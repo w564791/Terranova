@@ -914,7 +914,8 @@ func (s *AICMDBSkillService) validateSelectedSkills(selected []string) []string 
 }
 
 // selectDomainSkillsByAI AI 智能选择 Domain Skills
-func (s *AICMDBSkillService) selectDomainSkillsByAI(userDescription string) ([]string, error) {
+// phase: "first" - 第一步（资源发现阶段，需要查询 CMDB）, "second" - 第二步（配置生成阶段，用户已选择资源）
+func (s *AICMDBSkillService) selectDomainSkillsByAI(userDescription string, phase string) ([]string, error) {
 	totalTimer := NewTimer()
 
 	// 1. 获取所有 Domain Skill 描述
@@ -940,9 +941,9 @@ func (s *AICMDBSkillService) selectDomainSkillsByAI(userDescription string) ([]s
 		return nil, fmt.Errorf("AI 配置不可用")
 	}
 
-	// 3. 构建 Prompt（支持自定义 Prompt）
+	// 3. 构建 Prompt（支持自定义 Prompt，传入 phase 参数）
 	promptTimer := NewTimer()
-	prompt := s.buildDomainSkillSelectionPromptWithConfig(aiConfig, userDescription, skillInfos)
+	prompt := s.buildDomainSkillSelectionPromptWithConfig(aiConfig, userDescription, skillInfos, phase)
 	RecordAICallDuration("domain_skill_selection", "build_prompt", promptTimer.ElapsedMs())
 
 	// 4. 调用 AI
@@ -984,7 +985,8 @@ func (s *AICMDBSkillService) selectDomainSkillsByAI(userDescription string) ([]s
 
 // buildDomainSkillSelectionPromptWithConfig 构建 Domain Skill 选择 Prompt（支持自定义 Prompt）
 // 自定义 Prompt 会自动追加用户需求和 Skills 列表
-func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithConfig(aiConfig *models.AIConfig, userDescription string, skillInfos []DomainSkillInfo) string {
+// phase: "first" - 第一步（资源发现阶段），"second" - 第二步（配置生成阶段）
+func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithConfig(aiConfig *models.AIConfig, userDescription string, skillInfos []DomainSkillInfo, phase string) string {
 	// 构建 Skill 列表字符串（从数据库动态查询）
 	var skillListBuilder strings.Builder
 	for i, info := range skillInfos {
@@ -996,7 +998,10 @@ func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithConfig(aiConfig 
 	}
 	skillList := skillListBuilder.String()
 
-	log.Printf("[AICMDBSkillService] 动态构建 domain_skill_selection Prompt，包含 %d 个可用 Skills", len(skillInfos))
+	// 构建阶段描述
+	phaseDescription := s.buildPhaseDescription(phase)
+
+	log.Printf("[AICMDBSkillService] 动态构建 domain_skill_selection Prompt，包含 %d 个可用 Skills，阶段: %s", len(skillInfos), phase)
 
 	// 检查是否有自定义 Prompt
 	if aiConfig.CapabilityPrompts != nil {
@@ -1004,15 +1009,19 @@ func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithConfig(aiConfig 
 			log.Printf("[AICMDBSkillService] 使用自定义 domain_skill_selection Prompt")
 
 			// 如果自定义 Prompt 包含占位符，替换它们
-			if strings.Contains(customPrompt, "{skill_list}") || strings.Contains(customPrompt, "{user_description}") {
+			if strings.Contains(customPrompt, "{skill_list}") || strings.Contains(customPrompt, "{user_description}") || strings.Contains(customPrompt, "{phase}") {
 				prompt := strings.ReplaceAll(customPrompt, "{user_description}", userDescription)
 				prompt = strings.ReplaceAll(prompt, "{skill_list}", skillList)
+				prompt = strings.ReplaceAll(prompt, "{phase}", phaseDescription)
 				return prompt
 			}
 
 			// 如果没有占位符，自动追加用户需求和 Skills 列表
 			var sb strings.Builder
 			sb.WriteString(customPrompt)
+			sb.WriteString("\n\n")
+			sb.WriteString("【当前阶段】\n")
+			sb.WriteString(phaseDescription)
 			sb.WriteString("\n\n")
 			sb.WriteString("【用户需求】\n")
 			sb.WriteString(userDescription)
@@ -1027,15 +1036,19 @@ func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithConfig(aiConfig 
 	if aiConfig.CustomPrompt != "" {
 		log.Printf("[AICMDBSkillService] 使用 custom_prompt 字段的 domain_skill_selection Prompt")
 
-		if strings.Contains(aiConfig.CustomPrompt, "{skill_list}") || strings.Contains(aiConfig.CustomPrompt, "{user_description}") {
+		if strings.Contains(aiConfig.CustomPrompt, "{skill_list}") || strings.Contains(aiConfig.CustomPrompt, "{user_description}") || strings.Contains(aiConfig.CustomPrompt, "{phase}") {
 			prompt := strings.ReplaceAll(aiConfig.CustomPrompt, "{user_description}", userDescription)
 			prompt = strings.ReplaceAll(prompt, "{skill_list}", skillList)
+			prompt = strings.ReplaceAll(prompt, "{phase}", phaseDescription)
 			return prompt
 		}
 
 		// 自动追加
 		var sb strings.Builder
 		sb.WriteString(aiConfig.CustomPrompt)
+		sb.WriteString("\n\n")
+		sb.WriteString("【当前阶段】\n")
+		sb.WriteString(phaseDescription)
 		sb.WriteString("\n\n")
 		sb.WriteString("【用户需求】\n")
 		sb.WriteString(userDescription)
@@ -1045,8 +1058,71 @@ func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithConfig(aiConfig 
 		return sb.String()
 	}
 
-	// 使用默认 Prompt
-	return s.buildDomainSkillSelectionPrompt(userDescription, skillInfos)
+	// 使用默认 Prompt（带阶段信息）
+	return s.buildDomainSkillSelectionPromptWithPhase(userDescription, skillInfos, phase)
+}
+
+// buildPhaseDescription 构建阶段描述
+func (s *AICMDBSkillService) buildPhaseDescription(phase string) string {
+	switch phase {
+	case "first":
+		return `第一步 - 资源发现阶段
+- 需要从 CMDB 查询用户描述中提到的现有资源
+- 可以选择 CMDB 相关的 Skills（如 cmdb_resource_matching、cmdb_resource_types、region_mapping）`
+	case "second":
+		return `第二步 - 配置生成阶段
+- 用户已经选择了所需的资源，资源信息已确定
+- 【重要】禁止选择 CMDB 相关的 Skills（cmdb_resource_matching、cmdb_resource_types、region_mapping），因为资源已确定，不需要再查询
+- 只选择与资源配置生成相关的 Skills`
+	default:
+		return "未知阶段"
+	}
+}
+
+// buildDomainSkillSelectionPromptWithPhase 构建带阶段信息的 Domain Skill 选择 Prompt（硬编码版本）
+func (s *AICMDBSkillService) buildDomainSkillSelectionPromptWithPhase(userDescription string, skillInfos []DomainSkillInfo, phase string) string {
+	var sb strings.Builder
+
+	sb.WriteString("你是一个 IaC 平台的 Skill 选择助手。请根据用户需求和当前阶段，从可用的 Domain Skills 中选择需要的 Skills。\n\n")
+
+	sb.WriteString("【当前阶段】\n")
+	sb.WriteString(s.buildPhaseDescription(phase))
+	sb.WriteString("\n\n")
+
+	sb.WriteString("【用户需求】\n")
+	sb.WriteString(userDescription)
+	sb.WriteString("\n\n")
+
+	sb.WriteString("【可用的 Domain Skills】\n")
+	for i, info := range skillInfos {
+		desc := info.Description
+		if desc == "" {
+			desc = "(无描述)"
+		}
+		sb.WriteString(fmt.Sprintf("%d. %s - %s\n", i+1, info.Name, desc))
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("【选择规则】\n")
+	sb.WriteString("1. 只选择与用户需求直接相关的 Skills\n")
+	sb.WriteString("2. 通常选择 2-5 个 Skills 即可，不要贪多\n")
+	sb.WriteString("3. 【重要】根据当前阶段决定是否选择 CMDB 相关 Skills：\n")
+	sb.WriteString("   - 第一步（资源发现阶段）：如果用户需求涉及 CMDB 资源引用，可以选择 cmdb_resource_matching、cmdb_resource_types、region_mapping\n")
+	sb.WriteString("   - 第二步（配置生成阶段）：用户已选择资源，禁止选择 CMDB 相关 Skills\n")
+	sb.WriteString("4. 如果用户需求涉及 AWS 策略（IAM/S3/KMS 等），选择对应的策略 Skill\n")
+	sb.WriteString("5. 如果用户需求涉及资源标签，选择 aws_resource_tagging\n")
+	sb.WriteString("\n")
+
+	sb.WriteString("【输出格式】\n")
+	sb.WriteString("请返回 JSON 格式，不要有任何额外文字：\n")
+	sb.WriteString("```json\n")
+	sb.WriteString("{\n")
+	sb.WriteString("  \"selected_skills\": [\"skill_name_1\", \"skill_name_2\"],\n")
+	sb.WriteString("  \"reason\": \"简短说明选择理由\"\n")
+	sb.WriteString("}\n")
+	sb.WriteString("```\n")
+
+	return sb.String()
 }
 
 // buildDomainSkillSelectionPrompt 构建 Domain Skill 选择 Prompt（硬编码版本）
@@ -1533,11 +1609,11 @@ func (s *AICMDBSkillService) executeParallel(userID string, userDescription stri
 		log.Printf("[AICMDBSkillService] [并行] CMDB 任务完成: %.0fms, 状态: %s", cmdbDuration, status)
 	}()
 
-	// 协程 2: AI 选择 Domain Skills
+	// 协程 2: AI 选择 Domain Skills（第一步：资源发现阶段）
 	go func() {
 		defer close(skillDone)
 		skillTimer := NewTimer()
-		selectedSkills, err := s.selectDomainSkillsByAI(userDescription)
+		selectedSkills, err := s.selectDomainSkillsByAI(userDescription, "first")
 		skillDuration = skillTimer.ElapsedMs()
 		result.SelectedSkills = selectedSkills
 		result.SkillError = err

@@ -339,8 +339,8 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 			cmdbData = s.buildCMDBDataFromSelections(convertedSelections)
 		}
 
-		// 同时执行 Skill 自动发现（第二步也需要）
-		skillResult, err := s.selectDomainSkillsByAI(userDescription)
+		// 同时执行 Skill 自动发现（第二步：配置生成阶段，用户已选择资源）
+		skillResult, err := s.selectDomainSkillsByAI(userDescription, "second")
 		if err != nil {
 			log.Printf("[AICMDBSkillService] 第二步 Skill 选择失败: %v，降级到标签匹配", err)
 		} else {
