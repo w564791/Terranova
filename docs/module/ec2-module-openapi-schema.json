@@ -1,0 +1,1061 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AWS EC2 Instance",
+    "version": "5.0.0",
+    "description": "Terraform module: AWS EC2 Instance",
+    "x-module-source": "terraform-aws-modules/ec2-instance/aws",
+    "x-provider": "aws"
+  },
+  "components": {
+    "schemas": {
+      "ModuleInput": {
+        "type": "object",
+        "properties": {
+          "ami": {
+            "type": "string",
+            "title": "Ami",
+            "description": "ID of AMI to use for the instance",
+            "pattern": "^ami-",
+            "x-validation": [
+              {
+                "condition": "var.ami == null || can(regex(\"^ami-\", var.ami))",
+                "errorMessage": "AMI ID must start with 'ami-'.",
+                "pattern": "^ami-"
+              }
+            ]
+          },
+          "ami_ssm_parameter": {
+            "type": "string",
+            "title": "Ami Ssm Parameter",
+            "description": "SSM parameter name for the AMI ID"
+          },
+          "arn": {
+            "type": "string",
+            "title": "Arn",
+            "description": "The ARN of the instance"
+          },
+          "associate_public_ip_address": {
+            "type": "boolean",
+            "title": "Associate Public Ip Address",
+            "description": "Whether to associate a public IP address with an instance in a VPC"
+          },
+          "availability_zone": {
+            "type": "string",
+            "title": "Availability Zone",
+            "description": "AZ to start the instance in"
+          },
+          "capacity_reservation_specification": {
+            "type": "object",
+            "title": "Capacity Reservation Specification",
+            "description": "Describes an instance's Capacity Reservation targeting option",
+            "default": {}
+          },
+          "cpu_core_count": {
+            "type": "number",
+            "title": "Cpu Core Count",
+            "description": "Sets the number of CPU cores for an instance"
+          },
+          "cpu_options": {
+            "type": "object",
+            "title": "Cpu Options",
+            "description": "Defines CPU options to apply to the instance at launch time",
+            "default": {}
+          },
+          "cpu_threads_per_core": {
+            "type": "number",
+            "title": "Cpu Threads Per Core",
+            "description": "Sets the number of CPU threads per core for an instance"
+          },
+          "create": {
+            "type": "boolean",
+            "title": "Create",
+            "description": "Whether to create an instance",
+            "default": true
+          },
+          "create_spot_instance": {
+            "type": "boolean",
+            "title": "Create Spot Instance",
+            "description": "Depicts if the instance is a spot instance",
+            "default": false
+          },
+          "credit_specification": {
+            "type": "object",
+            "title": "Credit Specification",
+            "description": "Customize the credit specification of the instance",
+            "default": {}
+          },
+          "disable_api_stop": {
+            "type": "boolean",
+            "title": "Disable Api Stop",
+            "description": "If true, enables EC2 Instance Stop Protection"
+          },
+          "disable_api_termination": {
+            "type": "boolean",
+            "title": "Disable Api Termination",
+            "description": "If true, enables EC2 Instance Termination Protection"
+          },
+          "ebs_block_device": {
+            "type": "array",
+            "title": "Ebs Block Device",
+            "description": "Additional EBS block devices to attach to the instance",
+            "default": null,
+            "items": {
+              "type": "object"
+            }
+          },
+          "ebs_optimized": {
+            "type": "boolean",
+            "title": "Ebs Optimized",
+            "description": "If true, the launched EC2 instance will be EBS-optimized"
+          },
+          "enable_volume_tags": {
+            "type": "boolean",
+            "title": "Enable Volume Tags",
+            "description": "Whether to enable volume tags",
+            "default": true
+          },
+          "enclave_options_enabled": {
+            "type": "boolean",
+            "title": "Enclave Options Enabled",
+            "description": "Whether Nitro Enclaves will be enabled on the instance"
+          },
+          "ephemeral_block_device": {
+            "type": "array",
+            "title": "Ephemeral Block Device",
+            "description": "Customize Ephemeral (also known as Instance Store) volumes on the instance",
+            "default": null,
+            "items": {
+              "type": "object"
+            }
+          },
+          "get_password_data": {
+            "type": "boolean",
+            "title": "Get Password Data",
+            "description": "If true, wait for password data to become available and retrieve it"
+          },
+          "hibernation": {
+            "type": "boolean",
+            "title": "Hibernation",
+            "description": "If true, the launched EC2 instance will support hibernation"
+          },
+          "host_id": {
+            "type": "string",
+            "title": "Host Id",
+            "description": "ID of a dedicated host that the instance will be assigned to"
+          },
+          "iam_instance_profile": {
+            "type": "string",
+            "title": "Iam Instance Profile",
+            "description": "IAM Instance Profile to launch the instance with"
+          },
+          "instance_initiated_shutdown_behavior": {
+            "type": "string",
+            "title": "Instance Initiated Shutdown Behavior",
+            "description": "Shutdown behavior for the instance"
+          },
+          "instance_market_options": {
+            "type": "object",
+            "title": "Instance Market Options",
+            "description": "The market (purchasing) option for the instance",
+            "default": {}
+          },
+          "instance_state": {
+            "type": "string",
+            "title": "Instance State",
+            "description": "The state of the instance"
+          },
+          "instance_tags": {
+            "type": "object",
+            "title": "Instance Tags",
+            "description": "Additional tags for the instance",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "instance_type": {
+            "type": "string",
+            "title": "Instance Type",
+            "description": "The type of instance to start",
+            "default": "t3.micro"
+          },
+          "ipv6_address_count": {
+            "type": "number",
+            "title": "Ipv6 Address Count",
+            "description": "A number of IPv6 addresses to associate with the primary network interface"
+          },
+          "ipv6_addresses": {
+            "type": "array",
+            "title": "Ipv6 Addresses",
+            "description": "Specify one or more IPv6 addresses from the range of the subnet to associate with the primary network interface",
+            "items": {
+              "type": "string"
+            }
+          },
+          "key_name": {
+            "type": "string",
+            "title": "Key Name",
+            "description": "Key name of the Key Pair to use for the instance"
+          },
+          "launch_template": {
+            "type": "object",
+            "title": "Launch Template",
+            "description": "Specifies a Launch Template to configure the instance",
+            "default": {}
+          },
+          "maintenance_options": {
+            "type": "object",
+            "title": "Maintenance Options",
+            "description": "The maintenance options for the instance",
+            "default": {}
+          },
+          "metadata_options": {
+            "type": "object",
+            "title": "Metadata Options",
+            "description": "Customize the metadata options of the instance",
+            "default": {}
+          },
+          "monitoring": {
+            "type": "boolean",
+            "title": "Monitoring",
+            "description": "If true, the launched EC2 instance will have detailed monitoring enabled"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Name to be used on EC2 instance created",
+            "default": ""
+          },
+          "network_interface": {
+            "type": "array",
+            "title": "Network Interface",
+            "description": "Customize network interfaces to be attached at instance boot time",
+            "default": null,
+            "items": {
+              "type": "object"
+            }
+          },
+          "placement_group": {
+            "type": "string",
+            "title": "Placement Group",
+            "description": "The Placement Group to start the instance in"
+          },
+          "private_dns": {
+            "type": "string",
+            "title": "Private Dns",
+            "description": "The private DNS name assigned to the instance"
+          },
+          "private_dns_name_options": {
+            "type": "object",
+            "title": "Private Dns Name Options",
+            "description": "Customize the private DNS name options of the instance",
+            "default": {}
+          },
+          "private_ip": {
+            "type": "string",
+            "title": "Private Ip",
+            "description": "Private IP address to associate with the instance in a VPC"
+          },
+          "public_dns": {
+            "type": "string",
+            "title": "Public Dns",
+            "description": "The public DNS name assigned to the instance"
+          },
+          "public_ip": {
+            "type": "string",
+            "title": "Public Ip",
+            "description": "The public IP address assigned to the instance"
+          },
+          "root_block_device": {
+            "type": "array",
+            "title": "Root Block Device",
+            "description": "Customize details about the root block device of the instance",
+            "default": null,
+            "items": {
+              "type": "object"
+            }
+          },
+          "secondary_private_ips": {
+            "type": "array",
+            "title": "Secondary Private Ips",
+            "description": "A list of secondary private IPv4 addresses to assign to the instance's primary network interface",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_dest_check": {
+            "type": "boolean",
+            "title": "Source Dest Check",
+            "description": "Controls if traffic is routed to the instance when the destination address does not match the instance",
+            "default": true
+          },
+          "spot_block_duration_minutes": {
+            "type": "number",
+            "title": "Spot Block Duration Minutes",
+            "description": "The required duration for the Spot instances, in minutes"
+          },
+          "spot_instance_interruption_behavior": {
+            "type": "string",
+            "title": "Spot Instance Interruption Behavior",
+            "description": "Indicates Spot instance behavior when it is interrupted"
+          },
+          "spot_launch_group": {
+            "type": "string",
+            "title": "Spot Launch Group",
+            "description": "A launch group is a group of spot instances that launch together and terminate together"
+          },
+          "spot_price": {
+            "type": "string",
+            "title": "Spot Price",
+            "description": "The maximum price to request on the spot market"
+          },
+          "spot_type": {
+            "type": "string",
+            "title": "Spot Type",
+            "description": "If set to one-time, after the instance is terminated, the spot request will be closed"
+          },
+          "spot_valid_from": {
+            "type": "string",
+            "title": "Spot Valid From",
+            "description": "The start date and time of the request, in UTC RFC3339 format"
+          },
+          "spot_valid_until": {
+            "type": "string",
+            "title": "Spot Valid Until",
+            "description": "The end date and time of the request, in UTC RFC3339 format"
+          },
+          "spot_wait_for_fulfillment": {
+            "type": "boolean",
+            "title": "Spot Wait For Fulfillment",
+            "description": "If set, Terraform will wait for the Spot Request to be fulfilled"
+          },
+          "subnet_id": {
+            "type": "string",
+            "title": "Subnet Id",
+            "description": "The VPC Subnet ID to launch in"
+          },
+          "tags": {
+            "type": "object",
+            "title": "Tags",
+            "description": "A mapping of tags to assign to the resource",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "tenancy": {
+            "type": "string",
+            "title": "Tenancy",
+            "description": "The tenancy of the instance"
+          },
+          "timeouts": {
+            "type": "object",
+            "title": "Timeouts",
+            "description": "Define maximum timeout for creating, updating, and deleting EC2 instance resources",
+            "default": {}
+          },
+          "user_data": {
+            "type": "string",
+            "title": "User Data",
+            "description": "The user data to provide when launching the instance"
+          },
+          "user_data_base64": {
+            "type": "string",
+            "title": "User Data Base64",
+            "description": "Can be used instead of user_data to pass base64-encoded binary data directly"
+          },
+          "user_data_replace_on_change": {
+            "type": "boolean",
+            "title": "User Data Replace On Change",
+            "description": "When used in combination with user_data or user_data_base64 will trigger a destroy and recreate when set to true",
+            "default": false
+          },
+          "volume_tags": {
+            "type": "object",
+            "title": "Volume Tags",
+            "description": "A mapping of tags to assign to the devices created by the instance at launch time",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "vpc_security_group_ids": {
+            "type": "array",
+            "title": "Vpc Security Group Ids",
+            "description": "A list of security group IDs to associate with",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-iac-platform": {
+    "ui": {
+      "fields": {
+        "ami": {
+          "widget": "select",
+          "label": "AMI镜像",
+          "group": "basic",
+          "order": 1,
+          "help": "ID of AMI to use for the instance",
+          "source": "ami_list",
+          "searchable": true,
+          "allowCustom": true
+        },
+        "ami_ssm_parameter": {
+          "widget": "text",
+          "label": "Ami Ssm Parameter",
+          "group": "advanced",
+          "order": 1,
+          "hiddenByDefault": true,
+          "help": "SSM parameter name for the AMI ID"
+        },
+        "arn": {
+          "widget": "text",
+          "label": "Arn",
+          "group": "advanced",
+          "order": 2,
+          "hiddenByDefault": true,
+          "help": "The ARN of the instance"
+        },
+        "associate_public_ip_address": {
+          "widget": "switch",
+          "label": "公网IP",
+          "group": "basic",
+          "order": 2,
+          "help": "Whether to associate a public IP address with an instance in a VPC"
+        },
+        "availability_zone": {
+          "widget": "select",
+          "label": "可用区",
+          "group": "advanced",
+          "order": 3,
+          "hiddenByDefault": true,
+          "help": "AZ to start the instance in",
+          "source": "availability_zones"
+        },
+        "capacity_reservation_specification": {
+          "widget": "select",
+          "label": "Capacity Reservation Specification",
+          "group": "advanced",
+          "order": 4,
+          "hiddenByDefault": true,
+          "help": "Describes an instance's Capacity Reservation targeting option"
+        },
+        "cpu_core_count": {
+          "widget": "number",
+          "label": "Cpu Core Count",
+          "group": "advanced",
+          "order": 5,
+          "hiddenByDefault": true,
+          "help": "Sets the number of CPU cores for an instance"
+        },
+        "cpu_options": {
+          "widget": "select",
+          "label": "AMD",
+          "group": "advanced",
+          "order": 6,
+          "hiddenByDefault": true,
+          "help": "Defines CPU options to apply to the instance at launch time"
+        },
+        "cpu_threads_per_core": {
+          "widget": "number",
+          "label": "Cpu Threads Per Core",
+          "group": "advanced",
+          "order": 7,
+          "hiddenByDefault": true,
+          "help": "Sets the number of CPU threads per core for an instance"
+        },
+        "create": {
+          "widget": "switch",
+          "label": "Create",
+          "group": "advanced",
+          "order": 8,
+          "hiddenByDefault": true,
+          "help": "Whether to create an instance"
+        },
+        "create_spot_instance": {
+          "widget": "switch",
+          "label": "创建Spot实例",
+          "group": "advanced",
+          "order": 9,
+          "hiddenByDefault": true,
+          "help": "Depicts if the instance is a spot instance"
+        },
+        "credit_specification": {
+          "widget": "select",
+          "label": "CPU积分",
+          "group": "advanced",
+          "order": 10,
+          "hiddenByDefault": true,
+          "help": "Customize the credit specification of the instance"
+        },
+        "disable_api_stop": {
+          "widget": "switch",
+          "label": "停止保护",
+          "group": "advanced",
+          "order": 11,
+          "hiddenByDefault": true,
+          "help": "If true, enables EC2 Instance Stop Protection"
+        },
+        "disable_api_termination": {
+          "widget": "switch",
+          "label": "终止保护",
+          "group": "advanced",
+          "order": 12,
+          "hiddenByDefault": true,
+          "help": "If true, enables EC2 Instance Termination Protection"
+        },
+        "ebs_block_device": {
+          "widget": "key-value",
+          "label": "标签",
+          "group": "advanced",
+          "order": 13,
+          "hiddenByDefault": true,
+          "placeholder": "/dev/sdf",
+          "help": "Additional EBS block devices to attach to the instance"
+        },
+        "ebs_optimized": {
+          "widget": "switch",
+          "label": "EBS优化",
+          "group": "advanced",
+          "order": 14,
+          "hiddenByDefault": true,
+          "help": "If true, the launched EC2 instance will be EBS-optimized"
+        },
+        "enable_volume_tags": {
+          "widget": "switch",
+          "label": "启用卷标签",
+          "group": "advanced",
+          "order": 15,
+          "hiddenByDefault": true,
+          "help": "Whether to enable volume tags"
+        },
+        "enclave_options_enabled": {
+          "widget": "switch",
+          "label": "Nitro",
+          "group": "advanced",
+          "order": 16,
+          "hiddenByDefault": true,
+          "help": "Whether Nitro Enclaves will be enabled on the instance"
+        },
+        "ephemeral_block_device": {
+          "widget": "object-list",
+          "label": "虚拟名称",
+          "group": "advanced",
+          "order": 17,
+          "hiddenByDefault": true,
+          "help": "Customize Ephemeral (also known as Instance Store) volumes on the instance"
+        },
+        "get_password_data": {
+          "widget": "switch",
+          "label": "Get Password Data",
+          "group": "advanced",
+          "order": 18,
+          "hiddenByDefault": true,
+          "help": "If true, wait for password data to become available and retrieve it"
+        },
+        "hibernation": {
+          "widget": "switch",
+          "label": "休眠支持",
+          "group": "advanced",
+          "order": 19,
+          "hiddenByDefault": true,
+          "help": "If true, the launched EC2 instance will support hibernation"
+        },
+        "host_id": {
+          "widget": "text",
+          "label": "Host Id",
+          "group": "advanced",
+          "order": 20,
+          "hiddenByDefault": true,
+          "help": "ID of a dedicated host that the instance will be assigned to"
+        },
+        "iam_instance_profile": {
+          "widget": "select",
+          "label": "IAM实例配置文件",
+          "group": "basic",
+          "order": 3,
+          "help": "IAM Instance Profile to launch the instance with",
+          "source": "iam_instance_profiles",
+          "searchable": true
+        },
+        "instance_initiated_shutdown_behavior": {
+          "widget": "select",
+          "label": "Instance Initiated Shutdown Behavior",
+          "group": "advanced",
+          "order": 21,
+          "hiddenByDefault": true,
+          "help": "Shutdown behavior for the instance"
+        },
+        "instance_market_options": {
+          "widget": "select",
+          "label": "Instance Market Options",
+          "group": "advanced",
+          "order": 22,
+          "hiddenByDefault": true,
+          "help": "The market (purchasing) option for the instance"
+        },
+        "instance_state": {
+          "widget": "text",
+          "label": "Instance State",
+          "group": "advanced",
+          "order": 23,
+          "hiddenByDefault": true,
+          "help": "The state of the instance"
+        },
+        "instance_tags": {
+          "widget": "key-value",
+          "label": "Instance Tags",
+          "group": "advanced",
+          "order": 24,
+          "hiddenByDefault": true,
+          "help": "Additional tags for the instance"
+        },
+        "instance_type": {
+          "widget": "select",
+          "label": "实例类型",
+          "group": "basic",
+          "order": 4,
+          "help": "The type of instance to start",
+          "source": "instance_types",
+          "searchable": true
+        },
+        "ipv6_address_count": {
+          "widget": "number",
+          "label": "Ipv6 Address Count",
+          "group": "advanced",
+          "order": 25,
+          "hiddenByDefault": true,
+          "help": "A number of IPv6 addresses to associate with the primary network interface"
+        },
+        "ipv6_addresses": {
+          "widget": "tags",
+          "label": "Ipv6 Addresses",
+          "group": "advanced",
+          "order": 26,
+          "hiddenByDefault": true,
+          "help": "Specify one or more IPv6 addresses from the range of the subnet to associate with the primary network interface"
+        },
+        "key_name": {
+          "widget": "select",
+          "label": "密钥对",
+          "group": "basic",
+          "order": 5,
+          "help": "Key name of the Key Pair to use for the instance",
+          "source": "key_pairs",
+          "searchable": true
+        },
+        "launch_template": {
+          "widget": "object",
+          "label": "版本",
+          "group": "advanced",
+          "order": 27,
+          "hiddenByDefault": true,
+          "help": "Specifies a Launch Template to configure the instance"
+        },
+        "maintenance_options": {
+          "widget": "select",
+          "label": "自动恢复",
+          "group": "advanced",
+          "order": 28,
+          "hiddenByDefault": true,
+          "help": "The maintenance options for the instance"
+        },
+        "metadata_options": {
+          "widget": "select",
+          "label": "实例标签",
+          "group": "advanced",
+          "order": 29,
+          "hiddenByDefault": true,
+          "help": "Customize the metadata options of the instance"
+        },
+        "monitoring": {
+          "widget": "switch",
+          "label": "详细监控",
+          "group": "advanced",
+          "order": 30,
+          "hiddenByDefault": true,
+          "help": "If true, the launched EC2 instance will have detailed monitoring enabled"
+        },
+        "name": {
+          "widget": "text",
+          "label": "实例名称",
+          "group": "basic",
+          "order": 6,
+          "help": "Name to be used on EC2 instance created"
+        },
+        "network_interface": {
+          "widget": "object-list",
+          "label": "终止时删除",
+          "group": "advanced",
+          "order": 31,
+          "hiddenByDefault": true,
+          "help": "Customize network interfaces to be attached at instance boot time"
+        },
+        "placement_group": {
+          "widget": "text",
+          "label": "Placement Group",
+          "group": "advanced",
+          "order": 32,
+          "hiddenByDefault": true,
+          "help": "The Placement Group to start the instance in"
+        },
+        "private_dns": {
+          "widget": "text",
+          "label": "私有DNS",
+          "group": "advanced",
+          "order": 33,
+          "hiddenByDefault": true,
+          "help": "The private DNS name assigned to the instance"
+        },
+        "private_dns_name_options": {
+          "widget": "select",
+          "label": "Private Dns Name Options",
+          "group": "advanced",
+          "order": 34,
+          "hiddenByDefault": true,
+          "help": "Customize the private DNS name options of the instance"
+        },
+        "private_ip": {
+          "widget": "text",
+          "label": "私有IP",
+          "group": "advanced",
+          "order": 35,
+          "hiddenByDefault": true,
+          "help": "Private IP address to associate with the instance in a VPC"
+        },
+        "public_dns": {
+          "widget": "text",
+          "label": "公网DNS",
+          "group": "advanced",
+          "order": 36,
+          "hiddenByDefault": true,
+          "help": "The public DNS name assigned to the instance"
+        },
+        "public_ip": {
+          "widget": "text",
+          "label": "公网IP地址",
+          "group": "advanced",
+          "order": 37,
+          "hiddenByDefault": true,
+          "help": "The public IP address assigned to the instance"
+        },
+        "root_block_device": {
+          "widget": "key-value",
+          "label": "标签",
+          "group": "advanced",
+          "order": 38,
+          "hiddenByDefault": true,
+          "help": "Customize details about the root block device of the instance"
+        },
+        "secondary_private_ips": {
+          "widget": "tags",
+          "label": "Secondary Private Ips",
+          "group": "advanced",
+          "order": 39,
+          "hiddenByDefault": true,
+          "help": "A list of secondary private IPv4 addresses to assign to the instance's primary network interface"
+        },
+        "source_dest_check": {
+          "widget": "switch",
+          "label": "Source Dest Check",
+          "group": "advanced",
+          "order": 40,
+          "hiddenByDefault": true,
+          "help": "Controls if traffic is routed to the instance when the destination address does not match the instance"
+        },
+        "spot_block_duration_minutes": {
+          "widget": "number",
+          "label": "Spot Block Duration Minutes",
+          "group": "advanced",
+          "order": 41,
+          "hiddenByDefault": true,
+          "help": "The required duration for the Spot instances, in minutes"
+        },
+        "spot_instance_interruption_behavior": {
+          "widget": "select",
+          "label": "Spot Instance Interruption Behavior",
+          "group": "advanced",
+          "order": 42,
+          "hiddenByDefault": true,
+          "help": "Indicates Spot instance behavior when it is interrupted"
+        },
+        "spot_launch_group": {
+          "widget": "text",
+          "label": "Spot Launch Group",
+          "group": "advanced",
+          "order": 43,
+          "hiddenByDefault": true,
+          "help": "A launch group is a group of spot instances that launch together and terminate together"
+        },
+        "spot_price": {
+          "widget": "text",
+          "label": "Spot价格",
+          "group": "advanced",
+          "order": 44,
+          "hiddenByDefault": true,
+          "help": "The maximum price to request on the spot market"
+        },
+        "spot_type": {
+          "widget": "select",
+          "label": "Spot Type",
+          "group": "advanced",
+          "order": 45,
+          "hiddenByDefault": true,
+          "help": "If set to one-time, after the instance is terminated, the spot request will be closed"
+        },
+        "spot_valid_from": {
+          "widget": "datetime",
+          "label": "Spot Valid From",
+          "group": "advanced",
+          "order": 46,
+          "hiddenByDefault": true,
+          "help": "The start date and time of the request, in UTC RFC3339 format"
+        },
+        "spot_valid_until": {
+          "widget": "datetime",
+          "label": "Spot Valid Until",
+          "group": "advanced",
+          "order": 47,
+          "hiddenByDefault": true,
+          "help": "The end date and time of the request, in UTC RFC3339 format"
+        },
+        "spot_wait_for_fulfillment": {
+          "widget": "switch",
+          "label": "Spot Wait For Fulfillment",
+          "group": "advanced",
+          "order": 48,
+          "hiddenByDefault": true,
+          "help": "If set, Terraform will wait for the Spot Request to be fulfilled"
+        },
+        "subnet_id": {
+          "widget": "select",
+          "label": "子网",
+          "group": "basic",
+          "order": 7,
+          "help": "The VPC Subnet ID to launch in",
+          "source": "subnet_list",
+          "searchable": true,
+          "dependsOn": [
+            "vpc_id"
+          ]
+        },
+        "tags": {
+          "widget": "key-value",
+          "label": "标签",
+          "group": "basic",
+          "order": 8,
+          "help": "A mapping of tags to assign to the resource"
+        },
+        "tenancy": {
+          "widget": "select",
+          "label": "Tenancy",
+          "group": "advanced",
+          "order": 49,
+          "hiddenByDefault": true,
+          "help": "The tenancy of the instance"
+        },
+        "timeouts": {
+          "widget": "object",
+          "label": "Timeouts",
+          "group": "advanced",
+          "order": 50,
+          "hiddenByDefault": true,
+          "help": "Define maximum timeout for creating, updating, and deleting EC2 instance resources"
+        },
+        "user_data": {
+          "widget": "textarea",
+          "label": "用户数据",
+          "group": "advanced",
+          "order": 51,
+          "hiddenByDefault": true,
+          "help": "The user data to provide when launching the instance"
+        },
+        "user_data_base64": {
+          "widget": "textarea",
+          "label": "User Data Base64",
+          "group": "advanced",
+          "order": 52,
+          "hiddenByDefault": true,
+          "help": "Can be used instead of user_data to pass base64-encoded binary data directly"
+        },
+        "user_data_replace_on_change": {
+          "widget": "switch",
+          "label": "User Data Replace On Change",
+          "group": "advanced",
+          "order": 53,
+          "hiddenByDefault": true,
+          "help": "When used in combination with user_data or user_data_base64 will trigger a destroy and recreate when set to true"
+        },
+        "volume_tags": {
+          "widget": "key-value",
+          "label": "卷标签",
+          "group": "advanced",
+          "order": 54,
+          "hiddenByDefault": true,
+          "help": "A mapping of tags to assign to the devices created by the instance at launch time"
+        },
+        "vpc_security_group_ids": {
+          "widget": "multi-select",
+          "label": "安全组",
+          "group": "basic",
+          "order": 9,
+          "help": "A list of security group IDs to associate with",
+          "source": "security_groups",
+          "searchable": true,
+          "dependsOn": [
+            "vpc_id"
+          ]
+        }
+      },
+      "groups": [
+        {
+          "id": "basic",
+          "title": "基础配置",
+          "icon": "settings",
+          "order": 1,
+          "defaultExpanded": true
+        },
+        {
+          "id": "advanced",
+          "title": "高级配置",
+          "icon": "code",
+          "order": 2,
+          "hiddenByDefault": true
+        }
+      ],
+      "layout": {
+        "type": "tabs",
+        "position": "top"
+      }
+    },
+    "external": {
+      "sources": [
+        {
+          "id": "availability_zones",
+          "type": "api",
+          "api": "/api/v1/aws/ec2/availability-zones",
+          "method": "GET",
+          "params": {
+            "region": "${providers.aws.region}"
+          },
+          "cache": {
+            "ttl": 3600
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.availability_zones[*].{value: zone_name, label: zone_name}"
+          }
+        },
+        {
+          "id": "iam_instance_profiles",
+          "type": "api",
+          "api": "/api/v1/aws/iam/instance-profiles",
+          "method": "GET",
+          "cache": {
+            "ttl": 300
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.instance_profiles[*].{value: instance_profile_name, label: instance_profile_name, arn: arn}"
+          }
+        },
+        {
+          "id": "instance_types",
+          "type": "api",
+          "api": "/api/v1/aws/ec2/instance-types",
+          "method": "GET",
+          "params": {
+            "region": "${providers.aws.region}"
+          },
+          "cache": {
+            "ttl": 3600
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.instance_types[*].{value: instance_type, label: instance_type, vcpu: vcpu_info.default_vcpus, memory: memory_info.size_in_mib}"
+          }
+        },
+        {
+          "id": "key_pairs",
+          "type": "api",
+          "api": "/api/v1/aws/ec2/key-pairs",
+          "method": "GET",
+          "params": {
+            "region": "${providers.aws.region}"
+          },
+          "cache": {
+            "ttl": 300
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.key_pairs[*].{value: key_name, label: key_name}"
+          }
+        },
+        {
+          "id": "subnet_list",
+          "type": "api",
+          "api": "/api/v1/aws/ec2/subnets",
+          "method": "GET",
+          "params": {
+            "region": "${providers.aws.region}",
+            "vpc_id": "${fields.vpc_id}"
+          },
+          "cache": {
+            "ttl": 300
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.subnets[*].{value: subnet_id, label: tags.Name || subnet_id, group: availability_zone}"
+          },
+          "dependsOn": [
+            "vpc_id"
+          ]
+        },
+        {
+          "id": "security_groups",
+          "type": "api",
+          "api": "/api/v1/aws/ec2/security-groups",
+          "method": "GET",
+          "params": {
+            "region": "${providers.aws.region}",
+            "vpc_id": "${fields.vpc_id}"
+          },
+          "cache": {
+            "ttl": 300
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.security_groups[*].{value: group_id, label: group_name, description: description}"
+          },
+          "dependsOn": [
+            "vpc_id"
+          ]
+        },
+        {
+          "id": "ami_list",
+          "type": "api",
+          "api": "/api/v1/aws/ec2/images",
+          "method": "GET",
+          "params": {
+            "architecture": "x86_64",
+            "owners": "amazon,self",
+            "region": "${providers.aws.region}"
+          },
+          "cache": {
+            "ttl": 300,
+            "key": "ami_list_${providers.aws.region}"
+          },
+          "transform": {
+            "type": "jmespath",
+            "expression": "data.images[*].{value: image_id, label: name, description: description}"
+          }
+        }
+      ]
+    }
+  }
+}

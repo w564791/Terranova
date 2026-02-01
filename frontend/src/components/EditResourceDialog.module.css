@@ -1,0 +1,327 @@
+/* Dialog Overlay */
+.dialogOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-lg, 16px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Dialog Container */
+.dialogContainer {
+  background: var(--color-white, #FFFFFF);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04));
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Dialog Header */
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg, 24px);
+  border-bottom: 1px solid var(--color-gray-200, #E5E7EB);
+}
+
+.headerContent {
+  flex: 1;
+}
+
+.dialogTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-gray-900, #111827);
+  margin: 0 0 8px 0;
+  font-family: var(--font-heading, 'Poppins', sans-serif);
+}
+
+.resourceInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--color-gray-600, #6B7280);
+}
+
+.resourceType {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  background: var(--color-gray-100, #F3F4F6);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.resourceSeparator {
+  color: var(--color-gray-400, #9CA3AF);
+}
+
+.resourceName {
+  font-weight: 500;
+  color: var(--color-gray-700, #374151);
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-gray-500, #6B7280);
+  font-size: 24px;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  margin-left: var(--spacing-md, 16px);
+}
+
+.closeButton:hover {
+  background: var(--color-gray-100, #F3F4F6);
+  color: var(--color-gray-700, #374151);
+}
+
+/* Dialog Content */
+.dialogContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg, 24px);
+}
+
+/* Loading State */
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl, 48px);
+  color: var(--color-gray-600, #6B7280);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-gray-200, #E5E7EB);
+  border-top-color: var(--color-blue-500, #3B82F6);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  padding: var(--spacing-2xl, 48px);
+  color: var(--color-gray-600, #6B7280);
+}
+
+.emptyState p {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+}
+
+.emptyStateHint {
+  font-size: 14px;
+  color: var(--color-gray-500, #6B7280);
+}
+
+/* Form Section */
+.formSection {
+  margin-bottom: var(--spacing-xl, 32px);
+}
+
+/* Change Summary Section */
+.changeSummarySection {
+  background: var(--color-gray-50, #F9FAFB);
+  border: 1px solid var(--color-gray-200, #E5E7EB);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--spacing-lg, 20px);
+}
+
+.changeSummaryLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700, #374151);
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+.required {
+  color: var(--color-red-500, #EF4444);
+  margin-left: 2px;
+}
+
+.changeSummaryInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-gray-300, #D1D5DB);
+  border-radius: var(--radius-md, 6px);
+  font-size: 14px;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  transition: all 0.2s;
+  background: var(--color-white, #FFFFFF);
+}
+
+.changeSummaryInput:focus {
+  outline: none;
+  border-color: var(--color-blue-500, #3B82F6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.changeSummaryInput:disabled {
+  background: var(--color-gray-100, #F3F4F6);
+  cursor: not-allowed;
+}
+
+.changeSummaryInput.inputError {
+  border-color: var(--color-red-500, #EF4444);
+}
+
+.changeSummaryInput.inputError:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.errorMessage {
+  margin-top: var(--spacing-sm, 8px);
+  font-size: 13px;
+  color: var(--color-red-600, #DC2626);
+}
+
+.changeSummaryHint {
+  margin-top: var(--spacing-sm, 8px);
+  font-size: 13px;
+  color: var(--color-gray-500, #6B7280);
+  line-height: 1.5;
+}
+
+/* Dialog Footer */
+.dialogFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md, 12px);
+  padding: var(--spacing-lg, 20px) var(--spacing-lg, 24px);
+  border-top: 1px solid var(--color-gray-200, #E5E7EB);
+  background: var(--color-gray-50, #F9FAFB);
+}
+
+/* Buttons */
+.btnCancel,
+.btnPrimary {
+  padding: 10px 20px;
+  border-radius: var(--radius-md, 6px);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-family: var(--font-body, 'Inter', sans-serif);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btnCancel {
+  background: var(--color-white, #FFFFFF);
+  color: var(--color-gray-700, #374151);
+  border: 1px solid var(--color-gray-300, #D1D5DB);
+}
+
+.btnCancel:hover:not(:disabled) {
+  background: var(--color-gray-50, #F9FAFB);
+  border-color: var(--color-gray-400, #9CA3AF);
+}
+
+.btnPrimary {
+  background: var(--color-blue-500, #3B82F6);
+  color: var(--color-white, #FFFFFF);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--color-blue-600, #2563EB);
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.07));
+}
+
+.btnCancel:disabled,
+.btnPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--color-white, #FFFFFF);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dialogContainer {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .dialogOverlay {
+    padding: 0;
+  }
+
+  .dialogHeader,
+  .dialogContent,
+  .dialogFooter {
+    padding: var(--spacing-md, 16px);
+  }
+
+  .dialogFooter {
+    flex-direction: column-reverse;
+  }
+
+  .btnCancel,
+  .btnPrimary {
+    width: 100%;
+    justify-content: center;
+  }
+}

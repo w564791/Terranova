@@ -1,0 +1,1143 @@
+package controllers
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"iac-platform/internal/models"
+	"iac-platform/services"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// WorkspaceTaskController 工作空间任务控制器
+type WorkspaceTaskController struct {
+	db            *gorm.DB
+	executor      *services.TerraformExecutor
+	streamManager *services.OutputStreamManager
+	queueManager  *services.TaskQueueManager
+}
+
+// NewWorkspaceTaskController 创建任务控制器
+func NewWorkspaceTaskController(db *gorm.DB, streamManager *services.OutputStreamManager) *WorkspaceTaskController {
+	executor := services.NewTerraformExecutor(db, streamManager)
+	queueManager := services.NewTaskQueueManager(db, executor)
+
+	return &WorkspaceTaskController{
+		db:            db,
+		executor:      executor,
+		streamManager: streamManager,
+		queueManager:  queueManager,
+	}
+}
+
+// CreatePlanTask 创建Plan任务
+// @Summary 创建Plan任务
+// @Description 创建Terraform Plan任务或Plan+Apply任务
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param request body object false "任务配置（description和run_type可选）"
+// @Success 201 {object} map[string]interface{} "任务创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "工作空间不存在"
+// @Failure 423 {object} map[string]interface{} "工作空间已锁定"
+// @Failure 500 {object} map[string]interface{} "创建失败"
+// @Router /api/v1/workspaces/{id}/tasks/plan [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	// 获取当前用户ID（从JWT中间件）
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	uid := userID.(string)
+
+	log.Printf("[DEBUG] CreatePlanTask called: workspace=%d, user=%d", workspaceID, uid)
+
+	// 解析请求体
+	var req struct {
+		Description string `json:"description"`
+		RunType     string `json:"run_type"` // "plan" 或 "plan_and_apply"
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 如果没有请求体，继续执行（description是可选的）
+		req.Description = ""
+		req.RunType = "plan" // 默认为plan
+	}
+
+	// 如果没有指定run_type，默认为plan
+	if req.RunType == "" {
+		req.RunType = "plan"
+	}
+
+	// 验证run_type
+	if req.RunType != "plan" && req.RunType != "plan_and_apply" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid run_type. Must be 'plan' or 'plan_and_apply'",
+		})
+		return
+	}
+
+	// 检查workspace是否存在
+	var workspace models.Workspace
+	if err := c.db.First(&workspace, workspaceID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+		return
+	}
+
+	// 检查workspace是否被锁定
+	if workspace.IsLocked {
+		ctx.JSON(http.StatusLocked, gin.H{
+			"error":       "Workspace is locked",
+			"locked_by":   workspace.LockedBy,
+			"lock_reason": workspace.LockReason,
+		})
+		return
+	}
+
+	// 根据run_type确定任务类型
+	var taskType models.TaskType
+	if req.RunType == "plan_and_apply" {
+		taskType = models.TaskTypePlanAndApply
+	} else {
+		taskType = models.TaskTypePlan
+	}
+
+	// 创建任务（只创建一个任务）
+	task := &models.WorkspaceTask{
+		WorkspaceID:   workspaceID,
+		TaskType:      taskType,
+		Status:        models.TaskStatusPending,
+		ExecutionMode: workspace.ExecutionMode,
+		CreatedBy:     &uid,
+		Stage:         "pending",
+		Description:   req.Description,
+	}
+
+	if err := c.db.Create(task).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+		return
+	}
+
+	// 通知队列管理器尝试执行任务
+	go func() {
+		if err := c.queueManager.TryExecuteNextTask(uint(workspaceID)); err != nil {
+			log.Printf("Failed to start task execution: %v", err)
+		}
+	}()
+
+	// 返回创建的任务信息
+	var message string
+	if taskType == models.TaskTypePlanAndApply {
+		message = "Plan+Apply task created successfully"
+	} else {
+		message = "Plan task created successfully"
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": message,
+		"task":    task,
+	})
+}
+
+// CreateApplyTask 创建Apply任务
+// @Summary 创建Apply任务
+// @Description 创建Terraform Apply任务（需要先有成功的Plan）
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Success 201 {object} map[string]interface{} "任务创建成功"
+// @Failure 400 {object} map[string]interface{} "没有可用的Plan或参数无效"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "工作空间不存在"
+// @Failure 423 {object} map[string]interface{} "工作空间已锁定"
+// @Failure 500 {object} map[string]interface{} "创建失败"
+// @Router /api/v1/workspaces/{id}/tasks/apply [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) CreateApplyTask(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	uid := userID.(string)
+
+	// 检查workspace是否存在
+	var workspace models.Workspace
+	if err := c.db.First(&workspace, workspaceID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+		return
+	}
+
+	// 检查workspace是否被锁定
+	if workspace.IsLocked {
+		ctx.JSON(http.StatusLocked, gin.H{
+			"error":       "Workspace is locked",
+			"locked_by":   workspace.LockedBy,
+			"lock_reason": workspace.LockReason,
+		})
+		return
+	}
+
+	// 获取最近的成功Plan任务
+	var planTask models.WorkspaceTask
+	err = c.db.Where("workspace_id = ? AND task_type = ? AND status = ?",
+		workspaceID, models.TaskTypePlan, models.TaskStatusSuccess).
+		Order("created_at DESC").
+		First(&planTask).Error
+
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "No successful plan task found. Please run plan first.",
+		})
+		return
+	}
+
+	// 创建Apply任务
+	task := &models.WorkspaceTask{
+		WorkspaceID:   workspaceID,
+		TaskType:      models.TaskTypeApply,
+		Status:        models.TaskStatusPending,
+		ExecutionMode: workspace.ExecutionMode,
+		PlanTaskID:    &planTask.ID,
+		CreatedBy:     &uid,
+		Stage:         "pending",
+	}
+
+	if err := c.db.Create(task).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+		return
+	}
+
+	// 异步执行Apply任务
+	go func() {
+		execCtx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+		defer cancel()
+
+		// 更新任务状态为运行中
+		task.Status = models.TaskStatusRunning
+		task.StartedAt = timePtr(time.Now())
+		c.db.Save(task)
+
+		// 执行Apply
+		if err := c.executor.ExecuteApply(execCtx, task); err != nil {
+			task.Status = models.TaskStatusFailed
+			task.ErrorMessage = err.Error()
+			task.CompletedAt = timePtr(time.Now())
+			c.db.Save(task)
+			return
+		}
+
+		// 更新workspace状态
+		workspace.State = models.WorkspaceStateCompleted
+		workspace.LastApplyAt = timePtr(time.Now())
+		c.db.Save(&workspace)
+	}()
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "Apply task created successfully",
+		"task":    task,
+	})
+}
+
+// GetTask 获取任务详情
+// @Summary 获取任务详情
+// @Description 根据ID获取任务的详细信息
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {object} map[string]interface{} "成功返回任务详情"
+// @Failure 400 {object} map[string]interface{} "无效的参数"
+// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id} [get]
+// @Security Bearer
+func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	// 获取workspace配置
+	var workspace models.Workspace
+	if err := c.db.Select("show_unchanged_resources").First(&workspace, workspaceID).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get workspace"})
+		return
+	}
+
+	var task models.WorkspaceTask
+
+	// 根据workspace配置决定是否排除plan_json
+	if workspace.ShowUnchangedResources {
+		// 返回完整数据（包括plan_json）
+		if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+			First(&task).Error; err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+			return
+		}
+	} else {
+		// 排除plan_json字段以减少响应大小
+		if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+			Omit("plan_json").
+			First(&task).Error; err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+			return
+		}
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"task": task,
+	})
+}
+
+// GetTasks 获取任务列表
+// @Summary 获取任务列表
+// @Description 获取工作空间的任务列表，支持分页、搜索和过滤
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Param search query string false "搜索关键词"
+// @Param status query string false "状态过滤"
+// @Param task_type query string false "任务类型过滤"
+// @Param start_date query string false "开始日期（RFC3339格式）"
+// @Param end_date query string false "结束日期（RFC3339格式）"
+// @Success 200 {object} map[string]interface{} "成功返回任务列表"
+// @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
+// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Router /api/v1/workspaces/{id}/tasks [get]
+// @Security Bearer
+func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
+	workspaceIDParam := ctx.Param("id")
+	if workspaceIDParam == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	// 获取workspace以获取内部ID (支持语义化ID和数字ID)
+	var workspace models.Workspace
+	err := c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
+	if err != nil {
+		// 尝试作为数字ID查询
+		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+			return
+		}
+	}
+	workspaceID := workspace.ID
+
+	// 分页参数
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 10000 {
+		pageSize = 10000 // 提高上限以支持获取所有数据
+	}
+
+	var tasks []models.WorkspaceTask
+	var total int64
+
+	// 基础查询 (使用内部数字ID)
+	query := c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID)
+
+	// 搜索参数 - 支持搜索description, ID, task_type
+	search := ctx.Query("search")
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			"description LIKE ? OR CAST(id AS TEXT) LIKE ? OR task_type LIKE ?",
+			searchPattern, searchPattern, searchPattern,
+		)
+	}
+
+	// 时间范围过滤 - 正确处理时区
+	startDate := ctx.Query("start_date")
+	if startDate != "" {
+		// 解析ISO 8601时间字符串
+		startTime, err := time.Parse(time.RFC3339, startDate)
+		if err != nil {
+			log.Printf("Failed to parse start_date: %v", err)
+		} else {
+			// 转换为本地时区进行比较
+			localStartTime := startTime.Local()
+			query = query.Where("created_at >= ?", localStartTime)
+			log.Printf("Time filter: start_date=%s (UTC) -> %s (Local)", startDate, localStartTime.Format(time.RFC3339))
+		}
+	}
+	endDate := ctx.Query("end_date")
+	if endDate != "" {
+		// 解析ISO 8601时间字符串
+		endTime, err := time.Parse(time.RFC3339, endDate)
+		if err != nil {
+			log.Printf("Failed to parse end_date: %v", err)
+		} else {
+			// 转换为本地时区进行比较
+			localEndTime := endTime.Local()
+			query = query.Where("created_at <= ?", localEndTime)
+			log.Printf("Time filter: end_date=%s (UTC) -> %s (Local)", endDate, localEndTime.Format(time.RFC3339))
+		}
+	}
+
+	// 状态过滤 - 支持前端的filter类型
+	statusFilter := ctx.Query("status")
+	if statusFilter != "" && statusFilter != "all" {
+		switch statusFilter {
+		case "needs_attention":
+			query = query.Where("status IN ?", []string{"requires_approval", "plan_completed"})
+		case "errored":
+			query = query.Where("status = ?", "failed")
+		case "success":
+			query = query.Where("status IN ?", []string{"success", "applied"})
+		case "cancelled":
+			query = query.Where("status = ?", "cancelled")
+		case "running":
+			query = query.Where("status = ?", "running")
+		case "on_hold":
+			query = query.Where("status IN ?", []string{"on_hold", "pending", "apply_pending"})
+		default:
+			// 直接使用状态值
+			query = query.Where("status = ?", statusFilter)
+		}
+	}
+
+	// 任务类型过滤（保留原有功能）
+	if taskType := ctx.Query("task_type"); taskType != "" {
+		query = query.Where("task_type = ?", taskType)
+	}
+
+	// 获取过滤后的总数
+	if err := query.Count(&total).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count tasks"})
+		return
+	}
+
+	// 计算filter counts - 基于相同的搜索和时间范围条件
+	baseCountQuery := c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID)
+
+	// 应用搜索条件
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		baseCountQuery = baseCountQuery.Where(
+			"description LIKE ? OR CAST(id AS TEXT) LIKE ? OR task_type LIKE ?",
+			searchPattern, searchPattern, searchPattern,
+		)
+	}
+
+	// 应用时间范围条件
+	if startDate != "" {
+		baseCountQuery = baseCountQuery.Where("created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		baseCountQuery = baseCountQuery.Where("created_at <= ?", endDate)
+	}
+
+	filterCounts := map[string]int64{
+		"all":             0,
+		"needs_attention": 0,
+		"errored":         0,
+		"running":         0,
+		"on_hold":         0,
+		"success":         0,
+		"cancelled":       0,
+	}
+
+	// Count all (已经应用了搜索和时间范围)
+	var countAll int64
+	baseCountQuery.Count(&countAll)
+	filterCounts["all"] = countAll
+
+	// Count by status - 每次都需要重新创建query以避免条件累积
+	var count int64
+
+	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID).
+		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
+		Where("status = ?", "failed").Count(&count)
+	filterCounts["errored"] = count
+
+	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID).
+		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
+		Where("status = ?", "running").Count(&count)
+	filterCounts["running"] = count
+
+	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID).
+		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
+		Where("status IN ?", []string{"on_hold", "pending", "apply_pending"}).Count(&count)
+	filterCounts["on_hold"] = count
+
+	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID).
+		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
+		Where("status = ?", "cancelled").Count(&count)
+	filterCounts["cancelled"] = count
+
+	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID).
+		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
+		Where("status IN ?", []string{"success", "applied"}).Count(&count)
+	filterCounts["success"] = count
+
+	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspaceID).
+		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
+		Where("status IN ?", []string{"requires_approval", "plan_completed"}).Count(&count)
+	filterCounts["needs_attention"] = count
+
+	// 分页查询 - 只选择列表页需要的字段，排除大字段
+	offset := (page - 1) * pageSize
+	if err := query.
+		Select("id", "workspace_id", "task_type", "status", "created_at", "created_by",
+			"description", "changes_add", "changes_change", "changes_destroy",
+			"stage", "started_at", "completed_at").
+		Order("created_at DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&tasks).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"tasks":         tasks,
+		"total":         total,
+		"page":          page,
+		"page_size":     pageSize,
+		"pages":         (int(total) + pageSize - 1) / pageSize,
+		"filter_counts": filterCounts,
+	})
+}
+
+// applySearchAndTimeFilters 应用搜索和时间范围过滤的辅助函数
+func applySearchAndTimeFilters(search, startDate, endDate string) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if search != "" {
+			searchPattern := "%" + search + "%"
+			db = db.Where(
+				"description LIKE ? OR CAST(id AS TEXT) LIKE ? OR task_type LIKE ?",
+				searchPattern, searchPattern, searchPattern,
+			)
+		}
+		if startDate != "" {
+			// 解析并转换为本地时区
+			if startTime, err := time.Parse(time.RFC3339, startDate); err == nil {
+				db = db.Where("created_at >= ?", startTime.Local())
+			}
+		}
+		if endDate != "" {
+			// 解析并转换为本地时区
+			if endTime, err := time.Parse(time.RFC3339, endDate); err == nil {
+				db = db.Where("created_at <= ?", endTime.Local())
+			}
+		}
+		return db
+	}
+}
+
+// GetTaskLogs 获取任务日志
+// @Summary 获取任务日志
+// @Description 获取任务的执行日志
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {object} map[string]interface{} "成功返回日志"
+// @Failure 400 {object} map[string]interface{} "无效的任务ID"
+// @Failure 500 {object} map[string]interface{} "获取失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/logs [get]
+// @Security Bearer
+func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	logs, err := c.executor.GetTaskLogs(uint(taskID))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"total": len(logs),
+	})
+}
+
+// ConfirmApply 确认执行Apply
+// @Summary 确认执行Apply
+// @Description 确认执行Plan+Apply任务的Apply阶段
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Param request body object true "Apply描述"
+// @Success 200 {object} map[string]interface{} "Apply已加入队列"
+// @Failure 400 {object} map[string]interface{} "请求参数无效或任务状态不正确"
+// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Failure 409 {object} map[string]interface{} "资源已变更"
+// @Failure 500 {object} map[string]interface{} "更新失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	// 解析请求体
+	var req struct {
+		ApplyDescription string `json:"apply_description"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "apply_description is required"})
+		return
+	}
+
+	// 获取任务
+	var task models.WorkspaceTask
+	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+		First(&task).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 验证任务类型
+	if task.TaskType != models.TaskTypePlanAndApply {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Only plan_and_apply tasks can be confirmed",
+		})
+		return
+	}
+
+	// 验证任务状态
+	if task.Status != models.TaskStatusPlanCompleted {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":          "Task is not in plan_completed status",
+			"current_status": task.Status,
+		})
+		return
+	}
+
+	// 验证资源版本快照
+	if err := c.executor.ValidateResourceSnapshot(&task); err != nil {
+		ctx.JSON(http.StatusConflict, gin.H{
+			"error":   "Resources have changed since plan",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// 更新任务
+	task.ApplyDescription = req.ApplyDescription
+	task.Status = models.TaskStatusApplyPending
+	task.Stage = "apply_pending"
+
+	if err := c.db.Save(&task).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
+		return
+	}
+
+	// 通知队列管理器尝试执行Apply
+	go func() {
+		if err := c.queueManager.TryExecuteNextTask(uint(workspaceID)); err != nil {
+			log.Printf("Failed to start apply execution: %v", err)
+		}
+	}()
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Apply queued for execution",
+		"task":    task,
+	})
+}
+
+// CancelPreviousTasks 取消当前任务之前的所有等待任务
+// @Summary 取消之前的等待任务
+// @Description 取消当前任务之前的所有等待中的任务
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {object} map[string]interface{} "取消成功"
+// @Failure 400 {object} map[string]interface{} "无效的参数或任务状态不正确"
+// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Failure 500 {object} map[string]interface{} "取消失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/cancel-previous [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	// 获取当前任务
+	var currentTask models.WorkspaceTask
+	if err := c.db.First(&currentTask, taskID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 只允许对pending状态的任务执行此操作
+	if currentTask.Status != models.TaskStatusPending {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Only pending tasks can cancel previous tasks"})
+		return
+	}
+
+	// 查找所有在当前任务之前创建的需要取消的任务
+	// 包括：pending, apply_pending, plan_completed（等待Apply确认）
+	// 不包括：running（正在执行）, requires_approval（需要人工确认）
+	var previousTasks []models.WorkspaceTask
+	if err := c.db.Where("workspace_id = ? AND id < ? AND status IN ?",
+		workspaceID, taskID, []string{"pending", "apply_pending", "plan_completed"}).
+		Find(&previousTasks).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find previous tasks"})
+		return
+	}
+
+	// 取消所有之前的任务
+	cancelledCount := 0
+	for _, task := range previousTasks {
+		task.Status = models.TaskStatusCancelled
+		task.CompletedAt = timePtr(time.Now())
+		task.ErrorMessage = "Cancelled by user to prioritize later task"
+
+		if err := c.db.Save(&task).Error; err == nil {
+			cancelledCount++
+		}
+	}
+
+	// 取消之前的任务后，尝试执行当前任务
+	go func() {
+		if err := c.queueManager.TryExecuteNextTask(uint(workspaceID)); err != nil {
+			log.Printf("Failed to start task execution after cancelling previous tasks: %v", err)
+		}
+	}()
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":         "Previous tasks cancelled successfully",
+		"cancelled_count": cancelledCount,
+	})
+}
+
+// CancelTask 取消任务
+// @Summary 取消任务
+// @Description 取消指定的任务
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {object} map[string]interface{} "取消成功"
+// @Failure 400 {object} map[string]interface{} "无效的任务ID或任务已完成"
+// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Failure 500 {object} map[string]interface{} "取消失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/cancel [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	var task models.WorkspaceTask
+	if err := c.db.First(&task, taskID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 只能取消未完成的任务（不能取消success、applied、failed、cancelled）
+	if task.Status == models.TaskStatusSuccess ||
+		task.Status == models.TaskStatusApplied ||
+		task.Status == models.TaskStatusFailed ||
+		task.Status == models.TaskStatusCancelled {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot cancel completed, failed or already cancelled tasks",
+		})
+		return
+	}
+
+	// 从OutputStreamManager获取当前日志（如果任务正在运行）
+	stream := c.streamManager.Get(uint(taskID))
+	if stream != nil {
+		bufferedLogs := stream.GetBufferedLogs()
+
+		if bufferedLogs != "" {
+			// 根据任务类型保存到对应字段
+			if task.TaskType == models.TaskTypePlan || task.TaskType == models.TaskTypePlanAndApply {
+				task.PlanOutput = bufferedLogs
+				log.Printf("Saved %d bytes of plan logs for cancelled task %d", len(bufferedLogs), taskID)
+			} else if task.TaskType == models.TaskTypeApply {
+				task.ApplyOutput = bufferedLogs
+				log.Printf("Saved %d bytes of apply logs for cancelled task %d", len(bufferedLogs), taskID)
+			}
+		}
+	}
+
+	// 更新任务状态
+	task.Status = models.TaskStatusCancelled
+	task.CompletedAt = timePtr(time.Now())
+	task.ErrorMessage = "Task cancelled by user"
+
+	if err := c.db.Save(&task).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel task"})
+		return
+	}
+
+	// 任务取消后，尝试执行下一个任务
+	go func() {
+		if err := c.queueManager.TryExecuteNextTask(task.WorkspaceID); err != nil {
+			log.Printf("Failed to start next task after cancellation: %v", err)
+		}
+	}()
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Task cancelled successfully",
+		"task":    task,
+	})
+}
+
+// timePtr 返回时间指针
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+// RetryStateSave 重试State保存
+// @Summary 重试State保存
+// @Description 重试保存失败的State文件
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {object} map[string]interface{} "State保存成功"
+// @Failure 400 {object} map[string]interface{} "任务不是State保存失败状态"
+// @Failure 404 {object} map[string]interface{} "任务或备份文件不存在"
+// @Failure 500 {object} map[string]interface{} "保存失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/retry-state-save [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
+	workspaceID, _ := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	taskID, _ := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+
+	var task models.WorkspaceTask
+	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+		First(&task).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 检查是否是State保存失败的任务
+	if !strings.Contains(task.ErrorMessage, "state save failed") {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Task is not in state save failed status",
+		})
+		return
+	}
+
+	// 从错误信息中提取备份路径
+	backupPath := extractBackupPath(task.ErrorMessage)
+	if backupPath == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Cannot find backup path in error message",
+			"details": "Error message format may be incorrect or backup path is missing",
+		})
+		return
+	}
+
+	// 检查备份文件是否存在
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error":       "Backup file not found",
+			"backup_path": backupPath,
+			"suggestion":  "The backup file may have been deleted or the backup directory was not created successfully. Please check the backup directory permissions.",
+		})
+		return
+	}
+
+	// 读取备份文件
+	stateData, err := os.ReadFile(backupPath)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":       fmt.Sprintf("Failed to read backup file: %v", err),
+			"backup_path": backupPath,
+		})
+		return
+	}
+
+	// 获取workspace
+	var workspace models.Workspace
+	if err := c.db.First(&workspace, workspaceID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+		return
+	}
+
+	// 重新保存到数据库
+	if err := c.executor.SaveStateToDatabase(&workspace, &task, stateData); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to save state: %v", err),
+		})
+		return
+	}
+
+	// 更新任务状态
+	task.Status = models.TaskStatusSuccess
+	task.ErrorMessage = ""
+	c.db.Save(&task)
+
+	// 解锁workspace
+	workspace.IsLocked = false
+	workspace.LockedBy = nil
+	workspace.LockedAt = nil
+	workspace.LockReason = ""
+	c.db.Save(&workspace)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "State saved successfully, workspace unlocked",
+		"task":    task,
+	})
+}
+
+// DownloadStateBackup 下载State备份
+// @Summary 下载State备份文件
+// @Description 下载任务的State备份文件
+// @Tags Workspace Task
+// @Accept json
+// @Produce application/octet-stream
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {file} file "State备份文件"
+// @Failure 400 {object} map[string]interface{} "无法找到备份路径"
+// @Failure 404 {object} map[string]interface{} "任务或备份文件不存在"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/state-backup [get]
+// @Security Bearer
+func (c *WorkspaceTaskController) DownloadStateBackup(ctx *gin.Context) {
+	workspaceID, _ := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	taskID, _ := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+
+	var task models.WorkspaceTask
+	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+		First(&task).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 从错误信息中提取备份路径
+	backupPath := extractBackupPath(task.ErrorMessage)
+	if backupPath == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot find backup path in error message",
+		})
+		return
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error": "Backup file not found",
+		})
+		return
+	}
+
+	// 返回文件
+	ctx.Header("Content-Disposition", fmt.Sprintf("attachment; filename=terraform_%d.tfstate", taskID))
+	ctx.File(backupPath)
+}
+
+// extractBackupPath 从错误信息中提取备份路径
+func extractBackupPath(errorMessage string) string {
+	// "backup at: /var/backup/states/ws_10_task_63_1760251780.tfstate"
+	parts := strings.Split(errorMessage, "backup at: ")
+	if len(parts) > 1 {
+		return strings.TrimSpace(parts[1])
+	}
+	return ""
+}
+
+// CreateComment 添加任务评论
+// @Summary 添加任务评论
+// @Description 为任务添加评论
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Param request body object true "评论内容"
+// @Success 201 {object} map[string]interface{} "评论创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效或评论数量超限"
+// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Failure 500 {object} map[string]interface{} "创建失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/comments [post]
+// @Security Bearer
+func (c *WorkspaceTaskController) CreateComment(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	// 获取当前用户信息（从JWT中间件）
+	userID, exists := ctx.Get("user_id")
+	var uid *string
+	if exists {
+		u := userID.(string)
+		uid = &u
+	}
+
+	// 解析请求体
+	var req struct {
+		Comment    string `json:"comment" binding:"required"`
+		ActionType string `json:"action_type"` // comment, confirm_apply, cancel, cancel_previous
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Comment is required"})
+		return
+	}
+
+	// 验证任务是否存在
+	var task models.WorkspaceTask
+	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+		First(&task).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 检查评论数量限制（最多20条）
+	var commentCount int64
+	c.db.Model(&models.TaskComment{}).Where("task_id = ?", taskID).Count(&commentCount)
+	if commentCount >= 20 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Maximum 20 comments allowed per task",
+		})
+		return
+	}
+
+	// 创建评论
+	comment := &models.TaskComment{
+		TaskID:     uint(taskID),
+		UserID:     uid,
+		Username:   "User", // 默认用户名，实际应该从用户系统获取
+		Comment:    req.Comment,
+		ActionType: req.ActionType,
+		CreatedAt:  time.Now(),
+	}
+
+	if err := c.db.Create(comment).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "Comment created successfully",
+		"comment": comment,
+	})
+}
+
+// GetComments 获取任务评论列表
+// @Summary 获取任务评论列表
+// @Description 获取任务的所有评论
+// @Tags Workspace Task
+// @Accept json
+// @Produce json
+// @Param id path int true "工作空间ID"
+// @Param task_id path int true "任务ID"
+// @Success 200 {object} map[string]interface{} "成功返回评论列表"
+// @Failure 400 {object} map[string]interface{} "无效的参数"
+// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Failure 500 {object} map[string]interface{} "获取失败"
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/comments [get]
+// @Security Bearer
+func (c *WorkspaceTaskController) GetComments(ctx *gin.Context) {
+	workspaceID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	// 验证任务是否存在
+	var task models.WorkspaceTask
+	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspaceID).
+		First(&task).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// 获取评论列表（按时间倒序）
+	var comments []models.TaskComment
+	if err := c.db.Where("task_id = ?", taskID).
+		Order("created_at DESC").
+		Find(&comments).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"comments": comments,
+		"total":    len(comments),
+	})
+}

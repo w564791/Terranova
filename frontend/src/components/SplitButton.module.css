@@ -1,0 +1,89 @@
+.splitButton {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.mainButton {
+  padding: 10px 20px;
+  background: var(--color-blue-600);
+  color: white;
+  border: none;
+  border-radius: 6px 0 0 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.mainButton:hover:not(.disabled) {
+  background: var(--color-blue-700);
+}
+
+.dropdownButton {
+  padding: 10px 12px;
+  background: var(--color-blue-600);
+  color: white;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropdownButton:hover:not(.disabled) {
+  background: var(--color-blue-700);
+}
+
+.dropdownIcon {
+  display: block;
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+.dropdownMenu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  background: white;
+  border: 1px solid var(--color-gray-300);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.menuItem {
+  padding: 12px 16px;
+  background: white;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  color: var(--color-gray-900);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  display: block;
+  white-space: nowrap;
+}
+
+.menuItem:hover {
+  background: var(--color-gray-50);
+}
+
+.menuItem:active {
+  background: var(--color-gray-100);
+}
+
+.menuIcon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}

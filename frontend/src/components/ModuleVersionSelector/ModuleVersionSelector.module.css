@@ -1,0 +1,374 @@
+.container {
+  margin-bottom: 16px;
+}
+
+.selectorWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+}
+
+.selector {
+  position: relative;
+}
+
+.selectorButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 200px;
+  transition: all 0.2s;
+}
+
+.selectorButton:hover {
+  background: var(--bg-hover, #ebebeb);
+  border-color: var(--primary-color, #1890ff);
+}
+
+.selectorButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.versionText {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+.versionMeta {
+  font-size: 12px;
+  color: var(--text-tertiary, #999);
+}
+
+.arrow {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-tertiary, #999);
+}
+
+.defaultBadge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--primary-color, #1890ff);
+  color: white;
+  font-size: 10px;
+  border-radius: 4px;
+  font-weight: normal;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 280px;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.dropdownItem:last-child {
+  border-bottom: none;
+}
+
+.dropdownItem:hover {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.dropdownItem.selected {
+  background: var(--primary-light, #e6f7ff);
+}
+
+.versionInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.versionName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+.versionStats {
+  font-size: 12px;
+  color: var(--text-tertiary, #999);
+}
+
+.versionActions {
+  display: flex;
+  gap: 4px;
+}
+
+.actionButton {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.actionButton:hover {
+  opacity: 1;
+}
+
+.addVersion {
+  color: var(--primary-color, #1890ff);
+  font-weight: 500;
+}
+
+.setDefaultButton,
+.inheritButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.setDefaultButton {
+  background: var(--warning-light, #fff7e6);
+  color: var(--warning-color, #fa8c16);
+  border: 1px solid var(--warning-color, #fa8c16);
+}
+
+.setDefaultButton:hover {
+  background: var(--warning-color, #fa8c16);
+  color: white;
+}
+
+.defaultButton {
+  background: var(--success-light, #f6ffed);
+  color: var(--success-color, #52c41a);
+  border: 1px solid var(--success-color, #52c41a);
+  cursor: default;
+  opacity: 0.8;
+}
+
+.defaultButton:disabled {
+  cursor: default;
+}
+
+.inheritButton {
+  background: var(--success-light, #f6ffed);
+  color: var(--success-color, #52c41a);
+  border: 1px solid var(--success-color, #52c41a);
+}
+
+.inheritButton:hover {
+  background: var(--success-color, #52c41a);
+  color: white;
+}
+
+/* 无版本状态 */
+.noVersions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 6px;
+}
+
+.noVersionsText {
+  color: var(--text-tertiary, #999);
+  font-size: 14px;
+}
+
+.createButton {
+  padding: 6px 12px;
+  background: var(--primary-color, #1890ff);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.createButton:hover {
+  background: var(--primary-dark, #096dd9);
+}
+
+/* 弹窗样式 */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.modal h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: var(--text-primary, #333);
+}
+
+.modalDescription {
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.formGroup {
+  margin-bottom: 16px;
+}
+
+.formGroup label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--text-secondary, #666);
+}
+
+.formGroup input[type="text"],
+.formGroup select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.formGroup input[type="text"]:focus,
+.formGroup select:focus {
+  outline: none;
+  border-color: var(--primary-color, #1890ff);
+  box-shadow: 0 0 0 2px var(--primary-light, #e6f7ff);
+}
+
+.formGroup input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.modalActions button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.modalActions button:first-child {
+  background: white;
+  border: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-secondary, #666);
+}
+
+.modalActions button:first-child:hover {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.primaryButton {
+  background: var(--primary-color, #1890ff) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.primaryButton:hover {
+  background: var(--primary-dark, #096dd9) !important;
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 继承选项 */
+.versionList {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+}
+
+.inheritOption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.inheritOption:last-child {
+  border-bottom: none;
+}
+
+.inheritOption:hover {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.demoCount {
+  font-size: 12px;
+  color: var(--text-tertiary, #999);
+  background: var(--bg-secondary, #f5f5f5);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.noData {
+  text-align: center;
+  color: var(--text-tertiary, #999);
+  padding: 20px;
+}

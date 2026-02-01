@@ -1,0 +1,305 @@
+package services
+
+import (
+	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"time"
+
+	"iac-platform/internal/models"
+
+	"gorm.io/gorm"
+)
+
+// LocalExecutorService Local执行模式服务
+type LocalExecutorService struct {
+	db               *gorm.DB
+	lifecycleService *WorkspaceLifecycleService
+	baseWorkdir      string
+}
+
+// NewLocalExecutorService 创建Local执行服务实例
+func NewLocalExecutorService(db *gorm.DB, baseWorkdir string) *LocalExecutorService {
+	return &LocalExecutorService{
+		db:               db,
+		lifecycleService: NewWorkspaceLifecycleService(db),
+		baseWorkdir:      baseWorkdir,
+	}
+}
+
+// ExecutePlan 执行Plan任务
+func (les *LocalExecutorService) ExecutePlan(taskID uint) error {
+	// 获取任务信息
+	task, err := les.lifecycleService.GetTask(taskID)
+	if err != nil {
+		return fmt.Errorf("获取任务失败: %w", err)
+	}
+
+	// 获取workspace信息
+	var workspace models.Workspace
+	if err := les.db.First(&workspace, task.WorkspaceID).Error; err != nil {
+		return fmt.Errorf("获取workspace失败: %w", err)
+	}
+
+	// 更新任务状态为running
+	now := time.Now()
+	if err := les.db.Model(task).Updates(map[string]interface{}{
+		"status":     models.TaskStatusRunning,
+		"started_at": now,
+	}).Error; err != nil {
+		return fmt.Errorf("更新任务状态失败: %w", err)
+	}
+
+	// 创建工作目录
+	workdir := filepath.Join(les.baseWorkdir, fmt.Sprintf("workspace-%d", workspace.ID))
+	executor := NewTerraformExecutor(workdir)
+
+	// 创建context（30分钟超时）
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	// 写入Terraform代码
+	if err := executor.WriteTerraformCode(workspace.TFCode); err != nil {
+		les.lifecycleService.CompletePlan(taskID, false, "", err.Error())
+		return fmt.Errorf("写入Terraform代码失败: %w", err)
+	}
+
+	// 执行terraform init
+	initResult, err := executor.Init(ctx)
+	if err != nil || !initResult.Success {
+		errorMsg := initResult.Error
+		if err != nil {
+			errorMsg = err.Error()
+		}
+		les.lifecycleService.CompletePlan(taskID, false, initResult.Output, errorMsg)
+		return fmt.Errorf("terraform init失败: %s", errorMsg)
+	}
+
+	// 执行terraform plan
+	vars := les.extractVariables(workspace)
+	planResult, err := executor.Plan(ctx, vars)
+	if err != nil || !planResult.Success {
+		errorMsg := planResult.Error
+		if err != nil {
+			errorMsg = err.Error()
+		}
+		les.lifecycleService.CompletePlan(taskID, false, planResult.Output, errorMsg)
+		return fmt.Errorf("terraform plan失败: %s", errorMsg)
+	}
+
+	// 完成Plan任务
+	output := fmt.Sprintf("=== Init Output ===\n%s\n\n=== Plan Output ===\n%s",
+		initResult.Output, planResult.Output)
+	if err := les.lifecycleService.CompletePlan(taskID, true, output, ""); err != nil {
+		return fmt.Errorf("完成Plan任务失败: %w", err)
+	}
+
+	// 如果是auto_apply模式，自动转换到waiting_apply状态
+	if workspace.AutoApply {
+		if err := les.lifecycleService.TransitionState(workspace.ID, models.WorkspaceStateWaitingApply); err != nil {
+			return fmt.Errorf("转换到waiting_apply状态失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ExecuteApply 执行Apply任务
+func (les *LocalExecutorService) ExecuteApply(taskID uint) error {
+	// 获取任务信息
+	task, err := les.lifecycleService.GetTask(taskID)
+	if err != nil {
+		return fmt.Errorf("获取任务失败: %w", err)
+	}
+
+	// 获取workspace信息
+	var workspace models.Workspace
+	if err := les.db.First(&workspace, task.WorkspaceID).Error; err != nil {
+		return fmt.Errorf("获取workspace失败: %w", err)
+	}
+
+	// 更新任务状态为running
+	now := time.Now()
+	if err := les.db.Model(task).Updates(map[string]interface{}{
+		"status":     models.TaskStatusRunning,
+		"started_at": now,
+	}).Error; err != nil {
+		return fmt.Errorf("更新任务状态失败: %w", err)
+	}
+
+	// 创建工作目录
+	workdir := filepath.Join(les.baseWorkdir, fmt.Sprintf("workspace-%d", workspace.ID))
+	executor := NewTerraformExecutor(workdir)
+
+	// 创建context（60分钟超时）
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	defer cancel()
+
+	// 写入Terraform代码
+	if err := executor.WriteTerraformCode(workspace.TFCode); err != nil {
+		les.lifecycleService.CompleteApply(taskID, false, "", err.Error())
+		return fmt.Errorf("写入Terraform代码失败: %w", err)
+	}
+
+	// 如果有state，恢复state
+	if workspace.TFState != nil && len(workspace.TFState) > 0 {
+		if err := executor.SaveState(ctx, workspace.TFState); err != nil {
+			les.lifecycleService.CompleteApply(taskID, false, "", err.Error())
+			return fmt.Errorf("恢复state失败: %w", err)
+		}
+	}
+
+	// 执行terraform init
+	initResult, err := executor.Init(ctx)
+	if err != nil || !initResult.Success {
+		errorMsg := initResult.Error
+		if err != nil {
+			errorMsg = err.Error()
+		}
+		les.lifecycleService.CompleteApply(taskID, false, initResult.Output, errorMsg)
+		return fmt.Errorf("terraform init失败: %s", errorMsg)
+	}
+
+	// 执行terraform apply
+	vars := les.extractVariables(workspace)
+	applyResult, err := executor.Apply(ctx, vars)
+	if err != nil || !applyResult.Success {
+		errorMsg := applyResult.Error
+		if err != nil {
+			errorMsg = err.Error()
+		}
+		les.lifecycleService.CompleteApply(taskID, false, applyResult.Output, errorMsg)
+		return fmt.Errorf("terraform apply失败: %s", errorMsg)
+	}
+
+	// 获取并保存state
+	state, err := executor.GetState(ctx)
+	if err != nil {
+		// State获取失败不影响Apply成功
+		fmt.Printf("警告: 获取state失败: %v\n", err)
+	} else {
+		// 保存state到workspace
+		if err := les.db.Model(&workspace).Update("tf_state", state).Error; err != nil {
+			fmt.Printf("警告: 保存state失败: %v\n", err)
+		}
+
+		// 创建state版本
+		if err := les.createStateVersion(workspace.ID, state, taskID); err != nil {
+			fmt.Printf("警告: 创建state版本失败: %v\n", err)
+		}
+	}
+
+	// 完成Apply任务
+	output := fmt.Sprintf("=== Init Output ===\n%s\n\n=== Apply Output ===\n%s",
+		initResult.Output, applyResult.Output)
+	if err := les.lifecycleService.CompleteApply(taskID, true, output, ""); err != nil {
+		return fmt.Errorf("完成Apply任务失败: %w", err)
+	}
+
+	return nil
+}
+
+// extractVariables 从workspace中提取变量
+func (les *LocalExecutorService) extractVariables(workspace models.Workspace) map[string]string {
+	vars := make(map[string]string)
+
+	// 从system_variables中提取
+	if workspace.SystemVariables != nil {
+		for key, value := range workspace.SystemVariables {
+			if strValue, ok := value.(string); ok {
+				vars[key] = strValue
+			}
+		}
+	}
+
+	return vars
+}
+
+// createStateVersion 创建state版本
+func (les *LocalExecutorService) createStateVersion(workspaceID uint, state models.JSONB, taskID uint) error {
+	// 计算checksum
+	stateBytes, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("序列化state失败: %w", err)
+	}
+
+	hash := md5.Sum(stateBytes)
+	checksum := hex.EncodeToString(hash[:])
+
+	// 计算资源数量
+	resourceCount := les.calculateResourceCount(state)
+
+	// 获取当前最大版本号
+	var maxVersion int
+	les.db.Model(&models.WorkspaceStateVersion{}).
+		Where("workspace_id = ?", workspaceID).
+		Select("COALESCE(MAX(version), 0)").
+		Scan(&maxVersion)
+
+	// 创建新版本
+	version := &models.WorkspaceStateVersion{
+		WorkspaceID:   workspaceID,
+		Content:       state,
+		Version:       maxVersion + 1,
+		Checksum:      checksum,
+		SizeBytes:     len(stateBytes),
+		RunID:         &taskID,
+		ResourceCount: resourceCount,
+	}
+
+	if err := les.db.Create(version).Error; err != nil {
+		return fmt.Errorf("创建state版本失败: %w", err)
+	}
+
+	// 更新workspace的resource_count
+	if err := les.db.Model(&models.Workspace{}).
+		Where("id = ?", workspaceID).
+		Update("resource_count", resourceCount).Error; err != nil {
+		fmt.Printf("警告: 更新workspace资源数量失败: %v\n", err)
+	}
+
+	return nil
+}
+
+// calculateResourceCount 计算State中的资源数量
+func (les *LocalExecutorService) calculateResourceCount(state models.JSONB) int {
+	// Terraform State结构
+	type TerraformState struct {
+		Resources []struct {
+			Type      string `json:"type"`
+			Instances []struct {
+				Attributes map[string]interface{} `json:"attributes"`
+			} `json:"instances"`
+		} `json:"resources"`
+	}
+
+	// 将JSONB转换为JSON字符串
+	jsonBytes, err := json.Marshal(state)
+	if err != nil {
+		return 0
+	}
+
+	// 解析State
+	var tfState TerraformState
+	if err := json.Unmarshal(jsonBytes, &tfState); err != nil {
+		return 0
+	}
+
+	// 统计资源数量
+	totalCount := 0
+	for _, resource := range tfState.Resources {
+		totalCount += len(resource.Instances)
+	}
+
+	return totalCount
+}
+
+// CleanWorkspace 清理workspace工作目录
+func (les *LocalExecutorService) CleanWorkspace(workspaceID uint) error {
+	workdir := filepath.Join(les.baseWorkdir, fmt.Sprintf("workspace-%d", workspaceID))
+	executor := NewTerraformExecutor(workdir)
+	return executor.CleanWorkdir()
+}

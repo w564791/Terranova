@@ -1,0 +1,137 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.dialog {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.header.warning {
+  background: rgba(239, 68, 68, 0.1);
+  border-bottom-color: rgba(239, 68, 68, 0.2);
+}
+
+.header.danger {
+  background: rgba(220, 38, 38, 0.1);
+  border-bottom-color: rgba(220, 38, 38, 0.2);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.title.warning {
+  color: var(--color-red-700);
+}
+
+.title.danger {
+  color: var(--color-red-800);
+}
+
+.body {
+  padding: 24px;
+}
+
+.message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-gray-700);
+  white-space: pre-line;
+}
+
+.footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btnCancel {
+  padding: 10px 20px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: 6px;
+  background: white;
+  color: var(--color-gray-700);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnCancel:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.btnConfirm {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: white;
+}
+
+.btnConfirm.info {
+  background: #3b82f6;
+}
+
+.btnConfirm.info:hover {
+  background: #2563eb;
+}
+
+.btnConfirm.warning {
+  background: #3b82f6;
+  color: white;
+}
+
+.btnConfirm.warning:hover {
+  background: #2563eb;
+}
+
+.btnConfirm.danger {
+  background: var(--color-red-600);
+  color: white;
+}
+
+.btnConfirm.danger:hover {
+  background: var(--color-red-700);
+}

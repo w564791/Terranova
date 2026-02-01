@@ -1,0 +1,233 @@
+package services
+
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"time"
+
+	"iac-platform/internal/models"
+
+	"gorm.io/gorm"
+)
+
+// AgentService Agent服务
+type AgentService struct {
+	db *gorm.DB
+}
+
+// NewAgentService 创建Agent服务
+func NewAgentService(db *gorm.DB) *AgentService {
+	return &AgentService{db: db}
+}
+
+// CreateAgent 创建Agent并生成Token
+func (s *AgentService) CreateAgent(agent *models.Agent) error {
+	// 生成安全的Token
+	token, err := s.generateSecureToken()
+	if err != nil {
+		return err
+	}
+
+	agent.Token = token
+	expiresAt := time.Now().Add(365 * 24 * time.Hour) // 1年有效期
+	agent.TokenExpiresAt = &expiresAt
+	agent.Status = models.AgentStatusOffline
+
+	return s.db.Create(agent).Error
+}
+
+// RegisterAgent Agent注册（使用Token）
+func (s *AgentService) RegisterAgent(req *models.AgentRegistrationRequest) (*models.Agent, error) {
+	// 验证Token
+	var agent models.Agent
+	err := s.db.Where("token = ? AND (token_expires_at IS NULL OR token_expires_at > ?)",
+		req.Token, time.Now()).First(&agent).Error
+
+	if err == gorm.ErrRecordNotFound {
+		// Token不存在，创建新Agent
+		agent = models.Agent{
+			AgentID:      req.AgentID,
+			Name:         req.Name,
+			Description:  req.Description,
+			Token:        req.Token,
+			Labels:       req.Labels,
+			Capabilities: req.Capabilities,
+			Endpoint:     req.Endpoint,
+			Status:       models.AgentStatusOnline,
+		}
+		now := time.Now()
+		agent.LastHeartbeatAt = &now
+
+		return &agent, s.db.Create(&agent).Error
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Token存在，更新Agent信息
+	agent.AgentID = req.AgentID
+	agent.Name = req.Name
+	agent.Description = req.Description
+	agent.Labels = req.Labels
+	agent.Capabilities = req.Capabilities
+	agent.Endpoint = req.Endpoint
+	agent.Status = models.AgentStatusOnline
+	now := time.Now()
+	agent.LastHeartbeatAt = &now
+
+	return &agent, s.db.Save(&agent).Error
+}
+
+// Heartbeat 处理Agent心跳
+func (s *AgentService) Heartbeat(req *models.AgentHeartbeatRequest) error {
+	updates := map[string]interface{}{
+		"last_heartbeat_at": time.Now(),
+		"status":            req.Status,
+	}
+
+	if req.Metadata != nil {
+		updates["metadata"] = req.Metadata
+	}
+
+	result := s.db.Model(&models.Agent{}).
+		Where("agent_id = ?", req.AgentID).
+		Updates(updates)
+
+	if result.RowsAffected == 0 {
+		return errors.New("agent not found")
+	}
+
+	return result.Error
+}
+
+// GetAgent 获取Agent
+func (s *AgentService) GetAgent(id uint) (*models.Agent, error) {
+	var agent models.Agent
+	err := s.db.First(&agent, id).Error
+	return &agent, err
+}
+
+// GetAgentByAgentID 根据AgentID获取Agent
+func (s *AgentService) GetAgentByAgentID(agentID string) (*models.Agent, error) {
+	var agent models.Agent
+	err := s.db.Where("agent_id = ?", agentID).First(&agent).Error
+	return &agent, err
+}
+
+// ListAgents 获取Agent列表
+func (s *AgentService) ListAgents(status string, labels []string) ([]models.Agent, error) {
+	query := s.db.Model(&models.Agent{}).Where("deleted_at IS NULL")
+
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	if len(labels) > 0 {
+		// 标签匹配查询
+		for _, label := range labels {
+			query = query.Where("labels @> ?", `["`+label+`"]`)
+		}
+	}
+
+	var agents []models.Agent
+	err := query.Find(&agents).Error
+	return agents, err
+}
+
+// UpdateAgent 更新Agent
+func (s *AgentService) UpdateAgent(id uint, updates map[string]interface{}) error {
+	result := s.db.Model(&models.Agent{}).Where("id = ?", id).Updates(updates)
+	if result.RowsAffected == 0 {
+		return errors.New("agent not found")
+	}
+	return result.Error
+}
+
+// DeleteAgent 删除Agent（软删除）
+func (s *AgentService) DeleteAgent(id uint) error {
+	now := time.Now()
+	result := s.db.Model(&models.Agent{}).Where("id = ?", id).Update("deleted_at", now)
+	if result.RowsAffected == 0 {
+		return errors.New("agent not found")
+	}
+	return result.Error
+}
+
+// RegenerateToken 重新生成Token
+func (s *AgentService) RegenerateToken(id uint) (string, error) {
+	token, err := s.generateSecureToken()
+	if err != nil {
+		return "", err
+	}
+
+	expiresAt := time.Now().Add(365 * 24 * time.Hour)
+
+	result := s.db.Model(&models.Agent{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"token":            token,
+			"token_expires_at": expiresAt,
+		})
+
+	if result.RowsAffected == 0 {
+		return "", errors.New("agent not found")
+	}
+
+	return token, result.Error
+}
+
+// RevokeToken 撤销Token
+func (s *AgentService) RevokeToken(id uint) error {
+	now := time.Now()
+	result := s.db.Model(&models.Agent{}).
+		Where("id = ?", id).
+		Update("token_expires_at", now)
+
+	if result.RowsAffected == 0 {
+		return errors.New("agent not found")
+	}
+
+	return result.Error
+}
+
+// generateSecureToken 生成安全的Token
+func (s *AgentService) generateSecureToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return "agt_" + base64.URLEncoding.EncodeToString(b), nil
+}
+
+// CheckOnlineAgents 检查在线Agent
+func (s *AgentService) CheckOnlineAgents() error {
+	// 将超过60秒没有心跳的Agent标记为离线
+	timeout := time.Now().Add(-60 * time.Second)
+
+	return s.db.Model(&models.Agent{}).
+		Where("status = ? AND last_heartbeat_at < ?", models.AgentStatusOnline, timeout).
+		Update("status", models.AgentStatusOffline).Error
+}
+
+// UpdateTaskStats 更新Agent任务统计
+func (s *AgentService) UpdateTaskStats(agentID uint, success bool) error {
+	updates := map[string]interface{}{
+		"total_tasks": gorm.Expr("total_tasks + 1"),
+	}
+
+	if success {
+		updates["success_tasks"] = gorm.Expr("success_tasks + 1")
+	} else {
+		updates["failed_tasks"] = gorm.Expr("failed_tasks + 1")
+	}
+
+	result := s.db.Model(&models.Agent{}).Where("id = ?", agentID).Updates(updates)
+	if result.RowsAffected == 0 {
+		return errors.New("agent not found")
+	}
+
+	return result.Error
+}

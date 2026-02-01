@@ -1,0 +1,171 @@
+package router
+
+import (
+	"iac-platform/internal/handlers"
+	"iac-platform/internal/iam"
+	"iac-platform/internal/middleware"
+	"iac-platform/internal/websocket"
+	"iac-platform/services"
+
+	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"gorm.io/gorm"
+
+	_ "iac-platform/docs" // swagger docs
+)
+
+func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *websocket.Hub, agentMetricsHub *websocket.AgentMetricsHub, queueManager *services.TaskQueueManager, rawCCHandler *handlers.RawAgentCCHandler, runTaskExecutor *services.RunTaskExecutor) *gin.Engine {
+	r := gin.Default()
+
+	// 设置全局数据库连接（用于JWT中间件查询用户信息）
+	middleware.SetGlobalDB(db)
+
+	// 中间件
+	r.Use(middleware.CORS())
+	r.Use(middleware.Logger())
+	r.Use(middleware.ErrorHandler())
+
+	// 健康检查
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	// Prometheus 指标端点（复用业务端口）
+	r.GET("/metrics", gin.WrapF(services.MetricsHandler()))
+
+	// 静态文件服务 - 提供自定义CSS
+	r.Static("/static", "./static")
+
+	// Swagger文档 - 配置以改善显示
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.DeepLinking(true),
+		ginSwagger.DocExpansion("list"),
+		ginSwagger.PersistAuthorization(true),
+		ginSwagger.DefaultModelsExpandDepth(-1),
+	))
+
+	// API路由组
+	api := r.Group("/api/v1")
+
+	// WebSocket路由（需要认证）
+	ws := api.Group("/ws")
+	ws.Use(middleware.JWTAuth())
+	{
+		wsHandler := handlers.NewWebSocketHandler(wsHub)
+		ws.GET("/editing/:session_id", wsHandler.HandleConnection)
+		ws.GET("/sessions", wsHandler.GetConnectedSessions)
+
+		// Agent Metrics WebSocket
+		agentMetricsWSHandler := handlers.NewAgentMetricsWSHandler(agentMetricsHub)
+		ws.GET("/agent-pools/:pool_id/metrics", agentMetricsWSHandler.HandleAgentMetricsWS)
+	}
+
+	// 认证路由（无需JWT）
+	auth := api.Group("/auth")
+	{
+		authHandler := handlers.NewAuthHandler(db)
+		auth.POST("/login", authHandler.Login)
+		// auth.POST("/register", authHandler.Register)
+	}
+
+	// Token刷新、用户信息获取和登出需要JWT认证
+	api.POST("/auth/refresh", middleware.JWTAuth(), handlers.NewAuthHandler(db).RefreshToken)
+	api.GET("/auth/me", middleware.JWTAuth(), handlers.NewAuthHandler(db).GetMe)
+	api.POST("/auth/logout", middleware.JWTAuth(), handlers.NewAuthHandler(db).Logout)
+
+	// Agent API routes (使用 Pool Token 认证，不需要 JWT)
+	setupAgentAPIRoutes(api, db, streamManager, agentMetricsHub, runTaskExecutor)
+
+	// Run Task Callback routes (公开路由，不需要认证，供外部 Run Task 服务回调)
+	setupRunTaskCallbackRoutes(api, db, runTaskExecutor)
+
+	// 需要认证的路由
+	protected := api.Group("")
+	protected.Use(middleware.JWTAuth())
+	protected.Use(middleware.AuditLogger(db))
+
+	// 初始化IAM权限中间件
+	iamMiddleware := middleware.NewIAMPermissionMiddleware(db)
+
+	// 通用密文管理路由（需要认证）
+	setupSecretRoutes(protected, db, iamMiddleware)
+
+	// 初始化IAM服务工厂（提前初始化，供权限检查使用）
+	iamFactory := iam.NewServiceFactory(db)
+	permissionHandler := handlers.NewPermissionHandler(
+		iamFactory.GetPermissionService(),
+		iamFactory.GetPermissionChecker(),
+		iamFactory.GetTeamService(),
+		db,
+	)
+
+	// 权限检查API - 所有认证用户都可以调用（用于检查自己的权限）
+	protected.POST("/iam/permissions/check", permissionHandler.CheckPermission)
+
+	// Dashboard统计 - 使用IAM权限控制
+	setupDashboardRoutes(api, db, iamMiddleware)
+
+	// Remote Data Token 访问路由（公开路由，使用临时token认证，不需要JWT）
+	// 这个路由必须在 setupWorkspaceRoutes 之前注册，因为它不需要JWT中间件
+	setupRemoteDataPublicRoutes(api, db)
+
+	// 工作空间管理 - 使用IAM权限控制
+	// 传入 permissionService 用于创建 workspace 时自动为创建者授权
+	setupWorkspaceRoutes(api, db, streamManager, iamMiddleware, wsHub, queueManager, rawCCHandler, iamFactory.GetPermissionService())
+	setupModuleRoutes(api, db, iamMiddleware)
+	// Project 管理 - 使用 Organization 权限控制
+	setupProjectRoutes(api, db, iamMiddleware)
+	// AI分析路由
+	setupAIRoutes(api, db, iamMiddleware)
+
+	// 其他需要admin角色的路由
+	// 临时方案：为admin角色绕过IAM检查
+	// TODO: 长期应该完全使用IAM权限，移除role字段
+	protected.Use(middleware.BypassIAMForAdmin())
+	{
+
+		// 用户路由 - 添加IAM权限检查
+		setupUserRoutes(protected, db, iamMiddleware)
+
+		setupDemoRoutes(protected, api, db, iamMiddleware)
+
+		// Schema管理 - 添加IAM权限检查
+		setupSchemaRoutes(protected, db, iamMiddleware)
+
+		// setupTaskRoutes sets up task log routes
+		setupTaskRoutes(api, db, streamManager, iamMiddleware)
+
+		// 其他需要admin角色的路由组
+		adminProtected := protected.Group("")
+		adminProtected.Use(middleware.BypassIAMForAdmin())
+		{
+
+			// Agent Pool 管理 - 添加IAM权限检查（需要 JWT 认证）
+			setupAgentPoolRoutes(adminProtected, db, iamMiddleware)
+
+			// Run Task 管理 - 添加IAM权限检查（需要 JWT 认证）
+			setupRunTaskRoutes(adminProtected, db, iamMiddleware)
+
+			// IAM权限系统
+			setupIAMRoutes(adminProtected, db, iamMiddleware)
+
+			// 全局设置管理
+			setupGlobalRoutes(adminProtected, db, iamMiddleware)
+
+			// 通知管理
+			SetupNotificationRoutes(adminProtected, db)
+
+			// Manifest 可视化编排器
+			RegisterManifestRoutes(adminProtected, db, queueManager)
+		}
+	}
+
+	// CMDB资源索引（需要认证，只读功能对所有用户开放）
+	SetupCMDBRoutes(protected, db)
+
+	// 注意：Drift 检测路由已在 router_workspace.go 中注册
+
+	return r
+}

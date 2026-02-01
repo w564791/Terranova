@@ -1,0 +1,413 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AWS S3 Bucket Module",
+    "version": "4.1.0",
+    "description": "Terraform module which creates S3 bucket resources on AWS",
+    "x-module-source": "terraform-aws-modules/s3-bucket/aws",
+    "x-provider": "aws"
+  },
+  "components": {
+    "schemas": {
+      "S3ModuleInput": {
+        "type": "object",
+        "required": ["name", "tags"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "桶名称",
+            "description": "The name of the bucket",
+            "minLength": 3,
+            "maxLength": 63,
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+          },
+          "acl": {
+            "type": "string",
+            "title": "访问控制列表",
+            "enum": ["private", "public-read", "public-read-write", "authenticated-read", "bucket-owner-read", "bucket-owner-full-control", "log-delivery-write"],
+            "default": "private"
+          },
+          "policy": {
+            "type": "string",
+            "title": "桶策略",
+            "contentMediaType": "application/json"
+          },
+          "force_destroy": {
+            "type": "boolean",
+            "title": "强制销毁",
+            "default": false
+          },
+          "tags": {
+            "type": "object",
+            "title": "标签",
+            "additionalProperties": {"type": "string"},
+            "x-required-keys": ["business-line", "managed-by"]
+          },
+          "attach_policy": {
+            "type": "boolean",
+            "title": "附加策略",
+            "default": false
+          },
+          "attach_deny_insecure_transport_policy": {
+            "type": "boolean",
+            "title": "拒绝不安全传输",
+            "default": false
+          },
+          "versioning": {
+            "type": "object",
+            "title": "版本控制",
+            "properties": {
+              "enabled": {"type": "boolean", "title": "启用版本控制", "description": "保留对象的所有版本", "default": false},
+              "mfa_delete": {"type": "boolean", "title": "MFA删除", "description": "删除对象版本时需要MFA验证", "default": false}
+            }
+          },
+          "server_side_encryption_configuration": {
+            "type": "object",
+            "title": "服务端加密配置",
+            "properties": {
+              "rule": {
+                "type": "object",
+                "properties": {
+                  "apply_server_side_encryption_by_default": {
+                    "type": "object",
+                    "properties": {
+                      "sse_algorithm": {
+                        "type": "string",
+                        "enum": ["AES256", "aws:kms"],
+                        "default": "AES256"
+                      },
+                      "kms_master_key_id": {"type": "string"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "object_lock_enabled": {
+            "type": "boolean",
+            "title": "启用对象锁定",
+            "default": false
+          },
+          "object_lock_configuration": {
+            "type": "object",
+            "title": "对象锁定配置",
+            "properties": {
+              "rule": {
+                "type": "object",
+                "properties": {
+                  "default_retention": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {"type": "string", "enum": ["GOVERNANCE", "COMPLIANCE"]},
+                      "days": {"type": "integer", "minimum": 1}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "lifecycle_rule": {
+            "type": "array",
+            "title": "生命周期规则",
+            "items": {
+              "type": "object",
+              "required": ["id", "enabled"],
+              "properties": {
+                "id": {"type": "string", "maxLength": 255},
+                "enabled": {"type": "boolean", "default": true},
+                "filter": {
+                  "type": "object",
+                  "properties": {
+                    "prefix": {"type": "string"},
+                    "tags": {"type": "object", "additionalProperties": {"type": "string"}}
+                  }
+                },
+                "transition": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "days": {"type": "integer", "minimum": 0},
+                      "storage_class": {
+                        "type": "string",
+                        "enum": ["STANDARD_IA", "ONEZONE_IA", "INTELLIGENT_TIERING", "GLACIER", "GLACIER_IR", "DEEP_ARCHIVE"]
+                      }
+                    }
+                  }
+                },
+                "expiration": {
+                  "type": "object",
+                  "properties": {
+                    "days": {"type": "integer", "minimum": 1}
+                  }
+                }
+              }
+            }
+          },
+          "cors_rule": {
+            "type": "array",
+            "title": "CORS规则",
+            "items": {
+              "type": "object",
+              "required": ["allowed_methods", "allowed_origins"],
+              "properties": {
+                "allowed_headers": {"type": "array", "items": {"type": "string"}, "default": ["*"]},
+                "allowed_methods": {"type": "array", "items": {"type": "string", "enum": ["GET", "PUT", "HEAD", "POST", "DELETE"]}},
+                "allowed_origins": {"type": "array", "items": {"type": "string"}},
+                "expose_headers": {"type": "array", "items": {"type": "string"}},
+                "max_age_seconds": {"type": "integer", "minimum": 0, "default": 0}
+              }
+            }
+          },
+          "logging": {
+            "type": "object",
+            "title": "日志记录",
+            "properties": {
+              "target_bucket": {"type": "string"},
+              "target_prefix": {"type": "string", "default": "log/"}
+            }
+          },
+          "block_public_acls": {"type": "boolean", "default": true},
+          "block_public_policy": {"type": "boolean", "default": true},
+          "ignore_public_acls": {"type": "boolean", "default": true},
+          "restrict_public_buckets": {"type": "boolean", "default": true},
+          "control_object_ownership": {"type": "boolean", "default": false},
+          "object_ownership": {
+            "type": "string",
+            "enum": ["BucketOwnerEnforced", "BucketOwnerPreferred", "ObjectWriter"],
+            "default": "BucketOwnerEnforced"
+          }
+        }
+      }
+    }
+  },
+  "x-iac-platform": {
+    "ui": {
+      "fields": {
+        "name": {
+          "widget": "text",
+          "label": "桶名称",
+          "placeholder": "my-bucket-name",
+          "help": "桶名称必须全局唯一",
+          "group": "basic",
+          "order": 1,
+          "immutable": true
+        },
+        "tags": {
+          "widget": "key-value",
+          "label": "标签",
+          "group": "basic",
+          "order": 2,
+          "requiredKeys": ["business-line", "managed-by"]
+        },
+        "acl": {
+          "widget": "select",
+          "label": "访问控制列表",
+          "group": "security",
+          "order": 1
+        },
+        "policy": {
+          "widget": "json-editor",
+          "label": "桶策略",
+          "group": "security",
+          "order": 2,
+          "height": 300,
+          "hiddenByDefault": true
+        },
+        "attach_policy": {
+          "widget": "switch",
+          "label": "附加策略",
+          "group": "security",
+          "order": 3
+        },
+        "attach_deny_insecure_transport_policy": {
+          "widget": "switch",
+          "label": "拒绝不安全传输",
+          "group": "security",
+          "order": 4
+        },
+        "block_public_acls": {
+          "widget": "switch",
+          "label": "阻止公共ACL",
+          "group": "security",
+          "order": 5
+        },
+        "block_public_policy": {
+          "widget": "switch",
+          "label": "阻止公共策略",
+          "group": "security",
+          "order": 6
+        },
+        "server_side_encryption_configuration": {
+          "widget": "object",
+          "label": "服务端加密配置",
+          "group": "encryption",
+          "order": 1,
+          "collapsible": true
+        },
+        "versioning": {
+          "widget": "object",
+          "label": "版本控制",
+          "group": "versioning",
+          "order": 1
+        },
+        "object_lock_enabled": {
+          "widget": "switch",
+          "label": "启用对象锁定",
+          "group": "versioning",
+          "order": 2
+        },
+        "object_lock_configuration": {
+          "widget": "object",
+          "label": "对象锁定配置",
+          "group": "versioning",
+          "order": 3
+        },
+        "lifecycle_rule": {
+          "widget": "object-list",
+          "label": "生命周期规则",
+          "addButtonText": "添加规则",
+          "itemTitle": "${id}",
+          "group": "lifecycle",
+          "order": 1
+        },
+        "cors_rule": {
+          "widget": "object-list",
+          "label": "CORS规则",
+          "addButtonText": "添加CORS规则",
+          "group": "cors",
+          "order": 1,
+          "hiddenByDefault": true
+        },
+        "logging": {
+          "widget": "object",
+          "label": "日志记录",
+          "group": "logging",
+          "order": 1,
+          "hiddenByDefault": true
+        }
+      },
+      "groups": [
+        {"id": "basic", "title": "基本配置", "icon": "settings", "order": 1, "defaultExpanded": true},
+        {"id": "security", "title": "安全配置", "icon": "security", "order": 2, "defaultExpanded": true},
+        {"id": "encryption", "title": "加密配置", "icon": "lock", "order": 3, "defaultExpanded": false},
+        {"id": "versioning", "title": "版本控制", "icon": "history", "order": 4, "defaultExpanded": false},
+        {"id": "lifecycle", "title": "生命周期", "icon": "schedule", "order": 5, "defaultExpanded": false},
+        {"id": "cors", "title": "CORS配置", "icon": "public", "order": 6, "defaultExpanded": false, "hiddenByDefault": true},
+        {"id": "logging", "title": "日志配置", "icon": "description", "order": 7, "defaultExpanded": false, "hiddenByDefault": true}
+      ],
+      "layout": {
+        "type": "tabs",
+        "position": "top"
+      }
+    },
+    "validation": {
+      "rules": [
+        {
+          "id": "acl-grant-conflict",
+          "type": "conflicts",
+          "fields": ["acl", "grant"],
+          "message": "ACL和Grant不能同时设置"
+        },
+        {
+          "id": "policy-required-with-attach",
+          "type": "requiredWith",
+          "trigger": {"field": "attach_policy", "value": true},
+          "requires": ["policy"],
+          "message": "启用attach_policy时必须提供policy"
+        },
+        {
+          "id": "kms-key-required",
+          "type": "requiredWith",
+          "trigger": {"field": "server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.sse_algorithm", "value": "aws:kms"},
+          "requires": ["server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id"],
+          "message": "使用KMS加密时必须指定KMS密钥ID"
+        },
+        {
+          "id": "versioning-for-object-lock",
+          "type": "requiredWith",
+          "trigger": {"field": "object_lock_enabled", "value": true},
+          "requires": ["versioning.enabled"],
+          "requiredValues": {"versioning.enabled": true},
+          "message": "启用对象锁定需要同时启用版本控制"
+        }
+      ]
+    },
+    "cascade": {
+      "rules": [
+        {
+          "id": "object-lock-cascade",
+          "trigger": {"field": "object_lock_enabled", "operator": "eq", "value": true},
+          "actions": [
+            {"type": "show", "fields": ["object_lock_configuration"]},
+            {"type": "setValue", "field": "versioning.enabled", "value": true},
+            {"type": "disable", "fields": ["versioning.enabled"], "message": "对象锁定需要版本控制"}
+          ]
+        },
+        {
+          "id": "attach-policy-cascade",
+          "trigger": {"field": "attach_policy", "operator": "eq", "value": true},
+          "actions": [
+            {"type": "show", "fields": ["policy"]},
+            {"type": "require", "fields": ["policy"]}
+          ]
+        },
+        {
+          "id": "kms-encryption-cascade",
+          "trigger": {"field": "server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.sse_algorithm", "operator": "eq", "value": "aws:kms"},
+          "actions": [
+            {"type": "show", "fields": ["server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id"]},
+            {"type": "require", "fields": ["server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id"]}
+          ]
+        },
+        {
+          "id": "control-ownership-cascade",
+          "trigger": {"field": "control_object_ownership", "operator": "eq", "value": true},
+          "actions": [
+            {"type": "show", "fields": ["object_ownership"]},
+            {"type": "hide", "fields": ["acl"]}
+          ]
+        }
+      ]
+    },
+    "external": {
+      "sources": [
+        {
+          "id": "kms_keys",
+          "type": "api",
+          "api": "/api/v1/aws/kms/keys",
+          "method": "GET",
+          "params": {"region": "${providers.aws.region}"},
+          "cache": {"ttl": 300},
+          "transform": {"type": "jmespath", "expression": "data.keys[*].{value: arn, label: alias}"}
+        },
+        {
+          "id": "s3_buckets",
+          "type": "api",
+          "api": "/api/v1/aws/s3/buckets",
+          "method": "GET",
+          "transform": {"type": "jmespath", "expression": "data.buckets[*].{value: name, label: name}"}
+        }
+      ],
+      "bindings": {
+        "server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id": {
+          "source": "kms_keys",
+          "widget": "select",
+          "allowCustom": true
+        },
+        "logging.target_bucket": {
+          "source": "s3_buckets",
+          "widget": "select",
+          "allowCustom": true
+        }
+      }
+    },
+    "terraform": {
+      "source": "terraform-aws-modules/s3-bucket/aws",
+      "version": "~> 4.0",
+      "forceNew": ["name"],
+      "computed": ["arn", "bucket_domain_name", "bucket_regional_domain_name"],
+      "sensitive": ["policy"]
+    }
+  }
+}

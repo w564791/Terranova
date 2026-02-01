@@ -1,0 +1,239 @@
+.jsonEditor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--color-gray-50);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.toolButton {
+  padding: 4px 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toolButton:hover:not(:disabled) {
+  background: var(--color-gray-100);
+  border-color: var(--color-gray-400);
+}
+
+.toolButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.infoIndicator {
+  margin-left: auto;
+  padding: 4px 8px;
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.errorIndicator {
+  margin-left: auto;
+  padding: 4px 8px;
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.editorContainer {
+  display: flex;
+  position: relative;
+  background: var(--color-white);
+}
+
+.lineNumbers {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm) 0;
+  background: var(--color-gray-50);
+  border-right: 1px solid var(--color-gray-200);
+  min-width: 40px;
+  user-select: none;
+}
+
+.lineNumber {
+  padding: 0 var(--spacing-sm);
+  text-align: right;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--color-gray-500);
+}
+
+.lineNumber.errorLine {
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+  font-weight: bold;
+  position: relative;
+}
+
+.lineNumber.errorLine::after {
+  content: '→';
+  position: absolute;
+  right: -8px;
+  color: var(--color-red-500);
+}
+
+.editorWrapper {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  overflow: auto;
+}
+
+.editor {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: none;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 20px;
+  resize: none;
+  background: transparent;
+  color: #111827 !important;
+  outline: none;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  -webkit-text-fill-color: #111827 !important;
+  /* 禁用高亮层时直接显示文本颜色 */
+  position: relative;
+  z-index: 2;
+}
+
+.editor:focus {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+.editor::placeholder {
+  color: var(--color-gray-400);
+}
+
+/* 高亮层 - 需要与 editor 完全同步 */
+.highlightLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--spacing-sm);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--color-gray-900);
+  z-index: 1;
+}
+
+/* JSON语法高亮颜色 */
+.highlightLayer :global(.json-key) {
+  color: #0969da;
+  font-weight: 500;
+}
+
+.highlightLayer :global(.json-string) {
+  color: #032f62;
+}
+
+.highlightLayer :global(.json-number) {
+  color: #0550ae;
+}
+
+.highlightLayer :global(.json-boolean) {
+  color: #cf222e;
+  font-weight: 500;
+}
+
+.highlightLayer :global(.json-null) {
+  color: #6e7781;
+  font-weight: 500;
+}
+
+.errorMessage {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: var(--color-red-50);
+  border-top: 1px solid var(--color-red-200);
+  color: var(--color-red-700);
+  font-size: 13px;
+}
+
+.errorIcon {
+  font-size: 16px;
+}
+
+/* 响应式调整 */
+@media (max-width: 640px) {
+  .lineNumbers {
+    min-width: 32px;
+  }
+  
+  .lineNumber {
+    font-size: 12px;
+  }
+  
+  .editor,
+  .highlightLayer {
+    font-size: 12px;
+  }
+}
+
+/* 深色模式支持（预留） */
+@media (prefers-color-scheme: dark) {
+  .jsonEditor {
+    background: var(--color-gray-900);
+    border-color: var(--color-gray-700);
+  }
+  
+  .toolbar {
+    background: var(--color-gray-800);
+    border-color: var(--color-gray-700);
+  }
+  
+  .toolButton {
+    background: var(--color-gray-700);
+    color: var(--color-gray-200);
+    border-color: var(--color-gray-600);
+  }
+  
+  .lineNumbers {
+    background: var(--color-gray-800);
+    border-color: var(--color-gray-700);
+  }
+  
+  .editor {
+    color: var(--color-gray-100);
+  }
+}

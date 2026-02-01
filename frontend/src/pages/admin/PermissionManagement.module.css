@@ -1,0 +1,958 @@
+/* 容器 */
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 页面头部 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  gap: 20px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.description {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+/* 操作栏 */
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-width: 300px;
+}
+
+.scopeTypeSelect,
+.scopeIdInput {
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.scopeTypeSelect {
+  min-width: 120px;
+}
+
+.scopeIdInput {
+  flex: 1;
+  min-width: 200px;
+}
+
+.scopeTypeSelect:hover,
+.scopeIdInput:hover {
+  border-color: #40a9ff;
+}
+
+.scopeTypeSelect:focus,
+.scopeIdInput:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.actionButtons {
+  display: flex;
+  gap: 12px;
+}
+
+.addButton {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #1890ff;
+  color: white;
+  white-space: nowrap;
+}
+
+.addButton:hover:not(:disabled) {
+  background: #40a9ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+}
+
+.addButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.addButton:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.presetButton {
+  background: #52c41a;
+  color: white;
+}
+
+.presetButton:hover {
+  background: #73d13d;
+}
+
+/* 授权表单容器 */
+.grantFormContainer {
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.grantFormHeader {
+  margin-bottom: 20px;
+}
+
+.grantFormTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.grantFormHint {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.grantForm {
+  background: white;
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.required {
+  color: #ff4d4f;
+  margin-left: 4px;
+}
+
+.input,
+.textarea {
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.input:hover,
+.textarea:hover {
+  border-color: #40a9ff;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.input.error {
+  border-color: #ff4d4f;
+}
+
+.input.error:focus {
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+}
+
+.errorText {
+  font-size: 12px;
+  color: #ff4d4f;
+  margin-top: 4px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* 权限选择区域 */
+.permissionsSection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.permissionsSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.selectedCount {
+  font-size: 14px;
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.permissionsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.permissionGroup {
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.permissionGroupTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1890ff;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.permissionItems {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.permissionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.permissionItem:hover {
+  background: #f0f0f0;
+}
+
+.permissionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.permissionName {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.permissionDesc {
+  font-size: 12px;
+  color: #666;
+}
+
+.permissionLevels {
+  display: flex;
+  gap: 8px;
+}
+
+.levelCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.levelCheckbox:hover {
+  border-color: #1890ff;
+  background: #f0f7ff;
+}
+
+.levelCheckbox.checked {
+  border-color: #1890ff;
+  background: #e6f7ff;
+}
+
+.levelCheckbox input[type='checkbox'] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.levelLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  user-select: none;
+}
+
+.levelCheckbox.checked .levelLabel {
+  color: #1890ff;
+}
+
+/* 表单按钮 */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.button {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.button.primary {
+  background: #1890ff;
+  color: white;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: #40a9ff;
+}
+
+.button.primary:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.button.secondary {
+  background: white;
+  color: #333;
+  border: 1px solid #d9d9d9;
+}
+
+.button.secondary:hover:not(:disabled) {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.button.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 用户列表 */
+.userList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 用户卡片 */
+.userCard {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.userCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 用户头部 */
+.userHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.userHeader:hover {
+  background: #fafafa;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.userAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.userDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.userName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roleTag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+
+.userEmail {
+  font-size: 14px;
+  color: #666;
+}
+
+.userStats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.roleCount {
+  font-size: 14px;
+  color: #667eea;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  border: 1px solid #667eea40;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.permissionCount {
+  font-size: 14px;
+  color: #666;
+  padding: 4px 12px;
+  background: #f0f0f0;
+  border-radius: 12px;
+}
+
+.batchRevokeButton {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+.batchRevokeButton:hover {
+  background: #ff4d4f;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+}
+
+.expandIcon {
+  font-size: 12px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+/* 权限详情 */
+.permissionsDetail {
+  padding: 0 24px 24px 24px;
+  background: #fafafa;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 2000px;
+  }
+}
+
+.noPermissions {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 角色部分 */
+.rolesSection {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #e8e8e8;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+}
+
+.rolesList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.roleItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  border: 1px solid #667eea40;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.roleItem:hover {
+  background: linear-gradient(135deg, #667eea25 0%, #764ba225 100%);
+  border-color: #667eea60;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.roleInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.roleHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.roleName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.roleScope {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.roleTime {
+  font-size: 12px;
+  color: #999;
+}
+
+.revokeRoleButton {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+.revokeRoleButton:hover {
+  background: #ff4d4f;
+  color: white;
+}
+
+/* 权限列表 */
+.permissionsList {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+.permissionsTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.permissionsTable thead {
+  background: #fafafa;
+}
+
+.permissionsTable th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.permissionsTable td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.permissionsTable tbody tr {
+  transition: background 0.2s;
+}
+
+.permissionsTable tbody tr:hover {
+  background: #f0f7ff;
+}
+
+.scopeIdCell {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  color: #666;
+}
+
+/* 作用域类型徽章 */
+.scopeBadge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.scopeBadge.organization {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.scopeBadge.project {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.scopeBadge.workspace {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.principalCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.principalBadge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.principalBadge.user {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.principalBadge.team {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.principalBadge.application {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.principalId {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  color: #666;
+}
+
+.principalName {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.permissionCell {
+  font-weight: 500;
+}
+
+.levelBadge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.levelBadge.none {
+  background: #f5f5f5;
+  color: #999;
+}
+
+.levelBadge.read {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.levelBadge.write {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.levelBadge.admin {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+.dateCell {
+  color: #666;
+  font-size: 13px;
+}
+
+.reasonCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #666;
+}
+
+.actionButton {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionButton.revoke {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+.actionButton.revoke:hover {
+  background: #ff4d4f;
+  color: white;
+}
+
+.actionButton.edit {
+  background: #e6f7ff;
+  color: #1890ff;
+  margin-right: 8px;
+}
+
+.actionButton.edit:hover {
+  background: #1890ff;
+  color: white;
+}
+
+.actionButton.save {
+  background: #f6ffed;
+  color: #52c41a;
+  margin-right: 8px;
+}
+
+.actionButton.save:hover {
+  background: #52c41a;
+  color: white;
+}
+
+.actionButton.cancel {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.actionButton.cancel:hover {
+  background: #d9d9d9;
+  color: #333;
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+}
+
+.levelSelect {
+  padding: 4px 8px;
+  border: 1px solid #1890ff;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #e6f7ff;
+  color: #1890ff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.levelSelect:focus {
+  outline: none;
+  border-color: #40a9ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+/* 空状态 */
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.emptyText {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.emptyHint {
+  font-size: 14px;
+  color: #999;
+}
+
+.loading {
+  padding: 60px 20px;
+  text-align: center;
+  font-size: 16px;
+  color: #666;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .addButton {
+    width: 100%;
+  }
+
+  .userHeader {
+    padding: 16px;
+  }
+
+  .userAvatar {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .userName {
+    font-size: 15px;
+  }
+
+  .userEmail {
+    font-size: 13px;
+  }
+
+  .permissionsDetail {
+    padding: 0 16px 16px 16px;
+  }
+
+  .permissionsTable {
+    font-size: 12px;
+  }
+
+  .permissionsTable th,
+  .permissionsTable td {
+    padding: 8px;
+  }
+
+  .scopeBadge {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+}

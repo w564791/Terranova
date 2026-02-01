@@ -1,0 +1,255 @@
+.container {
+  padding: 20px;
+}
+
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: #666;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+}
+
+/* Current Agent Styles */
+.currentAgent {
+  background: #e6f7ff;
+  border: 2px solid #91d5ff;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.noAgent {
+  background: #fafafa;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.noAgent p {
+  margin: 0 0 8px 0;
+  color: #595959;
+}
+
+.hint {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+/* Agent Info Styles */
+.agentInfo {
+  flex: 1;
+}
+
+.agentName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agentId {
+  font-size: 13px;
+  color: #8c8c8c;
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin-bottom: 8px;
+}
+
+.agentMeta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.version,
+.ip {
+  font-size: 12px;
+  color: #595959;
+  background: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #d9d9d9;
+}
+
+.allowedAt {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 8px;
+}
+
+/* Status Badges */
+.statusBadge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statusIdle {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.statusBusy {
+  background: #fff7e6;
+  color: #fa8c16;
+  border: 1px solid #ffd591;
+}
+
+.statusOffline {
+  background: #fff1f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+.currentBadge {
+  background: #1890ff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Agent List Styles */
+.emptyState {
+  background: #fafafa;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+}
+
+.emptyState p {
+  margin: 0 0 8px 0;
+  color: #595959;
+}
+
+.agentList {
+  display: grid;
+  gap: 12px;
+}
+
+.agentCard {
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s;
+}
+
+.agentCard:hover {
+  border-color: #40a9ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+}
+
+.currentCard {
+  border-color: #1890ff;
+  border-width: 2px;
+  background: #f0f9ff;
+}
+
+/* Action Buttons */
+.agentActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.setCurrentButton,
+.revokeButton {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.setCurrentButton {
+  background: #1890ff;
+  color: white;
+  border: none;
+}
+
+.setCurrentButton:hover {
+  background: #40a9ff;
+}
+
+.revokeButton {
+  background: white;
+  color: #ff4d4f;
+  border: 1px solid #ff4d4f;
+}
+
+.revokeButton:hover {
+  background: #fff1f0;
+  border-color: #ff7875;
+  color: #ff7875;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .currentAgent,
+  .agentCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .agentActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .agentMeta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+/* Pool Type Badge Styles */
+.poolTypeBadge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.poolTypeStatic {
+  background: #e6f7ff;
+  color: #0958d9;
+  border: 1px solid #91d5ff;
+}
+
+.poolTypeK8s {
+  background: #f6ffed;
+  color: #389e0d;
+  border: 1px solid #b7eb8f;
+}

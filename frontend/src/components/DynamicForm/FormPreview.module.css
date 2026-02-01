@@ -1,0 +1,535 @@
+.previewOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.previewModal {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 900px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+  flex-shrink: 0;
+}
+
+.previewTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.viewToggle {
+  display: flex;
+  gap: 0;
+  margin-left: auto;
+  margin-right: var(--spacing-md);
+  background: var(--color-gray-100);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+
+.toggleButton {
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  color: var(--color-gray-600);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: calc(var(--radius-md) - 2px);
+  transition: all 0.2s;
+}
+
+.toggleButton:hover {
+  color: var(--color-gray-800);
+}
+
+.toggleButton.active {
+  background: var(--color-white);
+  color: var(--color-gray-900);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-gray-500);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+}
+
+.previewBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+  background: var(--color-gray-50);
+}
+
+/* 表单视图样式 */
+.formView {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* 只读提示 */
+.readOnlyNotice {
+  background: var(--color-blue-50);
+  border: 1px solid var(--color-blue-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--color-blue-700);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+/* 字段容器 */
+.fieldsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* 只读字段样式 */
+.readOnlyField {
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.readOnlyField input,
+.readOnlyField textarea,
+.readOnlyField select {
+  background: var(--color-gray-50) !important;
+  cursor: not-allowed !important;
+  border-color: var(--color-gray-200) !important;
+}
+
+.readOnlyField input[type="checkbox"],
+.readOnlyField input[type="radio"] {
+  pointer-events: none;
+}
+
+/* 隐藏所有按钮 */
+.readOnlyField button {
+  display: none !important;
+}
+
+/* 保持开关按钮的视觉效果但禁用交互 */
+.readOnlyField button[aria-pressed] {
+  display: flex !important;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.emptyState {
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  color: var(--color-gray-500);
+  font-size: 16px;
+}
+
+.fieldGroup {
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-gray-200);
+}
+
+.groupTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-gray-800);
+  margin: 0 0 var(--spacing-md) 0;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+
+.fieldHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.fieldName {
+  font-weight: 500;
+  color: var(--color-gray-900);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.forceNewBadge {
+  color: #ff9800;
+  font-size: 14px;
+  cursor: help;
+}
+
+.fieldType {
+  padding: 2px 8px;
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.fieldDescription {
+  font-size: 12px;
+  color: var(--color-gray-600);
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.5;
+}
+
+.fieldDescription a {
+  color: var(--color-blue-500);
+  text-decoration: none;
+}
+
+.fieldDescription a:hover {
+  text-decoration: underline;
+}
+
+.fieldValue {
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
+}
+
+.fieldValue {
+  font-size: 14px;
+  color: var(--color-gray-800);
+}
+
+/* 简洁的值显示样式 */
+.emptyValue {
+  color: var(--color-gray-400);
+  font-style: italic;
+}
+
+.stringValue {
+  color: var(--color-gray-900);
+}
+
+.booleanValue {
+  color: var(--color-blue-600);
+  font-weight: 500;
+}
+
+.jsonIndicator {
+  background: var(--color-blue-50);
+  color: var(--color-blue-700);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 数组预览样式 */
+.arrayPreview {
+  margin-top: var(--spacing-xs);
+}
+
+.arrayPreviewItem {
+  margin-bottom: var(--spacing-sm);
+  padding-left: var(--spacing-md);
+  border-left: 2px solid var(--color-gray-200);
+}
+
+.arrayPreviewHeader {
+  margin-bottom: 4px;
+}
+
+.arrayPreviewIndex {
+  color: var(--color-gray-600);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.arrayPreviewContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.arrayPreviewField {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  margin-bottom: 6px;
+}
+
+.arrayPreviewField:last-child {
+  margin-bottom: 0;
+}
+
+/* 对象预览样式 */
+.objectPreview {
+  margin-top: var(--spacing-xs);
+  padding-left: var(--spacing-md);
+}
+
+.objectPreviewField {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+  margin-bottom: 4px;
+}
+
+/* 字段标签和内容 */
+.fieldLabel {
+  color: var(--color-gray-600);
+  font-size: 13px;
+  min-width: fit-content;
+}
+
+.fieldContent {
+  color: var(--color-gray-900);
+  font-size: 13px;
+  flex: 1;
+}
+
+/* 简单数组样式 */
+.simpleArray {
+  color: var(--color-gray-800);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+/* 嵌套数组的额外缩进 */
+.arrayPreview .arrayPreview {
+  margin-left: var(--spacing-md);
+  margin-top: 4px;
+}
+
+/* 嵌套对象的额外缩进 */
+.arrayPreview .objectPreview {
+  margin-left: var(--spacing-md);
+  margin-top: 4px;
+}
+
+/* JSON视图样式 */
+.jsonView {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-gray-200);
+  overflow: hidden;
+}
+
+.jsonToolbar {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-gray-50);
+  border-bottom: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.copyButton {
+  padding: 6px 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-sm);
+  color: var(--color-gray-700);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copyButton:hover {
+  background: var(--color-gray-100);
+  border-color: var(--color-gray-400);
+}
+
+.jsonContent {
+  flex: 1;
+  display: flex;
+  overflow: auto;
+  background: var(--color-white);
+}
+
+.lineNumbers {
+  padding: var(--spacing-md) 0;
+  background: var(--color-gray-50);
+  border-right: 1px solid var(--color-gray-200);
+  min-width: 40px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.lineNumber {
+  padding: 0 var(--spacing-sm);
+  text-align: right;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--color-gray-500);
+}
+
+.jsonCode {
+  flex: 1;
+  padding: var(--spacing-md);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-gray-900);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* JSON语法高亮 */
+.jsonCode :global(.json-key) {
+  color: #0969da;
+  font-weight: 500;
+}
+
+.jsonCode :global(.json-string) {
+  color: #032f62;
+}
+
+.jsonCode :global(.json-number) {
+  color: #0550ae;
+}
+
+.jsonCode :global(.json-boolean) {
+  color: #cf222e;
+  font-weight: 500;
+}
+
+.jsonCode :global(.json-null) {
+  color: #6e7781;
+  font-weight: 500;
+}
+
+/* 底部栏 */
+.previewFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+  background: var(--color-white);
+  flex-shrink: 0;
+}
+
+.summary {
+  font-size: 14px;
+  color: var(--color-gray-600);
+}
+
+.confirmButton {
+  padding: 8px 24px;
+  background: var(--color-blue-500);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.confirmButton:hover {
+  background: var(--color-blue-600);
+}
+
+/* 内嵌预览模式 */
+.inlinePreview {
+  width: 100%;
+}
+
+.inlinePreview .previewBody {
+  padding: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .previewModal {
+    width: 95%;
+    height: 90vh;
+  }
+  
+  .previewHeader {
+    padding: var(--spacing-md);
+  }
+  
+  .previewTitle {
+    font-size: 18px;
+  }
+  
+  .viewToggle {
+    margin-right: var(--spacing-sm);
+  }
+  
+  .toggleButton {
+    padding: 4px 12px;
+    font-size: 13px;
+  }
+  
+  .previewBody {
+    padding: var(--spacing-md);
+  }
+}

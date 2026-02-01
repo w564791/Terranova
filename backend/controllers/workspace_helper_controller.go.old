@@ -1,0 +1,124 @@
+package controllers
+
+import (
+	"net/http"
+	"time"
+
+	"iac-platform/services"
+
+	"github.com/gin-gonic/gin"
+)
+
+type WorkspaceHelperController struct {
+	terraformVersionService *services.TerraformVersionService
+	agentPoolService        *services.AgentPoolService
+}
+
+func NewWorkspaceHelperController(
+	terraformVersionService *services.TerraformVersionService,
+	agentPoolService *services.AgentPoolService,
+) *WorkspaceHelperController {
+	return &WorkspaceHelperController{
+		terraformVersionService: terraformVersionService,
+		agentPoolService:        agentPoolService,
+	}
+}
+
+// GetWorkspaceFormData 获取创建Workspace表单所需的所有数据
+// @Summary 获取Workspace表单数据
+// @Description 获取创建Workspace时需要的Terraform版本、Agent Pool、K8s配置等数据
+// @Tags Workspace
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/workspaces/form-data [get]
+func (whc *WorkspaceHelperController) GetWorkspaceFormData(c *gin.Context) {
+	// 获取Terraform版本列表
+	var terraformVersions []string
+	enabled := true
+	versions, err := whc.terraformVersionService.List(&enabled, nil)
+	if err != nil || len(versions) == 0 {
+		// 返回默认版本列表
+		terraformVersions = []string{"latest", "1.6.0", "1.5.7", "1.4.6"}
+	} else {
+		terraformVersions = make([]string, len(versions))
+		for i, v := range versions {
+			terraformVersions[i] = v.Version
+		}
+	}
+
+	// 获取Agent Pool列表
+	var agentPools []map[string]interface{}
+	pools, err := whc.agentPoolService.ListPools()
+	if err != nil || len(pools) == 0 {
+		// 返回空列表
+		agentPools = []map[string]interface{}{}
+	} else {
+		agentPools = make([]map[string]interface{}, len(pools))
+		for i, pool := range pools {
+			agentPools[i] = map[string]interface{}{
+				"id":          pool.ID,
+				"name":        pool.Name,
+				"description": pool.Description,
+			}
+		}
+	}
+
+	// K8s配置列表（暂时返回空，后续实现）
+	k8sConfigs := []map[string]interface{}{}
+
+	// 执行模式选项
+	executionModes := []map[string]interface{}{
+		{
+			"value":       "local",
+			"label":       "Local - 本地执行",
+			"description": "在平台服务器上直接执行Terraform",
+		},
+		{
+			"value":       "agent",
+			"label":       "Agent - 远程Agent执行",
+			"description": "通过远程Agent执行Terraform，适合分布式部署",
+		},
+		{
+			"value":       "k8s",
+			"label":       "K8s - Kubernetes执行",
+			"description": "在Kubernetes集群中动态创建Pod执行",
+		},
+	}
+
+	// State后端选项
+	stateBackends := []map[string]interface{}{
+		{
+			"value":       "local",
+			"label":       "Local",
+			"description": "本地文件系统存储",
+		},
+		{
+			"value":       "s3",
+			"label":       "S3",
+			"description": "AWS S3或兼容对象存储",
+		},
+		{
+			"value":       "remote",
+			"label":       "Remote",
+			"description": "Terraform Cloud/Enterprise",
+		},
+		{
+			"value":       "consul",
+			"label":       "Consul",
+			"description": "HashiCorp Consul",
+		},
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"terraform_versions": terraformVersions,
+			"agent_pools":        agentPools,
+			"k8s_configs":        k8sConfigs,
+			"execution_modes":    executionModes,
+			"state_backends":     stateBackends,
+		},
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}

@@ -1,0 +1,324 @@
+/* Task Timeline - TFE Style */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Timeline Card */
+.timelineCard {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-left-color: #6b7280;
+  margin: 0 20px 12px 20px;
+}
+
+.timelineCard.cardpassed {
+  border-left-color: #10b981;
+}
+
+.timelineCard.cardrunning {
+  border-left-color: #3b82f6;
+}
+
+.timelineCard.cardfailed {
+  border-left-color: #ef4444;
+}
+
+.timelineCard.cardpending {
+  border-left-color: #6b7280;
+}
+
+.timelineCard.cardcancelled {
+  border-left-color: #6b7280;
+}
+
+.timelineCard.cardFailed {
+  border-left-color: #ef4444;
+}
+
+/* Card Header */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #fafafa;
+  min-height: 56px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cardHeader:hover {
+  background: #f3f4f6;
+}
+
+.cardHeaderCollapsed {
+  border-bottom: none;
+}
+
+.cardHeaderExpanded {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Trigger Info */
+.triggerInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.triggerAvatar {
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border-radius: 50%;
+}
+
+.triggerText {
+  font-size: 14px;
+  color: #374151;
+}
+
+.triggerText strong {
+  color: #111827;
+}
+
+/* Card Title */
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.statusIcon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.titleText {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cardTime {
+  font-size: 13px;
+  color: #6b7280;
+  margin-left: 8px;
+}
+
+/* Card Summary */
+.cardSummary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.resourceChanges {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.changeAdd {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.changeModify {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.changeDestroy {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.expandButton {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.expandButton:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Card Content */
+.cardContent {
+  padding: 16px 20px;
+  background: #fff;
+}
+
+/* Details Grid */
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailLabel {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detailValue {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+}
+
+/* View Mode Toggle */
+.viewModeToggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.toggleBtn {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggleBtn:hover {
+  color: #374151;
+}
+
+.toggleBtnActive {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Error Message */
+.errorMessage {
+  font-size: 13px;
+  color: #991b1b;
+  background: #fef2f2;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Inline Error (inside Plan/Apply card) */
+.inlineError {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.inlineErrorHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.inlineErrorHeader:hover {
+  background: #fee2e2;
+}
+
+.inlineErrorIcon {
+  color: #ef4444;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.inlineErrorTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #991b1b;
+  flex: 1;
+}
+
+.inlineErrorToggle {
+  color: #991b1b;
+  font-size: 12px;
+}
+
+.inlineErrorMessage {
+  font-size: 13px;
+  color: #991b1b;
+  background: #fff5f5;
+  padding: 12px 16px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid #fecaca;
+}
+
+/* AI Analysis Wrapper */
+.aiAnalysisWrapper {
+  margin-bottom: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cardSummary {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .detailsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

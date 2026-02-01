@@ -1,0 +1,76 @@
+/* Coming Soon 占位符页面样式 */
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 200px);
+  padding: var(--spacing-2xl);
+}
+
+.content {
+  text-align: center;
+  max-width: 600px;
+}
+
+.icon {
+  font-size: 80px;
+  margin-bottom: var(--spacing-xl);
+  opacity: 0.8;
+}
+
+.title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+  margin-bottom: var(--spacing-md);
+}
+
+.description {
+  font-size: var(--font-size-lg);
+  color: var(--color-gray-600);
+  margin-bottom: var(--spacing-2xl);
+  line-height: 1.6;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+}
+
+.feature {
+  padding: var(--spacing-md);
+  background: white;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-700);
+  transition: all 0.2s;
+}
+
+.feature:hover {
+  border-color: var(--color-blue-300);
+  background: var(--color-blue-50);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .icon {
+    font-size: 60px;
+  }
+
+  .title {
+    font-size: var(--font-size-xl);
+  }
+
+  .description {
+    font-size: var(--font-size-base);
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+  }
+}

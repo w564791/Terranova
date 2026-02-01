@@ -1,0 +1,1209 @@
+/* Plan Complete 容器 */
+.planComplete {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Copy Toast */
+.copyToast {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: #10b981;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* 搜索和过滤栏 */
+.filterBar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filterRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.searchBox {
+  position: relative;
+  flex: 1;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 8px 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.clearButton {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.clearButton:hover {
+  color: #6b7280;
+}
+
+.actionFilterContainer {
+  position: relative;
+}
+
+.actionFilterButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionFilterButton:hover {
+  border-color: #3b82f6;
+  background: #f9fafb;
+}
+
+.filterIcon {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.filterCount {
+  background: #3b82f6;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chevron {
+  font-size: 9px;
+  color: #9ca3af;
+}
+
+.actionFilterDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  z-index: 10;
+  padding: 6px;
+}
+
+.actionFilterItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.actionFilterItem:hover {
+  background: #f9fafb;
+}
+
+.actionFilterItem input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.actionFilterLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.filterResult {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #1e40af;
+}
+
+.clearFiltersButton {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* Resource List */
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Resource Card */
+.resourceCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  transition: all 0.2s;
+}
+
+.resourceCard:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Action-specific card borders */
+.resourceCard.actionCreate {
+  border-left: 3px solid #16a34a;
+}
+
+.resourceCard.actionUpdate {
+  border-left: 3px solid #2563eb;
+}
+
+.resourceCard.actionDelete {
+  border-left: 3px solid #dc2626;
+}
+
+.resourceCard.actionReplace {
+  border-left: 3px solid #ea580c;
+}
+
+/* Resource Header */
+.resourceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+  gap: 12px;
+}
+
+.resourceHeader:hover {
+  background: #f9fafb;
+}
+
+.resourceHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.resourceHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Expand Icon */
+.expandIcon {
+  font-size: 10px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+/* Action Icons */
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.actionIcon.actionCreate,
+.iconCreate {
+  color: #16a34a;
+}
+
+.actionIcon.actionUpdate,
+.iconUpdate {
+  color: #2563eb;
+}
+
+.actionIcon.actionDelete,
+.iconDelete {
+  color: #dc2626;
+}
+
+.actionIcon.actionReplace,
+.iconReplace {
+  color: #ea580c;
+}
+
+/* Resource Address */
+.resourceAddress {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Copy Button */
+.copyButton {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #9ca3af;
+  opacity: 0;
+  transition: all 0.2s;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resourceHeader:hover .copyButton {
+  opacity: 0.6;
+}
+
+.copyButton:hover {
+  opacity: 1 !important;
+  background: rgba(0, 0, 0, 0.05);
+  color: #6b7280;
+}
+
+/* Resource Type Tag */
+.resourceTypeTag {
+  font-size: 11px;
+  color: #6b7280;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+/* Action Badge */
+.actionBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.actionBadge.actionCreate {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.actionBadge.actionUpdate {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.actionBadge.actionDelete {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.actionBadge.actionReplace {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+/* Resource Body */
+.resourceBody {
+  padding: 12px 16px;
+  background: #fafafa;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Section Label */
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sectionLabelDelete {
+  color: #dc2626;
+}
+
+/* Simple Attributes Grid */
+.simpleAttrsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.simpleAttrRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+}
+
+.simpleAttrRow:hover {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+/* Attribute Icons */
+.attrIcon {
+  color: #16a34a;
+  font-weight: 700;
+  font-size: 13px;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.attrIconDelete {
+  color: #dc2626;
+}
+
+/* Attribute Key */
+.attrKey {
+  font-weight: 500;
+  color: #6b7280;
+  min-width: 120px;
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+/* Value Styles - 统一使用中性灰色背景 */
+.valueCreate,
+.valueDelete,
+.valueBefore,
+.valueAfter,
+.valueNeutral {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #374151;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* Value Comparison (Before → After) */
+.valueComparison {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.arrow {
+  color: #9ca3af;
+  font-weight: 500;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+/* Known After Apply */
+.knownAfterApply {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #faf5ff;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #7c3aed;
+  font-style: italic;
+}
+
+/* Nested Group (for objects like tags, metadata) */
+.nestedGroup {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.nestedHeader {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.nestedContent {
+  padding: 6px 0;
+}
+
+.nestedRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.nestedRow:hover {
+  background: #f9fafb;
+}
+
+.nestedKey {
+  font-weight: 500;
+  color: #6b7280;
+  min-width: 140px;
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+/* Change Icons */
+.changeIcon {
+  font-weight: 700;
+  font-size: 13px;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.iconAdd {
+  color: #16a34a;
+}
+
+.iconRemove {
+  color: #dc2626;
+}
+
+.iconModify {
+  color: #2563eb;
+}
+
+.iconUnchanged {
+  color: #9ca3af;
+}
+
+/* Changes Table */
+.changesTable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.changeRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+}
+
+.changeRow:hover {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.changeKey {
+  font-weight: 500;
+  color: #6b7280;
+  min-width: 140px;
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+/* Unchanged Toggle */
+.unchangedToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  user-select: none;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+}
+
+.unchangedToggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.toggleIcon {
+  font-size: 9px;
+  color: #9ca3af;
+}
+
+/* Unchanged List */
+.unchangedList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  margin-top: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.unchangedRow {
+  display: flex;
+  gap: 10px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #9ca3af;
+}
+
+.unchangedKey {
+  font-weight: 500;
+  min-width: 120px;
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.unchangedValue {
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+/* Empty Message */
+.emptyMessage {
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* No Resources */
+.noResources {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 32px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.noResourcesIcon {
+  color: #d1d5db;
+  margin-bottom: 12px;
+}
+
+.noResources h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 6px 0;
+}
+
+.noResources p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 6px 0;
+  line-height: 1.5;
+}
+
+.noResourcesHint {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+/* Action Invocations Section (Terraform 1.14+) */
+.actionInvocationsSection {
+  margin-top: 16px;
+  border: 1px solid #7c3aed;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%);
+}
+
+.actionInvocationsHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.actionInvocationsHeader:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.actionInvocationsTitle {
+  font-weight: 600;
+  color: #7c3aed;
+  display: flex;
+  align-items: center;
+}
+
+.actionInvocationsCount {
+  background: #7c3aed;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actionInvocationsBadge {
+  margin-left: auto;
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.actionInvocationsList {
+  padding: 8px;
+}
+
+.actionInvocationItem {
+  background: white;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.actionInvocationItem:last-child {
+  margin-bottom: 0;
+}
+
+.actionInvocationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: rgba(124, 58, 237, 0.02);
+  border-bottom: 1px solid transparent;
+}
+
+.actionInvocationHeader:hover {
+  background: rgba(124, 58, 237, 0.05);
+}
+
+.actionInvocationItem:has(.actionInvocationBody) .actionInvocationHeader {
+  border-bottom: 1px solid rgba(124, 58, 237, 0.1);
+}
+
+.actionInvocationLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.actionInvocationLeft .copyButton {
+  opacity: 0.6;
+}
+
+.actionInvocationLeft .copyButton:hover {
+  opacity: 1;
+}
+
+.actionInvocationIcon {
+  font-size: 16px;
+  color: #7c3aed;
+}
+
+.actionInvocationAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 13px;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.actionInvocationRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.actionInvocationTypeTag {
+  background: #f3e8ff;
+  color: #7c3aed;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.actionInvocationTriggerBadge {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.actionInvocationBody {
+  padding: 12px 16px;
+  background: white;
+}
+
+.actionTriggerRelation {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border-radius: 6px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.triggerRelationLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.triggerRelationFlow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.triggerResourceAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #1f2937;
+  background: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.triggerArrow {
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+}
+
+.triggerActionAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #7c3aed;
+  background: #f3e8ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ddd6fe;
+}
+
+.actionConfigSection {
+  margin-bottom: 12px;
+}
+
+.actionConfigLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.actionConfigGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actionConfigRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+.actionConfigKey {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.actionConfigValue {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #1f2937;
+  word-break: break-all;
+}
+
+.actionProviderInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.actionProviderLabel {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.actionProviderValue {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #374151;
+}
+
+/* Output Changes Section */
+.outputChangesSection {
+  margin-top: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.outputChangesHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.outputChangesHeader:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+}
+
+.outputChangesTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.outputChangesCount {
+  font-size: 11px;
+  color: #3b82f6;
+  background: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.outputChangesList {
+  display: flex;
+  flex-direction: column;
+}
+
+.outputChangeItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  background: white;
+  transition: background 0.2s;
+}
+
+.outputChangeItem:last-child {
+  border-bottom: none;
+}
+
+.outputChangeItem:hover {
+  background: #f9fafb;
+}
+
+.outputChangeHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.outputName {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.sensitiveTag {
+  font-size: 10px;
+  color: #dc2626;
+  background: #fee2e2;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.sensitiveValue {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #fee2e2;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #dc2626;
+  font-style: italic;
+}
+
+.outputChangeValue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 26px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+/* Legacy compatibility - keep old class names working */
+.valueTag {
+  composes: valueNeutral;
+}
+
+.valueTagCreate {
+  composes: valueCreate;
+}
+
+.valueTagDelete {
+  composes: valueDelete;
+}
+
+.valueTagBefore {
+  composes: valueBefore;
+}
+
+.valueTagAfter {
+  composes: valueAfter;
+}
+
+.attributeList {
+  composes: simpleAttrsGrid;
+}
+
+.attributeRow {
+  composes: simpleAttrRow;
+}
+
+.attributeGroup {
+  composes: nestedGroup;
+}
+
+.attributeGroupHeader {
+  composes: nestedHeader;
+}
+
+.attributeGroupContent {
+  composes: nestedContent;
+}
+
+/* Triggers Action Indicator - 在资源卡片中显示触发的 actions */
+.triggersActionIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: #7c3aed;
+  font-size: 12px;
+}
+
+.triggersActionBadge {
+  background: linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%);
+  color: #7c3aed;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  border: 1px solid #ddd6fe;
+}
+
+/* Triggered Actions Section - 在资源展开时显示触发的 actions 详情 */
+.triggeredActionsSection {
+  margin-top: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 6px;
+}
+
+.triggeredActionsLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.triggeredActionItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: white;
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.triggeredActionItem:last-child {
+  margin-bottom: 0;
+}
+
+.triggeredActionItem .copyButton {
+  opacity: 0.6;
+}
+
+.triggeredActionItem .copyButton:hover {
+  opacity: 1;
+}
+
+.triggeredActionArrow {
+  color: #7c3aed;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.triggeredActionAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #1f2937;
+  word-break: break-all;
+  flex: 1;
+  min-width: 200px;
+}
+
+.triggeredActionType {
+  background: #f3e8ff;
+  color: #7c3aed;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.triggeredActionEvent {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}

@@ -1,0 +1,381 @@
+package controllers
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"iac-platform/internal/models"
+	"iac-platform/services"
+
+	"github.com/gin-gonic/gin"
+)
+
+// AgentController Agent控制器
+type AgentController struct {
+	agentService *services.AgentService
+}
+
+// NewAgentController 创建Agent控制器实例
+func NewAgentController(agentService *services.AgentService) *AgentController {
+	return &AgentController{
+		agentService: agentService,
+	}
+}
+
+// RegisterAgent 注册Agent
+// @Summary 注册Agent
+// @Description 注册新的Agent到平台
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param request body models.AgentRegistrationRequest true "Agent注册信息"
+// @Success 201 {object} map[string]interface{} "注册成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Failure 500 {object} map[string]interface{} "注册失败"
+// @Router /api/v1/agents/register [post]
+// @Security Bearer
+func (ac *AgentController) RegisterAgent(c *gin.Context) {
+	var req models.AgentRegistrationRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "请求参数无效",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	agent, err := ac.agentService.RegisterAgent(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "注册Agent失败",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"code":      201,
+		"data":      agent,
+		"message":   "Agent注册成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// ListAgents 获取Agent列表
+// @Summary 获取Agent列表
+// @Description 获取Agent列表，支持按状态和标签过滤
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param status query string false "状态过滤"
+// @Param labels query string false "标签过滤（逗号分隔）"
+// @Success 200 {object} map[string]interface{} "成功返回Agent列表"
+// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Router /api/v1/agents [get]
+// @Security Bearer
+func (ac *AgentController) ListAgents(c *gin.Context) {
+	status := c.Query("status")
+
+	var labels []string
+	if labelsStr := c.Query("labels"); labelsStr != "" {
+		labels = strings.Split(labelsStr, ",")
+	}
+
+	agents, err := ac.agentService.ListAgents(status, labels)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "获取Agent列表失败",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"data":      agents,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// GetAgent 获取Agent详情
+// @Summary 获取Agent详情
+// @Description 根据ID获取Agent的详细信息
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param id path int true "Agent ID"
+// @Success 200 {object} map[string]interface{} "成功返回Agent详情"
+// @Failure 400 {object} map[string]interface{} "无效的Agent ID"
+// @Failure 404 {object} map[string]interface{} "Agent不存在"
+// @Router /api/v1/agents/{id} [get]
+// @Security Bearer
+func (ac *AgentController) GetAgent(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Agent ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	agent, err := ac.agentService.GetAgent(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":      404,
+			"message":   "Agent不存在",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"data":      agent,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// UpdateAgent 更新Agent信息
+// @Summary 更新Agent信息
+// @Description 更新Agent的配置信息
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param id path int true "Agent ID"
+// @Param request body object true "更新信息"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Router /api/v1/agents/{id} [put]
+// @Security Bearer
+func (ac *AgentController) UpdateAgent(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Agent ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	var req struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "请求参数无效",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// 构建更新map
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "没有提供更新字段",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := ac.agentService.UpdateAgent(uint(id), updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// 获取更新后的Agent
+	agent, _ := ac.agentService.GetAgent(uint(id))
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"data":      agent,
+		"message":   "Agent更新成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// DeleteAgent 删除Agent
+// @Summary 删除Agent
+// @Description 删除指定的Agent
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param id path int true "Agent ID"
+// @Success 200 {object} map[string]interface{} "删除成功"
+// @Failure 400 {object} map[string]interface{} "无效的Agent ID"
+// @Router /api/v1/agents/{id} [delete]
+// @Security Bearer
+func (ac *AgentController) DeleteAgent(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Agent ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := ac.agentService.DeleteAgent(uint(id)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "Agent删除成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// Heartbeat Agent心跳
+// @Summary Agent心跳
+// @Description Agent发送心跳保持在线状态
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param request body models.AgentHeartbeatRequest true "心跳信息"
+// @Success 200 {object} map[string]interface{} "心跳更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Router /api/v1/agents/heartbeat [post]
+// @Security Bearer
+func (ac *AgentController) Heartbeat(c *gin.Context) {
+	var req models.AgentHeartbeatRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "请求参数无效",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := ac.agentService.Heartbeat(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "心跳更新成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// RevokeToken 撤销Agent Token
+// @Summary 撤销Agent Token
+// @Description 撤销Agent的访问令牌
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param id path int true "Agent ID"
+// @Success 200 {object} map[string]interface{} "Token已撤销"
+// @Failure 400 {object} map[string]interface{} "无效的Agent ID"
+// @Router /api/v1/agents/{id}/revoke-token [post]
+// @Security Bearer
+func (ac *AgentController) RevokeToken(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Agent ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := ac.agentService.RevokeToken(uint(id)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "Token已撤销",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// RegenerateToken 重新生成Agent Token
+// @Summary 重新生成Agent Token
+// @Description 为Agent重新生成新的访问令牌
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param id path int true "Agent ID"
+// @Success 200 {object} map[string]interface{} "Token重新生成成功"
+// @Failure 400 {object} map[string]interface{} "无效的Agent ID"
+// @Router /api/v1/agents/{id}/regenerate-token [post]
+// @Security Bearer
+func (ac *AgentController) RegenerateToken(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Agent ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	newToken, err := ac.agentService.RegenerateToken(uint(id))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"token": newToken,
+		},
+		"message":   "Token重新生成成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}

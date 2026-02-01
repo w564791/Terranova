@@ -1,0 +1,768 @@
+/* Health Tab 容器 */
+.healthTabContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Section */
+.section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* Drift 配置头部 */
+.driftConfigHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.driftConfigTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.driftConfigToggle {
+  font-size: 12px;
+  color: #9ca3af;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.driftConfigToggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Check Button Group */
+.checkButtonGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Last Check Info */
+.lastCheckInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.lastCheckTime {
+  color: #374151;
+}
+
+.lastCheckStatus {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.statusSuccess {
+  color: #10b981;
+}
+
+.statusFailed {
+  color: #ef4444;
+}
+
+.statusSkipped {
+  color: #f59e0b;
+}
+
+.statusRunning,
+.statusPending {
+  color: #3b82f6;
+}
+
+.checkingStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #0369a1;
+}
+
+.spinnerIcon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+  color: #0369a1;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.triggerCheckButton {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.triggerCheckButton:hover {
+  background: #2563eb;
+}
+
+.triggerCheckButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.cancelCheckButton {
+  padding: 8px 16px;
+  background: #fff;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelCheckButton:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.driftLastCheck {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Drift 状态条 */
+.driftStatusBar {
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  margin-bottom: 16px;
+}
+
+.driftStatusBarDrift {
+  background: #f59e0b;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.driftStatusBarSynced {
+  background: #10b981;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.driftStatusBarUnapplied {
+  background: #6b7280;
+  height: 100%;
+  transition: width 0.3s;
+}
+
+/* Drift Status Content - Two Column Layout */
+.driftStatusContent {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+
+/* Drift 统计数字 */
+.driftStatusStats {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.driftStatItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.driftStatValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.driftStatLabel {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Summary Box */
+.summaryBox {
+  max-width: 400px;
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fefce8;
+  border-radius: 6px;
+  border-left: 3px solid #f59e0b;
+  margin-left: auto;
+}
+
+.summaryText {
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.summaryText p {
+  margin: 0 0 4px 0;
+}
+
+.summaryText p:last-child {
+  margin-bottom: 0;
+}
+
+.summaryText strong {
+  font-weight: 600;
+}
+
+.summaryText code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+/* Resource List */
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Resource Card */
+.resourceCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  transition: all 0.2s;
+  border-left: 3px solid #e5e7eb;
+}
+
+.resourceCard:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.resourceCardDrifted {
+  border-left-color: #f59e0b;
+}
+
+.resourceCardUnapplied {
+  border-left-color: #6b7280;
+}
+
+.resourceCardSynced {
+  border-left-color: #10b981;
+}
+
+/* Resource Header */
+.resourceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+  gap: 12px;
+}
+
+.resourceHeader:hover {
+  background: #f9fafb;
+}
+
+.resourceHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.resourceHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Expand Icon */
+.expandIcon {
+  font-size: 10px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+/* Resource Icon */
+.resourceIcon {
+  font-size: 16px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.resourceIconDrifted {
+  color: #f59e0b;
+}
+
+.resourceIconUnapplied {
+  color: #6b7280;
+}
+
+.resourceIconSynced {
+  color: #10b981;
+}
+
+/* Resource Name */
+.resourceName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Children Count */
+.childrenCount {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Drift Badge */
+.driftBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Unapplied Badge */
+.unappliedBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* Synced Badge */
+.syncedBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* Resource Body */
+.resourceBody {
+  padding: 12px 16px;
+  background: #fafafa;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Children List */
+.childrenList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Child Card */
+.childCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.childCard.actionCreate {
+  border-left: 3px solid #16a34a;
+}
+
+.childCard.actionUpdate {
+  border-left: 3px solid #2563eb;
+}
+
+.childCard.actionDelete {
+  border-left: 3px solid #dc2626;
+}
+
+.childCard.actionUnapplied {
+  border-left: 3px solid #6b7280;
+}
+
+/* Child Header */
+.childHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Action Icons */
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.actionIcon.actionCreate {
+  color: #16a34a;
+}
+
+.actionIcon.actionUpdate {
+  color: #2563eb;
+}
+
+.actionIcon.actionDelete {
+  color: #dc2626;
+}
+
+.actionIcon.actionUnapplied {
+  color: #6b7280;
+}
+
+/* Child Address */
+.childAddress {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Action Badge */
+.actionBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: auto;
+}
+
+.actionBadge.actionCreate {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.actionBadge.actionUpdate {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.actionBadge.actionDelete {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.actionBadge.actionUnapplied {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* Changes Table */
+.changesTable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.changeRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+}
+
+.changeRow:hover {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+/* Change Icons */
+.changeIcon {
+  font-weight: 700;
+  font-size: 13px;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.iconAdd {
+  color: #16a34a;
+}
+
+.iconRemove {
+  color: #dc2626;
+}
+
+.iconModify {
+  color: #2563eb;
+}
+
+/* Change Key */
+.changeKey {
+  font-weight: 500;
+  color: #6b7280;
+  min-width: 120px;
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+/* Value Styles */
+.valueCreate,
+.valueDelete,
+.valueBefore,
+.valueAfter {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #374151;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.valueCreate {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.valueDelete {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Value Comparison */
+.valueComparison {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.arrow {
+  color: #9ca3af;
+  font-weight: 500;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+/* Status Legend */
+.statusLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.legendDesc {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* AI Summary Placeholder */
+.aiSummaryPlaceholder {
+  margin-top: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+}
+
+.aiSummaryHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.aiIcon {
+  font-size: 18px;
+}
+
+.aiTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.aiSummaryContent {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aiPlaceholderText {
+  font-size: 13px;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .driftStatusStats {
+    gap: 16px;
+  }
+
+  .driftStatValue {
+    font-size: 20px;
+  }
+
+  .resourceHeader {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .resourceHeaderLeft {
+    flex: 1 1 100%;
+  }
+
+  .resourceHeaderRight {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
+  .childHeader {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .childAddress {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  .actionBadge {
+    order: 1;
+    margin-left: 0;
+  }
+
+  .changeRow {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .changeKey {
+    min-width: auto;
+  }
+}

@@ -1,0 +1,58 @@
+.container {
+  padding: 24px;
+  background: #fff;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.container h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.uploadSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.description {
+  width: 100%;
+}
+
+.options {
+  display: flex;
+  align-items: center;
+}
+
+.forceWarning {
+  margin: 0;
+  padding: 16px;
+  background: #fff2e8;
+  border: 2px solid #ff4d4f;
+  border-radius: 4px;
+}
+
+.forceWarning ul {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.forceWarning li {
+  margin: 4px 0;
+  color: #d4380d;
+}
+
+.forceWarning p {
+  margin: 8px 0;
+}
+
+.forceWarning p:first-child {
+  margin-top: 0;
+}
+
+.uploadButton {
+  align-self: flex-start;
+  min-width: 120px;
+}

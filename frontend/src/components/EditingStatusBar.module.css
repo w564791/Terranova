@@ -1,0 +1,115 @@
+.statusBar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.statusContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.statusIcon {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.statusText {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.statusActions {
+  display: flex;
+  gap: 10px;
+}
+
+.detailsButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+}
+
+.detailsButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.warningMessage {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* 状态颜色 */
+.status-green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.status-yellow {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.status-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+}
+
+.status-red {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .statusBar {
+    padding: 10px 15px;
+  }
+
+  .statusContent {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .statusText {
+    font-size: 13px;
+  }
+
+  .detailsButton {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+}

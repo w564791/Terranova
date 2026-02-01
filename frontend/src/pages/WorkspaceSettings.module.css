@@ -1,0 +1,790 @@
+/* Settings页面布局 - 左侧tab + 右侧内容 */
+.settingsLayout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-gray-50);
+}
+
+/* 左侧导航栏 */
+.settingsSidebar {
+  width: 260px;
+  background: var(--color-white);
+  border-right: 1px solid var(--color-gray-200);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.sidebarHeader {
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.sidebarTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+/* 导航菜单 */
+.settingsNav {
+  flex: 1;
+  padding: 12px 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: var(--color-gray-700);
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  width: 100%;
+  cursor: pointer;
+  font-family: var(--font-primary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.navItem:hover {
+  background: var(--color-gray-50);
+  color: var(--color-gray-900);
+}
+
+.navItemActive {
+  background: #eff6ff;
+  color: var(--color-blue-700);
+  border-left-color: var(--color-blue-600);
+}
+
+.navIcon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.navLabel {
+  flex: 1;
+}
+
+/* 右侧主内容区 */
+.settingsMain {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+}
+
+.settingsContent {
+  flex: 1;
+  padding: 32px;
+  max-width: 1200px;
+  width: 100%;
+}
+
+/* Tab内容 */
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 内容头部 */
+.contentHeader {
+  margin-bottom: 8px;
+}
+
+.contentTitle {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 8px 0;
+}
+
+.contentDescription {
+  font-size: 15px;
+  color: var(--color-gray-600);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Section */
+.section {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-gray-100);
+}
+
+/* 表单字段 */
+.field {
+  margin-bottom: 20px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.required {
+  color: #dc2626;
+  margin-left: 4px;
+}
+
+.required {
+  color: var(--color-red-500);
+  margin-left: 2px;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-gray-900);
+  font-family: var(--font-primary);
+  transition: all 0.2s;
+  background: var(--color-white);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-blue-600);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--color-gray-400);
+}
+
+.inputError {
+  border-color: var(--color-red-500);
+}
+
+.inputError:focus {
+  border-color: var(--color-red-500);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--color-gray-500);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.errorText {
+  font-size: 13px;
+  color: var(--color-red-500);
+  margin-top: 6px;
+}
+
+/* Tags */
+.tagList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tagPair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tagInput {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-gray-900);
+  transition: all 0.2s;
+}
+
+.tagInput:focus {
+  outline: none;
+  border-color: var(--color-blue-600);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.tagSeparator {
+  color: var(--color-gray-400);
+  font-weight: 500;
+}
+
+.removeTagButton {
+  padding: 6px 10px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-600);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.removeTagButton:hover {
+  background: var(--color-red-50);
+  border-color: var(--color-red-300);
+  color: var(--color-red-600);
+}
+
+.addTagButton {
+  padding: 8px 16px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-700);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+
+.addTagButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+/* 保存区域 */
+.saveSection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-gray-200);
+  margin-top: 24px;
+}
+
+.saveButton {
+  padding: 10px 24px;
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.unsavedHint {
+  font-size: 13px;
+  color: var(--color-orange-600);
+  font-weight: 500;
+}
+
+/* 锁定状态 */
+.lockStatus {
+  margin-bottom: 20px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--color-gray-100);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  margin-bottom: 16px;
+}
+
+.lockedIcon,
+.unlockedIcon {
+  font-size: 18px;
+}
+
+.lockInfo {
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lockInfoItem {
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.lockInfoLabel {
+  color: var(--color-gray-600);
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.lockInfoValue {
+  color: var(--color-gray-900);
+}
+
+/* 按钮 */
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.primaryButton {
+  padding: 10px 20px;
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primaryButton:hover {
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
+}
+
+.cancelButton {
+  padding: 10px 20px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-700);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.dangerButton {
+  padding: 10px 20px;
+  background: var(--color-red-600);
+  border: 1px solid var(--color-red-600);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: var(--color-red-700);
+  border-color: var(--color-red-700);
+}
+
+.dangerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Coming Soon */
+.comingSoon {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.comingSoonIcon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.comingSoonTitle {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 8px 0;
+}
+
+.comingSoonText {
+  font-size: 15px;
+  color: var(--color-gray-600);
+  margin: 0;
+}
+
+/* 危险区域 */
+.dangerZone {
+  border: 2px solid var(--color-red-500);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  background: var(--color-red-50);
+}
+
+.dangerItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.dangerInfo {
+  flex: 1;
+}
+
+.dangerTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-red-700);
+  margin: 0 0 8px 0;
+}
+
+.dangerDescription {
+  font-size: 14px;
+  color: var(--color-gray-700);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dangerWarning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--color-orange-50);
+  border: 1px solid var(--color-orange-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-orange-800);
+}
+
+.warningIcon {
+  font-size: 20px;
+}
+
+/* 删除确认对话框 */
+.deleteConfirm {
+  padding: 4px 0;
+}
+
+.deleteWarning {
+  font-size: 14px;
+  color: var(--color-red-600);
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.deleteConfirm p {
+  font-size: 14px;
+  color: var(--color-gray-700);
+  margin: 0 0 12px 0;
+}
+
+.confirmInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-gray-900);
+  font-family: var(--font-primary);
+}
+
+.confirmInput:focus {
+  outline: none;
+  border-color: var(--color-blue-600);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 加载和错误状态 */
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-gray-50);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 16px;
+  border: 3px solid var(--color-gray-200);
+  border-top-color: var(--color-blue-600);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading p {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin: 0;
+}
+
+.error {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-red-600);
+  font-size: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+  .settingsContent {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .settingsLayout {
+    flex-direction: column;
+  }
+
+  .settingsSidebar {
+    width: 100%;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .settingsMain {
+    margin-left: 0;
+  }
+
+  .settingsContent {
+    padding: 20px;
+  }
+
+  .contentTitle {
+    font-size: 24px;
+  }
+
+  .dangerItem {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dangerButton {
+    width: 100%;
+  }
+
+  .tagPair {
+    flex-wrap: wrap;
+  }
+
+  .tagInput {
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .settingsContent {
+    padding: 16px;
+  }
+
+  .section {
+    padding: 16px;
+  }
+
+  .contentTitle {
+    font-size: 20px;
+  }
+
+  .sectionTitle {
+    font-size: 16px;
+  }
+}
+
+/* 自定义删除对话框样式 */
+.dialogOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialogContent {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.dialogHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-gray-200);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.dialogTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-red-600);
+  margin: 0;
+}
+
+.dialogBody {
+  padding: 24px;
+}
+
+.dialogFooter {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.deleteButton {
+  padding: 10px 20px;
+  background: var(--color-red-600);
+  border: 1px solid var(--color-red-600);
+  border-radius: var(--radius-md);
+  color: var(--color-white);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: var(--color-red-700);
+  border-color: var(--color-red-700);
+}
+
+.deleteButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Toggle开关样式 */
+.toggleContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleSlider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-gray-300);
+  border-radius: 24px;
+  transition: all 0.3s;
+}
+
+.toggleSlider:before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--color-white);
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.toggle input:checked + .toggleSlider {
+  background-color: var(--color-blue-600);
+}
+
+.toggle input:checked + .toggleSlider:before {
+  transform: translateX(24px);
+}
+
+.toggle input:focus + .toggleSlider {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.toggleLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+}

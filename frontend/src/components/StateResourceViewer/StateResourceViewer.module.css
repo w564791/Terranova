@@ -1,0 +1,314 @@
+/* State Resource Viewer - 三级结构样式 */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 搜索区域 */
+.searchSection {
+  background: white;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.searchForm {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.filterSelect {
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  min-width: 140px;
+  cursor: pointer;
+}
+
+.actionButton {
+  padding: 8px 14px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.actionButton:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+/* 资源列表 */
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 第一级：资源卡片 */
+.resourceCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.resourceCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.resourceCardHeader:hover {
+  background: #f3f4f6;
+}
+
+.expandIcon {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.resourceName {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.resourceCount {
+  padding: 3px 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.resourceCardContent {
+  border-top: 1px solid #e5e7eb;
+  background: white;
+}
+
+/* 第二级：地址项 */
+.addressItem {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.addressItem:last-child {
+  border-bottom: none;
+}
+
+.addressHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 10px 32px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.addressHeader:hover {
+  background: #f9fafb;
+}
+
+.modeIcon {
+  font-size: 10px;
+  font-weight: 600;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.managedIcon {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.dataIcon {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.addressText {
+  flex: 1;
+  font-size: 13px;
+  color: #374151;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  word-break: break-all;
+}
+
+.typeTag {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: 'Monaco', 'Menlo', monospace;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.typeTag:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.addressContent {
+  padding-left: 32px;
+}
+
+/* 第三级：实例详情 - terraform state show 风格 */
+.instanceDetails {
+  background: #1e1e1e;
+  border-radius: 6px;
+  margin: 8px 16px 8px 48px;
+  overflow: hidden;
+}
+
+.instanceToolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.copyButton {
+  padding: 4px 12px;
+  background: #3d3d3d;
+  border: 1px solid #4d4d4d;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.copyButton:hover {
+  background: #4d4d4d;
+  color: #fff;
+}
+
+.stateShowOutput {
+  margin: 0;
+  padding: 16px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #d4d4d4;
+  overflow-x: auto;
+  white-space: pre;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.stateShowOutput code {
+  font-family: inherit;
+}
+
+/* 复制提示 */
+.copiedToast {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #10b981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  animation: fadeInOut 2s ease-in-out;
+  z-index: 10;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+}
+
+/* 空状态 */
+.emptyState {
+  text-align: center;
+  padding: 48px 24px;
+  color: #6b7280;
+  background: white;
+  border-radius: 8px;
+}
+
+.emptyText {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .searchForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .searchInput {
+    min-width: auto;
+  }
+  
+  .filterSelect {
+    min-width: auto;
+  }
+  
+  .actionButton {
+    flex: 1;
+  }
+  
+  .addressHeader {
+    padding-left: 16px;
+  }
+  
+  .addressContent {
+    padding-left: 16px;
+  }
+}

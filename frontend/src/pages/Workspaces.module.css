@@ -1,0 +1,910 @@
+/* 容器 */
+.container {
+  height: calc(100vh - 68px - 24px);
+  display: flex;
+  flex-direction: column;
+  background: #f8fafc;
+  overflow: hidden;
+  margin: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 -1px 3px rgba(0, 0, 0, 0.04),
+    inset 1px 0 3px rgba(0, 0, 0, 0.04),
+    inset -1px 0 3px rgba(0, 0, 0, 0.04);
+}
+
+.container * {
+  box-sizing: border-box;
+}
+
+/* 页面头部 */
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px 8px 0 0;
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.pageTitle {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* New 按钮 */
+.newButtonContainer {
+  position: relative;
+}
+
+.newButton {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.newButton:hover {
+  background: #2563eb;
+}
+
+.newButtonActive {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.dropdownArrow {
+  font-size: 12px;
+}
+
+.dropdownOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+}
+
+.newDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 140px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdownItem {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dropdownItem:hover {
+  background: #f3f4f6;
+}
+
+/* 主布局 */
+.mainLayout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左侧 Projects 侧边栏 */
+.projectsSidebar {
+  width: 220px;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.projectsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  height: 45px;
+}
+
+.projectsTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.5px;
+}
+
+.projectSearchBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.projectSearchBtn:hover {
+  color: #374151;
+}
+
+.projectsList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.projectItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.projectItem:hover {
+  background: #f9fafb;
+}
+
+.projectItemActive {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+}
+
+.projectItemActive .projectName {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.projectIcon {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.projectName {
+  font-size: 14px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.projectsPagination {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 45px;
+  min-height: 45px;
+  align-items: center;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.paginationBtn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.paginationBtn:hover:not(:disabled) {
+  color: #3b82f6;
+}
+
+.paginationBtn:disabled {
+  color: #d1d5db;
+  cursor: not-allowed;
+}
+
+/* 右侧内容区域 */
+.contentArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 工作空间标题栏 */
+.workspacesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 45px;
+  border-bottom: 1px solid #d1d5db;
+  background: #fff;
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.workspacesTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s;
+}
+
+.collapseBtn:hover {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #9ca3af;
+}
+
+.inProject {
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.searchBox {
+  position: relative;
+}
+
+.searchInput {
+  width: 240px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.searchInput::placeholder {
+  color: #9ca3af;
+}
+
+/* 筛选栏 */
+.filtersBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 50px;
+  border-bottom: 1px solid #d1d5db;
+  background: #fff;
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.statusFilters {
+  display: flex;
+  gap: 4px;
+}
+
+.statusBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.statusAttention svg {
+  stroke: #f59e0b;
+}
+
+.statusError svg {
+  stroke: #ef4444;
+}
+
+.statusRunning svg {
+  stroke: #3b82f6;
+}
+
+.statusSuccess svg {
+  stroke: #22c55e;
+}
+
+.dropdownIcon {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.statusBtn:hover {
+  background: #f3f4f6;
+}
+
+.statusBtnActive {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.statusIcon {
+  font-size: 14px;
+}
+
+.filterActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filterDropdownContainer {
+  position: relative;
+}
+
+.filterBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filterBtn:hover {
+  background: #f3f4f6;
+}
+
+.filterBtnActive {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.filterDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.filterDropdownEmpty {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.filterDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.filterDropdownItem:hover {
+  background: #f3f4f6;
+}
+
+.filterDropdownItem input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.filterDropdownItem span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clearBtn {
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  color: #ef4444;
+}
+
+/* 工作空间表格 */
+.workspacesTable {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  padding: 0 20px;
+  height: 40px;
+  align-items: center;
+  background: #f9fafb;
+  border-bottom: 1px solid #d1d5db;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.tableBody {
+  flex: 1;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.tableRow:hover {
+  background: #f9fafb;
+}
+
+.colName {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspaceName {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.workspaceDesc {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.colStatus {
+  display: flex;
+  align-items: center;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-applied,
+.status-success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-running {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-requires_approval,
+.status-plan_completed,
+.status-apply_pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-planned_and_finished {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.status-pending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-waiting {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.colMode {
+  display: flex;
+  align-items: center;
+}
+
+.modeBadge {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.colTime {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* 表格分页 */
+.tablePagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 45px;
+  min-height: 45px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+  flex-shrink: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.paginationInfo {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paginationArrow {
+  width: 32px;
+  height: 32px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.paginationArrow svg {
+  stroke: #fff;
+}
+
+.paginationArrow:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.paginationArrow:disabled {
+  background: #d1d5db;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+.paginationArrow:disabled svg {
+  stroke: #fff;
+  opacity: 0.8;
+}
+
+.pageInfo {
+  font-size: 13px;
+  color: #6b7280;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* 空状态 */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+/* 加载和错误状态 */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 16px;
+}
+
+.errorIcon {
+  font-size: 32px;
+}
+
+.errorMessage {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.retryButton {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.retryButton:hover {
+  background: #2563eb;
+}
+
+/* 对话框 */
+.dialogOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialogContent {
+  background: #fff;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.dialogHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dialogTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.dialogClose {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.dialogClose:hover {
+  color: #6b7280;
+}
+
+.dialogBody {
+  padding: 20px;
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.formGroup {
+  margin-bottom: 16px;
+}
+
+.formGroup:last-child {
+  margin-bottom: 0;
+}
+
+.formLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.formInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.formTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  resize: vertical;
+  transition: all 0.2s;
+}
+
+.formTextarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.formHint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.cancelButton {
+  padding: 8px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: #f3f4f6;
+}
+
+.primaryButton {
+  padding: 8px 16px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primaryButton:hover {
+  background: #2563eb;
+}
+
+.primaryButton:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+/* 响应式 */
+@media (max-width: 900px) {
+  .container {
+    margin: 8px;
+    height: calc(100vh - 68px - 16px);
+  }
+
+  .mainLayout {
+    flex-direction: column;
+  }
+
+  .projectsSidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .projectsList {
+    max-height: 200px;
+  }
+}

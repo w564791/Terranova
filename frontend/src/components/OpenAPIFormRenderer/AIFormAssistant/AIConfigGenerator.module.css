@@ -1,0 +1,962 @@
+/* AI 配置生成器样式 - v3 */
+
+/* 全局动画定义 - 使用 :global 确保可以被内联样式引用 */
+:global {
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  
+  @keyframes sparkle {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(0.95);
+    }
+  }
+}
+
+/* 容器 */
+.container {
+  position: relative;
+  display: inline-block;
+}
+
+/* 流水特效动画 */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+}
+
+/* 触发按钮 */
+.triggerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: 36px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  color: #4F7CFF;
+  background: linear-gradient(
+    90deg,
+    rgba(79, 124, 255, 0.08) 0%,
+    rgba(123, 159, 255, 0.15) 25%,
+    rgba(79, 124, 255, 0.08) 50%,
+    rgba(123, 159, 255, 0.15) 75%,
+    rgba(79, 124, 255, 0.08) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+  border: 1px solid rgba(79, 124, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.triggerButton:hover:not(:disabled) {
+  color: #3366FF;
+  background: linear-gradient(
+    90deg,
+    rgba(79, 124, 255, 0.15) 0%,
+    rgba(123, 159, 255, 0.25) 25%,
+    rgba(79, 124, 255, 0.15) 50%,
+    rgba(123, 159, 255, 0.25) 75%,
+    rgba(79, 124, 255, 0.15) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  border-color: rgba(79, 124, 255, 0.5);
+  box-shadow: 0 2px 8px rgba(79, 124, 255, 0.25);
+}
+
+.triggerButtonActive {
+  background: #4F7CFF !important;
+  color: white !important;
+  border-color: #4F7CFF !important;
+  animation: none !important;
+}
+
+.triggerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aiIcon {
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+.triggerButton:hover .aiIcon {
+  animation: sparkle 1s ease-in-out infinite;
+}
+
+.triggerButtonActive .aiIcon path {
+  fill: white;
+}
+
+.closeIcon {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+/* 贯穿式面板 - 横跨整个页面宽度 */
+.fullWidthPanel {
+  width: 100%;
+  max-width: 100%;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.promptLabel {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.infoLink {
+  color: #4F7CFF;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.infoLink:hover {
+  text-decoration: underline;
+}
+
+/* 提示词在头部显示 - 直接作为 flex 子元素 */
+.promptHint {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 400px;
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+  cursor: pointer;
+  transition: color 0.2s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 12px;
+}
+
+.promptHint:hover {
+  color: #4F7CFF;
+}
+
+.promptSeparator {
+  color: #ddd;
+  margin: 0 4px;
+  font-style: normal;
+}
+
+.charCount {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.panelCloseButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.panelCloseButton:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+/* 输入区域 */
+.inputSection {
+  position: relative;
+  padding: 12px 16px;
+}
+
+.inlineTextArea {
+  border-radius: 6px !important;
+  border: 1px solid #d9d9d9 !important;
+  padding: 10px 12px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  resize: none !important;
+}
+
+.inlineTextArea:focus {
+  border-color: #4F7CFF !important;
+  box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.1) !important;
+}
+
+.inlineTextArea::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* 贯穿式输入框 - 支持自适应高度 */
+.fullWidthTextArea {
+  width: 100% !important;
+  border-radius: 6px !important;
+  border: 1px solid #d9d9d9 !important;
+  padding: 10px 12px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  resize: none !important;
+  background: white !important;
+  /* 移除固定高度限制，让 autoSize 生效 */
+  min-height: auto !important;
+  max-height: none !important;
+}
+
+.fullWidthTextArea:focus {
+  border-color: #4F7CFF !important;
+  box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.1) !important;
+}
+
+.fullWidthTextArea::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* 内嵌加载提示 - 放在操作栏按钮旁边 */
+.inlineLoadingIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: #4F7CFF;
+}
+
+/* 加载进度显示 */
+.loadingProgress {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
+  border-top: 1px solid #d9e8ff;
+}
+
+.loadingSteps {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loadingText {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: #4F7CFF;
+}
+
+.loadingStep {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(79, 124, 255, 0.1);
+  border-radius: 12px;
+  font-size: 12px;
+  color: #4F7CFF;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loadingStep:nth-child(1) { animation-delay: 0s; }
+.loadingStep:nth-child(2) { animation-delay: 0.2s; }
+.loadingStep:nth-child(3) { animation-delay: 0.4s; }
+.loadingStep:nth-child(4) { animation-delay: 0.6s; }
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 内联进度显示 - 放在按钮旁边 */
+.loadingProgressInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  margin-left: 8px;
+}
+
+.loadingTextInline {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+}
+
+/* 进度步骤样式 */
+.progressStep {
+  color: #999;
+  transition: all 0.3s ease;
+}
+
+.progressStepActive {
+  color: #4F7CFF;
+}
+
+.progressStepCurrent {
+  font-weight: 600;
+  color: #4F7CFF;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* SSE 实时进度样式 */
+.progressInfo {
+  color: #999;
+  font-size: 11px;
+  margin-left: 6px;
+  font-weight: normal;
+}
+
+.progressTime {
+  color: #bbb;
+  font-size: 10px;
+  margin-left: 4px;
+  font-weight: normal;
+}
+
+/* 横向进度步骤显示 */
+.progressStepsHorizontal {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  font-size: 12px;
+}
+
+/* 已完成步骤（绿色） */
+.progressStepCompleted {
+  display: inline-flex;
+  align-items: center;
+  color: #52c41a;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* 跳过的步骤（灰色） */
+.progressStepSkipped {
+  display: inline-flex;
+  align-items: center;
+  color: #999;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* 步骤之间的箭头 */
+.progressArrow {
+  color: #d9d9d9;
+  margin: 0 2px;
+  font-weight: normal;
+}
+
+/* 当前活动步骤 */
+.progressStepActive {
+  display: inline-flex;
+  align-items: center;
+  color: #4F7CFF;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.progressStepActive .progressTime {
+  color: #999;
+}
+
+/* 执行摘要（预览弹窗中显示） */
+.executionSummary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.summaryStepCompleted {
+  display: inline-flex;
+  align-items: center;
+  color: #52c41a;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.summaryArrow {
+  color: #d9d9d9;
+  margin: 0 2px;
+  font-weight: normal;
+}
+
+.summaryTotal {
+  color: #666;
+  font-weight: 600;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+/* 操作栏 */
+.actionBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+  border-radius: 0 0 8px 8px;
+  flex-wrap: wrap;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 操作栏右侧区域 */
+.actionBarRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 提示词容器 */
+.promptsContainer {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-height: 36px;
+  padding: 2px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.promptsContainer::-webkit-scrollbar {
+  display: none;
+}
+
+.promptItem {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%);
+  border: 1px solid #b8d4f0;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.promptItem:hover {
+  background: linear-gradient(135deg, #d4e8f9 0%, #e0f0ff 100%);
+  border-color: #4F7CFF;
+  box-shadow: 0 2px 6px rgba(79, 124, 255, 0.2);
+}
+
+.promptItemContent {
+  font-size: 12px;
+  color: #1a56db;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.actionButton {
+  border-radius: 20px !important;
+  font-size: 13px !important;
+}
+
+.helpText {
+  width: 100%;
+  font-size: 12px;
+  color: #999;
+  padding: 8px 16px;
+  text-align: left;
+}
+
+/* Modal 样式 */
+.modal :global(.ant-modal-content) {
+  padding: 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+/* 自定义标题栏 */
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
+  border-bottom: 1px solid #d9e8ff;
+}
+
+.modalTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  color: #1a56db;
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+
+/* Modal 内容区 */
+.modalBody {
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Modal 底部 */
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 预览视图 */
+.previewAlert {
+  margin-bottom: 16px;
+}
+
+.previewTabs {
+  margin-bottom: 16px;
+}
+
+.previewTabs :global(.ant-tabs-content) {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* 配置预览列表 */
+.configPreview {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.configList {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.configItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 4px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.configItem:last-child {
+  border-bottom: none;
+}
+
+.configKey {
+  color: #0550ae;
+  font-weight: 600;
+  min-width: 180px;
+  flex-shrink: 0;
+}
+
+.configSeparator {
+  color: #666;
+  margin: 0 8px;
+}
+
+.configValue {
+  flex: 1;
+  word-break: break-all;
+}
+
+/* 值类型样式 */
+.nullValue {
+  color: #999;
+  font-style: italic;
+}
+
+.boolValue {
+  color: #0550ae;
+}
+
+.numberValue {
+  color: #0550ae;
+}
+
+.stringValue {
+  color: #0a3069;
+}
+
+.placeholderValue {
+  color: #cf222e;
+  background: #ffebe9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.emptyArray,
+.emptyObject {
+  color: #999;
+}
+
+.arrayValue,
+.objectValue {
+  display: inline;
+}
+
+.arrayItem,
+.objectEntry {
+  margin-left: 16px;
+}
+
+.objectKey {
+  color: #0550ae;
+}
+
+/* JSON 预览容器 */
+.jsonPreviewContainer {
+  position: relative;
+}
+
+/* 复制按钮 */
+.copyButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(45, 45, 45, 0.95);
+  border-radius: 4px;
+  cursor: pointer;
+  color: #e0e0e0;
+  transition: all 0.2s;
+  z-index: 100;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.copyButton:hover:not(:disabled) {
+  background: rgba(70, 70, 70, 0.98);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
+.copyButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* JSON 预览 */
+.jsonPreview {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  padding-top: 48px; /* 为复制按钮留出空间 */
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: auto;
+  margin: 0;
+  max-height: 350px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.emptyConfig {
+  text-align: center;
+  color: #999;
+  padding: 40px;
+}
+
+/* Collapse 样式 */
+.placeholderCollapse {
+  margin-top: 16px;
+  background: #fff;
+}
+
+.placeholderList {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.placeholderItem {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  border-left: 3px solid #1890ff;
+}
+
+.placeholderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.fieldName {
+  font-weight: 600;
+  color: #1890ff;
+  font-family: monospace;
+}
+
+.fieldDesc {
+  color: #666;
+  font-size: 13px;
+  margin: 0;
+}
+
+.helpLink {
+  font-size: 12px;
+  color: #1890ff;
+}
+
+.helpLink:hover {
+  color: #40a9ff;
+}
+
+/* ========== 移动端响应式适配 ========== */
+@media screen and (max-width: 768px) {
+  /* 触发按钮 - 移动端更紧凑 */
+  .triggerButton {
+    padding: 0 10px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  /* 面板 */
+  .fullWidthPanel {
+    margin-top: 8px;
+    margin-bottom: 12px;
+  }
+
+  .panelHeader {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .promptLabel {
+    font-size: 13px;
+  }
+
+  .infoLink {
+    font-size: 12px;
+  }
+
+  /* 输入区域 */
+  .inputSection {
+    padding: 10px 12px;
+  }
+
+  .fullWidthTextArea {
+    font-size: 14px !important;
+    padding: 8px 10px !important;
+  }
+
+  /* 操作栏 - 移动端按钮换行显示 */
+  .actionBar {
+    padding: 10px 12px;
+  }
+
+  .actionButtons {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .actionButton {
+    font-size: 12px !important;
+    padding: 0 12px !important;
+    height: 28px !important;
+  }
+
+  /* 加载提示 - 移动端单独一行 */
+  .inlineLoadingIndicator {
+    width: 100%;
+    padding: 8px 0 0 0;
+    font-size: 12px;
+    justify-content: center;
+  }
+
+  .helpText {
+    font-size: 11px;
+  }
+
+  /* Modal - 移动端全屏 */
+  .modalHeader {
+    padding: 12px 16px;
+  }
+
+  .modalTitle {
+    font-size: 14px;
+  }
+
+  .modalBody {
+    padding: 16px;
+    max-height: 70vh;
+  }
+
+  .modalFooter {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  /* 配置预览 */
+  .configPreview {
+    padding: 10px;
+  }
+
+  .configList {
+    font-size: 12px;
+  }
+
+  .configKey {
+    min-width: 120px;
+  }
+
+  /* JSON 预览 */
+  .jsonPreview {
+    font-size: 11px;
+    padding: 12px;
+    padding-top: 44px;
+  }
+
+  .copyButton {
+    padding: 4px 8px;
+    height: 24px;
+    font-size: 11px;
+  }
+}
+
+/* 超小屏幕（手机竖屏） */
+@media screen and (max-width: 480px) {
+  .triggerButton {
+    padding: 0 10px;
+    height: 32px;
+    font-size: 12px;
+    gap: 4px;
+  }
+
+  /* 保留按钮文字，不隐藏 */
+
+  .panelHeader {
+    padding: 8px 10px;
+  }
+
+  .inputSection {
+    padding: 8px 10px;
+  }
+
+  .actionBar {
+    padding: 8px 10px;
+  }
+
+  .actionButton {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .configKey {
+    min-width: 100px;
+    font-size: 11px;
+  }
+
+  .configValue {
+    font-size: 11px;
+  }
+}

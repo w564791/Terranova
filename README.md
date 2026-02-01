@@ -1,160 +1,370 @@
-# IaC平台 (Infrastructure as Code Platform)
+# IaC Platform (Infrastructure as Code Platform)
 
-一个企业级的基础设施即代码管理平台，提供完整的Terraform工作流管理、多租户权限控制、智能表单渲染和资源可视化能力。
+<p align="center">
+  <img src="docs/iac-platform.svg" alt="IaC Platform Logo" width="200"/>
+</p>
 
-## 🎯 核心特色
+<p align="center">
+  <strong>企业级基础设施即代码管理平台</strong><br>
+  AI驱动 · 表单化操作 · 多租户架构 · 全流程管控
+</p>
 
-### 🤖 AI驱动的智能化
-- **AI Schema生成**: 自动解析Terraform Module生成OpenAPI Schema
-- **AI错误分析**: 基于AWS Bedrock Claude 3.5 Sonnet的智能错误诊断
-- **0门槛操作**: 完全屏蔽HCL语法，纯表单化操作
+<p align="center">
+  <a href="#-核心亮点">核心亮点</a> •
+  <a href="#-功能特性">功能特性</a> •
+  <a href="#-快速开始">快速开始</a> •
+  <a href="#-技术架构">技术架构</a> •
+  <a href="#-文档">文档</a>
+</p>
 
-### 🏢 企业级多租户架构
-- **三层权限模型**: Organization → Project → Workspace
-- **细粒度权限控制**: READ/WRITE/ADMIN三级权限，支持团队授权
-- **临时权限系统**: 基于Webhook的任务级临时授权
-- **完整审计日志**: 所有权限变更和资源访问可追溯
+---
 
-### 🔄 灵活的执行模式
-- **Server模式**: 平台直接执行，适合开发测试
-- **Agent模式**: 独立Agent执行，安全隔离，适合生产环境
-- **K8s模式**: 动态Pod执行，弹性伸缩，适合云原生环境
+## 🌟 核心亮点
 
-### 📝 强大的表单系统
-- **OpenAPI驱动**: 基于OpenAPI 3.1标准的Schema定义
-- **12种Widget类型**: 支持复杂对象、动态键、JSON编辑等
-- **无限嵌套**: 支持复杂对象的深度嵌套表单渲染
-- **级联规则**: 字段间智能联动，动态显示/隐藏/禁用
-- **外部数据源**: 支持从API动态加载选项数据
+### 🖥️ UI 界面管理
+- **完全脱离命令行**: 纯 Web 界面操作，无需 HCL 语法知识
+- **全局搜索支持**: 所有功能模块均支持搜索，快速定位资源
+- **表单化操作**: 基于 OpenAPI Schema 的智能表单渲染
 
-### 🔍 资源管理与可视化
-- **CMDB树状结构**: 按workspace → module → resource层级展示
-- **全局资源搜索**: 支持按ID、名称快速定位资源
-- **资源版本控制**: 完整的资源变更历史追踪
-- **State管理**: State版本控制、锁机制、差异对比
+### 👥 角色分离设计
+| 角色 | 职责 |
+|------|------|
+| **平台管理员** | 全局配置、Agent 管理、系统设置 |
+| **策略管理员** | Run Tasks、安全策略、合规检查 |
+| **高级工程师** | Module 设计、Schema 定义、Skill 配置 |
+| **交付工程师** | Workspace 管理、资源部署、日常运维 |
 
-### 🛡️ 安全与合规
-- **敏感数据保护**: State敏感数据加密存储
-- **资源锁定**: 防止并发修改冲突
-- **VCS集成**: 支持GitHub/GitLab等主流版本控制系统
-- **Run Tasks集成**: 内置安全、成本、合规检查
+---
+
+## 📋 功能特性
+
+### 🔧 全局设置
+
+#### Agent 管理
+- **调度与应急解冻**: 适配非活跃网段的自动关机能力
+- **活跃度监控**: 实时查看 Agent 状态、当前运行任务 ID
+- **认证轮转**: 支持 Agent 认证凭据自动轮转
+- **自动扩容**: 支持 K8S 环境自动扩缩容
+- **白名单策略**: Agent 支持白名单访问控制
+- **自定义模板**: 支持自定义 Agent 部署模板
+
+#### IaC Engine
+- **双引擎支持**: 同时支持 OpenTofu 和 Terraform
+- **版本管理**: 
+  - 全局默认版本配置
+  - 多版本并行支持
+  - Workspace 级别灵活配置
+
+#### Run Tasks
+- **四阶段 Hook**: Pre-plan / Post-plan / Pre-apply / Post-apply
+- **多场景支持**: 代码安全审查、合规检查、成本预估等
+- **审批流程**: 单次授权审批流（规划中）
+- **执行模式**: 
+  - **强制模式**: 检查失败直接终止任务
+  - **非强制模式**: 仅告警不阻断
+
+#### 全局通知
+支持以下事件类型的通知推送：
+- `Completed` - 任务完成
+- `Created` - 任务创建
+- `task_planning` - 计划中
+- `task_planned` - 计划完成
+- `task_applying` - 应用中
+- `Failed` - 任务失败
+- `Cancelled` - 任务取消
+- `Approval` - 审批请求
+- `Drift` - 漂移检测
+
+---
+
+### 🤖 AI 能力
+
+#### 错误分析
+- 针对主流程错误信息提供 AI 智能分析
+- 基于 AWS Bedrock Claude 3.5 Sonnet
+- 自动生成根因分析和解决方案
+
+#### Module Skill 系统
+- **自动生成**: 使用内置 Module Skill Generator
+- **OpenAPI V3 驱动**: 基于 OpenAPI V3 自动生成 Module Skill
+- **Skill 使用流程**:
+  ```
+  Module → 自动生成 Schema Skill
+      ↓
+  用户需求 → 需求安全断言
+      ↓
+  AI 判断是否需要查询 CMDB ←→ AI 判断必要的 Skill 组装（基线 Skill 不可跳过）
+      ↓
+  并行查询 CMDB
+      ↓
+  Task Skill 加载 Module Skill
+      ↓
+  LLM 生成候选参数
+      ↓
+  平台 SchemaSolver 做最终裁决（待实施）
+  ```
+
+#### 向量化 CMDB
+- AI 检索向量化 CMDB 数据
+- 支持自然语言资源查询
+- 更好地支持资源生成数据源
+
+#### 安全断言
+- 所有大模型调用前进行安全判定
+- AI 权限继承自用户权限
+- 防止越权操作
+
+#### 表单资源生成
+- 基于自然语言需求查找 CMDB
+- 根据 Module Skill 自动生成资源配置
+- 配合 Schema 做为生成规范
+
+---
+
+### 🔐 RBAC 权限系统
+
+#### 角色管理
+- **内建角色**: 预置标准角色模板
+- **自定义角色**: 支持创建自定义角色
+- **用户组**: 支持 Group 管理
+- **审计日志**: 完整的权限变更追踪
+
+#### Token 管理
+| Token 类型 | 特性 |
+|-----------|------|
+| **个人 Token** | 仅登录状态有效，登出失效，再次登录恢复 |
+| **团队 Token** | 无登录状态要求，持久有效 |
+
+---
+
+### 📦 Module 管理
+
+#### 版本化 Demo 和 Schema
+- 每个版本独立的 Demo 和 Schema
+- 支持版本继承
+- Terraform 版本级别管理
+
+#### Schema 系统（核心亮点）
+- **表单化提交**: 支持 Form 形式的 Terraform 提交
+- **参数分组**: 支持 Group 组织参数
+- **参数关联规则**:
+  - 互斥关系：XX 存在则 BB 不能存在
+  - 依赖关系：A 存在则 B 必须存在
+  - 支持 List 类型参数值
+
+#### 值填充来源
+| 来源 | 说明 |
+|------|------|
+| **CMDB** | 参数显示 CMDB 样式提示 |
+| **Workspace Output** | 使用 `/` 快速呼出菜单 |
+| **远程 Workspace** | 支持配置的远程 Workspace 调用 |
+
+#### AI 辅助
+- AI 生成代码
+- 自动 Form 表单生成
+- 错误自动修复
+
+#### OpenAPI V3 可视化编辑
+- 自动解析 Terraform Variables
+- 提供 Schema 编辑能力
+- 可视化配置界面
+
+#### 提示词管理
+- 新增提示词 CRUD 功能
+- 展示在 AI 助手呼出界面
+- 教用户如何使用 Module
+
+#### Claude Skill 能力下放
+- Task 层交给 Module 维护者
+- 提供 AI 生成 Module Skill 能力
+
+---
+
+### 🗄️ CMDB 资源管理
+
+#### 自动同步
+- 每次 Apply（无论成功与否）自动更新内置 CMDB
+- 仅保留必要字段（ARN、Name、Tag 等）
+- 轻量化设计
+- 支持手动 Sync
+
+#### 外置 CMDB
+- 支持外置 CMDB 同步
+- 多数据源集成
+
+#### 数据结构
+- **树状结构**: 层级化资源展示
+- **向量化数据**: 支持自然语言资源生成数据源
+
+---
+
+### 🏠 Workspace 管理
+
+#### 纵览界面
+- 最近一次任务状态
+- Drift 缩略信息
+- 最近添加的资源列表
+
+#### Run 列表
+- 历史运行列表展示
+- 任务状态追踪
+
+#### Run Details
+- 历史运行详细信息
+- Structure 变更内容展示
+- **日志查看**:
+  - Classic 日志模式
+  - 分进度查看
+  - 错误自动弹出 AI 分析按钮
+
+#### State 管理
+- **卡片形式归类查看**: 类似资源列表展示
+- **详细信息展开**: 类似 `tf state show` 的详细视图
+- **JSON 原始数据**: 支持原始数据查看
+- **安全机制**: 
+  - 进入详情页需显式 Retrieve
+  - 需要额外 IAM 权限
+- **版本管理**: State 版本控制
+- **导入校验**: State 导入验证能力
+
+#### 资源管理
+| 功能 | 说明 |
+|------|------|
+| **查看模式** | 表单模式 / JSON 模式，支持来回切换 |
+| **变更方式** | 表单变更 / JSON 变更 |
+| **版本控制** | 单资源版本控制，支持快速回滚 |
+| **软删除** | 支持资源软删除 |
+| **版本对比** | 资源版本差异对比 |
+| **AI 辅助** | 支持 AI 新增和编辑 |
+| **导出能力** | 资源配置导出 |
+| **资源锁** | 多人编辑时可申请锁，申请者可选择是否同意 |
+| **草稿机制** | 编辑时支持草稿，落后版本提示 |
+
+#### 变量管理
+- **版本管理**: 每个任务运行快照当前变量
+- **API 支持**: 支持提交任意变量版本
+- **串行任务流**: 支持任务流编排
+- **变量类型**: Terraform 变量 + 系统变量
+- **敏感变量**: 支持 Sensitive 变量加密
+
+#### Output 管理
+- 链接其它 Workspace 的 Output
+- 白名单配置
+- 支持全局允许
+- 支持 Static Output
+
+#### Drift 检测
+- **后台静默检查**: 资源漂移自动检测
+- **触发方式**: 手动 / 自动
+- **自动周期**: 支持自定义检测周期
+
+#### Workspace 配置
+| 配置项 | 说明 |
+|--------|------|
+| **Workspace Lock** | 工作空间锁定 |
+| **Provider 版本限制** | Workspace 级别 Provider 版本控制 |
+| **Run Task 配置** | 全局 Run Task 不可单方面禁用 |
+| **Run Trigger** | 被上游 Workspace 触发的能力 |
+| **通知功能** | Workspace 级别通知配置 |
+
+#### 执行引擎版本管理
+- 平台级别 Terraform/OpenTofu 版本管理
+- 多版本并行支持
+
+#### 🎯 里程碑
+> 为 AI 创建资源时，打通了 CMDB 和 AI，AI 继承用户权限，支持以自然语言方式生成配置，配合 Schema 做为生成规范，以更安全/合规的方式提供标准化的资源创建。
+
+---
+
+### 📐 Manifests 编排
+
+#### 可视化编辑
+- **拖拽编辑**: 拖拽式模块编排
+- **关联关系查看**: 可视化依赖关系
+
+#### 完整能力继承
+- 支持 Workspace 里的 Form/JSON 所有能力
+- 包含 AI 辅助功能
+
+#### 多次部署
+- 支持 Manifest 多次部署
+- 部署历史追踪
+
+---
 
 ## 🏗️ 技术架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        前端层 (React)                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ 动态表单渲染  │  │ 资源可视化   │  │ 权限管理     │      │
-│  │ OpenAPI驱动  │  │ CMDB树状图   │  │ IAM控制台    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                            ↕ REST API / WebSocket
-┌─────────────────────────────────────────────────────────────┐
-│                      后端层 (Golang)                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Workspace    │  │ IAM权限      │  │ Agent管理    │      │
-│  │ 生命周期管理  │  │ 三层模型     │  │ 任务调度     │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Schema管理   │  │ State管理    │  │ CMDB索引     │      │
-│  │ AI解析引擎   │  │ 版本控制     │  │ 资源搜索     │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                    执行层 (Terraform)                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Local执行器  │  │ Agent执行器  │  │ K8s执行器    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                            ↕
-┌─────────────────────────────────────────────────────────────┐
-│                      存储层                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ PostgreSQL   │  │ S3/OSS       │  │ Redis        │      │
-│  │ 元数据存储   │  │ State存储    │  │ 缓存/队列    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           前端层 (React + TypeScript)                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │ 动态表单渲染  │  │ 资源可视化   │  │ 权限管理     │  │ AI 助手      │ │
+│  │ OpenAPI驱动  │  │ CMDB树状图   │  │ IAM控制台    │  │ Skill系统    │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                              ↕ REST API / WebSocket
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           后端层 (Golang + Gin)                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │ Workspace    │  │ IAM权限      │  │ Agent管理    │  │ AI Engine    │ │
+│  │ 生命周期管理  │  │ RBAC模型     │  │ 任务调度     │  │ Skill生成    │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘ │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │ Schema管理   │  │ State管理    │  │ CMDB索引     │  │ Run Tasks    │ │
+│  │ OpenAPI解析  │  │ 版本控制     │  │ 向量搜索     │  │ Hook系统     │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                              ↕
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        执行层 (Terraform/OpenTofu)                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
+│  │ Server执行器 │  │ Agent执行器  │  │ K8s执行器    │                   │
+│  │ 本地执行     │  │ 远程隔离     │  │ 弹性伸缩     │                   │
+│  └──────────────┘  └──────────────┘  └──────────────┘                   │
+└─────────────────────────────────────────────────────────────────────────┘
+                              ↕
+┌─────────────────────────────────────────────────────────────────────────┐
+│                             存储层                                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │ PostgreSQL   │  │ S3/OSS       │  │ Redis        │  │ Vector DB    │ │
+│  │ 元数据存储   │  │ State存储    │  │ 缓存/队列    │  │ 向量索引     │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## 🛠️ 技术栈
 
 ### 后端
-- **语言**: Go 1.21+
-- **框架**: Gin
-- **ORM**: GORM
-- **数据库**: PostgreSQL 15+
-- **缓存**: Redis
-- **AI集成**: AWS Bedrock (Claude 3.5 Sonnet)
-- **Terraform**: terraform-exec
+| 技术 | 版本/说明 |
+|------|----------|
+| **语言** | Go 1.21+ |
+| **框架** | Gin |
+| **ORM** | GORM |
+| **数据库** | PostgreSQL 15+ |
+| **缓存** | Redis 6+ |
+| **AI** | AWS Bedrock (Claude 3.5 Sonnet) |
+| **IaC** | Terraform / OpenTofu |
 
 ### 前端
-- **框架**: React 18+ with TypeScript
-- **UI库**: Ant Design
-- **状态管理**: Redux Toolkit
-- **表单处理**: React Hook Form
-- **构建工具**: Vite
+| 技术 | 版本/说明 |
+|------|----------|
+| **框架** | React 18+ with TypeScript |
+| **UI库** | Ant Design |
+| **状态管理** | Redux Toolkit |
+| **表单处理** | React Hook Form |
+| **构建工具** | Vite |
 
 ### 基础设施
-- **容器化**: Docker + Docker Compose
-- **编排**: Kubernetes (可选)
-- **CI/CD**: GitHub Actions
-- **监控**: Prometheus + Grafana
+| 技术 | 说明 |
+|------|------|
+| **容器化** | Docker + Docker Compose |
+| **编排** | Kubernetes (可选) |
+| **CI/CD** | GitHub Actions |
+| **监控** | Prometheus + Grafana |
 
-## 📚 核心功能模块
-
-### 1. 工作空间管理 (Workspace)
-- **生命周期管理**: Plan → Apply → Destroy完整流程
-- **多执行模式**: Server/Agent/K8s三种模式
-- **任务队列**: 并发控制、优先级调度
-- **State管理**: 版本控制、锁机制、回滚能力
-- **变量管理**: 支持敏感数据加密存储
-- **通知系统**: Webhook集成、事件驱动
-
-### 2. 权限系统 (IAM)
-- **三层模型**: Organization → Project → Workspace
-- **主体类型**: User、Team、Application
-- **权限等级**: NONE(拒绝) / READ / WRITE / ADMIN
-- **权限继承**: 上层权限自动向下继承
-- **临时权限**: 基于Webhook的任务级授权
-- **审计日志**: 完整的权限变更和访问记录
-
-### 3. 模块管理 (Module)
-- **Schema驱动**: 基于OpenAPI 3.1标准
-- **AI解析**: 自动从Terraform代码生成Schema
-- **动态表单**: 12种Widget类型，支持复杂嵌套
-- **级联规则**: 字段间智能联动
-- **外部数据源**: 动态加载选项数据
-- **版本管理**: Module版本控制和更新通知
-
-### 4. Agent架构
-- **多模式支持**: Server/Agent/K8s
-- **负载均衡**: 最少任务数选择策略
-- **健康检查**: 心跳监控、自动故障恢复
-- **安全隔离**: Token认证、权限控制
-- **弹性伸缩**: K8s模式支持动态扩缩容
-
-### 5. CMDB资源管理
-- **树状结构**: workspace → module → resource层级展示
-- **全局搜索**: 按ID、名称快速定位资源
-- **资源索引**: 自动解析State构建资源索引
-- **智能命名**: 多策略提取云资源名称
-- **跨workspace搜索**: 支持全局资源查找
-
-### 6. Manifest编排
-- **可视化编排**: 拖拽式模块连线
-- **依赖管理**: 自动处理模块间依赖关系
-- **输出引用**: 支持模块输出的引用传递
-- **版本控制**: Manifest版本管理
-- **部署管理**: 统一部署多个关联资源
-
-### 7. 安全特性
-- **State加密**: 敏感数据加密存储
-- **权限控制**: 细粒度的资源访问控制
-- **审计日志**: 完整的操作审计追踪
-- **资源锁定**: 防止并发修改冲突
-- **临时授权**: 基于时间的临时权限
+---
 
 ## 🚀 快速开始
 
@@ -167,105 +377,58 @@
 
 ### 本地开发
 
-1. **克隆项目**
 ```bash
+# 1. 克隆项目
 git clone <repository-url>
 cd iac-platform
-```
 
-2. **启动依赖服务**
-```bash
+# 2. 启动依赖服务
 docker-compose up -d postgres redis
-```
 
-3. **初始化数据库**
-```bash
+# 3. 初始化数据库
 psql -h localhost -U postgres -d iac_platform -f docs/12-database-schema.sql
-```
 
-4. **启动后端**
-```bash
+# 4. 启动后端
 cd backend
 go mod tidy
 go run main.go
-```
 
-5. **启动前端**
-```bash
+# 5. 启动前端
 cd frontend
 npm install
 npm run dev
 ```
 
-6. **访问应用**
-- 前端: http://localhost:3000
-- 后端API: http://localhost:8080
-- API文档: http://localhost:8080/swagger/index.html
+### 访问地址
+| 服务 | 地址 |
+|------|------|
+| 前端 | http://localhost:3000 |
+| 后端 API | http://localhost:8080 |
+| API 文档 | http://localhost:8080/swagger/index.html |
 
-## 📋 主要功能特性
+---
 
-### 动态表单系统
-- ✅ 基于OpenAPI 3.1 Schema的表单渲染
-- ✅ 12种Widget类型（text, number, select, switch, tags, key-value, object, object-list, dynamic-object, json-editor, password, datetime, code-editor）
-- ✅ 支持无限嵌套的复杂对象
-- ✅ 级联规则引擎（字段联动）
-- ✅ 外部数据源集成（动态选项加载）
-- ✅ 跨字段验证规则
-- ✅ tf2openapi转换工具
+## 📚 文档
 
-### 工作空间功能
-- ✅ Plan/Apply/Destroy完整流程
-- ✅ 三种执行模式（Server/Agent/K8s）
-- ✅ State版本控制和回滚
-- ✅ 变量管理（支持敏感数据）
-- ✅ 任务队列和并发控制
-- ✅ WebSocket实时状态推送
-- ✅ 结构化日志输出
+### 快速入门
+- [快速开始指南](docs/01-QUICK_START_FOR_AI.md)
+- [执行指南](docs/02-EXECUTION_GUIDE.md)
+- [开发指南](docs/03-development-guide.md)
 
-### 权限系统
-- ✅ 三层权限模型（Organization/Project/Workspace）
-- ✅ 团队管理和成员授权
-- ✅ 细粒度权限控制（READ/WRITE/ADMIN）
-- ✅ 临时权限系统（基于Webhook）
-- ✅ 完整审计日志
-- ✅ 权限继承机制
+### 核心模块
+| 模块 | 文档路径 |
+|------|----------|
+| **Workspace** | `docs/workspace/` |
+| **IAM 权限** | `docs/iam/` |
+| **Module 系统** | `docs/module/` |
+| **Agent 架构** | `docs/agent/` |
+| **CMDB** | `docs/cmdb/` |
+| **AI 功能** | `docs/ai/` |
+| **Run Tasks** | `docs/run-task/` |
+| **Manifest** | `docs/manifest/` |
+| **安全特性** | `docs/security/` |
 
-### CMDB功能
-- ✅ 资源树状结构展示
-- ✅ 全局资源搜索
-- ✅ 自动State解析和索引
-- ✅ 智能资源命名
-- ✅ 跨workspace资源查找
-
-### AI功能
-- ✅ AI错误分析（基于Claude 3.5 Sonnet）
-- ✅ 智能根因分析和解决方案
-- ✅ QPS限制保护
-- ✅ 自定义分析Prompt
-
-## 🔧 开发指南
-
-### 开始开发前必读
-1. 阅读 `docs/01-QUICK_START_FOR_AI.md` 了解项目概览
-2. 查看 `docs/workspace/00-overview.md` 了解核心架构
-3. 参考 `docs/iam/02-iac-platform-permission-system-design.md` 了解权限系统
-4. 查看 `docs/module/openapi-schema-design.md` 了解表单系统
-
-### 重要文档
-- **Workspace模块**: `docs/workspace/` - 工作空间完整设计
-- **IAM权限**: `docs/iam/` - 权限系统设计和实现
-- **Module系统**: `docs/module/` - 模块和表单系统
-- **Agent架构**: `docs/agent/` - Agent执行模式设计
-- **CMDB功能**: `docs/cmdb/` - 资源管理和搜索
-- **安全特性**: `docs/security/` - 安全相关设计
-
-### 开发流程
-1. **需求确认**: 检查相关设计文档，避免重复开发
-2. **接口设计**: 遵循API规范，保持一致性
-3. **数据库设计**: 使用已定义的表结构
-4. **最小化实现**: 只实现当前任务必需的功能
-5. **测试验证**: 确保功能正常工作
-6. **文档更新**: 更新相关文档
+---
 
 ## 📊 项目状态
 
@@ -274,173 +437,140 @@ npm run dev
 
 ### ✅ 已完成功能
 
-#### 工作空间管理
-- ✅ Workspace CRUD操作
-- ✅ Plan/Apply/Destroy完整流程
-- ✅ 三种执行模式（Server/Agent/K8s）
-- ✅ 任务队列和并发控制
-- ✅ WebSocket实时状态推送
-- ✅ 结构化日志输出
-- ✅ 任务触发器（Run Triggers）
-- ✅ Provider配置管理
+<details>
+<summary><b>全局设置</b></summary>
 
-#### State管理
-- ✅ State版本控制和历史
-- ✅ State上传和回滚
-- ✅ State预览和搜索
-- ✅ State敏感数据保护
-- ✅ Workspace锁定机制
+- ✅ Agent 调度与应急解冻
+- ✅ Agent 活跃度监控
+- ✅ Agent 认证轮转
+- ✅ K8S 自动扩缩容
+- ✅ Agent 白名单策略
+- ✅ 自定义 Agent 模板
+- ✅ OpenTofu/Terraform 双引擎支持
+- ✅ 全局/Workspace 版本配置
+- ✅ Run Tasks 四阶段 Hook
+- ✅ 强制/非强制执行模式
+- ✅ 全局通知系统
 
-#### 资源管理
-- ✅ 资源CRUD操作
-- ✅ 资源版本控制
-- ✅ 资源快照和恢复
-- ✅ 资源依赖管理
-- ✅ 资源编辑协作（锁定/心跳/接管）
-- ✅ 资源漂移检测
+</details>
 
-#### 模块系统
-- ✅ Module CRUD操作
-- ✅ OpenAPI Schema管理（V2）
-- ✅ Schema解析服务（tf2openapi）
-- ✅ 动态表单渲染（12种Widget）
-- ✅ Module Demo管理
-- ✅ Demo版本控制
+<details>
+<summary><b>AI 能力</b></summary>
 
-#### 表单系统
-- ✅ 基于OpenAPI 3.1的表单渲染
-- ✅ 12种Widget类型（text, number, select, switch, tags, key-value, object, object-list, dynamic-object, json-editor, password, datetime, code-editor）
-- ✅ 级联规则引擎
-- ✅ 外部数据源支持
-- ✅ 跨字段验证
+- ✅ 错误分析（Claude 3.5 Sonnet）
+- ✅ Module Skill 自动生成
+- ✅ 向量化 CMDB 检索
+- ✅ 安全断言机制
+- ✅ 表单资源生成
+- ✅ AI 权限继承
 
-#### Agent架构
-- ✅ Agent注册和心跳
-- ✅ Agent Pool管理
-- ✅ 任务锁定和续期
-- ✅ K8s Job执行模式
-- ✅ Agent清理服务
-- ✅ Pool Token管理
+</details>
 
-#### CMDB功能
-- ✅ 资源索引自动同步
-- ✅ 资源树状结构展示
-- ✅ 全局资源搜索
-- ✅ Module层级解析
-- ✅ 智能资源命名
+<details>
+<summary><b>RBAC 权限</b></summary>
 
-#### IAM权限系统
-- ✅ Organization管理
-- ✅ Project管理
-- ✅ Team管理
-- ✅ User管理
-- ✅ Role管理
-- ✅ 权限授予和撤销
-- ✅ Application管理
+- ✅ 内建角色/自定义角色
+- ✅ 用户组管理
 - ✅ 审计日志
+- ✅ 个人 Token（登录状态绑定）
+- ✅ 团队 Token（持久有效）
 
-#### AI功能
-- ✅ AI配置管理（多配置支持）
-- ✅ AI错误分析（Bedrock/OpenAI Compatible）
-- ✅ 分析结果存储和查询
-- ✅ QPS限制保护
-- ✅ 可用模型和区域查询
+</details>
 
-#### Manifest编排
-- ✅ Manifest CRUD操作
-- ✅ 可视化编排器
-- ✅ Module连线和依赖
-- ✅ Manifest部署管理
-- ✅ 部署资源追踪
+<details>
+<summary><b>Module 管理</b></summary>
 
-#### 其他功能
-- ✅ 变量管理（版本控制）
-- ✅ Workspace Outputs管理
-- ✅ Run Tasks集成
-- ✅ 通知配置管理
-- ✅ Terraform版本管理
-- ✅ 平台配置管理
-- ✅ Swagger API文档
+- ✅ 版本化 Demo 和 Schema
+- ✅ 表单化 Terraform 提交
+- ✅ 参数分组和关联规则
+- ✅ CMDB/Output 值填充
+- ✅ AI 代码生成
+- ✅ OpenAPI V3 可视化编辑
+- ✅ 提示词 CRUD
+- ✅ Module Skill 能力下放
 
-#### Run Task集成
-- ✅ Run Task全局管理
-- ✅ Workspace Run Task配置
-- ✅ 四个执行阶段（Pre-plan/Post-plan/Pre-apply/Post-apply）
-- ✅ 执行级别控制（Advisory/Mandatory）
-- ✅ 回调机制和超时处理
-- ✅ 一次性Access Token
-- ✅ HMAC签名验证
-- ✅ Run Task结果展示
+</details>
 
-#### 通知系统
-- ✅ 通知配置管理（全局和Workspace级别）
-- ✅ 两种通知类型（Webhook/Lark Robot）
-- ✅ 10种触发事件（task_created/planned/completed/failed等）
-- ✅ 事件驱动通知发送
-- ✅ HMAC签名和Lark签名
-- ✅ 通知日志和重试机制
-- ✅ 全局通知自动应用
+<details>
+<summary><b>CMDB</b></summary>
 
-#### Secrets管理
-- ✅ 通用Secrets存储表
-- ✅ 多资源类型支持（Agent Pool/Workspace/Module/System）
-- ✅ AES-256-GCM加密
-- ✅ 访问审计和使用追踪
-- ✅ 过期管理和轮转策略
+- ✅ 自动同步（Apply 触发）
+- ✅ 轻量化字段存储
+- ✅ 外置 CMDB 同步
+- ✅ 树状结构展示
+- ✅ 向量化数据支持
 
-#### 其他已完成功能
-- ✅ Run Triggers（任务触发器）
-- ✅ 任务评论系统
-- ✅ 资源锁定和编辑协作
-- ✅ 接管请求机制
-- ✅ Pool Token管理
-- ✅ Login Session管理
-- ✅ User/Team Token管理
-- ✅ Remote Data集成
-- ✅ VCS Provider配置
+</details>
 
-### ❌ 未实现功能（仅设计）
+<details>
+<summary><b>Workspace</b></summary>
 
-#### 高级特性
-- ❌ Drift自动检测调度（手动检测已实现）
-- ❌ AI驱动的自动修复建议
-- ❌ 成本预测分析
-- ❌ GitOps完整集成（VCS集成已部分实现）
-- ❌ Workspace Template
-- ❌ 多租户完整隔离（数据库层面）
+- ✅ 纵览界面
+- ✅ Run 列表和详情
+- ✅ 分进度日志查看
+- ✅ AI 错误分析按钮
+- ✅ State 卡片式查看
+- ✅ State 版本管理
+- ✅ 资源表单/JSON 双模式
+- ✅ 资源版本控制和回滚
+- ✅ 资源锁和草稿机制
+- ✅ 变量版本管理
+- ✅ Output 链接
+- ✅ Drift 检测（手动/自动）
+- ✅ Workspace 配置管理
 
-### 🎯 下一步计划
-1. 实现Drift自动检测调度
-2. 增强AI自动修复建议
-3. 完善GitOps集成
-4. 实现成本预测分析
-5. 优化性能和监控
+</details>
+
+<details>
+<summary><b>Manifests</b></summary>
+
+- ✅ 拖拽式可视化编辑
+- ✅ 关联关系查看
+- ✅ Form/JSON 完整能力
+- ✅ AI 辅助
+- ✅ 多次部署支持
+
+</details>
+
+### 🚧 规划中功能
+
+- ⏳ 单次授权审批流
+- ⏳ SchemaSolver 最终裁决
+- ⏳ 成本预测分析
+- ⏳ GitOps 完整集成
+
+---
 
 ## 🤝 贡献指南
 
 ### 开发规范
-- **Go**: 遵循Go官方代码规范，使用gofmt格式化
-- **TypeScript**: 使用ESLint + Prettier，严格类型检查
-- **提交规范**: 使用Conventional Commits
-- **测试要求**: 单元测试覆盖率>80%
+- **Go**: 遵循 Go 官方代码规范，使用 gofmt 格式化
+- **TypeScript**: 使用 ESLint + Prettier，严格类型检查
+- **提交规范**: 使用 Conventional Commits
+- **测试要求**: 单元测试覆盖率 > 80%
 
 ### 提交流程
-1. Fork项目并创建功能分支
+1. Fork 项目并创建功能分支
 2. 按照开发指南进行开发
 3. 确保测试通过和代码格式正确
-4. 提交Pull Request并描述变更内容
-5. 等待代码review和合并
+4. 提交 Pull Request 并描述变更内容
+5. 等待代码 Review 和合并
+
+---
 
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
 
+---
+
 ## 📞 联系方式
 
-- 项目维护者: [Your Name]
-- 邮箱: [your.email@example.com]
-- 问题反馈: [GitHub Issues](https://github.com/your-org/iac-platform/issues)
+- **问题反馈**: [GitHub Issues](https://github.com/your-org/iac-platform/issues)
+- **功能建议**: [GitHub Discussions](https://github.com/your-org/iac-platform/discussions)
 
 ---
 
-**注意**: 这是一个企业级IaC管理平台，所有核心功能已完成设计和实现。开发时请严格按照文档规范进行，确保系统的稳定性和安全性。
+<p align="center">
+  <sub>Built with ❤️ for Infrastructure as Code</sub>
+</p>

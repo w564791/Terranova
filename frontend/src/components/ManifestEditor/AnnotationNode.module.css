@@ -1,0 +1,26 @@
+.annotationNode {
+  padding: 4px 8px;
+  background: transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 50px;
+  min-height: 20px;
+  cursor: text;
+}
+
+.annotationNode.selected {
+  outline: 1px dashed #999;
+}
+
+.editInput {
+  width: 100%;
+  height: 100%;
+  min-height: 40px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.9);
+  resize: none;
+  font-family: inherit;
+  padding: 0;
+  margin: 0;
+}

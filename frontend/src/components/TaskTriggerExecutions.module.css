@@ -1,0 +1,342 @@
+/* 与 TaskDetail 页面的卡片样式保持一致 */
+.container {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  margin: 0 20px 16px 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon {
+  font-size: 18px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.count {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.configLink {
+  font-size: 13px;
+  color: var(--color-blue-600);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.configLink:hover {
+  text-decoration: underline;
+  color: var(--color-blue-700);
+}
+
+.content {
+  padding: 16px 20px;
+}
+
+.description {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+/* Warning Alert - 与 TaskDetail 的 errorCard 风格类似 */
+.warningAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.warningIcon {
+  color: #f59e0b;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.warningContent {
+  flex: 1;
+}
+
+.warningTitle {
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.warningText {
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  padding: 24px 20px;
+}
+
+.emptyText {
+  font-size: 14px;
+  color: var(--color-gray-500);
+  margin: 0 0 12px 0;
+}
+
+.emptyLink {
+  font-size: 14px;
+  color: var(--color-blue-600);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.emptyLink:hover {
+  text-decoration: underline;
+}
+
+/* Table - 与页面其他表格风格一致 */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableHeader {
+  background: var(--color-gray-50);
+}
+
+.tableHeader th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.tableBody tr {
+  border-bottom: 1px solid var(--color-gray-100);
+  transition: background 0.15s;
+}
+
+.tableBody tr:last-child {
+  border-bottom: none;
+}
+
+.tableBody tr:hover {
+  background: var(--color-gray-50);
+}
+
+.tableBody td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: var(--color-gray-900);
+  vertical-align: middle;
+}
+
+/* Target Workspace Cell */
+.targetCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.linkIcon {
+  color: var(--color-gray-400);
+  font-size: 14px;
+}
+
+.targetName {
+  font-weight: 500;
+  color: var(--color-gray-900);
+}
+
+.autoApplyTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+/* Status Tags - 与 TaskDetail 的 badge 风格一致 */
+.statusTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.statusPending {
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+}
+
+.statusTriggered {
+  background: var(--color-green-100);
+  color: var(--color-green-700);
+}
+
+.statusSkipped {
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+}
+
+.statusFailed {
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+}
+
+.statusDisabled {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Condition Tag */
+.conditionTag {
+  display: inline-block;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+/* Task Link */
+.taskLink {
+  color: var(--color-blue-600);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.taskLink:hover {
+  text-decoration: underline;
+}
+
+.noTask {
+  color: var(--color-gray-400);
+}
+
+/* Action Button - 与 TaskDetail 的按钮风格一致 */
+.actionButton {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.enableButton {
+  background: var(--color-blue-600);
+  color: white;
+  border: none;
+}
+
+.enableButton:hover {
+  background: var(--color-blue-700);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.disableButton {
+  background: white;
+  color: var(--color-red-600);
+  border: 1px solid var(--color-red-300);
+}
+
+.disableButton:hover {
+  background: var(--color-red-50);
+  border-color: var(--color-red-400);
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-gray-500);
+  font-size: 14px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .container {
+    margin: 0 12px 12px 12px;
+  }
+
+  .header {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .content {
+    padding: 14px 16px;
+  }
+
+  .tableHeader th,
+  .tableBody td {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .tableHeader th {
+    font-size: 11px;
+  }
+
+  .targetCell {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .statusTag,
+  .conditionTag {
+    font-size: 11px;
+    padding: 3px 10px;
+  }
+
+  .actionButton {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
+}

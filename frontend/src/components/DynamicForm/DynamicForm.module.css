@@ -1,0 +1,203 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* 表单操作栏 */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.previewButton {
+  padding: 8px 16px;
+  background: var(--color-white);
+  color: var(--color-blue-600);
+  border: 1px solid var(--color-blue-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.previewButton:hover {
+  background: var(--color-blue-50);
+  border-color: var(--color-blue-400);
+  color: var(--color-blue-700);
+}
+
+
+.advancedSection {
+  padding: var(--spacing-md);
+  border: 1px dashed var(--color-gray-300);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.showAdvancedButton {
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.showAdvancedButton:hover {
+  background: var(--color-gray-200);
+  border-color: var(--color-gray-400);
+}
+
+/* 字段选择器样式 - 优化3 */
+.fieldSelector {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+}
+
+.fieldSelectorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.fieldSelectorHeader span {
+  font-weight: 500;
+  color: var(--color-gray-700);
+}
+
+.cancelButton {
+  background: transparent;
+  color: var(--color-gray-600);
+  border: 1px solid var(--color-gray-300);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cancelButton:hover {
+  background: var(--color-gray-50);
+}
+
+.fieldSelectorList {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.fieldOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--spacing-sm);
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.fieldOption:hover {
+  background: var(--color-blue-50);
+  border-color: var(--color-blue-300);
+}
+
+.fieldName {
+  font-weight: 500;
+  color: var(--color-gray-800);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.fieldDescription {
+  font-size: 12px;
+  color: var(--color-gray-500);
+  line-height: 1.4;
+}
+
+/* 高级字段行布局 - 优化1: 移除按钮与字段同行 */
+.advancedFieldRow {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+}
+
+.advancedFieldContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.advancedFieldActions {
+  flex-shrink: 0;
+  padding-top: 28px; /* 对齐到字段输入框的高度 */
+}
+
+.removeAdvancedButton {
+  background: var(--color-white);
+  color: var(--color-red-600);
+  border: 1px solid var(--color-red-300);
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.removeAdvancedButton:hover {
+  background: var(--color-red-50);
+  border-color: var(--color-red-400);
+  color: var(--color-red-700);
+}
+
+/* 移除提示样式 */
+.removeHint {
+  font-size: 12px;
+  color: var(--color-gray-500);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* 搜索框样式 */
+.searchBox {
+  margin-bottom: var(--spacing-md);
+}
+
+.searchInput {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.noResults {
+  text-align: center;
+  padding: var(--spacing-lg);
+  color: var(--color-gray-500);
+  font-size: 14px;
+}

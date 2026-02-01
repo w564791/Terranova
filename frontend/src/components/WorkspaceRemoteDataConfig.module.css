@@ -1,0 +1,262 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  margin-bottom: 0;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+.sharingStatus {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.remoteDataList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.remoteDataItem {
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  padding: 12px;
+  background: #fafafa;
+  transition: all 0.2s;
+}
+
+.remoteDataItem:hover {
+  border-color: #d9d9d9;
+  background: #fff;
+}
+
+.itemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.itemContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.outputsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+/* Dark mode support */
+:global(.dark) .remoteDataItem {
+  border-color: #303030;
+  background: #1f1f1f;
+}
+
+:global(.dark) .remoteDataItem:hover {
+  border-color: #434343;
+  background: #262626;
+}
+
+:global(.dark) .outputsList {
+  background: #262626;
+}
+
+.usageSection {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e8e8e8;
+}
+
+.codeBlock {
+  background: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 4px 0 0 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #1890ff;
+  overflow-x: auto;
+}
+
+:global(.dark) .usageSection {
+  border-top-color: #303030;
+}
+
+:global(.dark) .codeBlock {
+  background: #1f1f1f;
+  border-color: #303030;
+  color: #40a9ff;
+}
+
+/* Outputs usage list */
+.outputsUsageList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.outputUsageItem {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.outputUsageItem:hover {
+  background: #fafafa;
+  border-color: #d9d9d9;
+}
+
+.copyButton {
+  margin-left: auto;
+  color: #1890ff;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.copyButton:hover {
+  opacity: 1;
+}
+
+.outputCode {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #1890ff;
+  flex: 1;
+}
+
+:global(.dark) .outputUsageItem {
+  background: #1f1f1f;
+  border-color: #303030;
+}
+
+:global(.dark) .outputUsageItem:hover {
+  background: #111d2c;
+  border-color: #153450;
+}
+
+:global(.dark) .outputCode {
+  color: #40a9ff;
+}
+
+/* Output usage wrapper for expand/collapse */
+.outputUsageWrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+}
+
+.expandIcon {
+  font-size: 10px;
+  color: #8c8c8c;
+  margin-right: 8px;
+  width: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.outputValueContainer {
+  margin-left: 20px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.outputValue {
+  background: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 11px;
+  color: #595959;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+:global(.dark) .clickable:hover {
+  background: #111d2c;
+  border-color: #153450;
+}
+
+:global(.dark) .outputValueContainer .outputValue {
+  background: #1f1f1f;
+  border-color: #303030;
+  color: #a6a6a6;
+}
+
+/* Inline form styles */
+.inlineForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.formItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+:global(.dark) .formLabel {
+  color: #d9d9d9;
+}
+
+:global(.dark) .formActions {
+  border-top-color: #303030;
+}

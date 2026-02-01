@@ -1,0 +1,105 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.label {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* Sizes */
+.small {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.small .icon {
+  font-size: 12px;
+}
+
+.small .label {
+  font-size: 11px;
+}
+
+.medium {
+  padding: 4px 12px;
+}
+
+.large {
+  padding: 6px 16px;
+  font-size: 14px;
+}
+
+.large .icon {
+  font-size: 16px;
+}
+
+.large .label {
+  font-size: 14px;
+}
+
+/* Colors */
+.gray {
+  background-color: #f5f5f5;
+  color: #666;
+  border: 1px solid #e0e0e0;
+}
+
+.blue {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #90caf9;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.green {
+  background-color: #e8f5e9;
+  color: #388e3c;
+  border: 1px solid #81c784;
+}
+
+.orange {
+  background-color: #fff3e0;
+  color: #f57c00;
+  border: 1px solid #ffb74d;
+}
+
+.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #66bb6a;
+}
+
+.error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef5350;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Hover effects */
+.badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}

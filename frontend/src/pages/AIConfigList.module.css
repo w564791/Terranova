@@ -1,0 +1,497 @@
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.createButton {
+  padding: 10px 20px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.createButton:hover {
+  background-color: #2563eb;
+}
+
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: #6b7280;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+.message.success {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.message.error {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+.empty {
+  text-align: center;
+  padding: 48px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.empty p {
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.list {
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.serviceType {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.enabledBadge {
+  padding: 4px 12px;
+  background-color: #d1fae5;
+  color: #065f46;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.disabledBadge {
+  padding: 4px 12px;
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+}
+
+.editButton,
+.deleteButton {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editButton {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.editButton:hover {
+  background-color: #2563eb;
+}
+
+.deleteButton {
+  background-color: #ef4444;
+  color: white;
+}
+
+.deleteButton:hover {
+  background-color: #dc2626;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.infoRow {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.label {
+  color: #6b7280;
+  min-width: 120px;
+}
+
+.value {
+  color: #1f2937;
+  flex: 1;
+  word-break: break-all;
+}
+
+/* Tab 样式 */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #3b82f6;
+}
+
+.activeTab {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.tabContent {
+  min-height: 400px;
+}
+
+.tabHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* Layer Tabs 样式 */
+.layerTabs {
+  display: flex;
+  gap: 8px;
+}
+
+.layerTab {
+  padding: 6px 14px;
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.layerTab:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.activeLayerTab {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+/* Skill 卡片样式 */
+.skillCard {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: box-shadow 0.2s;
+}
+
+.skillCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.skillInactive {
+  opacity: 0.6;
+  background: #f9fafb;
+}
+
+.skillHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.skillTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.skillName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.layerBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.layer_foundation {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.layer_domain {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.layer_task {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.sourceBadge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.skillActions {
+  display: flex;
+  gap: 8px;
+}
+
+.actionBtn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.actionBtn:hover {
+  background: #f3f4f6;
+}
+
+.dangerBtn:hover {
+  background: #fee2e2;
+}
+
+/* Text-based action buttons */
+.textBtn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.textBtn:hover {
+  background: #f9fafb;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.textBtnActive {
+  color: #f59e0b;
+  border-color: #fcd34d;
+}
+
+.textBtnActive:hover {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
+.textBtnInactive {
+  color: #10b981;
+  border-color: #6ee7b7;
+}
+
+.textBtnInactive:hover {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #059669;
+}
+
+.textBtnDanger {
+  color: #ef4444;
+  border-color: #fca5a5;
+}
+
+.textBtnDanger:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+.skillMeta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.metaLabel {
+  color: #9ca3af;
+}
+
+.skillContent {
+  background: #f9fafb;
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.skillContent pre {
+  margin: 0;
+  font-size: 11px;
+  color: #6b7280;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.skillSection {
+  margin-bottom: 28px;
+}
+
+.skillSectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skillSectionDesc {
+  font-size: 12px;
+  font-weight: 400;
+  color: #9ca3af;
+  margin-left: 8px;
+}
+
+.skillList {
+  display: grid;
+  gap: 12px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .createButton {
+    width: 100%;
+  }
+
+  .cardHeader {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cardActions {
+    width: 100%;
+  }
+
+  .editButton,
+  .deleteButton {
+    flex: 1;
+  }
+
+  .infoRow {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .label {
+    min-width: auto;
+    font-weight: 500;
+  }
+}

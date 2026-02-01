@@ -1,0 +1,186 @@
+:root {
+  /* 字体系统 */
+  --font-family-primary: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-heading: 'Poppins', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  /* 颜色系统 */
+  --color-white: #FFFFFF;
+  --color-gray-50: #F8F9FA;
+  --color-gray-100: #F1F3F4;
+  --color-gray-200: #E8EAED;
+  --color-gray-300: #DADCE0;
+  --color-gray-400: #BDC1C6;
+  --color-gray-500: #9AA0A6;
+  --color-gray-600: #80868B;
+  --color-gray-700: #5F6368;
+  --color-gray-800: #3C4043;
+  --color-gray-900: #202124;
+  
+  --color-blue-50: #E8F0FE;
+  --color-blue-100: #D2E3FC;
+  --color-blue-200: #AECBFA;
+  --color-blue-300: #8AB4F8;
+  --color-blue-400: #669DF6;
+  --color-blue-500: #4285F4;
+  --color-blue-600: #1A73E8;
+  --color-blue-700: #1967D2;
+  --color-blue-800: #185ABC;
+  --color-blue-900: #174EA6;
+  
+  --color-red-50: #FCE8E6;
+  --color-red-100: #FAD2CF;
+  --color-red-200: #F6AEA9;
+  --color-red-300: #F28B82;
+  --color-red-400: #EE675C;
+  --color-red-500: #EA4335;
+  --color-red-600: #D93025;
+  --color-red-700: #C5221F;
+  --color-red-800: #B31412;
+  --color-red-900: #A50E0E;
+  
+  --color-green-50: #E6F4EA;
+  --color-green-100: #CEEAD6;
+  --color-green-200: #A8DAB5;
+  --color-green-300: #81C995;
+  --color-green-400: #5BB974;
+  --color-green-500: #34A853;
+  --color-green-600: #137333;
+  --color-green-700: #0D652D;
+  --color-green-800: #0B5394;
+  --color-green-900: #094C3B;
+  
+  /* 间距系统 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  /* 圆角系统 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  
+  /* 阴影系统 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+  
+  /* 基础样式 */
+  font-family: var(--font-family-primary);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--color-gray-900);
+  background-color: var(--color-gray-50);
+  
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--color-gray-50);
+  overflow-x: hidden;
+  width: 100%;
+}
+
+#root {
+  min-height: 100vh;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* 全局移动端优化 */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* 防止所有元素超出屏幕宽度 */
+img,
+video,
+canvas,
+svg,
+pre,
+code {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 确保表格不会导致横向滚动 */
+table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+/* 长文本自动换行 */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+div {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}

@@ -1,0 +1,423 @@
+/* Manifest Deploy Page - TFE Style */
+
+.container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.content {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.deployCard {
+  margin-bottom: 24px;
+}
+
+/* History Section */
+.historySection {
+  margin-bottom: 24px;
+}
+
+.historyTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.emptyDeployments {
+  text-align: center;
+  padding: 48px 0;
+  color: #6b7280;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.deploymentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Deployment Card - TFE Style */
+.deploymentCard {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+.deploymentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #fafafa;
+  min-height: 56px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.deploymentHeader:hover {
+  background: #f3f4f6;
+}
+
+.deploymentHeaderExpanded {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.deploymentTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.statusIcon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.titleText {
+  font-size: 15px;
+  color: #111827;
+}
+
+.titleText strong {
+  font-weight: 600;
+}
+
+.workspaceId {
+  color: #6b7280;
+  font-size: 13px;
+  margin-left: 4px;
+}
+
+.deploymentTime {
+  font-size: 13px;
+  color: #6b7280;
+  margin-left: 8px;
+}
+
+.deploymentSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.expandButton {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.expandButton:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Deployment Content */
+.deploymentContent {
+  padding: 16px 20px;
+  background: #fff;
+}
+
+/* Details Grid */
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailLabel {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detailValue {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+}
+
+/* Resources Section */
+.resourcesSection {
+  margin-bottom: 16px;
+}
+
+.resourcesTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.resourcesLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+  color: #6b7280;
+}
+
+.resourcesEmpty {
+  padding: 16px 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.resourcesList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resourceItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.resourceMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.driftBadge {
+  color: #f59e0b;
+  font-size: 14px;
+}
+
+.resourceLink {
+  color: #3b82f6;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.resourceLink:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.resourceName {
+  font-weight: 500;
+  color: #111827;
+}
+
+.resourceId {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.resourceMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resourceType {
+  font-size: 12px;
+  color: #6b7280;
+  background: #e5e7eb;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.resourceStatus {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.resourceStatus.active {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.resourceStatus.inactive {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+/* Deployment Actions */
+.deploymentActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Responsive */
+/* Uninstall Dialog */
+.uninstallDialogContent {
+  padding: 8px 0;
+}
+
+.driftWarning {
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.driftWarning p {
+  margin: 0 0 8px 0;
+  color: #d46b08;
+  font-weight: 500;
+}
+
+.driftedList {
+  margin: 0;
+  padding-left: 20px;
+  color: #d46b08;
+}
+
+.driftedList li {
+  margin: 4px 0;
+}
+
+.warningText {
+  margin-top: 12px !important;
+  margin-bottom: 0 !important;
+  color: #cf1322 !important;
+  font-weight: 500;
+}
+
+.resourceSummary {
+  margin-bottom: 16px;
+}
+
+.resourceSummary p {
+  margin: 0 0 8px 0;
+  color: #374151;
+}
+
+.resourceList {
+  margin: 0;
+  padding-left: 20px;
+  color: #6b7280;
+}
+
+.resourceList li {
+  margin: 4px 0;
+}
+
+.confirmSection {
+  margin-bottom: 16px;
+}
+
+.confirmLabel {
+  margin: 0 0 8px 0;
+  color: #374151;
+}
+
+.confirmLabel strong {
+  color: #111827;
+  font-family: monospace;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.confirmInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.confirmInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.confirmInput::placeholder {
+  color: #9ca3af;
+}
+
+.dangerText {
+  margin: 0;
+  color: #cf1322;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .deploymentHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .deploymentSummary {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .detailsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .resourceItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

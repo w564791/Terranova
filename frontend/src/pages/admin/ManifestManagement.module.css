@@ -1,0 +1,430 @@
+.container {
+  padding: 20px;
+  max-width: 100%;
+  background: #f8fafc;
+  min-height: calc(100vh - 68px - 24px);
+  margin: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* 页面头部 */
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pageTitle {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-gray-900, #202124);
+}
+
+.headerRight {
+  display: flex;
+  gap: 12px;
+}
+
+/* 过滤器区域 */
+.filterSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.filterBar {
+  display: flex;
+  gap: 4px;
+  background: var(--color-gray-100);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.filterButton {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-gray-600, #5F6368);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filterButton:hover {
+  background: var(--color-gray-200, #E8EAED);
+  color: var(--color-gray-800, #1F2937);
+}
+
+.filterActive {
+  background: white;
+  color: var(--color-blue-600, #2563EB);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.filterCount {
+  background: var(--color-gray-200, #E8EAED);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filterActive .filterCount {
+  background: var(--color-blue-100, #DBEAFE);
+  color: var(--color-blue-600, #2563EB);
+}
+
+.searchBar {
+  flex-shrink: 0;
+}
+
+/* 列表区域 */
+.listSection {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--color-gray-200);
+  overflow: hidden;
+}
+
+.loading {
+  padding: 48px;
+  text-align: center;
+  color: var(--color-gray-600, #5F6368);
+}
+
+/* 空状态 */
+.emptyState {
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.emptyText {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-700, #3C4043);
+  margin: 0 0 8px 0;
+}
+
+.emptyHint {
+  font-size: 14px;
+  color: var(--color-gray-600, #5F6368);
+  margin: 0 0 24px 0;
+}
+
+/* Manifest 列表 */
+.manifestList {
+  display: flex;
+  flex-direction: column;
+}
+
+.manifestItem {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-gray-100, #F1F3F4);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.manifestItem:hover {
+  background: var(--color-gray-50, #F8F9FA);
+}
+
+.manifestItem:last-child {
+  border-bottom: none;
+}
+
+/* 状态指示条 */
+.statusIndicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 0 2px 2px 0;
+}
+
+.indicator-success {
+  background: var(--color-green-500, #10B981);
+}
+
+.indicator-pending {
+  background: #F59E0B;
+}
+
+.indicator-neutral {
+  background: var(--color-gray-300, #DADCE0);
+}
+
+/* 主内容区 */
+.manifestContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.manifestTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.manifestName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-gray-900, #202124);
+}
+
+.deploymentBadge {
+  background: var(--color-blue-100, #DBEAFE);
+  color: var(--color-blue-600, #2563EB);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.manifestMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-gray-600, #5F6368);
+}
+
+.manifestId {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.metaSeparator {
+  color: var(--color-gray-300, #DADCE0);
+}
+
+.manifestVersion {
+  font-weight: 500;
+}
+
+.manifestDescription {
+  color: var(--color-gray-600, #5F6368);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 右侧状态区 */
+.manifestStatusArea {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.statusBadge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusBadge-success {
+  background: var(--color-green-100, #D1FAE5);
+  color: var(--color-green-700, #047857);
+}
+
+.statusBadge-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.statusBadge-neutral {
+  background: var(--color-gray-100, #F1F3F4);
+  color: var(--color-gray-600, #5F6368);
+}
+
+.manifestTime {
+  font-size: 12px;
+  color: var(--color-gray-600, #5F6368);
+}
+
+/* 操作按钮 */
+.manifestActions {
+  flex-shrink: 0;
+}
+
+.moreButton {
+  color: var(--color-gray-600, #5F6368);
+}
+
+.moreButton:hover {
+  color: var(--color-gray-700, #3C4043);
+  background: var(--color-gray-100, #F1F3F4);
+}
+
+/* 分页 */
+.paginationContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-gray-100, #F1F3F4);
+  background: var(--color-gray-50, #F8F9FA);
+}
+
+.paginationLeft {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.paginationInfo {
+  font-size: 13px;
+  color: var(--color-gray-600, #5F6368);
+}
+
+.pageSizeSelector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pageSizeLabel {
+  font-size: 13px;
+  color: var(--color-gray-600, #5F6368);
+}
+
+.pageSizeSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--color-gray-300, #DADCE0);
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.paginationButton {
+  padding: 6px 12px;
+  border: 1px solid var(--color-gray-300, #DADCE0);
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  color: var(--color-gray-700, #3C4043);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.paginationButton:hover:not(:disabled) {
+  background: var(--color-gray-50, #F8F9FA);
+  border-color: var(--color-gray-300, #DADCE0);
+}
+
+.paginationButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paginationPages {
+  font-size: 13px;
+  color: var(--color-gray-600, #5F6368);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .pageHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .headerRight {
+    width: 100%;
+  }
+
+  .headerRight button {
+    flex: 1;
+  }
+
+  .filterSection {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterBar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .searchBar {
+    width: 100%;
+  }
+
+  .searchBar input {
+    width: 100% !important;
+  }
+
+  .manifestItem {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+
+  .manifestContent {
+    width: calc(100% - 56px);
+    margin-bottom: 8px;
+  }
+
+  .manifestStatusArea {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-right: 0;
+    padding-left: 56px;
+  }
+
+  .manifestActions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+
+  .paginationContainer {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .paginationLeft {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

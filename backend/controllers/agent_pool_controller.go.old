@@ -1,0 +1,371 @@
+package controllers
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"iac-platform/internal/models"
+	"iac-platform/services"
+
+	"github.com/gin-gonic/gin"
+)
+
+// AgentPoolController AgentPool控制器
+type AgentPoolController struct {
+	poolService *services.AgentPoolService
+}
+
+// NewAgentPoolController 创建AgentPool控制器实例
+func NewAgentPoolController(poolService *services.AgentPoolService) *AgentPoolController {
+	return &AgentPoolController{
+		poolService: poolService,
+	}
+}
+
+// CreatePool 创建Agent Pool
+// @Summary 创建Agent Pool
+// @Description 创建新的Agent Pool
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Param request body object true "Pool信息"
+// @Success 201 {object} map[string]interface{} "创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Router /api/v1/agent-pools [post]
+// @Security Bearer
+func (apc *AgentPoolController) CreatePool(c *gin.Context) {
+	var req struct {
+		Name              string   `json:"name" binding:"required"`
+		Description       string   `json:"description"`
+		SelectionStrategy string   `json:"selection_strategy" binding:"required"`
+		RequiredLabels    []string `json:"required_labels"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "请求参数无效",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	pool := &models.AgentPool{
+		Name:              req.Name,
+		Description:       req.Description,
+		SelectionStrategy: models.SelectionStrategy(req.SelectionStrategy),
+		RequiredLabels:    req.RequiredLabels,
+		AgentIDs:          []string{},
+	}
+
+	if err := apc.poolService.CreatePool(pool); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"code":      201,
+		"data":      pool,
+		"message":   "Agent Pool创建成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// ListPools 获取Agent Pool列表
+// @Summary 获取Agent Pool列表
+// @Description 获取所有Agent Pool
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "成功返回Pool列表"
+// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Router /api/v1/agent-pools [get]
+// @Security Bearer
+func (apc *AgentPoolController) ListPools(c *gin.Context) {
+	pools, err := apc.poolService.ListPools()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "获取Agent Pool列表失败",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"data":      pools,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// GetPool 获取Agent Pool详情
+// @Summary 获取Agent Pool详情
+// @Description 根据ID获取Agent Pool详情
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Param id path int true "Pool ID"
+// @Success 200 {object} map[string]interface{} "成功返回Pool详情"
+// @Failure 400 {object} map[string]interface{} "无效的Pool ID"
+// @Failure 404 {object} map[string]interface{} "Pool不存在"
+// @Router /api/v1/agent-pools/{id} [get]
+// @Security Bearer
+func (apc *AgentPoolController) GetPool(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Pool ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	pool, err := apc.poolService.GetPool(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":      404,
+			"message":   "Agent Pool不存在",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"data":      pool,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// UpdatePool 更新Agent Pool
+// @Summary 更新Agent Pool
+// @Description 更新Agent Pool配置
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Param id path int true "Pool ID"
+// @Param request body object true "更新信息"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Router /api/v1/agent-pools/{id} [put]
+// @Security Bearer
+func (apc *AgentPoolController) UpdatePool(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Pool ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	var req struct {
+		Name              *string  `json:"name"`
+		Description       *string  `json:"description"`
+		SelectionStrategy *string  `json:"selection_strategy"`
+		RequiredLabels    []string `json:"required_labels"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "请求参数无效",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// 构建更新map
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.SelectionStrategy != nil {
+		updates["selection_strategy"] = *req.SelectionStrategy
+	}
+	if req.RequiredLabels != nil {
+		updates["required_labels"] = req.RequiredLabels
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "没有提供更新字段",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := apc.poolService.UpdatePool(uint(id), updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// 获取更新后的Pool
+	pool, _ := apc.poolService.GetPool(uint(id))
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"data":      pool,
+		"message":   "Agent Pool更新成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// DeletePool 删除Agent Pool
+// @Summary 删除Agent Pool
+// @Description 删除指定的Agent Pool
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Param id path int true "Pool ID"
+// @Success 200 {object} map[string]interface{} "删除成功"
+// @Failure 400 {object} map[string]interface{} "无效的Pool ID"
+// @Router /api/v1/agent-pools/{id} [delete]
+// @Security Bearer
+func (apc *AgentPoolController) DeletePool(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Pool ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := apc.poolService.DeletePool(uint(id)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "Agent Pool删除成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// AddAgent 添加Agent到Pool
+// @Summary 添加Agent到Pool
+// @Description 将Agent添加到指定的Pool
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Param id path int true "Pool ID"
+// @Param request body object true "Agent ID"
+// @Success 200 {object} map[string]interface{} "添加成功"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Router /api/v1/agent-pools/{id}/agents [post]
+// @Security Bearer
+func (apc *AgentPoolController) AddAgent(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Pool ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	var req struct {
+		AgentID string `json:"agent_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "请求参数无效",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := apc.poolService.AddAgentToPool(uint(id), req.AgentID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "Agent添加成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// RemoveAgent 从Pool移除Agent
+// @Summary 从Pool移除Agent
+// @Description 从指定Pool中移除Agent
+// @Tags Agent Pool
+// @Accept json
+// @Produce json
+// @Param id path int true "Pool ID"
+// @Param agent_id path string true "Agent ID"
+// @Success 200 {object} map[string]interface{} "移除成功"
+// @Failure 400 {object} map[string]interface{} "无效的参数"
+// @Router /api/v1/agent-pools/{id}/agents/{agent_id} [delete]
+// @Security Bearer
+func (apc *AgentPoolController) RemoveAgent(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的Pool ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	agentID := c.Param("agent_id")
+	if agentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "Agent ID不能为空",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	if err := apc.poolService.RemoveAgentFromPool(uint(id), agentID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":      200,
+		"message":   "Agent移除成功",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
