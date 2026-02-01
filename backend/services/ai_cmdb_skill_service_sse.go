@@ -594,9 +594,14 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 				})
 			}
 		} else {
-			// 验证成功，使用 SchemaSolver 处理后的参数（包含默认值填充等）
+			// 验证成功，使用 SchemaSolver 处理后的参数
 			response.Config = solverResult.Params
-			log.Printf("[AICMDBSkillService] SchemaSolver 验证成功，应用了 %d 条规则", len(solverResult.AppliedRules))
+			log.Printf("[AICMDBSkillService] SchemaSolver 验证成功: AI 提供的参数格式正确（枚举值、类型、依赖关系均通过验证）")
+			if len(solverResult.AppliedRules) > 0 {
+				log.Printf("[AICMDBSkillService] 触发了 %d 条规则: %v", len(solverResult.AppliedRules), solverResult.AppliedRules)
+			} else {
+				log.Printf("[AICMDBSkillService] 未触发任何隐含/条件规则，直接使用 AI 的输出")
+			}
 		}
 	}
 
