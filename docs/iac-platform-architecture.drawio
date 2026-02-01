@@ -1,104 +1,239 @@
 <mxfile host="65bd71144e">
     <diagram id="iac-platform-architecture" name="IaC Platform">
-        <mxGraphModel dx="1626" dy="592" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+        <mxGraphModel dx="1236" dy="797" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1600" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="t" value="IaC Platform 系统架构图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#1a237e;" parent="1" vertex="1">
-                    <mxGeometry x="270" y="15" width="600" height="40" as="geometry"/>
+                <mxCell id="cm" value="" style="rounded=1;fillColor=#E8EAF6;strokeColor=#3F51B5;strokeWidth=2;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="650" width="720" height="190" as="geometry"/>
                 </mxCell>
-                <mxCell id="feature" value="平台特色: 全UI管理(脱离命令行) | 全局搜索 | Schema Form表单提交 | 参数关联关系 | AI能力" style="text;html=1;strokeColor=#1565C0;fillColor=#E3F2FD;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#1565C0;rounded=1;strokeWidth=2;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="55" width="1120" height="35" as="geometry"/>
+                <mxCell id="title" value="IaC Platform 系统架构图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=32;fontStyle=1;fontColor=#1a237e;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="10" width="800" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="feature" value="平台特色: 全UI管理(脱离命令行) | 全局搜索 | Schema Form表单提交 | 参数关联关系 | AI驱动 | 多角色协作" style="text;html=1;strokeColor=#1565C0;fillColor=#E3F2FD;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#1565C0;rounded=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="65" width="1520" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="roles" value="" style="rounded=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=2;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="110" width="1520" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="roles_label" value="角色分离" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#E65100;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="115" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="role1" value="平台管理员 系统管理" style="rounded=1;fillColor=#FFE0B2;strokeColor=#F57C00;strokeWidth=2;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="120" width="260" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="role2" value="策略管理员 RBAC/Run Tasks/审计/skill完善" style="rounded=1;fillColor=#FFE0B2;strokeColor=#F57C00;strokeWidth=2;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="510" y="118.75" width="250" height="41.25" as="geometry"/>
+                </mxCell>
+                <mxCell id="role3" value="高级工程师 Module设计/Schema/Skill(auto)" style="rounded=1;fillColor=#FFE0B2;strokeColor=#F57C00;strokeWidth=2;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="118.75" width="235" height="42.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="role4" value="交付工程师/资源管理" style="rounded=1;fillColor=#FFE0B2;strokeColor=#F57C00;strokeWidth=2;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1250" y="118.75" width="200" height="42.5" as="geometry"/>
                 </mxCell>
                 <mxCell id="gs" value="" style="rounded=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;strokeWidth=2;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="100" width="1120" height="180" as="geometry"/>
+                    <mxGeometry x="40" y="180" width="1520" height="200" as="geometry"/>
                 </mxCell>
                 <mxCell id="gsl" value="全局设置" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#7B1FA2;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="105" width="100" height="20" as="geometry"/>
+                    <mxGeometry x="50" y="185" width="100" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="ai" value="AI 服务&#xa;• 错误分析&#xa;• 资源生成&#xa;• Form生成&#xa;• AI断言(小模型)&#xa;• 大模型执行" style="rounded=1;fillColor=#E1BEE7;strokeColor=#8E24AA;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="130" width="150" height="140" as="geometry"/>
+                <mxCell id="ag" value="Agent 管理" style="rounded=1;fillColor=#FFCDD2;strokeColor=#E53935;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="210" width="280" height="160" as="geometry"/>
                 </mxCell>
-                <mxCell id="ag" value="Agent 管理&#xa;• 调度与应急解冻&#xa;• 非活跃时间段自动关机&#xa;• 活跃度/当前任务ID&#xa;• 认证轮转/自动扩容&#xa;• 白名单访问策略&#xa;• K8S扩缩容/自定义模版" style="rounded=1;fillColor=#FFCDD2;strokeColor=#E53935;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="230" y="130" width="200" height="140" as="geometry"/>
+                <mxCell id="ag1" value="调度与应急解冻功能&#xa;非活跃网段自动关机&#xa;活跃度查看/当前任务ID&#xa;认证轮转能力&#xa;自动扩容能力&#xa;白名单访问策略&#xa;K8S环境自动扩缩容/自定义模版支持" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="235" width="270" height="130" as="geometry"/>
                 </mxCell>
-                <mxCell id="ie" value="IaC Engine&#xa;• Terraform 支持&#xa;• OpenTofu 支持&#xa;• 全局默认版本配置&#xa;• 多版本支持&#xa;• Workspace灵活配置&#xa;• 平台级版本管理" style="rounded=1;fillColor=#B2EBF2;strokeColor=#0097A7;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="450" y="130" width="180" height="140" as="geometry"/>
+                <mxCell id="ie" value="IaC Engine" style="rounded=1;fillColor=#B2EBF2;strokeColor=#0097A7;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="210" width="200" height="160" as="geometry"/>
                 </mxCell>
-                <mxCell id="rt" value="Run Tasks&#xa;• Pre-plan/Post-plan&#xa;• Pre-apply/Post-apply&#xa;• 代码安全审查&#xa;• 强制/非强制模式&#xa;• 审批流(规划中)" style="rounded=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="650" y="130" width="170" height="140" as="geometry"/>
+                <mxCell id="ie1" value="OpenTofu/Terraform支持&#xa;全局默认版本配置&#xa;多版本支持 Workspace灵活配置&#xa;平台级版本管理" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="365" y="235" width="190" height="130" as="geometry"/>
                 </mxCell>
-                <mxCell id="nt" value="全局通知 Events:&#xa;• Completed/Created&#xa;• task_planning/planned&#xa;• task_applying/Failed&#xa;• Cancelled/Approval/Drift" style="rounded=1;fillColor=#FFE0B2;strokeColor=#F57C00;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="840" y="130" width="170" height="140" as="geometry"/>
+                <mxCell id="rt" value="Run Tasks" style="rounded=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="210" width="200" height="160" as="geometry"/>
                 </mxCell>
-                <mxCell id="rb" value="RBAC 权限管理&#xa;• 内建 Role&#xa;• 自定义 Role&#xa;• Group 管理&#xa;• 审计日志" style="rounded=1;fillColor=#DCEDC8;strokeColor=#689F38;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="1030" y="130" width="120" height="140" as="geometry"/>
+                <mxCell id="rt1" value="Pre-plan/Post-plan Hook Pre-apply/Post-apply Hook &#xa;代码安全审查 &#xa;强制/非强制模式 &#xa;单次授权审批流(规划中)" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="585" y="235" width="190" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="nt" value="全局通知" style="rounded=1;fillColor=#FFE0B2;strokeColor=#F57C00;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="210" width="200" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="nt1" value="Events: &#xa;Completed/Created task_planning/task_planned task_applying/Failed Cancelled/Approval/Drift" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="805" y="235" width="190" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="rb" value="RBAC 权限管理" style="rounded=1;fillColor=#DCEDC8;strokeColor=#689F38;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1020" y="210" width="240" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="rb1" value="内建Role&#xa;自定义Role Group管理&#xa;审计日志 个人Token(登录状态绑定)&#xa;登出失效/再登录恢复&#xa;团队Token(无登录要求)" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="1025" y="235" width="230" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_section" value="" style="rounded=1;fillColor=#EDE7F6;strokeColor=#512DA8;strokeWidth=3;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="390" width="760" height="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_label" value="AI 服务 " style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#512DA8;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="395" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_base" value="AI 基础能力" style="rounded=1;fillColor=#D1C4E9;strokeColor=#7E57C2;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="420" width="180" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_base1" value="错误分析(主流程错误)&#xa;表单资源生成&#xa;自然语言需求解析&#xa;AI权限继承自用户&#xa;安全断言(小模型)&#xa;所有大模型调用前&#xa;安全判定小马甲&#xa;" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="445" width="170" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_skill" value="Module Skill 系统" style="rounded=1;fillColor=#D1C4E9;strokeColor=#7E57C2;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="420" width="250" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_skill1" value="内置Skill Generator自动生成&#xa;基于OpenAPI V3自动生成 Skill流程&#xa;流程: &#xa;1.Module生成Schema Skill &#xa;2.用户需求-安全断言 &#xa;3.AI判断是否查询CMDB &#xa;4.AI判断必要Skill组装 &#xa;5.基线Skill不可跳过 &#xa;6.并行查询CMDB &#xa;7.Task加载Module Skill &#xa;8.LLM生成候选参数 &#xa;9.SchemaSolver最终裁决" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=9;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="265" y="445" width="240" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_cmdb" value="AI 检索向量化" style="rounded=1;fillColor=#D1C4E9;strokeColor=#7E57C2;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="447.5" y="670" width="272.5" height="155" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai_cmdb1" value="CMDB数据向量化&#xa;支持自然语言资源查询&#xa;更好支持资源生成数据源&#xa;查找CMDB匹配用户需求" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="470" y="700" width="230" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="md" value="" style="rounded=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=3;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="290" width="450" height="200" as="geometry"/>
+                    <mxGeometry x="820" y="390" width="740" height="240" as="geometry"/>
                 </mxCell>
                 <mxCell id="mdl" value="Module 模块管理 (核心功能)" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#FF8F00;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="295" width="250" height="20" as="geometry"/>
+                    <mxGeometry x="830" y="395" width="250" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="m1" value="• 版本级别的 Demo 和 Schema (可继承)&#xa;- Schema亮点: Form表单提交Terraform&#xa;参数Group及关联关系:&#xa;   - 互斥: xx存在则bb不能存在&#xa;   - 依赖: a存在则b必须存在&#xa;   - 支持List等复杂类型&#xa;• 值填充: CMDB(样式提示) / WS Output(/)&#xa;• 远程Workspace调用&#xa;• AI生成代码/自动Form/错误修复&#xa;• OpenAPI V3可视化编辑&#xa;• 自动解析terraform variables" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=4;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="320" width="420" height="160" as="geometry"/>
+                <mxCell id="md_ver" value="版本管理" style="rounded=1;fillColor=#FFECB3;strokeColor=#FFA000;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="420" width="200" height="200" as="geometry"/>
                 </mxCell>
-                <mxCell id="cm" value="" style="rounded=1;fillColor=#E8EAF6;strokeColor=#3F51B5;strokeWidth=2;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="510" y="290" width="280" height="200" as="geometry"/>
+                <mxCell id="md_ver1" value="版本级别Demo&#xa;版本级别Schema Schema可继承&#xa;自动解析TF variables生成 OpenAPI V3&#xa;可视化编辑(schema editor)" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="845" y="445" width="190" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="md_schema" value="Schema (最大亮点)" style="rounded=1;fillColor=#FFECB3;strokeColor=#FFA000;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="420" width="240" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="md_schema1" value="Form表单提交Terraform 参数&#xa;Group分组 &#xa;参数关联关系: &#xa;互斥:xx存在则bb不能存在 &#xa;依赖:a存在则b必须存在 &#xa;...&#xa;支持List等复杂类型&#xa;值填充来源: CMDB(样式提示)/WS Output(/快速呼出)/远程Workspace调用" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=9;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="1065" y="445" width="230" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="md_ai" value="AI 能力" style="rounded=1;fillColor=#FFECB3;strokeColor=#FFA000;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1320" y="420" width="220" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="md_ai1" value="AI生成代码 自动Form表单 错误修复 提示词CRUD功能 展示在AI助手界面 教用户使用Module Claude Skill能力下放 Task层交给维护者 AI生成Module Skill" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=9;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="1325" y="445" width="210" height="170" as="geometry"/>
                 </mxCell>
                 <mxCell id="cml" value="CMDB 配置管理" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#3F51B5;" parent="1" vertex="1">
-                    <mxGeometry x="520" y="295" width="150" height="20" as="geometry"/>
+                    <mxGeometry x="50" y="645" width="150" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="c1" value="内置CMDB:&#xa;• 每次apply自动更新(成功/失败)&#xa;• 轻量字段: arn/name/tag等&#xa;• 支持手动sync&#xa;&#xa;外置CMDB:&#xa;• 支持外置CMDB同步&#xa;• 树状结构展示" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=4;" parent="1" vertex="1">
-                    <mxGeometry x="530" y="320" width="240" height="160" as="geometry"/>
+                <mxCell id="cm_inner" value="内置CMDB" style="rounded=1;fillColor=#C5CAE9;strokeColor=#5C6BC0;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="670" width="170" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="cm_inner1" value="每次apply自动更新 (成功/失败都赠量更新) &#xa;轻量字段: arn/name/tag等&#xa;支持手动sync&#xa;树状结构展示" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="695" width="160" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="cm_ext" value="外置CMDB" style="rounded=1;fillColor=#C5CAE9;strokeColor=#5C6BC0;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="670" width="170" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="cm_ext1" value="外置CMDB同步&#xa;向量化CMDB数据&#xa;支持自然语言查询&#xa;资源生成数据源" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="245" y="695" width="160" height="130" as="geometry"/>
                 </mxCell>
                 <mxCell id="mf" value="" style="rounded=1;fillColor=#FCE4EC;strokeColor=#C2185B;strokeWidth=2;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="810" y="290" width="350" height="200" as="geometry"/>
+                    <mxGeometry x="780" y="650" width="320" height="190" as="geometry"/>
                 </mxCell>
                 <mxCell id="mfl" value="Manifests 编排管理" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#C2185B;" parent="1" vertex="1">
-                    <mxGeometry x="820" y="295" width="180" height="20" as="geometry"/>
+                    <mxGeometry x="865" y="660" width="180" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="mf1" value="• 拖拽编辑&#xa;• 关联关系查看&#xa;• 支持Form/JSON所有能力&#xa;• AI支持&#xa;• 多次部署" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=4;" parent="1" vertex="1">
-                    <mxGeometry x="830" y="320" width="210" height="160" as="geometry"/>
-                </mxCell>
-                <mxCell id="ws" value="" style="rounded=1;fillColor=#E0F2F1;strokeColor=#00796B;strokeWidth=2;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="500" width="1120" height="340" as="geometry"/>
-                </mxCell>
-                <mxCell id="wsl" value="Workspace (核心功能)" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#00796B;" parent="1" vertex="1">
-                    <mxGeometry x="70" y="500" width="180" height="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="w1" value="纵览界面&#xa;• 最近一次任务&#xa;• Drift缩略&#xa;• 最近添加资源" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="540" width="220" height="130" as="geometry"/>
-                </mxCell>
-                <mxCell id="w2" value="Run 列表/详情&#xa;• 历史运行列表&#xa;• Structure变更内容&#xa;• Classic日志查看&#xa;• 分进度查看日志&#xa;• AI错误分析按钮" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="330" y="536.25" width="250" height="133.75" as="geometry"/>
-                </mxCell>
-                <mxCell id="w3" value="State 管理&#xa;• 卡片形式归类查看&#xa;• 展开详细信息&#xa;• JSON原始数据查看&#xa;• Retrieve权限控制&#xa;• 版本管理&#xa;• 导入校验" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="620" y="532.5" width="250" height="135" as="geometry"/>
-                </mxCell>
-                <mxCell id="w4" value="资源管理 (核心功能)&#xa;• 表单/JSON模式切换&#xa;• 单资源版本控制&#xa;• 快速回滚&#xa;• 软删除&#xa;• 版本对比&#xa;• AI新增/编辑&#xa;• 导出能力" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="900" y="530" width="240" height="140" as="geometry"/>
-                </mxCell>
-                <mxCell id="w5" value="变量管理&#xa;• 版本管理&#xa;• 任务运行快照&#xa;• 串行任务流支持&#xa;• TF变量/系统变量&#xa;• Sensitive变量" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="900" y="680" width="240" height="130" as="geometry"/>
-                </mxCell>
-                <mxCell id="w6" value="Output 管理&#xa;• 链接其它Workspace&#xa;• 白名单配置&#xa;• 全局允许&#xa;• Static Output" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="620" y="680" width="250" height="135" as="geometry"/>
-                </mxCell>
-                <mxCell id="w7" value="Drift 检测&#xa;• 后台静默检查&#xa;• 手动/自动触发&#xa;• 自定义周期" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="680" width="220" height="130" as="geometry"/>
-                </mxCell>
-                <mxCell id="w8" value="Workspace 配置&#xa;• Workspace Lock&#xa;• Provider版本限制&#xa;• RunTask配置(全局不可禁用)&#xa;• Run Trigger(上游触发)&#xa;• 通知功能" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=left;spacingLeft=5;" parent="1" vertex="1">
-                    <mxGeometry x="330" y="685" width="250" height="130" as="geometry"/>
+                <mxCell id="mf1" value="拖拽编辑&#xa;关联关系查看&#xa;支持Form/JSON所有能力&#xa;AI支持&#xa;多次部署" style="rounded=1;fillColor=#F8BBD9;strokeColor=#D81B60;strokeWidth=2;align=left;spacingLeft=10;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="805" y="695" width="275" height="120" as="geometry"/>
                 </mxCell>
                 <mxCell id="dl" value="" style="rounded=1;fillColor=#ECEFF1;strokeColor=#455A64;strokeWidth=2;dashed=1;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="860" width="1120" height="80" as="geometry"/>
+                    <mxGeometry x="1140" y="650" width="420" height="190" as="geometry"/>
                 </mxCell>
                 <mxCell id="dll" value="数据层" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#455A64;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="865" width="80" height="20" as="geometry"/>
+                    <mxGeometry x="1340" y="695" width="80" height="20" as="geometry"/>
                 </mxCell>
-                <mxCell id="d1" value="PostgreSQL" style="shape=cylinder3;size=8;fillColor=#CFD8DC;strokeColor=#546E7A;strokeWidth=2;" parent="1" vertex="1">
-                    <mxGeometry x="530" y="885" width="100" height="35" as="geometry"/>
+                <mxCell id="d1" value="PostgreSQL 主数据库" style="shape=cylinder3;size=8;fillColor=#CFD8DC;strokeColor=#546E7A;strokeWidth=2;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1190" y="680" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2" value="向量数据库 pgvector" style="shape=cylinder3;size=8;fillColor=#CFD8DC;strokeColor=#546E7A;strokeWidth=2;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1420" y="680" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="d_desc" value="数据特点: 版本控制 | 快照机制 | 软删除 | 审计追踪 | 向量检索" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=11;fontColor=#455A64;" parent="1" vertex="1">
+                    <mxGeometry x="1020" y="770" width="720" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ws" value="" style="rounded=1;fillColor=#E0F2F1;strokeColor=#00796B;strokeWidth=3;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="860" width="1520" height="520" as="geometry"/>
+                </mxCell>
+                <mxCell id="wsl" value="Workspace (核心功能)" style="text;strokeColor=none;fillColor=none;align=left;fontSize=14;fontStyle=1;fontColor=#00796B;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="900" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="milestone" value="里程碑: AI创建资源打通CMDB AI继承用户权限 自然语言生成配置 配合Schema做为生成规范 安全/合规的标准化资源创建" style="text;html=1;strokeColor=#00796B;fillColor=#B2DFDB;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#00796B;rounded=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="962.5" width="1480" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="w1" value="纵览界面" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="1002.5" width="180" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w1_1" value="最近一次任务&#xa;Drift缩略&#xa;最近添加资源" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1027.5" width="170" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w2" value="Run 列表/详情" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="265" y="1002.5" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w2_1" value="历史运行列表&#xa;Structure变更内容&#xa;分进度日志&#xa;AI错误分析" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="1027.5" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w3" value="State 管理" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="485" y="1002.5" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w3_1" value="卡片归类&#xa;详情展开&#xa;JSON原始数据/Retrieve权限&#xa;版本管理&#xa;导入校验" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="1027.5" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w4" value="资源管理 (核心)" style="rounded=1;fillColor=#80CBC4;strokeColor=#00695C;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="705" y="1002.5" width="280" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="w4_1" value="表单/JSON模式切换&#xa;单资源版本控制&#xa;快速回滚/软删除&#xa;版本对比&#xa;AI新增/编辑&#xa;导出能力&#xa;资源级别锁: 多人编辑申请机制&#xa;申请者选择是否同意 &#xa;草稿功能&#xa;草稿落后提示" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=9;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="710" y="1027.5" width="270" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="w5" value="变量管理" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1005" y="1002.5" width="245" height="147.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="w5_1" value="版本管理&#xa;任务运行快照&#xa;API支持任意变量版本&#xa;串行任务流支持&#xa;TF变量&#xa;系统变量&#xa;Sensitive变量" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="1010" y="1027.5" width="230" height="112.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="w6" value="Output 管理" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1265" y="1002.5" width="285" height="147.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="w6_1" value="链接其它Workspace&#xa;白名单配置&#xa;全局允许&#xa;Static Output" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="1270" y="1027.5" width="270" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w7" value="Drift 检测" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="65" y="1117.5" width="180" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w7_1" value="后台静默检查&#xa;手动/自动触发&#xa;自定义周期" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="1142.5" width="170" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w8" value="Workspace 配置" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="265" y="1117.5" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w8_1" value="Workspace Lock &#xa;Provider版本限制&#xa;RunTask配置(全局不可禁用)&#xa;Run Trigger(上游触发)&#xa;通知功能" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="1142.5" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w9" value="远程数据" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="485" y="1117.5" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w9_1" value="远程Workspace Output调用&#xa;白名单配置&#xa;跨Workspace数据共享" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="1142.5" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w10" value="任务管理" style="rounded=1;fillColor=#B2DFDB;strokeColor=#00897B;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="705" y="1197.5" width="280" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="w10_1" value="Plan/Apply任务&#xa;任务队列管理&#xa;任务状态追踪&#xa;任务日志&#xa;任务评论" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="710" y="1222.5" width="270" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="w11" value="版本控制特性" style="rounded=1;fillColor=#80CBC4;strokeColor=#00695C;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1005" y="1180" width="545" height="117.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="w11_1" value="资源版本控制: 每个资源独立版本历史&#xa;变量版本控制: 每次任务快照变量&#xa;State版本控制: State历史版本管理&#xa;草稿机制: 编辑时保存草稿/落后提示&#xa;软删除: 资源软删除支持恢复&#xa;版本对比: 任意版本间差异对比" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=10;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="1012.5" y="1197.5" width="527.5" height="92.5" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" value="Skill分层" style="rounded=1;fillColor=#D1C4E9;strokeColor=#7E57C2;strokeWidth=2;align=center;fontStyle=1;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+                    <mxGeometry x="540" y="420" width="250" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="基础层: 基础能力不可以绕过&#xa;domain层: 按需选择.自动加载&#xa;task层: 根据不同的任务加载" style="text;strokeColor=none;fillColor=none;align=left;spacingLeft=5;fontSize=9;whiteSpace=wrap;" vertex="1" parent="1">
+                    <mxGeometry x="550" y="450" width="220" height="140" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
