@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"gorm.io/gorm"
@@ -56,6 +57,44 @@ type SchemaFieldDef struct {
 	// 参数关联关系
 	ConflictsWith []string `json:"conflicts_with,omitempty"` // 互斥参数
 	DependsOn     []string `json:"depends_on,omitempty"`     // 依赖参数
+
+	// 隐含规则: 当字段值满足条件时，自动设置其他字段
+	// 例如: high_availability=true 时自动设置 multi_az=true
+	Implies *ImpliesRule `json:"implies,omitempty"`
+
+	// 条件规则: if-else 逻辑
+	Conditional *ConditionalRule `json:"conditional,omitempty"`
+
+	// 数据源配置
+	Source       string                 `json:"source,omitempty"`        // cmdb, output, variable
+	SourceConfig map[string]interface{} `json:"source_config,omitempty"` // 数据源配置
+}
+
+// ImpliesRule 隐含规则: 当字段值满足条件时，自动设置其他字段
+type ImpliesRule struct {
+	When interface{}            `json:"when"` // 触发条件的值
+	Then map[string]interface{} `json:"then"` // 要设置的字段和值
+}
+
+// ConditionalRule 条件规则: if-else 逻辑
+type ConditionalRule struct {
+	If   *Condition        `json:"if"`             // 条件
+	Then *FieldRequirement `json:"then,omitempty"` // 满足条件时的要求
+	Else *FieldRequirement `json:"else,omitempty"` // 不满足条件时的要求
+}
+
+// Condition 条件定义
+type Condition struct {
+	Field    string      `json:"field"`    // 字段名
+	Operator string      `json:"operator"` // 操作符: exists, equals, in, not_exists, not_equals
+	Value    interface{} `json:"value"`    // 比较值
+}
+
+// FieldRequirement 字段要求
+type FieldRequirement struct {
+	Required  []string               `json:"required,omitempty"`   // 必须存在的字段
+	Forbidden []string               `json:"forbidden,omitempty"`  // 必须不存在的字段
+	SetValues map[string]interface{} `json:"set_values,omitempty"` // 自动设置的值
 }
 
 // ========== 反馈结构 ==========
@@ -106,9 +145,10 @@ func NewSchemaSolver(db *gorm.DB, moduleID uint) *SchemaSolver {
 
 // LoadSchema 加载 Module 的 Schema
 func (s *SchemaSolver) LoadSchema() error {
+	// 使用 []byte 来接收 JSONB 数据，避免 GORM 扫描问题
 	var schema struct {
-		OpenAPISchema map[string]interface{} `gorm:"column:openapi_schema;type:jsonb"`
-		SchemaData    string                 `gorm:"column:schema_data;type:jsonb"`
+		OpenAPISchema []byte `gorm:"column:openapi_schema;type:jsonb"`
+		SchemaData    []byte `gorm:"column:schema_data;type:jsonb"`
 	}
 
 	// 优先使用 openapi_schema，如果没有则使用 schema_data
@@ -123,21 +163,48 @@ func (s *SchemaSolver) LoadSchema() error {
 
 	// 解析 Schema
 	var schemaMap map[string]interface{}
-	if schema.OpenAPISchema != nil && len(schema.OpenAPISchema) > 0 {
-		schemaMap = schema.OpenAPISchema
-	} else if schema.SchemaData != "" {
-		if err := json.Unmarshal([]byte(schema.SchemaData), &schemaMap); err != nil {
+
+	// 优先使用 openapi_schema
+	if len(schema.OpenAPISchema) > 0 {
+		if err := json.Unmarshal(schema.OpenAPISchema, &schemaMap); err != nil {
+			log.Printf("[SchemaSolver] 解析 openapi_schema 失败: %v", err)
+			// 继续尝试 schema_data
+		}
+	}
+
+	// 如果 openapi_schema 解析失败或为空，尝试 schema_data
+	if schemaMap == nil && len(schema.SchemaData) > 0 {
+		if err := json.Unmarshal(schema.SchemaData, &schemaMap); err != nil {
 			return fmt.Errorf("解析 schema_data 失败: %w", err)
 		}
-	} else {
+	}
+
+	if schemaMap == nil {
 		return fmt.Errorf("Schema 为空")
 	}
 
+	// 检测 Schema 格式并提取字段定义
+	propertiesMap := s.extractPropertiesFromSchema(schemaMap)
+	if propertiesMap == nil {
+		return fmt.Errorf("无法从 Schema 中提取字段定义")
+	}
+
+	// 提取 required 字段列表
+	requiredFields := s.extractRequiredFields(schemaMap)
+
 	// 转换为 SchemaFieldDef
 	s.schema = make(map[string]*SchemaFieldDef)
-	for key, value := range schemaMap {
+	for key, value := range propertiesMap {
 		if fieldMap, ok := value.(map[string]interface{}); ok {
-			s.schema[key] = s.parseFieldDef(fieldMap)
+			fieldDef := s.parseFieldDef(fieldMap)
+			// 检查是否在 required 列表中
+			for _, req := range requiredFields {
+				if req == key {
+					fieldDef.Required = true
+					break
+				}
+			}
+			s.schema[key] = fieldDef
 		}
 	}
 
@@ -145,10 +212,86 @@ func (s *SchemaSolver) LoadSchema() error {
 	return nil
 }
 
+// extractPropertiesFromSchema 从 Schema 中提取 properties
+// 支持多种格式：
+// 1. OpenAPI 3.x: components.schemas.ModuleInput.properties
+// 2. 简单格式: 直接是 properties map
+func (s *SchemaSolver) extractPropertiesFromSchema(schemaMap map[string]interface{}) map[string]interface{} {
+	// 尝试 OpenAPI 3.x 格式: components.schemas.ModuleInput.properties
+	if components, ok := schemaMap["components"].(map[string]interface{}); ok {
+		if schemas, ok := components["schemas"].(map[string]interface{}); ok {
+			if moduleInput, ok := schemas["ModuleInput"].(map[string]interface{}); ok {
+				if properties, ok := moduleInput["properties"].(map[string]interface{}); ok {
+					log.Printf("[SchemaSolver] 检测到 OpenAPI 3.x 格式")
+					return properties
+				}
+			}
+		}
+	}
+
+	// 尝试直接 properties 格式
+	if properties, ok := schemaMap["properties"].(map[string]interface{}); ok {
+		log.Printf("[SchemaSolver] 检测到直接 properties 格式")
+		return properties
+	}
+
+	// 尝试简单格式（直接是字段定义）
+	// 检查是否有 type 字段，如果没有，可能是简单格式
+	hasTypeField := false
+	for _, value := range schemaMap {
+		if fieldMap, ok := value.(map[string]interface{}); ok {
+			if _, hasType := fieldMap["type"]; hasType {
+				hasTypeField = true
+				break
+			}
+		}
+	}
+
+	if hasTypeField {
+		log.Printf("[SchemaSolver] 检测到简单格式（直接字段定义）")
+		return schemaMap
+	}
+
+	return nil
+}
+
+// extractRequiredFields 从 Schema 中提取 required 字段列表
+func (s *SchemaSolver) extractRequiredFields(schemaMap map[string]interface{}) []string {
+	var required []string
+
+	// 尝试 OpenAPI 3.x 格式
+	if components, ok := schemaMap["components"].(map[string]interface{}); ok {
+		if schemas, ok := components["schemas"].(map[string]interface{}); ok {
+			if moduleInput, ok := schemas["ModuleInput"].(map[string]interface{}); ok {
+				if reqList, ok := moduleInput["required"].([]interface{}); ok {
+					for _, r := range reqList {
+						if str, ok := r.(string); ok {
+							required = append(required, str)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 尝试直接 required 格式
+	if reqList, ok := schemaMap["required"].([]interface{}); ok {
+		for _, r := range reqList {
+			if str, ok := r.(string); ok {
+				required = append(required, str)
+			}
+		}
+	}
+
+	return required
+}
+
 // parseFieldDef 解析字段定义
+// 支持 OpenAPI 3.x 格式和自定义格式
 func (s *SchemaSolver) parseFieldDef(fieldMap map[string]interface{}) *SchemaFieldDef {
 	field := &SchemaFieldDef{}
 
+	// 基本字段
 	if t, ok := fieldMap["type"].(string); ok {
 		field.Type = t
 	}
@@ -161,9 +304,48 @@ func (s *SchemaSolver) parseFieldDef(fieldMap map[string]interface{}) *SchemaFie
 	if desc, ok := fieldMap["description"].(string); ok {
 		field.Description = desc
 	}
-	if opts, ok := fieldMap["options"].([]interface{}); ok {
+
+	// 枚举值 - 支持 OpenAPI 的 "enum" 和自定义的 "options"
+	if opts, ok := fieldMap["enum"].([]interface{}); ok {
+		field.Options = opts
+	} else if opts, ok := fieldMap["options"].([]interface{}); ok {
 		field.Options = opts
 	}
+
+	// 正则表达式 - OpenAPI 的 "pattern"
+	if pattern, ok := fieldMap["pattern"].(string); ok {
+		field.Pattern = pattern
+	}
+
+	// 字符串长度约束 - OpenAPI 的 "minLength" 和 "maxLength"
+	if minLen, ok := fieldMap["minLength"].(float64); ok {
+		minLenInt := int(minLen)
+		field.MinLength = &minLenInt
+	}
+	if maxLen, ok := fieldMap["maxLength"].(float64); ok {
+		maxLenInt := int(maxLen)
+		field.MaxLength = &maxLenInt
+	}
+
+	// 数值约束 - OpenAPI 的 "minimum" 和 "maximum"
+	if min, ok := fieldMap["minimum"].(float64); ok {
+		field.Minimum = &min
+	}
+	if max, ok := fieldMap["maximum"].(float64); ok {
+		field.Maximum = &max
+	}
+
+	// 数组约束 - OpenAPI 的 "minItems" 和 "maxItems"
+	if minItems, ok := fieldMap["minItems"].(float64); ok {
+		minItemsInt := int(minItems)
+		field.MinItems = &minItemsInt
+	}
+	if maxItems, ok := fieldMap["maxItems"].(float64); ok {
+		maxItemsInt := int(maxItems)
+		field.MaxItems = &maxItemsInt
+	}
+
+	// 自定义字段
 	if fn, ok := fieldMap["force_new"].(bool); ok {
 		field.ForceNew = fn
 	}
@@ -174,6 +356,8 @@ func (s *SchemaSolver) parseFieldDef(fieldMap map[string]interface{}) *SchemaFie
 			}
 		}
 	}
+
+	// 嵌套对象属性
 	if props, ok := fieldMap["properties"].(map[string]interface{}); ok {
 		field.Properties = make(map[string]*SchemaFieldDef)
 		for k, v := range props {
@@ -182,9 +366,13 @@ func (s *SchemaSolver) parseFieldDef(fieldMap map[string]interface{}) *SchemaFie
 			}
 		}
 	}
+
+	// 数组元素定义
 	if items, ok := fieldMap["items"].(map[string]interface{}); ok {
 		field.Items = s.parseFieldDef(items)
 	}
+
+	// 参数关联关系
 	if conflicts, ok := fieldMap["conflicts_with"].([]interface{}); ok {
 		for _, v := range conflicts {
 			if str, ok := v.(string); ok {
@@ -204,14 +392,40 @@ func (s *SchemaSolver) parseFieldDef(fieldMap map[string]interface{}) *SchemaFie
 }
 
 // Solve 执行组装逻辑
-func (s *SchemaSolver) Solve(aiParams map[string]interface{}) *SolverResult {
-	result := &SolverResult{
+func (s *SchemaSolver) Solve(aiParams map[string]interface{}) (result *SolverResult) {
+	// 初始化结果
+	result = &SolverResult{
 		Success:      true,
 		Params:       make(map[string]interface{}),
 		Warnings:     make([]string, 0),
 		AppliedRules: make([]string, 0),
 		Feedbacks:    make([]*SolverFeedback, 0),
 		NeedAIFix:    false,
+	}
+
+	// panic 恢复机制 - 确保任何 panic 都不会导致程序崩溃
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[SchemaSolver] Solve 发生 panic: %v", r)
+			result.Success = false
+			result.NeedAIFix = false // panic 时不要求 AI 修复
+			result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+				Type:    FeedbackTypeError,
+				Action:  ActionAdjustValue,
+				Message: fmt.Sprintf("Schema 验证过程中发生内部错误: %v", r),
+			})
+		}
+	}()
+
+	// 检查 SchemaSolver 是否正确初始化
+	if s == nil || s.db == nil {
+		result.Success = false
+		result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+			Type:    FeedbackTypeError,
+			Action:  ActionAdjustValue,
+			Message: "SchemaSolver 未正确初始化",
+		})
+		return result
 	}
 
 	// 如果 Schema 未加载，先加载
@@ -227,9 +441,25 @@ func (s *SchemaSolver) Solve(aiParams map[string]interface{}) *SolverResult {
 		}
 	}
 
-	// 复制 AI 参数
+	// 再次检查 schema 是否加载成功
+	if s.schema == nil {
+		result.Success = false
+		result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+			Type:    FeedbackTypeError,
+			Action:  ActionAdjustValue,
+			Message: "Schema 加载后仍为空",
+		})
+		return result
+	}
+
+	// 处理空参数的情况
+	if aiParams == nil {
+		aiParams = make(map[string]interface{})
+	}
+
+	// 复制 AI 参数（深拷贝以避免修改原始数据）
 	for k, v := range aiParams {
-		result.Params[k] = v
+		result.Params[k] = s.deepCopyValue(v)
 	}
 
 	// 第一步: 验证枚举值
@@ -238,22 +468,32 @@ func (s *SchemaSolver) Solve(aiParams map[string]interface{}) *SolverResult {
 	// 第二步: 验证类型
 	s.validateTypes(result)
 
-	// 第三步: 验证数组约束
+	// 第三步: 验证字符串约束（最小长度、最大长度、正则表达式）
+	s.validateStringConstraints(result)
+
+	// 第四步: 验证数值约束（最小值、最大值）
+	s.validateNumberConstraints(result)
+
+	// 第五步: 验证数组约束
 	s.validateArrayConstraints(result)
 
-	// 第四步: 检查互斥条件
+	// 第六步: 检查互斥条件
 	s.checkConflicts(result)
 
-	// 第五步: 检查依赖条件
+	// 第七步: 检查依赖条件
 	s.checkDependencies(result)
 
-	// 第六步: 检查必填字段
+	// 第八步: 检查必填字段
 	s.checkRequiredFields(result)
 
-	// 第七步: 应用默认值
-	s.applyDefaults(result)
+	// 第九步: 应用隐含规则 (Implies)
+	s.applyImpliesRules(result)
 
-	// 第八步: 验证 map 类型的 must_include
+	// 第十步: 应用条件规则 (Conditional)
+	s.applyConditionalRules(result)
+
+	// 第十一步: 验证 map 类型的 must_include
+	// 注意：不再自动填充默认值，这应该由 AI 来决定
 	s.validateMapMustInclude(result)
 
 	// 检查是否有错误反馈
@@ -337,6 +577,159 @@ func (s *SchemaSolver) validateTypes(result *SolverResult) {
 	}
 }
 
+// validateStringConstraints 验证字符串约束（最小长度、最大长度、正则表达式）
+func (s *SchemaSolver) validateStringConstraints(result *SolverResult) {
+	for key, value := range result.Params {
+		field, exists := s.schema[key]
+		if !exists || field.Type != "string" {
+			continue
+		}
+
+		strValue, ok := value.(string)
+		if !ok {
+			continue
+		}
+
+		length := len(strValue)
+
+		// 检查最小长度
+		if field.MinLength != nil && length < *field.MinLength {
+			result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+				Type:         FeedbackTypeError,
+				Action:       ActionAdjustValue,
+				Field:        key,
+				Message:      fmt.Sprintf("字段 '%s' 的长度为 %d，但最小长度要求为 %d", key, length, *field.MinLength),
+				AIPrompt:     fmt.Sprintf("字符串 '%s' 的长度为 %d，但需要至少 %d 个字符。当前值: '%s'。请提供一个更长的值。", key, length, *field.MinLength, strValue),
+				CurrentValue: value,
+				Constraint: map[string]interface{}{
+					"type":       "min_length",
+					"min_length": *field.MinLength,
+					"actual":     length,
+				},
+			})
+		}
+
+		// 检查最大长度
+		if field.MaxLength != nil && length > *field.MaxLength {
+			result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+				Type:         FeedbackTypeError,
+				Action:       ActionAdjustValue,
+				Field:        key,
+				Message:      fmt.Sprintf("字段 '%s' 的长度为 %d，但最大长度限制为 %d", key, length, *field.MaxLength),
+				AIPrompt:     fmt.Sprintf("字符串 '%s' 的长度为 %d，但最多只能有 %d 个字符。当前值: '%s'。请缩短这个值。", key, length, *field.MaxLength, strValue),
+				CurrentValue: value,
+				Constraint: map[string]interface{}{
+					"type":       "max_length",
+					"max_length": *field.MaxLength,
+					"actual":     length,
+				},
+			})
+		}
+
+		// 检查正则表达式
+		if field.Pattern != "" {
+			matched, err := regexp.MatchString(field.Pattern, strValue)
+			if err != nil {
+				log.Printf("[SchemaSolver] 正则表达式错误: %v", err)
+			} else if !matched {
+				result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+					Type:         FeedbackTypeError,
+					Action:       ActionAdjustValue,
+					Field:        key,
+					Message:      fmt.Sprintf("字段 '%s' 的值不匹配要求的格式", key),
+					AIPrompt:     fmt.Sprintf("字符串 '%s' 的值 '%s' 不匹配要求的格式（正则: %s）。请提供一个符合格式要求的值。", key, strValue, field.Pattern),
+					CurrentValue: value,
+					Constraint: map[string]interface{}{
+						"type":    "pattern",
+						"pattern": field.Pattern,
+					},
+				})
+			}
+		}
+	}
+}
+
+// validateNumberConstraints 验证数值约束（最小值、最大值）
+// 支持 number 和 integer 类型
+func (s *SchemaSolver) validateNumberConstraints(result *SolverResult) {
+	for key, value := range result.Params {
+		field, exists := s.schema[key]
+		if !exists {
+			continue
+		}
+
+		// 支持 number 和 integer 类型
+		if field.Type != "number" && field.Type != "integer" {
+			continue
+		}
+
+		// 转换为 float64
+		var numValue float64
+		var isValidNumber bool
+		switch v := value.(type) {
+		case float64:
+			numValue = v
+			isValidNumber = true
+		case float32:
+			numValue = float64(v)
+			isValidNumber = true
+		case int:
+			numValue = float64(v)
+			isValidNumber = true
+		case int64:
+			numValue = float64(v)
+			isValidNumber = true
+		case int32:
+			numValue = float64(v)
+			isValidNumber = true
+		case json.Number:
+			// JSON 解析时可能返回 json.Number
+			if f, err := v.Float64(); err == nil {
+				numValue = f
+				isValidNumber = true
+			}
+		}
+
+		if !isValidNumber {
+			continue
+		}
+
+		// 检查最小值
+		if field.Minimum != nil && numValue < *field.Minimum {
+			result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+				Type:         FeedbackTypeError,
+				Action:       ActionAdjustValue,
+				Field:        key,
+				Message:      fmt.Sprintf("字段 '%s' 的值为 %v，但最小值要求为 %v", key, numValue, *field.Minimum),
+				AIPrompt:     fmt.Sprintf("数值 '%s' 的值为 %v，但需要至少为 %v。请提供一个更大的值。", key, numValue, *field.Minimum),
+				CurrentValue: value,
+				Constraint: map[string]interface{}{
+					"type":    "minimum",
+					"minimum": *field.Minimum,
+					"actual":  numValue,
+				},
+			})
+		}
+
+		// 检查最大值
+		if field.Maximum != nil && numValue > *field.Maximum {
+			result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+				Type:         FeedbackTypeError,
+				Action:       ActionAdjustValue,
+				Field:        key,
+				Message:      fmt.Sprintf("字段 '%s' 的值为 %v，但最大值限制为 %v", key, numValue, *field.Maximum),
+				AIPrompt:     fmt.Sprintf("数值 '%s' 的值为 %v，但最多只能为 %v。请提供一个更小的值。", key, numValue, *field.Maximum),
+				CurrentValue: value,
+				Constraint: map[string]interface{}{
+					"type":    "maximum",
+					"maximum": *field.Maximum,
+					"actual":  numValue,
+				},
+			})
+		}
+	}
+}
+
 // getValueType 获取值的类型
 func (s *SchemaSolver) getValueType(value interface{}) string {
 	if value == nil {
@@ -377,6 +770,18 @@ func (s *SchemaSolver) isTypeCompatible(expected, actual string, value interface
 	case "number":
 		// 数字类型兼容
 		return actual == "number"
+	case "integer":
+		// integer 类型兼容 number（JSON 中整数也是 number）
+		return actual == "number"
+	case "boolean":
+		// boolean 类型
+		return actual == "boolean"
+	case "string":
+		// string 类型
+		return actual == "string"
+	case "array":
+		// array 类型
+		return actual == "array"
 	}
 
 	return false
@@ -616,6 +1021,161 @@ func (s *SchemaSolver) checkRequiredFields(result *SolverResult) {
 	}
 }
 
+// applyImpliesRules 应用隐含规则
+// 例如: high_availability=true 时自动设置 multi_az=true
+func (s *SchemaSolver) applyImpliesRules(result *SolverResult) {
+	for key, value := range result.Params {
+		field, exists := s.schema[key]
+		if !exists || field.Implies == nil {
+			continue
+		}
+
+		// 检查是否满足触发条件
+		if reflect.DeepEqual(value, field.Implies.When) {
+			for impliedKey, impliedValue := range field.Implies.Then {
+				// 只在目标字段不存在时设置
+				if _, exists := result.Params[impliedKey]; !exists {
+					result.Params[impliedKey] = impliedValue
+					result.AppliedRules = append(result.AppliedRules,
+						fmt.Sprintf("隐含规则: %s=%v → %s=%v", key, value, impliedKey, impliedValue))
+				}
+			}
+		}
+	}
+}
+
+// applyConditionalRules 应用条件规则 (if-else 逻辑)
+func (s *SchemaSolver) applyConditionalRules(result *SolverResult) {
+	for key, field := range s.schema {
+		if field.Conditional == nil {
+			continue
+		}
+
+		condition := field.Conditional
+		conditionMet := s.evaluateCondition(condition.If, result.Params)
+
+		var requirement *FieldRequirement
+		var branch string
+		if conditionMet {
+			requirement = condition.Then
+			branch = "then"
+		} else if condition.Else != nil {
+			requirement = condition.Else
+			branch = "else"
+		}
+
+		if requirement != nil {
+			// 检查必需字段
+			for _, requiredField := range requirement.Required {
+				if _, exists := result.Params[requiredField]; !exists {
+					result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+						Type:   FeedbackTypeError,
+						Action: ActionAddField,
+						Field:  requiredField,
+						Message: fmt.Sprintf("条件规则要求字段 '%s' 必须存在（当 %s 时）",
+							requiredField, s.describeCondition(condition.If)),
+						AIPrompt: fmt.Sprintf(`基于字段 '%s' 的条件规则：
+- 条件: %s
+- 分支: %s
+- 必需字段: '%s' 缺失
+
+请为 '%s' 提供一个合适的值，考虑：
+- 触发的条件
+- 其他参数的上下文
+- 最佳实践`,
+							key, s.describeCondition(condition.If), branch, requiredField, requiredField),
+						Constraint: map[string]interface{}{
+							"type": "conditional_required",
+						},
+					})
+				}
+			}
+
+			// 检查禁止字段
+			for _, forbiddenField := range requirement.Forbidden {
+				if _, exists := result.Params[forbiddenField]; exists {
+					result.Feedbacks = append(result.Feedbacks, &SolverFeedback{
+						Type:   FeedbackTypeError,
+						Action: ActionRemoveField,
+						Field:  forbiddenField,
+						Message: fmt.Sprintf("条件规则禁止字段 '%s' 存在（当 %s 时）",
+							forbiddenField, s.describeCondition(condition.If)),
+						AIPrompt: fmt.Sprintf(`基于字段 '%s' 的条件规则：
+- 条件: %s
+- 分支: %s
+- 字段 '%s' 必须不存在
+
+你提供了 '%s' = %v，但这违反了条件规则。
+
+请移除此字段或调整其他参数以避免触发此条件。
+解释你选择的方法的理由。`,
+							key, s.describeCondition(condition.If), branch,
+							forbiddenField, forbiddenField, result.Params[forbiddenField]),
+						CurrentValue: result.Params[forbiddenField],
+						Constraint: map[string]interface{}{
+							"type": "conditional_forbidden",
+						},
+					})
+				}
+			}
+
+			// 自动设置值
+			for setKey, setValue := range requirement.SetValues {
+				if _, exists := result.Params[setKey]; !exists {
+					result.Params[setKey] = setValue
+					result.AppliedRules = append(result.AppliedRules,
+						fmt.Sprintf("条件自动设置: %s=%v (条件: %s, 分支: %s)",
+							setKey, setValue, s.describeCondition(condition.If), branch))
+				}
+			}
+		}
+	}
+}
+
+// evaluateCondition 评估条件
+func (s *SchemaSolver) evaluateCondition(cond *Condition, params map[string]interface{}) bool {
+	if cond == nil {
+		return false
+	}
+
+	value, exists := params[cond.Field]
+
+	switch cond.Operator {
+	case "exists":
+		return exists
+	case "not_exists":
+		return !exists
+	case "equals":
+		return exists && reflect.DeepEqual(value, cond.Value)
+	case "not_equals":
+		return !exists || !reflect.DeepEqual(value, cond.Value)
+	case "in":
+		if !exists {
+			return false
+		}
+		valueList, ok := cond.Value.([]interface{})
+		if !ok {
+			return false
+		}
+		for _, v := range valueList {
+			if reflect.DeepEqual(value, v) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// describeCondition 描述条件（用于日志和反馈）
+func (s *SchemaSolver) describeCondition(cond *Condition) string {
+	if cond == nil {
+		return "无条件"
+	}
+	return fmt.Sprintf("%s %s %v", cond.Field, cond.Operator, cond.Value)
+}
+
 // applyDefaults 应用默认值
 func (s *SchemaSolver) applyDefaults(result *SolverResult) {
 	for key, field := range s.schema {
@@ -743,4 +1303,46 @@ func (s *SchemaSolver) GetFieldDef(fieldName string) *SchemaFieldDef {
 		return nil
 	}
 	return s.schema[fieldName]
+}
+
+// deepCopyValue 深拷贝值，避免修改原始数据
+func (s *SchemaSolver) deepCopyValue(value interface{}) interface{} {
+	if value == nil {
+		return nil
+	}
+
+	// 使用 JSON 序列化/反序列化实现深拷贝
+	// 这种方式虽然性能不是最优，但最安全可靠
+	switch v := value.(type) {
+	case map[string]interface{}:
+		// 对于 map，进行深拷贝
+		result := make(map[string]interface{})
+		for k, val := range v {
+			result[k] = s.deepCopyValue(val)
+		}
+		return result
+	case []interface{}:
+		// 对于 slice，进行深拷贝
+		result := make([]interface{}, len(v))
+		for i, val := range v {
+			result[i] = s.deepCopyValue(val)
+		}
+		return result
+	case string, int, int64, int32, float64, float32, bool:
+		// 基本类型直接返回（值类型，不需要拷贝）
+		return v
+	default:
+		// 对于其他复杂类型，使用 JSON 序列化/反序列化
+		data, err := json.Marshal(v)
+		if err != nil {
+			// 如果序列化失败，返回原值
+			return v
+		}
+		var result interface{}
+		if err := json.Unmarshal(data, &result); err != nil {
+			// 如果反序列化失败，返回原值
+			return v
+		}
+		return result
+	}
 }
