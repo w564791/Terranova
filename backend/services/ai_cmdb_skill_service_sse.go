@@ -141,7 +141,8 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 
 	// 步骤 4: 组装 Prompt
 	reportProgress(4, "组装Skill", "正在组装 Skill 提示词...")
-	schemaData := s.getSchemaData(moduleID)
+	// 【重要】移除 Schema 直接加载，AI 只使用 Module Skill
+	// schemaData := s.getSchemaData(moduleID) // 已移除
 	dynamicContext := &DynamicContext{
 		UserDescription: userDescription,
 		WorkspaceID:     workspaceID,
@@ -150,7 +151,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 		UseCMDB:         cmdbData != "",
 		CurrentConfig:   currentConfig,
 		CMDBData:        cmdbData,
-		SchemaData:      schemaData,
+		SchemaData:      "", // 不再传递 Schema 数据给 AI
 		ExtraContext: map[string]interface{}{
 			"mode": mode,
 		},
@@ -439,6 +440,8 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 
 // generateWithCMDBDataAndSkillsWithProgress 使用 CMDB 数据和选中的 Skills 生成配置（带进度回调）
 // skipStep4Display: 是否跳过步骤 4 的显示（第二步流程中，步骤 3 和步骤 4 合并显示）
+// 【重要】此方法已移除 Schema 直接加载，AI 只使用 Module Skill 生成参数建议
+// 然后由 SchemaSolver 进行验证和修正
 func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 	userID string,
 	moduleID uint,
@@ -482,10 +485,10 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 		composition.DomainSkillMode = models.DomainSkillModeFixed
 	}
 
-	// 获取 Schema 数据
-	schemaData := s.getSchemaData(moduleID)
+	// 【重要】移除 Schema 直接加载，AI 只使用 Module Skill
+	// schemaData := s.getSchemaData(moduleID) // 已移除
 
-	// 构建动态上下文
+	// 构建动态上下文（不再包含 SchemaData）
 	dynamicContext := &DynamicContext{
 		UserDescription: userDescription,
 		WorkspaceID:     workspaceID,
@@ -494,7 +497,7 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 		UseCMDB:         cmdbData != "",
 		CurrentConfig:   currentConfig,
 		CMDBData:        cmdbData,
-		SchemaData:      schemaData,
+		SchemaData:      "", // 不再传递 Schema 数据给 AI
 		ExtraContext: map[string]interface{}{
 			"mode": mode,
 		},
@@ -541,15 +544,64 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 		UsedSkills: nil, // AI 生成步骤不需要显示 Skills
 	})
 
-	// 发送最终进度（包含所有已完成步骤）
-	reportProgress(5, "完成", "配置生成完成", completedSteps)
-
-	// 解析响应
+	// 解析 AI 响应
 	response, err := s.parseAIResponse(aiResult, moduleID)
 	if err != nil {
 		IncAICallCount("form_generation_optimized", "parse_error")
 		return nil, err
 	}
+
+	// 【新增】使用 SchemaSolver 验证 AI 生成的配置
+	if response.Config != nil && len(response.Config) > 0 {
+		solverTimer := NewTimer()
+		solver := NewSchemaSolver(s.db, moduleID)
+		solverResult := solver.Solve(response.Config)
+
+		if !solverResult.Success {
+			log.Printf("[AICMDBSkillService] SchemaSolver 验证失败，需要 AI 修正")
+			log.Printf("[AICMDBSkillService] 反馈: %s", solverResult.AIInstructions)
+
+			// 如果需要 AI 修正，使用反馈循环
+			if solverResult.NeedAIFix {
+				// 更新进度
+				reportProgress(5, "Schema验证", "正在验证并修正配置...", completedSteps)
+
+				// 使用反馈循环让 AI 修正
+				loop := NewAIFeedbackLoop(s.db, moduleID)
+				loop.SetMaxRetries(2) // 最多重试 2 次
+				loopResult, loopErr := loop.ExecuteWithRetry(userDescription, response.Config, aiConfig)
+
+				if loopErr != nil {
+					log.Printf("[AICMDBSkillService] AI 反馈循环失败: %v", loopErr)
+				} else if loopResult.Success {
+					// 使用修正后的参数
+					response.Config = loopResult.FinalParams
+					log.Printf("[AICMDBSkillService] AI 修正成功，重试次数: %d", loopResult.TotalRetries)
+				} else {
+					// 修正失败，但仍然使用最终参数（可能部分正确）
+					response.Config = loopResult.FinalParams
+					log.Printf("[AICMDBSkillService] AI 修正未完全成功: %s", loopResult.Error)
+					// 添加警告信息
+					if response.Message == "" {
+						response.Message = "配置已生成，但部分参数可能需要手动调整"
+					}
+				}
+
+				// 记录 Schema 验证步骤的耗时
+				completedSteps = append(completedSteps, CompletedStep{
+					Name:      "Schema验证",
+					ElapsedMs: int64(solverTimer.ElapsedMs()),
+				})
+			}
+		} else {
+			// 验证成功，使用 SchemaSolver 处理后的参数（包含默认值填充等）
+			response.Config = solverResult.Params
+			log.Printf("[AICMDBSkillService] SchemaSolver 验证成功，应用了 %d 条规则", len(solverResult.AppliedRules))
+		}
+	}
+
+	// 发送最终进度（包含所有已完成步骤）
+	reportProgress(5, "完成", "配置生成完成", completedSteps)
 
 	// 记录指标
 	executionTimeMs := int(totalTimer.ElapsedMs())
