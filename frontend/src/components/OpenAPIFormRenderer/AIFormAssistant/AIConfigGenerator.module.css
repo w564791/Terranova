@@ -328,14 +328,17 @@
   gap: 8px;
   padding: 0 12px;
   margin-left: 8px;
+  max-width: calc(100% - 280px); /* 为按钮留出空间 */
+  flex-wrap: wrap;
 }
 
 .loadingTextInline {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   font-size: 12px;
   color: #999;
-  white-space: nowrap;
+  /* 移除 white-space: nowrap 以允许换行 */
 }
 
 /* 进度步骤样式 */

@@ -258,41 +258,44 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
               预览生成数据
             </Button>
           )}
-          {/* 进度显示 - 放在按钮旁边 */}
-          {/* 加载中：显示实时进度 */}
-          {/* 加载完成：显示执行摘要 */}
-          {loading ? (
-            <div className={styles.loadingProgressInline}>
-              <Spin size="small" />
-              <span className={styles.loadingTextInline}>
-                {progress ? (
-                  // 使用真实进度数据
-                  <span className={styles.progressStepsHorizontal}>
-                    {/* 已完成的步骤（绿色） */}
-                    {progress.completedSteps?.map((step, index) => (
-                      <span key={index} className={styles.progressStepCompleted}>
+        </div>
+        {/* 进度显示 - 独立一行显示，支持换行 */}
+        {/* 加载中：显示实时进度 */}
+        {/* 加载完成：显示执行摘要 */}
+        {loading ? (
+          <div style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <Spin size="small" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {progress ? (
+                // 使用真实进度数据
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', fontSize: 12 }}>
+                  {/* 已完成的步骤（绿色） */}
+                  {progress.completedSteps?.map((step, index) => (
+                    <React.Fragment key={index}>
+                      <span style={{ color: '#52c41a', whiteSpace: 'nowrap' }}>
                         ✓{step.name}({(step.elapsed_ms / 1000).toFixed(1)}s)
-                        <span className={styles.progressArrow}>→</span>
                       </span>
-                    ))}
-                    {/* 当前步骤（蓝色，带动态计时） */}
-                    <span className={styles.progressStepActive}>
-                      {progress.stepName}
-                      <span className={styles.progressTime}>({elapsedSeconds}s)</span>
-                    </span>
+                      <span style={{ color: '#d9d9d9' }}>→</span>
+                    </React.Fragment>
+                  ))}
+                  {/* 当前步骤（蓝色，带动态计时） */}
+                  <span style={{ color: '#4F7CFF', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    {progress.stepName}({elapsedSeconds}s)
                   </span>
-                ) : (
-                  // 没有进度数据时显示默认文本
-                  <span>正在处理...</span>
-                )}
-              </span>
+                </div>
+              ) : (
+                // 没有进度数据时显示默认文本
+                <span style={{ fontSize: 12, color: '#999' }}>正在处理...</span>
+              )}
             </div>
-          ) : finalProgress?.completedSteps && finalProgress.completedSteps.length > 0 ? (
-            // 执行摘要 - 显示在原来进度的位置
-            <div className={styles.loadingProgressInline} style={{ color: '#52c41a' }}>
-              <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 4 }} />
-              <span className={styles.loadingTextInline}>
-                <span className={styles.progressStepsHorizontal}>
+          </div>
+        ) : finalProgress?.completedSteps && finalProgress.completedSteps.length > 0 ? (
+          // 执行摘要 - 独立一行显示
+          <div style={{ width: '100%', marginTop: 8, padding: '8px 0', borderTop: '1px dashed #e8e8e8' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', fontSize: 12 }}>
                   {finalProgress.completedSteps.map((step, index) => {
                     // 检查是否是两步流程的分界点（第一步的最后一个步骤后面是第二步的初始化）
                     const nextStep = finalProgress.completedSteps![index + 1];
@@ -324,25 +327,27 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                       )
                       : null;
                     
-                    const stepContent = isSkipped ? (
-                      <>○{step.name}(跳过)</>
-                    ) : (
-                      <>✓{step.name}({formatStepTime(step.elapsed_ms)}s)</>
-                    );
+                    const stepContent = isSkipped 
+                      ? `○${step.name}(跳过)` 
+                      : `✓${step.name}(${formatStepTime(step.elapsed_ms)}s)`;
                     
                     return (
                       <React.Fragment key={index}>
                         {skillsTooltip ? (
                           <Tooltip title={skillsTooltip} placement="top">
                             <span 
-                              className={isSkipped ? styles.progressStepSkipped : styles.progressStepCompleted}
-                              style={{ cursor: 'help', borderBottom: '1px dashed currentColor' }}
+                              style={{ 
+                                color: isSkipped ? '#999' : '#52c41a', 
+                                whiteSpace: 'nowrap',
+                                cursor: 'help', 
+                                borderBottom: '1px dashed currentColor' 
+                              }}
                             >
                               {stepContent}
                             </span>
                           </Tooltip>
                         ) : (
-                          <span className={isSkipped ? styles.progressStepSkipped : styles.progressStepCompleted}>
+                          <span style={{ color: isSkipped ? '#999' : '#52c41a', whiteSpace: 'nowrap' }}>
                             {stepContent}
                           </span>
                         )}
@@ -350,25 +355,26 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                           isPhaseBreak ? (
                             // 两步流程的分界点，显示"用户选择"
                             <>
-                              <span className={styles.progressArrow}>→</span>
-                              <span style={{ color: '#333', fontWeight: 500 }}>用户选择</span>
-                              <span className={styles.progressArrow}>→</span>
+                              <span style={{ color: '#d9d9d9' }}>→</span>
+                              <span style={{ color: '#333', fontWeight: 500, whiteSpace: 'nowrap' }}>用户选择</span>
+                              <span style={{ color: '#d9d9d9' }}>→</span>
                             </>
                           ) : (
-                            <span className={styles.progressArrow}>→</span>
+                            <span style={{ color: '#d9d9d9' }}>→</span>
                           )
                         )}
                       </React.Fragment>
                     );
                   })}
-                  <span style={{ marginLeft: 8, color: '#666' }}>
+                  {/* 总耗时跟在步骤后面 */}
+                  <span style={{ color: '#666', marginLeft: 4, whiteSpace: 'nowrap' }}>
                     | 总耗时: {formatStepTime(finalProgress.completedSteps.reduce((sum, s) => sum + s.elapsed_ms, 0))}s
                   </span>
-                </span>
-              </span>
+                </div>
+              </div>
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
       
       {/* CMDB 开关和帮助文本 */}
@@ -1073,8 +1079,8 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
       }
       
       // 使用 antd notification 显示执行摘要（比 message 更可靠）
-      // 构建带有"用户选择"标记和跳过标记的描述
-      let notificationDescription = '配置已成功应用到表单';
+      // 构建带有"用户选择"标记和跳过标记的描述（使用 React 组件支持换行）
+      let notificationDescription: React.ReactNode = '配置已成功应用到表单';
       if (progressData?.completedSteps && progressData.completedSteps.length > 0) {
         // 找到分界点的位置
         const phaseBreakIndex = progressData.completedSteps.findIndex((s: { name: string; elapsed_ms: number }, i: number) => {
@@ -1082,31 +1088,46 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
           return next?.name === '初始化' && i > 0;
         });
         
-        const stepsWithMarkers = progressData.completedSteps.map((s: { name: string; elapsed_ms: number }, index: number) => {
-          // 检查是否是两步流程的分界点（第一步的最后一个步骤后面是第二步的初始化）
-          const nextStep = progressData.completedSteps![index + 1];
-          const isPhaseBreak = nextStep?.name === '初始化' && index > 0;
-          
-          // 检查当前步骤是否在第二步流程中
-          const isInSecondPhase = phaseBreakIndex >= 0 && index > phaseBreakIndex;
-          
-          // 只有在第一步流程中，非初始化步骤如果时间小于 100ms 才显示"跳过"
-          const isSkipped = !isInSecondPhase && s.name !== '初始化' && s.elapsed_ms < 100;
-          
-          let stepStr = isSkipped 
-            ? `○${s.name}(跳过)` 
-            : `✓${s.name}(${formatStepTime(s.elapsed_ms)}s)`;
-          
-          // 如果是分界点，在后面添加"用户选择"
-          if (isPhaseBreak) {
-            stepStr += ' → 用户选择';
-          }
-          
-          return stepStr;
-        }).join(' → ');
-        
         const totalMs = progressData.completedSteps.reduce((sum: number, s: { name: string; elapsed_ms: number }) => sum + s.elapsed_ms, 0);
-        notificationDescription = `${stepsWithMarkers} | 总耗时: ${formatStepTime(totalMs)}s`;
+        
+        // 使用 React 组件构建描述，支持换行
+        notificationDescription = (
+          <div style={{ fontSize: 12 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+              {progressData.completedSteps.map((s: { name: string; elapsed_ms: number }, index: number) => {
+                // 检查是否是两步流程的分界点（第一步的最后一个步骤后面是第二步的初始化）
+                const nextStep = progressData.completedSteps![index + 1];
+                const isPhaseBreak = nextStep?.name === '初始化' && index > 0;
+                
+                // 检查当前步骤是否在第二步流程中
+                const isInSecondPhase = phaseBreakIndex >= 0 && index > phaseBreakIndex;
+                
+                // 只有在第一步流程中，非初始化步骤如果时间小于 100ms 才显示"跳过"
+                const isSkipped = !isInSecondPhase && s.name !== '初始化' && s.elapsed_ms < 100;
+                
+                return (
+                  <React.Fragment key={index}>
+                    <span style={{ color: isSkipped ? '#999' : '#52c41a', whiteSpace: 'nowrap' }}>
+                      {isSkipped ? `○${s.name}(跳过)` : `✓${s.name}(${formatStepTime(s.elapsed_ms)}s)`}
+                    </span>
+                    {index < progressData.completedSteps!.length - 1 && (
+                      <span style={{ color: '#999' }}>→</span>
+                    )}
+                    {isPhaseBreak && (
+                      <>
+                        <span style={{ color: '#333', fontWeight: 500 }}>用户选择</span>
+                        <span style={{ color: '#999' }}>→</span>
+                      </>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 4, color: '#666' }}>
+              总耗时: {formatStepTime(totalMs)}s
+            </div>
+          </div>
+        );
       }
       
       notification.success({
@@ -1682,9 +1703,10 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
                 </React.Fragment>
               );
             })}
-            <span style={{ marginLeft: 8, color: '#666' }}>
-              | 总耗时: {formatStepTime(finalProgress.completedSteps.reduce((sum, s) => sum + s.elapsed_ms, 0))}s
-            </span>
+            {/* 总耗时单独一行显示 */}
+            <div style={{ width: '100%', marginTop: 4, color: '#666', fontSize: 11 }}>
+              总耗时: {formatStepTime(finalProgress.completedSteps.reduce((sum, s) => sum + s.elapsed_ms, 0))}s
+            </div>
           </div>
         )}
 
