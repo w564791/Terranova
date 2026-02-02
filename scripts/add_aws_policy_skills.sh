@@ -7,7 +7,7 @@ set -e
 
 # 数据库连接参数
 DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-15432}"
+DB_PORT="${DB_PORT:-15433}"
 DB_USER="${DB_USER:-postgres}"
 DB_NAME="${DB_NAME:-iac_platform}"
 DB_PASSWORD="${DB_PASSWORD:-postgres123}"

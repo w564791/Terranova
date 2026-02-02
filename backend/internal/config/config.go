@@ -42,7 +42,7 @@ func Load() *Config {
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "15432"),
+			Port:     getEnv("DB_PORT", "15433"),
 			Name:     getEnv("DB_NAME", "iac_platform"),
 			User:     getEnv("DB_USER", "postgres"),
 			Password: getEnv("DB_PASSWORD", "postgres123"),

@@ -14,7 +14,7 @@ func main() {
 	// 从环境变量或命令行参数获取数据库连接字符串
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgresql://postgres:postgres123@localhost:15432/iac_platform?sslmode=disable"
+		dbURL = "postgresql://postgres:postgres123@localhost:15433/iac_platform?sslmode=disable"
 	}
 
 	log.Printf("Connecting to database...")

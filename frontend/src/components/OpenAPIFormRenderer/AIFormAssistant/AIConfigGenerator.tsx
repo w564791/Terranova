@@ -1561,18 +1561,67 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
   const isRefineMode = mode === 'refine';
   const isConfigValid = isRefineMode && !hasWarnings;  // 只有修复模式且没有警告才认为配置符合预期
 
+  // 复制到剪贴板的兼容性函数
+  const copyToClipboard = useCallback((text: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // 优先使用现代 Clipboard API
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text)
+          .then(resolve)
+          .catch(reject);
+      } else {
+        // Fallback: 使用传统的 execCommand 方法
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = text;
+          // 避免滚动到底部
+          textArea.style.position = 'fixed';
+          textArea.style.top = '0';
+          textArea.style.left = '0';
+          textArea.style.width = '2em';
+          textArea.style.height = '2em';
+          textArea.style.padding = '0';
+          textArea.style.border = 'none';
+          textArea.style.outline = 'none';
+          textArea.style.boxShadow = 'none';
+          textArea.style.background = 'transparent';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          
+          if (successful) {
+            resolve();
+          } else {
+            reject(new Error('execCommand copy failed'));
+          }
+        } catch (err) {
+          reject(err);
+        }
+      }
+    });
+  }, []);
+
   const handleCopyJson = useCallback(() => {
-    if (generatedConfig) {
-      const jsonStr = JSON.stringify(generatedConfig, null, 2);
-      navigator.clipboard.writeText(jsonStr).then(() => {
+    if (!generatedConfig || Object.keys(generatedConfig).length === 0) {
+      message.warning('没有可复制的配置');
+      return;
+    }
+    
+    const jsonStr = JSON.stringify(generatedConfig, null, 2);
+    copyToClipboard(jsonStr)
+      .then(() => {
         setCopied(true);
         message.success('已复制到剪贴板');
         setTimeout(() => setCopied(false), 2000);
-      }).catch(() => {
-        message.error('复制失败');
+      })
+      .catch((err) => {
+        console.error('复制失败:', err);
+        message.error('复制失败，请手动复制');
       });
-    }
-  }, [generatedConfig]);
+  }, [generatedConfig, copyToClipboard]);
   
   return (
     <Modal
@@ -1846,17 +1895,18 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
                   <button 
                     className={styles.copyButton}
                     onClick={handleCopyJson}
-                    disabled={!generatedConfig}
+                    disabled={!generatedConfig || Object.keys(generatedConfig).length === 0}
+                    data-copied={copied ? "true" : "false"}
                   >
                     {copied ? (
                       <>
                         <CheckOutlined style={{ fontSize: 12 }} />
-                        <span>Copied</span>
+                        <span>已复制</span>
                       </>
                     ) : (
                       <>
                         <CopyOutlined style={{ fontSize: 12 }} />
-                        <span>Copy</span>
+                        <span>复制</span>
                       </>
                     )}
                   </button>
