@@ -1,9 +1,19 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Form, Input, Tag, Tooltip } from 'antd';
-import { LinkOutlined } from '@ant-design/icons';
+import { LinkOutlined, WarningOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
 import type { Rule } from 'antd/es/form';
+
+// 占位符检测正则表达式
+// 支持多种格式：<YOUR_XXX>、<XXX>、{{PLACEHOLDER:XXX}}、{{XXX}}、${XXX}
+const PLACEHOLDER_PATTERN = /<YOUR_[A-Za-z0-9_-]+>|<[A-Z][A-Za-z0-9_-]*>|\{\{PLACEHOLDER:[^}]+\}\}|\{\{[A-Za-z0-9_-]+\}\}|\$\{[A-Za-z0-9_-]+\}/;
+
+// 检测值是否包含占位符
+const containsPlaceholder = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  return PLACEHOLDER_PATTERN.test(value);
+};
 
 /**
  * x-validation 规则类型（来自 OpenAPI Schema）
@@ -84,8 +94,25 @@ const TextWidget: React.FC<WidgetProps> = ({
   const help = uiConfig?.help || schema.description;
   const placeholder = uiConfig?.placeholder || `请输入${label}`;
 
-  // 生成验证规则
-  const validationRules = useMemo(() => generateValidationRules(schema, label), [schema, label]);
+  // 检测当前值是否包含占位符
+  const hasPlaceholder = useMemo(() => containsPlaceholder(formValue), [formValue]);
+
+  // 生成验证规则（包含占位符检测）
+  const validationRules = useMemo(() => {
+    const rules = generateValidationRules(schema, label);
+    
+    // 添加占位符验证规则
+    rules.push({
+      validator: async (_: any, value: string) => {
+        if (containsPlaceholder(value)) {
+          return Promise.reject(new Error('请替换占位符为实际值'));
+        }
+        return Promise.resolve();
+      },
+    });
+    
+    return rules;
+  }, [schema, label]);
 
   // 获取验证提示信息（从 x-validation 中提取）
   const validationHints = useMemo(() => {
@@ -247,6 +274,13 @@ const TextWidget: React.FC<WidgetProps> = ({
           <span>
             {label}
             {renderReferenceTag()}
+            {hasPlaceholder && (
+              <Tooltip title="包含占位符，请替换为实际值">
+                <Tag color="error" icon={<WarningOutlined />} style={{ marginLeft: 8 }}>
+                  占位符
+                </Tag>
+              </Tooltip>
+            )}
           </span>
         }
         name={name}
@@ -263,22 +297,42 @@ const TextWidget: React.FC<WidgetProps> = ({
                 输入 / 可引用其他 {hasManifestContext ? 'Module' : '资源'} 的输出
               </span>
             )}
+            {hasPlaceholder && (
+              <span style={{ color: '#cf222e', display: 'block', fontSize: 12, marginTop: 4 }}>
+                ⚠️ 请替换占位符为实际值，否则无法提交
+              </span>
+            )}
           </span>
         }
         rules={validationRules}
         getValueFromEvent={getValueFromEvent}
+        validateStatus={hasPlaceholder ? 'error' : undefined}
+        data-has-placeholder={hasPlaceholder ? 'true' : undefined}
       >
         <Input
           ref={inputRef}
+          id={`field-${name}`}
           onChange={handleInputChange}
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
           allowClear
-          style={isModuleReference ? { 
-            fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-            color: '#1890ff',
-          } : undefined}
+          status={hasPlaceholder ? 'error' : undefined}
+          style={
+            hasPlaceholder 
+              ? { 
+                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                  color: '#cf222e',
+                  backgroundColor: '#fff2f0',
+                  borderColor: '#cf222e',
+                }
+              : isModuleReference 
+                ? { 
+                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                    color: '#1890ff',
+                  } 
+                : undefined
+          }
         />
       </Form.Item>
 

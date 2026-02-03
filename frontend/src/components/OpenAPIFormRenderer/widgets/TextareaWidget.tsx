@@ -1,10 +1,25 @@
 import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { Form, Input, Tag, Tooltip } from 'antd';
-import { LinkOutlined } from '@ant-design/icons';
+import { LinkOutlined, WarningOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
 
 const { TextArea } = Input;
+
+// 占位符检测正则表达式
+// 支持多种格式：<YOUR_XXX>、<XXX>、{{PLACEHOLDER:XXX}}、{{XXX}}、${XXX}
+const PLACEHOLDER_PATTERN = /<YOUR_[A-Za-z0-9_-]+>|<[A-Z][A-Za-z0-9_-]*>|\{\{PLACEHOLDER:[^}]+\}\}|\{\{[A-Za-z0-9_-]+\}\}|\$\{[A-Za-z0-9_-]+\}/;
+
+// 检测值是否包含占位符
+const containsPlaceholder = (value: unknown): boolean => {
+  if (typeof value === 'string') {
+    return PLACEHOLDER_PATTERN.test(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some(item => typeof item === 'string' && PLACEHOLDER_PATTERN.test(item));
+  }
+  return false;
+};
 
 /**
  * TextareaWidget - 多行文本输入组件
@@ -34,6 +49,9 @@ const TextareaWidget: React.FC<WidgetProps> = ({
   
   // 检测是否是数组类型
   const isArrayType = schema.type === 'array';
+  
+  // 检测当前值是否包含占位符
+  const hasPlaceholder = useMemo(() => containsPlaceholder(formValue), [formValue]);
   
   // 内部文本状态（用于数组类型时保留用户输入的换行符）
   const [internalText, setInternalText] = useState<string>('');
@@ -322,6 +340,13 @@ const TextareaWidget: React.FC<WidgetProps> = ({
               </span>
             )}
             {renderReferenceTag()}
+            {hasPlaceholder && (
+              <Tooltip title="包含占位符，请替换为实际值">
+                <Tag color="error" icon={<WarningOutlined />} style={{ marginLeft: 8 }}>
+                  占位符
+                </Tag>
+              </Tooltip>
+            )}
           </span>
         }
         name={name}
@@ -333,11 +358,18 @@ const TextareaWidget: React.FC<WidgetProps> = ({
                 输入 / 可引用其他 {hasManifestContext ? 'Module' : '资源'} 的输出
               </span>
             )}
+            {hasPlaceholder && (
+              <span style={{ color: '#cf222e', display: 'block', fontSize: 12, marginTop: 4 }}>
+                ⚠️ 请替换占位符为实际值，否则无法提交
+              </span>
+            )}
           </span>
         }
         getValueProps={getValueProps}
         getValueFromEvent={getValueFromEvent}
         normalize={normalize}
+        validateStatus={hasPlaceholder ? 'error' : undefined}
+        data-has-placeholder={hasPlaceholder ? 'true' : undefined}
         rules={[
           ...(schema.required ? [{ required: true, message: `${label}是必填项` }] : []),
           ...(isArrayType && schema.minItems ? [{
@@ -356,18 +388,39 @@ const TextareaWidget: React.FC<WidgetProps> = ({
               }
             }
           }] : []),
+          // 占位符验证规则
+          {
+            validator: async (_: unknown, val: unknown) => {
+              if (containsPlaceholder(val)) {
+                throw new Error('请替换占位符为实际值');
+              }
+            }
+          },
         ]}
       >
         <TextArea
           ref={inputRef}
+          id={`field-${name}`}
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
           autoSize={{ minRows: 3, maxRows: 10 }}
-          style={isModuleReference ? { 
-            fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-            color: '#1890ff',
-          } : { fontFamily: 'monospace' }}
+          status={hasPlaceholder ? 'error' : undefined}
+          style={
+            hasPlaceholder 
+              ? { 
+                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                  color: '#cf222e',
+                  backgroundColor: '#fff2f0',
+                  borderColor: '#cf222e',
+                }
+              : isModuleReference 
+                ? { 
+                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                    color: '#1890ff',
+                  } 
+                : { fontFamily: 'monospace' }
+          }
           onFocus={handleFocus}
           onBlur={handleBlur}
         />

@@ -59,6 +59,114 @@ interface ResourceConfig {
 type Step = 'select' | 'configure' | 'preview';
 type RunType = 'none' | 'plan' | 'plan_and_apply';
 
+// 占位符检测正则表达式
+// 支持多种格式：<YOUR_XXX>、<XXX>、{{PLACEHOLDER:XXX}}、{{XXX}}、${XXX}
+const PLACEHOLDER_PATTERN = /<YOUR_[A-Za-z0-9_-]+>|<[A-Z][A-Za-z0-9_-]*>|\{\{PLACEHOLDER:[^}]+\}\}|\{\{[A-Za-z0-9_-]+\}\}|\$\{[A-Za-z0-9_-]+\}/g;
+
+// 检测配置中的占位符
+interface PlaceholderInfo {
+  field: string;
+  value: string;
+  placeholder: string;
+}
+
+const detectPlaceholdersInFormData = (data: Record<string, unknown>, path: string = ''): PlaceholderInfo[] => {
+  const placeholders: PlaceholderInfo[] = [];
+  
+  const scan = (obj: unknown, currentPath: string) => {
+    if (typeof obj === 'string') {
+      const matches = obj.match(PLACEHOLDER_PATTERN);
+      if (matches) {
+        matches.forEach(match => {
+          placeholders.push({
+            field: currentPath,
+            value: obj,
+            placeholder: match,
+          });
+        });
+      }
+    } else if (Array.isArray(obj)) {
+      obj.forEach((item, i) => scan(item, `${currentPath}[${i}]`));
+    } else if (obj && typeof obj === 'object') {
+      Object.entries(obj as Record<string, unknown>).forEach(([key, value]) => {
+        const newPath = currentPath ? `${currentPath}.${key}` : key;
+        scan(value, newPath);
+      });
+    }
+  };
+  
+  scan(data, path);
+  return placeholders;
+};
+
+// 滚动到包含占位符的字段
+const scrollToPlaceholderField = (fieldName: string) => {
+  // 获取顶层字段名
+  const topLevelField = fieldName.split('.')[0].split('[')[0];
+  
+  // 方法1：尝试通过 id 查找输入框
+  const fieldElement = document.getElementById(`field-${topLevelField}`);
+  if (fieldElement) {
+    fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    fieldElement.focus();
+    // 添加高亮效果
+    fieldElement.style.boxShadow = '0 0 0 3px rgba(207, 34, 46, 0.4)';
+    fieldElement.style.backgroundColor = '#fff2f0';
+    setTimeout(() => {
+      fieldElement.style.boxShadow = '';
+      fieldElement.style.backgroundColor = '';
+    }, 3000);
+    return true;
+  }
+  
+  // 方法2：尝试通过 name 属性查找 Form.Item
+  const formItemByName = document.querySelector(`[class*="ant-form-item"][data-field="${topLevelField}"]`);
+  if (formItemByName) {
+    formItemByName.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = formItemByName.querySelector('input, textarea');
+    if (input) {
+      (input as HTMLElement).focus();
+      (input as HTMLElement).style.boxShadow = '0 0 0 3px rgba(207, 34, 46, 0.4)';
+      (input as HTMLElement).style.backgroundColor = '#fff2f0';
+      setTimeout(() => {
+        (input as HTMLElement).style.boxShadow = '';
+        (input as HTMLElement).style.backgroundColor = '';
+      }, 3000);
+    }
+    return true;
+  }
+  
+  // 方法3：尝试通过 data-has-placeholder 属性查找
+  const placeholderField = document.querySelector(`[data-has-placeholder="true"]`);
+  if (placeholderField) {
+    placeholderField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = placeholderField.querySelector('input, textarea');
+    if (input) {
+      (input as HTMLElement).focus();
+    }
+    return true;
+  }
+  
+  // 方法4：尝试通过包含占位符值的输入框查找
+  const allInputs = document.querySelectorAll('input, textarea');
+  for (const input of allInputs) {
+    const value = (input as HTMLInputElement | HTMLTextAreaElement).value;
+    if (value && PLACEHOLDER_PATTERN.test(value)) {
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (input as HTMLElement).focus();
+      (input as HTMLElement).style.boxShadow = '0 0 0 3px rgba(207, 34, 46, 0.4)';
+      (input as HTMLElement).style.backgroundColor = '#fff2f0';
+      setTimeout(() => {
+        (input as HTMLElement).style.boxShadow = '';
+        (input as HTMLElement).style.backgroundColor = '';
+      }, 3000);
+      return true;
+    }
+  }
+  
+  return false;
+};
+
 const AddResources: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -630,6 +738,18 @@ const AddResources: React.FC = () => {
     if (checkResourceNameExists(resourceType, nameToUse)) {
       setNameError(`资源 "${resourceType}.${nameToUse}" 已存在，请使用其他名称`);
       showToast(`资源 "${resourceType}.${nameToUse}" 已存在`, 'error');
+      return false;
+    }
+
+    // 检查表单数据中是否包含占位符
+    const placeholders = detectPlaceholdersInFormData(formData);
+    if (placeholders.length > 0) {
+      const firstPlaceholder = placeholders[0];
+      showToast(`配置中包含 ${placeholders.length} 个占位符需要替换，请先替换占位符`, 'error');
+      
+      // 滚动到第一个包含占位符的字段
+      scrollToPlaceholderField(firstPlaceholder.field);
+      
       return false;
     }
 
