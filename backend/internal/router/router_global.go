@@ -244,5 +244,62 @@ func setupGlobalRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddlewa
 				platformConfigHandler.UpdatePlatformConfig(c)
 			}
 		})
+
+		// MFA全局配置管理 - 仅限 admin
+		mfaHandler := handlers.NewMFAHandler(db)
+
+		globalSettings.GET("/mfa", func(c *gin.Context) {
+			role, _ := c.Get("role")
+			if role == "admin" {
+				mfaHandler.GetMFAConfig(c)
+				return
+			}
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ")(c)
+			if !c.IsAborted() {
+				mfaHandler.GetMFAConfig(c)
+			}
+		})
+
+		globalSettings.PUT("/mfa", func(c *gin.Context) {
+			role, _ := c.Get("role")
+			if role == "admin" {
+				mfaHandler.UpdateMFAConfig(c)
+				return
+			}
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN")(c)
+			if !c.IsAborted() {
+				mfaHandler.UpdateMFAConfig(c)
+			}
+		})
+	}
+
+	// 管理员用户MFA管理路由
+	adminUsers := adminProtected.Group("/admin/users")
+	{
+		mfaHandler := handlers.NewMFAHandler(db)
+
+		adminUsers.GET("/:user_id/mfa/status", func(c *gin.Context) {
+			role, _ := c.Get("role")
+			if role == "admin" {
+				mfaHandler.GetUserMFAStatus(c)
+				return
+			}
+			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "READ")(c)
+			if !c.IsAborted() {
+				mfaHandler.GetUserMFAStatus(c)
+			}
+		})
+
+		adminUsers.POST("/:user_id/mfa/reset", func(c *gin.Context) {
+			role, _ := c.Get("role")
+			if role == "admin" {
+				mfaHandler.ResetUserMFA(c)
+				return
+			}
+			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "ADMIN")(c)
+			if !c.IsAborted() {
+				mfaHandler.ResetUserMFA(c)
+			}
+		})
 	}
 }

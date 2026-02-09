@@ -19,6 +19,14 @@ type User struct {
 	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
+
+	// MFA相关字段
+	MFAEnabled        bool       `json:"mfa_enabled" gorm:"column:mfa_enabled;default:false"`
+	MFASecret         string     `json:"-" gorm:"column:mfa_secret;type:varchar(128)"`
+	MFAVerifiedAt     *time.Time `json:"mfa_verified_at,omitempty" gorm:"column:mfa_verified_at"`
+	MFABackupCodes    string     `json:"-" gorm:"column:mfa_backup_codes;type:text"`
+	MFAFailedAttempts int        `json:"-" gorm:"column:mfa_failed_attempts;default:0"`
+	MFALockedUntil    *time.Time `json:"-" gorm:"column:mfa_locked_until"`
 }
 
 // BeforeCreate hook to generate ID if not set

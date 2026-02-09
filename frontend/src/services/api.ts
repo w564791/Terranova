@@ -60,7 +60,23 @@ api.interceptors.response.use(
     return response.data;
   },
   (error) => {
-    if (error.response?.status === 401 && !window.location.pathname.includes('/login') && !window.location.pathname.includes('/setup')) {
+    // MFA验证相关的401错误不应该重定向到登录页
+    const isMFAVerify = error.config?.url?.includes('/auth/mfa/verify');
+    const isAuthMe = error.config?.url?.includes('/auth/me');
+    const isDashboard = error.config?.url?.includes('/dashboard');
+    
+    // 不要在以下情况下自动重定向到登录页：
+    // 1. MFA验证请求
+    // 2. /auth/me 请求（由AuthProvider处理）
+    // 3. Dashboard请求（可能是token还没保存完成）
+    // 4. 已经在登录/setup/mfa页面
+    const shouldNotRedirect = isMFAVerify || isAuthMe || isDashboard ||
+      window.location.pathname.includes('/login') || 
+      window.location.pathname.includes('/setup') || 
+      window.location.pathname.includes('/mfa');
+    
+    if (error.response?.status === 401 && !shouldNotRedirect) {
+      console.log('[api.ts] 401 error, redirecting to login');
       localStorage.removeItem('token');
       window.location.href = '/login';
     }

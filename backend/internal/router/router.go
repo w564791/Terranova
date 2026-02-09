@@ -76,6 +76,10 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 		authHandler := handlers.NewAuthHandler(db)
 		auth.POST("/login", authHandler.Login)
 		// auth.POST("/register", authHandler.Register)
+
+		// MFA验证路由（登录时的第二步验证，无需JWT）
+		mfaHandler := handlers.NewMFAHandler(db)
+		auth.POST("/mfa/verify", mfaHandler.VerifyMFALogin)
 	}
 
 	// Token刷新、用户信息获取和登出需要JWT认证

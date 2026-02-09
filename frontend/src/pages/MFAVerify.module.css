@@ -1,0 +1,96 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.headerIcon {
+  font-size: 56px;
+  color: #1890ff;
+  margin-bottom: 16px;
+}
+
+.verifySection {
+  text-align: center;
+}
+
+.codeInputs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.codeInput {
+  width: 48px !important;
+  height: 56px !important;
+  font-size: 24px !important;
+  text-align: center !important;
+  border-radius: 8px !important;
+}
+
+.codeInput input {
+  text-align: center !important;
+}
+
+.alert {
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.backupInput {
+  margin-bottom: 16px;
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 4px;
+}
+
+.footer {
+  text-align: center;
+}
+
+.backLink {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.redirecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.errorMessage {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .codeInput {
+    width: 40px !important;
+    height: 48px !important;
+    font-size: 20px !important;
+  }
+
+  .codeInputs {
+    gap: 6px;
+  }
+}

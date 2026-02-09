@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+#   postgres:
+#     image: postgres:15
+#     container_name: iac-platform-postgres
+#     environment:
+#       POSTGRES_DB: iac_platform
+#       POSTGRES_USER: postgres
+#       POSTGRES_PASSWORD: postgres123
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#  #     - ./docs/database-schema-fixed.sql:/docker-entrypoint-initdb.d/init.sql
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U postgres -d iac_platform"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+
+  # PostgreSQL with pgvector extension for vector similarity search
+  # This is the OLD database (PG15) - port 15432
+  postgres-pgvector:
+    image: pgvector/pgvector:pg15
+    container_name: iac-platform-postgres-pgvector
+    environment:
+      POSTGRES_DB: iac_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_pgvector_data:/var/lib/postgresql/data
+      # Note: init-pgvector.sql is only needed for fresh installations
+      # Data has been migrated from the original postgres container
+      # - ./scripts/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d iac_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NEW PostgreSQL 18 with pgvector 0.8.1 - port 15433
+  # This will be the PRIMARY database after migration
+  # Note: PG18+ requires mounting at /var/lib/postgresql (not /data subdirectory)
+  postgres-pg18:
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    container_name: iac-platform-postgres-pg18
+    environment:
+      POSTGRES_DB: iac_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "15433:5432"
+    volumes:
+      - postgres_pgvector18_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d iac_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres-pgvector:
+        condition: service_healthy
+
+volumes:
+  # postgres_data:
+  postgres_pgvector_data:
+  postgres_pgvector18_data:

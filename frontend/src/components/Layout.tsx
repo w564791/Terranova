@@ -120,6 +120,7 @@ const Layout: React.FC = () => {
         { path: '/global/settings/run-tasks', label: 'Run Tasks', icon: '' },
         { path: '/global/settings/notifications', label: 'Notifications', icon: '' },
         { path: '/global/settings/platform-config', label: 'Platform Config', icon: '' },
+        { path: '/global/settings/mfa', label: 'MFA Security', icon: '' },
       ]
     },
   ];

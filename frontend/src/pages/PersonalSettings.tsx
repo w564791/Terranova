@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
+import { getMFAStatus } from '../services/mfaService';
+import type { MFAStatus } from '../services/mfaService';
 import styles from './PersonalSettings.module.css';
 
 interface UserToken {
@@ -23,9 +25,9 @@ interface TokenCreateResponse {
 const PersonalSettings: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'password' | 'tokens'>(() => {
+  const [activeTab, setActiveTab] = useState<'password' | 'tokens' | 'mfa'>(() => {
     const tab = searchParams.get('tab');
-    return (tab === 'tokens' || tab === 'password') ? tab : 'password';
+    return (tab === 'tokens' || tab === 'password' || tab === 'mfa') ? tab : 'password';
   });
   
   // Password change state
@@ -44,12 +46,31 @@ const PersonalSettings: React.FC = () => {
   const [tokenMessage, setTokenMessage] = useState('');
   const [tokenError, setTokenError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // MFA state
+  const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'tokens') {
       loadTokens();
     }
+    if (activeTab === 'mfa') {
+      loadMFAStatus();
+    }
   }, [activeTab]);
+
+  const loadMFAStatus = async () => {
+    try {
+      setMfaLoading(true);
+      const response: any = await getMFAStatus();
+      setMfaStatus(response.data);
+    } catch (error) {
+      console.error('加载MFA状态失败:', error);
+    } finally {
+      setMfaLoading(false);
+    }
+  };
 
   const loadTokens = async () => {
     try {
@@ -173,6 +194,15 @@ const PersonalSettings: React.FC = () => {
           }}
         >
           访问Token
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'mfa' ? styles.activeTab : ''}`}
+          onClick={() => {
+            setActiveTab('mfa');
+            setSearchParams({ tab: 'mfa' });
+          }}
+        >
+          多因素认证
         </button>
       </div>
 
@@ -350,7 +380,7 @@ const PersonalSettings: React.FC = () => {
                 </div>
               ) : tokens.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <p className={styles.emptyIcon}>🔑</p>
+                  <p className={styles.emptyIcon}></p>
                   <p className={styles.emptyText}>您还没有创建任何Token</p>
                   <p className={styles.emptyHint}>点击上方"创建新Token"按钮开始创建</p>
                 </div>
@@ -417,6 +447,94 @@ const PersonalSettings: React.FC = () => {
                 </table>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'mfa' && (
+          <div className={styles.section}>
+            <h2>多因素认证（MFA）</h2>
+            <p className={styles.description}>
+              多因素认证通过要求额外的验证码来增强账户安全性。启用后，登录时除了密码外，还需要输入Authenticator应用生成的验证码。
+            </p>
+
+            {mfaLoading ? (
+              <div className={styles.loadingState}>
+                <p>加载中...</p>
+              </div>
+            ) : mfaStatus ? (
+              <div className={styles.mfaContent}>
+                <div className={styles.mfaStatusCard}>
+                  <div className={styles.mfaStatusHeader}>
+                    <span className={`${styles.mfaStatusBadge} ${mfaStatus.mfa_enabled ? styles.mfaEnabled : styles.mfaDisabled}`}>
+                      {mfaStatus.mfa_enabled ? '已启用' : '未启用'}
+                    </span>
+                  </div>
+                  {mfaStatus.mfa_enabled && mfaStatus.mfa_verified_at && (
+                    <p className={styles.mfaStatusTime}>
+                      启用时间：{formatDate(mfaStatus.mfa_verified_at)}
+                    </p>
+                  )}
+
+                  {mfaStatus.mfa_enabled && (
+                    <div className={styles.mfaInfo}>
+                      <div className={styles.mfaInfoItem}>
+                        <span className={styles.mfaInfoLabel}>剩余备用恢复码</span>
+                        <span className={styles.mfaInfoValue}>{mfaStatus.backup_codes_count} 个</span>
+                      </div>
+                      <div className={styles.mfaInfoItem}>
+                        <span className={styles.mfaInfoLabel}>强制策略</span>
+                        <span className={styles.mfaInfoValue}>
+                          {mfaStatus.enforcement_policy === 'optional' && '可选'}
+                          {mfaStatus.enforcement_policy === 'required_new' && '新用户必须'}
+                          {mfaStatus.enforcement_policy === 'required_all' && '所有用户必须'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {mfaStatus.is_required && !mfaStatus.mfa_enabled && (
+                    <div className={styles.mfaWarning}>
+                      根据安全策略，您需要启用多因素认证
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.mfaActions}>
+                  {mfaStatus.mfa_enabled ? (
+                    <button
+                      onClick={() => navigate('/settings/mfa')}
+                      className={styles.mfaManageButton}
+                    >
+                      管理多因素认证
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/settings/mfa')}
+                      className={styles.mfaEnableButton}
+                    >
+                      启用多因素认证
+                    </button>
+                  )}
+                </div>
+
+                <div className={styles.mfaTips}>
+                  <h4>支持的Authenticator应用</h4>
+                  <ul>
+                    <li>Google Authenticator</li>
+                    <li>Microsoft Authenticator</li>
+                    <li>Authy</li>
+                    <li>其他支持TOTP标准的应用</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.errorState}>
+                <p className={styles.errorText}>加载MFA状态失败</p>
+                <button onClick={loadMFAStatus} className={styles.retryButton}>
+                  重试
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

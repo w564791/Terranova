@@ -6,6 +6,7 @@ import (
 
 	"iac-platform/internal/config"
 	"iac-platform/internal/models"
+	"iac-platform/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -14,11 +15,15 @@ import (
 )
 
 type AuthHandler struct {
-	db *gorm.DB
+	db         *gorm.DB
+	mfaService *services.MFAService
 }
 
 func NewAuthHandler(db *gorm.DB) *AuthHandler {
-	return &AuthHandler{db: db}
+	return &AuthHandler{
+		db:         db,
+		mfaService: services.NewMFAService(db),
+	}
 }
 
 type LoginRequest struct {
@@ -86,6 +91,70 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "User ID is empty, please contact administrator",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 检查是否需要MFA验证
+	if user.MFAEnabled {
+		// 用户已启用MFA，需要进行两步验证
+		mfaToken, err := h.mfaService.CreateMFAToken(user.ID, c.ClientIP())
+		if err != nil {
+			println("❌ Failed to create MFA token:", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":      500,
+				"message":   "Failed to create MFA token",
+				"timestamp": time.Now(),
+			})
+			return
+		}
+
+		println("🔐 MFA required for user:", user.Username)
+		c.JSON(http.StatusOK, gin.H{
+			"code":    200,
+			"message": "需要MFA验证",
+			"data": gin.H{
+				"mfa_required": true,
+				"mfa_token":    mfaToken.Token,
+				"expires_in":   300, // 5分钟
+				"user": gin.H{
+					"username": user.Username,
+				},
+			},
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 检查是否需要强制设置MFA（新用户）
+	mfaStatus, err := h.mfaService.GetUserMFAStatus(&user)
+	if err == nil && mfaStatus.IsRequired && !user.MFAEnabled {
+		// 需要设置MFA但尚未设置，返回需要设置MFA的提示
+		// 先生成临时token让用户可以设置MFA
+		mfaToken, err := h.mfaService.CreateMFAToken(user.ID, c.ClientIP())
+		if err != nil {
+			println("❌ Failed to create MFA token:", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":      500,
+				"message":   "Failed to create MFA token",
+				"timestamp": time.Now(),
+			})
+			return
+		}
+
+		println("🔐 MFA setup required for user:", user.Username)
+		c.JSON(http.StatusOK, gin.H{
+			"code":    200,
+			"message": "需要设置MFA",
+			"data": gin.H{
+				"mfa_setup_required": true,
+				"mfa_token":          mfaToken.Token,
+				"expires_in":         300, // 5分钟
+				"user": gin.H{
+					"username": user.Username,
+				},
+			},
 			"timestamp": time.Now(),
 		})
 		return

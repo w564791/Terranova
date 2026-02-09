@@ -63,6 +63,9 @@ import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
 import CMDB from './pages/CMDB';
 import Setup from './pages/Setup';
+import MFASetup from './pages/MFASetup';
+import MFAVerify from './pages/MFAVerify';
+import MFAConfig from './pages/admin/MFAConfig';
 import './App.css';
 
 console.log('App component loaded');
@@ -79,6 +82,8 @@ const App: FC = () => {
             <Routes>
               <Route path="/setup" element={<Setup />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/login/mfa" element={<MFAVerify />} />
+              <Route path="/setup/mfa" element={<MFASetup />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               
               {/* WorkspaceDetail 独立路由，不使用 Layout */}
@@ -162,10 +167,12 @@ const App: FC = () => {
                 <Route path="global/settings/notifications/create" element={<NotificationForm />} />
                 <Route path="global/settings/notifications/:notificationId/edit" element={<NotificationForm />} />
                 <Route path="global/settings/platform-config" element={<PlatformConfig />} />
+                <Route path="global/settings/mfa" element={<MFAConfig />} />
                 <Route path="admin/manifests" element={<ManifestManagement />} />
                 <Route path="admin/manifests/new" element={<ManifestCreate />} />
                 <Route path="api-docs" element={<SwaggerUI />} />
                 <Route path="settings" element={<PersonalSettings />} />
+                <Route path="settings/mfa" element={<MFASetup />} />
                 <Route path="cmdb" element={<CMDB />} />
               </Route>
               

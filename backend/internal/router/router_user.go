@@ -40,5 +40,16 @@ func setupUserRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *mid
 		user.POST("/tokens", userTokenHandler.CreateUserToken)
 		user.GET("/tokens", userTokenHandler.ListUserTokens)
 		user.DELETE("/tokens/:token_name", userTokenHandler.RevokeUserToken)
+
+		// MFA设置路由
+		mfaHandler := handlers.NewMFAHandler(db)
+		mfa := user.Group("/mfa")
+		{
+			mfa.GET("/status", mfaHandler.GetMFAStatus)
+			mfa.POST("/setup", mfaHandler.SetupMFA)
+			mfa.POST("/verify", mfaHandler.VerifyAndEnableMFA)
+			mfa.POST("/disable", mfaHandler.DisableMFA)
+			mfa.POST("/backup-codes/regenerate", mfaHandler.RegenerateBackupCodes)
+		}
 	}
 }

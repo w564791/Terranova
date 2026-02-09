@@ -10,7 +10,6 @@ interface AuthProviderProps {
 
 const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const dispatch = useDispatch();
-  const { token, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [checkingSetup, setCheckingSetup] = useState(true);
 
   // 首次加载时检查系统初始化状态
@@ -36,9 +35,13 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkSetupStatus();
   }, []);
 
+  const { token, isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+
   useEffect(() => {
     const verifyToken = async () => {
-      if (token) {
+      if (token && !user) {
+        // 只有当有token但没有用户信息时才验证（页面刷新的情况）
+        // 如果已经有用户信息（通过loginSuccess设置），则不需要再次验证
         try {
           // 每次都从后端获取最新的用户信息（不缓存权限）
           const response = await api.get('/auth/me');
@@ -61,7 +64,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // 已取消定时刷新：用户信息只在组件挂载时获取一次
     // const interval = setInterval(verifyToken, 30000);
     // return () => clearInterval(interval);
-  }, [token, dispatch, checkingSetup]);
+  }, [token, user, dispatch, checkingSetup]);
 
   // 正在检查系统初始化状态
   if (checkingSetup) {
@@ -79,8 +82,8 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     );
   }
 
-  // 如果有token但还未验证完成，显示加载状态
-  if (token && !isAuthenticated) {
+  // 如果有token但还没有用户信息，显示加载状态
+  if (token && !user) {
     return (
       <div style={{ 
         display: 'flex', 

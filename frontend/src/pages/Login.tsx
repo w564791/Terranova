@@ -71,6 +71,33 @@ const Login: React.FC = () => {
       const response = await authService.login(formData);
       console.log(' Login response:', response);
       
+      // 检查是否需要MFA验证
+      if (response.data.mfa_required) {
+        console.log('🔐 MFA required, redirecting to MFA verify page');
+        navigate('/login/mfa', {
+          state: {
+            mfa_token: response.data.mfa_token,
+            username: response.data.user?.username || formData.username,
+          },
+          replace: true,
+        });
+        return;
+      }
+      
+      // 检查是否需要设置MFA
+      if (response.data.mfa_setup_required) {
+        console.log('🔐 MFA setup required, redirecting to MFA setup page');
+        navigate('/setup/mfa', {
+          state: {
+            mfa_token: response.data.mfa_token,
+            username: response.data.user?.username || formData.username,
+            from_login: true,
+          },
+          replace: true,
+        });
+        return;
+      }
+      
       const token = response.data.token;
       const user = response.data.user;
       

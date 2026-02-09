@@ -1,0 +1,201 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  background: #f5f5f5;
+}
+
+.card {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.headerIcon {
+  font-size: 48px;
+  color: #1890ff;
+  margin-bottom: 16px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+  gap: 16px;
+}
+
+.steps {
+  margin-bottom: 32px;
+}
+
+.stepContent {
+  padding: 16px 0;
+}
+
+.alert {
+  margin-bottom: 24px;
+}
+
+.instructions {
+  margin-bottom: 24px;
+}
+
+.instructions ol {
+  padding-left: 20px;
+  margin: 12px 0;
+}
+
+.instructions li {
+  margin-bottom: 8px;
+  color: #666;
+}
+
+.qrSection {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.qrCode {
+  flex-shrink: 0;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+}
+
+.qrCode img {
+  width: 200px;
+  height: 200px;
+  display: block;
+}
+
+.qrInstructions {
+  flex: 1;
+}
+
+.secretKey {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.secretKey code {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  word-break: break-all;
+  flex: 1;
+}
+
+.verifySection {
+  text-align: center;
+}
+
+.codeInputs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.codeInput {
+  width: 48px !important;
+  height: 56px !important;
+  font-size: 24px !important;
+  text-align: center !important;
+  border-radius: 8px !important;
+}
+
+.codeInput input {
+  text-align: center !important;
+}
+
+.backupCodesSection {
+  margin-bottom: 24px;
+}
+
+.backupCodes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.backupCode {
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.backupCode code {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 2px;
+}
+
+.backupActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.statusInfo {
+  display: flex;
+  justify-content: space-around;
+  padding: 16px 0;
+}
+
+.statusItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.formItem {
+  margin-bottom: 16px;
+}
+
+.formItem > span:first-child {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+@media (max-width: 576px) {
+  .qrSection {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .qrCode img {
+    width: 180px;
+    height: 180px;
+  }
+
+  .backupCodes {
+    grid-template-columns: 1fr;
+  }
+
+  .codeInput {
+    width: 40px !important;
+    height: 48px !important;
+    font-size: 20px !important;
+  }
+}
