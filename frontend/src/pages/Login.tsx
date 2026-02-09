@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import type { RootState } from '../store';
 import { loginStart, loginSuccess, loginFailure } from '../store/slices/authSlice';
-import { authService } from '../services/auth';
+import { authService, setupService } from '../services/auth';
 import styles from './Login.module.css';
 
 const Login: React.FC = () => {
@@ -16,6 +16,26 @@ const Login: React.FC = () => {
   const searchParams = new URLSearchParams(location.search);
   const returnUrl = searchParams.get('returnUrl');
   const from = returnUrl ? decodeURIComponent(returnUrl) : '/';
+  
+  // Check if system is initialized, redirect to setup if not
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const response: any = await setupService.getStatus();
+        const statusData = response.data || response;
+        if (!statusData.initialized) {
+          navigate('/setup', { replace: true });
+          return;
+        }
+      } catch (error) {
+        // If setup check fails, continue to login page
+        console.error('Failed to check setup status:', error);
+      }
+    };
+    if (!isAuthenticated) {
+      checkSetup();
+    }
+  }, [navigate, isAuthenticated]);
   
   // If already logged in, auto redirect to target page
   useEffect(() => {

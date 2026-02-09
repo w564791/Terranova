@@ -62,6 +62,14 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 		ws.GET("/agent-pools/:pool_id/metrics", agentMetricsWSHandler.HandleAgentMetricsWS)
 	}
 
+	// 系统初始化路由（无需JWT，未初始化时可用）
+	setup := api.Group("/setup")
+	{
+		setupHandler := handlers.NewSetupHandler(db)
+		setup.GET("/status", setupHandler.GetStatus)
+		setup.POST("/init", setupHandler.InitAdmin)
+	}
+
 	// 认证路由（无需JWT）
 	auth := api.Group("/auth")
 	{

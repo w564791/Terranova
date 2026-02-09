@@ -15,7 +15,6 @@ type EmbeddingController struct {
 	db               *gorm.DB
 	worker           *services.EmbeddingWorker
 	embeddingService *services.EmbeddingService
-	aiFormService    *services.AIFormService // 用于意图断言
 }
 
 // NewEmbeddingController 创建 embedding 控制器
@@ -24,7 +23,6 @@ func NewEmbeddingController(db *gorm.DB, worker *services.EmbeddingWorker) *Embe
 		db:               db,
 		worker:           worker,
 		embeddingService: services.NewEmbeddingService(db),
-		aiFormService:    services.NewAIFormService(db),
 	}
 }
 
@@ -206,10 +204,6 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 		return
 	}
 
-	// 获取用户 ID（用于意图断言）
-	userID, _ := ctx.Get("user_id")
-	userIDStr, _ := userID.(string)
-
 	// 设置默认值
 	if req.Limit <= 0 || req.Limit > 100 {
 		req.Limit = 50
@@ -221,21 +215,6 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	// 如果 embedding 配置不可用，降级到关键字搜索
 	if !configStatus.Configured || !configStatus.HasAPIKey {
 		c.fallbackToKeywordSearch(ctx, req, "embedding 配置未就绪")
-		return
-	}
-
-	// ========== 意图断言检查（安全守卫）==========
-	// 防止恶意用户通过向量搜索接口发送不当内容到 Embedding API
-	assertionResult, err := c.aiFormService.AssertIntent(userIDStr, req.Query)
-	if err != nil {
-		// 意图断言服务不可用，记录警告但继续执行（降级处理）
-	} else if assertionResult != nil && !assertionResult.IsSafe {
-		// 意图不安全，拦截请求
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": assertionResult.Suggestion,
-			"blocked": true,
-		})
 		return
 	}
 

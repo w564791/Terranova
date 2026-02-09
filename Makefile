@@ -2,19 +2,14 @@
 
 .PHONY: help dev-up dev-down db-init db-reset logs build-server build-agent docker-server docker-agent
 
-# 默认变量
+# 默认变量（可通过 .env 文件或环境变量覆盖）
 DB_PORT ?= 5432
 DB_USER ?= postgres
 DB_PASSWORD ?= postgres123
 DB_NAME ?= iac_platform
 SERVER_PORT ?= 8080
-AGENT_WS_PORT ?= 8091
-HOST_IP = 10.101.0.75
-IAC_AGENT_TOKEN = apt_pool-abcdefghijklmnop_50a26ac346864671cef8c53add6048fae38e6b0d388e065a093ee1bbb198916e
-IAC_AGENT_NAME = test-container
-# 获取主机IP并设置为DB_HOST
-
-DB_HOST ?= $(HOST_IP)
+CC_SERVER_PORT ?= 8090
+DB_HOST ?= localhost
 
 
 help: ## 显示帮助信息
@@ -71,11 +66,10 @@ build-all: build-server build-agent ## 构建所有二进制文件
 
 # Docker运行命令(编译后运行)
 run-server: build-server ## 在Docker容器中运行服务器
-	@echo "主机IP: $(HOST_IP)"
 	@echo "在Docker容器中启动服务器..."
 	docker run --rm --platform linux/arm64 -it \
 		-p $(SERVER_PORT):$(SERVER_PORT) \
-		-p $(AGENT_WS_PORT):$(AGENT_WS_PORT) \
+		-p $(CC_SERVER_PORT):$(CC_SERVER_PORT) \
 		-e DB_HOST=$(DB_HOST) \
 		-e DB_PORT=$(DB_PORT) \
 		-e DB_USER=$(DB_USER) \
@@ -83,22 +77,23 @@ run-server: build-server ## 在Docker容器中运行服务器
 		-e DB_NAME=$(DB_NAME) \
 		-e DB_SSLMODE=disable \
 		-e SERVER_PORT=$(SERVER_PORT) \
-		-e AGENT_WS_PORT=$(AGENT_WS_PORT) \
+		-e CC_SERVER_PORT=$(CC_SERVER_PORT) \
 		-e SERVER_HOST=0.0.0.0 \
 		-v $(PWD)/backend:/app \
 		-w /app \
 		golang:1.25 \
 		./iac-platform
 
-run-agent: build-agent ## 在Docker容器中运行Agent
-	@echo "主机IP: $(HOST_IP)"
+run-agent: build-agent ## 在Docker容器中运行Agent（需要设置环境变量 IAC_AGENT_TOKEN 和 IAC_AGENT_NAME）
 	@echo "在Docker容器中启动Agent..."
-	@echo "API端点: http://$(HOST_IP):$(SERVER_PORT)"
-	@echo "WebSocket端点: ws://$(HOST_IP):$(AGENT_WS_PORT)"
-	docker run  --rm -it \
-		-e IAC_API_ENDPOINT=$(HOST_IP) \
-		-e SERVER_PORT=8080 \
-		-e CC_SERVER_PORT=8090 \
+	@echo "API端点: http://$(DB_HOST):$(SERVER_PORT)"
+	@echo "CC端点: ws://$(DB_HOST):$(CC_SERVER_PORT)"
+	@if [ -z "$(IAC_AGENT_TOKEN)" ]; then echo "[ERROR] 请设置 IAC_AGENT_TOKEN 环境变量（从平台 Agent Pool 页面获取）"; exit 1; fi
+	@if [ -z "$(IAC_AGENT_NAME)" ]; then echo "[ERROR] 请设置 IAC_AGENT_NAME 环境变量"; exit 1; fi
+	docker run --rm -it \
+		-e IAC_API_ENDPOINT=$(DB_HOST) \
+		-e SERVER_PORT=$(SERVER_PORT) \
+		-e CC_SERVER_PORT=$(CC_SERVER_PORT) \
 		-e IAC_AGENT_TOKEN=$(IAC_AGENT_TOKEN) \
 		-e IAC_AGENT_NAME=$(IAC_AGENT_NAME) \
 		-v $(PWD)/backend:/app \
@@ -115,6 +110,72 @@ local-agent: ## 本地运行Agent
 	@echo "启动Agent..."
 	@echo "请确保已设置环境变量: IAC_API_ENDPOINT, IAC_CC_ENDPOINT, IAC_AGENT_TOKEN, IAC_AGENT_NAME"
 	cd backend/cmd/agent && go run main.go
+
+# 密钥和环境配置生成
+generate-secret: ## 生成平台私钥和 .env 配置文件
+	@if [ -f .env ] && grep -q "^JWT_SECRET=" .env 2>/dev/null; then \
+		echo "[OK] .env 文件已存在，跳过生成"; \
+	else \
+		JWT_KEY=$$(openssl rand -base64 48 | tr -d '\n/+=' | head -c 64); \
+		echo "# IaC Platform 环境变量配置" > .env; \
+		echo "# 自动生成，请勿提交到版本控制" >> .env; \
+		echo "" >> .env; \
+		echo "# 平台私钥（用于 JWT 签名和变量加密）" >> .env; \
+		echo "JWT_SECRET=$$JWT_KEY" >> .env; \
+		echo "" >> .env; \
+		echo "# 数据库配置" >> .env; \
+		echo "DB_HOST=localhost" >> .env; \
+		echo "DB_PORT=15433" >> .env; \
+		echo "DB_NAME=iac_platform" >> .env; \
+		echo "DB_USER=postgres" >> .env; \
+		echo "DB_PASSWORD=postgres123" >> .env; \
+		echo "" >> .env; \
+		echo "# 服务端口" >> .env; \
+		echo "SERVER_PORT=8080" >> .env; \
+		echo "CC_SERVER_PORT=8090" >> .env; \
+		echo "FRONTEND_PORT=5173" >> .env; \
+		echo ""; \
+		echo "[OK] .env 配置文件已生成"; \
+		echo "  JWT_SECRET: 64 字符随机密钥"; \
+		echo "  DB_PORT: 15433"; \
+		echo "  SERVER_PORT: 8080"; \
+		echo "  [WARN] 请妥善保管 JWT_SECRET，更换将导致："; \
+		echo "     - 所有已登录用户的 Token 失效"; \
+		echo "     - 所有已加密的变量无法解密"; \
+	fi
+
+# 本地部署命令
+deploy-local: generate-secret ## 本地部署（初始化数据库 + 启动服务，首次访问引导创建管理员）
+	@echo "=========================================="
+	@echo "IaC Platform 本地部署"
+	@echo "=========================================="
+	@echo ""
+	@echo "1. 加载环境变量..."
+	@if [ -f .env ]; then echo "  从 .env 文件加载配置"; fi
+	@echo ""
+	@echo "2. 启动数据库（首次启动自动初始化表结构和种子数据）..."
+	docker-compose up -d
+	@echo "等待数据库启动..."
+	@sleep 5
+	@echo ""
+	@echo "4. 启动后端服务..."
+	@set -a && [ -f .env ] && . ./.env; set +a && cd backend && go run main.go &
+	@sleep 3
+	@echo ""
+	@echo "5. 启动前端..."
+	cd frontend && npm run dev &
+	@echo ""
+	@echo "=========================================="
+	@echo "部署完成！"
+	@echo "前端: http://localhost:5173"
+	@echo "后端: http://localhost:8080"
+	@echo ""
+	@echo "首次使用请访问前端页面完成管理员初始化"
+	@echo "=========================================="
+
+export-seed-data: ## 从当前数据库导出种子数据
+	@echo "导出种子数据..."
+	bash scripts/export_seed_data.sh
 
 # 清理命令
 clean: ## 清理构建文件

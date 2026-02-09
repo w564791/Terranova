@@ -62,6 +62,7 @@ import IAMLayout from './components/IAMLayout';
 import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
 import CMDB from './pages/CMDB';
+import Setup from './pages/Setup';
 import './App.css';
 
 console.log('App component loaded');
@@ -76,6 +77,7 @@ const App: FC = () => {
           <AuthProvider>
             <Router>
             <Routes>
+              <Route path="/setup" element={<Setup />} />
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               

@@ -1,0 +1,75 @@
+version: '3.8'
+
+# IaC Platform Docker Compose 配置
+# 使用方法：
+#   1. cp docker-compose.example.yml docker-compose.yml
+#   2. make generate-secret  (生成 .env 文件和私钥)
+#   3. 根据需要修改 .env 中的配置
+#   4. docker-compose up -d
+#   5. 访问前端完成管理员初始化
+
+services:
+  # PostgreSQL 18 with pgvector - 主数据库
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    container_name: iac-platform-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-iac_platform}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
+    ports:
+      - "${DB_PORT:-15433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      # 数据库初始化脚本（仅首次启动时执行）
+      # 01: 数据库表结构（从生产数据库导出的完整 schema）
+      - ./scripts/init_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      # 02: 种子数据（权限、角色、AI配置、Skills、Agent Pools 等）
+      - ./scripts/init_seed_data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-iac_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # IaC Platform 后端服务（取消注释以使用容器化部署）
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: iac-platform-backend
+  #   ports:
+  #     - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+  #     - "${CC_SERVER_PORT:-8090}:${CC_SERVER_PORT:-8090}"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_USER=${DB_USER:-postgres}
+  #     - DB_PASSWORD=${DB_PASSWORD:-postgres123}
+  #     - DB_NAME=${DB_NAME:-iac_platform}
+  #     - SERVER_PORT=${SERVER_PORT:-8080}
+  #     - CC_SERVER_PORT=${CC_SERVER_PORT:-8090}
+  #     - SERVER_HOST=0.0.0.0
+  #     - JWT_SECRET=${JWT_SECRET}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+  # IaC Platform 前端服务（取消注释以使用容器化部署）
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: iac-platform-frontend
+  #   ports:
+  #     - "${FRONTEND_PORT:-5173}:${FRONTEND_PORT:-5173}"
+  #   environment:
+  #     - VITE_API_BASE_URL=http://localhost:${SERVER_PORT:-8080}/api/v1
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
