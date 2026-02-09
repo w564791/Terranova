@@ -56,8 +56,8 @@ const Login: React.FC = () => {
     
     // Simple validation
     const newErrors: { username?: string; password?: string } = {};
-    if (!formData.username) newErrors.username = 'Please enter username';
-    if (!formData.password) newErrors.password = 'Please enter password';
+    if (!formData.username) newErrors.username = '请输入用户名';
+    if (!formData.password) newErrors.password = '请输入密码';
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -71,9 +71,6 @@ const Login: React.FC = () => {
       const response = await authService.login(formData);
       console.log(' Login response:', response);
       
-      // 后端返回: {code: 200, data: {token, user}, message, timestamp}
-      // axios拦截器返回response.data,所以response就是这个对象
-      // token和user在response.data里
       const token = response.data.token;
       const user = response.data.user;
       
@@ -81,7 +78,7 @@ const Login: React.FC = () => {
       console.log(' User:', user);
       
       if (!token || !user) {
-        console.error('❌ Missing token or user in response!', response);
+        console.error('Missing token or user in response!', response);
         throw new Error('Incomplete login response data');
       }
       
@@ -90,7 +87,6 @@ const Login: React.FC = () => {
         token: token,
       }));
       
-      // Redux会自动保存,但我们再次确认
       console.log(' Token saved to localStorage:', localStorage.getItem('token')?.substring(0, 30) + '...');
       
       localStorage.removeItem('loginUsername');
@@ -100,9 +96,9 @@ const Login: React.FC = () => {
       const errorMessage = error.message || 'Login failed, please check username and password';
       
       if (errorMessage.includes('用户') || errorMessage.includes('User not found')) {
-        setErrors({ username: 'Username not found' });
+        setErrors({ username: '用户名不存在' });
       } else if (errorMessage.includes('密码') || errorMessage.includes('password')) {
-        setErrors({ password: 'Incorrect password' });
+        setErrors({ password: '密码错误' });
       } else {
         setErrors({ password: errorMessage });
       }
@@ -125,42 +121,53 @@ const Login: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.card}>
-        <div className={styles.header}>
-          <h1 className={styles.title}>Welcome to IaC Platform</h1>
-          <p className={styles.subtitle}>Infrastructure Management Platform</p>
+      {/* 左侧品牌区域 */}
+      <div className={styles.brandSection}>
+        <h1 className={styles.brandTitle}>
+          强大。安全。卓越。
+          <br />
+          <span className={styles.brandHighlight}>IaC Platform</span>
+          <br />
+          基础设施即代码管理平台。
+        </h1>
+        <p className={styles.brandSubtitle}>
+          统一管理您的云基础设施，实现自动化部署、版本控制和团队协作。
+          让基础设施管理变得简单、可靠、高效。
+        </p>
+      </div>
+
+      {/* 右侧表单区域 */}
+      <div className={styles.formSection}>
+        <div className={styles.formHeader}>
+          <h2 className={styles.formTitle}>登录账号</h2>
         </div>
-        
+
         <form className={styles.form} onSubmit={handleSubmit}>
           <div className={styles.inputGroup}>
+            <label className={styles.label}>用户名</label>
             <input
               type="text"
-              placeholder="Username"
-              className={styles.input}
+              placeholder="请输入用户名"
+              className={`${styles.input} ${errors.username ? styles.inputError : ''}`}
               value={formData.username}
               onChange={(e) => handleInputChange('username', e.target.value)}
-              style={{ borderColor: errors.username ? '#ef4444' : undefined }}
             />
             {errors.username && (
-              <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
-                {errors.username}
-              </div>
+              <span className={styles.errorText}>{errors.username}</span>
             )}
           </div>
           
           <div className={styles.inputGroup}>
+            <label className={styles.label}>密码</label>
             <input
               type="password"
-              placeholder="Password"
-              className={styles.input}
+              placeholder="请输入密码"
+              className={`${styles.input} ${errors.password ? styles.inputError : ''}`}
               value={formData.password}
               onChange={(e) => handleInputChange('password', e.target.value)}
-              style={{ borderColor: errors.password ? '#ef4444' : undefined }}
             />
             {errors.password && (
-              <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
-                {errors.password}
-              </div>
+              <span className={styles.errorText}>{errors.password}</span>
             )}
           </div>
           
@@ -169,7 +176,7 @@ const Login: React.FC = () => {
             className={styles.button}
             disabled={loading}
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? '登录中...' : '登录'}
           </button>
         </form>
       </div>

@@ -1,94 +1,130 @@
 .container {
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 100vh;
-  background: #0f172a;
-  padding: 20px;
+  background: #1e2a4a;
+  padding: 40px;
 }
 
-.card {
-  width: 100%;
-  max-width: 400px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
+/* 左侧品牌区域 */
+.brandSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  color: white;
 }
 
-.header {
-  padding: 32px 32px 24px;
+.brandTitle {
+  font-size: 48px;
+  font-weight: 300;
+  line-height: 1.3;
+  margin: 0 0 24px 0;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+}
+
+.brandHighlight {
+  color: #60a5fa;
+  font-weight: 400;
+}
+
+.brandSubtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  max-width: 480px;
+}
+
+/* 右侧表单区域 - 悬浮卡片 */
+.formSection {
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  margin: auto 0;
+}
+
+.formHeader {
+  margin-bottom: 32px;
   text-align: center;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
 }
 
-.title {
+.formTitle {
   font-size: 24px;
   font-weight: 600;
-  color: #f1f5f9;
-  line-height: 1.2;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.formSubtitle {
+  font-size: 14px;
+  color: #64748b;
   margin: 0;
 }
 
-.subtitle {
-  font-size: 14px;
-  font-weight: 400;
-  color: #94a3b8;
-  line-height: 1.5;
-  margin-top: 8px;
-}
-
 .form {
-  padding: 24px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .inputGroup {
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .label {
-  display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  color: #cbd5e1;
-  margin-bottom: 6px;
+  color: #374151;
 }
 
 .input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #475569;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   font-size: 14px;
-  font-weight: 400;
   line-height: 1.5;
   transition: all 0.2s ease;
-  background: #0f172a;
-  color: #f1f5f9;
+  background: #ffffff;
+  color: #1e293b;
 }
 
 .input:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .input::placeholder {
-  color: #64748b;
+  color: #9ca3af;
+}
+
+.inputError {
+  border-color: #ef4444 !important;
+}
+
+.errorText {
+  color: #ef4444;
+  font-size: 12px;
 }
 
 .button {
   width: 100%;
-  padding: 12px 16px;
+  padding: 12px 24px;
   background: #3b82f6;
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.5;
   cursor: pointer;
   transition: all 0.2s ease;
   margin-top: 8px;
@@ -96,13 +132,20 @@
 
 .button:hover {
   background: #2563eb;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  box-shadow: none;
+}
+
+.errorMessage {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px;
+  color: #dc2626;
+  font-size: 14px;
 }
 
 .forgotPassword {
@@ -112,45 +155,60 @@
 
 .forgotPasswordLink {
   font-size: 13px;
-  color: #60a5fa;
+  color: #3b82f6;
   text-decoration: none;
-  transition: color 0.2s ease;
 }
 
 .forgotPasswordLink:hover {
-  color: #93c5fd;
   text-decoration: underline;
 }
 
-.errorMessage {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 16px;
-  color: #f87171;
-  font-size: 14px;
+/* 响应式设计 */
+@media (max-width: 1024px) {
+  .container {
+    padding: 32px;
+  }
+
+  .brandSection {
+    padding: 40px;
+  }
+
+  .brandTitle {
+    font-size: 36px;
+  }
+
+  .formSection {
+    width: 380px;
+    padding: 40px;
+  }
 }
 
-/* Responsive Design */
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .container {
-    padding: 16px;
+    flex-direction: column;
+    padding: 24px;
+    justify-content: center;
+    align-items: center;
   }
 
-  .card {
-    border-radius: 8px;
+  .brandSection {
+    padding: 24px;
+    text-align: center;
+    align-items: center;
   }
 
-  .header {
-    padding: 24px 20px 20px;
+  .brandTitle {
+    font-size: 28px;
   }
 
-  .title {
-    font-size: 22px;
+  .brandSubtitle {
+    text-align: center;
   }
 
-  .form {
-    padding: 20px;
+  .formSection {
+    width: 100%;
+    max-width: 400px;
+    padding: 32px 24px;
+    margin: 24px 0 0 0;
   }
 }
