@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
-import { getMFAStatus } from '../services/mfaService';
-import type { MFAStatus } from '../services/mfaService';
+import { getMFAStatus, getMFAConfig } from '../services/mfaService';
+import type { MFAStatus, MFAConfig } from '../services/mfaService';
 import styles from './PersonalSettings.module.css';
 
 interface UserToken {
@@ -49,6 +49,7 @@ const PersonalSettings: React.FC = () => {
   
   // MFA state
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
+  const [mfaConfig, setMfaConfig] = useState<MFAConfig | null>(null);
   const [mfaLoading, setMfaLoading] = useState(false);
 
   useEffect(() => {
@@ -57,6 +58,7 @@ const PersonalSettings: React.FC = () => {
     }
     if (activeTab === 'mfa') {
       loadMFAStatus();
+      loadMFAConfig();
     }
   }, [activeTab]);
 
@@ -71,6 +73,18 @@ const PersonalSettings: React.FC = () => {
       setMfaLoading(false);
     }
   };
+
+  const loadMFAConfig = async () => {
+    try {
+      const response: any = await getMFAConfig();
+      setMfaConfig(response.data?.config);
+    } catch (error) {
+      console.error('加载MFA配置失败:', error);
+    }
+  };
+
+  // 判断备用码是否启用
+  const isBackupCodesEnabled = mfaConfig?.required_backup_codes !== 0;
 
   const loadTokens = async () => {
     try {
@@ -477,10 +491,12 @@ const PersonalSettings: React.FC = () => {
 
                   {mfaStatus.mfa_enabled && (
                     <div className={styles.mfaInfo}>
-                      <div className={styles.mfaInfoItem}>
-                        <span className={styles.mfaInfoLabel}>剩余备用恢复码</span>
-                        <span className={styles.mfaInfoValue}>{mfaStatus.backup_codes_count} 个</span>
-                      </div>
+                      {isBackupCodesEnabled && (
+                        <div className={styles.mfaInfoItem}>
+                          <span className={styles.mfaInfoLabel}>剩余备用恢复码</span>
+                          <span className={styles.mfaInfoValue}>{mfaStatus.backup_codes_count} 个</span>
+                        </div>
+                      )}
                       <div className={styles.mfaInfoItem}>
                         <span className={styles.mfaInfoLabel}>强制策略</span>
                         <span className={styles.mfaInfoValue}>

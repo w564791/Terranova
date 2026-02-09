@@ -192,7 +192,7 @@ const MFAConfigPage: React.FC = () => {
           <Title level={5}>安全设置</Title>
 
           <Row gutter={24}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 name="max_failed_attempts"
                 label="最大失败尝试次数"
@@ -201,13 +201,27 @@ const MFAConfigPage: React.FC = () => {
                 <InputNumber min={3} max={10} style={{ width: 120 }} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 name="lockout_duration_minutes"
                 label="锁定时长（分钟）"
                 extra="账户被锁定后的等待时间"
               >
                 <InputNumber min={5} max={60} style={{ width: 120 }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="required_backup_codes"
+                label="备用码验证数量"
+                extra="使用备用码登录时需要输入的数量，0表示禁用"
+              >
+                <Select style={{ width: 120 }}>
+                  <Option value={0}>禁用</Option>
+                  <Option value={1}>1个</Option>
+                  <Option value={2}>2个</Option>
+                  <Option value={3}>3个</Option>
+                </Select>
               </Form.Item>
             </Col>
           </Row>

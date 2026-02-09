@@ -375,6 +375,7 @@ type UpdateMFAConfigRequest struct {
 	GracePeriodDays        *int    `json:"grace_period_days"`
 	MaxFailedAttempts      *int    `json:"max_failed_attempts"`
 	LockoutDurationMinutes *int    `json:"lockout_duration_minutes"`
+	RequiredBackupCodes    *int    `json:"required_backup_codes"`
 }
 
 // UpdateMFAConfig 更新MFA全局配置
@@ -421,6 +422,9 @@ func (h *MFAHandler) UpdateMFAConfig(c *gin.Context) {
 	}
 	if req.LockoutDurationMinutes != nil {
 		config.LockoutDurationMinutes = *req.LockoutDurationMinutes
+	}
+	if req.RequiredBackupCodes != nil {
+		config.RequiredBackupCodes = *req.RequiredBackupCodes
 	}
 
 	if err := h.mfaService.UpdateMFAConfig(config); err != nil {

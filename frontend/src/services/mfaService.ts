@@ -28,6 +28,7 @@ export interface MFAConfig {
   grace_period_days: number;
   max_failed_attempts: number;
   lockout_duration_minutes: number;
+  required_backup_codes: number; // 使用备用码登录时需要输入的数量
 }
 
 // MFA统计

@@ -74,10 +74,12 @@ const Login: React.FC = () => {
       // 检查是否需要MFA验证
       if (response.data.mfa_required) {
         console.log('🔐 MFA required, redirecting to MFA verify page');
+        console.log('🔐 Backend returned required_backup_codes:', response.data.required_backup_codes);
         navigate('/login/mfa', {
           state: {
             mfa_token: response.data.mfa_token,
             username: response.data.user?.username || formData.username,
+            required_backup_codes: response.data.required_backup_codes !== undefined ? response.data.required_backup_codes : 1,
           },
           replace: true,
         });

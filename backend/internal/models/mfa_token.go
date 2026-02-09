@@ -47,6 +47,7 @@ type MFAConfig struct {
 	GracePeriodDays        int        `json:"grace_period_days"`
 	MaxFailedAttempts      int        `json:"max_failed_attempts"`
 	LockoutDurationMinutes int        `json:"lockout_duration_minutes"`
+	RequiredBackupCodes    int        `json:"required_backup_codes"` // 使用备用码登录时需要输入的数量，默认1
 }
 
 // MFAStatus 用户MFA状态

@@ -3,8 +3,8 @@ import { Card, Steps, Button, Input, message, Alert, Typography, Space, Spin, Mo
 import type { InputRef } from 'antd';
 import { SafetyCertificateOutlined, QrcodeOutlined, KeyOutlined, CheckCircleOutlined, CopyOutlined, DownloadOutlined, ReloadOutlined, LockOutlined, UnlockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { getMFAStatus, setupMFA, verifyAndEnableMFA, disableMFA, regenerateBackupCodes } from '../services/mfaService';
-import type { MFAStatus, MFASetupResponse } from '../services/mfaService';
+import { getMFAStatus, setupMFA, verifyAndEnableMFA, disableMFA, regenerateBackupCodes, getMFAConfig } from '../services/mfaService';
+import type { MFAStatus, MFASetupResponse, MFAConfig } from '../services/mfaService';
 import styles from './MFASetup.module.css';
 
 const { Title, Text, Paragraph } = Typography;
@@ -14,6 +14,7 @@ const MFASetup: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
+  const [mfaConfig, setMfaConfig] = useState<MFAConfig | null>(null);
   const [setupData, setSetupData] = useState<MFASetupResponse | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [verifyCode, setVerifyCode] = useState('');
@@ -30,6 +31,7 @@ const MFASetup: React.FC = () => {
 
   useEffect(() => {
     loadMFAStatus();
+    loadMFAConfig();
   }, []);
 
   const loadMFAStatus = async () => {
@@ -43,6 +45,19 @@ const MFASetup: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const loadMFAConfig = async () => {
+    try {
+      const response: any = await getMFAConfig();
+      setMfaConfig(response.data?.config);
+    } catch (error) {
+      // 获取配置失败，使用默认值
+      console.error('获取MFA配置失败:', error);
+    }
+  };
+
+  // 判断备用码是否启用
+  const isBackupCodesEnabled = mfaConfig?.required_backup_codes !== 0;
 
   const handleStartSetup = async () => {
     try {
@@ -181,10 +196,12 @@ const MFASetup: React.FC = () => {
           />
 
           <div className={styles.statusInfo}>
-            <div className={styles.statusItem}>
-              <Text type="secondary">剩余备用恢复码</Text>
-              <Text strong>{mfaStatus.backup_codes_count} 个</Text>
-            </div>
+            {isBackupCodesEnabled && (
+              <div className={styles.statusItem}>
+                <Text type="secondary">剩余备用恢复码</Text>
+                <Text strong>{mfaStatus.backup_codes_count} 个</Text>
+              </div>
+            )}
             <div className={styles.statusItem}>
               <Text type="secondary">强制策略</Text>
               <Text strong>
@@ -198,13 +215,15 @@ const MFASetup: React.FC = () => {
           <Divider />
 
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => setShowRegenerateModal(true)}
-              block
-            >
-              重新生成备用恢复码
-            </Button>
+            {isBackupCodesEnabled && (
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => setShowRegenerateModal(true)}
+                block
+              >
+                重新生成备用恢复码
+              </Button>
+            )}
             
             {mfaStatus.enforcement_policy !== 'required_all' && (
               <Button
@@ -454,40 +473,42 @@ const MFASetup: React.FC = () => {
           <div className={styles.stepContent}>
             <Alert
               message="MFA已成功启用！"
-              description="请保存以下备用恢复码，当您无法访问Authenticator应用时可以使用。"
+              description={isBackupCodesEnabled ? "请保存以下备用恢复码，当您无法访问Authenticator应用时可以使用。" : "您的账户现在受到多因素认证保护。"}
               type="success"
               showIcon
               icon={<CheckCircleOutlined />}
               className={styles.alert}
             />
 
-            <div className={styles.backupCodesSection}>
-              <Title level={5}>备用恢复码</Title>
-              <Paragraph type="secondary">
-                每个恢复码只能使用一次，请妥善保管。
-              </Paragraph>
-              <div className={styles.backupCodes}>
-                {setupData.backup_codes.map((code, index) => (
-                  <div key={index} className={styles.backupCode}>
-                    <code>{code}</code>
-                  </div>
-                ))}
+            {isBackupCodesEnabled && (
+              <div className={styles.backupCodesSection}>
+                <Title level={5}>备用恢复码</Title>
+                <Paragraph type="secondary">
+                  每个恢复码只能使用一次，请妥善保管。
+                </Paragraph>
+                <div className={styles.backupCodes}>
+                  {setupData.backup_codes.map((code, index) => (
+                    <div key={index} className={styles.backupCode}>
+                      <code>{code}</code>
+                    </div>
+                  ))}
+                </div>
+                <Space className={styles.backupActions}>
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() => copyToClipboard(setupData.backup_codes.join('\n'))}
+                  >
+                    复制全部
+                  </Button>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={() => downloadBackupCodes(setupData.backup_codes)}
+                  >
+                    下载
+                  </Button>
+                </Space>
               </div>
-              <Space className={styles.backupActions}>
-                <Button
-                  icon={<CopyOutlined />}
-                  onClick={() => copyToClipboard(setupData.backup_codes.join('\n'))}
-                >
-                  复制全部
-                </Button>
-                <Button
-                  icon={<DownloadOutlined />}
-                  onClick={() => downloadBackupCodes(setupData.backup_codes)}
-                >
-                  下载
-                </Button>
-              </Space>
-            </div>
+            )}
 
             <Button
               type="primary"

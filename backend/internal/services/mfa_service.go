@@ -37,6 +37,7 @@ func (s *MFAService) GetMFAConfig() (*models.MFAConfig, error) {
 		GracePeriodDays:        7,
 		MaxFailedAttempts:      5,
 		LockoutDurationMinutes: 15,
+		RequiredBackupCodes:    1, // 默认需要1个备用码
 	}
 
 	// 从数据库加载配置
@@ -75,6 +76,10 @@ func (s *MFAService) GetMFAConfig() (*models.MFAConfig, error) {
 			if v := s.parseJSONInt(cfg.Value); v > 0 {
 				config.LockoutDurationMinutes = v
 			}
+		case "mfa_required_backup_codes":
+			// 允许0值（表示禁用备用码）
+			v := s.parseJSONInt(cfg.Value)
+			config.RequiredBackupCodes = v
 		}
 	}
 
@@ -83,6 +88,14 @@ func (s *MFAService) GetMFAConfig() (*models.MFAConfig, error) {
 
 // UpdateMFAConfig 更新MFA全局配置
 func (s *MFAService) UpdateMFAConfig(config *models.MFAConfig) error {
+	// RequiredBackupCodes: 0表示禁用备用码，1-5表示需要的数量
+	if config.RequiredBackupCodes < 0 {
+		config.RequiredBackupCodes = 0
+	}
+	if config.RequiredBackupCodes > 5 {
+		config.RequiredBackupCodes = 5 // 最多5个
+	}
+
 	updates := map[string]interface{}{
 		"mfa_enabled":                  fmt.Sprintf("%t", config.Enabled),
 		"mfa_enforcement":              fmt.Sprintf(`"%s"`, config.Enforcement),
@@ -90,6 +103,7 @@ func (s *MFAService) UpdateMFAConfig(config *models.MFAConfig) error {
 		"mfa_grace_period_days":        fmt.Sprintf("%d", config.GracePeriodDays),
 		"mfa_max_failed_attempts":      fmt.Sprintf("%d", config.MaxFailedAttempts),
 		"mfa_lockout_duration_minutes": fmt.Sprintf("%d", config.LockoutDurationMinutes),
+		"mfa_required_backup_codes":    fmt.Sprintf("%d", config.RequiredBackupCodes),
 	}
 
 	// 如果策略从optional变为required_*，记录启用时间
@@ -294,16 +308,31 @@ func (s *MFAService) VerifyMFACode(user *models.User, code string) error {
 	return nil
 }
 
-// VerifyBackupCode 验证备用恢复码
-func (s *MFAService) VerifyBackupCode(user *models.User, code string) error {
+// VerifyBackupCode 验证备用恢复码（支持多个备用码，用逗号分隔）
+func (s *MFAService) VerifyBackupCode(user *models.User, codeInput string) error {
 	config, err := s.GetMFAConfig()
 	if err != nil {
 		return err
 	}
 
+	// 检查备用码功能是否被禁用
+	if config.RequiredBackupCodes == 0 {
+		return fmt.Errorf("备用码功能已禁用")
+	}
+
 	// 检查是否被锁定
 	if s.isUserLocked(user) {
 		return fmt.Errorf("account is locked due to too many failed attempts")
+	}
+
+	// 解析输入的备用码（可能是多个，用逗号分隔）
+	inputCodes := strings.Split(codeInput, ",")
+	requiredCount := config.RequiredBackupCodes
+
+	// 检查输入的备用码数量是否足够
+	if len(inputCodes) < requiredCount {
+		s.incrementFailedAttempts(user, config)
+		return fmt.Errorf("需要输入 %d 个备用码", requiredCount)
 	}
 
 	// 解密备用恢复码
@@ -312,22 +341,42 @@ func (s *MFAService) VerifyBackupCode(user *models.User, code string) error {
 		return fmt.Errorf("failed to decrypt backup codes: %w", err)
 	}
 
-	// 查找并验证恢复码
-	found := false
-	for i, c := range codes {
-		if c.Code == code && !c.Used {
-			codes[i].Used = true
-			now := time.Now()
-			codes[i].UsedAt = &now
-			found = true
-			break
+	// 验证所有输入的备用码
+	verifiedCount := 0
+	verifiedIndices := make([]int, 0)
+
+	for _, inputCode := range inputCodes[:requiredCount] {
+		inputCode = strings.TrimSpace(inputCode)
+		for i, c := range codes {
+			if c.Code == inputCode && !c.Used {
+				// 检查是否已经在本次验证中使用过
+				alreadyUsed := false
+				for _, idx := range verifiedIndices {
+					if idx == i {
+						alreadyUsed = true
+						break
+					}
+				}
+				if !alreadyUsed {
+					verifiedIndices = append(verifiedIndices, i)
+					verifiedCount++
+					break
+				}
+			}
 		}
 	}
 
-	if !found {
-		// 增加失败次数
+	// 检查是否验证了足够数量的备用码
+	if verifiedCount < requiredCount {
 		s.incrementFailedAttempts(user, config)
-		return fmt.Errorf("invalid or already used backup code")
+		return fmt.Errorf("invalid or already used backup codes")
+	}
+
+	// 标记已使用的备用码
+	now := time.Now()
+	for _, idx := range verifiedIndices {
+		codes[idx].Used = true
+		codes[idx].UsedAt = &now
 	}
 
 	// 保存更新后的备用恢复码

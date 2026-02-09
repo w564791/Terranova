@@ -110,14 +110,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			return
 		}
 
+		// 获取MFA配置中的备用码数量要求
+		mfaConfig, _ := h.mfaService.GetMFAConfig()
+		requiredBackupCodes := 1
+		if mfaConfig != nil {
+			requiredBackupCodes = mfaConfig.RequiredBackupCodes
+		}
+
 		println("🔐 MFA required for user:", user.Username)
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "需要MFA验证",
 			"data": gin.H{
-				"mfa_required": true,
-				"mfa_token":    mfaToken.Token,
-				"expires_in":   300, // 5分钟
+				"mfa_required":          true,
+				"mfa_token":             mfaToken.Token,
+				"expires_in":            300, // 5分钟
+				"required_backup_codes": requiredBackupCodes,
 				"user": gin.H{
 					"username": user.Username,
 				},

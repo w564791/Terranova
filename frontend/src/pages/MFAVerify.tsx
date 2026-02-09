@@ -15,6 +15,7 @@ interface LocationState {
   mfa_token: string;
   username: string;
   mfa_setup_required?: boolean;
+  required_backup_codes?: number;
 }
 
 const MFAVerify: React.FC = () => {
@@ -26,7 +27,12 @@ const MFAVerify: React.FC = () => {
   const [verifyCode, setVerifyCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [useBackupCode, setUseBackupCode] = useState(false);
-  const [backupCode, setBackupCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[]>(['']);
+  const [requiredBackupCodes, setRequiredBackupCodes] = useState(() => {
+    const value = state?.required_backup_codes !== undefined ? state.required_backup_codes : 1;
+    console.log('[MFA Debug] Initial requiredBackupCodes:', value, 'from state:', state?.required_backup_codes);
+    return value;
+  });
   const [errorMessage, setErrorMessage] = useState('');
   const [redirecting, setRedirecting] = useState(false);
   const inputRefs = useRef<(InputRef | null)[]>([]);
@@ -35,10 +41,22 @@ const MFAVerify: React.FC = () => {
     // 如果没有mfa_token，重定向到登录页
     if (!state?.mfa_token) {
       navigate('/login');
+      return;
     }
     // 如果需要设置MFA，重定向到MFA设置页面
     if (state?.mfa_setup_required) {
       navigate('/setup/mfa', { state: { mfa_token: state.mfa_token } });
+      return;
+    }
+    
+    // 使用从登录页面传递过来的备用码数量配置
+    console.log('[MFA Debug] useEffect - state.required_backup_codes:', state?.required_backup_codes);
+    if (state?.required_backup_codes !== undefined) {
+      console.log('[MFA Debug] Setting requiredBackupCodes to:', state.required_backup_codes);
+      setRequiredBackupCodes(state.required_backup_codes);
+      if (state.required_backup_codes > 0) {
+        setBackupCodes(Array(state.required_backup_codes).fill(''));
+      }
     }
   }, [state, navigate]);
 
@@ -112,13 +130,25 @@ const MFAVerify: React.FC = () => {
     }
   };
 
+  const handleBackupCodeChange = (index: number, value: string) => {
+    const newCodes = [...backupCodes];
+    newCodes[index] = value.replace(/\D/g, '').slice(0, 8);
+    setBackupCodes(newCodes);
+    setErrorMessage('');
+  };
+
+  const isBackupCodesComplete = () => {
+    return backupCodes.every(code => code.length === 8);
+  };
+
   const handleVerify = async () => {
     if (useBackupCode) {
-      if (backupCode.length !== 8) {
-        message.error('请输入8位恢复码');
+      if (!isBackupCodesComplete()) {
+        message.error(`请输入${requiredBackupCodes}个8位恢复码`);
         return;
       }
-      handleVerifyWithCode(backupCode);
+      // 将多个备用码用逗号连接发送
+      handleVerifyWithCode(backupCodes.join(','));
     } else {
       if (verifyCode.length !== 6) {
         message.error('请输入6位验证码');
@@ -206,24 +236,25 @@ const MFAVerify: React.FC = () => {
           <div className={styles.verifySection}>
             <Alert
               message="使用备用恢复码"
-              description="每个恢复码只能使用一次。使用后建议重新生成新的恢复码。"
+              description={`需要输入 ${requiredBackupCodes} 个恢复码。每个恢复码只能使用一次。`}
               type="info"
               showIcon
               className={styles.alert}
             />
-            <Input
-              placeholder="请输入8位恢复码"
-              value={backupCode}
-              onChange={(e) => {
-                setBackupCode(e.target.value.replace(/\D/g, '').slice(0, 8));
-                setErrorMessage('');
-              }}
-              maxLength={8}
-              size="large"
-              className={styles.backupInput}
-              onKeyPress={handleKeyPress}
-              disabled={verifying}
-            />
+            {backupCodes.map((code, index) => (
+              <Input
+                key={index}
+                placeholder={`请输入第 ${index + 1} 个8位恢复码`}
+                value={code}
+                onChange={(e) => handleBackupCodeChange(index, e.target.value)}
+                maxLength={8}
+                size="large"
+                className={styles.backupInput}
+                onKeyPress={handleKeyPress}
+                disabled={verifying}
+                style={{ marginBottom: index < backupCodes.length - 1 ? 8 : 16 }}
+              />
+            ))}
             {errorMessage && (
               <div className={styles.errorMessage}>
                 <Text type="danger">{errorMessage}</Text>
@@ -234,7 +265,7 @@ const MFAVerify: React.FC = () => {
               size="large"
               onClick={handleVerify}
               loading={verifying}
-              disabled={backupCode.length !== 8}
+              disabled={!isBackupCodesComplete()}
               block
             >
               验证
@@ -245,24 +276,26 @@ const MFAVerify: React.FC = () => {
         <Divider />
 
         <div className={styles.footer}>
-          {!useBackupCode ? (
-            <Button
-              type="link"
-              icon={<KeyOutlined />}
-              onClick={() => setUseBackupCode(true)}
-            >
-              无法访问 Authenticator？使用备用恢复码
-            </Button>
-          ) : (
-            <Button
-              type="link"
-              onClick={() => {
-                setUseBackupCode(false);
-                setBackupCode('');
-              }}
-            >
-              返回使用验证码
-            </Button>
+          {requiredBackupCodes > 0 && (
+            !useBackupCode ? (
+              <Button
+                type="link"
+                icon={<KeyOutlined />}
+                onClick={() => setUseBackupCode(true)}
+              >
+                无法访问 Authenticator？使用备用恢复码
+              </Button>
+            ) : (
+              <Button
+                type="link"
+                onClick={() => {
+                  setUseBackupCode(false);
+                  setBackupCodes(Array(requiredBackupCodes).fill(''));
+                }}
+              >
+                返回使用验证码
+              </Button>
+            )
           )}
         </div>
 
