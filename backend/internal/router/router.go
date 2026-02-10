@@ -119,6 +119,19 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	// 权限检查API - 所有认证用户都可以调用（用于检查自己的权限）
 	protected.POST("/iam/permissions/check", permissionHandler.CheckPermission)
 
+	// MFA 设置路由 - 所有已认证用户都可以访问（不需要 IAM 权限）
+	{
+		mfaHandler := handlers.NewMFAHandler(db)
+		mfa := protected.Group("/user/mfa")
+		{
+			mfa.GET("/status", mfaHandler.GetMFAStatus)
+			mfa.POST("/setup", mfaHandler.SetupMFA)
+			mfa.POST("/verify", mfaHandler.VerifyAndEnableMFA)
+			mfa.POST("/disable", mfaHandler.DisableMFA)
+			mfa.POST("/backup-codes/regenerate", mfaHandler.RegenerateBackupCodes)
+		}
+	}
+
 	// Dashboard统计 - 使用IAM权限控制
 	setupDashboardRoutes(api, db, iamMiddleware)
 

@@ -9,6 +9,7 @@ import (
 
 	"iac-platform/internal/config"
 	"iac-platform/internal/models"
+	"iac-platform/internal/services"
 	"iac-platform/internal/services/sso"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,7 @@ import (
 type SSOHandler struct {
 	db         *gorm.DB
 	ssoService *sso.SSOService
+	mfaService *services.MFAService
 }
 
 // NewSSOHandler 创建 SSO Handler
@@ -27,6 +29,7 @@ func NewSSOHandler(db *gorm.DB) *SSOHandler {
 	return &SSOHandler{
 		db:         db,
 		ssoService: sso.NewSSOService(db),
+		mfaService: services.NewMFAService(db),
 	}
 }
 
@@ -139,6 +142,113 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":    401,
 			"message": err.Error(),
+		})
+		return
+	}
+
+	// 新用户第一次登录：先生成 JWT 让用户登录，同时标记需要设置 MFA
+	// （MFA setup API 需要 JWT 认证，所以必须先登录）
+	if result.IsNewUser && !result.User.MFAEnabled {
+		mfaConfig, _ := h.mfaService.GetMFAConfig()
+		if mfaConfig != nil && mfaConfig.Enabled {
+			// 生成 session 和 JWT
+			sessionID, err := generateSessionID()
+			if err == nil {
+				expiresAt := time.Now().Add(24 * time.Hour)
+				session := models.LoginSession{
+					SessionID: sessionID,
+					UserID:    result.User.ID,
+					Username:  result.User.Username,
+					CreatedAt: time.Now(),
+					ExpiresAt: expiresAt,
+					IPAddress: c.ClientIP(),
+					UserAgent: c.Request.UserAgent(),
+					IsActive:  true,
+				}
+				h.db.Create(&session)
+
+				token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
+				if err == nil {
+					c.JSON(http.StatusOK, gin.H{
+						"code":    200,
+						"message": "MFA setup required for new user",
+						"data": gin.H{
+							"token":              token,
+							"expires_at":         expiresAt,
+							"mfa_setup_required": true,
+							"is_new_user":        true,
+							"user": gin.H{
+								"id":       result.User.ID,
+								"username": result.User.Username,
+								"email":    result.User.Email,
+								"role":     result.User.Role,
+							},
+						},
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// 检查 MFA（已有用户）
+	if result.User.MFAEnabled {
+		mfaToken, err := h.mfaService.CreateMFAToken(result.User.ID, c.ClientIP())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "Failed to create MFA token",
+			})
+			return
+		}
+
+		mfaConfig, _ := h.mfaService.GetMFAConfig()
+		requiredBackupCodes := 1
+		if mfaConfig != nil {
+			requiredBackupCodes = mfaConfig.RequiredBackupCodes
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":    200,
+			"message": "MFA verification required",
+			"data": gin.H{
+				"mfa_required":          true,
+				"mfa_token":             mfaToken.Token,
+				"expires_in":            300,
+				"required_backup_codes": requiredBackupCodes,
+				"is_new_user":           result.IsNewUser,
+				"user": gin.H{
+					"username": result.User.Username,
+				},
+			},
+		})
+		return
+	}
+
+	// 检查 MFA 强制策略
+	mfaStatus, err := h.mfaService.GetUserMFAStatus(result.User)
+	if err == nil && mfaStatus.IsRequired && !result.User.MFAEnabled {
+		mfaToken, err := h.mfaService.CreateMFAToken(result.User.ID, c.ClientIP())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    500,
+				"message": "Failed to create MFA token",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"code":    200,
+			"message": "MFA setup required",
+			"data": gin.H{
+				"mfa_setup_required": true,
+				"mfa_token":          mfaToken.Token,
+				"expires_in":         300,
+				"is_new_user":        result.IsNewUser,
+				"user": gin.H{
+					"username": result.User.Username,
+				},
+			},
 		})
 		return
 	}

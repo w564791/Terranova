@@ -41,15 +41,6 @@ func setupUserRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *mid
 		user.GET("/tokens", userTokenHandler.ListUserTokens)
 		user.DELETE("/tokens/:token_name", userTokenHandler.RevokeUserToken)
 
-		// MFA设置路由
-		mfaHandler := handlers.NewMFAHandler(db)
-		mfa := user.Group("/mfa")
-		{
-			mfa.GET("/status", mfaHandler.GetMFAStatus)
-			mfa.POST("/setup", mfaHandler.SetupMFA)
-			mfa.POST("/verify", mfaHandler.VerifyAndEnableMFA)
-			mfa.POST("/disable", mfaHandler.DisableMFA)
-			mfa.POST("/backup-codes/regenerate", mfaHandler.RegenerateBackupCodes)
-		}
+		// MFA设置路由已移至 router.go（在 IAM 检查之前注册，所有已认证用户可访问）
 	}
 }

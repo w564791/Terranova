@@ -64,6 +64,52 @@ const SSOCallback: React.FC = () => {
         const response: any = await ssoService.callback(providerKey, code, state);
         const data = response.data || response;
 
+        // 检查是否需要 MFA 验证
+        if (data.mfa_required) {
+          localStorage.removeItem('sso_provider');
+          navigate('/login/mfa', {
+            state: {
+              mfa_token: data.mfa_token,
+              username: data.user?.username || '',
+              required_backup_codes: data.required_backup_codes !== undefined ? data.required_backup_codes : 1,
+            },
+            replace: true,
+          });
+          return;
+        }
+
+        // 检查是否需要设置 MFA（带 token 的情况：先登录再跳转）
+        if (data.mfa_setup_required && data.token) {
+          localStorage.setItem('token', data.token);
+          localStorage.removeItem('sso_provider');
+          dispatch(loginSuccess({
+            user: data.user,
+            token: data.token,
+          }));
+          navigate('/settings/mfa', {
+            state: {
+              from_login: true,
+              force_setup: true,
+            },
+            replace: true,
+          });
+          return;
+        }
+
+        // 检查是否需要设置 MFA（不带 token 的情况：用 mfa_token）
+        if (data.mfa_setup_required) {
+          localStorage.removeItem('sso_provider');
+          navigate('/setup/mfa', {
+            state: {
+              mfa_token: data.mfa_token,
+              username: data.user?.username || '',
+              from_login: true,
+            },
+            replace: true,
+          });
+          return;
+        }
+
         if (data.token && data.user) {
           localStorage.setItem('token', data.token);
           localStorage.removeItem('sso_provider');
