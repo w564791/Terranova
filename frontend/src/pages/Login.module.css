@@ -163,6 +163,72 @@
   text-decoration: underline;
 }
 
+/* SSO 登录区域 */
+.ssoSection {
+  margin-bottom: 8px;
+}
+
+.ssoButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+}
+
+.ssoButton:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.ssoButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ssoButton svg {
+  flex-shrink: 0;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.dividerText {
+  padding: 0 12px;
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.disableLocalLoginHint {
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 16px 0 0;
+}
+
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .container {

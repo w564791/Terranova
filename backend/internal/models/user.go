@@ -16,6 +16,7 @@ type User struct {
 	IsSystemAdmin bool       `json:"is_system_admin" gorm:"default:false"`
 	OAuthProvider string     `json:"oauth_provider,omitempty" gorm:"column:oauth_provider;type:varchar(50)"`
 	OAuthID       string     `json:"oauth_id,omitempty" gorm:"column:oauth_id;type:varchar(200)"`
+	IsSSOUser     bool       `json:"is_sso_user" gorm:"column:is_sso_user;default:false"`
 	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`

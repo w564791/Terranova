@@ -7,6 +7,7 @@ import (
 	"iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"iac-platform/internal/services"
+	"iac-platform/internal/services/sso"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -17,12 +18,14 @@ import (
 type AuthHandler struct {
 	db         *gorm.DB
 	mfaService *services.MFAService
+	ssoService *sso.SSOService
 }
 
 func NewAuthHandler(db *gorm.DB) *AuthHandler {
 	return &AuthHandler{
 		db:         db,
 		mfaService: services.NewMFAService(db),
+		ssoService: sso.NewSSOService(db),
 	}
 }
 
@@ -62,11 +65,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	var user models.User
 	if err := h.db.Where("username = ? AND is_active = ?", req.Username, true).First(&user).Error; err != nil {
-		// Log the error for debugging
-		println("❌ Login failed: User not found -", req.Username, "Error:", err.Error())
+		println("Login failed: User not found -", req.Username, "Error:", err.Error())
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":      401,
 			"message":   "User not found",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 检查本地登录是否被禁用（超管例外）
+	if h.ssoService.IsLocalLoginDisabled() && !user.IsSystemAdmin {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":      403,
+			"message":   "Local login is disabled. Please use SSO to login.",
 			"timestamp": time.Now(),
 		})
 		return

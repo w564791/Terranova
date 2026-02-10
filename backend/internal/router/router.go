@@ -82,6 +82,9 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 		auth.POST("/mfa/verify", mfaHandler.VerifyMFALogin)
 	}
 
+	// SSO 路由（包含公开端点和需要认证的端点）
+	setupSSORoutes(api, db)
+
 	// Token刷新、用户信息获取和登出需要JWT认证
 	api.POST("/auth/refresh", middleware.JWTAuth(), handlers.NewAuthHandler(db).RefreshToken)
 	api.GET("/auth/me", middleware.JWTAuth(), handlers.NewAuthHandler(db).GetMe)

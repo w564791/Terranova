@@ -63,6 +63,8 @@ import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
 import CMDB from './pages/CMDB';
 import Setup from './pages/Setup';
+import SSOCallback from './pages/SSOCallback';
+import SSOConfig from './pages/admin/SSOConfig';
 import MFASetup from './pages/MFASetup';
 import MFAVerify from './pages/MFAVerify';
 import MFAConfig from './pages/admin/MFAConfig';
@@ -82,6 +84,7 @@ const App: FC = () => {
             <Routes>
               <Route path="/setup" element={<Setup />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/sso/callback" element={<SSOCallback />} />
               <Route path="/login/mfa" element={<MFAVerify />} />
               <Route path="/setup/mfa" element={<MFASetup />} />
               <Route path="/reset-password" element={<ResetPassword />} />
@@ -168,6 +171,7 @@ const App: FC = () => {
                 <Route path="global/settings/notifications/:notificationId/edit" element={<NotificationForm />} />
                 <Route path="global/settings/platform-config" element={<PlatformConfig />} />
                 <Route path="global/settings/mfa" element={<MFAConfig />} />
+                <Route path="global/settings/sso" element={<SSOConfig />} />
                 <Route path="admin/manifests" element={<ManifestManagement />} />
                 <Route path="admin/manifests/new" element={<ManifestCreate />} />
                 <Route path="api-docs" element={<SwaggerUI />} />

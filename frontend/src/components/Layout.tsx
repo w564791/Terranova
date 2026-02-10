@@ -121,6 +121,7 @@ const Layout: React.FC = () => {
         { path: '/global/settings/notifications', label: 'Notifications', icon: '' },
         { path: '/global/settings/platform-config', label: 'Platform Config', icon: '' },
         { path: '/global/settings/mfa', label: 'MFA Security', icon: '' },
+        { path: '/global/settings/sso', label: 'SSO Config', icon: '' },
       ]
     },
   ];

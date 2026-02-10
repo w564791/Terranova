@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -322,9 +325,50 @@ func main() {
 	// 在goroutine中启动服务器
 	go func() {
 		addr := host + ":" + port
-		log.Printf("Server starting on %s (accessible from network)", addr)
-		if err := r.Run(addr); err != nil {
-			log.Fatal("Failed to start server:", err)
+
+		// 检查 TLS 证书：优先使用环境变量，否则自动探测常见路径
+		tlsCert := os.Getenv("TLS_CERT_FILE")
+		tlsKey := os.Getenv("TLS_KEY_FILE")
+
+		if tlsCert == "" || tlsKey == "" {
+			// 自动探测证书路径（相对于工作目录）
+			searchPaths := []struct{ cert, key string }{
+				{"../certs/localhost.pem", "../certs/localhost-key.pem"},
+				{"certs/localhost.pem", "certs/localhost-key.pem"},
+			}
+			for _, p := range searchPaths {
+				certAbs, _ := filepath.Abs(p.cert)
+				keyAbs, _ := filepath.Abs(p.key)
+				if _, err := os.Stat(certAbs); err == nil {
+					if _, err := os.Stat(keyAbs); err == nil {
+						tlsCert = certAbs
+						tlsKey = keyAbs
+						break
+					}
+				}
+			}
+		}
+
+		if tlsCert != "" && tlsKey != "" {
+			log.Printf("🔒 Server starting on https://%s (TLS enabled)", addr)
+			log.Printf("   cert: %s", tlsCert)
+			log.Printf("   key:  %s", tlsKey)
+
+			srv := &http.Server{
+				Addr:    addr,
+				Handler: r,
+				TLSConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				},
+			}
+			if err := srv.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
+				log.Fatal("Failed to start TLS server:", err)
+			}
+		} else {
+			log.Printf("Server starting on http://%s (accessible from network)", addr)
+			if err := r.Run(addr); err != nil {
+				log.Fatal("Failed to start server:", err)
+			}
 		}
 	}()
 
