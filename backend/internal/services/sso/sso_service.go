@@ -251,8 +251,8 @@ func (s *SSOService) handleLoginCallback(ctx context.Context, providerKey string
 		return &LoginResult{User: &user, IsNewUser: false}, nil
 	}
 
-	// 未找到关联 -> 尝试通过邮箱匹配用户
-	if userInfo.Email != "" {
+	// 未找到关联 -> 尝试通过邮箱匹配用户（仅当邮箱已验证时才自动关联）
+	if userInfo.Email != "" && userInfo.EmailVerified {
 		var existingUser models.User
 		if err := s.db.Where("email = ? AND is_active = ?", userInfo.Email, true).First(&existingUser).Error; err == nil {
 			// 找到同邮箱用户 -> 创建身份关联

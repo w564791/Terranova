@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	cryptoRand "crypto/rand"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -572,15 +574,22 @@ func generateJWTWithSession(userID string, username, role, sessionID string) (st
 }
 
 func generateSessionID() (string, error) {
-	// 使用与token ID相同的生成逻辑
-	return "session-" + time.Now().Format("20060102150405") + "-" + randomString(8), nil
+	randStr, err := secureRandomString(16)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate random string: %w", err)
+	}
+	return "session-" + time.Now().Format("20060102150405") + "-" + randStr, nil
 }
 
-func randomString(length int) string {
+func secureRandomString(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+	randomBytes := make([]byte, length)
+	if _, err := cryptoRand.Read(randomBytes); err != nil {
+		return "", err
 	}
-	return string(b)
+	for i := range b {
+		b[i] = charset[int(randomBytes[i])%len(charset)]
+	}
+	return string(b), nil
 }

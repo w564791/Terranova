@@ -367,3 +367,44 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// RequireRole 检查用户是否具有指定角色
+func RequireRole(roles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":      403,
+				"message":   "Access denied: role not found",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		roleStr, ok := role.(string)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":      403,
+				"message":   "Access denied: invalid role format",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		for _, r := range roles {
+			if roleStr == r {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":      403,
+			"message":   "Access denied: insufficient permissions",
+			"timestamp": time.Now(),
+		})
+		c.Abort()
+	}
+}

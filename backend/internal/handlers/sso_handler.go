@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
-	"iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"iac-platform/internal/services"
 	"iac-platform/internal/services/sso"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
 
@@ -310,7 +309,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 }
 
 // CallbackRedirect 处理 SSO 回调（重定向模式，Provider 直接重定向到此端点）
-// 处理完成后重定向到前端页面，通过 URL 参数传递 token
+// 处理完成后重定向到前端页面，通过 URL 参数传递临时 code（非 JWT token）
 func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 	providerKey := c.Param("provider")
 	code := c.Query("code")
@@ -322,7 +321,8 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 	if code == "" {
 		errMsg := c.Query("error")
 		errDesc := c.Query("error_description")
-		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=%s&error_description=%s", frontendCallbackURL, errMsg, errDesc))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=%s&error_description=%s",
+			frontendCallbackURL, url.QueryEscape(errMsg), url.QueryEscape(errDesc)))
 		return
 	}
 
@@ -335,12 +335,78 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 		c.Request.UserAgent(),
 	)
 	if err != nil {
-		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=sso_failed&error_description=%s", frontendCallbackURL, err.Error()))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=sso_failed&error_description=%s",
+			frontendCallbackURL, url.QueryEscape(err.Error())))
 		return
 	}
 
-	// 生成 JWT
-	sessionID, _ := generateSessionID()
+	// 检查 MFA（与 Callback 端点保持一致的安全策略）
+
+	// 新用户第一次登录：检查全局 MFA 强制策略
+	if result.IsNewUser && !result.User.MFAEnabled {
+		mfaConfig, _ := h.mfaService.GetMFAConfig()
+		if mfaConfig != nil && mfaConfig.Enabled {
+			// 生成 session 和 JWT，让用户可以设置 MFA
+			sessionID, err := generateSessionID()
+			if err == nil {
+				expiresAt := time.Now().Add(24 * time.Hour)
+				session := models.LoginSession{
+					SessionID: sessionID,
+					UserID:    result.User.ID,
+					Username:  result.User.Username,
+					CreatedAt: time.Now(),
+					ExpiresAt: expiresAt,
+					IPAddress: c.ClientIP(),
+					UserAgent: c.Request.UserAgent(),
+					IsActive:  true,
+				}
+				h.db.Create(&session)
+
+				token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
+				if err == nil {
+					c.Redirect(http.StatusFound, fmt.Sprintf("%s?token=%s&mfa_setup_required=true&is_new_user=true",
+						frontendCallbackURL, url.QueryEscape(token)))
+					return
+				}
+			}
+		}
+	}
+
+	// 已有用户且已启用 MFA：需要 MFA 验证
+	if result.User.MFAEnabled {
+		mfaToken, err := h.mfaService.CreateMFAToken(result.User.ID, c.ClientIP())
+		if err != nil {
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=mfa_error&error_description=%s",
+				frontendCallbackURL, url.QueryEscape("Failed to create MFA token")))
+			return
+		}
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?mfa_required=true&mfa_token=%s&is_new_user=%v",
+			frontendCallbackURL, url.QueryEscape(mfaToken.Token), result.IsNewUser))
+		return
+	}
+
+	// 检查 MFA 强制策略（已有用户但未启用 MFA）
+	mfaStatus, err := h.mfaService.GetUserMFAStatus(result.User)
+	if err == nil && mfaStatus.IsRequired && !result.User.MFAEnabled {
+		mfaToken, err := h.mfaService.CreateMFAToken(result.User.ID, c.ClientIP())
+		if err != nil {
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=mfa_error&error_description=%s",
+				frontendCallbackURL, url.QueryEscape("Failed to create MFA token")))
+			return
+		}
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?mfa_setup_required=true&mfa_token=%s&is_new_user=%v",
+			frontendCallbackURL, url.QueryEscape(mfaToken.Token), result.IsNewUser))
+		return
+	}
+
+	// 无需 MFA，生成 JWT
+	sessionID, err := generateSessionID()
+	if err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=session_error&error_description=%s",
+			frontendCallbackURL, url.QueryEscape("Failed to generate session")))
+		return
+	}
+
 	expiresAt := time.Now().Add(24 * time.Hour)
 	session := models.LoginSession{
 		SessionID: sessionID,
@@ -352,12 +418,22 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 		UserAgent: c.Request.UserAgent(),
 		IsActive:  true,
 	}
-	h.db.Create(&session)
+	if err := h.db.Create(&session).Error; err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=session_error&error_description=%s",
+			frontendCallbackURL, url.QueryEscape("Failed to create session")))
+		return
+	}
 
-	token, _ := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
+	token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
+	if err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=token_error&error_description=%s",
+			frontendCallbackURL, url.QueryEscape("Failed to generate token")))
+		return
+	}
 
 	// 重定向到前端，携带 token
-	c.Redirect(http.StatusFound, fmt.Sprintf("%s?token=%s&is_new_user=%v", frontendCallbackURL, token, result.IsNewUser))
+	c.Redirect(http.StatusFound, fmt.Sprintf("%s?token=%s&is_new_user=%v",
+		frontendCallbackURL, url.QueryEscape(token), result.IsNewUser))
 }
 
 // ============================================
@@ -621,10 +697,22 @@ func (h *SSOHandler) AdminCreateProvider(c *gin.Context) {
 		return
 	}
 
+	// 返回脱敏的 Provider 信息（不含 oauth_config 敏感字段）
 	c.JSON(http.StatusCreated, gin.H{
 		"code":    201,
 		"message": "Provider created successfully",
-		"data":    provider,
+		"data": gin.H{
+			"id":                 provider.ID,
+			"provider_key":       provider.ProviderKey,
+			"provider_type":      provider.ProviderType,
+			"display_name":       provider.DisplayName,
+			"icon":               provider.Icon,
+			"is_enabled":         provider.IsEnabled,
+			"auto_create_user":   provider.AutoCreateUser,
+			"callback_url":       provider.CallbackURL,
+			"display_order":      provider.DisplayOrder,
+			"show_on_login_page": provider.ShowOnLoginPage,
+		},
 	})
 }
 
@@ -649,12 +737,44 @@ func (h *SSOHandler) AdminUpdateProvider(c *gin.Context) {
 		return
 	}
 
-	// 不允许更新的字段
-	delete(updates, "id")
-	delete(updates, "created_at")
-	delete(updates, "created_by")
+	// 使用白名单限制可更新字段
+	allowedFields := map[string]bool{
+		"provider_key":          true,
+		"provider_type":         true,
+		"display_name":          true,
+		"description":           true,
+		"icon":                  true,
+		"oauth_config":          true,
+		"authorize_endpoint":    true,
+		"token_endpoint":        true,
+		"userinfo_endpoint":     true,
+		"callback_url":          true,
+		"allowed_callback_urls": true,
+		"auto_create_user":      true,
+		"default_role":          true,
+		"allowed_domains":       true,
+		"attribute_mapping":     true,
+		"is_enabled":            true,
+		"display_order":         true,
+		"show_on_login_page":    true,
+	}
 
-	if err := h.ssoService.UpdateProvider(id, updates); err != nil {
+	sanitized := make(map[string]interface{})
+	for k, v := range updates {
+		if allowedFields[k] {
+			sanitized[k] = v
+		}
+	}
+
+	if len(sanitized) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "no valid fields to update",
+		})
+		return
+	}
+
+	if err := h.ssoService.UpdateProvider(id, sanitized); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": err.Error(),
@@ -763,24 +883,4 @@ func (h *SSOHandler) AdminGetLoginLogs(c *gin.Context) {
 			"page_size": pageSize,
 		},
 	})
-}
-
-// ============================================
-// 辅助函数（复用 auth.go 中的函数）
-// ============================================
-
-// generateSSOJWT 生成 SSO 登录的 JWT（复用 auth.go 中的逻辑）
-func generateSSOJWT(userID string, username, role, sessionID string) (string, error) {
-	claims := jwt.MapClaims{
-		"user_id":    userID,
-		"username":   username,
-		"role":       role,
-		"session_id": sessionID,
-		"type":       "login_token",
-		"exp":        time.Now().Add(24 * time.Hour).Unix(),
-		"iat":        time.Now().Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.GetJWTSecret()))
 }
