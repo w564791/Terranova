@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"iac-platform/internal/crypto"
@@ -20,13 +19,9 @@ import (
 type SSOService struct {
 	db      *gorm.DB
 	factory *DefaultProviderFactory
-
-	// 内存 state 存储（生产环境建议用 Redis）
-	stateMu sync.RWMutex
-	states  map[string]*StateData
 }
 
-// StateData state 参数关联的数据
+// StateData state 参数关联的数据（用于内部传递，实际存储在 PostgreSQL sso_states 表）
 type StateData struct {
 	ProviderKey string    `json:"provider_key"`
 	RedirectURL string    `json:"redirect_url"` // 前端回调后跳转的 URL
@@ -47,10 +42,9 @@ func NewSSOService(db *gorm.DB) *SSOService {
 	svc := &SSOService{
 		db:      db,
 		factory: NewProviderFactory(),
-		states:  make(map[string]*StateData),
 	}
 
-	// 启动 state 清理协程
+	// 启动过期 state 清理协程（从数据库清理）
 	go svc.cleanupExpiredStates()
 
 	return svc
@@ -537,7 +531,7 @@ func (s *SSOService) logLogin(providerKey, userID, providerUserID, providerEmail
 }
 
 // ============================================
-// State 管理（CSRF 防护）
+// State 管理（CSRF 防护，使用 PostgreSQL 存储）
 // ============================================
 
 func generateState() (string, error) {
@@ -548,45 +542,53 @@ func generateState() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
+// storeState 将 state 存储到数据库
 func (s *SSOService) storeState(state string, data *StateData) {
-	s.stateMu.Lock()
-	defer s.stateMu.Unlock()
-	s.states[state] = data
+	now := time.Now()
+	ssoState := &models.SSOState{
+		State:       state,
+		ProviderKey: data.ProviderKey,
+		RedirectURL: data.RedirectURL,
+		Action:      data.Action,
+		UserID:      data.UserID,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(10 * time.Minute),
+	}
+	s.db.Create(ssoState)
 }
 
+// validateState 从数据库验证并消费 state（一次性使用）
 func (s *SSOService) validateState(state string) (*StateData, error) {
-	s.stateMu.Lock()
-	defer s.stateMu.Unlock()
-
-	data, ok := s.states[state]
-	if !ok {
+	var ssoState models.SSOState
+	err := s.db.Where("state = ?", state).First(&ssoState).Error
+	if err != nil {
 		return nil, fmt.Errorf("state not found")
 	}
 
-	// 删除已使用的 state
-	delete(s.states, state)
+	// 立即删除已使用的 state（一次性使用）
+	s.db.Delete(&ssoState)
 
-	// 检查是否过期（10 分钟）
-	if time.Since(data.CreatedAt) > 10*time.Minute {
+	// 检查是否过期
+	if time.Now().After(ssoState.ExpiresAt) {
 		return nil, fmt.Errorf("state expired")
 	}
 
-	return data, nil
+	return &StateData{
+		ProviderKey: ssoState.ProviderKey,
+		RedirectURL: ssoState.RedirectURL,
+		Action:      ssoState.Action,
+		UserID:      ssoState.UserID,
+		CreatedAt:   ssoState.CreatedAt,
+	}, nil
 }
 
-// cleanupExpiredStates 定期清理过期的 state
+// cleanupExpiredStates 定期清理数据库中过期的 state
 func (s *SSOService) cleanupExpiredStates() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.stateMu.Lock()
-		for key, data := range s.states {
-			if time.Since(data.CreatedAt) > 10*time.Minute {
-				delete(s.states, key)
-			}
-		}
-		s.stateMu.Unlock()
+		s.db.Where("expires_at < ?", time.Now()).Delete(&models.SSOState{})
 	}
 }
 
