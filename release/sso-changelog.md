@@ -54,3 +54,4 @@
 - OAuth Token 使用 AES-256-GCM 加密存储（复用平台 crypto 包）
 - State 参数防 CSRF（一次性使用，10 分钟过期）
 - 禁用本地登录时超管例外（安全兜底）
+- SSO登陆用户接受全局MFA开启约束
