@@ -4,6 +4,16 @@ import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './UserManagement.module.css';
 
+// IAM角色接口
+interface IAMRole {
+  id: number;
+  name: string;
+  display_name: string;
+  description: string;
+  is_system: boolean;
+  is_active: boolean;
+}
+
 const UserManagement: React.FC = () => {
   const { success: showSuccess, error: showError } = useToast();
   const [users, setUsers] = useState<any[]>([]);
@@ -11,6 +21,7 @@ const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [iamRoles, setIamRoles] = useState<IAMRole[]>([]);
   const [statusFilter, setStatusFilter] = useState<boolean | undefined>(undefined);
   const [roleChangeConfirm, setRoleChangeConfirm] = useState<{
     show: boolean;
@@ -28,6 +39,27 @@ const UserManagement: React.FC = () => {
     show: boolean;
     user: any;
   }>({ show: false, user: null });
+
+  // 加载IAM角色列表
+  const loadIAMRoles = async () => {
+    try {
+      const response = await fetch('/api/v1/iam/roles', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setIamRoles(data.roles || []);
+      }
+    } catch (error) {
+      console.error('加载角色列表失败:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadIAMRoles();
+  }, []);
 
   useEffect(() => {
     loadStats();
@@ -168,8 +200,11 @@ const UserManagement: React.FC = () => {
           <label>角色:</label>
           <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={styles.select}>
             <option value="">全部</option>
-            <option value="admin">管理员</option>
-            <option value="user">普通用户</option>
+            {iamRoles.map((role) => (
+              <option key={role.id} value={role.name}>
+                {role.display_name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -238,8 +273,15 @@ const UserManagement: React.FC = () => {
                       onChange={(e) => handleUpdateRole(user, e.target.value)}
                       className={styles.roleSelect}
                     >
-                      <option value="user">普通用户</option>
-                      <option value="admin">管理员</option>
+                      {iamRoles.map((role) => (
+                        <option key={role.id} value={role.name}>
+                          {role.display_name}
+                        </option>
+                      ))}
+                      {/* 如果用户当前角色不在列表中，也显示出来 */}
+                      {user.role && !iamRoles.find(r => r.name === user.role) && (
+                        <option value={user.role}>{user.role}</option>
+                      )}
                     </select>
                   </td>
                   <td>
@@ -317,8 +359,11 @@ const UserManagement: React.FC = () => {
                 value={createForm.role}
                 onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
               >
-                <option value="user">普通用户</option>
-                <option value="admin">管理员</option>
+                {iamRoles.map((role) => (
+                  <option key={role.id} value={role.name}>
+                    {role.display_name}
+                  </option>
+                ))}
               </select>
             </div>
             <div className={styles.modalActions}>

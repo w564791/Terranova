@@ -36,11 +36,11 @@ export default defineConfig({
     // API 代理
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: useHttps ? 'https://localhost:8080' : 'http://localhost:8080',
         changeOrigin: true,
         ws: true,
         secure: false, // 后端是 https 自签名时不炸
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        // 注意：不要 rewrite，后端路由已包含 /api/v1 前缀
       },
     },
   },
