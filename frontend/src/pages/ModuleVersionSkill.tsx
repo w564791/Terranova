@@ -11,6 +11,8 @@ import {
   type ModuleVersionSkill 
 } from '../services/skill';
 import api from '../services/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import styles from './ModuleVersionSkill.module.css';
 
 interface Module {
@@ -270,7 +272,7 @@ const ModuleVersionSkillPage: React.FC = () => {
               <div className={styles.sectionBody}>
                 {skill?.schema_generated_content ? (
                   <div className={styles.markdownContent}>
-                    <pre>{skill.schema_generated_content}</pre>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{skill.schema_generated_content}</ReactMarkdown>
                   </div>
                 ) : (
                   <div className={styles.emptyContent}>
@@ -334,7 +336,7 @@ const ModuleVersionSkillPage: React.FC = () => {
                 ) : (
                   <div className={styles.customContent}>
                     {skill?.custom_content ? (
-                      <pre>{skill.custom_content}</pre>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{skill.custom_content}</ReactMarkdown>
                     ) : (
                       <p className={styles.placeholder}>暂无自定义内容，点击编辑添加</p>
                     )}

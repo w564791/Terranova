@@ -10,16 +10,12 @@ import {
 } from '../services/ai';
 import { 
   listSkills, 
-  deleteSkill, 
-  activateSkill, 
-  deactivateSkill,
   type Skill, 
   type SkillLayer,
   LAYER_LABELS,
   SOURCE_TYPE_LABELS 
 } from '../services/skill';
-import ConfirmDialog from '../components/ConfirmDialog';
-import SkillEditor from '../components/SkillEditor';
+import ConfirmDialog from '../components/ConfirmDialog'; 
 import {
   DndContext,
   closestCenter,
@@ -369,15 +365,9 @@ interface LayerPagination {
 
 // Skills 管理组件
 const SkillsTab = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; skill: Skill | null }>({
-    show: false,
-    skill: null,
-  });
-  const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
-  const [viewingSkill, setViewingSkill] = useState<Skill | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // 搜索状态
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -447,13 +437,6 @@ const SkillsTab = () => {
     loadLayerSkills('domain', 1, 20, setDomainData);
     loadLayerSkills('task', 1, 20, setTaskData);
   }, []);
-
-  // 刷新所有层级
-  const refreshAllLayers = () => {
-    loadLayerSkills('foundation', foundationData.page, foundationData.pageSize, setFoundationData);
-    loadLayerSkills('domain', domainData.page, domainData.pageSize, setDomainData);
-    loadLayerSkills('task', taskData.page, taskData.pageSize, setTaskData);
-  };
 
   // 处理分页变化
   const handlePageChange = (layer: SkillLayer, newPage: number) => {
@@ -536,48 +519,6 @@ const SkillsTab = () => {
     }
   };
 
-  const handleToggleActive = async (skill: Skill) => {
-    try {
-      if (skill.is_active) {
-        await deactivateSkill(skill.id);
-        setMessage({ type: 'success', text: `${skill.display_name} 已停用` });
-      } else {
-        await activateSkill(skill.id);
-        setMessage({ type: 'success', text: `${skill.display_name} 已激活` });
-      }
-      refreshAllLayers();
-    } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.error || '操作失败',
-      });
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteConfirm.skill) return;
-    try {
-      // 传递 hard=true 进行真实删除，而非仅禁用
-      await deleteSkill(deleteConfirm.skill.id, true);
-      setMessage({ type: 'success', text: '删除成功' });
-      setDeleteConfirm({ show: false, skill: null });
-      refreshAllLayers();
-    } catch (error: any) {
-      setMessage({
-        type: 'error',
-        text: error.response?.data?.error || '删除失败',
-      });
-    }
-  };
-
-  const handleEditorClose = (saved: boolean) => {
-    setEditingSkill(null);
-    setShowCreateModal(false);
-    if (saved) {
-      refreshAllLayers();
-      setMessage({ type: 'success', text: '保存成功' });
-    }
-  };
 
   // 渲染分页组件
   const renderPagination = (pagination: LayerPagination, layer: SkillLayer) => {
@@ -633,7 +574,7 @@ const SkillsTab = () => {
     <div 
       key={skill.id} 
       className={`${styles.skillCard} ${!skill.is_active ? styles.skillInactive : ''}`}
-      onClick={() => setViewingSkill(skill)}
+      onClick={() => navigate(`/global/settings/skills/${skill.id}`)}
       style={{ cursor: 'pointer' }}
     >
       <div className={styles.skillHeader}>
@@ -642,35 +583,13 @@ const SkillsTab = () => {
             {LAYER_LABELS[skill.layer]}
           </span>
           <span className={styles.skillName}>{skill.display_name}</span>
+          {!skill.is_active && (
+            <span className={styles.sourceBadge}>已停用</span>
+          )}
           {skill.source_type !== 'manual' && (
             <span className={styles.sourceBadge}>
               {SOURCE_TYPE_LABELS[skill.source_type]}
             </span>
-          )}
-        </div>
-        <div className={styles.skillActions} onClick={(e) => e.stopPropagation()}>
-          <button 
-            className={styles.textBtn}
-            onClick={() => setEditingSkill(skill)}
-            title="编辑"
-          >
-            编辑
-          </button>
-          <button 
-            className={`${styles.textBtn} ${skill.is_active ? styles.textBtnActive : styles.textBtnInactive}`}
-            onClick={() => handleToggleActive(skill)}
-            title={skill.is_active ? '停用' : '激活'}
-          >
-            {skill.is_active ? '停用' : '激活'}
-          </button>
-          {skill.source_type === 'manual' && (
-            <button 
-              className={`${styles.textBtn} ${styles.textBtnDanger}`}
-              onClick={() => setDeleteConfirm({ show: true, skill })}
-              title="删除"
-            >
-              删除
-            </button>
           )}
         </div>
       </div>
@@ -798,7 +717,7 @@ const SkillsTab = () => {
           </div>
           <button 
             className={styles.createButton}
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/global/settings/skills/create')}
           >
             + 新建 Skill
           </button>
@@ -872,38 +791,12 @@ const SkillsTab = () => {
           <p>暂无 Skill</p>
           <button 
             className={styles.createButton}
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/global/settings/skills/create')}
           >
             创建第一个 Skill
           </button>
         </div>
       )}
-
-      {(editingSkill || showCreateModal) && (
-        <SkillEditor
-          skill={editingSkill}
-          onClose={handleEditorClose}
-        />
-      )}
-
-      {viewingSkill && (
-        <SkillEditor
-          skill={viewingSkill}
-          onClose={() => setViewingSkill(null)}
-          readOnly
-        />
-      )}
-
-      <ConfirmDialog
-        isOpen={deleteConfirm.show}
-        title="删除 Skill"
-        message={`确定要删除 "${deleteConfirm.skill?.display_name}" 吗？此操作不可恢复。`}
-        confirmText="删除"
-        cancelText="取消"
-        type="danger"
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteConfirm({ show: false, skill: null })}
-      />
     </>
   );
 };

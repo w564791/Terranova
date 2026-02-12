@@ -19,6 +19,8 @@ import EditDemo from './pages/EditDemo';
 import CreateDemo from './pages/CreateDemo';
 import ModuleDemos from './pages/ModuleDemos';
 import ModuleVersionSkill from './pages/ModuleVersionSkill';
+import SkillDetail from './pages/SkillDetail';
+import SkillCreate from './pages/SkillCreate';
 import Workspaces from './pages/Workspaces';
 import WorkspaceDetail from './pages/WorkspaceDetail';
 import CreateWorkspace from './pages/CreateWorkspace';
@@ -159,6 +161,8 @@ const App: FC = () => {
                 <Route path="global/settings/ai-configs" element={<AIConfigList />} />
                 <Route path="global/settings/ai-configs/create" element={<AIConfigForm />} />
                 <Route path="global/settings/ai-configs/:id/edit" element={<AIConfigForm />} />
+                <Route path="global/settings/skills/create" element={<SkillCreate />} />
+                <Route path="global/settings/skills/:id" element={<SkillDetail />} />
                 <Route path="global/settings/agent-pools" element={<AgentPoolManagement />} />
                 <Route path="global/settings/agent-pools/create" element={<AgentPoolForm />} />
                 <Route path="global/settings/agent-pools/:poolId" element={<AgentPoolDetail />} />
