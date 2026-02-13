@@ -44,7 +44,7 @@ type SetupInitRequest struct {
 func (h *SetupHandler) GetStatus(c *gin.Context) {
 	var count int64
 	if err := h.db.Model(&models.User{}).Where("role = ? AND is_active = ?", "admin", true).Count(&count).Error; err != nil {
-		log.Printf("❌ [Setup] Failed to check admin status: %v", err)
+		log.Printf("[Setup] Failed to check admin status: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to check system status",
@@ -87,29 +87,7 @@ func (h *SetupHandler) GetStatus(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/setup/init [post]
 func (h *SetupHandler) InitAdmin(c *gin.Context) {
-	// 1. 检查系统是否已初始化
-	var adminCount int64
-	if err := h.db.Model(&models.User{}).Where("role = ? AND is_active = ?", "admin", true).Count(&adminCount).Error; err != nil {
-		log.Printf("❌ [Setup] Failed to check admin status: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "Failed to check system status",
-			"timestamp": time.Now(),
-		})
-		return
-	}
-
-	if adminCount > 0 {
-		log.Printf("⚠️ [Setup] System already initialized, rejecting init request")
-		c.JSON(http.StatusConflict, gin.H{
-			"code":      409,
-			"message":   "系统已初始化，无法重复创建管理员",
-			"timestamp": time.Now(),
-		})
-		return
-	}
-
-	// 2. 解析请求
+	// 1. 解析请求（在获取锁之前完成参数校验，避免持锁时间过长）
 	var req SetupInitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -120,10 +98,68 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		return
 	}
 
-	// 3. 检查用户名和邮箱是否已存在
+	// 2. 生成密码哈希（CPU密集操作，在获取锁之前完成）
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("[Setup] Failed to hash password: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "Failed to hash password",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 3. 开启事务并获取 Advisory Lock（防止并发初始化竞态条件）
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 使用 PostgreSQL Advisory Lock 确保同一时间只有一个初始化请求能执行
+	// lock key 73657475 是 "setup" 的 ASCII 编码，仅用于标识此操作
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(73657475)").Error; err != nil {
+		tx.Rollback()
+		log.Printf("[Setup] Failed to acquire advisory lock: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "Failed to acquire initialization lock",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 4. 在事务内检查系统是否已初始化（持有锁，安全无竞态）
+	var adminCount int64
+	if err := tx.Model(&models.User{}).Where("role = ? AND is_active = ?", "admin", true).Count(&adminCount).Error; err != nil {
+		tx.Rollback()
+		log.Printf("[Setup] Failed to check admin status: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "Failed to check system status",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	if adminCount > 0 {
+		tx.Rollback()
+		log.Printf("[Setup] System already initialized, rejecting init request")
+		c.JSON(http.StatusConflict, gin.H{
+			"code":      409,
+			"message":   "系统已初始化，无法重复创建管理员",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 5. 在事务内检查用户名和邮箱是否已存在
 	var existingCount int64
-	if err := h.db.Model(&models.User{}).Where("username = ? OR email = ?", req.Username, req.Email).Count(&existingCount).Error; err != nil {
-		log.Printf("❌ [Setup] Failed to check existing user: %v", err)
+	if err := tx.Model(&models.User{}).Where("username = ? OR email = ?", req.Username, req.Email).Count(&existingCount).Error; err != nil {
+		tx.Rollback()
+		log.Printf("[Setup] Failed to check existing user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to check existing user",
@@ -133,6 +169,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 	}
 
 	if existingCount > 0 {
+		tx.Rollback()
 		c.JSON(http.StatusConflict, gin.H{
 			"code":      409,
 			"message":   "用户名或邮箱已存在",
@@ -140,26 +177,6 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		})
 		return
 	}
-
-	// 4. 生成密码哈希
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("❌ [Setup] Failed to hash password: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "Failed to hash password",
-			"timestamp": time.Now(),
-		})
-		return
-	}
-
-	// 5. 在事务中创建管理员用户及相关数据
-	tx := h.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
 
 	// 创建用户
 	user := models.User{
@@ -173,7 +190,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 
 	if err := tx.Create(&user).Error; err != nil {
 		tx.Rollback()
-		log.Printf("❌ [Setup] Failed to create admin user: %v", err)
+		log.Printf("[Setup] Failed to create admin user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to create admin user",
@@ -182,7 +199,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ [Setup] Admin user created: %s (ID: %s)", user.Username, user.ID)
+	log.Printf("[Setup] Admin user created: %s (ID: %s)", user.Username, user.ID)
 
 	// 6. 分配 admin IAM 角色
 	// 查找系统 admin 角色
@@ -215,7 +232,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 				log.Printf("⚠️ [Setup] Failed to assign admin IAM role: %v", err)
 				// 不回滚，角色分配是可选的
 			} else {
-				log.Printf("✅ [Setup] Admin IAM role assigned to user %s", user.Username)
+				log.Printf("[Setup] Admin IAM role assigned to user %s", user.Username)
 			}
 		}
 	}
@@ -236,13 +253,13 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		if err := tx.Table("user_organizations").Create(&userOrg).Error; err != nil {
 			log.Printf("⚠️ [Setup] Failed to assign user to default org: %v", err)
 		} else {
-			log.Printf("✅ [Setup] User %s assigned to default organization", user.Username)
+			log.Printf("[Setup] User %s assigned to default organization", user.Username)
 		}
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("❌ [Setup] Failed to commit transaction: %v", err)
+		log.Printf("[Setup] Failed to commit transaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to complete setup",

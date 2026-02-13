@@ -6,7 +6,7 @@
 
 ## 需要整改的问题分类
 
-1. **无认证无授权**: `run-task-callback`(3个), `setup/init`(1个)
+1. **无认证无授权**: `run-task-callback`(3个) ~~`setup/init`(1个, ✅ 已修复)~~
 2. **有JWT但缺IAM权限检查**: `secrets`(5个), `user/tokens`(4个), `notifications`(7个), `manifest`(20个), `sso-auth`(4个), `ai/embedding/config-status`(1个)
 3. **仅BypassIAMForAdmin无细粒度IAM**: `admin-skills`(9个), `admin-embedding`(2个), `admin-module-skill`(4个), `admin-module-version-skill`(5个), `admin-embedding-cache`(5个)
 4. **敏感端点无访问控制**: `metrics`(1个)
@@ -34,17 +34,20 @@
 
 **修复建议**: 添加 Basic Auth 或独立的 metrics token 认证，不走 JWT/IAM 体系。监控系统使用专用凭证访问。
 
-### setup — POST /setup/init
+### setup — POST /setup/init ✅ 已修复
 
-**原因**: 系统初始化接口无任何认证保护，也无状态检查防护。虽然设计意图是在系统未初始化时使用，但如果缺少"已初始化则拒绝"的幂等性保护，攻击者可能在系统运行后重新调用此接口重置管理员账户，导致完全接管系统。
+**原因**: 系统初始化接口无需 JWT 认证（设计如此，因为初始化时尚无用户可登录），但需要幂等性保护防止重复初始化。
 
-**风险等级**: 🔴 严重
+**风险等级**: 🟢 已解决
 
-**后果**: 攻击者可重置管理员账户密码，完全接管整个 IaC 平台；所有 Workspace、Terraform State、云凭证、部署配置均被暴露；攻击者可利用平台中存储的云凭证对生产环境基础设施进行任意操作（创建、修改、删除云资源），造成不可逆的生产事故和数据丢失。
+**已实施的保护措施**:
+1. **幂等性保护**: handler 内部检查是否已存在活跃的 admin 用户，若已存在则返回 409 Conflict
+2. **并发安全**: 使用 PostgreSQL Advisory Lock (`pg_advisory_xact_lock`) 防止竞态条件，确保同一时间只有一个初始化请求能执行
+3. **事务原子性**: admin 检查和用户创建在同一事务内完成，检查-创建操作不可分割
+4. **参数校验**: 用户名(3-50字符)、邮箱(格式校验)、密码(最少8字符) 均有 binding 校验
+5. **唯一性约束**: 事务内检查用户名和邮箱是否已存在
 
-**修复副作用**: 添加"已初始化则拒绝"逻辑后，如果数据库被意外清空或迁移到新环境，管理员将无法重新初始化系统（因为状态标记可能残留）。需要提供数据库级别的重置机制或命令行工具作为备用初始化入口。
-
-**修复建议**: 在 handler 中检查数据库是否已存在 admin 用户，若已存在则返回 409 Conflict。不需要 IAM 权限，仅需幂等性保护。
+**说明**: 此接口不需要 JWT/IAM 认证保护（系统初始化时尚无用户），安全性通过 handler 内部的业务逻辑保证。如果数据库被清空需要重新初始化，admin 检查会自动允许重新创建。
 
 ### run-task-callback — PATCH/POST /run-task-results/:id/callback
 
@@ -240,7 +243,7 @@ manifests/*
 | root | GET /static/* | false |
 | root | GET /swagger/*any | false |
 | setup | GET /setup/status | false |
-| setup | POST /setup/init | true |
+| setup | POST /setup/init | ✅ false (已修复) |
 | auth | POST /auth/login | false |
 | auth | POST /auth/mfa/verify | false |
 | auth | POST /auth/refresh | false |
