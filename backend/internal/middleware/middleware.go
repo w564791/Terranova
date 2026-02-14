@@ -216,10 +216,30 @@ func JWTAuth() gin.HandlerFunc {
 			// 设置session_id到context（供logout使用）
 			c.Set("session_id", sessionID)
 
-			// 从token中获取role（login token包含role）
-			if role, exists := claims["role"]; exists && role != nil {
-				c.Set("role", role)
+			// 从数据库查询最新的role（确保管理员修改权限后立即生效，无需重新登录）
+			var loginUser struct {
+				Role     string
+				IsActive bool
 			}
+			if err := globalDB.Table("users").Select("role, is_active").Where("user_id = ?", userID).First(&loginUser).Error; err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"code":      401,
+					"message":   "User not found",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			if !loginUser.IsActive {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"code":      401,
+					"message":   "User is inactive",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			c.Set("role", loginUser.Role)
 		} else if tokenType == "user_token" {
 			// User token: 必须验证token_id在数据库中存在且有效
 			tokenID, _ := claims["token_id"].(string)

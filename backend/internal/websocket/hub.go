@@ -3,8 +3,27 @@ package websocket
 import (
 	"encoding/json"
 	"log"
+	"os"
 	"sync"
+
+	"iac-platform/internal/pgpubsub"
+
+	"gorm.io/gorm"
 )
+
+// WSBroadcastChannel is the PostgreSQL NOTIFY channel used for cross-replica
+// WebSocket message broadcasting.
+const WSBroadcastChannel = "ws_broadcast"
+
+// CrossReplicaMessage is the envelope sent over PG NOTIFY to route a WebSocket
+// message to the correct replica/session.
+type CrossReplicaMessage struct {
+	TargetType string      `json:"target_type"` // "session"
+	TargetID   string      `json:"target_id"`   // session_id
+	EventType  string      `json:"event_type"`  // message type
+	Payload    interface{} `json:"payload"`      // message data
+	SourcePod  string      `json:"source_pod"`   // sender pod name
+}
 
 // Hub 管理所有WebSocket连接
 type Hub struct {
@@ -22,6 +41,15 @@ type Hub struct {
 
 	// 保护clients map的互斥锁
 	mu sync.RWMutex
+
+	// pubsub for cross-replica NOTIFY
+	pubsub *pgpubsub.PubSub
+
+	// db for sending NOTIFY via GORM
+	db *gorm.DB
+
+	// podName is this pod's identity (used to skip self-originated messages)
+	podName string
 }
 
 // Message WebSocket消息结构
@@ -107,6 +135,98 @@ func (h *Hub) SendToSession(sessionID string, message Message) {
 	} else {
 		log.Printf("  Session %s not connected, message not sent: type=%s", sessionID, message.Type)
 	}
+}
+
+// SendToSessionOrBroadcast tries to deliver a message to a local session first.
+// If the session is not connected to this replica and PG PubSub is configured,
+// the message is published via PG NOTIFY so that other replicas can deliver it.
+func (h *Hub) SendToSessionOrBroadcast(sessionID string, message Message) {
+	h.mu.RLock()
+	client, exists := h.clients[sessionID]
+	h.mu.RUnlock()
+
+	if exists {
+		// Session is local – deliver directly.
+		h.sendToClient(client, message)
+		return
+	}
+
+	// Not found locally – try cross-replica broadcast.
+	if h.pubsub == nil || h.db == nil {
+		log.Printf("[Hub] Session %s not local and PubSub not configured, message dropped: type=%s", sessionID, message.Type)
+		return
+	}
+
+	crMsg := CrossReplicaMessage{
+		TargetType: "session",
+		TargetID:   sessionID,
+		EventType:  message.Type,
+		Payload:    message.Data,
+		SourcePod:  h.podName,
+	}
+
+	if err := pgpubsub.Notify(h.db, WSBroadcastChannel, crMsg); err != nil {
+		log.Printf("[Hub] Failed to send cross-replica NOTIFY for session %s: %v", sessionID, err)
+	} else {
+		log.Printf("[Hub] Cross-replica NOTIFY sent for session %s: type=%s", sessionID, message.Type)
+	}
+}
+
+// SetupCrossReplicaListener configures the Hub to participate in cross-replica
+// message delivery via PostgreSQL LISTEN/NOTIFY.
+func (h *Hub) SetupCrossReplicaListener(ps *pgpubsub.PubSub, db *gorm.DB) {
+	h.pubsub = ps
+	h.db = db
+
+	// Determine pod identity.
+	h.podName = os.Getenv("POD_NAME")
+	if h.podName == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			h.podName = "unknown"
+		} else {
+			h.podName = hostname
+		}
+	}
+	log.Printf("[Hub] Cross-replica listener setup: podName=%s", h.podName)
+
+	// Subscribe to the broadcast channel. The handler unmarshals the
+	// CrossReplicaMessage, skips messages originating from this pod, and
+	// delivers to the target session if it is connected locally.
+	ps.Subscribe(WSBroadcastChannel, func(payload string) {
+		var crMsg CrossReplicaMessage
+		if err := json.Unmarshal([]byte(payload), &crMsg); err != nil {
+			log.Printf("[Hub] Failed to unmarshal cross-replica message: %v", err)
+			return
+		}
+
+		// Skip messages we sent ourselves.
+		if crMsg.SourcePod == h.podName {
+			return
+		}
+
+		if crMsg.TargetType != "session" {
+			log.Printf("[Hub] Unknown cross-replica target_type=%s, ignoring", crMsg.TargetType)
+			return
+		}
+
+		h.mu.RLock()
+		client, exists := h.clients[crMsg.TargetID]
+		h.mu.RUnlock()
+
+		if !exists {
+			// Session is not on this replica either; that's fine.
+			return
+		}
+
+		msg := Message{
+			Type:      crMsg.EventType,
+			SessionID: crMsg.TargetID,
+			Data:      crMsg.Payload,
+		}
+		h.sendToClient(client, msg)
+		log.Printf("[Hub] Delivered cross-replica message to session %s: type=%s from pod=%s", crMsg.TargetID, crMsg.EventType, crMsg.SourcePod)
+	})
 }
 
 // sendToSession 内部方法，发送消息给指定session

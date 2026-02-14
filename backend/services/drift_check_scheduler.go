@@ -34,7 +34,7 @@ func NewDriftCheckScheduler(db *gorm.DB, taskQueueManager *TaskQueueManager) *Dr
 }
 
 // Start 启动调度器
-func (s *DriftCheckScheduler) Start(interval time.Duration) {
+func (s *DriftCheckScheduler) Start(ctx context.Context, interval time.Duration) {
 	s.mutex.Lock()
 	if s.isRunning {
 		s.mutex.Unlock()
@@ -54,6 +54,9 @@ func (s *DriftCheckScheduler) Start(interval time.Duration) {
 
 		for {
 			select {
+			case <-ctx.Done():
+				log.Println("[DriftScheduler] Stopped: context cancelled")
+				return
 			case <-s.ticker.C:
 				s.checkWorkspaces()
 			case <-s.stopChan:

@@ -494,6 +494,146 @@ func (h *MFAHandler) GetUserMFAStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "data": status})
 }
 
+// SetupMFAWithToken 使用 mfa_token 认证的 MFA 初始设置（用于首次登录强制设置 MFA）
+// @Summary 初始化MFA设置（mfa_token认证）
+// @Description 用户首次登录时通过 mfa_token 认证，初始化 MFA 设置
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body SetupMFAWithTokenRequest true "MFA Token"
+// @Success 200 {object} models.MFASetupResponse
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/v1/auth/mfa/setup [post]
+func (h *MFAHandler) SetupMFAWithToken(c *gin.Context) {
+	var req SetupMFAWithTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	// 验证 mfa_token
+	mfaToken, err := h.mfaService.ValidateMFAToken(req.MFAToken, c.ClientIP())
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Authorization required"})
+		return
+	}
+
+	// 获取用户
+	var user models.User
+	if err := h.db.Where("user_id = ?", mfaToken.UserID).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "User not found"})
+		return
+	}
+
+	if user.MFAEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "MFA is already enabled"})
+		return
+	}
+
+	response, err := h.mfaService.SetupMFA(&user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 200, "data": response})
+}
+
+// SetupMFAWithTokenRequest 使用 mfa_token 的 MFA 设置请求
+type SetupMFAWithTokenRequest struct {
+	MFAToken string `json:"mfa_token" binding:"required"`
+}
+
+// VerifyAndEnableMFAWithToken 使用 mfa_token 认证验证并启用 MFA
+// @Summary 验证并启用MFA（mfa_token认证）
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body VerifyMFAWithTokenRequest true "MFA Token + 验证码"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/auth/mfa/enable [post]
+func (h *MFAHandler) VerifyAndEnableMFAWithToken(c *gin.Context) {
+	var req VerifyMFAWithTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	// 验证 mfa_token
+	mfaToken, err := h.mfaService.ValidateMFAToken(req.MFAToken, c.ClientIP())
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Authorization required"})
+		return
+	}
+
+	// 获取用户
+	var user models.User
+	if err := h.db.Where("user_id = ?", mfaToken.UserID).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "User not found"})
+		return
+	}
+
+	if err := h.mfaService.VerifyAndEnableMFA(&user, req.Code); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	// MFA 启用成功，标记 token 已使用
+	_ = h.mfaService.MarkMFATokenUsed(mfaToken)
+
+	// 生成 session 和 JWT，直接登录
+	sessionID, err := generateSessionID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to generate session"})
+		return
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour)
+	session := models.LoginSession{
+		SessionID: sessionID,
+		UserID:    user.ID,
+		Username:  user.Username,
+		CreatedAt: time.Now(),
+		ExpiresAt: expiresAt,
+		IPAddress: c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
+		IsActive:  true,
+	}
+
+	if err := h.db.Create(&session).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to create session"})
+		return
+	}
+
+	token, err := generateJWTWithSession(user.ID, user.Username, user.Role, sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "MFA已成功启用",
+		"data": gin.H{
+			"mfa_enabled": true,
+			"token":       token,
+			"expires_at":  expiresAt,
+			"user": gin.H{
+				"id":       user.ID,
+				"username": user.Username,
+				"email":    user.Email,
+				"role":     user.Role,
+			},
+		},
+	})
+}
+
+// VerifyMFAWithTokenRequest 使用 mfa_token 的 MFA 验证请求
+type VerifyMFAWithTokenRequest struct {
+	MFAToken string `json:"mfa_token" binding:"required"`
+	Code     string `json:"code" binding:"required"`
+}
+
 // 辅助方法
 
 func (h *MFAHandler) getCurrentUser(c *gin.Context) (*models.User, error) {

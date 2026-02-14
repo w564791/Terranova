@@ -28,7 +28,8 @@ export const useTerraformOutput = (taskId: number) => {
     
     isConnectingRef.current = true;
     const token = localStorage.getItem('token');
-    const wsUrl = `ws://localhost:8080/api/v1/tasks/${taskId}/output/stream`;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/tasks/${taskId}/output/stream`;
     const ws = new WebSocket(wsUrl, ['access_token', token || '']);
     wsRef.current = ws;
 

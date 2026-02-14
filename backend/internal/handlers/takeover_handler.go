@@ -82,16 +82,11 @@ func (h *TakeoverHandler) RequestTakeover(c *gin.Context) {
 	log.Printf("🔔 准备发送接管请求通知: target_session=%s", req.TargetSessionID)
 	log.Printf("🔔 当前已连接的sessions: %v", h.wsHub.GetConnectedSessions())
 
-	if h.wsHub.IsSessionConnected(req.TargetSessionID) {
-		log.Printf(" 目标session已连接，发送takeover_request消息")
-		h.wsHub.SendToSession(req.TargetSessionID, websocket.Message{
-			Type:      "takeover_request",
-			SessionID: req.TargetSessionID,
-			Data:      request,
-		})
-	} else {
-		log.Printf(" 目标session未连接: %s", req.TargetSessionID)
-	}
+	h.wsHub.SendToSessionOrBroadcast(req.TargetSessionID, websocket.Message{
+		Type:      "takeover_request",
+		SessionID: req.TargetSessionID,
+		Data:      request,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"request_id": request.ID,
@@ -138,18 +133,16 @@ func (h *TakeoverHandler) RespondToTakeover(c *gin.Context) {
 	}
 
 	// 通过WebSocket通知请求方
-	if h.wsHub.IsSessionConnected(request.RequesterSession) {
-		messageType := "takeover_rejected"
-		if req.Approved {
-			messageType = "takeover_approved"
-		}
-
-		h.wsHub.SendToSession(request.RequesterSession, websocket.Message{
-			Type:      messageType,
-			SessionID: request.RequesterSession,
-			Data:      request,
-		})
+	messageType := "takeover_rejected"
+	if req.Approved {
+		messageType = "takeover_approved"
 	}
+
+	h.wsHub.SendToSessionOrBroadcast(request.RequesterSession, websocket.Message{
+		Type:      messageType,
+		SessionID: request.RequesterSession,
+		Data:      request,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": map[bool]string{true: "approved", false: "rejected"}[req.Approved],
@@ -223,16 +216,13 @@ func (h *TakeoverHandler) GetRequestStatus(c *gin.Context) {
 
 	// 如果状态从pending变为approved（超时自动接管），通知被接管方
 	if originalStatus == "pending" && request.Status == "approved" {
-		// 通过WebSocket通知被接管方
-		if h.wsHub.IsSessionConnected(request.TargetSession) {
-			h.wsHub.SendToSession(request.TargetSession, websocket.Message{
-				Type:      "force_takeover",
-				SessionID: request.TargetSession,
-				Data: map[string]interface{}{
-					"message": "接管请求已超时，您的编辑会话已被接管",
-				},
-			})
-		}
+		h.wsHub.SendToSessionOrBroadcast(request.TargetSession, websocket.Message{
+			Type:      "force_takeover",
+			SessionID: request.TargetSession,
+			Data: map[string]interface{}{
+				"message": "接管请求已超时，您的编辑会话已被接管",
+			},
+		})
 	}
 
 	c.JSON(http.StatusOK, request)
@@ -285,15 +275,13 @@ func (h *TakeoverHandler) ForceTakeover(c *gin.Context) {
 	}
 
 	// 通过WebSocket通知被接管方
-	if h.wsHub.IsSessionConnected(req.TargetSessionID) {
-		h.wsHub.SendToSession(req.TargetSessionID, websocket.Message{
-			Type:      "force_takeover",
-			SessionID: req.TargetSessionID,
-			Data: map[string]interface{}{
-				"message": "您的编辑会话已被强制接管",
-			},
-		})
-	}
+	h.wsHub.SendToSessionOrBroadcast(req.TargetSessionID, websocket.Message{
+		Type:      "force_takeover",
+		SessionID: req.TargetSessionID,
+		Data: map[string]interface{}{
+			"message": "您的编辑会话已被强制接管",
+		},
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",

@@ -145,48 +145,33 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// 新用户第一次登录：先生成 JWT 让用户登录，同时标记需要设置 MFA
-	// （MFA setup API 需要 JWT 认证，所以必须先登录）
+	// 新用户第一次登录：生成 mfa_token（非 JWT），用户必须完成 MFA 设置后才能获得 JWT
 	if result.IsNewUser && !result.User.MFAEnabled {
 		mfaConfig, _ := h.mfaService.GetMFAConfig()
 		if mfaConfig != nil && mfaConfig.Enabled {
-			// 生成 session 和 JWT
-			sessionID, err := generateSessionID()
-			if err == nil {
-				expiresAt := time.Now().Add(24 * time.Hour)
-				session := models.LoginSession{
-					SessionID: sessionID,
-					UserID:    result.User.ID,
-					Username:  result.User.Username,
-					CreatedAt: time.Now(),
-					ExpiresAt: expiresAt,
-					IPAddress: c.ClientIP(),
-					UserAgent: c.Request.UserAgent(),
-					IsActive:  true,
-				}
-				h.db.Create(&session)
-
-				token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
-				if err == nil {
-					c.JSON(http.StatusOK, gin.H{
-						"code":    200,
-						"message": "MFA setup required for new user",
-						"data": gin.H{
-							"token":              token,
-							"expires_at":         expiresAt,
-							"mfa_setup_required": true,
-							"is_new_user":        true,
-							"user": gin.H{
-								"id":       result.User.ID,
-								"username": result.User.Username,
-								"email":    result.User.Email,
-								"role":     result.User.Role,
-							},
-						},
-					})
-					return
-				}
+			mfaToken, err := h.mfaService.CreateMFAToken(result.User.ID, c.ClientIP())
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    500,
+					"message": "Failed to create MFA token",
+				})
+				return
 			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code":    200,
+				"message": "MFA setup required for new user",
+				"data": gin.H{
+					"mfa_setup_required": true,
+					"mfa_token":          mfaToken.Token,
+					"expires_in":         300,
+					"is_new_user":        true,
+					"user": gin.H{
+						"username": result.User.Username,
+					},
+				},
+			})
+			return
 		}
 	}
 
@@ -342,33 +327,19 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 
 	// 检查 MFA（与 Callback 端点保持一致的安全策略）
 
-	// 新用户第一次登录：检查全局 MFA 强制策略
+	// 新用户第一次登录：生成 mfa_token（非 JWT），用户必须完成 MFA 设置后才能获得 JWT
 	if result.IsNewUser && !result.User.MFAEnabled {
 		mfaConfig, _ := h.mfaService.GetMFAConfig()
 		if mfaConfig != nil && mfaConfig.Enabled {
-			// 生成 session 和 JWT，让用户可以设置 MFA
-			sessionID, err := generateSessionID()
-			if err == nil {
-				expiresAt := time.Now().Add(24 * time.Hour)
-				session := models.LoginSession{
-					SessionID: sessionID,
-					UserID:    result.User.ID,
-					Username:  result.User.Username,
-					CreatedAt: time.Now(),
-					ExpiresAt: expiresAt,
-					IPAddress: c.ClientIP(),
-					UserAgent: c.Request.UserAgent(),
-					IsActive:  true,
-				}
-				h.db.Create(&session)
-
-				token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
-				if err == nil {
-					c.Redirect(http.StatusFound, fmt.Sprintf("%s?token=%s&mfa_setup_required=true&is_new_user=true",
-						frontendCallbackURL, url.QueryEscape(token)))
-					return
-				}
+			mfaToken, err := h.mfaService.CreateMFAToken(result.User.ID, c.ClientIP())
+			if err != nil {
+				c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=mfa_error&error_description=%s",
+					frontendCallbackURL, url.QueryEscape("Failed to create MFA token")))
+				return
 			}
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s?mfa_setup_required=true&mfa_token=%s&is_new_user=true",
+				frontendCallbackURL, url.QueryEscape(mfaToken.Token)))
+			return
 		}
 	}
 

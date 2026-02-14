@@ -3,22 +3,38 @@ package handlers
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
+	"iac-platform/internal/pgpubsub"
 	"iac-platform/services"
 
 	gorillaws "github.com/gorilla/websocket"
 	"gorm.io/gorm"
 )
+
+// TaskDispatchChannel is the PG NOTIFY channel used for cross-replica agent task dispatch.
+const TaskDispatchChannel = "task_dispatch"
+
+// TaskDispatchMessage is the payload sent over PG NOTIFY when the leader
+// cannot deliver a task locally and needs another replica to handle it.
+type TaskDispatchMessage struct {
+	AgentID     string `json:"agent_id"`
+	TaskID      uint   `json:"task_id"`
+	WorkspaceID string `json:"workspace_id"`
+	Action      string `json:"action"`
+	SourcePod   string `json:"source_pod"`
+}
 
 // RawAgentCCHandler handles Agent C&C WebSocket connections using raw http.Handler
 type RawAgentCCHandler struct {
@@ -146,10 +162,15 @@ func (h *RawAgentCCHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Raw] Agent %s connected to C&C channel", agentID)
 
-	// Update agent status
+	// Update agent status (including connected_pod for HA routing)
+	podName := os.Getenv("POD_NAME")
+	if podName == "" {
+		podName, _ = os.Hostname()
+	}
 	h.db.Model(&agent).Updates(map[string]interface{}{
-		"status":       "online",
-		"last_ping_at": time.Now(),
+		"status":        "online",
+		"last_ping_at":  time.Now(),
+		"connected_pod": podName,
 	})
 
 	// Start connection handler
@@ -195,8 +216,9 @@ func (h *RawAgentCCHandler) handleConnection(agentConn *RawAgentConnection) {
 		h.db.Model(&models.Agent{}).
 			Where("agent_id = ?", agentConn.AgentID).
 			Updates(map[string]interface{}{
-				"status":       "offline",
-				"last_ping_at": time.Now(),
+				"status":        "offline",
+				"last_ping_at":  time.Now(),
+				"connected_pod": gorm.Expr("NULL"),
 			})
 
 		log.Printf("[Raw] Agent %s disconnected from C&C channel", agentConn.AgentID)
@@ -386,10 +408,15 @@ func (h *RawAgentCCHandler) handleHeartbeat(agentConn *RawAgentConnection, paylo
 	// Get agent info for pool_id and name
 	var agent models.Agent
 	if err := h.db.Where("agent_id = ?", agentConn.AgentID).First(&agent).Error; err == nil {
-		// Update agent status in database
+		// Update agent status in database (including connected_pod for HA routing)
+		podName := os.Getenv("POD_NAME")
+		if podName == "" {
+			podName, _ = os.Hostname()
+		}
 		h.db.Model(&agent).Updates(map[string]interface{}{
-			"status":       "online",
-			"last_ping_at": time.Now(),
+			"status":        "online",
+			"last_ping_at":  time.Now(),
+			"connected_pod": podName,
 		})
 
 		// Broadcast metrics to AgentMetricsHub if available
@@ -784,9 +811,25 @@ func (h *RawAgentCCHandler) GetConnectedAgents() []string {
 }
 
 // StartStandalone starts the handler as a standalone HTTP server
+// If TLS_CERT_FILE and TLS_KEY_FILE are set, it starts with TLS.
 func (h *RawAgentCCHandler) StartStandalone(port string) error {
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/agents/control", h)
+
+	tlsCert := os.Getenv("TLS_CERT_FILE")
+	tlsKey := os.Getenv("TLS_KEY_FILE")
+
+	if tlsCert != "" && tlsKey != "" {
+		log.Printf("[Raw] Starting standalone WebSocket server on port %s (TLS)", port)
+		srv := &http.Server{
+			Addr:    ":" + port,
+			Handler: mux,
+			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+		}
+		return srv.ListenAndServeTLS(tlsCert, tlsKey)
+	}
 
 	log.Printf("[Raw] Starting standalone WebSocket server on port %s", port)
 	return http.ListenAndServe(":"+port, mux)
@@ -1001,4 +1044,52 @@ func (h *RawAgentCCHandler) BroadcastCredentialsRefresh(poolID string) error {
 
 	log.Printf("[Raw] Credentials refresh broadcast completed: %d/%d agents notified", successCount, len(agents))
 	return nil
+}
+
+// SetupTaskDispatchListener subscribes to the TaskDispatchChannel so that
+// cross-replica task dispatch messages are handled. When the leader publishes
+// a TaskDispatchMessage via PG NOTIFY, every replica receives it. Each replica
+// checks whether the target agent is connected locally and, if so, delivers
+// the task over its WebSocket connection.
+func (h *RawAgentCCHandler) SetupTaskDispatchListener(pubsub *pgpubsub.PubSub) {
+	podName := os.Getenv("POD_NAME")
+	if podName == "" {
+		podName, _ = os.Hostname()
+	}
+
+	pubsub.Subscribe(TaskDispatchChannel, func(payload string) {
+		var msg TaskDispatchMessage
+		if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+			log.Printf("[TaskDispatch] Failed to unmarshal task dispatch message: %v", err)
+			return
+		}
+
+		// Skip messages that originated from this pod to avoid double-delivery.
+		if msg.SourcePod == podName {
+			return
+		}
+
+		// Check if the target agent is connected to this replica.
+		h.mu.RLock()
+		_, connected := h.agents[msg.AgentID]
+		h.mu.RUnlock()
+
+		if !connected {
+			// Agent is not on this replica; nothing to do.
+			return
+		}
+
+		log.Printf("[TaskDispatch] Received cross-replica dispatch: task=%d agent=%s action=%s from pod=%s",
+			msg.TaskID, msg.AgentID, msg.Action, msg.SourcePod)
+
+		if err := h.SendTaskToAgent(msg.AgentID, msg.TaskID, msg.WorkspaceID, msg.Action); err != nil {
+			log.Printf("[TaskDispatch] Failed to deliver task %d to agent %s on this replica: %v",
+				msg.TaskID, msg.AgentID, err)
+		} else {
+			log.Printf("[TaskDispatch] Successfully delivered task %d to agent %s on this replica",
+				msg.TaskID, msg.AgentID)
+		}
+	})
+
+	log.Printf("[TaskDispatch] Listener configured on pod %s", podName)
 }

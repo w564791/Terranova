@@ -77,9 +77,11 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 		auth.POST("/login", authHandler.Login)
 		// auth.POST("/register", authHandler.Register)
 
-		// MFA验证路由（登录时的第二步验证，无需JWT）
+		// MFA路由（登录流程，无需JWT，使用mfa_token认证）
 		mfaHandler := handlers.NewMFAHandler(db)
 		auth.POST("/mfa/verify", mfaHandler.VerifyMFALogin)
+		auth.POST("/mfa/setup", mfaHandler.SetupMFAWithToken)
+		auth.POST("/mfa/enable", mfaHandler.VerifyAndEnableMFAWithToken)
 	}
 
 	// SSO 路由（包含公开端点和需要认证的端点）

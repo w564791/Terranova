@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -27,7 +28,7 @@ func NewAgentCleanupService(db *gorm.DB) *AgentCleanupService {
 }
 
 // Start begins the cleanup service with the specified interval
-func (s *AgentCleanupService) Start(interval time.Duration) {
+func (s *AgentCleanupService) Start(ctx context.Context, interval time.Duration) {
 	log.Printf("[AgentCleanup] Starting agent cleanup service with interval: %v", interval)
 
 	s.ticker = time.NewTicker(interval)
@@ -39,6 +40,9 @@ func (s *AgentCleanupService) Start(interval time.Duration) {
 		// Then run periodically
 		for {
 			select {
+			case <-ctx.Done():
+				log.Println("[AgentCleanup] Stopped: context cancelled")
+				return
 			case <-s.ticker.C:
 				s.runCleanup()
 			case <-s.done:

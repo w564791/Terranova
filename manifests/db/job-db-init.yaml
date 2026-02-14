@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iac-db-init
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+    app.kubernetes.io/component: db-init
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: iac-platform
+        app.kubernetes.io/component: db-init
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-init
+          image: w564791/iac-db-init:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: iac-platform
+            - secretRef:
+                name: iac-platform
+          env:
+            - name: DB_SSLROOTCERT
+              value: /etc/ssl/certs/ca.crt
+          volumeMounts:
+            - name: internal-ca
+              mountPath: /etc/ssl/certs/ca.crt
+              subPath: ca.crt
+              readOnly: true
+      volumes:
+        - name: internal-ca
+          secret:
+            secretName: iac-internal-ca
+            items:
+              - key: ca.crt
+                path: ca.crt

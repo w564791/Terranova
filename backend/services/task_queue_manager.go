@@ -2,16 +2,34 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log"
+	"os"
 	"runtime/debug"
-	"sync"
+	"strings"
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/pglock"
+	"iac-platform/internal/pgpubsub"
 
 	"gorm.io/gorm"
 )
+
+// taskDispatchChannel must match handlers.TaskDispatchChannel.
+const taskDispatchChannel = "task_dispatch"
+
+// taskDispatchMessage mirrors handlers.TaskDispatchMessage so the services
+// package can marshal the same JSON structure without importing handlers.
+type taskDispatchMessage struct {
+	AgentID     string `json:"agent_id"`
+	TaskID      uint   `json:"task_id"`
+	WorkspaceID string `json:"workspace_id"`
+	Action      string `json:"action"`
+	SourcePod   string `json:"source_pod"`
+}
 
 // TaskQueueManager 任务队列管理器
 type TaskQueueManager struct {
@@ -20,7 +38,8 @@ type TaskQueueManager struct {
 	k8sJobService    *K8sJobService
 	k8sDeploymentSvc *K8sDeploymentService // K8s Pod管理服务（用于槽位管理）
 	agentCCHandler   AgentCCHandler        // Interface for Agent C&C communication
-	workspaceLocks   sync.Map              // workspace_id -> *sync.Mutex
+	pgLocker         *pglock.Locker        // PG advisory locks for workspace serialization
+	pubsub           *pgpubsub.PubSub      // PG NOTIFY/LISTEN for cross-replica dispatch
 }
 
 // AgentCCHandler interface for sending tasks to agents
@@ -43,6 +62,7 @@ func NewTaskQueueManager(db *gorm.DB, executor *TerraformExecutor) *TaskQueueMan
 		db:            db,
 		executor:      executor,
 		k8sJobService: k8sJobService,
+		pgLocker:      pglock.New(db),
 	}
 }
 
@@ -50,6 +70,12 @@ func NewTaskQueueManager(db *gorm.DB, executor *TerraformExecutor) *TaskQueueMan
 func (m *TaskQueueManager) SetAgentCCHandler(handler AgentCCHandler) {
 	m.agentCCHandler = handler
 	log.Println("[TaskQueue] Agent C&C handler configured")
+}
+
+// SetPubSub sets the PG PubSub instance used for cross-replica task dispatch.
+func (m *TaskQueueManager) SetPubSub(ps *pgpubsub.PubSub) {
+	m.pubsub = ps
+	log.Println("[TaskQueue] PG PubSub configured for cross-replica task dispatch")
 }
 
 // SetK8sDeploymentService sets the K8s Deployment Service (called from main.go after initialization)
@@ -231,15 +257,25 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 	if task.TaskType == models.TaskTypePlanAndApply {
 		log.Printf("[TaskQueue] Plan+Apply task %d requires workspace lock", task.ID)
 
-		// 获取workspace锁
-		lockKey := fmt.Sprintf("ws_%s", workspaceID)
-		lock, _ := m.workspaceLocks.LoadOrStore(lockKey, &sync.Mutex{})
-		mutex := lock.(*sync.Mutex)
+		// Acquire PG advisory lock for workspace serialization.
+		// Use FNV hash of workspace ID string to derive a stable int64 key.
+		h := fnv.New64a()
+		h.Write([]byte(workspaceID))
+		lockKey := int64(h.Sum64())
 
-		mutex.Lock()
-		defer mutex.Unlock()
+		locked, err := m.pgLocker.TryLock(lockKey)
+		if err != nil {
+			log.Printf("[TaskQueue] Failed to acquire advisory lock for workspace %s: %v", workspaceID, err)
+			return err
+		}
+		if !locked {
+			// Another replica holds this lock — skip; PendingTasksMonitor will retry later.
+			log.Printf("[TaskQueue] Advisory lock for workspace %s held by another replica, skipping", workspaceID)
+			return nil
+		}
+		defer m.pgLocker.Unlock(lockKey)
 
-		log.Printf("[TaskQueue] Acquired workspace lock for plan+apply task %d", task.ID)
+		log.Printf("[TaskQueue] Acquired PG advisory lock for plan+apply task %d (workspace %s, key %d)", task.ID, workspaceID, lockKey)
 
 		// 重新检查任务状态（可能在等待锁期间被其他goroutine处理了）
 		var currentTask models.WorkspaceTask
@@ -624,6 +660,39 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 
 	// 7. Send task to agent via C&C channel (AFTER saving agent_id to DB)
 	if err := m.agentCCHandler.SendTaskToAgent(selectedAgent.AgentID, task.ID, task.WorkspaceID, action); err != nil {
+		// Check if the error indicates the agent is not connected on this replica.
+		// In HA mode it may be connected to a different replica, so try PG NOTIFY.
+		if m.pubsub != nil && strings.Contains(err.Error(), "not connected") {
+			log.Printf("[TaskQueue] Agent %s not connected locally, broadcasting task %d via PG NOTIFY for cross-replica delivery",
+				selectedAgent.AgentID, task.ID)
+
+			podName := os.Getenv("POD_NAME")
+			if podName == "" {
+				podName, _ = os.Hostname()
+			}
+
+			dispatchMsg := taskDispatchMessage{
+				AgentID:     selectedAgent.AgentID,
+				TaskID:      task.ID,
+				WorkspaceID: task.WorkspaceID,
+				Action:      action,
+				SourcePod:   podName,
+			}
+
+			msgData, marshalErr := json.Marshal(dispatchMsg)
+			if marshalErr != nil {
+				log.Printf("[TaskDispatch] Failed to marshal dispatch message for task %d: %v", task.ID, marshalErr)
+			} else if notifyErr := pgpubsub.NotifyRaw(m.db, taskDispatchChannel, string(msgData)); notifyErr != nil {
+				log.Printf("[TaskDispatch] Failed to send PG NOTIFY for task %d: %v", task.ID, notifyErr)
+			} else {
+				log.Printf("[TaskDispatch] PG NOTIFY sent for task %d to agent %s (will be delivered by another replica)",
+					task.ID, selectedAgent.AgentID)
+				// Return nil — PendingTasksMonitor will retry if the other replica
+				// also cannot deliver (e.g. agent truly disconnected).
+				return nil
+			}
+		}
+
 		// Release slot if allocated
 		if selectedPodName != "" {
 			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)

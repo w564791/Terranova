@@ -18,6 +18,8 @@ import (
 	"iac-platform/internal/models"
 	"iac-platform/internal/router"
 	"iac-platform/internal/websocket"
+	"iac-platform/internal/leaderelection"
+	"iac-platform/internal/pgpubsub"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -62,6 +64,10 @@ func main() {
 		log.Fatal("Failed to initialize database:", err)
 	}
 
+	// 创建可被 shutdown 信号取消的顶层 context
+	shutdownCtx, shutdownCancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer shutdownCancel()
+
 	// 初始化全局信号管理器
 	signalManager := services.GetSignalManager()
 	log.Println("Global signal manager initialized")
@@ -91,36 +97,39 @@ func main() {
 	executor.SetRunTaskExecutor(runTaskExecutor)
 	log.Println("Run Task executor initialized and configured")
 
-	// 启动 Run Task 超时检查器
+	// 初始化 Run Task 超时检查器
 	runTaskTimeoutChecker := services.NewRunTaskTimeoutChecker(db, 30*time.Second)
-	runTaskTimeoutCtx, runTaskTimeoutCancel := context.WithCancel(context.Background())
-	defer runTaskTimeoutCancel()
-	go runTaskTimeoutChecker.Start(runTaskTimeoutCtx)
-	log.Println("Run Task timeout checker started (30 second interval)")
 
 	// 初始化资源编辑协作服务
 	editingService := services.NewResourceEditingService(db)
 	log.Println("Resource editing service initialized")
 
-	// 初始化WebSocket Hub
+	// 初始化WebSocket Hub（所有副本运行）
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
 	log.Println("WebSocket Hub initialized and running")
 
-	// 初始化Agent Metrics Hub
+	// 初始化 PG PubSub 用于 WebSocket 跨副本消息广播
+	pubsubDSN := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+		cfg.Database.Host, cfg.Database.User, cfg.Database.Password, cfg.Database.Name, cfg.Database.Port)
+	pubsub := pgpubsub.New(pubsubDSN)
+	wsHub.SetupCrossReplicaListener(pubsub, db)
+	if err := pubsub.Start(); err != nil {
+		log.Fatalf("Failed to start PG PubSub: %v", err)
+	}
+	defer pubsub.Stop()
+	log.Println("PG PubSub initialized for cross-replica WebSocket broadcasting")
+
+	// 初始化Agent Metrics Hub（所有副本运行）
 	agentMetricsHub := websocket.NewAgentMetricsHub()
 	go agentMetricsHub.Run()
 	log.Println("Agent Metrics Hub initialized and running")
 
 	// 初始化CMDB外部数据源同步调度器
 	cmdbSyncScheduler := services.NewCMDBSyncScheduler(db)
-	cmdbSyncScheduler.Start(1 * time.Minute) // 每分钟检查一次需要同步的数据源
-	log.Println("CMDB external source sync scheduler started (1 minute check interval)")
 
 	// 初始化Agent清理服务
 	agentCleanupService := services.NewAgentCleanupService(db)
-	agentCleanupService.Start(5 * time.Minute)
-	log.Println("Agent cleanup service started (5 minute interval)")
 
 	// 初始化K8s Deployment服务
 	k8sDeploymentService, err := services.NewK8sDeploymentService(db)
@@ -129,76 +138,10 @@ func main() {
 		log.Println("K8s agent pools will not be available")
 	} else {
 		log.Println("K8s Deployment service initialized")
-
-		// 为所有K8s pools创建deployments
-		go func() {
-			ctx := context.Background()
-			var pools []struct {
-				PoolID   string
-				Name     string
-				PoolType string
-			}
-
-			if err := db.Table("agent_pools").
-				Where("pool_type = ?", "k8s").
-				Select("pool_id, name, pool_type").
-				Find(&pools).Error; err != nil {
-				log.Printf("[K8sDeployment] Error fetching K8s pools: %v", err)
-				return
-			}
-
-			log.Printf("[K8sDeployment] Found %d active K8s pools, ensuring deployments exist", len(pools))
-
-			for _, poolInfo := range pools {
-				// Fetch full pool data
-				var pool models.AgentPool
-				if err := db.Where("pool_id = ?", poolInfo.PoolID).First(&pool).Error; err != nil {
-					log.Printf("[K8sDeployment] Error fetching pool %s: %v", poolInfo.PoolID, err)
-					continue
-				}
-
-				// Ensure deployment exists for this pool
-				if err := k8sDeploymentService.EnsureDeploymentForPool(ctx, &pool); err != nil {
-					log.Printf("[K8sDeployment] Error ensuring deployment for pool %s: %v", poolInfo.PoolID, err)
-				} else {
-					log.Printf("[K8sDeployment] Deployment ensured for pool %s", poolInfo.PoolID)
-				}
-			}
-
-			log.Println("[K8sDeployment] All K8s pool deployments initialized")
-		}()
-
-		// 启动auto-scaler goroutine (每30秒检查一次)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		go k8sDeploymentService.StartAutoScaler(ctx, 5*time.Second)
-		log.Println("K8s Deployment auto-scaler started (5 second interval)")
 	}
 
-	// 启动后台清理任务
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-
-		log.Println("Background cleanup worker started (1 minute interval)")
-
-		for range ticker.C {
-			// 清理过期的资源锁（2分钟无心跳）
-			if err := editingService.CleanupExpiredLocks(); err != nil {
-				log.Printf("Error cleaning up expired locks: %v", err)
-			}
-
-			// 清理旧的草稿（7天前的expired状态）
-			if err := editingService.CleanupOldDrifts(); err != nil {
-				log.Printf("Error cleaning up old drifts: %v", err)
-			}
-
-			// 清理过期的接管请求
-			if err := editingService.CleanupExpiredRequests(); err != nil {
-				log.Printf("Error cleaning up expired takeover requests: %v", err)
-			}
-		}
-	}()
+	// 初始化 Drift 检测调度器
+	driftScheduler := services.NewDriftCheckScheduler(db, queueManager)
 
 	// 设置Gin模式
 	if cfg.Server.Env == "production" {
@@ -208,7 +151,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// 启动独立的WebSocket服务器来处理Agent连接
+	// 启动独立的WebSocket服务器来处理Agent连接（所有副本运行）
 	// 这避免了Gin框架对WebSocket的干扰
 	rawCCHandler := handlers.NewRawAgentCCHandler(db, streamManager)
 	rawCCHandler.SetMetricsHub(agentMetricsHub)
@@ -263,6 +206,11 @@ func main() {
 	queueManager.SetAgentCCHandler(rawCCHandler)
 	log.Println("[TaskQueue] Agent C&C handler configured (using Raw WebSocket handler)")
 
+	// Wire up PG PubSub for cross-replica agent task dispatch (HA)
+	queueManager.SetPubSub(pubsub)
+	rawCCHandler.SetupTaskDispatchListener(pubsub)
+	log.Println("[TaskDispatch] Cross-replica task dispatch configured via PG NOTIFY/LISTEN")
+
 	// 【Phase 2优化】将K8s Deployment Service注入到TaskQueueManager（用于槽位管理）
 	if k8sDeploymentService != nil {
 		queueManager.SetK8sDeploymentService(k8sDeploymentService)
@@ -280,37 +228,137 @@ func main() {
 
 	log.Println("System initialized with task queue management and Agent C&C support")
 
-	// 启动 Embedding Worker（CMDB 向量化搜索后台处理）
+	// 获取 Embedding Worker（在 router.Setup 之后才可用）
 	embeddingWorker := router.GetEmbeddingWorker()
-	if embeddingWorker != nil {
-		embeddingWorkerCtx, embeddingWorkerCancel := context.WithCancel(context.Background())
-		defer embeddingWorkerCancel()
-		go embeddingWorker.Start(embeddingWorkerCtx)
-		log.Println("Embedding worker started for CMDB vector search")
-	}
 
-	// 恢复pending任务（必须在 AgentCCHandler 初始化之后）
-	if err := queueManager.RecoverPendingTasks(); err != nil {
-		log.Printf("Warning: Failed to recover pending tasks: %v", err)
-	}
+	// ---------------------------------------------------------------
+	// Leader Election: 只有 leader 才运行后台调度/清理 goroutine
+	// ---------------------------------------------------------------
+	go leaderelection.RunWithFallback(shutdownCtx, leaderelection.LeaderCallbacks{
+		OnStartedLeading: func(leaderCtx context.Context) {
+			log.Println("[Main] This instance is now the leader, starting background services...")
 
-	// 启动pending任务监控器（10秒检查一次）
-	// 这确保所有pending任务都能得到执行机会,即使之前的尝试失败了
-	monitorCtx, monitorCancel := context.WithCancel(context.Background())
-	defer monitorCancel()
-	go queueManager.StartPendingTasksMonitor(monitorCtx, 10*time.Second)
-	log.Println("Pending tasks monitor started (10 second interval)")
+			// 1. Drift Check Scheduler
+			driftScheduler.Start(leaderCtx, 1*time.Minute)
+			log.Println("[Leader] Drift check scheduler started (1 minute check interval)")
 
-	// 初始化并启动 Drift 检测调度器
-	driftScheduler := services.NewDriftCheckScheduler(db, queueManager)
-	driftScheduler.Start(1 * time.Minute)
-	log.Println("Drift check scheduler started (1 minute check interval)")
+			// 2. K8s Deployment AutoScaler
+			if k8sDeploymentService != nil {
+				// 为所有K8s pools创建deployments
+				go func() {
+					var pools []struct {
+						PoolID   string
+						Name     string
+						PoolType string
+					}
 
-	// 设置优雅关闭
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+					if err := db.Table("agent_pools").
+						Where("pool_type = ?", "k8s").
+						Select("pool_id, name, pool_type").
+						Find(&pools).Error; err != nil {
+						log.Printf("[K8sDeployment] Error fetching K8s pools: %v", err)
+						return
+					}
 
-	// 启动服务器
+					log.Printf("[K8sDeployment] Found %d active K8s pools, ensuring deployments exist", len(pools))
+
+					for _, poolInfo := range pools {
+						// Fetch full pool data
+						var pool models.AgentPool
+						if err := db.Where("pool_id = ?", poolInfo.PoolID).First(&pool).Error; err != nil {
+							log.Printf("[K8sDeployment] Error fetching pool %s: %v", poolInfo.PoolID, err)
+							continue
+						}
+
+						// Ensure deployment exists for this pool
+						if err := k8sDeploymentService.EnsureDeploymentForPool(leaderCtx, &pool); err != nil {
+							log.Printf("[K8sDeployment] Error ensuring deployment for pool %s: %v", poolInfo.PoolID, err)
+						} else {
+							log.Printf("[K8sDeployment] Deployment ensured for pool %s", poolInfo.PoolID)
+						}
+					}
+
+					log.Println("[K8sDeployment] All K8s pool deployments initialized")
+				}()
+
+				go k8sDeploymentService.StartAutoScaler(leaderCtx, 5*time.Second)
+				log.Println("[Leader] K8s Deployment auto-scaler started (5 second interval)")
+			}
+
+			// 3. Pending Tasks Monitor
+			go queueManager.StartPendingTasksMonitor(leaderCtx, 10*time.Second)
+			log.Println("[Leader] Pending tasks monitor started (10 second interval)")
+
+			// 4. CMDB Sync Scheduler
+			cmdbSyncScheduler.Start(leaderCtx, 1*time.Minute)
+			log.Println("[Leader] CMDB sync scheduler started (1 minute check interval)")
+
+			// 5. Agent Cleanup Service
+			agentCleanupService.Start(leaderCtx, 5*time.Minute)
+			log.Println("[Leader] Agent cleanup service started (5 minute interval)")
+
+			// 6. Run Task Timeout Checker
+			go runTaskTimeoutChecker.Start(leaderCtx)
+			log.Println("[Leader] Run Task timeout checker started (30 second interval)")
+
+			// 7. Embedding Worker (if configured)
+			if embeddingWorker != nil {
+				go embeddingWorker.Start(leaderCtx)
+				log.Println("[Leader] Embedding worker started for CMDB vector search")
+			}
+
+			// 8. Background cleanup goroutine (lock/draft cleanup)
+			go func() {
+				ticker := time.NewTicker(1 * time.Minute)
+				defer ticker.Stop()
+
+				log.Println("[Leader] Background cleanup worker started (1 minute interval)")
+
+				for {
+					select {
+					case <-leaderCtx.Done():
+						log.Println("[Leader] Background cleanup worker stopping")
+						return
+					case <-ticker.C:
+						// 清理过期的资源锁（2分钟无心跳）
+						if err := editingService.CleanupExpiredLocks(); err != nil {
+							log.Printf("Error cleaning up expired locks: %v", err)
+						}
+
+						// 清理旧的草稿（7天前的expired状态）
+						if err := editingService.CleanupOldDrifts(); err != nil {
+							log.Printf("Error cleaning up old drifts: %v", err)
+						}
+
+						// 清理过期的接管请求
+						if err := editingService.CleanupExpiredRequests(); err != nil {
+							log.Printf("Error cleaning up expired takeover requests: %v", err)
+						}
+					}
+				}
+			}()
+
+			// 9. Recover pending tasks (one-time, must run after AgentCCHandler init)
+			if err := queueManager.RecoverPendingTasks(); err != nil {
+				log.Printf("Warning: Failed to recover pending tasks: %v", err)
+			}
+			log.Println("[Leader] Pending tasks recovery completed")
+
+			// Block until leadership is lost (leaderCtx cancelled)
+			<-leaderCtx.Done()
+		},
+		OnStoppedLeading: func() {
+			log.Println("[Main] Lost leadership, background services stopping via context cancellation")
+			// 停止有显式 Stop 方法的服务
+			cmdbSyncScheduler.Stop()
+			agentCleanupService.Stop()
+		},
+		OnNewLeader: func(identity string) {
+			log.Printf("[Main] New leader elected: %s", identity)
+		},
+	})
+
+	// 启动服务器（所有副本运行）
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
@@ -350,7 +398,7 @@ func main() {
 		}
 
 		if tlsCert != "" && tlsKey != "" {
-			log.Printf("🔒 Server starting on https://%s (TLS enabled)", addr)
+			log.Printf("Server starting on https://%s (TLS enabled)", addr)
 			log.Printf("   cert: %s", tlsCert)
 			log.Printf("   key:  %s", tlsKey)
 
@@ -372,24 +420,16 @@ func main() {
 		}
 	}()
 
-	// 等待退出信号
-	<-quit
+	// 等待退出信号（shutdownCtx 已通过 signal.NotifyContext 监听 SIGINT/SIGTERM）
+	<-shutdownCtx.Done()
 	log.Println("Shutting down server...")
 
-	// 停止CMDB同步调度器
-	cmdbSyncScheduler.Stop()
-	log.Println("CMDB sync scheduler stopped")
-
-	// 停止Agent清理服务
-	agentCleanupService.Stop()
-	log.Println("Agent cleanup service stopped")
-
-	// K8s Deployment auto-scaler会通过context自动停止
-	log.Println("K8s Deployment auto-scaler stopped")
+	// K8s Deployment auto-scaler 和其他 leader 服务会通过 leaderCtx 自动停止
+	log.Println("Leader services stopping via context cancellation")
 
 	// 等待关键操作完成
 	if signalManager.IsCriticalSection() {
-		log.Println("⏳ Waiting for critical operations to complete...")
+		log.Println("Waiting for critical operations to complete...")
 
 		// 轮询检查，最多等待30秒
 		for i := 0; i < 30; i++ {

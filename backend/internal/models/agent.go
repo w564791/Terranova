@@ -15,6 +15,7 @@ type Agent struct {
 	IPAddress     *string    `gorm:"column:ip_address;type:varchar(50)" json:"ip_address,omitempty"`
 	Version       *string    `gorm:"column:version;type:varchar(50)" json:"version,omitempty"`
 	LastPingAt    *time.Time `gorm:"column:last_ping_at" json:"last_ping_at,omitempty"`
+	ConnectedPod  *string    `gorm:"column:connected_pod;type:varchar(100)" json:"connected_pod"`
 	Capabilities  *string    `gorm:"column:capabilities;type:jsonb" json:"capabilities,omitempty"`
 	Metadata      *string    `gorm:"column:metadata;type:jsonb" json:"metadata,omitempty"`
 	RegisteredAt  time.Time  `gorm:"column:registered_at;not null;default:CURRENT_TIMESTAMP" json:"registered_at"`

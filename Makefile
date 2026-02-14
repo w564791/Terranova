@@ -1,6 +1,10 @@
 # IaC平台开发工具
 
-.PHONY: help dev-up dev-down db-init db-reset logs build-server build-agent docker-server docker-agent
+.PHONY: help dev-up dev-down db-init db-reset logs build-server build-agent build-all \
+	docker-build docker-build-frontend docker-build-agent docker-build-db-init docker-build-all \
+	docker-push docker-push-frontend docker-push-agent docker-push-db-init docker-push-all \
+	run-server run-agent local-server local-agent \
+	generate-secret deploy-local export-seed-data clean
 
 # 默认变量（可通过 .env 文件或环境变量覆盖）
 DB_PORT ?= 5432
@@ -11,11 +15,23 @@ SERVER_PORT ?= 8080
 CC_SERVER_PORT ?= 8090
 DB_HOST ?= localhost
 
+# Docker 镜像配置
+DOCKER_REPO ?= w564791
+IMAGE_SERVER ?= $(DOCKER_REPO)/iac-platform
+IMAGE_FRONTEND ?= $(DOCKER_REPO)/iac-frontend
+IMAGE_AGENT ?= $(DOCKER_REPO)/iac-agent
+IMAGE_DB_INIT ?= $(DOCKER_REPO)/iac-db-init
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+PLATFORMS ?= linux/arm64,linux/amd64
 
 help: ## 显示帮助信息
 	@echo "IaC平台开发命令:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# =============================================================================
+# 开发环境
+# =============================================================================
 
 dev-up: ## 启动开发环境
 	@echo "启动PostgreSQL数据库..."
@@ -51,20 +67,98 @@ test-db: ## 测试数据库连接
 	@echo "测试数据库连接..."
 	docker-compose exec postgres psql -U postgres -d iac_platform -c "\dt"
 
-# 构建命令
-build-server: ## 构建服务器二进制文件
+# =============================================================================
+# 本地构建（Go 二进制）
+# =============================================================================
+
+build-server: ## 构建服务器二进制文件（当前平台）
 	@echo "构建服务器..."
-	cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o iac-platform main.go
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o iac-platform main.go
 	@echo "服务器构建完成: backend/iac-platform"
 
-build-agent: ## 构建Agent二进制文件
+build-agent: ## 构建Agent二进制文件（当前平台）
 	@echo "构建Agent..."
-	cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o iac-agent cmd/agent/main.go
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o iac-agent cmd/agent/main.go
 	@echo "Agent构建完成: backend/iac-agent"
 
 build-all: build-server build-agent ## 构建所有二进制文件
 
-# Docker运行命令(编译后运行)
+# =============================================================================
+# Docker 镜像构建与推送
+# =============================================================================
+
+docker-build: ## 构建后端 Docker 镜像（本地，当前架构）
+	@echo "构建镜像: $(IMAGE_SERVER):$(VERSION)"
+	docker build \
+		-t $(IMAGE_SERVER):$(VERSION) \
+		-t $(IMAGE_SERVER):latest \
+		backend/
+	@echo "镜像构建完成: $(IMAGE_SERVER):$(VERSION)"
+
+docker-build-frontend: ## 构建前端 Docker 镜像（本地，当前架构）
+	@echo "构建镜像: $(IMAGE_FRONTEND):$(VERSION)"
+	docker build \
+		-t $(IMAGE_FRONTEND):$(VERSION) \
+		-t $(IMAGE_FRONTEND):latest \
+		frontend/
+	@echo "镜像构建完成: $(IMAGE_FRONTEND):$(VERSION)"
+
+docker-build-agent: ## 构建 Agent Docker 镜像（本地，当前架构）
+	@echo "构建镜像: $(IMAGE_AGENT):$(VERSION)"
+	docker build \
+		-t $(IMAGE_AGENT):$(VERSION) \
+		-t $(IMAGE_AGENT):latest \
+		-f backend/cmd/agent/Dockerfile backend/
+	@echo "镜像构建完成: $(IMAGE_AGENT):$(VERSION)"
+
+docker-build-db-init: ## 构建 DB 初始化 Docker 镜像（本地，当前架构）
+	@echo "构建镜像: $(IMAGE_DB_INIT):$(VERSION)"
+	docker build \
+		-t $(IMAGE_DB_INIT):$(VERSION) \
+		-t $(IMAGE_DB_INIT):latest \
+		manifests/db/
+	@echo "镜像构建完成: $(IMAGE_DB_INIT):$(VERSION)"
+
+docker-build-all: docker-build docker-build-frontend docker-build-agent docker-build-db-init ## 构建所有 Docker 镜像
+
+docker-push: ## 构建多架构后端镜像并推送 (arm64+amd64)
+	@echo "构建并推送: $(IMAGE_SERVER):$(VERSION) [$(PLATFORMS)]"
+	docker buildx build --platform $(PLATFORMS) \
+		-t $(IMAGE_SERVER):$(VERSION) \
+		-t $(IMAGE_SERVER):latest \
+		--push backend/
+	@echo "推送完成"
+
+docker-push-frontend: ## 构建多架构前端镜像并推送 (arm64+amd64)
+	@echo "构建并推送: $(IMAGE_FRONTEND):$(VERSION) [$(PLATFORMS)]"
+	docker buildx build --platform $(PLATFORMS) \
+		-t $(IMAGE_FRONTEND):$(VERSION) \
+		-t $(IMAGE_FRONTEND):latest \
+		--push frontend/
+	@echo "推送完成"
+
+docker-push-agent: ## 构建多架构 Agent 镜像并推送 (arm64+amd64)
+	@echo "构建并推送: $(IMAGE_AGENT):$(VERSION) [$(PLATFORMS)]"
+	docker buildx build --platform $(PLATFORMS) \
+		-t $(IMAGE_AGENT):$(VERSION) \
+		-t $(IMAGE_AGENT):latest \
+		-f backend/cmd/agent/Dockerfile --push backend/
+	@echo "推送完成"
+
+docker-push-db-init: ## 构建多架构 DB 初始化镜像并推送 (arm64+amd64)
+	@echo "构建并推送: $(IMAGE_DB_INIT):$(VERSION) [$(PLATFORMS)]"
+	docker buildx build --platform $(PLATFORMS) \
+		-t $(IMAGE_DB_INIT):$(VERSION) \
+		-t $(IMAGE_DB_INIT):latest \
+		--push manifests/db/
+	@echo "推送完成"
+
+docker-push-all: docker-push docker-push-frontend docker-push-agent docker-push-db-init ## 构建并推送所有多架构镜像
+
+# =============================================================================
+# Docker 容器运行（编译后运行）
+# =============================================================================
+
 run-server: build-server ## 在Docker容器中运行服务器
 	@echo "在Docker容器中启动服务器..."
 	docker run --rm --platform linux/arm64 -it \
@@ -101,7 +195,10 @@ run-agent: build-agent ## 在Docker容器中运行Agent（需要设置环境变�
 		amazonlinux:unzip \
 		./iac-agent
 
-# 本地运行命令
+# =============================================================================
+# 本地运行
+# =============================================================================
+
 local-server: ## 本地运行服务器
 	@echo "启动服务器..."
 	cd backend && go run main.go
@@ -111,7 +208,10 @@ local-agent: ## 本地运行Agent
 	@echo "请确保已设置环境变量: IAC_API_ENDPOINT, IAC_CC_ENDPOINT, IAC_AGENT_TOKEN, IAC_AGENT_NAME"
 	cd backend/cmd/agent && go run main.go
 
-# 密钥和环境配置生成
+# =============================================================================
+# 密钥和环境配置
+# =============================================================================
+
 generate-secret: ## 生成平台私钥和 .env 配置文件
 	@if [ -f .env ] && grep -q "^JWT_SECRET=" .env 2>/dev/null; then \
 		echo "[OK] .env 文件已存在，跳过生成"; \
@@ -144,7 +244,10 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "     - 所有已加密的变量无法解密"; \
 	fi
 
-# 本地部署命令
+# =============================================================================
+# 部署
+# =============================================================================
+
 deploy-local: generate-secret ## 本地部署（初始化数据库 + 启动服务，首次访问引导创建管理员）
 	@echo "=========================================="
 	@echo "IaC Platform 本地部署"
@@ -177,7 +280,10 @@ export-seed-data: ## 从当前数据库导出种子数据
 	@echo "导出种子数据..."
 	bash scripts/export_seed_data.sh
 
-# 清理命令
+# =============================================================================
+# 清理
+# =============================================================================
+
 clean: ## 清理构建文件
 	@echo "清理构建文件..."
 	rm -f backend/iac-platform backend/iac-agent

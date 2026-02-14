@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, Steps, Button, Input, message, Alert, Typography, Space, Spin, Modal, Divider } from 'antd';
 import type { InputRef } from 'antd';
 import { SafetyCertificateOutlined, QrcodeOutlined, KeyOutlined, CheckCircleOutlined, CopyOutlined, DownloadOutlined, ReloadOutlined, LockOutlined, UnlockOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { getMFAStatus, setupMFA, verifyAndEnableMFA, disableMFA, regenerateBackupCodes, getMFAConfig } from '../services/mfaService';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { loginSuccess } from '../store/slices/authSlice';
+import { getMFAStatus, setupMFA, verifyAndEnableMFA, setupMFAWithToken, verifyAndEnableMFAWithToken, disableMFA, regenerateBackupCodes, getMFAConfig } from '../services/mfaService';
 import type { MFAStatus, MFASetupResponse, MFAConfig } from '../services/mfaService';
 import styles from './MFASetup.module.css';
 
@@ -12,6 +14,9 @@ const { Step } = Steps;
 
 const MFASetup: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const dispatch = useDispatch();
+  const mfaToken = (location.state as any)?.mfa_token as string | undefined;
   const [loading, setLoading] = useState(true);
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
   const [mfaConfig, setMfaConfig] = useState<MFAConfig | null>(null);
@@ -30,8 +35,13 @@ const MFASetup: React.FC = () => {
   const inputRefs = useRef<(InputRef | null)[]>([]);
 
   useEffect(() => {
-    loadMFAStatus();
-    loadMFAConfig();
+    if (mfaToken) {
+      // 首次设置流程（从登录页跳转，只有 mfa_token，无 JWT）
+      setLoading(false);
+    } else {
+      loadMFAStatus();
+      loadMFAConfig();
+    }
   }, []);
 
   const loadMFAStatus = async () => {
@@ -62,7 +72,9 @@ const MFASetup: React.FC = () => {
   const handleStartSetup = async () => {
     try {
       setLoading(true);
-      const response: any = await setupMFA();
+      const response: any = mfaToken
+        ? await setupMFAWithToken(mfaToken)
+        : await setupMFA();
       setSetupData(response.data);
       setCurrentStep(1);
     } catch (error: any) {
@@ -80,10 +92,21 @@ const MFASetup: React.FC = () => {
 
     try {
       setVerifying(true);
-      await verifyAndEnableMFA(verifyCode);
-      message.success('MFA已成功启用！');
-      setCurrentStep(2);
-      loadMFAStatus();
+      if (mfaToken) {
+        // 首次设置流程：启用 MFA 后直接拿到 JWT 登录
+        const response: any = await verifyAndEnableMFAWithToken(mfaToken, verifyCode);
+        message.success('MFA已成功启用！');
+        setCurrentStep(2);
+        // 保存 token 并登录
+        const { token, user } = response.data;
+        localStorage.setItem('token', token);
+        dispatch(loginSuccess({ user, token }));
+      } else {
+        await verifyAndEnableMFA(verifyCode);
+        message.success('MFA已成功启用！');
+        setCurrentStep(2);
+        loadMFAStatus();
+      }
     } catch (error: any) {
       message.error(error || '验证失败，请检查验证码');
     } finally {

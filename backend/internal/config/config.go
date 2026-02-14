@@ -17,11 +17,13 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	Name     string
-	User     string
-	Password string
+	Host       string
+	Port       string
+	Name       string
+	User       string
+	Password   string
+	SSLMode    string
+	SSLRootCert string
 }
 
 type JWTConfig struct {
@@ -41,11 +43,13 @@ func Load() *Config {
 			Env:  getEnv("ENV", "development"),
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "15433"),
-			Name:     getEnv("DB_NAME", "iac_platform"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres123"),
+			Host:        getEnv("DB_HOST", "localhost"),
+			Port:        getEnv("DB_PORT", "15433"),
+			Name:        getEnv("DB_NAME", "iac_platform"),
+			User:        getEnv("DB_USER", "postgres"),
+			Password:    getEnv("DB_PASSWORD", "postgres123"),
+			SSLMode:     getEnv("DB_SSLMODE", "require"),
+			SSLRootCert: getEnv("DB_SSLROOTCERT", ""),
 		},
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", "your-jwt-secret-key"),

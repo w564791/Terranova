@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iac-platform
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iac-platform
+      app.kubernetes.io/component: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: iac-platform
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: iac-platform
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: iac-platform
+          image: w564791/iac-platform:latest
+          imagePullPolicy: Always
+          ports:
+            - name: https
+              containerPort: 8080
+              protocol: TCP
+            - name: ws-agent
+              containerPort: 8090
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: iac-platform
+            - secretRef:
+                name: iac-platform
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: TLS_CERT_FILE
+              value: /etc/tls/tls.crt
+            - name: TLS_KEY_FILE
+              value: /etc/tls/tls.key
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: tls
+          secret:
+            secretName: iac-platform-tls

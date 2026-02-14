@@ -1,0 +1,10 @@
+.git
+.env
+*.md
+docs/
+**/.DS_Store
+**/node_modules
+frontend/dist
+backend/iac-platform
+backend/iac-agent
+docker-compose*.yml

@@ -18,10 +18,14 @@ func Connect() (*gorm.DB, error) {
 	user := getEnv("DB_USER", "postgres")
 	password := getEnv("DB_PASSWORD", "postgres")
 	dbname := getEnv("DB_NAME", "iac_platform")
-	sslmode := getEnv("DB_SSLMODE", "disable")
+	sslmode := getEnv("DB_SSLMODE", "require")
+	sslrootcert := getEnv("DB_SSLROOTCERT", "")
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		host, port, user, password, dbname, sslmode)
+	if sslrootcert != "" {
+		dsn += fmt.Sprintf(" sslrootcert=%s", sslrootcert)
+	}
 
 	// 配置GORM日志
 	gormLogger := logger.New(

@@ -249,7 +249,7 @@ const PlatformConfig: React.FC = () => {
             </div>
             <div className={styles.summaryItem}>
               <span className={styles.summaryLabel}>Agent CC 地址：</span>
-              <code>ws://{config.host}:{config.cc_port}/ws/agent</code>
+              <code>{config.protocol === 'https' ? 'wss' : 'ws'}://{config.host}:{config.cc_port}/ws/agent</code>
             </div>
           </div>
         </div>

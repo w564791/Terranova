@@ -2,6 +2,7 @@
 node_modules/
 vendor/
 .env*
+backend/cmd/agent/KCroot.crt
 # 构建输出
 dist/
 build/

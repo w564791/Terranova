@@ -9,9 +9,11 @@ import (
 )
 
 func Initialize(cfg config.DatabaseConfig) (*gorm.DB, error) {
-	// 添加timezone参数,确保使用Asia/Singapore时区
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Singapore",
-		cfg.Host, cfg.User, cfg.Password, cfg.Name, cfg.Port)
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Singapore",
+		cfg.Host, cfg.User, cfg.Password, cfg.Name, cfg.Port, cfg.SSLMode)
+	if cfg.SSLRootCert != "" {
+		dsn += fmt.Sprintf(" sslrootcert=%s", cfg.SSLRootCert)
+	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

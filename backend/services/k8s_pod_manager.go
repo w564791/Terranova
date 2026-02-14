@@ -758,8 +758,16 @@ func (m *K8sPodManager) buildPodSpec(podName, namespace, poolID string, config *
 				Value: platformConfig.Host,
 			})
 
-			log.Printf("[PodManager] Auto-injected platform config: IAC_API_ENDPOINT=%s, SERVER_PORT=%s, CC_SERVER_PORT=%s",
-				platformConfig.Host, platformConfig.APIPort, platformConfig.CCPort)
+			// IAC_AGENT_PROTOCOL - Protocol for agent to connect (http or https)
+			if platformConfig.Protocol != "" {
+				envVars = append(envVars, corev1.EnvVar{
+					Name:  "IAC_AGENT_PROTOCOL",
+					Value: platformConfig.Protocol,
+				})
+			}
+
+			log.Printf("[PodManager] Auto-injected platform config: IAC_API_ENDPOINT=%s, SERVER_PORT=%s, CC_SERVER_PORT=%s, IAC_AGENT_PROTOCOL=%s",
+				platformConfig.Host, platformConfig.APIPort, platformConfig.CCPort, platformConfig.Protocol)
 		} else if err != nil {
 			log.Printf("[PodManager] Warning: failed to get platform config, skipping auto-injection: %v", err)
 		}
@@ -819,6 +827,35 @@ func (m *K8sPodManager) buildPodSpec(podName, namespace, poolID string, config *
 		container.Args = config.Args
 	}
 
+	// If platform uses HTTPS with internal CA, mount CA cert for agent TLS trust
+	var volumes []corev1.Volume
+	if m.platformConfigService != nil {
+		if pc, err := m.platformConfigService.GetConfig(); err == nil && pc.Protocol == "https" {
+			volumes = append(volumes, corev1.Volume{
+				Name: "internal-ca",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: "iac-internal-ca",
+						Items: []corev1.KeyToPath{
+							{Key: "ca.crt", Path: "ca.crt"},
+						},
+					},
+				},
+			})
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      "internal-ca",
+				MountPath: "/etc/ssl/certs/iac-internal-ca.crt",
+				SubPath:   "ca.crt",
+				ReadOnly:  true,
+			})
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  "SSL_CERT_FILE",
+				Value: "/etc/ssl/certs/iac-internal-ca.crt",
+			})
+			log.Printf("[PodManager] Mounted internal CA cert for HTTPS trust")
+		}
+	}
+
 	// Build Pod
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -833,6 +870,7 @@ func (m *K8sPodManager) buildPodSpec(podName, namespace, poolID string, config *
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever, // Pod不自动重启
 			Containers:    []corev1.Container{container},
+			Volumes:       volumes,
 		},
 	}
 

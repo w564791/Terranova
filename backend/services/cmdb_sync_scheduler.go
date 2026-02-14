@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -32,7 +33,7 @@ func NewCMDBSyncScheduler(db *gorm.DB) *CMDBSyncScheduler {
 
 // Start 启动调度器
 // checkInterval 是检查需要同步的数据源的间隔时间
-func (s *CMDBSyncScheduler) Start(checkInterval time.Duration) {
+func (s *CMDBSyncScheduler) Start(ctx context.Context, checkInterval time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -56,6 +57,9 @@ func (s *CMDBSyncScheduler) Start(checkInterval time.Duration) {
 
 		for {
 			select {
+			case <-ctx.Done():
+				log.Println("[CMDBSyncScheduler] Stopped: context cancelled")
+				return
 			case <-s.ticker.C:
 				s.checkAndSync()
 			case <-s.stopChan:

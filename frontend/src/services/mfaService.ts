@@ -69,6 +69,30 @@ export const regenerateBackupCodes = (code: string) => {
   );
 };
 
+// 首次登录 MFA 设置（使用 mfa_token 认证，无需 JWT）
+export const setupMFAWithToken = (mfa_token: string) => {
+  return api.post<{ code: number; data: MFASetupResponse }>('/auth/mfa/setup', { mfa_token });
+};
+
+// 首次登录 MFA 验证并启用（使用 mfa_token 认证，无需 JWT）
+export const verifyAndEnableMFAWithToken = (mfa_token: string, code: string) => {
+  return api.post<{
+    code: number;
+    message: string;
+    data: {
+      mfa_enabled: boolean;
+      token: string;
+      expires_at: string;
+      user: {
+        id: string;
+        username: string;
+        email: string;
+        role: string;
+      };
+    };
+  }>('/auth/mfa/enable', { mfa_token, code });
+};
+
 // 登录时MFA验证
 export const verifyMFALogin = (mfa_token: string, code: string) => {
   return api.post<{

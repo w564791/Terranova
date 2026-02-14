@@ -18,10 +18,38 @@ const SSOCallback: React.FC = () => {
     processedRef.current = true;
 
     const handleCallback = async () => {
-      // 检查是否有直接传递的 token（重定向模式）
+      // 检查重定向模式的 MFA 参数（优先于 token 检查，确保 MFA 不被绕过）
+      const redirectMfaRequired = searchParams.get('mfa_required');
+      const redirectMfaSetupRequired = searchParams.get('mfa_setup_required');
+      const redirectMfaToken = searchParams.get('mfa_token');
+
+      if (redirectMfaRequired === 'true' && redirectMfaToken) {
+        navigate('/login/mfa', {
+          state: {
+            mfa_token: redirectMfaToken,
+            username: '',
+            required_backup_codes: 1,
+          },
+          replace: true,
+        });
+        return;
+      }
+
+      if (redirectMfaSetupRequired === 'true' && redirectMfaToken) {
+        navigate('/setup/mfa', {
+          state: {
+            mfa_token: redirectMfaToken,
+            username: '',
+            from_login: true,
+          },
+          replace: true,
+        });
+        return;
+      }
+
+      // 检查是否有直接传递的 token（重定向模式，无需 MFA）
       const directToken = searchParams.get('token');
       if (directToken) {
-        // 重定向模式：token 直接在 URL 参数中
         localStorage.setItem('token', directToken);
         dispatch(loginSuccess({
           user: { id: 0, username: '', email: '', role: '' },
@@ -78,25 +106,7 @@ const SSOCallback: React.FC = () => {
           return;
         }
 
-        // 检查是否需要设置 MFA（带 token 的情况：先登录再跳转）
-        if (data.mfa_setup_required && data.token) {
-          localStorage.setItem('token', data.token);
-          localStorage.removeItem('sso_provider');
-          dispatch(loginSuccess({
-            user: data.user,
-            token: data.token,
-          }));
-          navigate('/settings/mfa', {
-            state: {
-              from_login: true,
-              force_setup: true,
-            },
-            replace: true,
-          });
-          return;
-        }
-
-        // 检查是否需要设置 MFA（不带 token 的情况：用 mfa_token）
+        // 检查是否需要设置 MFA（使用 mfa_token，不发放 JWT）
         if (data.mfa_setup_required) {
           localStorage.removeItem('sso_provider');
           navigate('/setup/mfa', {
