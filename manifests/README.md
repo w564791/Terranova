@@ -74,28 +74,33 @@ manifests/
 
 ```bash
 # One-click deploy (ordered)
-kubectl apply -f manifests/base/ && \
 kubectl apply -f manifests/tls/ && \
-kubectl apply -f manifests/gateway/ && \
+kubectl apply -f manifests/base/ && \
+kubectl apply -f manifests/db/statefulset-postgres.yaml && \
+kubectl apply -f manifests/gateway/  && \
 kubectl apply -f manifests/db/job-db-init.yaml
 ```
 
 ## Step-by-Step Deploy
 
 ```bash
+#0 tls enable
+kubectl apply -f manifests/tls/
 # 1. Create namespace, configmap, secrets, RBAC, deployments, services
 kubectl apply -f manifests/base/
 
 # 2. Wait for cert-manager to issue certificates
-kubectl apply -f manifests/tls/
+
 kubectl -n terraform get certificate -w
 # Wait until READY=True for: iac-internal-ca, iac-platform-tls, iac-frontend-tls
 
 # 3. Deploy Gateway and routing rules
 kubectl apply -f manifests/gateway/
 
+kubectl apply -f manifests/db/statefulset-postgres.yaml
 # 4. Initialize database (run once)
 kubectl apply -f manifests/db/job-db-init.yaml
+
 kubectl -n terraform wait --for=condition=complete job/iac-db-init --timeout=120s
 ```
 
@@ -122,6 +127,20 @@ Before deploying, update the following values to match your environment:
 **`tls/secret-gateway-tls.yaml`**
 - Replace with your own TLS certificate for external access (current: mkcert self-signed for `*.iac-platform.com`)
 
+## Local Access
+
+通过 port-forward 将 Envoy Gateway 暴露到本地：
+
+```bash
+# 将 Gateway 映射到本地 8443 端口
+kubectl port-forward -n envoy-gateway-system svc/envoy-terraform-iac-platform-ce676110 8443:443
+
+# 访问平台
+# https://www.iac-platform.com:8443
+```
+
+> 需要在 `/etc/hosts` 中添加 `127.0.0.1 www.iac-platform.com`，或使用自签证书匹配的域名。
+
 ## Verify Deployment
 
 ```bash
@@ -135,8 +154,9 @@ kubectl -n terraform get pods
 kubectl -n terraform get certificate
 
 # Test backend health endpoint (via port-forward)
-kubectl -n terraform port-forward svc/iac-platform 8080:8080
-curl -k https://localhost:8080/health
+kubectl port-forward -n envoy-gateway-system svc/envoy-terraform-iac-platform-ce676110 8443:443
+
+curl -k https://localhost:8443/health
 ```
 
 ## Architecture
