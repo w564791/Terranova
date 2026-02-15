@@ -1,0 +1,7 @@
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata
+WORKDIR /app
+ARG TARGETARCH
+COPY linux-${TARGETARCH}/iac-platform .
+EXPOSE 8080 8090
+ENTRYPOINT ["./iac-platform"]

@@ -1,0 +1,5 @@
+FROM amazonlinux:latest
+RUN yum install -y unzip git && update-ca-trust && mkdir -p /tmp/.terraform.d/plugin-cache
+ARG TARGETARCH
+COPY linux-${TARGETARCH}/iac-agent /tmp/agent
+ENTRYPOINT ["/tmp/agent"]

@@ -87,6 +87,15 @@ kubectl -n envoy-gateway-system rollout status deployment/envoy-gateway
 
 Ref: https://gateway.envoyproxy.io/docs/install/
 
+## Docker Images
+
+| Image | Description |
+|-------|-------------|
+| [w564791/iac-platform](https://hub.docker.com/r/w564791/iac-platform) | Backend server (API + WebSocket) |
+| [w564791/iac-frontend](https://hub.docker.com/r/w564791/iac-frontend) | Frontend (nginx) |
+| [w564791/iac-agent](https://hub.docker.com/r/w564791/iac-agent) | Agent (Terraform/OpenTofu executor) |
+| [w564791/iac-db-init](https://hub.docker.com/r/w564791/iac-db-init) | Database initialization job |
+
 ## Directory Structure
 
 ```
