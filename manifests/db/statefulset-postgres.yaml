@@ -19,14 +19,61 @@ spec:
         app.kubernetes.io/name: iac-platform
         app.kubernetes.io/component: postgres
     spec:
+      initContainers:
+        # cert-manager 挂载的文件默认 root:root 0644
+        # PostgreSQL 要求 server.key 必须 0600 且属于 postgres(999)
+        # 仅在 DB_SSLMODE != disable 且证书存在时执行复制
+        - name: fix-cert-permissions
+          image: pgvector/pgvector:0.8.1-pg18-trixie
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ "$DB_SSLMODE" != "disable" ] && [ -f /certs-in/tls.crt ]; then
+                cp /certs-in/tls.crt /certs-out/server.crt
+                cp /certs-in/tls.key /certs-out/server.key
+                cp /certs-in/ca.crt  /certs-out/ca.crt
+                chmod 600 /certs-out/server.key
+                chown 999:999 /certs-out/*
+                echo "SSL certificates prepared"
+              else
+                echo "SSL disabled or certificates not found, skipping"
+              fi
+          env:
+            - name: DB_SSLMODE
+              valueFrom:
+                configMapKeyRef:
+                  name: iac-platform
+                  key: DB_SSLMODE
+          volumeMounts:
+            - name: pg-tls-in
+              mountPath: /certs-in
+              readOnly: true
+            - name: pg-tls
+              mountPath: /certs-out
       containers:
         - name: postgres
           image: pgvector/pgvector:0.8.1-pg18-trixie
+          command: ["sh", "-c"]
+          args:
+            - |
+              EXTRA_ARGS=""
+              if [ "$DB_SSLMODE" != "disable" ] && [ -f /etc/postgres-tls/server.crt ]; then
+                EXTRA_ARGS="-c ssl=on -c ssl_cert_file=/etc/postgres-tls/server.crt -c ssl_key_file=/etc/postgres-tls/server.key -c ssl_ca_file=/etc/postgres-tls/ca.crt"
+                echo "Starting PostgreSQL with SSL enabled"
+              else
+                echo "Starting PostgreSQL without SSL"
+              fi
+              exec docker-entrypoint.sh postgres $EXTRA_ARGS
           ports:
             - name: tcp
               containerPort: 5432
               protocol: TCP
           env:
+            - name: DB_SSLMODE
+              valueFrom:
+                configMapKeyRef:
+                  name: iac-platform
+                  key: DB_SSLMODE
             - name: POSTGRES_DB
               valueFrom:
                 configMapKeyRef:
@@ -52,6 +99,9 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            - name: pg-tls
+              mountPath: /etc/postgres-tls
+              readOnly: true
           readinessProbe:
             exec:
               command:
@@ -75,6 +125,14 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+      volumes:
+        - name: pg-tls-in
+          secret:
+            secretName: iac-postgres-tls
+            optional: true
+        - name: pg-tls
+          emptyDir:
+            medium: Memory
   volumeClaimTemplates:
     - metadata:
         name: data

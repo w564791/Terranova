@@ -67,3 +67,21 @@ spec:
     - iac-frontend.terraform.svc.cluster.local
   duration: 8760h
   renewBefore: 720h
+---
+# PostgreSQL 服务端证书（DB_SSLMODE != disable 时使用）
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iac-postgres-tls
+  namespace: terraform
+spec:
+  secretName: iac-postgres-tls
+  issuerRef:
+    name: iac-internal-ca
+    kind: Issuer
+  dnsNames:
+    - iac-postgres
+    - iac-postgres.terraform.svc
+    - iac-postgres.terraform.svc.cluster.local
+  duration: 8760h
+  renewBefore: 720h

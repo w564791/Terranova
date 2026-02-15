@@ -13,6 +13,6 @@ data:
   DB_HOST: "iac-postgres"
   DB_PORT: "5432"
   DB_NAME: "iac_platform"
-  DB_SSLMODE: "disable"
-  #DB_SSLMODE: "require"
+  # DB_SSLMODE: "disable"
+  DB_SSLMODE: "require"
   TZ: "Asia/Singapore"
