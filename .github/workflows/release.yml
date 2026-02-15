@@ -41,6 +41,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
+      - name: Download Go modules
+        run: cd backend && go mod download
+
       - name: Build server
         env:
           CGO_ENABLED: "0"
@@ -91,8 +94,7 @@ jobs:
         run: cd frontend && npx vite build
 
       - name: Archive frontend dist
-        run: tar -czf dist/frontend-dist.tar.gz -C frontend/dist .
-        working-directory: ${{ github.workspace }}
+        run: mkdir -p dist && tar -czf dist/frontend-dist.tar.gz -C frontend/dist .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
