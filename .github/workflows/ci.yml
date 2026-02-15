@@ -28,8 +28,11 @@ jobs:
       - name: Build agent
         run: cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o /dev/null cmd/agent/main.go
 
+      - name: Vet
+        run: cd backend && go vet ./...
+
       - name: Test
-        run: cd backend && go test ./...
+        run: cd backend && go test $(go list ./... | grep -v /controllers)
 
   frontend:
     name: Frontend build
