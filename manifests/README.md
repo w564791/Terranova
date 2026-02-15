@@ -1,10 +1,54 @@
 # IAC Platform Kubernetes Deployment
 
+
 ## Prerequisites
 
 - Kubernetes cluster (v1.27+)
 - `kubectl` configured to access the cluster
 - `helm` version >= v4.0.0
+### Local Access
+
+#### 生成本地信任证书（可选,macOS）
+
+使用 [mkcert](https://github.com/FiloSottile/mkcert) 生成本地信任的 TLS 证书，浏览器访问时不会报不安全连接：
+
+```bash
+# 安装 mkcert
+brew install mkcert
+brew install nss   # Firefox 需要，Safari / Chrome 可跳过
+
+# 将 mkcert CA 安装到系统信任链
+mkcert -install
+
+# 为平台域名生成证书
+mkcert \
+  www.iac-platform.com \
+  iac-platform.com \
+  api.iac-platform.com
+
+# 生成的文件：
+#   www.iac-platform.com+2.pem     (证书)
+#   www.iac-platform.com+2-key.pem (私钥)
+```
+
+将生成的证书和私钥替换到 `tls/secret-gateway-tls.yaml` 中：
+
+```bash
+# base64 编码后替换 secret-gateway-tls.yaml 中的 tls.crt 和 tls.key
+kubectl -n terraform create secret tls iac-gateway-tls \
+  --cert=www.iac-platform.com+2.pem \
+  --key=www.iac-platform.com+2-key.pem \
+  --dry-run=client -o yaml > tls/secret-gateway-tls.yaml
+```
+
+#### 配置 hosts
+
+在 `/etc/hosts` 中添加以下记录：
+
+```
+127.0.0.1 www.iac-platform.com iac-platform.com api.iac-platform.com
+
+```
 
 ### Install cert-manager
 
@@ -47,40 +91,55 @@ Ref: https://gateway.envoyproxy.io/docs/install/
 
 ```
 manifests/
-├── base/                        # Core resources
-│   ├── namespace.yaml           # Namespace: terraform
-│   ├── configmap.yaml           # Non-sensitive config (DB_HOST, ports, etc.)
-│   ├── secret.yaml              # Sensitive config (DB credentials, JWT secret)
-│   ├── ha-rbac.yaml             # ServiceAccount, Role, RoleBinding
-│   ├── deployment-backend.yaml  # Backend (2 replicas, HTTPS)
-│   ├── deployment-frontend.yaml # Frontend nginx (2 replicas, HTTPS)
-│   ├── service-backend.yaml     # ClusterIP: 8080 (API) + 8090 (Agent CC)
-│   └── service-frontend.yaml    # ClusterIP: 443
-├── tls/                         # TLS certificates
-│   ├── certificate.yaml         # cert-manager internal CA chain + service certs
-│   ├── secret-gateway-tls.yaml  # Gateway external TLS certificate
-│   └── certs/                   # mkcert certificate files (for local dev)
-├── db/                          # Database initialization
-│   ├── Dockerfile               # DB init container image
-│   ├── entrypoint.sh            # psql entrypoint script
-│   ├── init_seed_data.sql       # Schema + seed data
-│   └── job-db-init.yaml         # K8s Job for DB initialization
-└── gateway/                     # Envoy Gateway API
-    ├── gateway.yaml             # GatewayClass + Gateway (HTTPS 443 + 8090)
-    ├── httproute.yaml           # Routes: frontend(/), API(/api/,/health)
-    └── backend-tls-policy.yaml  # Gateway → backend/frontend HTTPS policy
+├── kustomization.yaml              # Root kustomization (imports tls, base, gateway, db)
+├── base/                           # Core resources
+│   ├── kustomization.yaml
+│   ├── namespace.yaml              # Namespace: terraform
+│   ├── configmap.yaml              # Non-sensitive config (DB_HOST, DB_SSLMODE, ports, etc.)
+│   ├── secret.yaml                 # Sensitive config (DB credentials, JWT secret)
+│   ├── ha-rbac.yaml                # ServiceAccount, Role, RoleBinding
+│   ├── deployment-backend.yaml     # Backend (2 replicas, HTTPS)
+│   ├── deployment-frontend.yaml    # Frontend nginx (2 replicas, HTTPS)
+│   ├── service-backend.yaml        # ClusterIP: 8080 (API) + 8090 (Agent CC)
+│   └── service-frontend.yaml       # ClusterIP: 443
+├── tls/                            # TLS certificates
+│   ├── kustomization.yaml
+│   ├── certificate.yaml            # cert-manager internal CA chain + service certs (incl. postgres)
+│   ├── secret-gateway-tls.yaml     # Gateway external TLS certificate
+│   └── certs/                      # mkcert certificate files (for local dev)
+│       ├── localhost.pem
+│       └── localhost-key.pem
+├── db/                             # Database
+│   ├── kustomization.yaml
+│   ├── statefulset-postgres.yaml   # PostgreSQL StatefulSet + Service (conditional SSL)
+│   ├── job-db-init.yaml            # K8s Job for DB initialization
+│   ├── Dockerfile                  # DB init container image
+│   ├── entrypoint.sh               # psql entrypoint script
+│   └── init_seed_data.sql          # Schema + seed data
+└── gateway/                        # Envoy Gateway API
+    ├── kustomization.yaml
+    ├── gateway.yaml                # GatewayClass + Gateway (HTTPS 443 + 8090)
+    ├── httproute.yaml              # Routes: frontend(/), API(/api/,/health)
+    └── backend-tls-policy.yaml     # Gateway → backend/frontend HTTPS policy
 ```
 
 ## Quick Deploy
 
 
 ```bash
-cd manifest
+cd manifests
 
-kubectl kustomize|kubectl create -f -
+# 基于当前时间+PID+主机名自动生成 JWT_SECRET（每次部署不同）
+JWT_KEY=$(echo -n "$(date +%s)-$$-$(hostname)" | openssl dgst -sha256 -binary | base64 | tr -d '\n')
+
+sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=${JWT_KEY}|" base/kustomization.yaml
+
+kubectl kustomize | kubectl create -f -
 
 kubectl -n terraform wait --for=condition=complete job/iac-db-init --timeout=120s
 ```
+
+> `JWT_SECRET` 每次部署时基于 `时间戳(秒) + PID + 主机名` 经 SHA-256 生成 256-bit 密钥，通过 `sed` 直接写入 `base/kustomization.yaml`。
 
 ## Configuration
 
@@ -89,8 +148,8 @@ Before deploying, update the following values to match your environment:
 **`base/configmap.yaml`**
 | Key | Description | Default |
 |-----|-------------|---------|
-| `DB_HOST` | PostgreSQL host | `10.179.219.54` |
-| `DB_PORT` | PostgreSQL port | `15433` |
+| `DB_HOST` | PostgreSQL host | `postgres` |
+| `DB_PORT` | PostgreSQL port | `5432` |
 | `DB_NAME` | Database name | `iac_platform` |
 | `DB_SSLMODE` | PostgreSQL SSL mode | `require` |
 | `TZ` | Timezone | `Asia/Singapore` |
@@ -100,12 +159,17 @@ Before deploying, update the following values to match your environment:
 |-----|-------------|---------|
 | `DB_USER` | Database user | `postgres` |
 | `DB_PASSWORD` | Database password | `postgres123` |
-| `JWT_SECRET` | JWT signing key | **must change** |
+
+**`base/kustomization.yaml` — secretGenerator**
+| Key | Description | 生成方式 |
+|-----|-------------|---------|
+| `JWT_SECRET` | JWT signing key | 部署时基于 `时间戳 + 主机名` 经 SHA-256 自动生成 256-bit 密钥，无需手动配置 |
 
 **`tls/secret-gateway-tls.yaml`**
 - Replace with your own TLS certificate for external access (current: mkcert self-signed for `*.iac-platform.com`)
 
-## Local Access
+
+### 访问平台
 
 通过 port-forward 将 Envoy Gateway 暴露到本地：
 
@@ -116,8 +180,6 @@ kubectl port-forward -n envoy-gateway-system svc/envoy-terraform-iac-platform-ce
 # 访问平台
 # https://www.iac-platform.com:8443
 ```
-
-> 需要在 `/etc/hosts` 中添加 `127.0.0.1 www.iac-platform.com`，或使用自签证书匹配的域名。
 
 ## Verify Deployment
 

@@ -41,6 +41,8 @@ spec:
                 name: iac-platform
             - secretRef:
                 name: iac-platform
+            - secretRef:
+                name: iac-jwt
           env:
             - name: POD_NAME
               valueFrom:
