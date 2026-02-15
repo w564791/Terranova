@@ -4,6 +4,7 @@
 
 - Kubernetes cluster (v1.27+)
 - `kubectl` configured to access the cluster
+- `helm` version >= v4.0.0
 
 ### Install cert-manager
 
