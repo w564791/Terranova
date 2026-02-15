@@ -97,7 +97,7 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 // restorePlanFile 从数据库恢复plan文件到临时目录
 func (s *PlanParserService) restorePlanFile(task *models.WorkspaceTask) (string, error) {
 	// 创建临时目录
-	tmpDir := fmt.Sprintf("/tmp/iac-platform/plan-parser/%d/%d", task.WorkspaceID, task.ID)
+	tmpDir := fmt.Sprintf("/tmp/iac-platform/plan-parser/%s/%d", task.WorkspaceID, task.ID)
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}

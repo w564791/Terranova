@@ -175,7 +175,7 @@ func (r *PermissionRepositoryImpl) GrantWorkspacePermission(ctx context.Context,
 
 	if err == nil {
 		// 已存在权限,返回冲突错误
-		return fmt.Errorf("permission already exists: principal %s already has permission %s (level: %s) on workspace %d",
+		return fmt.Errorf("permission already exists: principal %s already has permission %s (level: %s) on workspace %s",
 			permission.PrincipalID, permission.PermissionID, existing.PermissionLevel, permission.WorkspaceID)
 	}
 

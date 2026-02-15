@@ -212,7 +212,7 @@ buildResponse:
 	// 获取创建者信息（简化版，实际应该查询users表）
 	createdBy := "unknown"
 	if task.CreatedBy != nil {
-		createdBy = fmt.Sprintf("user_%d", *task.CreatedBy)
+		createdBy = fmt.Sprintf("user_%s", *task.CreatedBy)
 	}
 
 	return &LatestRunInfo{

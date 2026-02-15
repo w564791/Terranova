@@ -170,7 +170,7 @@ func (c *PermissionCheckerImpl) CheckPermissionWithTemporary(
 	// 3. 如果常规权限拒绝，检查是否有临时权限
 	if taskID != nil {
 		// TODO: 获取用户邮箱
-		userEmail := fmt.Sprintf("user_%d@example.com", req.UserID)
+		userEmail := fmt.Sprintf("user_%s@example.com", req.UserID)
 
 		hasTemp, err := c.checkTemporaryPermission(ctx, *taskID, userEmail, req.ResourceType)
 		if err != nil {

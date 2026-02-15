@@ -391,7 +391,7 @@ func (e *RunTaskExecutor) executeRunTask(
 	// Check response status
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		errMsg := fmt.Sprintf("external service returned status %d", resp.StatusCode)
-		result.err = fmt.Errorf(errMsg)
+		result.err = fmt.Errorf("%s", errMsg)
 		e.updateResultStatus(taskResult, models.RunTaskResultError, errMsg)
 		result.passed = false
 		return result

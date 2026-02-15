@@ -226,7 +226,7 @@ func (h *AuditHandler) QueryPermissionChangesByPrincipal(c *gin.Context) {
 
 	req := &service.QueryPermissionChangesByPrincipalRequest{
 		PrincipalType: valueobject.PrincipalType(principalTypeStr),
-		PrincipalID:   string(principalID),
+		PrincipalID:   strconv.FormatUint(principalID, 10),
 	}
 
 	// 解析时间参数并转换为本地时区（因为数据库存储的是本地时间）

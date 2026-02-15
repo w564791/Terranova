@@ -21,6 +21,7 @@ func TestWorkspaceController_GetWorkspaces(t *testing.T) {
 	workspaceController := NewWorkspaceController(
 		services.NewWorkspaceService(db),
 		services.NewWorkspaceOverviewService(db),
+		nil,
 	)
 	router.GET("/workspaces", workspaceController.GetWorkspaces)
 
@@ -45,6 +46,7 @@ func TestWorkspaceController_GetWorkspace(t *testing.T) {
 	workspaceController := NewWorkspaceController(
 		services.NewWorkspaceService(db),
 		services.NewWorkspaceOverviewService(db),
+		nil,
 	)
 	router.GET("/workspaces/:id", workspaceController.GetWorkspace)
 

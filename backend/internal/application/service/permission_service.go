@@ -323,7 +323,7 @@ func (s *PermissionServiceImpl) GrantPresetPermissions(
 
 		if err := s.GrantPermission(ctx, grantReq); err != nil {
 			// 继续授予其他权限，记录错误
-			fmt.Printf("failed to grant permission %d: %v\n", presetPerm.PermissionID, err)
+			fmt.Printf("failed to grant permission %s: %v\n", presetPerm.PermissionID, err)
 		}
 	}
 

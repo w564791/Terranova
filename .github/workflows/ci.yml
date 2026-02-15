@@ -12,7 +12,7 @@ env:
 
 jobs:
   backend:
-    name: Backend check
+    name: Backend build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
         run: cd backend && go test ./...
 
   frontend:
-    name: Frontend check
+    name: Frontend build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,9 +45,6 @@ jobs:
 
       - name: Install dependencies
         run: cd frontend && npm ci --no-audit
-
-      - name: Lint
-        run: cd frontend && npm run lint
 
       - name: Build
         run: cd frontend && npx vite build

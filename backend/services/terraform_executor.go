@@ -2464,7 +2464,7 @@ func (s *TerraformExecutor) SaveNewStateVersion(
 	backupDir := "/var/backup/states"
 	os.MkdirAll(backupDir, 0700)
 	backupPath := filepath.Join(backupDir,
-		fmt.Sprintf("ws_%d_task_%d_%d.tfstate",
+		fmt.Sprintf("ws_%s_task_%d_%d.tfstate",
 			workspace.WorkspaceID, task.ID, time.Now().Unix()))
 
 	if err := os.WriteFile(backupPath, stateData, 0600); err != nil {
@@ -3791,7 +3791,7 @@ func (s *TerraformExecutor) SaveNewStateVersionWithLogging(
 	backupDir := "/var/backup/states"
 	os.MkdirAll(backupDir, 0700)
 	backupPath := filepath.Join(backupDir,
-		fmt.Sprintf("ws_%d_task_%d_%d.tfstate",
+		fmt.Sprintf("ws_%s_task_%d_%d.tfstate",
 			workspace.WorkspaceID, task.ID, time.Now().Unix()))
 
 	if err := os.WriteFile(backupPath, stateData, 0600); err != nil {
