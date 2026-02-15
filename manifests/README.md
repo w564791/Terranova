@@ -72,34 +72,10 @@ manifests/
 
 ## Quick Deploy
 
-```bash
-# One-click deploy (ordered)
-kubectl apply -f manifests/tls/ && \
-kubectl apply -f manifests/base/ && \
-kubectl apply -f manifests/db/statefulset-postgres.yaml && \
-kubectl apply -f manifests/gateway/  && \
-kubectl apply -f manifests/db/job-db-init.yaml
-```
-
-## Step-by-Step Deploy
 
 ```bash
-#0 tls enable
-kubectl apply -f manifests/tls/
-# 1. Create namespace, configmap, secrets, RBAC, deployments, services
-kubectl apply -f manifests/base/
 
-# 2. Wait for cert-manager to issue certificates
-
-kubectl -n terraform get certificate -w
-# Wait until READY=True for: iac-internal-ca, iac-platform-tls, iac-frontend-tls
-
-# 3. Deploy Gateway and routing rules
-kubectl apply -f manifests/gateway/
-
-kubectl apply -f manifests/db/statefulset-postgres.yaml
-# 4. Initialize database (run once)
-kubectl apply -f manifests/db/job-db-init.yaml
+kubectl kustomize|kubectl create -f -
 
 kubectl -n terraform wait --for=condition=complete job/iac-db-init --timeout=120s
 ```
@@ -186,8 +162,7 @@ External Traffic
 ## Uninstall
 
 ```bash
-kubectl delete -f manifests/db/job-db-init.yaml
-kubectl delete -f manifests/gateway/
-kubectl delete -f manifests/tls/
-kubectl delete -f manifests/base/
+
+kubectl kustomize|kubectl delete -f -
+
 ```
