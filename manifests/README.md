@@ -75,6 +75,7 @@ manifests/
 
 
 ```bash
+cd manifest
 
 kubectl kustomize|kubectl create -f -
 
