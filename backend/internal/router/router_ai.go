@@ -20,120 +20,78 @@ func GetEmbeddingWorker() *services.EmbeddingWorker {
 // setupAIRoutes sets up AI analysis routes
 func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
 	// AI分析 - 使用AI_ANALYSIS权限，允许WRITE和ADMIN级别访问
-	// 注意：必须在protected.Use(middleware.BypassIAMForAdmin())之前定义，否则会被拦截
+	// AI分析路由 - 使用IAM权限控制
 	ai := api.Group("/ai")
 	ai.Use(middleware.JWTAuth())
 	ai.Use(middleware.AuditLogger(db))
 	{
 		aiController := controllers.NewAIController(db)
 
-		ai.POST("/analyze-error", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.AnalyzeError(c)
-				return
-			}
+		ai.POST("/analyze-error",
 			// 使用AI_ANALYSIS权限，WRITE和ADMIN级别都可以访问
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				aiController.AnalyzeError(c)
-			}
-		})
+			}),
+			aiController.AnalyzeError,
+		)
 
 		// AI 表单助手路由
 		aiFormService := services.NewAIFormService(db)
 		aiFormController := controllers.NewAIFormController(aiFormService)
 
 		// 生成表单配置 - 使用AI_ANALYSIS权限
-		ai.POST("/form/generate", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiFormController.GenerateConfig(c)
-				return
-			}
+		ai.POST("/form/generate",
 			// 使用AI_ANALYSIS权限，WRITE和ADMIN级别都可以访问
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				aiFormController.GenerateConfig(c)
-			}
-		})
+			}),
+			aiFormController.GenerateConfig,
+		)
 
 		// AI + CMDB 集成路由
 		aiCMDBController := controllers.NewAICMDBController(db)
 
 		// 带 CMDB 查询的配置生成 - 使用AI_ANALYSIS权限
-		ai.POST("/form/generate-with-cmdb", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiCMDBController.GenerateConfigWithCMDB(c)
-				return
-			}
+		ai.POST("/form/generate-with-cmdb",
 			// 使用AI_ANALYSIS权限，WRITE和ADMIN级别都可以访问
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				aiCMDBController.GenerateConfigWithCMDB(c)
-			}
-		})
+			}),
+			aiCMDBController.GenerateConfigWithCMDB,
+		)
 
 		// AI + CMDB + Skill 集成路由（新版 Skill 模式）
 		aiCMDBSkillController := controllers.NewAICMDBSkillController(db)
 
 		// 使用 Skill 模式的配置生成 - 使用AI_ANALYSIS权限
-		ai.POST("/form/generate-with-cmdb-skill", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiCMDBSkillController.GenerateConfigWithCMDBSkill(c)
-				return
-			}
+		ai.POST("/form/generate-with-cmdb-skill",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				aiCMDBSkillController.GenerateConfigWithCMDBSkill(c)
-			}
-		})
+			}),
+			aiCMDBSkillController.GenerateConfigWithCMDBSkill,
+		)
 
 		// 使用 SSE 实时推送进度的配置生成 - 使用AI_ANALYSIS权限
 		// 使用 POST 方法，参数通过 body 传递
-		ai.POST("/form/generate-with-cmdb-skill-sse", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiCMDBSkillController.GenerateConfigWithCMDBSkillSSE(c)
-				return
-			}
+		ai.POST("/form/generate-with-cmdb-skill-sse",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				aiCMDBSkillController.GenerateConfigWithCMDBSkillSSE(c)
-			}
-		})
+			}),
+			aiCMDBSkillController.GenerateConfigWithCMDBSkillSSE,
+		)
 
 		// 预览组装后的 Prompt（调试用）
-		ai.POST("/skill/preview-prompt", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiCMDBSkillController.PreviewAssembledPrompt(c)
-				return
-			}
+		ai.POST("/skill/preview-prompt",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				aiCMDBSkillController.PreviewAssembledPrompt(c)
-			}
-		})
+			}),
+			aiCMDBSkillController.PreviewAssembledPrompt,
+		)
 
 		// Embedding 相关路由
 		// 初始化 embedding worker（如果还没有初始化）
@@ -143,31 +101,27 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		embeddingController := controllers.NewEmbeddingController(db, embeddingWorker)
 
 		// 获取 embedding 配置状态
-		ai.GET("/embedding/config-status", embeddingController.GetConfigStatus)
+		ai.GET("/embedding/config-status",
+			iamMiddleware.RequirePermission("AI_ANALYSIS", "ORGANIZATION", "READ"),
+			embeddingController.GetConfigStatus,
+		)
 
 		// 向量搜索
-		ai.POST("/cmdb/vector-search", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				embeddingController.VectorSearch(c)
-				return
-			}
+		ai.POST("/cmdb/vector-search",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				embeddingController.VectorSearch(c)
-			}
-		})
+			}),
+			embeddingController.VectorSearch,
+		)
 	}
 
 	// Admin 路由 - embedding 管理
 	admin := api.Group("/admin")
 	admin.Use(middleware.JWTAuth())
 	admin.Use(middleware.AuditLogger(db))
-	admin.Use(middleware.BypassIAMForAdmin())
+	admin.Use(iamMiddleware.RequirePermission("AI_ANALYSIS", "ORGANIZATION", "ADMIN"))
 	{
 		if embeddingWorker == nil {
 			embeddingWorker = services.NewEmbeddingWorker(db)
@@ -235,51 +189,30 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		embeddingController := controllers.NewEmbeddingController(db, embeddingWorker)
 
 		// 获取 Workspace 的 embedding 状态
-		workspaces.GET("/:id/embedding-status", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				embeddingController.GetWorkspaceEmbeddingStatus(c)
-				return
-			}
+		workspaces.GET("/:id/embedding-status",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-				{ResourceType: "WORKSPACE", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				embeddingController.GetWorkspaceEmbeddingStatus(c)
-			}
-		})
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+			}),
+			embeddingController.GetWorkspaceEmbeddingStatus,
+		)
 
 		// 同步指定 Workspace 的 embedding
-		workspaces.POST("/:id/embedding/sync", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				embeddingController.SyncWorkspace(c)
-				return
-			}
+		workspaces.POST("/:id/embedding/sync",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACE", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-				{ResourceType: "WORKSPACE", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				embeddingController.SyncWorkspace(c)
-			}
-		})
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			embeddingController.SyncWorkspace,
+		)
 
 		// 重建指定 Workspace 的 embedding
-		workspaces.POST("/:id/embedding/rebuild", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				embeddingController.RebuildWorkspace(c)
-				return
-			}
+		workspaces.POST("/:id/embedding/rebuild",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACE", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				embeddingController.RebuildWorkspace(c)
-			}
-		})
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+			}),
+			embeddingController.RebuildWorkspace,
+		)
 	}
 }

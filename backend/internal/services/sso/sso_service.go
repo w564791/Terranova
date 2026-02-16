@@ -439,16 +439,10 @@ func (s *SSOService) createSSOUser(providerKey string, providerCfg *models.SSOPr
 	// 确保用户名唯一
 	username = s.ensureUniqueUsername(username)
 
-	role := providerCfg.DefaultRole
-	if role == "" {
-		role = "user"
-	}
-
 	user := &models.User{
 		Username:      username,
 		Email:         userInfo.Email,
 		PasswordHash:  "", // SSO 用户无密码
-		Role:          role,
 		IsActive:      true,
 		IsSSOUser:     true,
 		OAuthProvider: providerKey,

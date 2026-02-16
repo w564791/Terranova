@@ -43,7 +43,7 @@ type SetupInitRequest struct {
 // @Router /api/v1/setup/status [get]
 func (h *SetupHandler) GetStatus(c *gin.Context) {
 	var count int64
-	if err := h.db.Model(&models.User{}).Where("role = ? AND is_active = ?", "admin", true).Count(&count).Error; err != nil {
+	if err := h.db.Model(&models.User{}).Where("is_system_admin = ? AND is_active = ?", true, true).Count(&count).Error; err != nil {
 		log.Printf("[Setup] Failed to check admin status: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
@@ -133,7 +133,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 
 	// 4. 在事务内检查系统是否已初始化（持有锁，安全无竞态）
 	var adminCount int64
-	if err := tx.Model(&models.User{}).Where("role = ? AND is_active = ?", "admin", true).Count(&adminCount).Error; err != nil {
+	if err := tx.Model(&models.User{}).Where("is_system_admin = ? AND is_active = ?", true, true).Count(&adminCount).Error; err != nil {
 		tx.Rollback()
 		log.Printf("[Setup] Failed to check admin status: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -183,7 +183,6 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		Username:      req.Username,
 		Email:         req.Email,
 		PasswordHash:  string(hashedPassword),
-		Role:          "admin",
 		IsActive:      true,
 		IsSystemAdmin: true,
 	}
@@ -274,10 +273,10 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		"code":    201,
 		"message": "系统初始化成功，管理员账号已创建",
 		"data": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":             user.ID,
+			"username":       user.Username,
+			"email":          user.Email,
+			"is_system_admin": user.IsSystemAdmin,
 		},
 		"timestamp": time.Now(),
 	})

@@ -585,12 +585,12 @@ func (h *PermissionHandler) ListUserPermissions(c *gin.Context) {
 		return
 	}
 
-	currentUserRole, _ := c.Get("role")
+	isSystemAdmin, _ := c.Get("is_system_admin")
 
-	// 安全检查：用户只能查询自己的权限，除非是admin
-	if currentUserRole != "admin" && currentUserID.(string) != targetUserID {
+	// 安全检查：用户只能查询自己的权限，除非是系统管理员
+	if isSystemAdmin != true && currentUserID.(string) != targetUserID {
 		c.JSON(http.StatusForbidden, gin.H{
-			"error": "You can only view your own permissions. Admin access required to view other users' permissions.",
+			"error": "You can only view your own permissions. System admin access required to view other users' permissions.",
 		})
 		return
 	}
@@ -628,13 +628,12 @@ func (h *PermissionHandler) ListTeamPermissions(c *gin.Context) {
 		return
 	}
 
-	currentUserRole, _ := c.Get("role")
+	isSystemAdmin, _ := c.Get("is_system_admin")
 
-	// 安全检查：只有admin才能查询团队权限
-	// 注意：这里不检查团队成员身份，因为权限管理页面需要admin查看所有团队权限
-	if currentUserRole != "admin" {
+	// 安全检查：只有系统管理员才能查询团队权限
+	if isSystemAdmin != true {
 		c.JSON(http.StatusForbidden, gin.H{
-			"error": "Admin access required to view team permissions.",
+			"error": "System admin access required to view team permissions.",
 		})
 		return
 	}

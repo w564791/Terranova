@@ -10,296 +10,135 @@ import (
 )
 
 // setupGlobalRoutes sets up global settings routes
-func setupGlobalRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
-	// TODO: 实现global settings路由
-	// 参考原router.go中的:
-	// - globalSettings := adminProtected.Group("/global/settings")
-	// - Terraform版本管理
-	// - AI配置管理
-	globalSettings := adminProtected.Group("/global/settings")
+func setupGlobalRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
+	globalSettings := protected.Group("/global/settings")
 	{
-		// Terraform版本管理 - 添加IAM权限检查
+		// Terraform版本管理
 		tfVersionController := controllers.NewTerraformVersionController(db)
 
-		globalSettings.GET("/terraform-versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.ListTerraformVersions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				tfVersionController.ListTerraformVersions(c)
-			}
-		})
+		globalSettings.GET("/terraform-versions",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ"),
+			tfVersionController.ListTerraformVersions,
+		)
 
-		globalSettings.GET("/terraform-versions/default", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.GetDefaultVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				tfVersionController.GetDefaultVersion(c)
-			}
-		})
+		globalSettings.GET("/terraform-versions/default",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ"),
+			tfVersionController.GetDefaultVersion,
+		)
 
-		globalSettings.GET("/terraform-versions/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.GetTerraformVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				tfVersionController.GetTerraformVersion(c)
-			}
-		})
+		globalSettings.GET("/terraform-versions/:id",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ"),
+			tfVersionController.GetTerraformVersion,
+		)
 
-		globalSettings.POST("/terraform-versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.CreateTerraformVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				tfVersionController.CreateTerraformVersion(c)
-			}
-		})
+		globalSettings.POST("/terraform-versions",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "WRITE"),
+			tfVersionController.CreateTerraformVersion,
+		)
 
-		globalSettings.PUT("/terraform-versions/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.UpdateTerraformVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				tfVersionController.UpdateTerraformVersion(c)
-			}
-		})
+		globalSettings.PUT("/terraform-versions/:id",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "WRITE"),
+			tfVersionController.UpdateTerraformVersion,
+		)
 
-		globalSettings.POST("/terraform-versions/:id/set-default", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.SetDefaultVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				tfVersionController.SetDefaultVersion(c)
-			}
-		})
+		globalSettings.POST("/terraform-versions/:id/set-default",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "ADMIN"),
+			tfVersionController.SetDefaultVersion,
+		)
 
-		globalSettings.DELETE("/terraform-versions/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				tfVersionController.DeleteTerraformVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				tfVersionController.DeleteTerraformVersion(c)
-			}
-		})
+		globalSettings.DELETE("/terraform-versions/:id",
+			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "ADMIN"),
+			tfVersionController.DeleteTerraformVersion,
+		)
 
-		// AI配置管理 - 添加IAM权限检查
+		// AI配置管理
 		aiController := controllers.NewAIController(db)
 
-		globalSettings.GET("/ai-configs", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.ListConfigs(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				aiController.ListConfigs(c)
-			}
-		})
+		globalSettings.GET("/ai-configs",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
+			aiController.ListConfigs,
+		)
 
-		globalSettings.POST("/ai-configs", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.CreateConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				aiController.CreateConfig(c)
-			}
-		})
+		globalSettings.POST("/ai-configs",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE"),
+			aiController.CreateConfig,
+		)
 
-		globalSettings.GET("/ai-configs/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.GetConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				aiController.GetConfig(c)
-			}
-		})
+		globalSettings.GET("/ai-configs/:id",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
+			aiController.GetConfig,
+		)
 
-		globalSettings.PUT("/ai-configs/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.UpdateConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				aiController.UpdateConfig(c)
-			}
-		})
+		globalSettings.PUT("/ai-configs/:id",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE"),
+			aiController.UpdateConfig,
+		)
 
-		globalSettings.DELETE("/ai-configs/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.DeleteConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				aiController.DeleteConfig(c)
-			}
-		})
+		globalSettings.DELETE("/ai-configs/:id",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN"),
+			aiController.DeleteConfig,
+		)
 
-		globalSettings.PUT("/ai-configs/priorities", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.BatchUpdatePriorities(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				aiController.BatchUpdatePriorities(c)
-			}
-		})
+		globalSettings.PUT("/ai-configs/priorities",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE"),
+			aiController.BatchUpdatePriorities,
+		)
 
-		globalSettings.PUT("/ai-configs/:id/set-default", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.SetAsDefault(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				aiController.SetAsDefault(c)
-			}
-		})
+		globalSettings.PUT("/ai-configs/:id/set-default",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN"),
+			aiController.SetAsDefault,
+		)
 
-		globalSettings.GET("/ai-config/regions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.GetAvailableRegions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				aiController.GetAvailableRegions(c)
-			}
-		})
+		globalSettings.GET("/ai-config/regions",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
+			aiController.GetAvailableRegions,
+		)
 
-		globalSettings.GET("/ai-config/models", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.GetAvailableModels(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				aiController.GetAvailableModels(c)
-			}
-		})
+		globalSettings.GET("/ai-config/models",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
+			aiController.GetAvailableModels,
+		)
 
-		// 平台配置管理 - 仅限 admin
+		// 平台配置管理
 		platformConfigHandler := handlers.NewPlatformConfigHandler(db)
 
-		globalSettings.GET("/platform-config", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				platformConfigHandler.GetPlatformConfig(c)
-				return
-			}
-			// 非 admin 用户也可以读取平台配置（用于显示）
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				platformConfigHandler.GetPlatformConfig(c)
-			}
-		})
+		globalSettings.GET("/platform-config",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			platformConfigHandler.GetPlatformConfig,
+		)
 
-		globalSettings.PUT("/platform-config", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				platformConfigHandler.UpdatePlatformConfig(c)
-				return
-			}
-			// 只有 admin 可以修改平台配置
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				platformConfigHandler.UpdatePlatformConfig(c)
-			}
-		})
+		globalSettings.PUT("/platform-config",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
+			platformConfigHandler.UpdatePlatformConfig,
+		)
 
-		// MFA全局配置管理 - 仅限 admin
+		// MFA全局配置管理
 		mfaHandler := handlers.NewMFAHandler(db)
 
-		globalSettings.GET("/mfa", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				mfaHandler.GetMFAConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				mfaHandler.GetMFAConfig(c)
-			}
-		})
+		globalSettings.GET("/mfa",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			mfaHandler.GetMFAConfig,
+		)
 
-		globalSettings.PUT("/mfa", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				mfaHandler.UpdateMFAConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				mfaHandler.UpdateMFAConfig(c)
-			}
-		})
+		globalSettings.PUT("/mfa",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
+			mfaHandler.UpdateMFAConfig,
+		)
 	}
 
 	// 管理员用户MFA管理路由
-	adminUsers := adminProtected.Group("/admin/users")
+	adminUsers := protected.Group("/admin/users")
 	{
 		mfaHandler := handlers.NewMFAHandler(db)
 
-		adminUsers.GET("/:user_id/mfa/status", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				mfaHandler.GetUserMFAStatus(c)
-				return
-			}
-			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				mfaHandler.GetUserMFAStatus(c)
-			}
-		})
+		adminUsers.GET("/:user_id/mfa/status",
+			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "READ"),
+			mfaHandler.GetUserMFAStatus,
+		)
 
-		adminUsers.POST("/:user_id/mfa/reset", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				mfaHandler.ResetUserMFA(c)
-				return
-			}
-			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				mfaHandler.ResetUserMFA(c)
-			}
-		})
+		adminUsers.POST("/:user_id/mfa/reset",
+			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "ADMIN"),
+			mfaHandler.ResetUserMFA,
+		)
 	}
 }

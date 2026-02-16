@@ -4,7 +4,7 @@ interface User {
   id: number;
   username: string;
   email: string;
-  role: string;
+  is_system_admin: boolean;
 }
 
 interface AuthState {

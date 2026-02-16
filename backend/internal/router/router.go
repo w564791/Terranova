@@ -150,47 +150,34 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	// AI分析路由
 	setupAIRoutes(api, db, iamMiddleware)
 
-	// 其他需要admin角色的路由
-	// 临时方案：为admin角色绕过IAM检查
-	// TODO: 长期应该完全使用IAM权限，移除role字段
-	protected.Use(middleware.BypassIAMForAdmin())
-	{
+	// 用户路由 - 使用IAM权限检查
+	setupUserRoutes(protected, db, iamMiddleware)
 
-		// 用户路由 - 添加IAM权限检查
-		setupUserRoutes(protected, db, iamMiddleware)
+	setupDemoRoutes(protected, api, db, iamMiddleware)
 
-		setupDemoRoutes(protected, api, db, iamMiddleware)
+	// Schema管理 - 使用IAM权限检查
+	setupSchemaRoutes(protected, db, iamMiddleware)
 
-		// Schema管理 - 添加IAM权限检查
-		setupSchemaRoutes(protected, db, iamMiddleware)
+	// setupTaskRoutes sets up task log routes
+	setupTaskRoutes(api, db, streamManager, iamMiddleware)
 
-		// setupTaskRoutes sets up task log routes
-		setupTaskRoutes(api, db, streamManager, iamMiddleware)
+	// Agent Pool 管理 - 使用IAM权限检查（需要 JWT 认证）
+	setupAgentPoolRoutes(protected, db, iamMiddleware)
 
-		// 其他需要admin角色的路由组
-		adminProtected := protected.Group("")
-		adminProtected.Use(middleware.BypassIAMForAdmin())
-		{
+	// Run Task 管理 - 使用IAM权限检查（需要 JWT 认证）
+	setupRunTaskRoutes(protected, db, iamMiddleware)
 
-			// Agent Pool 管理 - 添加IAM权限检查（需要 JWT 认证）
-			setupAgentPoolRoutes(adminProtected, db, iamMiddleware)
+	// IAM权限系统
+	setupIAMRoutes(protected, db, iamMiddleware)
 
-			// Run Task 管理 - 添加IAM权限检查（需要 JWT 认证）
-			setupRunTaskRoutes(adminProtected, db, iamMiddleware)
+	// 全局设置管理
+	setupGlobalRoutes(protected, db, iamMiddleware)
 
-			// IAM权限系统
-			setupIAMRoutes(adminProtected, db, iamMiddleware)
+	// 通知管理
+	SetupNotificationRoutes(protected, db, iamMiddleware)
 
-			// 全局设置管理
-			setupGlobalRoutes(adminProtected, db, iamMiddleware)
-
-			// 通知管理
-			SetupNotificationRoutes(adminProtected, db)
-
-			// Manifest 可视化编排器
-			RegisterManifestRoutes(adminProtected, db, queueManager)
-		}
-	}
+	// Manifest 可视化编排器
+	RegisterManifestRoutes(protected, db, queueManager, iamMiddleware)
 
 	// CMDB资源索引（需要认证，只读功能对所有用户开放）
 	SetupCMDBRoutes(protected, db)

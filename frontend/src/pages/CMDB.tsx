@@ -712,7 +712,7 @@ const WorkspaceTree: React.FC<{
 
 const CMDB: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.is_system_admin;
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();

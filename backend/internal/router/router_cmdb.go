@@ -24,36 +24,40 @@ func SetupCMDBRoutes(r *gin.RouterGroup, db *gorm.DB) {
 	// CMDB路由组
 	cmdb := r.Group("/cmdb")
 	{
-		// 搜索资源（只读，所有认证用户可访问）
-		cmdb.GET("/search", cmdbHandler.SearchResources)
-
-		// 搜索建议（只读，所有认证用户可访问）
-		cmdb.GET("/suggestions", cmdbHandler.GetSearchSuggestions)
-
-		// 获取统计信息（只读，所有认证用户可访问）
-		cmdb.GET("/stats", cmdbHandler.GetCMDBStats)
-
-		// 获取资源类型列表（只读，所有认证用户可访问）
-		cmdb.GET("/resource-types", cmdbHandler.GetResourceTypes)
-
-		// 获取所有workspace的资源数量（只读，所有认证用户可访问）
-		cmdb.GET("/workspace-counts", cmdbHandler.GetWorkspaceResourceCounts)
-
-		// Workspace相关（只读，所有认证用户可访问）
-		cmdb.GET("/workspaces/:workspace_id/tree", cmdbHandler.GetWorkspaceResourceTree)
-		cmdb.GET("/workspaces/:workspace_id/resources", cmdbHandler.GetResourceDetail)
+		// CMDB只读查询 - 需要WORKSPACES READ权限
+		cmdb.GET("/search",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.SearchResources)
+		cmdb.GET("/suggestions",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetSearchSuggestions)
+		cmdb.GET("/stats",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetCMDBStats)
+		cmdb.GET("/resource-types",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetResourceTypes)
+		cmdb.GET("/workspace-counts",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetWorkspaceResourceCounts)
+		cmdb.GET("/workspaces/:workspace_id/tree",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetWorkspaceResourceTree)
+		cmdb.GET("/workspaces/:workspace_id/resources",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetResourceDetail)
 
 		// 同步操作（需要cmdb:ADMIN权限，通常只有admin有此权限）
 		cmdb.POST("/workspaces/:workspace_id/sync",
-			iamMiddleware.RequirePermission("cmdb", "ORGANIZATION", "ADMIN"),
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
 			cmdbHandler.SyncWorkspace)
 		cmdb.POST("/sync-all",
-			iamMiddleware.RequirePermission("cmdb", "ORGANIZATION", "ADMIN"),
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
 			cmdbHandler.SyncAllWorkspaces)
 
 		// ===== 外部数据源管理（需要cmdb:ADMIN权限） =====
 		externalSources := cmdb.Group("/external-sources")
-		externalSources.Use(iamMiddleware.RequirePermission("cmdb", "ORGANIZATION", "ADMIN"))
+		externalSources.Use(iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"))
 		{
 			// 列出所有外部数据源
 			externalSources.GET("", externalSourceHandler.ListExternalSources)

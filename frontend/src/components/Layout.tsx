@@ -19,6 +19,8 @@ const Layout: React.FC = () => {
   const [hasDashboardPermission, setHasDashboardPermission] = useState(false);
   const [hasWorkspacesPermission, setHasWorkspacesPermission] = useState(false);
   const [hasModulesPermission, setHasModulesPermission] = useState(false);
+  const [hasIAMPermission, setHasIAMPermission] = useState(false);
+  const [hasGlobalSettingsPermission, setHasGlobalSettingsPermission] = useState(false);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
 
   React.useEffect(() => {
@@ -31,7 +33,7 @@ const Layout: React.FC = () => {
   React.useEffect(() => {
     const checkPermissions = async () => {
       setPermissionsLoading(true);
-      if (user && user.role !== 'admin') {
+      if (user && !user.is_system_admin) {
         try {
           // 使用权限检查API，不暴露具体的业务API
           const checkPermission = async (resourceType: string, scopeType: string = 'ORGANIZATION', scopeId: string = '1') => {
@@ -57,24 +59,34 @@ const Layout: React.FC = () => {
           };
 
           // 检查各项权限
-          const dashPerm = await checkPermission('ORGANIZATION');
-          const workspacesPerm = await checkPermission('WORKSPACES');
-          const modulesPerm = await checkPermission('MODULES');
-          
-          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm);
-          
+          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, globalPerm] = await Promise.all([
+            checkPermission('ORGANIZATION'),
+            checkPermission('WORKSPACES'),
+            checkPermission('MODULES'),
+            checkPermission('IAM_PERMISSIONS'),
+            checkPermission('SYSTEM_SETTINGS'),
+          ]);
+
+          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'Global:', globalPerm);
+
           setHasDashboardPermission(dashPerm);
           setHasWorkspacesPermission(workspacesPerm);
           setHasModulesPermission(modulesPerm);
+          setHasIAMPermission(iamPerm);
+          setHasGlobalSettingsPermission(globalPerm);
         } catch (error) {
           setHasDashboardPermission(false);
           setHasWorkspacesPermission(false);
           setHasModulesPermission(false);
+          setHasIAMPermission(false);
+          setHasGlobalSettingsPermission(false);
         }
-      } else if (user && user.role === 'admin') {
+      } else if (user && user.is_system_admin) {
         setHasDashboardPermission(true);
         setHasWorkspacesPermission(true);
         setHasModulesPermission(true);
+        setHasIAMPermission(true);
+        setHasGlobalSettingsPermission(true);
       }
       setPermissionsLoading(false);
     };
@@ -104,15 +116,15 @@ const Layout: React.FC = () => {
   const allNavItems = [
     { path: '/', label: 'Dashboard', icon: '', requireAdmin: false },
     { path: '/modules', label: 'Modules', icon: '', requireAdmin: false, requireModulesPermission: true },
-    { path: '/admin/manifests', label: 'Manifests', icon: '', requireAdmin: true },
-    { path: '/workspaces', label: 'Workspaces', icon: '', requireAdmin: false, requireWorkspacesPermission: true },
-    { path: '/cmdb', label: 'CMDB', icon: '', requireAdmin: false },
-    { path: '/iam/organizations', label: 'IAM', icon: '', requireAdmin: true },
-    { 
-      path: '/global', 
-      label: 'Global Settings', 
+    { path: '/admin/manifests', label: 'Manifests', icon: '', requireGlobalSettingsPermission: true },
+    { path: '/workspaces', label: 'Workspaces', icon: '', requireWorkspacesPermission: true },
+    { path: '/cmdb', label: 'CMDB', icon: '' },
+    { path: '/iam/organizations', label: 'IAM', icon: '', requireIAMPermission: true },
+    {
+      path: '/global',
+      label: 'Global Settings',
       icon: '',
-      requireAdmin: true,
+      requireGlobalSettingsPermission: true,
       children: [
         { path: '/global/settings/terraform-versions', label: 'IaC Engine', icon: '' },
         { path: '/global/settings/ai-configs', label: 'AI Config', icon: '' },
@@ -126,18 +138,16 @@ const Layout: React.FC = () => {
     },
   ];
 
-  // 根据用户角色和权限过滤菜单
-  const navItems = user?.role === 'admin' 
-    ? allNavItems 
+  // 根据用户权限过滤菜单（system_admin 看到所有菜单）
+  const navItems = user?.is_system_admin
+    ? allNavItems
     : allNavItems.filter(item => {
-        // 仪表板：有DASHBOARD权限的用户可以看到
         if (item.path === '/') return hasDashboardPermission;
-        // 模块管理：有MODULES权限的用户可以看到
-        if (item.path === '/modules') return hasModulesPermission;
-        // 工作空间：有WORKSPACES权限的用户可以看到
-        if (item.path === '/workspaces') return hasWorkspacesPermission;
-        // 其他需要admin的菜单：不显示
-        return !item.requireAdmin;
+        if ((item as any).requireModulesPermission) return hasModulesPermission;
+        if ((item as any).requireWorkspacesPermission) return hasWorkspacesPermission;
+        if ((item as any).requireIAMPermission) return hasIAMPermission;
+        if ((item as any).requireGlobalSettingsPermission) return hasGlobalSettingsPermission;
+        return true;
       });
 
   const toggleMenu = (path: string) => {
@@ -181,7 +191,7 @@ const Layout: React.FC = () => {
   }
 
   // 如果用户不是admin且没有任何权限，显示NoPermission页面
-  if (user?.role !== 'admin' && !hasDashboardPermission && !hasWorkspacesPermission && !hasModulesPermission) {
+  if (!user?.is_system_admin && !hasDashboardPermission && !hasWorkspacesPermission && !hasModulesPermission && !hasIAMPermission && !hasGlobalSettingsPermission) {
     return <NoPermission />;
   }
 
@@ -216,7 +226,7 @@ const Layout: React.FC = () => {
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {/* API按钮 - 仅超管可见，随侧边栏折叠隐藏 */}
-            {user?.role === 'admin' && !sidebarCollapsed && (
+            {user?.is_system_admin && !sidebarCollapsed && (
               <button
                 className={styles.apiButton}
                 onClick={() => {

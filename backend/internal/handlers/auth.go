@@ -218,7 +218,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// 生成JWT token（包含session_id）
-	token, err := generateJWTWithSession(user.ID, user.Username, user.Role, sessionID)
+	token, err := generateJWTWithSession(user.ID, user.Username, sessionID)
 	if err != nil {
 		println("❌ Failed to generate JWT:", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -238,10 +238,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"token":      token,
 			"expires_at": expiresAt,
 			"user": gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"email":    user.Email,
-				"role":     user.Role,
+				"id":             user.ID,
+				"username":       user.Username,
+				"email":          user.Email,
+				"is_system_admin": user.IsSystemAdmin,
 			},
 		},
 		"timestamp": time.Now(),
@@ -285,7 +285,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         "user",
 		IsActive:     true,
 	}
 
@@ -302,10 +301,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		"code":    201,
 		"message": "User created successfully",
 		"data": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":             user.ID,
+			"username":       user.Username,
+			"email":          user.Email,
+			"is_system_admin": user.IsSystemAdmin,
 		},
 		"timestamp": time.Now(),
 	})
@@ -435,7 +434,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// 生成新token
-	newToken, err := generateJWT(user.ID, user.Username, user.Role)
+	newToken, err := generateJWT(user.ID, user.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
@@ -452,10 +451,10 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			"token":      newToken,
 			"expires_at": time.Now().Add(24 * time.Hour),
 			"user": gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"email":    user.Email,
-				"role":     user.Role,
+				"id":             user.ID,
+				"username":       user.Username,
+				"email":          user.Email,
+				"is_system_admin": user.IsSystemAdmin,
 			},
 		},
 		"timestamp": time.Now(),
@@ -502,10 +501,10 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 		"code":    200,
 		"message": "Success",
 		"data": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":             user.ID,
+			"username":       user.Username,
+			"email":          user.Email,
+			"is_system_admin": user.IsSystemAdmin,
 		},
 		"timestamp": time.Now(),
 	})
@@ -545,11 +544,10 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	})
 }
 
-func generateJWT(userID string, username, role string) (string, error) {
+func generateJWT(userID string, username string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id":  userID,
 		"username": username,
-		"role":     role,
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 		"iat":      time.Now().Unix(),
 	}
@@ -558,11 +556,10 @@ func generateJWT(userID string, username, role string) (string, error) {
 	return token.SignedString([]byte(config.GetJWTSecret()))
 }
 
-func generateJWTWithSession(userID string, username, role, sessionID string) (string, error) {
+func generateJWTWithSession(userID string, username, sessionID string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id":    userID,
 		"username":   username,
-		"role":       role,
 		"session_id": sessionID,
 		"type":       "login_token",
 		"exp":        time.Now().Add(24 * time.Hour).Unix(),

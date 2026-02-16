@@ -309,7 +309,7 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 	fmt.Printf("[MFA Debug] Session created: %s for user %s\n", sessionID, user.Username)
 
 	// 生成JWT token（包含session_id）
-	token, err := generateJWTWithSession(user.ID, user.Username, user.Role, sessionID)
+	token, err := generateJWTWithSession(user.ID, user.Username, sessionID)
 	if err != nil {
 		fmt.Printf("[MFA Debug] Failed to generate JWT: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to generate token"})
@@ -325,10 +325,10 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 			"token":      token,
 			"expires_at": expiresAt,
 			"user": gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"email":    user.Email,
-				"role":     user.Role,
+				"id":             user.ID,
+				"username":       user.Username,
+				"email":          user.Email,
+				"is_system_admin": user.IsSystemAdmin,
 			},
 		},
 	})
@@ -605,7 +605,7 @@ func (h *MFAHandler) VerifyAndEnableMFAWithToken(c *gin.Context) {
 		return
 	}
 
-	token, err := generateJWTWithSession(user.ID, user.Username, user.Role, sessionID)
+	token, err := generateJWTWithSession(user.ID, user.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to generate token"})
 		return
@@ -619,10 +619,10 @@ func (h *MFAHandler) VerifyAndEnableMFAWithToken(c *gin.Context) {
 			"token":       token,
 			"expires_at":  expiresAt,
 			"user": gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"email":    user.Email,
-				"role":     user.Role,
+				"id":             user.ID,
+				"username":       user.Username,
+				"email":          user.Email,
+				"is_system_admin": user.IsSystemAdmin,
 			},
 		},
 	})

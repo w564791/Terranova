@@ -585,7 +585,7 @@ func (s *AICMDBService) getAccessibleWorkspaces(userID string) ([]string, error)
 	// 0. 首先检查用户是否是超级管理员
 	var user models.User
 	if err := s.db.Where("user_id = ?", userID).First(&user).Error; err == nil {
-		if user.Role == "admin" || user.Role == "super_admin" || user.Role == "superadmin" {
+		if user.IsSystemAdmin {
 			log.Printf("[AICMDBService] 用户 %s 是超级管理员，返回所有 Workspace", userID)
 			// 超管可以访问所有 Workspace
 			var allWorkspaces []string

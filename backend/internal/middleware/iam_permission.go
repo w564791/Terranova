@@ -34,9 +34,8 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 	requiredLevel string,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 0. 检查是否为admin角色,admin直接通过
-		role, roleExists := c.Get("role")
-		if roleExists && role == "admin" {
+		// 0. 系统管理员直接通过（is_system_admin 仅在系统初始化时设置）
+		if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
 			c.Next()
 			return
 		}
@@ -171,6 +170,12 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 	permissions []PermissionRequirement,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 0. 系统管理员直接通过（is_system_admin 仅在系统初始化时设置）
+		if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
+			c.Next()
+			return
+		}
+
 		userID, exists := c.Get("user_id")
 		if !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -182,40 +187,47 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 			return
 		}
 
-		// 获取scope_id
-		scopeID := c.Param("id")
-		if scopeID == "" {
-			scopeID = c.Query("scope_id")
-		}
-		if scopeID == "" {
-			scopeID = c.Query("org_id")
-		}
-		if scopeID == "" {
-			scopeID = "1"
-		}
-
-		var scopeIDUint uint
-		var scopeIDStr string
-
-		// 尝试解析为数字，如果失败则保留为字符串（可能是语义化ID）
-		if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
-			// 不是数字，可能是语义化ID（如 ws-xxx）
-			scopeIDStr = scopeID
-			scopeIDUint = 0 // 设为0，让CheckPermission通过ScopeIDStr处理
-		}
-
 		// 检查是否有任意一个权限满足
+		// 注意：scope_id的解析需要根据每个权限要求的scope_type分别处理
+		// ORGANIZATION scope使用org_id（默认1），其他scope使用路径参数:id
 		for _, perm := range permissions {
 			rt, _ := valueobject.ParseResourceType(perm.ResourceType)
 			st, _ := valueobject.ParseScopeType(perm.ScopeType)
 			rl, _ := valueobject.ParsePermissionLevel(perm.RequiredLevel)
+
+			var scopeIDUint uint
+			var scopeIDStr string
+
+			if st == valueobject.ScopeTypeOrganization {
+				// 组织级别权限：使用org_id查询参数，默认为1
+				scopeID := c.Query("org_id")
+				if scopeID == "" {
+					scopeID = "1"
+				}
+				if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
+					scopeIDUint = 1
+				}
+			} else {
+				// 工作空间或项目级别权限：从路径参数获取
+				scopeID := c.Param("id")
+				if scopeID == "" {
+					scopeID = c.Query("scope_id")
+				}
+				if scopeID == "" {
+					scopeID = "1"
+				}
+				if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
+					scopeIDStr = scopeID
+					scopeIDUint = 0
+				}
+			}
 
 			req := &service.CheckPermissionRequest{
 				UserID:        userID.(string),
 				ResourceType:  rt,
 				ScopeType:     st,
 				ScopeID:       scopeIDUint,
-				ScopeIDStr:    scopeIDStr, // 支持语义化ID
+				ScopeIDStr:    scopeIDStr,
 				RequiredLevel: rl,
 			}
 
@@ -248,25 +260,3 @@ type PermissionRequirement struct {
 	RequiredLevel string
 }
 
-// BypassIAMForAdmin 为管理员角色绕过IAM检查（临时方案）
-// 注意：这是一个临时解决方案，长期应该完全使用IAM权限
-func BypassIAMForAdmin() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if exists && role == "admin" {
-			// 管理员直接通过
-			c.Next()
-			return
-		}
-
-		// 非管理员用户：拒绝访问（因为IAM权限检查尚未完全集成到所有路由）
-		// TODO: 当IAM权限检查完全集成到所有路由后，才能移除此限制
-		c.JSON(http.StatusForbidden, gin.H{
-			"code":      403,
-			"message":   "Access denied: Only administrators can access this resource",
-			"hint":      "Please contact your administrator to grant you the necessary permissions",
-			"timestamp": time.Now(),
-		})
-		c.Abort()
-	}
-}

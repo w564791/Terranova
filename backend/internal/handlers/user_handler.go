@@ -34,7 +34,6 @@ func NewUserHandler(service *service.UserService) *UserHandler {
 // @Router /api/v1/iam/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	req := &service.ListUsersRequest{
-		Role:   c.Query("role"),
 		Search: c.Query("search"),
 	}
 

@@ -18,19 +18,34 @@ func setupSecretRoutes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *middlewar
 	//      /workspace/ws-abc456/secrets
 	secrets := r.Group("/:resourceType/:resourceId/secrets")
 	{
+		// 列出密文（只读）
+		secrets.GET("",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			secretHandler.ListSecrets,
+		)
+
+		// 获取密文详情（只读）
+		secrets.GET("/:secretId",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			secretHandler.GetSecret,
+		)
+
 		// 创建密文
-		secrets.POST("", secretHandler.CreateSecret)
-
-		// 列出密文
-		secrets.GET("", secretHandler.ListSecrets)
-
-		// 获取密文详情
-		secrets.GET("/:secretId", secretHandler.GetSecret)
+		secrets.POST("",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			secretHandler.CreateSecret,
+		)
 
 		// 更新密文（仅metadata）
-		secrets.PUT("/:secretId", secretHandler.UpdateSecret)
+		secrets.PUT("/:secretId",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			secretHandler.UpdateSecret,
+		)
 
 		// 删除密文
-		secrets.DELETE("/:secretId", secretHandler.DeleteSecret)
+		secrets.DELETE("/:secretId",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
+			secretHandler.DeleteSecret,
+		)
 	}
 }

@@ -24,7 +24,6 @@ func NewUserService(db *gorm.DB) *UserService {
 
 // ListUsersRequest 列出用户请求
 type ListUsersRequest struct {
-	Role     string `json:"role"`
 	IsActive *bool  `json:"is_active"`
 	Search   string `json:"search"`
 	Limit    int    `json:"limit"`
@@ -33,8 +32,7 @@ type ListUsersRequest struct {
 
 // UpdateUserRequest 更新用户请求
 type UpdateUserRequest struct {
-	Role     *string `json:"role"`
-	IsActive *bool   `json:"is_active"`
+	IsActive *bool `json:"is_active"`
 }
 
 // CreateUserRequest 创建用户请求
@@ -42,7 +40,6 @@ type CreateUserRequest struct {
 	Username string `json:"username" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
-	Role     string `json:"role" binding:"required,oneof=user admin"`
 }
 
 // ListUsers 列出用户
@@ -53,9 +50,6 @@ func (s *UserService) ListUsers(ctx context.Context, req *ListUsersRequest) ([]*
 	query := s.db.WithContext(ctx).Model(&models.User{})
 
 	// 应用筛选
-	if req.Role != "" {
-		query = query.Where("role = ?", req.Role)
-	}
 	if req.IsActive != nil {
 		query = query.Where("is_active = ?", *req.IsActive)
 	}
@@ -103,9 +97,6 @@ func (s *UserService) UpdateUser(ctx context.Context, id string, req *UpdateUser
 	}
 
 	updates := make(map[string]interface{})
-	if req.Role != nil {
-		updates["role"] = *req.Role
-	}
 	if req.IsActive != nil {
 		updates["is_active"] = *req.IsActive
 	}
@@ -147,16 +138,16 @@ func (s *UserService) GetUserStats(ctx context.Context) (map[string]interface{},
 		return nil, err
 	}
 
-	if err := s.db.WithContext(ctx).Model(&models.User{}).Where("role = ?", "admin").Count(&adminCount).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&models.User{}).Where("is_system_admin = ?", true).Count(&adminCount).Error; err != nil {
 		return nil, err
 	}
 
 	return map[string]interface{}{
-		"total":       total,
-		"active":      activeCount,
-		"inactive":    total - activeCount,
-		"admin_count": adminCount,
-		"user_count":  total - adminCount,
+		"total":              total,
+		"active":             activeCount,
+		"inactive":           total - activeCount,
+		"system_admin_count": adminCount,
+		"user_count":         total - adminCount,
 	}, nil
 }
 
@@ -183,7 +174,6 @@ func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) (*
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         req.Role,
 		IsActive:     true,
 	}
 
@@ -202,14 +192,14 @@ func (s *UserService) DeleteUser(ctx context.Context, id string) error {
 		return err
 	}
 
-	// 不允许删除管理员账户（可选的安全措施）
-	if user.Role == "admin" {
+	// 不允许删除最后一个系统管理员
+	if user.IsSystemAdmin {
 		var adminCount int64
-		if err := s.db.WithContext(ctx).Model(&models.User{}).Where("role = ?", "admin").Count(&adminCount).Error; err != nil {
+		if err := s.db.WithContext(ctx).Model(&models.User{}).Where("is_system_admin = ?", true).Count(&adminCount).Error; err != nil {
 			return err
 		}
 		if adminCount <= 1 {
-			return errors.New("cannot delete the last admin user")
+			return errors.New("cannot delete the last system admin user")
 		}
 	}
 

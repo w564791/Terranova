@@ -17,91 +17,43 @@ func setupDemoRoutes(protected *gin.RouterGroup, api *gin.RouterGroup, db *gorm.
 	{
 		demoController := controllers.NewModuleDemoController(db)
 
-		demos.GET("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				demoController.GetDemoByID(c)
-				return
-			}
-			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				demoController.GetDemoByID(c)
-			}
-		})
+		demos.GET("/:id",
+			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ"),
+			demoController.GetDemoByID,
+		)
 
-		demos.PUT("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				demoController.UpdateDemo(c)
-				return
-			}
-			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				demoController.UpdateDemo(c)
-			}
-		})
+		demos.PUT("/:id",
+			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "WRITE"),
+			demoController.UpdateDemo,
+		)
 
-		demos.DELETE("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				demoController.DeleteDemo(c)
-				return
-			}
-			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				demoController.DeleteDemo(c)
-			}
-		})
+		demos.DELETE("/:id",
+			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "ADMIN"),
+			demoController.DeleteDemo,
+		)
 
 		// 版本管理
-		demos.GET("/:id/versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				demoController.GetVersionsByDemoID(c)
-				return
-			}
-			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				demoController.GetVersionsByDemoID(c)
-			}
-		})
+		demos.GET("/:id/versions",
+			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ"),
+			demoController.GetVersionsByDemoID,
+		)
 
-		demos.GET("/:id/compare", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				demoController.CompareVersions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				demoController.CompareVersions(c)
-			}
-		})
+		demos.GET("/:id/compare",
+			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ"),
+			demoController.CompareVersions,
+		)
 
-		demos.POST("/:id/rollback", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				demoController.RollbackToVersion(c)
-				return
-			}
-			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				demoController.RollbackToVersion(c)
-			}
-		})
+		demos.POST("/:id/rollback",
+			iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "WRITE"),
+			demoController.RollbackToVersion,
+		)
 	}
 
 	// Demo版本详情 - 添加IAM权限检查
-	api.GET("/demo-versions/:versionId", middleware.JWTAuth(), func(c *gin.Context) {
-		demoController := controllers.NewModuleDemoController(db)
-		role, _ := c.Get("role")
-		if role == "admin" {
-			demoController.GetVersionByID(c)
-			return
-		}
-		iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ")(c)
-		if !c.IsAborted() {
-			demoController.GetVersionByID(c)
-		}
-	})
+	demoController := controllers.NewModuleDemoController(db)
+	api.GET("/demo-versions/:versionId",
+		middleware.JWTAuth(),
+		iamMiddleware.RequirePermission("MODULE_DEMOS", "ORGANIZATION", "READ"),
+		demoController.GetVersionByID,
+	)
 }

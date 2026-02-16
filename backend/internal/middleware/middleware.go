@@ -216,12 +216,12 @@ func JWTAuth() gin.HandlerFunc {
 			// 设置session_id到context（供logout使用）
 			c.Set("session_id", sessionID)
 
-			// 从数据库查询最新的role（确保管理员修改权限后立即生效，无需重新登录）
+			// 从数据库查询最新的用户状态（确保权限修改后立即生效，无需重新登录）
 			var loginUser struct {
-				Role     string
-				IsActive bool
+				IsActive      bool
+				IsSystemAdmin bool
 			}
-			if err := globalDB.Table("users").Select("role, is_active").Where("user_id = ?", userID).First(&loginUser).Error; err != nil {
+			if err := globalDB.Table("users").Select("is_active, is_system_admin").Where("user_id = ?", userID).First(&loginUser).Error; err != nil {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"code":      401,
 					"message":   "User not found",
@@ -239,7 +239,7 @@ func JWTAuth() gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-			c.Set("role", loginUser.Role)
+			c.Set("is_system_admin", loginUser.IsSystemAdmin)
 		} else if tokenType == "user_token" {
 			// User token: 必须验证token_id在数据库中存在且有效
 			tokenID, _ := claims["token_id"].(string)
@@ -295,12 +295,12 @@ func JWTAuth() gin.HandlerFunc {
 				return
 			}
 
-			// 从数据库查询用户的role
+			// 从数据库查询用户状态
 			var user struct {
-				Role     string
-				IsActive bool
+				IsActive      bool
+				IsSystemAdmin bool
 			}
-			if err := globalDB.Table("users").Select("role, is_active").Where("user_id = ?", userID).First(&user).Error; err != nil {
+			if err := globalDB.Table("users").Select("is_active, is_system_admin").Where("user_id = ?", userID).First(&user).Error; err != nil {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"code":      401,
 					"message":   "User not found",
@@ -320,7 +320,7 @@ func JWTAuth() gin.HandlerFunc {
 				return
 			}
 
-			c.Set("role", user.Role)
+			c.Set("is_system_admin", user.IsSystemAdmin)
 		} else if tokenType == "team_token" {
 			// Team token: 必须验证token_id在数据库中存在且有效（不需要login session）
 			tokenID, _ := claims["token_id"].(string)
@@ -381,6 +381,23 @@ func JWTAuth() gin.HandlerFunc {
 	}
 }
 
+// RequireSystemAdmin 要求当前用户是系统管理员（is_system_admin=true）
+// 用于系统级管理操作（如SSO配置），不走IAM权限体系
+func RequireSystemAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
+			c.Next()
+			return
+		}
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":      403,
+			"message":   "System admin access required",
+			"timestamp": time.Now(),
+		})
+		c.Abort()
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -388,43 +405,3 @@ func min(a, b int) int {
 	return b
 }
 
-// RequireRole 检查用户是否具有指定角色
-func RequireRole(roles ...string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if !exists {
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":      403,
-				"message":   "Access denied: role not found",
-				"timestamp": time.Now(),
-			})
-			c.Abort()
-			return
-		}
-
-		roleStr, ok := role.(string)
-		if !ok {
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":      403,
-				"message":   "Access denied: invalid role format",
-				"timestamp": time.Now(),
-			})
-			c.Abort()
-			return
-		}
-
-		for _, r := range roles {
-			if roleStr == r {
-				c.Next()
-				return
-			}
-		}
-
-		c.JSON(http.StatusForbidden, gin.H{
-			"code":      403,
-			"message":   "Access denied: insufficient permissions",
-			"timestamp": time.Now(),
-		})
-		c.Abort()
-	}
-}

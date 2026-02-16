@@ -60,776 +60,335 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 		roleHandler := handlers.NewRoleHandler(db)
 
 		// 权限管理 - 其他权限管理API
-		iamGroup.POST("/permissions/grant", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.GrantPermission(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				permissionHandler.GrantPermission(c)
-			}
-		})
+		iamGroup.POST("/permissions/grant",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN"),
+			permissionHandler.GrantPermission,
+		)
 
-		iamGroup.POST("/permissions/batch-grant", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.BatchGrantPermissions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				permissionHandler.BatchGrantPermissions(c)
-			}
-		})
+		iamGroup.POST("/permissions/batch-grant",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN"),
+			permissionHandler.BatchGrantPermissions,
+		)
 
-		iamGroup.POST("/permissions/grant-preset", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.GrantPresetPermissions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				permissionHandler.GrantPresetPermissions(c)
-			}
-		})
+		iamGroup.POST("/permissions/grant-preset",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN"),
+			permissionHandler.GrantPresetPermissions,
+		)
 
-		iamGroup.DELETE("/permissions/:scope_type/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.RevokePermission(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				permissionHandler.RevokePermission(c)
-			}
-		})
+		iamGroup.DELETE("/permissions/:scope_type/:id",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN"),
+			permissionHandler.RevokePermission,
+		)
 
-		iamGroup.GET("/permissions/:scope_type/:scope_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.ListPermissions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				permissionHandler.ListPermissions(c)
-			}
-		})
+		iamGroup.GET("/permissions/:scope_type/:scope_id",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ"),
+			permissionHandler.ListPermissions,
+		)
 
-		iamGroup.GET("/permissions/definitions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.ListPermissionDefinitions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				permissionHandler.ListPermissionDefinitions(c)
-			}
-		})
+		iamGroup.GET("/permissions/definitions",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ"),
+			permissionHandler.ListPermissionDefinitions,
+		)
 
 		// 新增：按主体查询权限的API
-		iamGroup.GET("/users/:id/permissions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.ListUserPermissions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				permissionHandler.ListUserPermissions(c)
-			}
-		})
+		iamGroup.GET("/users/:id/permissions",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ"),
+			permissionHandler.ListUserPermissions,
+		)
 
-		iamGroup.GET("/teams/:id/permissions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				permissionHandler.ListTeamPermissions(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				permissionHandler.ListTeamPermissions(c)
-			}
-		})
+		iamGroup.GET("/teams/:id/permissions",
+			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "READ"),
+			permissionHandler.ListTeamPermissions,
+		)
 
 		// 团队管理 - 添加IAM权限检查
-		iamGroup.POST("/teams", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.CreateTeam(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				teamHandler.CreateTeam(c)
-			}
-		})
+		iamGroup.POST("/teams",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE"),
+			teamHandler.CreateTeam,
+		)
 
-		iamGroup.GET("/teams", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.ListTeamsByOrg(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				teamHandler.ListTeamsByOrg(c)
-			}
-		})
+		iamGroup.GET("/teams",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ"),
+			teamHandler.ListTeamsByOrg,
+		)
 
-		iamGroup.GET("/teams/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.GetTeam(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				teamHandler.GetTeam(c)
-			}
-		})
+		iamGroup.GET("/teams/:id",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ"),
+			teamHandler.GetTeam,
+		)
 
-		iamGroup.DELETE("/teams/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.DeleteTeam(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				teamHandler.DeleteTeam(c)
-			}
-		})
+		iamGroup.DELETE("/teams/:id",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "ADMIN"),
+			teamHandler.DeleteTeam,
+		)
 
-		iamGroup.POST("/teams/:id/members", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.AddTeamMember(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				teamHandler.AddTeamMember(c)
-			}
-		})
+		iamGroup.POST("/teams/:id/members",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE"),
+			teamHandler.AddTeamMember,
+		)
 
-		iamGroup.DELETE("/teams/:id/members/:user_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.RemoveTeamMember(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				teamHandler.RemoveTeamMember(c)
-			}
-		})
+		iamGroup.DELETE("/teams/:id/members/:user_id",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE"),
+			teamHandler.RemoveTeamMember,
+		)
 
-		iamGroup.GET("/teams/:id/members", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamHandler.ListTeamMembers(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				teamHandler.ListTeamMembers(c)
-			}
-		})
+		iamGroup.GET("/teams/:id/members",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ"),
+			teamHandler.ListTeamMembers,
+		)
 
 		// 团队Token管理 - 使用统一JWT密钥
 		teamTokenHandler := handlers.NewTeamTokenHandler(service.NewTeamTokenService(db, ""))
 
-		iamGroup.POST("/teams/:id/tokens", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamTokenHandler.CreateTeamToken(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				teamTokenHandler.CreateTeamToken(c)
-			}
-		})
+		iamGroup.POST("/teams/:id/tokens",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE"),
+			teamTokenHandler.CreateTeamToken,
+		)
 
-		iamGroup.GET("/teams/:id/tokens", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamTokenHandler.ListTeamTokens(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				teamTokenHandler.ListTeamTokens(c)
-			}
-		})
+		iamGroup.GET("/teams/:id/tokens",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ"),
+			teamTokenHandler.ListTeamTokens,
+		)
 
-		iamGroup.DELETE("/teams/:id/tokens/:token_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				teamTokenHandler.RevokeTeamToken(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				teamTokenHandler.RevokeTeamToken(c)
-			}
-		})
+		iamGroup.DELETE("/teams/:id/tokens/:token_id",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE"),
+			teamTokenHandler.RevokeTeamToken,
+		)
 
 		// 团队角色管理 - 添加IAM权限检查
-		iamGroup.POST("/teams/:id/roles", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.AssignTeamRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				roleHandler.AssignTeamRole(c)
-			}
-		})
+		iamGroup.POST("/teams/:id/roles",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "ADMIN"),
+			roleHandler.AssignTeamRole,
+		)
 
-		iamGroup.GET("/teams/:id/roles", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.ListTeamRoles(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				roleHandler.ListTeamRoles(c)
-			}
-		})
+		iamGroup.GET("/teams/:id/roles",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "READ"),
+			roleHandler.ListTeamRoles,
+		)
 
-		iamGroup.DELETE("/teams/:id/roles/:assignment_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.RevokeTeamRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				roleHandler.RevokeTeamRole(c)
-			}
-		})
+		iamGroup.DELETE("/teams/:id/roles/:assignment_id",
+			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "ADMIN"),
+			roleHandler.RevokeTeamRole,
+		)
 
 		// 组织管理 - 添加IAM权限检查
-		iamGroup.POST("/organizations", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.CreateOrganization(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				orgHandler.CreateOrganization(c)
-			}
-		})
+		iamGroup.POST("/organizations",
+			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "ADMIN"),
+			orgHandler.CreateOrganization,
+		)
 
-		iamGroup.GET("/organizations", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.ListOrganizations(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				orgHandler.ListOrganizations(c)
-			}
-		})
+		iamGroup.GET("/organizations",
+			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "READ"),
+			orgHandler.ListOrganizations,
+		)
 
-		iamGroup.GET("/organizations/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.GetOrganization(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				orgHandler.GetOrganization(c)
-			}
-		})
+		iamGroup.GET("/organizations/:id",
+			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "READ"),
+			orgHandler.GetOrganization,
+		)
 
-		iamGroup.PUT("/organizations/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.UpdateOrganization(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				orgHandler.UpdateOrganization(c)
-			}
-		})
+		iamGroup.PUT("/organizations/:id",
+			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "WRITE"),
+			orgHandler.UpdateOrganization,
+		)
 
-		iamGroup.DELETE("/organizations/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.DeleteOrganization(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				orgHandler.DeleteOrganization(c)
-			}
-		})
+		iamGroup.DELETE("/organizations/:id",
+			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "ADMIN"),
+			orgHandler.DeleteOrganization,
+		)
 
 		// 项目管理 - 添加IAM权限检查
-		iamGroup.POST("/projects", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.CreateProject(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				orgHandler.CreateProject(c)
-			}
-		})
+		iamGroup.POST("/projects",
+			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "WRITE"),
+			orgHandler.CreateProject,
+		)
 
-		iamGroup.GET("/projects", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.ListProjects(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				orgHandler.ListProjects(c)
-			}
-		})
+		iamGroup.GET("/projects",
+			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "READ"),
+			orgHandler.ListProjects,
+		)
 
-		iamGroup.GET("/projects/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.GetProject(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				orgHandler.GetProject(c)
-			}
-		})
+		iamGroup.GET("/projects/:id",
+			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "READ"),
+			orgHandler.GetProject,
+		)
 
-		iamGroup.PUT("/projects/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.UpdateProject(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				orgHandler.UpdateProject(c)
-			}
-		})
+		iamGroup.PUT("/projects/:id",
+			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "WRITE"),
+			orgHandler.UpdateProject,
+		)
 
-		iamGroup.DELETE("/projects/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				orgHandler.DeleteProject(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				orgHandler.DeleteProject(c)
-			}
-		})
+		iamGroup.DELETE("/projects/:id",
+			iamMiddleware.RequirePermission("IAM_PROJECTS", "ORGANIZATION", "ADMIN"),
+			orgHandler.DeleteProject,
+		)
 
 		// 应用管理 - 添加IAM权限检查
-		iamGroup.POST("/applications", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				applicationHandler.CreateApplication(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				applicationHandler.CreateApplication(c)
-			}
-		})
+		iamGroup.POST("/applications",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "WRITE"),
+			applicationHandler.CreateApplication,
+		)
 
-		iamGroup.GET("/applications", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				applicationHandler.ListApplications(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				applicationHandler.ListApplications(c)
-			}
-		})
+		iamGroup.GET("/applications",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "READ"),
+			applicationHandler.ListApplications,
+		)
 
-		iamGroup.GET("/applications/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				applicationHandler.GetApplication(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				applicationHandler.GetApplication(c)
-			}
-		})
+		iamGroup.GET("/applications/:id",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "READ"),
+			applicationHandler.GetApplication,
+		)
 
-		iamGroup.PUT("/applications/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				applicationHandler.UpdateApplication(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				applicationHandler.UpdateApplication(c)
-			}
-		})
+		iamGroup.PUT("/applications/:id",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "WRITE"),
+			applicationHandler.UpdateApplication,
+		)
 
-		iamGroup.DELETE("/applications/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				applicationHandler.DeleteApplication(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				applicationHandler.DeleteApplication(c)
-			}
-		})
+		iamGroup.DELETE("/applications/:id",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "ADMIN"),
+			applicationHandler.DeleteApplication,
+		)
 
-		iamGroup.POST("/applications/:id/regenerate-secret", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				applicationHandler.RegenerateSecret(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				applicationHandler.RegenerateSecret(c)
-			}
-		})
+		iamGroup.POST("/applications/:id/regenerate-secret",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "ADMIN"),
+			applicationHandler.RegenerateSecret,
+		)
 
 		// 审计日志 - 添加IAM权限检查
-		iamGroup.GET("/audit/config", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditConfigHandler.GetAuditConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				auditConfigHandler.GetAuditConfig(c)
-			}
-		})
+		iamGroup.GET("/audit/config",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
+			auditConfigHandler.GetAuditConfig,
+		)
 
-		iamGroup.PUT("/audit/config", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditConfigHandler.UpdateAuditConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				auditConfigHandler.UpdateAuditConfig(c)
-			}
-		})
+		iamGroup.PUT("/audit/config",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "ADMIN"),
+			auditConfigHandler.UpdateAuditConfig,
+		)
 
-		iamGroup.GET("/audit/permission-history", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditHandler.QueryPermissionHistory(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				auditHandler.QueryPermissionHistory(c)
-			}
-		})
+		iamGroup.GET("/audit/permission-history",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
+			auditHandler.QueryPermissionHistory,
+		)
 
-		iamGroup.GET("/audit/access-history", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditHandler.QueryAccessHistory(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				auditHandler.QueryAccessHistory(c)
-			}
-		})
+		iamGroup.GET("/audit/access-history",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
+			auditHandler.QueryAccessHistory,
+		)
 
-		iamGroup.GET("/audit/denied-access", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditHandler.QueryDeniedAccess(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				auditHandler.QueryDeniedAccess(c)
-			}
-		})
+		iamGroup.GET("/audit/denied-access",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
+			auditHandler.QueryDeniedAccess,
+		)
 
-		iamGroup.GET("/audit/permission-changes-by-principal", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditHandler.QueryPermissionChangesByPrincipal(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				auditHandler.QueryPermissionChangesByPrincipal(c)
-			}
-		})
+		iamGroup.GET("/audit/permission-changes-by-principal",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
+			auditHandler.QueryPermissionChangesByPrincipal,
+		)
 
-		iamGroup.GET("/audit/permission-changes-by-performer", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				auditHandler.QueryPermissionChangesByPerformer(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				auditHandler.QueryPermissionChangesByPerformer(c)
-			}
-		})
+		iamGroup.GET("/audit/permission-changes-by-performer",
+			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
+			auditHandler.QueryPermissionChangesByPerformer,
+		)
 
 		// 用户管理 - 添加IAM权限检查
-		iamGroup.GET("/users/stats", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.GetUserStats(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				userHandler.GetUserStats(c)
-			}
-		})
+		iamGroup.GET("/users/stats",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			userHandler.GetUserStats,
+		)
 
-		iamGroup.GET("/users", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.ListUsers(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				userHandler.ListUsers(c)
-			}
-		})
+		iamGroup.GET("/users",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			userHandler.ListUsers,
+		)
 
-		iamGroup.POST("/users", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.CreateUser(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				userHandler.CreateUser(c)
-			}
-		})
+		iamGroup.POST("/users",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "WRITE"),
+			userHandler.CreateUser,
+		)
 
 		// 用户角色分配（使用 /users/:id/roles 路径）
-		iamGroup.POST("/users/:id/roles", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.AssignRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				roleHandler.AssignRole(c)
-			}
-		})
+		iamGroup.POST("/users/:id/roles",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			roleHandler.AssignRole,
+		)
 
-		iamGroup.DELETE("/users/:id/roles/:assignment_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.RevokeRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				roleHandler.RevokeRole(c)
-			}
-		})
+		iamGroup.DELETE("/users/:id/roles/:assignment_id",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			roleHandler.RevokeRole,
+		)
 
-		iamGroup.GET("/users/:id/roles", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.ListUserRoles(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				roleHandler.ListUserRoles(c)
-			}
-		})
+		iamGroup.GET("/users/:id/roles",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			roleHandler.ListUserRoles,
+		)
 
 		// 用户基本操作
-		iamGroup.GET("/users/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.GetUser(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				userHandler.GetUser(c)
-			}
-		})
+		iamGroup.GET("/users/:id",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			userHandler.GetUser,
+		)
 
-		iamGroup.PUT("/users/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.UpdateUser(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				userHandler.UpdateUser(c)
-			}
-		})
+		iamGroup.PUT("/users/:id",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "WRITE"),
+			userHandler.UpdateUser,
+		)
 
-		iamGroup.POST("/users/:id/activate", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.ActivateUser(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				userHandler.ActivateUser(c)
-			}
-		})
+		iamGroup.POST("/users/:id/activate",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			userHandler.ActivateUser,
+		)
 
-		iamGroup.POST("/users/:id/deactivate", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.DeactivateUser(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				userHandler.DeactivateUser(c)
-			}
-		})
+		iamGroup.POST("/users/:id/deactivate",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			userHandler.DeactivateUser,
+		)
 
-		iamGroup.DELETE("/users/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				userHandler.DeleteUser(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				userHandler.DeleteUser(c)
-			}
-		})
+		iamGroup.DELETE("/users/:id",
+			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			userHandler.DeleteUser,
+		)
 
 		// 角色管理 - 添加IAM权限检查
-		iamGroup.GET("/roles", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.ListRoles(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				roleHandler.ListRoles(c)
-			}
-		})
+		iamGroup.GET("/roles",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "READ"),
+			roleHandler.ListRoles,
+		)
 
-		iamGroup.GET("/roles/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.GetRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				roleHandler.GetRole(c)
-			}
-		})
+		iamGroup.GET("/roles/:id",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "READ"),
+			roleHandler.GetRole,
+		)
 
-		iamGroup.POST("/roles", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.CreateRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				roleHandler.CreateRole(c)
-			}
-		})
+		iamGroup.POST("/roles",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE"),
+			roleHandler.CreateRole,
+		)
 
-		iamGroup.PUT("/roles/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.UpdateRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				roleHandler.UpdateRole(c)
-			}
-		})
+		iamGroup.PUT("/roles/:id",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE"),
+			roleHandler.UpdateRole,
+		)
 
-		iamGroup.DELETE("/roles/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.DeleteRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				roleHandler.DeleteRole(c)
-			}
-		})
+		iamGroup.DELETE("/roles/:id",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "ADMIN"),
+			roleHandler.DeleteRole,
+		)
 
 		// 角色策略管理
-		iamGroup.POST("/roles/:id/policies", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.AddRolePolicy(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				roleHandler.AddRolePolicy(c)
-			}
-		})
+		iamGroup.POST("/roles/:id/policies",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE"),
+			roleHandler.AddRolePolicy,
+		)
 
-		iamGroup.DELETE("/roles/:id/policies/:policy_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.RemoveRolePolicy(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				roleHandler.RemoveRolePolicy(c)
-			}
-		})
+		iamGroup.DELETE("/roles/:id/policies/:policy_id",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE"),
+			roleHandler.RemoveRolePolicy,
+		)
 
 		// 角色克隆
-		iamGroup.POST("/roles/:id/clone", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				roleHandler.CloneRole(c)
-				return
-			}
-			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				roleHandler.CloneRole(c)
-			}
-		})
+		iamGroup.POST("/roles/:id/clone",
+			iamMiddleware.RequirePermission("IAM_ROLES", "ORGANIZATION", "WRITE"),
+			roleHandler.CloneRole,
+		)
 	}
 }

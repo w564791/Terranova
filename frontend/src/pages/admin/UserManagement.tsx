@@ -4,67 +4,28 @@ import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './UserManagement.module.css';
 
-// IAM角色接口
-interface IAMRole {
-  id: number;
-  name: string;
-  display_name: string;
-  description: string;
-  is_system: boolean;
-  is_active: boolean;
-}
-
 const UserManagement: React.FC = () => {
   const { success: showSuccess, error: showError } = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [iamRoles, setIamRoles] = useState<IAMRole[]>([]);
   const [statusFilter, setStatusFilter] = useState<boolean | undefined>(undefined);
-  const [roleChangeConfirm, setRoleChangeConfirm] = useState<{
-    show: boolean;
-    user: any;
-    newRole: string;
-  }>({ show: false, user: null, newRole: '' });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({
     username: '',
     email: '',
     password: '',
-    role: 'user',
   });
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
     user: any;
   }>({ show: false, user: null });
 
-  // 加载IAM角色列表
-  const loadIAMRoles = async () => {
-    try {
-      const response = await fetch('/api/v1/iam/roles', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setIamRoles(data.roles || []);
-      }
-    } catch (error) {
-      console.error('加载角色列表失败:', error);
-    }
-  };
-
-  useEffect(() => {
-    loadIAMRoles();
-  }, []);
-
   useEffect(() => {
     loadStats();
     loadUsers();
-  }, [roleFilter, statusFilter]);
+  }, [statusFilter]);
 
   const loadStats = async () => {
     try {
@@ -79,7 +40,6 @@ const UserManagement: React.FC = () => {
     setLoading(true);
     try {
       const params: any = { limit: 50 };
-      if (roleFilter) params.role = roleFilter;
       if (statusFilter !== undefined) params.is_active = statusFilter;
       if (search) params.search = search;
 
@@ -111,24 +71,6 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const handleUpdateRole = (user: any, newRole: string) => {
-    setRoleChangeConfirm({ show: true, user, newRole });
-  };
-
-  const confirmRoleChange = async () => {
-    const { user, newRole } = roleChangeConfirm;
-    try {
-      await iamService.updateUser(user.id, { role: newRole });
-      showSuccess('角色更新成功');
-      loadUsers();
-      loadStats();
-    } catch (error: any) {
-      showError('更新失败: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setRoleChangeConfirm({ show: false, user: null, newRole: '' });
-    }
-  };
-
   const handleCreateUser = async () => {
     if (!createForm.username || !createForm.email || !createForm.password) {
       showError('请填写所有必填字段');
@@ -139,7 +81,7 @@ const UserManagement: React.FC = () => {
       await iamService.createUser(createForm);
       showSuccess('用户创建成功');
       setShowCreateModal(false);
-      setCreateForm({ username: '', email: '', password: '', role: 'user' });
+      setCreateForm({ username: '', email: '', password: '' });
       loadUsers();
       loadStats();
     } catch (error: any) {
@@ -189,25 +131,13 @@ const UserManagement: React.FC = () => {
             <div className={styles.statLabel}>停用用户</div>
           </div>
           <div className={styles.statCard}>
-            <div className={styles.statValue}>{stats.admin_count}</div>
-            <div className={styles.statLabel}>管理员</div>
+            <div className={styles.statValue}>{stats.system_admin_count}</div>
+            <div className={styles.statLabel}>系统管理员</div>
           </div>
         </div>
       )}
 
       <div className={styles.filters}>
-        <div className={styles.filterGroup}>
-          <label>角色:</label>
-          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={styles.select}>
-            <option value="">全部</option>
-            {iamRoles.map((role) => (
-              <option key={role.id} value={role.name}>
-                {role.display_name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className={styles.filterGroup}>
           <label>状态:</label>
           <select
@@ -255,8 +185,8 @@ const UserManagement: React.FC = () => {
                 <th>ID</th>
                 <th>用户名</th>
                 <th>邮箱</th>
-                <th>角色</th>
                 <th>状态</th>
+                <th>系统管理员</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -268,26 +198,14 @@ const UserManagement: React.FC = () => {
                   <td className={styles.usernameCell}>{user.username}</td>
                   <td>{user.email}</td>
                   <td>
-                    <select
-                      value={user.role}
-                      onChange={(e) => handleUpdateRole(user, e.target.value)}
-                      className={styles.roleSelect}
-                    >
-                      {iamRoles.map((role) => (
-                        <option key={role.id} value={role.name}>
-                          {role.display_name}
-                        </option>
-                      ))}
-                      {/* 如果用户当前角色不在列表中，也显示出来 */}
-                      {user.role && !iamRoles.find(r => r.name === user.role) && (
-                        <option value={user.role}>{user.role}</option>
-                      )}
-                    </select>
-                  </td>
-                  <td>
                     <span className={user.is_active ? styles.statusActive : styles.statusInactive}>
                       {user.is_active ? '活跃' : '停用'}
                     </span>
+                  </td>
+                  <td>
+                    {user.is_system_admin && (
+                      <span className={styles.statusActive}>是</span>
+                    )}
                   </td>
                   <td>{new Date(user.created_at).toLocaleString()}</td>
                   <td className={styles.actions}>
@@ -314,10 +232,9 @@ const UserManagement: React.FC = () => {
       <div className={styles.info}>
         <h3>用户管理说明</h3>
         <ul>
-          <li><strong>角色管理</strong>: 直接在表格中选择角色即可更新用户权限</li>
+          <li><strong>权限管理</strong>: 请在 IAM 权限管理页面中为用户分配角色和权限</li>
           <li><strong>状态管理</strong>: 可以激活或停用用户账号</li>
           <li><strong>搜索功能</strong>: 支持按用户名或邮箱搜索</li>
-          <li><strong>筛选功能</strong>: 可按角色和状态筛选用户列表</li>
         </ul>
       </div>
 
@@ -353,19 +270,6 @@ const UserManagement: React.FC = () => {
                 placeholder="请输入密码（至少6位）"
               />
             </div>
-            <div className={styles.formGroup}>
-              <label>角色 *</label>
-              <select
-                value={createForm.role}
-                onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
-              >
-                {iamRoles.map((role) => (
-                  <option key={role.id} value={role.name}>
-                    {role.display_name}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className={styles.modalActions}>
               <button onClick={handleCreateUser} className={styles.confirmButton}>
                 创建
@@ -373,7 +277,7 @@ const UserManagement: React.FC = () => {
               <button
                 onClick={() => {
                   setShowCreateModal(false);
-                  setCreateForm({ username: '', email: '', password: '', role: 'user' });
+                  setCreateForm({ username: '', email: '', password: '' });
                 }}
                 className={styles.cancelButton}
               >
@@ -383,18 +287,6 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* 角色更改确认对话框 */}
-      <ConfirmDialog
-        isOpen={roleChangeConfirm.show}
-        title="确认更改角色"
-        message={roleChangeConfirm.user ? `确定要将用户 "${roleChangeConfirm.user.username}" 的角色更改为 "${roleChangeConfirm.newRole}" 吗？` : ''}
-        confirmText="确认"
-        cancelText="取消"
-        type="warning"
-        onConfirm={confirmRoleChange}
-        onCancel={() => setRoleChangeConfirm({ show: false, user: null, newRole: '' })}
-      />
 
       {/* 删除用户确认对话框 */}
       <ConfirmDialog

@@ -16,17 +16,10 @@ func setupUserRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *mid
 		authHandler := handlers.NewAuthHandler(db)
 
 		// 管理员重置用户密码
-		user.POST("/reset-password", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				authHandler.ResetPassword(c)
-				return
-			}
-			iamMiddleware.RequirePermission("USER_MANAGEMENT", "USER", "WRITE")(c)
-			if !c.IsAborted() {
-				authHandler.ResetPassword(c)
-			}
-		})
+		user.POST("/reset-password",
+			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "WRITE"),
+			authHandler.ResetPassword,
+		)
 
 		// 用户个人设置相关路由
 		// 使用统一的JWT密钥配置

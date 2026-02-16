@@ -21,51 +21,23 @@ func setupTaskRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *services.
 	taskLogController := controllers.NewTaskLogController(db)
 	outputController := controllers.NewTerraformOutputController(streamManager)
 
-	api.GET("/tasks/:task_id/output/stream", middleware.JWTAuth(), middleware.AuditLogger(db), func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.StreamTaskOutput(c)
-			return
-		}
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ")(c)
-		if !c.IsAborted() {
-			outputController.StreamTaskOutput(c)
-		}
-	})
+	api.GET("/tasks/:task_id/output/stream", middleware.JWTAuth(), middleware.AuditLogger(db),
+		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
+		outputController.StreamTaskOutput,
+	)
 
-	api.GET("/tasks/:task_id/logs", middleware.JWTAuth(), middleware.AuditLogger(db), func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			taskLogController.GetTaskLogs(c)
-			return
-		}
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ")(c)
-		if !c.IsAborted() {
-			taskLogController.GetTaskLogs(c)
-		}
-	})
+	api.GET("/tasks/:task_id/logs", middleware.JWTAuth(), middleware.AuditLogger(db),
+		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
+		taskLogController.GetTaskLogs,
+	)
 
-	api.GET("/tasks/:task_id/logs/download", middleware.JWTAuth(), middleware.AuditLogger(db), func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			taskLogController.DownloadTaskLogs(c)
-			return
-		}
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ")(c)
-		if !c.IsAborted() {
-			taskLogController.DownloadTaskLogs(c)
-		}
-	})
+	api.GET("/tasks/:task_id/logs/download", middleware.JWTAuth(), middleware.AuditLogger(db),
+		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
+		taskLogController.DownloadTaskLogs,
+	)
 
-	api.GET("/terraform/streams/stats", middleware.JWTAuth(), middleware.AuditLogger(db), func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.GetStreamStats(c)
-			return
-		}
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ")(c)
-		if !c.IsAborted() {
-			outputController.GetStreamStats(c)
-		}
-	})
+	api.GET("/terraform/streams/stats", middleware.JWTAuth(), middleware.AuditLogger(db),
+		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
+		outputController.GetStreamStats,
+	)
 }

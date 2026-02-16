@@ -117,207 +117,95 @@ func setupAgentPoolRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddl
 	agentPools := adminProtected.Group("/agent-pools")
 	{
 		// Create agent pool
-		agentPools.POST("", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.CreateAgentPool(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.CreateAgentPool(c)
-			}
-		})
+		agentPools.POST("",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.CreateAgentPool,
+		)
 
 		// List agent pools
-		agentPools.GET("", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.ListAgentPools(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.ListAgentPools(c)
-			}
-		})
+		agentPools.GET("",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
+			agentPoolHandler.ListAgentPools,
+		)
 
 		// Get agent pool details
-		agentPools.GET("/:pool_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.GetAgentPool(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.GetAgentPool(c)
-			}
-		})
+		agentPools.GET("/:pool_id",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
+			agentPoolHandler.GetAgentPool,
+		)
 
 		// Update agent pool
-		agentPools.PUT("/:pool_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.UpdateAgentPool(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.UpdateAgentPool(c)
-			}
-		})
+		agentPools.PUT("/:pool_id",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.UpdateAgentPool,
+		)
 
 		// Delete agent pool
-		agentPools.DELETE("/:pool_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.DeleteAgentPool(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.DeleteAgentPool(c)
-			}
-		})
+		agentPools.DELETE("/:pool_id",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "ADMIN"),
+			agentPoolHandler.DeleteAgentPool,
+		)
 
 		// Pool authorization - Pool side
-		agentPools.POST("/:pool_id/allow-workspaces", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				poolAuthHandler.AllowWorkspaces(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				poolAuthHandler.AllowWorkspaces(c)
-			}
-		})
+		agentPools.POST("/:pool_id/allow-workspaces",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			poolAuthHandler.AllowWorkspaces,
+		)
 
-		agentPools.GET("/:pool_id/allowed-workspaces", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				poolAuthHandler.GetAllowedWorkspaces(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				poolAuthHandler.GetAllowedWorkspaces(c)
-			}
-		})
+		agentPools.GET("/:pool_id/allowed-workspaces",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
+			poolAuthHandler.GetAllowedWorkspaces,
+		)
 
-		agentPools.DELETE("/:pool_id/allowed-workspaces/:workspace_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				poolAuthHandler.RevokeWorkspaceAccess(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				poolAuthHandler.RevokeWorkspaceAccess(c)
-			}
-		})
+		agentPools.DELETE("/:pool_id/allowed-workspaces/:workspace_id",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			poolAuthHandler.RevokeWorkspaceAccess,
+		)
 
 		// Pool Token Management
-		agentPools.POST("/:pool_id/tokens", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.CreatePoolToken(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.CreatePoolToken(c)
-			}
-		})
+		agentPools.POST("/:pool_id/tokens",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.CreatePoolToken,
+		)
 
-		agentPools.GET("/:pool_id/tokens", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.ListPoolTokens(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.ListPoolTokens(c)
-			}
-		})
+		agentPools.GET("/:pool_id/tokens",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
+			agentPoolHandler.ListPoolTokens,
+		)
 
-		agentPools.DELETE("/:pool_id/tokens/:token_name", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.RevokePoolToken(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.RevokePoolToken(c)
-			}
-		})
+		agentPools.DELETE("/:pool_id/tokens/:token_name",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.RevokePoolToken,
+		)
 
 		// Rotate pool token (for K8s pools)
-		agentPools.POST("/:pool_id/tokens/:token_name/rotate", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.RotatePoolToken(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.RotatePoolToken(c)
-			}
-		})
+		agentPools.POST("/:pool_id/tokens/:token_name/rotate",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.RotatePoolToken,
+		)
 
 		// Sync deployment config (for K8s pools)
-		agentPools.POST("/:pool_id/sync-deployment", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.SyncDeploymentConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.SyncDeploymentConfig(c)
-			}
-		})
+		agentPools.POST("/:pool_id/sync-deployment",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.SyncDeploymentConfig,
+		)
 
 		// Activate one-time unfreeze (for K8s pools)
-		agentPools.POST("/:pool_id/one-time-unfreeze", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.ActivateOneTimeUnfreeze(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.ActivateOneTimeUnfreeze(c)
-			}
-		})
+		agentPools.POST("/:pool_id/one-time-unfreeze",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.ActivateOneTimeUnfreeze,
+		)
 
 		// K8s Configuration Management
-		agentPools.PUT("/:pool_id/k8s-config", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.UpdateK8sConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.UpdateK8sConfig(c)
-			}
-		})
+		agentPools.PUT("/:pool_id/k8s-config",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
+			agentPoolHandler.UpdateK8sConfig,
+		)
 
-		agentPools.GET("/:pool_id/k8s-config", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				agentPoolHandler.GetK8sConfig(c)
-				return
-			}
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				agentPoolHandler.GetK8sConfig(c)
-			}
-		})
+		agentPools.GET("/:pool_id/k8s-config",
+			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
+			agentPoolHandler.GetK8sConfig,
+		)
 	}
 }
 
@@ -330,42 +218,39 @@ func setupWorkspaceAgentRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMidd
 	// The system now uses Pool-level authorization.
 
 	// Pool-level authorization - Workspace side
-	workspaces.GET("/:id/available-pools", func(c *gin.Context) {
-		c.Params = append(c.Params, gin.Param{Key: "workspace_id", Value: c.Param("id")})
-		role, _ := c.Get("role")
-		if role == "admin" {
-			poolAuthHandler.GetAvailablePools(c)
-			return
-		}
-		iamMiddleware.RequirePermission("WORKSPACES", "WORKSPACE", "READ")(c)
-		if !c.IsAborted() {
-			poolAuthHandler.GetAvailablePools(c)
-		}
-	})
+	workspaces.GET("/:id/available-pools",
+		func(c *gin.Context) {
+			c.Params = append(c.Params, gin.Param{Key: "workspace_id", Value: c.Param("id")})
+			c.Next()
+		},
+		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+		}),
+		poolAuthHandler.GetAvailablePools,
+	)
 
-	workspaces.POST("/:id/set-current-pool", func(c *gin.Context) {
-		c.Params = append(c.Params, gin.Param{Key: "workspace_id", Value: c.Param("id")})
-		role, _ := c.Get("role")
-		if role == "admin" {
-			poolAuthHandler.SetCurrentPool(c)
-			return
-		}
-		iamMiddleware.RequirePermission("WORKSPACES", "WORKSPACE", "WRITE")(c)
-		if !c.IsAborted() {
-			poolAuthHandler.SetCurrentPool(c)
-		}
-	})
+	workspaces.POST("/:id/set-current-pool",
+		func(c *gin.Context) {
+			c.Params = append(c.Params, gin.Param{Key: "workspace_id", Value: c.Param("id")})
+			c.Next()
+		},
+		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+		}),
+		poolAuthHandler.SetCurrentPool,
+	)
 
-	workspaces.GET("/:id/current-pool", func(c *gin.Context) {
-		c.Params = append(c.Params, gin.Param{Key: "workspace_id", Value: c.Param("id")})
-		role, _ := c.Get("role")
-		if role == "admin" {
-			poolAuthHandler.GetCurrentPool(c)
-			return
-		}
-		iamMiddleware.RequirePermission("WORKSPACES", "WORKSPACE", "READ")(c)
-		if !c.IsAborted() {
-			poolAuthHandler.GetCurrentPool(c)
-		}
-	})
+	workspaces.GET("/:id/current-pool",
+		func(c *gin.Context) {
+			c.Params = append(c.Params, gin.Param{Key: "workspace_id", Value: c.Param("id")})
+			c.Next()
+		},
+		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+		}),
+		poolAuthHandler.GetCurrentPool,
+	)
 }

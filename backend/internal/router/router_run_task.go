@@ -36,94 +36,45 @@ func setupRunTaskRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddlew
 	runTasks := adminProtected.Group("/run-tasks")
 	{
 		// Create run task
-		runTasks.POST("", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.CreateRunTask(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				runTaskHandler.CreateRunTask(c)
-			}
-		})
+		runTasks.POST("",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "WRITE"),
+			runTaskHandler.CreateRunTask,
+		)
 
 		// List run tasks
-		runTasks.GET("", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.ListRunTasks(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				runTaskHandler.ListRunTasks(c)
-			}
-		})
+		runTasks.GET("",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "READ"),
+			runTaskHandler.ListRunTasks,
+		)
 
 		// Get run task details
-		runTasks.GET("/:run_task_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.GetRunTask(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				runTaskHandler.GetRunTask(c)
-			}
-		})
+		runTasks.GET("/:run_task_id",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "READ"),
+			runTaskHandler.GetRunTask,
+		)
 
 		// Update run task
-		runTasks.PUT("/:run_task_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.UpdateRunTask(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				runTaskHandler.UpdateRunTask(c)
-			}
-		})
+		runTasks.PUT("/:run_task_id",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "WRITE"),
+			runTaskHandler.UpdateRunTask,
+		)
 
 		// Delete run task
-		runTasks.DELETE("/:run_task_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.DeleteRunTask(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "ADMIN")(c)
-			if !c.IsAborted() {
-				runTaskHandler.DeleteRunTask(c)
-			}
-		})
+		runTasks.DELETE("/:run_task_id",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "ADMIN"),
+			runTaskHandler.DeleteRunTask,
+		)
 
 		// Test run task connection (new configuration)
-		runTasks.POST("/test", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.TestRunTask(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				runTaskHandler.TestRunTask(c)
-			}
-		})
+		runTasks.POST("/test",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "WRITE"),
+			runTaskHandler.TestRunTask,
+		)
 
 		// Test existing run task connection
-		runTasks.POST("/:run_task_id/test", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				runTaskHandler.TestExistingRunTask(c)
-				return
-			}
-			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				runTaskHandler.TestExistingRunTask(c)
-			}
-		})
+		runTasks.POST("/:run_task_id/test",
+			iamMiddleware.RequirePermission("RUN_TASKS", "ORGANIZATION", "READ"),
+			runTaskHandler.TestExistingRunTask,
+		)
 	}
 }

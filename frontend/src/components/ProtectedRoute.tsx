@@ -1,14 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
-import NoPermission from '../pages/NoPermission';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { token, user, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { token, user } = useSelector((state: RootState) => state.auth);
   const location = useLocation();
   
   if (!token) {
@@ -33,16 +32,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
   
-  // IAM权限系统：
-  // - 首页（/）：由后端dashboard API的IAM权限控制（需要ORGANIZATION READ）
-  // - 管理页面（/admin/*）：仍然需要admin角色
-  const isAdminPage = location.pathname.startsWith('/admin');
-  
-  if (isAdminPage && user.role !== 'admin') {
-    return <NoPermission />;
-  }
-  
-  // 非管理页面允许所有已认证用户访问，权限由后端API控制
+  // IAM权限系统：所有页面的访问控制由后端API的IAM权限中间件处理
+  // 前端仅负责认证检查（token有效性），权限检查交给后端
   return <>{children}</>;
 };
 

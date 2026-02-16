@@ -55,7 +55,7 @@ func setupSSORoutes(api *gin.RouterGroup, db *gorm.DB) {
 	// ============================================
 	ssoAdmin := api.Group("/admin/sso")
 	ssoAdmin.Use(middleware.JWTAuth())
-	ssoAdmin.Use(middleware.RequireRole("admin"))
+	ssoAdmin.Use(middleware.RequireSystemAdmin())
 	{
 		// Provider 配置管理
 		ssoAdmin.GET("/providers", ssoHandler.AdminGetProviders)

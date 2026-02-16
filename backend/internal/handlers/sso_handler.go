@@ -267,7 +267,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
+	token, err := generateJWTWithSession(result.User.ID, result.User.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -284,10 +284,10 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 			"expires_at":  expiresAt,
 			"is_new_user": result.IsNewUser,
 			"user": gin.H{
-				"id":       result.User.ID,
-				"username": result.User.Username,
-				"email":    result.User.Email,
-				"role":     result.User.Role,
+				"id":             result.User.ID,
+				"username":       result.User.Username,
+				"email":          result.User.Email,
+				"is_system_admin": result.User.IsSystemAdmin,
 			},
 		},
 	})
@@ -395,7 +395,7 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 		return
 	}
 
-	token, err := generateJWTWithSession(result.User.ID, result.User.Username, result.User.Role, sessionID)
+	token, err := generateJWTWithSession(result.User.ID, result.User.Username, sessionID)
 	if err != nil {
 		c.Redirect(http.StatusFound, fmt.Sprintf("%s?error=token_error&error_description=%s",
 			frontendCallbackURL, url.QueryEscape("Failed to generate token")))

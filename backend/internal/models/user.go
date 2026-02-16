@@ -11,7 +11,7 @@ type User struct {
 	Username      string     `json:"username" gorm:"uniqueIndex;not null"`
 	Email         string     `json:"email" gorm:"uniqueIndex;not null"`
 	PasswordHash  string     `json:"-" gorm:"not null"`
-	Role          string     `json:"role" gorm:"default:user"`
+	Role          string     `json:"-" gorm:"default:user"` // Deprecated: use IAM roles
 	IsActive      bool       `json:"is_active" gorm:"default:true"`
 	IsSystemAdmin bool       `json:"is_system_admin" gorm:"default:false"`
 	OAuthProvider string     `json:"oauth_provider,omitempty" gorm:"column:oauth_provider;type:varchar(50)"`

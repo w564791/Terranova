@@ -39,77 +39,51 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 		lifecycleService := services.NewWorkspaceLifecycleService(db)
 
 		// 工作空间列表和详情 - Admin绕过检查，非admin需要IAM权限
-		workspaces.GET("", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.GetWorkspaces(c)
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ")(c)
-			if !c.IsAborted() {
-				workspaceController.GetWorkspaces(c)
-			}
-		})
+		workspaces.GET("",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			workspaceController.GetWorkspaces,
+		)
 
 		// Workspace basic operations - READ level
-		workspaces.GET("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.GetWorkspace(c)
-				return
-			}
+		workspaces.GET("/:id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				workspaceController.GetWorkspace(c)
-			}
-		})
+			}),
+			workspaceController.GetWorkspace,
+		)
 
-		workspaces.GET("/:id/overview", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.GetWorkspaceOverview(c)
-				return
-			}
+		workspaces.GET("/:id/overview",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				workspaceController.GetWorkspaceOverview(c)
-			}
-		})
+			}),
+			workspaceController.GetWorkspaceOverview,
+		)
 
 		// Workspace basic operations - WRITE level
-		workspaces.PUT("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.UpdateWorkspace(c)
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACE_MANAGEMENT", "WORKSPACE", "WRITE")(c)
-			if !c.IsAborted() {
-				workspaceController.UpdateWorkspace(c)
-			}
-		})
+		workspaces.PUT("/:id",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			workspaceController.UpdateWorkspace,
+		)
 
-		workspaces.PATCH("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.UpdateWorkspace(c)
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACE_MANAGEMENT", "WORKSPACE", "WRITE")(c)
-			if !c.IsAborted() {
-				workspaceController.UpdateWorkspace(c)
-			}
-		})
+		workspaces.PATCH("/:id",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			workspaceController.UpdateWorkspace,
+		)
 
-		workspaces.POST("/:id/lock", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
+		workspaces.POST("/:id/lock",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			func(c *gin.Context) {
 				workspaceID := c.Param("id")
 				userID, _ := c.Get("user_id")
 				var req struct {
@@ -124,61 +98,32 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 					return
 				}
 				c.JSON(http.StatusOK, gin.H{"message": "Workspace locked successfully"})
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACE_MANAGEMENT", "WORKSPACE", "WRITE")(c)
-			if !c.IsAborted() {
-				workspaceID := c.Param("id")
-				userID, _ := c.Get("user_id")
-				var req struct {
-					Reason string `json:"reason" binding:"required"`
-				}
-				if err := c.ShouldBindJSON(&req); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				if err := lifecycleService.LockWorkspace(workspaceID, userID.(string), req.Reason); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
-				c.JSON(http.StatusOK, gin.H{"message": "Workspace locked successfully"})
-			}
-		})
+			},
+		)
 
-		workspaces.POST("/:id/unlock", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
+		workspaces.POST("/:id/unlock",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			func(c *gin.Context) {
 				workspaceID := c.Param("id")
 				if err := lifecycleService.UnlockWorkspace(workspaceID); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 					return
 				}
 				c.JSON(http.StatusOK, gin.H{"message": "Workspace unlocked successfully"})
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACE_MANAGEMENT", "WORKSPACE", "WRITE")(c)
-			if !c.IsAborted() {
-				workspaceID := c.Param("id")
-				if err := lifecycleService.UnlockWorkspace(workspaceID); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
-				c.JSON(http.StatusOK, gin.H{"message": "Workspace unlocked successfully"})
-			}
-		})
+			},
+		)
 
 		// Workspace basic operations - ADMIN level
-		workspaces.DELETE("/:id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.DeleteWorkspace(c)
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACE_MANAGEMENT", "WORKSPACE", "ADMIN")(c)
-			if !c.IsAborted() {
-				workspaceController.DeleteWorkspace(c)
-			}
-		})
+		workspaces.DELETE("/:id",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+			}),
+			workspaceController.DeleteWorkspace,
+		)
 
 		// Other workspace operations - 添加IAM权限检查
 		// workspaces.GET("/form-data", func(c *gin.Context) {
@@ -193,1084 +138,669 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 		// 	}
 		// })
 
-		workspaces.POST("", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				workspaceController.CreateWorkspace(c)
-				return
-			}
-			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "WRITE")(c)
-			if !c.IsAborted() {
-				workspaceController.CreateWorkspace(c)
-			}
-		})
+		workspaces.POST("",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "WRITE"),
+			workspaceController.CreateWorkspace,
+		)
 		// Task operations - READ level (精细化权限优先)
-		workspaces.GET("/:id/tasks", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.GetTasks(c)
-				return
-			}
+		workspaces.GET("/:id/tasks",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.GetTasks(c)
-			}
-		})
+			}),
+			taskController.GetTasks,
+		)
 
-		workspaces.GET("/:id/tasks/:task_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.GetTask(c)
-				return
-			}
+		workspaces.GET("/:id/tasks/:task_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.GetTask(c)
-			}
-		})
+			}),
+			taskController.GetTask,
+		)
 
-		workspaces.GET("/:id/tasks/:task_id/logs", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.GetTaskLogs(c)
-				return
-			}
+		workspaces.GET("/:id/tasks/:task_id/logs",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.GetTaskLogs(c)
-			}
-		})
+			}),
+			taskController.GetTaskLogs,
+		)
 
-		workspaces.GET("/:id/tasks/:task_id/comments", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.GetComments(c)
-				return
-			}
+		workspaces.GET("/:id/tasks/:task_id/comments",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.GetComments(c)
-			}
-		})
+			}),
+			taskController.GetComments,
+		)
 
-		workspaces.GET("/:id/tasks/:task_id/resource-changes", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
+		workspaces.GET("/:id/tasks/:task_id/resource-changes",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+			}),
+			func(c *gin.Context) {
 				controllers.GetTaskResourceChangesWithDB(c, db)
-				return
-			}
-			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				controllers.GetTaskResourceChangesWithDB(c, db)
-			}
-		})
+			},
+		)
 
-		workspaces.GET("/:id/tasks/:task_id/error-analysis", func(c *gin.Context) {
-			aiController := controllers.NewAIController(db)
-			role, _ := c.Get("role")
-			if role == "admin" {
-				aiController.GetTaskAnalysis(c)
-				return
-			}
+		aiController := controllers.NewAIController(db)
+		workspaces.GET("/:id/tasks/:task_id/error-analysis",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				aiController.GetTaskAnalysis(c)
-			}
-		})
+			}),
+			aiController.GetTaskAnalysis,
+		)
 
-		workspaces.GET("/:id/tasks/:task_id/state-backup", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.DownloadStateBackup(c)
-				return
-			}
+		workspaces.GET("/:id/tasks/:task_id/state-backup",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.DownloadStateBackup(c)
-			}
-		})
+			}),
+			taskController.DownloadStateBackup,
+		)
 
 		// Task operations - WRITE level (精细化权限优先)
-		workspaces.POST("/:id/tasks/plan", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.CreatePlanTask(c)
-				return
-			}
+		workspaces.POST("/:id/tasks/plan",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.CreatePlanTask(c)
-			}
-		})
+			}),
+			taskController.CreatePlanTask,
+		)
 
-		workspaces.POST("/:id/tasks/:task_id/comments", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.CreateComment(c)
-				return
-			}
+		workspaces.POST("/:id/tasks/:task_id/comments",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.CreateComment(c)
-			}
-		})
+			}),
+			taskController.CreateComment,
+		)
 
 		// Task operations - ADMIN level (精细化权限优先)
-		workspaces.POST("/:id/tasks/:task_id/cancel", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.CancelTask(c)
-				return
-			}
+		workspaces.POST("/:id/tasks/:task_id/cancel",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.CancelTask(c)
-			}
-		})
+			}),
+			taskController.CancelTask,
+		)
 
-		workspaces.POST("/:id/tasks/:task_id/cancel-previous", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.CancelPreviousTasks(c)
-				return
-			}
+		workspaces.POST("/:id/tasks/:task_id/cancel-previous",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.CancelPreviousTasks(c)
-			}
-		})
+			}),
+			taskController.CancelPreviousTasks,
+		)
 
-		workspaces.POST("/:id/tasks/:task_id/confirm-apply", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.ConfirmApply(c)
-				return
-			}
+		workspaces.POST("/:id/tasks/:task_id/confirm-apply",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.ConfirmApply(c)
-			}
-		})
+			}),
+			taskController.ConfirmApply,
+		)
 
-		workspaces.PATCH("/:id/tasks/:task_id/resource-changes/:resource_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
+		workspaces.PATCH("/:id/tasks/:task_id/resource-changes/:resource_id",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+			}),
+			func(c *gin.Context) {
 				controllers.UpdateResourceApplyStatusWithDB(c, db)
-				return
-			}
-			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				controllers.UpdateResourceApplyStatusWithDB(c, db)
-			}
-		})
+			},
+		)
 
-		workspaces.POST("/:id/tasks/:task_id/retry-state-save", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				taskController.RetryStateSave(c)
-				return
-			}
+		workspaces.POST("/:id/tasks/:task_id/retry-state-save",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				taskController.RetryStateSave(c)
-			}
-		})
+			}),
+			taskController.RetryStateSave,
+		)
 
-		workspaces.POST("/:id/tasks/:task_id/parse-plan", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				controllers.ManualParsePlanWithDB(c, db)
-				return
-			}
+		workspaces.POST("/:id/tasks/:task_id/parse-plan",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
+			}),
+			func(c *gin.Context) {
 				controllers.ManualParsePlanWithDB(c, db)
-			}
-		})
+			},
+		)
 		// State operations - READ level (精细化权限优先)
 		stateHandler := handlers.NewStateHandler(services.NewStateService(db))
 
-		workspaces.GET("/:id/current-state", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.GetCurrentState(c)
-				return
-			}
+		workspaces.GET("/:id/current-state",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.GetCurrentState(c)
-			}
-		})
+			}),
+			stateController.GetCurrentState,
+		)
 
-		workspaces.GET("/:id/state-versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.GetStateVersions(c)
-				return
-			}
+		workspaces.GET("/:id/state-versions",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.GetStateVersions(c)
-			}
-		})
+			}),
+			stateController.GetStateVersions,
+		)
 
 		// New: Get state version history (with pagination)
-		workspaces.GET("/:id/state/versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.GetStateVersions(c)
-				return
-			}
+		workspaces.GET("/:id/state/versions",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.GetStateVersions(c)
-			}
-		})
+			}),
+			stateHandler.GetStateVersions,
+		)
 
 		// New: Get specific state version (metadata only, no content)
-		workspaces.GET("/:id/state/versions/:version", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.GetStateVersion(c)
-				return
-			}
+		workspaces.GET("/:id/state/versions/:version",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.GetStateVersion(c)
-			}
-		})
+			}),
+			stateHandler.GetStateVersion,
+		)
 
 		// New: Retrieve state version content (requires WORKSPACE_STATE_SENSITIVE permission)
 		// This endpoint returns the full state content including sensitive data
-		workspaces.GET("/:id/state/versions/:version/retrieve", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.RetrieveStateVersion(c)
-				return
-			}
-			// Requires WORKSPACE_STATE_SENSITIVE permission to access state content
+		// Requires WORKSPACE_STATE_SENSITIVE permission to access state content
+		workspaces.GET("/:id/state/versions/:version/retrieve",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_STATE_SENSITIVE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.RetrieveStateVersion(c)
-			}
-		})
+			}),
+			stateHandler.RetrieveStateVersion,
+		)
 
 		// New: Download state version
-		workspaces.GET("/:id/state/versions/:version/download", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.DownloadStateVersion(c)
-				return
-			}
+		workspaces.GET("/:id/state/versions/:version/download",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.DownloadStateVersion(c)
-			}
-		})
+			}),
+			stateHandler.DownloadStateVersion,
+		)
 
-		workspaces.GET("/:id/state-versions/compare", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.CompareVersions(c)
-				return
-			}
+		workspaces.GET("/:id/state-versions/compare",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.CompareVersions(c)
-			}
-		})
+			}),
+			stateController.CompareVersions,
+		)
 
-		workspaces.GET("/:id/state-versions/:version/metadata", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.GetStateVersionMetadata(c)
-				return
-			}
+		workspaces.GET("/:id/state-versions/:version/metadata",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.GetStateVersionMetadata(c)
-			}
-		})
+			}),
+			stateController.GetStateVersionMetadata,
+		)
 
-		workspaces.GET("/:id/state-versions/:version", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.GetStateVersion(c)
-				return
-			}
+		workspaces.GET("/:id/state-versions/:version",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.GetStateVersion(c)
-			}
-		})
+			}),
+			stateController.GetStateVersion,
+		)
 
 		// State operations - WRITE level (精细化权限优先)
 		// New: Upload state (JSON)
-		workspaces.POST("/:id/state/upload", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.UploadState(c)
-				return
-			}
+		workspaces.POST("/:id/state/upload",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.UploadState(c)
-			}
-		})
+			}),
+			stateHandler.UploadState,
+		)
 
 		// New: Upload state file (multipart/form-data)
-		workspaces.POST("/:id/state/upload-file", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.UploadStateFile(c)
-				return
-			}
+		workspaces.POST("/:id/state/upload-file",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.UploadStateFile(c)
-			}
-		})
+			}),
+			stateHandler.UploadStateFile,
+		)
 
 		// New: Rollback state
-		workspaces.POST("/:id/state/rollback", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateHandler.RollbackState(c)
-				return
-			}
+		workspaces.POST("/:id/state/rollback",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				stateHandler.RollbackState(c)
-			}
-		})
+			}),
+			stateHandler.RollbackState,
+		)
 
-		workspaces.POST("/:id/state-versions/:version/rollback", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.RollbackState(c)
-				return
-			}
+		workspaces.POST("/:id/state-versions/:version/rollback",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.RollbackState(c)
-			}
-		})
+			}),
+			stateController.RollbackState,
+		)
 
 		// State operations - ADMIN level (精细化权限优先)
-		workspaces.DELETE("/:id/state-versions/:version", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				stateController.DeleteStateVersion(c)
-				return
-			}
+		workspaces.DELETE("/:id/state-versions/:version",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				stateController.DeleteStateVersion(c)
-			}
-		})
+			}),
+			stateController.DeleteStateVersion,
+		)
 
 		// Variable operations - READ level (精细化权限优先)
-		workspaces.GET("/:id/variables", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.ListVariables(c)
-				return
-			}
+		workspaces.GET("/:id/variables",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.ListVariables(c)
-			}
-		})
+			}),
+			variableController.ListVariables,
+		)
 
-		workspaces.GET("/:id/variables/:var_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.GetVariable(c)
-				return
-			}
+		workspaces.GET("/:id/variables/:var_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.GetVariable(c)
-			}
-		})
+			}),
+			variableController.GetVariable,
+		)
 
 		// Variable operations - WRITE level (精细化权限优先)
-		workspaces.POST("/:id/variables", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.CreateVariable(c)
-				return
-			}
+		workspaces.POST("/:id/variables",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.CreateVariable(c)
-			}
-		})
+			}),
+			variableController.CreateVariable,
+		)
 
-		workspaces.PUT("/:id/variables/:var_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.UpdateVariable(c)
-				return
-			}
-			// 精细权限优先：先检查workspace_variables，再检查workspace_management
+		// 精细权限优先：先检查workspace_variables，再检查workspace_management
+		workspaces.PUT("/:id/variables/:var_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.UpdateVariable(c)
-			}
-		})
+			}),
+			variableController.UpdateVariable,
+		)
 
-		workspaces.DELETE("/:id/variables/:var_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.DeleteVariable(c)
-				return
-			}
+		workspaces.DELETE("/:id/variables/:var_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.DeleteVariable(c)
-			}
-		})
+			}),
+			variableController.DeleteVariable,
+		)
 
 		// Variable version history operations - READ level
-		workspaces.GET("/:id/variables/:var_id/versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.GetVariableVersions(c)
-				return
-			}
+		workspaces.GET("/:id/variables/:var_id/versions",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.GetVariableVersions(c)
-			}
-		})
+			}),
+			variableController.GetVariableVersions,
+		)
 
-		workspaces.GET("/:id/variables/:var_id/versions/:version", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				variableController.GetVariableVersion(c)
-				return
-			}
+		workspaces.GET("/:id/variables/:var_id/versions/:version",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				variableController.GetVariableVersion(c)
-			}
-		})
+			}),
+			variableController.GetVariableVersion,
+		)
 		// Resource operations - READ level (精细化权限优先)
-		workspaces.GET("/:id/resources", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetResources(c)
-				return
-			}
+		workspaces.GET("/:id/resources",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetResources(c)
-			}
-		})
+			}),
+			resourceController.GetResources,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetResource(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetResource(c)
-			}
-		})
+			}),
+			resourceController.GetResource,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/versions", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetResourceVersions(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/versions",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetResourceVersions(c)
-			}
-		})
+			}),
+			resourceController.GetResourceVersions,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/versions/compare", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.CompareVersions(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/versions/compare",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.CompareVersions(c)
-			}
-		})
+			}),
+			resourceController.CompareVersions,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/versions/:version", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetResourceVersion(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/versions/:version",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetResourceVersion(c)
-			}
-		})
+			}),
+			resourceController.GetResourceVersion,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/dependencies", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetResourceDependencies(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/dependencies",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetResourceDependencies(c)
-			}
-		})
+			}),
+			resourceController.GetResourceDependencies,
+		)
 
-		workspaces.GET("/:id/snapshots", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetSnapshots(c)
-				return
-			}
+		workspaces.GET("/:id/snapshots",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetSnapshots(c)
-			}
-		})
+			}),
+			resourceController.GetSnapshots,
+		)
 
-		workspaces.GET("/:id/snapshots/:snapshot_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetSnapshot(c)
-				return
-			}
+		workspaces.GET("/:id/snapshots/:snapshot_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetSnapshot(c)
-			}
-		})
+			}),
+			resourceController.GetSnapshot,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/editing/status", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetEditingStatus(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/editing/status",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetEditingStatus(c)
-			}
-		})
+			}),
+			resourceController.GetEditingStatus,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/drift", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.GetDrift(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/drift",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.GetDrift(c)
-			}
-		})
+			}),
+			resourceController.GetDrift,
+		)
 
 		// Export resources as HCL - ADMIN level (需要workspace admin权限)
-		workspaces.GET("/:id/resources/export/hcl", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.ExportResourcesHCL(c)
-				return
-			}
+		workspaces.GET("/:id/resources/export/hcl",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.ExportResourcesHCL(c)
-			}
-		})
+			}),
+			resourceController.ExportResourcesHCL,
+		)
 
 		// Resource operations - WRITE level (精细化权限优先)
-		workspaces.POST("/:id/resources", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.AddResource(c)
-				return
-			}
+		workspaces.POST("/:id/resources",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.AddResource(c)
-			}
-		})
+			}),
+			resourceController.AddResource,
+		)
 
-		workspaces.POST("/:id/resources/import", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.ImportResources(c)
-				return
-			}
+		workspaces.POST("/:id/resources/import",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.ImportResources(c)
-			}
-		})
+			}),
+			resourceController.ImportResources,
+		)
 
-		workspaces.POST("/:id/resources/deploy", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.DeployResources(c)
-				return
-			}
+		workspaces.POST("/:id/resources/deploy",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.DeployResources(c)
-			}
-		})
+			}),
+			resourceController.DeployResources,
+		)
 
-		workspaces.PUT("/:id/resources/:resource_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.UpdateResource(c)
-				return
-			}
+		workspaces.PUT("/:id/resources/:resource_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.UpdateResource(c)
-			}
-		})
+			}),
+			resourceController.UpdateResource,
+		)
 
-		workspaces.DELETE("/:id/resources/:resource_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.DeleteResource(c)
-				return
-			}
+		workspaces.DELETE("/:id/resources/:resource_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.DeleteResource(c)
-			}
-		})
+			}),
+			resourceController.DeleteResource,
+		)
 
-		workspaces.PUT("/:id/resources/:resource_id/dependencies", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.UpdateDependencies(c)
-				return
-			}
+		workspaces.PUT("/:id/resources/:resource_id/dependencies",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.UpdateDependencies(c)
-			}
-		})
+			}),
+			resourceController.UpdateDependencies,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/restore", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.RestoreResource(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/restore",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.RestoreResource(c)
-			}
-		})
+			}),
+			resourceController.RestoreResource,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/versions/:version/rollback", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.RollbackResource(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/versions/:version/rollback",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.RollbackResource(c)
-			}
-		})
+			}),
+			resourceController.RollbackResource,
+		)
 
-		workspaces.POST("/:id/snapshots", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.CreateSnapshot(c)
-				return
-			}
+		workspaces.POST("/:id/snapshots",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.CreateSnapshot(c)
-			}
-		})
+			}),
+			resourceController.CreateSnapshot,
+		)
 
-		workspaces.POST("/:id/snapshots/:snapshot_id/restore", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.RestoreSnapshot(c)
-				return
-			}
+		workspaces.POST("/:id/snapshots/:snapshot_id/restore",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.RestoreSnapshot(c)
-			}
-		})
+			}),
+			resourceController.RestoreSnapshot,
+		)
 
-		workspaces.DELETE("/:id/snapshots/:snapshot_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.DeleteSnapshot(c)
-				return
-			}
+		workspaces.DELETE("/:id/snapshots/:snapshot_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.DeleteSnapshot(c)
-			}
-		})
+			}),
+			resourceController.DeleteSnapshot,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/editing/start", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.StartEditing(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/editing/start",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.StartEditing(c)
-			}
-		})
+			}),
+			resourceController.StartEditing,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/editing/heartbeat", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.Heartbeat(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/editing/heartbeat",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.Heartbeat(c)
-			}
-		})
+			}),
+			resourceController.Heartbeat,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/editing/end", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.EndEditing(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/editing/end",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.EndEditing(c)
-			}
-		})
+			}),
+			resourceController.EndEditing,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/drift/save", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.SaveDrift(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/drift/save",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.SaveDrift(c)
-			}
-		})
+			}),
+			resourceController.SaveDrift,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/drift/takeover", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.TakeoverEditing(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/drift/takeover",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.TakeoverEditing(c)
-			}
-		})
+			}),
+			resourceController.TakeoverEditing,
+		)
 
-		workspaces.DELETE("/:id/resources/:resource_id/drift", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				resourceController.DeleteDrift(c)
-				return
-			}
+		workspaces.DELETE("/:id/resources/:resource_id/drift",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				resourceController.DeleteDrift(c)
-			}
-		})
+			}),
+			resourceController.DeleteDrift,
+		)
 
 		// Takeover request operations - WRITE level
 		takeoverHandler := handlers.NewTakeoverHandler(db, wsHub)
 
-		workspaces.POST("/:id/resources/:resource_id/editing/takeover-request", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				takeoverHandler.RequestTakeover(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/editing/takeover-request",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				takeoverHandler.RequestTakeover(c)
-			}
-		})
+			}),
+			takeoverHandler.RequestTakeover,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/editing/takeover-response", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				takeoverHandler.RespondToTakeover(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/editing/takeover-response",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				takeoverHandler.RespondToTakeover(c)
-			}
-		})
+			}),
+			takeoverHandler.RespondToTakeover,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/editing/pending-requests", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				takeoverHandler.GetPendingRequests(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/editing/pending-requests",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				takeoverHandler.GetPendingRequests(c)
-			}
-		})
+			}),
+			takeoverHandler.GetPendingRequests,
+		)
 
-		workspaces.GET("/:id/resources/:resource_id/editing/request-status/:request_id", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				takeoverHandler.GetRequestStatus(c)
-				return
-			}
+		workspaces.GET("/:id/resources/:resource_id/editing/request-status/:request_id",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-			})(c)
-			if !c.IsAborted() {
-				takeoverHandler.GetRequestStatus(c)
-			}
-		})
+			}),
+			takeoverHandler.GetRequestStatus,
+		)
 
-		workspaces.POST("/:id/resources/:resource_id/editing/force-takeover", func(c *gin.Context) {
-			role, _ := c.Get("role")
-			if role == "admin" {
-				takeoverHandler.ForceTakeover(c)
-				return
-			}
+		workspaces.POST("/:id/resources/:resource_id/editing/force-takeover",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-			})(c)
-			if !c.IsAborted() {
-				takeoverHandler.ForceTakeover(c)
-			}
-		})
+			}),
+			takeoverHandler.ForceTakeover,
+		)
 
 		// Setup workspace-agent authorization routes
 		setupWorkspaceAgentRoutes(workspaces, db, iamMiddleware)
@@ -1300,52 +830,31 @@ func setupWorkspaceProjectRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMi
 	wpHandler := handlers.NewWorkspaceProjectHandler(db)
 
 	// Get workspace project - READ level (使用 Organization READ 权限)
-	workspaces.GET("/:id/project", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wpHandler.GetWorkspaceProject(c)
-			return
-		}
+	workspaces.GET("/:id/project",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wpHandler.GetWorkspaceProject(c)
-		}
-	})
+		}),
+		wpHandler.GetWorkspaceProject,
+	)
 
 	// Set workspace project - WRITE level (使用 Organization WRITE 权限)
-	workspaces.PUT("/:id/project", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wpHandler.SetWorkspaceProject(c)
-			return
-		}
+	workspaces.PUT("/:id/project",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			wpHandler.SetWorkspaceProject(c)
-		}
-	})
+		}),
+		wpHandler.SetWorkspaceProject,
+	)
 
 	// Remove workspace from project - WRITE level (使用 Organization WRITE 权限)
-	workspaces.DELETE("/:id/project", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wpHandler.RemoveWorkspaceFromProject(c)
-			return
-		}
+	workspaces.DELETE("/:id/project",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			wpHandler.RemoveWorkspaceFromProject(c)
-		}
-	})
+		}),
+		wpHandler.RemoveWorkspaceFromProject,
+	)
 }
 
 // setupWorkspaceRunTaskRoutes sets up workspace run task routes
@@ -1353,97 +862,61 @@ func setupWorkspaceRunTaskRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMi
 	wrtHandler := handlers.NewWorkspaceRunTaskHandler(db)
 
 	// Override run tasks - ADMIN level
-	workspaces.POST("/:id/tasks/:task_id/override-run-tasks", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wrtHandler.OverrideRunTasks(c)
-			return
-		}
+	workspaces.POST("/:id/tasks/:task_id/override-run-tasks",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-		})(c)
-		if !c.IsAborted() {
-			wrtHandler.OverrideRunTasks(c)
-		}
-	})
+		}),
+		wrtHandler.OverrideRunTasks,
+	)
 
 	// Get task run task results - READ level
-	workspaces.GET("/:id/tasks/:task_id/run-task-results", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wrtHandler.GetTaskRunTaskResults(c)
-			return
-		}
+	workspaces.GET("/:id/tasks/:task_id/run-task-results",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wrtHandler.GetTaskRunTaskResults(c)
-		}
-	})
+		}),
+		wrtHandler.GetTaskRunTaskResults,
+	)
 
 	// List workspace run tasks - READ level
-	workspaces.GET("/:id/run-tasks", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wrtHandler.ListWorkspaceRunTasks(c)
-			return
-		}
+	workspaces.GET("/:id/run-tasks",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wrtHandler.ListWorkspaceRunTasks(c)
-		}
-	})
+		}),
+		wrtHandler.ListWorkspaceRunTasks,
+	)
 
 	// Add run task to workspace - WRITE level
-	workspaces.POST("/:id/run-tasks", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wrtHandler.AddRunTaskToWorkspace(c)
-			return
-		}
+	workspaces.POST("/:id/run-tasks",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			wrtHandler.AddRunTaskToWorkspace(c)
-		}
-	})
+		}),
+		wrtHandler.AddRunTaskToWorkspace,
+	)
 
 	// Update workspace run task - WRITE level
-	workspaces.PUT("/:id/run-tasks/:workspace_run_task_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wrtHandler.UpdateWorkspaceRunTask(c)
-			return
-		}
+	workspaces.PUT("/:id/run-tasks/:workspace_run_task_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			wrtHandler.UpdateWorkspaceRunTask(c)
-		}
-	})
+		}),
+		wrtHandler.UpdateWorkspaceRunTask,
+	)
 
 	// Delete workspace run task - ADMIN level
-	workspaces.DELETE("/:id/run-tasks/:workspace_run_task_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wrtHandler.DeleteWorkspaceRunTask(c)
-			return
-		}
+	workspaces.DELETE("/:id/run-tasks/:workspace_run_task_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-		})(c)
-		if !c.IsAborted() {
-			wrtHandler.DeleteWorkspaceRunTask(c)
-		}
-	})
+		}),
+		wrtHandler.DeleteWorkspaceRunTask,
+	)
 }
 
 // setupWorkspaceOutputRoutes sets up workspace output routes
@@ -1451,128 +924,80 @@ func setupWorkspaceOutputRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMid
 	outputController := controllers.NewWorkspaceOutputController(db)
 
 	// List outputs - READ level
-	workspaces.GET("/:id/outputs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.ListOutputs(c)
-			return
-		}
+	workspaces.GET("/:id/outputs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.ListOutputs(c)
-		}
-	})
+		}),
+		outputController.ListOutputs,
+	)
 
 	// Get state outputs - READ level (WebUI使用，不返回sensitive数据)
-	workspaces.GET("/:id/state-outputs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.GetStateOutputs(c)
-			return
-		}
+	workspaces.GET("/:id/state-outputs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.GetStateOutputs(c)
-		}
-	})
+		}),
+		outputController.GetStateOutputs,
+	)
 
 	// Note: /state-outputs/full is now handled by setupRemoteDataPublicRoutes
 	// to support both JWT and temporary token authentication
 
 	// Get resources for outputs - READ level
-	workspaces.GET("/:id/outputs/resources", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.GetResourcesForOutputs(c)
-			return
-		}
+	workspaces.GET("/:id/outputs/resources",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.GetResourcesForOutputs(c)
-		}
-	})
+		}),
+		outputController.GetResourcesForOutputs,
+	)
 
 	// Get available outputs (smart hints from module schema) - READ level
-	workspaces.GET("/:id/available-outputs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.GetAvailableOutputs(c)
-			return
-		}
+	workspaces.GET("/:id/available-outputs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.GetAvailableOutputs(c)
-		}
-	})
+		}),
+		outputController.GetAvailableOutputs,
+	)
 
 	// Create output - WRITE level
-	workspaces.POST("/:id/outputs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.CreateOutput(c)
-			return
-		}
+	workspaces.POST("/:id/outputs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.CreateOutput(c)
-		}
-	})
+		}),
+		outputController.CreateOutput,
+	)
 
 	// Update output - WRITE level
-	workspaces.PUT("/:id/outputs/:output_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.UpdateOutput(c)
-			return
-		}
+	workspaces.PUT("/:id/outputs/:output_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.UpdateOutput(c)
-		}
-	})
+		}),
+		outputController.UpdateOutput,
+	)
 
 	// Delete output - ADMIN level
-	workspaces.DELETE("/:id/outputs/:output_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.DeleteOutput(c)
-			return
-		}
+	workspaces.DELETE("/:id/outputs/:output_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.DeleteOutput(c)
-		}
-	})
+		}),
+		outputController.DeleteOutput,
+	)
 
 	// Batch save outputs - WRITE level
-	workspaces.POST("/:id/outputs/batch", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			outputController.BatchSaveOutputs(c)
-			return
-		}
+	workspaces.POST("/:id/outputs/batch",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			outputController.BatchSaveOutputs(c)
-		}
-	})
+		}),
+		outputController.BatchSaveOutputs,
+	)
 }
 
 // setupWorkspaceNotificationRoutes sets up workspace notification routes
@@ -1580,110 +1005,68 @@ func setupWorkspaceNotificationRoutes(workspaces *gin.RouterGroup, db *gorm.DB, 
 	wnHandler := handlers.NewWorkspaceNotificationHandler(db)
 
 	// List workspace notifications - READ level
-	workspaces.GET("/:id/notifications", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.ListWorkspaceNotifications(c)
-			return
-		}
+	workspaces.GET("/:id/notifications",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.ListWorkspaceNotifications(c)
-		}
-	})
+		}),
+		wnHandler.ListWorkspaceNotifications,
+	)
 
 	// Add notification to workspace - WRITE level
-	workspaces.POST("/:id/notifications", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.AddWorkspaceNotification(c)
-			return
-		}
+	workspaces.POST("/:id/notifications",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.AddWorkspaceNotification(c)
-		}
-	})
+		}),
+		wnHandler.AddWorkspaceNotification,
+	)
 
 	// Update workspace notification - WRITE level
-	workspaces.PUT("/:id/notifications/:workspace_notification_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.UpdateWorkspaceNotification(c)
-			return
-		}
+	workspaces.PUT("/:id/notifications/:workspace_notification_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.UpdateWorkspaceNotification(c)
-		}
-	})
+		}),
+		wnHandler.UpdateWorkspaceNotification,
+	)
 
 	// Delete workspace notification - ADMIN level
-	workspaces.DELETE("/:id/notifications/:workspace_notification_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.DeleteWorkspaceNotification(c)
-			return
-		}
+	workspaces.DELETE("/:id/notifications/:workspace_notification_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.DeleteWorkspaceNotification(c)
-		}
-	})
+		}),
+		wnHandler.DeleteWorkspaceNotification,
+	)
 
 	// List notification logs - READ level
-	workspaces.GET("/:id/notification-logs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.ListNotificationLogs(c)
-			return
-		}
+	workspaces.GET("/:id/notification-logs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.ListNotificationLogs(c)
-		}
-	})
+		}),
+		wnHandler.ListNotificationLogs,
+	)
 
 	// Get notification log detail - READ level
-	workspaces.GET("/:id/notification-logs/:log_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.GetNotificationLogDetail(c)
-			return
-		}
+	workspaces.GET("/:id/notification-logs/:log_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.GetNotificationLogDetail(c)
-		}
-	})
+		}),
+		wnHandler.GetNotificationLogDetail,
+	)
 
 	// Get task notification logs - READ level
-	workspaces.GET("/:id/tasks/:task_id/notification-logs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			wnHandler.GetTaskNotificationLogs(c)
-			return
-		}
+	workspaces.GET("/:id/tasks/:task_id/notification-logs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			wnHandler.GetTaskNotificationLogs(c)
-		}
-	})
+		}),
+		wnHandler.GetTaskNotificationLogs,
+	)
 }
 
 // setupRemoteDataPublicRoutes sets up public routes for remote data token access
@@ -1741,157 +1124,97 @@ func setupWorkspaceRunTriggerRoutes(workspaces *gin.RouterGroup, db *gorm.DB, ia
 	rtHandler := handlers.NewRunTriggerHandler(db)
 
 	// List run triggers - READ level
-	workspaces.GET("/:id/run-triggers", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.ListRunTriggers(c)
-			return
-		}
+	workspaces.GET("/:id/run-triggers",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.ListRunTriggers(c)
-		}
-	})
+		}),
+		rtHandler.ListRunTriggers,
+	)
 
 	// List inbound triggers - READ level
-	workspaces.GET("/:id/run-triggers/inbound", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.ListInboundTriggers(c)
-			return
-		}
+	workspaces.GET("/:id/run-triggers/inbound",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.ListInboundTriggers(c)
-		}
-	})
+		}),
+		rtHandler.ListInboundTriggers,
+	)
 
 	// Get available targets - READ level
-	workspaces.GET("/:id/run-triggers/available-targets", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.GetAvailableTargets(c)
-			return
-		}
+	workspaces.GET("/:id/run-triggers/available-targets",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.GetAvailableTargets(c)
-		}
-	})
+		}),
+		rtHandler.GetAvailableTargets,
+	)
 
 	// Get available sources - READ level
-	workspaces.GET("/:id/run-triggers/available-sources", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.GetAvailableSources(c)
-			return
-		}
+	workspaces.GET("/:id/run-triggers/available-sources",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.GetAvailableSources(c)
-		}
-	})
+		}),
+		rtHandler.GetAvailableSources,
+	)
 
 	// Create inbound trigger - WRITE level
-	workspaces.POST("/:id/run-triggers/inbound", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.CreateInboundTrigger(c)
-			return
-		}
+	workspaces.POST("/:id/run-triggers/inbound",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.CreateInboundTrigger(c)
-		}
-	})
+		}),
+		rtHandler.CreateInboundTrigger,
+	)
 
 	// Create run trigger - WRITE level
-	workspaces.POST("/:id/run-triggers", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.CreateRunTrigger(c)
-			return
-		}
+	workspaces.POST("/:id/run-triggers",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.CreateRunTrigger(c)
-		}
-	})
+		}),
+		rtHandler.CreateRunTrigger,
+	)
 
 	// Update run trigger - WRITE level
-	workspaces.PUT("/:id/run-triggers/:trigger_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.UpdateRunTrigger(c)
-			return
-		}
+	workspaces.PUT("/:id/run-triggers/:trigger_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.UpdateRunTrigger(c)
-		}
-	})
+		}),
+		rtHandler.UpdateRunTrigger,
+	)
 
 	// Delete run trigger - ADMIN level
-	workspaces.DELETE("/:id/run-triggers/:trigger_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.DeleteRunTrigger(c)
-			return
-		}
+	workspaces.DELETE("/:id/run-triggers/:trigger_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.DeleteRunTrigger(c)
-		}
-	})
+		}),
+		rtHandler.DeleteRunTrigger,
+	)
 
 	// Get task trigger executions - READ level
-	workspaces.GET("/:id/tasks/:task_id/trigger-executions", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.GetTaskTriggerExecutions(c)
-			return
-		}
+	workspaces.GET("/:id/tasks/:task_id/trigger-executions",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.GetTaskTriggerExecutions(c)
-		}
-	})
+		}),
+		rtHandler.GetTaskTriggerExecutions,
+	)
 
 	// Toggle trigger execution - WRITE level
-	workspaces.POST("/:id/tasks/:task_id/trigger-executions/:execution_id/toggle", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			rtHandler.ToggleTriggerExecution(c)
-			return
-		}
+	workspaces.POST("/:id/tasks/:task_id/trigger-executions/:execution_id/toggle",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			rtHandler.ToggleTriggerExecution(c)
-		}
-	})
+		}),
+		rtHandler.ToggleTriggerExecution,
+	)
 }
 
 // setupWorkspaceDriftRoutes sets up workspace drift detection routes
@@ -1899,97 +1222,61 @@ func setupWorkspaceDriftRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMidd
 	driftController := controllers.NewDriftController(db, nil) // scheduler will be set later if needed
 
 	// Get drift config - READ level
-	workspaces.GET("/:id/drift-config", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			driftController.GetDriftConfig(c)
-			return
-		}
+	workspaces.GET("/:id/drift-config",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			driftController.GetDriftConfig(c)
-		}
-	})
+		}),
+		driftController.GetDriftConfig,
+	)
 
 	// Update drift config - WRITE level
-	workspaces.PUT("/:id/drift-config", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			driftController.UpdateDriftConfig(c)
-			return
-		}
+	workspaces.PUT("/:id/drift-config",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			driftController.UpdateDriftConfig(c)
-		}
-	})
+		}),
+		driftController.UpdateDriftConfig,
+	)
 
 	// Get drift status - READ level
-	workspaces.GET("/:id/drift-status", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			driftController.GetDriftStatus(c)
-			return
-		}
+	workspaces.GET("/:id/drift-status",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			driftController.GetDriftStatus(c)
-		}
-	})
+		}),
+		driftController.GetDriftStatus,
+	)
 
 	// Trigger drift check - WRITE level
-	workspaces.POST("/:id/drift-check", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			driftController.TriggerDriftCheck(c)
-			return
-		}
+	workspaces.POST("/:id/drift-check",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			driftController.TriggerDriftCheck(c)
-		}
-	})
+		}),
+		driftController.TriggerDriftCheck,
+	)
 
 	// Cancel drift check - WRITE level
-	workspaces.DELETE("/:id/drift-check", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			driftController.CancelDriftCheck(c)
-			return
-		}
+	workspaces.DELETE("/:id/drift-check",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			driftController.CancelDriftCheck(c)
-		}
-	})
+		}),
+		driftController.CancelDriftCheck,
+	)
 
 	// Get resource drift statuses - READ level
-	workspaces.GET("/:id/resources-drift", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			driftController.GetResourceDriftStatuses(c)
-			return
-		}
+	workspaces.GET("/:id/resources-drift",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_RESOURCES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			driftController.GetResourceDriftStatuses(c)
-		}
-	})
+		}),
+		driftController.GetResourceDriftStatuses,
+	)
 }
 
 // setupWorkspaceRemoteDataRoutes sets up workspace remote data routes
@@ -1997,122 +1284,74 @@ func setupWorkspaceRemoteDataRoutes(workspaces *gin.RouterGroup, db *gorm.DB, ia
 	remoteDataController := controllers.NewWorkspaceRemoteDataController(db)
 
 	// List remote data - READ level
-	workspaces.GET("/:id/remote-data", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.ListRemoteData(c)
-			return
-		}
+	workspaces.GET("/:id/remote-data",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.ListRemoteData(c)
-		}
-	})
+		}),
+		remoteDataController.ListRemoteData,
+	)
 
 	// Get accessible workspaces - READ level
-	workspaces.GET("/:id/remote-data/accessible-workspaces", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.GetAccessibleWorkspaces(c)
-			return
-		}
+	workspaces.GET("/:id/remote-data/accessible-workspaces",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.GetAccessibleWorkspaces(c)
-		}
-	})
+		}),
+		remoteDataController.GetAccessibleWorkspaces,
+	)
 
 	// Get source workspace outputs - READ level
-	workspaces.GET("/:id/remote-data/source-outputs", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.GetSourceWorkspaceOutputs(c)
-			return
-		}
+	workspaces.GET("/:id/remote-data/source-outputs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.GetSourceWorkspaceOutputs(c)
-		}
-	})
+		}),
+		remoteDataController.GetSourceWorkspaceOutputs,
+	)
 
 	// Create remote data - WRITE level
-	workspaces.POST("/:id/remote-data", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.CreateRemoteData(c)
-			return
-		}
+	workspaces.POST("/:id/remote-data",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.CreateRemoteData(c)
-		}
-	})
+		}),
+		remoteDataController.CreateRemoteData,
+	)
 
 	// Update remote data - WRITE level
-	workspaces.PUT("/:id/remote-data/:remote_data_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.UpdateRemoteData(c)
-			return
-		}
+	workspaces.PUT("/:id/remote-data/:remote_data_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.UpdateRemoteData(c)
-		}
-	})
+		}),
+		remoteDataController.UpdateRemoteData,
+	)
 
 	// Delete remote data - ADMIN level
-	workspaces.DELETE("/:id/remote-data/:remote_data_id", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.DeleteRemoteData(c)
-			return
-		}
+	workspaces.DELETE("/:id/remote-data/:remote_data_id",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.DeleteRemoteData(c)
-		}
-	})
+		}),
+		remoteDataController.DeleteRemoteData,
+	)
 
 	// Get outputs sharing settings - READ level
-	workspaces.GET("/:id/outputs-sharing", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.GetOutputsSharing(c)
-			return
-		}
+	workspaces.GET("/:id/outputs-sharing",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.GetOutputsSharing(c)
-		}
-	})
+		}),
+		remoteDataController.GetOutputsSharing,
+	)
 
 	// Update outputs sharing settings - WRITE level
-	workspaces.PUT("/:id/outputs-sharing", func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role == "admin" {
-			remoteDataController.UpdateOutputsSharing(c)
-			return
-		}
+	workspaces.PUT("/:id/outputs-sharing",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
 			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
-		})(c)
-		if !c.IsAborted() {
-			remoteDataController.UpdateOutputsSharing(c)
-		}
-	})
+		}),
+		remoteDataController.UpdateOutputsSharing,
+	)
 }

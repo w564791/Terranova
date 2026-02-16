@@ -478,7 +478,7 @@ const PermissionManagement: React.FC = () => {
                   <div className={styles.userDetails}>
                     <div className={styles.userName}>
                       {up.user.username}
-                      {up.user.role === 'admin' && (
+                      {up.user.is_system_admin && (
                         <span className={styles.roleTag}>超级管理员</span>
                       )}
                     </div>
