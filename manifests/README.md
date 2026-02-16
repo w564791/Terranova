@@ -6,6 +6,14 @@
 - Kubernetes cluster (v1.27+)
 - `kubectl` configured to access the cluster
 - `helm` version >= v4.0.0
+- `kind` version = latest
+
+### create local kubernetes cluster
+
+```
+ kind create cluster
+```
+
 ### Local Access
 
 #### 生成本地信任证书（可选,macOS）
