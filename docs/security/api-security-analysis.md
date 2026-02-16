@@ -649,3 +649,672 @@ manifests/*
 | cmdb | POST /cmdb/external-sources/:sid/sync | false |
 | cmdb | POST /cmdb/external-sources/:sid/test | false |
 | cmdb | GET /cmdb/external-sources/:sid/sync-logs | false |
+
+---
+
+## 每个 API 接口的权限详细分析
+
+> 更新时间: 2026-02-15
+> 分析内容: 每个 API 的认证方式、授权资源、权限级别、以及合理性评估
+> 图例: ✅ 合理 | ⚠️ 可优化 | ❌ 需整改
+
+### 1. 公开端点（无认证）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 1 | GET | /health | 无 | 无 | ✅ 健康检查端点，负载均衡/容器编排必需公开 |
+| 2 | GET | /metrics | 无 | 无 | ⚠️ Prometheus指标暴露系统内部信息（goroutine数、请求延迟、内存使用），建议加Basic Auth或独立metrics token |
+| 3 | GET | /static/* | 无 | 无 | ✅ 静态资源，无敏感数据 |
+| 4 | GET | /swagger/*any | 无 | 无 | ⚠️ 生产环境建议禁用或加认证，API文档暴露全部接口定义 |
+
+### 2. 系统初始化（无认证）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 5 | GET | /setup/status | 无 | 无 | ✅ 前端判断是否需要初始化，不含敏感信息 |
+| 6 | POST | /setup/init | 无 | Handler内部幂等检查 + Advisory Lock | ✅ 初始化时无用户可认证，handler已做幂等保护和并发安全控制 |
+
+### 3. 认证端点（无认证/MFA token）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 7 | POST | /auth/login | 无 | 无 | ✅ 登录入口必须公开 |
+| 8 | POST | /auth/mfa/verify | MFA Token | 无 | ✅ 使用登录流程中颁发的mfa_token验证，不需要JWT |
+| 9 | POST | /auth/mfa/setup | MFA Token | 无 | ✅ 首次登录强制MFA设置场景，使用mfa_token |
+| 10 | POST | /auth/mfa/enable | MFA Token | 无 | ✅ 配合mfa/setup使用，验证TOTP码后启用 |
+| 11 | POST | /auth/refresh | JWT | 无 | ✅ Token刷新仅需有效JWT，用户自服务操作 |
+| 12 | GET | /auth/me | JWT | 无 | ✅ 获取当前用户信息，仅返回自身数据 |
+| 13 | POST | /auth/logout | JWT | 无 | ✅ 登出仅操作自身会话 |
+
+### 4. SSO 公开端点（无认证）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 14 | GET | /auth/sso/providers | 无 | 无 | ✅ 登录页展示可用SSO提供商列表，仅返回名称和图标 |
+| 15 | GET | /auth/sso/:provider/login | 无 | 无 | ✅ 发起OAuth重定向，必须公开 |
+| 16 | GET | /auth/sso/:provider/callback | 无 | 无 | ✅ OAuth回调端点，IdP回调必须公开 |
+| 17 | POST | /auth/sso/:provider/callback | 无 | 无 | ✅ 同上，兼容POST方式的回调 |
+| 18 | GET | /auth/sso/:provider/callback/redirect | 无 | 无 | ✅ 前端重定向模式的回调处理 |
+
+### 5. SSO 身份管理（仅JWT，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 19 | GET | /auth/sso/identities | JWT | 无 | ⚠️ 用户自服务操作，JWT认证可接受，但缺少AuditLogger中间件记录操作。Handler应确保仅返回当前用户自身的身份 |
+| 20 | POST | /auth/sso/identities/link | JWT | 无 | ⚠️ 绑定SSO身份。风险：攻击者获取JWT后可绑定自控SSO身份作为后门。建议加AuditLogger并确保handler校验user_id一致性 |
+| 21 | DELETE | /auth/sso/identities/:id | JWT | 无 | ⚠️ 解绑SSO身份。风险：可绕过组织强制SSO绑定策略。建议加AuditLogger |
+| 22 | PUT | /auth/sso/identities/:id/primary | JWT | 无 | ⚠️ 设置主要登录方式。同上，缺少审计日志 |
+
+### 6. SSO 管理端点（JWT + RequireRole("admin")）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 23 | GET | /admin/sso/providers | JWT | RequireRole("admin") | ⚠️ 使用旧版role检查，无IAM权限。功能正确但无法委派给非admin的安全运维人员 |
+| 24 | GET | /admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 同上 |
+| 25 | POST | /admin/sso/providers | JWT | RequireRole("admin") | ⚠️ 同上。创建SSO Provider是高权限操作，admin-only合理，但应迁移到IAM体系 |
+| 26 | PUT | /admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 同上 |
+| 27 | DELETE | /admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 同上 |
+| 28 | GET | /admin/sso/config | JWT | RequireRole("admin") | ⚠️ 同上 |
+| 29 | PUT | /admin/sso/config | JWT | RequireRole("admin") | ⚠️ 同上。全局SSO配置修改应为ADMIN级别 |
+| 30 | GET | /admin/sso/logs | JWT | RequireRole("admin") | ⚠️ 同上 |
+
+### 7. WebSocket 端点（JWT）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 31 | GET | /ws/editing/:session_id | JWT | 无 | ✅ 协同编辑WebSocket，JWT认证足够，session_id本身提供访问隔离 |
+| 32 | GET | /ws/sessions | JWT | 无 | ✅ 查看活跃会话列表，仅需认证 |
+| 33 | GET | /ws/agent-pools/:pool_id/metrics | JWT | 无 | ⚠️ 可查看任意pool的实时指标。建议增加AGENT_POOLS READ权限校验 |
+
+### 8. Agent API（Pool Token认证）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 34 | POST | /agents/register | PoolToken | Token所属Pool | ✅ Agent注册需Pool Token，token绑定到特定Pool |
+| 35 | GET | /agents/pool/secrets | PoolToken | Token所属Pool | ✅ 获取Pool级密文用于生成credentials.tfrc.json，权限通过Pool Token隔离 |
+| 36 | GET | /agents/:agent_id | PoolToken | Token所属Pool | ✅ 查看Agent详情，Pool Token保证只能查看自己Pool下的Agent |
+| 37 | DELETE | /agents/:agent_id | PoolToken | Token所属Pool | ✅ 注销Agent。建议确认handler中校验agent_id属于当前Pool |
+| 38 | GET | /agents/control | 无（已废弃） | 返回410 Gone | ✅ 已迁移到独立端口8091，保留向后兼容提示 |
+
+### 9. Agent Task API（Pool Token + Workspace Check）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 39 | GET | /agents/tasks/:task_id/data | PoolToken + TaskCheck | Pool必须授权访问task所属workspace | ✅ 双层校验：Token有效性 + Workspace授权关系 |
+| 40 | POST | /agents/tasks/:task_id/logs/chunk | PoolToken + TaskCheck | 同上 | ✅ |
+| 41 | PUT | /agents/tasks/:task_id/status | PoolToken + TaskCheck | 同上 | ✅ |
+| 42 | POST | /agents/tasks/:task_id/state | PoolToken + TaskCheck | 同上 | ✅ |
+| 43 | GET | /agents/tasks/:task_id/plan-task | PoolToken + TaskCheck | 同上 | ✅ |
+| 44 | POST | /agents/tasks/:task_id/plan-data | PoolToken + TaskCheck | 同上 | ✅ |
+| 45 | POST | /agents/tasks/:task_id/plan-json | PoolToken + TaskCheck | 同上 | ✅ |
+| 46 | POST | /agents/tasks/:task_id/parse-plan-changes | PoolToken + TaskCheck | 同上 | ✅ |
+| 47 | GET | /agents/tasks/:task_id/logs | PoolToken + TaskCheck | 同上 | ✅ |
+
+### 10. Agent Workspace API（Pool Token + Workspace Check）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 48 | POST | /agents/workspaces/:wid/lock | PoolToken + WsCheck | Pool必须授权访问该workspace | ✅ |
+| 49 | POST | /agents/workspaces/:wid/unlock | PoolToken + WsCheck | 同上 | ✅ |
+| 50 | GET | /agents/workspaces/:wid/state/max-version | PoolToken + WsCheck | 同上 | ✅ |
+| 51 | PATCH | /agents/workspaces/:wid/fields | PoolToken + WsCheck | 同上 | ✅ |
+| 52 | GET | /agents/workspaces/:wid/terraform-lock-hcl | PoolToken + WsCheck | 同上 | ✅ |
+| 53 | PUT | /agents/workspaces/:wid/terraform-lock-hcl | PoolToken + WsCheck | 同上 | ✅ |
+
+### 11. Agent Terraform Version API（Pool Token）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 54 | GET | /agents/terraform-versions/default | PoolToken | Token所属Pool | ✅ 查询默认TF版本，只读元数据 |
+| 55 | GET | /agents/terraform-versions/:version | PoolToken | Token所属Pool | ✅ 查询特定TF版本配置 |
+
+### 12. Run Task 回调（无认证）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 56 | PATCH | /run-task-results/:id/callback | 无 | 无 | ❌ **严重**: 任何人知道result_id即可伪造回调结果，篡改安全扫描状态，绕过审批门禁。应加HMAC签名验证 |
+| 57 | POST | /run-task-results/:id/callback | 无 | 无 | ❌ **严重**: 同上 |
+| 58 | GET | /run-task-results/:id | 无 | 无 | ❌ 无认证可枚举获取扫描结果，泄露基础设施变更详情。应加HMAC或Bearer Token |
+
+### 13. IAM 权限检查（所有认证用户）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 59 | POST | /iam/permissions/check | JWT + AuditLogger | 无IAM（设计如此） | ✅ 用户检查自身权限的自服务API，必须对所有认证用户开放 |
+
+### 14. MFA 用户自服务（JWT，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 60 | GET | /user/mfa/status | JWT + AuditLogger | 无 | ✅ 查看自身MFA状态 |
+| 61 | POST | /user/mfa/setup | JWT + AuditLogger | 无 | ✅ 设置自身MFA，用户自服务 |
+| 62 | POST | /user/mfa/verify | JWT + AuditLogger | 无 | ✅ 验证并启用自身MFA |
+| 63 | POST | /user/mfa/disable | JWT + AuditLogger | 无 | ✅ 禁用自身MFA。注意：如果组织强制MFA，handler应拒绝此操作 |
+| 64 | POST | /user/mfa/backup-codes/regenerate | JWT + AuditLogger | 无 | ✅ 重新生成自身备份码 |
+
+### 15. Dashboard（JWT + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 65 | GET | /dashboard/overview | JWT + AuditLogger | IAM: ORGANIZATION / ORGANIZATION / READ | ✅ 需组织级READ权限查看概览。注意：**无admin绕过**，admin也必须有ORGANIZATION READ权限 |
+| 66 | GET | /dashboard/compliance | JWT + AuditLogger | IAM: ORGANIZATION / ORGANIZATION / READ | ✅ 同上 |
+
+> **Dashboard权限评估**: 这两个接口没有admin绕过逻辑，直接使用`iamMiddleware.RequirePermission`作为中间件。如果admin用户没有被授予ORGANIZATION READ权限，将返回403。这与其他接口的`admin绕过 + IAM fallback`模式不一致，可能导致admin用户意外被拒。建议统一为admin绕过模式或确保admin默认拥有该权限。
+
+### 16. Remote Data 公开端点
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 67 | GET | /workspaces/:id/state-outputs/full | 临时Token | Token验证 | ✅ 使用临时token认证，用于跨workspace数据引用，不走JWT体系 |
+
+### 17. 密文管理（JWT，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 68 | POST | /:resourceType/:resourceId/secrets | JWT + AuditLogger | 无 | ❌ **严重**: 任何认证用户可为任意资源类型创建密文。应根据resourceType动态映射IAM权限 |
+| 69 | GET | /:resourceType/:resourceId/secrets | JWT + AuditLogger | 无 | ❌ **严重**: 任何认证用户可读取任意资源的密文列表（含云平台凭证） |
+| 70 | GET | /:resourceType/:resourceId/secrets/:secretId | JWT + AuditLogger | 无 | ❌ **严重**: 同上 |
+| 71 | PUT | /:resourceType/:resourceId/secrets/:secretId | JWT + AuditLogger | 无 | ❌ **严重**: 任何认证用户可修改任意密文 |
+| 72 | DELETE | /:resourceType/:resourceId/secrets/:secretId | JWT + AuditLogger | 无 | ❌ **严重**: 任何认证用户可删除任意密文 |
+
+> **密文管理权限映射建议**: `agent_pool` → AGENT_POOLS/ORGANIZATION/WRITE, `workspace` → WORKSPACE_MANAGEMENT/WORKSPACE/WRITE
+
+### 18. 用户自服务（JWT，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 73 | POST | /user/reset-password | JWT + BypassIAMForAdmin | admin绕过 / IAM: USER_MANAGEMENT/USER/WRITE | ✅ 管理员重置他人密码，有完整权限检查 |
+| 74 | POST | /user/change-password | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 修改自身密码，handler中校验仅能改自己的。风险低，但SSO-only用户不应能设本地密码 |
+| 75 | POST | /user/tokens | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 创建API Token，handler限制只能管理自己的Token。建议可选的组织级策略限制Token创建 |
+| 76 | GET | /user/tokens | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 同上，列出自己的Token |
+| 77 | DELETE | /user/tokens/:token_name | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 同上，撤销自己的Token |
+
+### 19. Workspace 管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 78 | GET | /workspaces | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/ORGANIZATION/READ | ✅ 列表需组织级READ，合理 |
+| 79 | GET | /workspaces/:id | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/ORG/READ **或** WORKSPACE_MANAGEMENT/WS/READ | ✅ 支持组织级和workspace级两种授权路径，灵活 |
+| 80 | GET | /workspaces/:id/overview | JWT + AuditLogger | 同上 | ✅ |
+| 81 | PUT | /workspaces/:id | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_MANAGEMENT/WORKSPACE/WRITE | ✅ 修改workspace需workspace级WRITE |
+| 82 | PATCH | /workspaces/:id | JWT + AuditLogger | 同上 | ✅ |
+| 83 | POST | /workspaces/:id/lock | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_MANAGEMENT/WORKSPACE/WRITE | ✅ 锁定workspace需WRITE权限 |
+| 84 | POST | /workspaces/:id/unlock | JWT + AuditLogger | 同上 | ✅ |
+| 85 | DELETE | /workspaces/:id | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_MANAGEMENT/WORKSPACE/ADMIN | ✅ 删除需ADMIN级别，合理 |
+| 86 | POST | /workspaces | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/ORGANIZATION/WRITE | ✅ 创建workspace需组织级WRITE |
+
+### 20. Workspace Task 操作（JWT + admin绕过 + IAM）
+
+**READ级别** — 查看任务数据:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 87 | GET | /workspaces/:id/tasks | JWT + AuditLogger | admin绕过 / IAM: TASK_DATA_ACCESS **或** WORKSPACE_EXECUTION **或** WORKSPACE_MANAGEMENT (WS/READ) | ✅ 三个资源类型任一满足即可，支持多种授权场景 |
+| 88 | GET | /workspaces/:id/tasks/:tid | JWT + AuditLogger | 同上 | ✅ |
+| 89 | GET | /workspaces/:id/tasks/:tid/logs | JWT + AuditLogger | 同上 | ✅ |
+| 90 | GET | /workspaces/:id/tasks/:tid/comments | JWT + AuditLogger | 同上 | ✅ |
+| 91 | GET | /workspaces/:id/tasks/:tid/resource-changes | JWT + AuditLogger | 同上 | ✅ |
+| 92 | GET | /workspaces/:id/tasks/:tid/error-analysis | JWT + AuditLogger | 同上 | ✅ |
+| 93 | GET | /workspaces/:id/tasks/:tid/state-backup | JWT + AuditLogger | 同上 | ✅ state-backup可能含敏感数据，但有TASK_DATA_ACCESS权限控制 |
+
+**WRITE级别** — 创建Plan/评论:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 94 | POST | /workspaces/:id/tasks/plan | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_EXECUTION **或** WORKSPACE_MANAGEMENT (WS/WRITE) | ✅ 创建Plan任务需WRITE，合理 |
+| 95 | POST | /workspaces/:id/tasks/:tid/comments | JWT + AuditLogger | 同上 | ✅ |
+
+**ADMIN级别** — 取消/确认Apply等危险操作:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 96 | POST | /workspaces/:id/tasks/:tid/cancel | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_EXECUTION **或** WORKSPACE_MANAGEMENT (WS/ADMIN) | ✅ 取消任务需ADMIN，防止普通用户干扰正在执行的Apply |
+| 97 | POST | /workspaces/:id/tasks/:tid/cancel-previous | JWT + AuditLogger | 同上 | ✅ |
+| 98 | POST | /workspaces/:id/tasks/:tid/confirm-apply | JWT + AuditLogger | 同上 | ✅ 确认Apply是最敏感操作，ADMIN级别合理 |
+| 99 | PATCH | /workspaces/:id/tasks/:tid/resource-changes/:rid | JWT + AuditLogger | 同上 | ✅ |
+| 100 | POST | /workspaces/:id/tasks/:tid/retry-state-save | JWT + AuditLogger | 同上 | ✅ |
+| 101 | POST | /workspaces/:id/tasks/:tid/parse-plan | JWT + AuditLogger | 同上 | ✅ |
+
+### 21. Workspace State 操作（JWT + admin绕过 + IAM）
+
+**READ级别**:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 102 | GET | /workspaces/:id/current-state | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_STATE **或** WORKSPACE_MANAGEMENT (WS/READ) | ✅ |
+| 103 | GET | /workspaces/:id/state-versions | JWT + AuditLogger | 同上 | ✅ |
+| 104 | GET | /workspaces/:id/state/versions | JWT + AuditLogger | 同上 | ✅ 新版分页API |
+| 105 | GET | /workspaces/:id/state/versions/:v | JWT + AuditLogger | 同上 | ✅ 仅元数据，不含state内容 |
+| 106 | GET | /workspaces/:id/state/versions/:v/download | JWT + AuditLogger | 同上 | ✅ |
+| 107 | GET | /workspaces/:id/state-versions/compare | JWT + AuditLogger | 同上 | ✅ |
+| 108 | GET | /workspaces/:id/state-versions/:v/metadata | JWT + AuditLogger | 同上 | ✅ |
+| 109 | GET | /workspaces/:id/state-versions/:v | JWT + AuditLogger | 同上 | ✅ |
+
+**敏感State内容**:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 110 | GET | /workspaces/:id/state/versions/:v/retrieve | JWT + AuditLogger | admin绕过 / IAM: **WORKSPACE_STATE_SENSITIVE**/WS/READ **或** WORKSPACE_MANAGEMENT/WS/ADMIN | ✅ **安全亮点**: State完整内容（含密码、密钥等）使用独立的WORKSPACE_STATE_SENSITIVE权限，与普通state元数据分离。非常合理的细粒度控制 |
+
+**WRITE级别**:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 111 | POST | /workspaces/:id/state/upload | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_STATE/WS/WRITE **或** WORKSPACE_MANAGEMENT/WS/WRITE | ✅ |
+| 112 | POST | /workspaces/:id/state/upload-file | JWT + AuditLogger | 同上 | ✅ |
+
+**ADMIN级别**:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 113 | POST | /workspaces/:id/state/rollback | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_STATE/WS/ADMIN **或** WORKSPACE_MANAGEMENT/WS/ADMIN | ✅ 回滚state是高危操作，ADMIN合理 |
+| 114 | POST | /workspaces/:id/state-versions/:v/rollback | JWT + AuditLogger | 同上 | ✅ |
+| 115 | DELETE | /workspaces/:id/state-versions/:v | JWT + AuditLogger | 同上 | ✅ 删除state版本不可逆，ADMIN合理 |
+
+### 22. Workspace Variables（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 116 | GET | /workspaces/:id/variables | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_VARIABLES **或** WORKSPACE_MANAGEMENT (WS/READ) | ✅ |
+| 117 | GET | /workspaces/:id/variables/:vid | JWT + AuditLogger | 同上 | ✅ |
+| 118 | POST | /workspaces/:id/variables | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_VARIABLES **或** WORKSPACE_MANAGEMENT (WS/WRITE) | ✅ |
+| 119 | PUT | /workspaces/:id/variables/:vid | JWT + AuditLogger | 同上 | ✅ |
+| 120 | DELETE | /workspaces/:id/variables/:vid | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_VARIABLES **或** WORKSPACE_MANAGEMENT (WS/ADMIN) | ✅ |
+| 121 | GET | /workspaces/:id/variables/:vid/versions | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_VARIABLES/WS/READ | ✅ |
+| 122 | GET | /workspaces/:id/variables/:vid/versions/:v | JWT + AuditLogger | 同上 | ✅ |
+
+### 23. Workspace Resources（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 123 | GET | /workspaces/:id/resources | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_RESOURCES **或** WORKSPACE_MANAGEMENT (WS/READ) | ✅ |
+| 124-131 | GET | /workspaces/:id/resources/... (其他只读) | JWT + AuditLogger | 同上 | ✅ 所有只读操作统一READ级别 |
+| 132 | POST | /workspaces/:id/resources | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_RESOURCES/WS/WRITE **或** WORKSPACE_MANAGEMENT/WS/WRITE | ✅ |
+| 133 | POST | /workspaces/:id/resources/import | JWT + AuditLogger | 同上 | ✅ |
+| 134 | POST | /workspaces/:id/resources/deploy | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_EXECUTION/WS/WRITE **或** WORKSPACE_MANAGEMENT/WS/WRITE | ✅ deploy使用WORKSPACE_EXECUTION权限而非WORKSPACE_RESOURCES，因为它触发实际部署 |
+| 135 | PUT | /workspaces/:id/resources/:rid | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_RESOURCES/WS/WRITE | ✅ |
+| 136 | DELETE | /workspaces/:id/resources/:rid | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE_RESOURCES/WS/ADMIN | ✅ 删除资源需ADMIN |
+
+### 24. Workspace Pool关联（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 137 | GET | /workspaces/:id/available-pools | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/WORKSPACE/READ | ✅ |
+| 138 | POST | /workspaces/:id/set-current-pool | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/WORKSPACE/WRITE | ✅ 绑定Pool需WRITE |
+| 139 | GET | /workspaces/:id/current-pool | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/WORKSPACE/READ | ✅ |
+
+### 25. Agent Pool 管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 140 | POST | /agent-pools | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 141 | GET | /agent-pools | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/READ | ✅ |
+| 142 | GET | /agent-pools/:pid | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 143 | PUT | /agent-pools/:pid | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 144 | DELETE | /agent-pools/:pid | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/ADMIN | ✅ 删除Pool需ADMIN |
+| 145 | POST | /agent-pools/:pid/allow-workspaces | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 146 | GET | /agent-pools/:pid/allowed-workspaces | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/READ | ✅ |
+| 147 | DELETE | /agent-pools/:pid/allowed-workspaces/:wid | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 148 | POST | /agent-pools/:pid/tokens | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 149 | GET | /agent-pools/:pid/tokens | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/READ | ✅ |
+| 150 | DELETE | /agent-pools/:pid/tokens/:name | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 151 | POST | /agent-pools/:pid/tokens/:name/rotate | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 152 | POST | /agent-pools/:pid/sync-deployment | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 153 | POST | /agent-pools/:pid/one-time-unfreeze | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 154 | PUT | /agent-pools/:pid/k8s-config | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/WRITE | ✅ |
+| 155 | GET | /agent-pools/:pid/k8s-config | JWT + BypassIAMForAdmin | admin绕过 / IAM: AGENT_POOLS/ORGANIZATION/READ | ✅ |
+
+### 26. Run Task 管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 156 | POST | /run-tasks | JWT + BypassIAMForAdmin | admin绕过 / IAM: RUN_TASKS/ORGANIZATION/WRITE | ✅ |
+| 157 | GET | /run-tasks | JWT + BypassIAMForAdmin | admin绕过 / IAM: RUN_TASKS/ORGANIZATION/READ | ✅ |
+| 158 | GET | /run-tasks/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 159 | PUT | /run-tasks/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: RUN_TASKS/ORGANIZATION/WRITE | ✅ |
+| 160 | DELETE | /run-tasks/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: RUN_TASKS/ORGANIZATION/ADMIN | ✅ 删除需ADMIN |
+| 161 | POST | /run-tasks/test | JWT + BypassIAMForAdmin | admin绕过 / IAM: RUN_TASKS/ORGANIZATION/WRITE | ✅ |
+| 162 | POST | /run-tasks/:id/test | JWT + BypassIAMForAdmin | admin绕过 / IAM: RUN_TASKS/ORGANIZATION/READ | ✅ 测试已有Run Task只需READ |
+
+### 27. IAM 权限管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 163 | GET | /iam/status | JWT + BypassIAMForAdmin | admin绕过（隐式拒绝非admin） | ✅ IAM状态查询 |
+| 164 | POST | /iam/permissions/grant | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_PERMISSIONS/ORGANIZATION/ADMIN | ✅ 授权操作需ADMIN级别，防止权限提升 |
+| 165 | POST | /iam/permissions/batch-grant | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 166 | POST | /iam/permissions/grant-preset | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 167 | DELETE | /iam/permissions/:scope_type/:id | JWT + BypassIAMForAdmin | 同上 | ✅ 撤销权限也需ADMIN |
+| 168 | GET | /iam/permissions/:scope_type/:scope_id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_PERMISSIONS/ORGANIZATION/READ | ✅ 查看权限只需READ |
+| 169 | GET | /iam/permissions/definitions | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 170 | GET | /iam/users/:id/permissions | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 171 | GET | /iam/teams/:id/permissions | JWT + BypassIAMForAdmin | 同上 | ✅ |
+
+### 28. IAM 团队管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 172 | POST | /iam/teams | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/WRITE | ✅ |
+| 173 | GET | /iam/teams | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/READ | ✅ |
+| 174 | GET | /iam/teams/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 175 | DELETE | /iam/teams/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/ADMIN | ✅ 删除团队需ADMIN |
+| 176 | POST | /iam/teams/:id/members | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/WRITE | ✅ |
+| 177 | DELETE | /iam/teams/:id/members/:uid | JWT + BypassIAMForAdmin | 同上 | ✅ 移除成员用WRITE，合理（不是删除团队本身） |
+| 178 | GET | /iam/teams/:id/members | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/READ | ✅ |
+
+### 29. IAM 团队Token（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 179 | POST | /iam/teams/:id/tokens | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/WRITE | ✅ |
+| 180 | GET | /iam/teams/:id/tokens | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/READ | ✅ |
+| 181 | DELETE | /iam/teams/:id/tokens/:tid | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/WRITE | ✅ |
+
+### 30. IAM 团队角色（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 182 | POST | /iam/teams/:id/roles | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/ADMIN | ✅ 角色分配需ADMIN |
+| 183 | GET | /iam/teams/:id/roles | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/READ | ✅ |
+| 184 | DELETE | /iam/teams/:id/roles/:aid | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_TEAMS/ORGANIZATION/ADMIN | ✅ |
+
+### 31. IAM 组织管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 185 | POST | /iam/organizations | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ORGANIZATIONS/ORGANIZATION/ADMIN | ✅ 创建组织需ADMIN |
+| 186 | GET | /iam/organizations | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ORGANIZATIONS/ORGANIZATION/READ | ✅ |
+| 187 | GET | /iam/organizations/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 188 | PUT | /iam/organizations/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ORGANIZATIONS/ORGANIZATION/WRITE | ✅ |
+| 189 | DELETE | /iam/organizations/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ORGANIZATIONS/ORGANIZATION/ADMIN | ✅ |
+
+### 32. IAM 项目管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 190 | POST | /iam/projects | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_PROJECTS/ORGANIZATION/WRITE | ✅ |
+| 191 | GET | /iam/projects | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_PROJECTS/ORGANIZATION/READ | ✅ |
+| 192 | GET | /iam/projects/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 193 | PUT | /iam/projects/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_PROJECTS/ORGANIZATION/WRITE | ✅ |
+| 194 | DELETE | /iam/projects/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_PROJECTS/ORGANIZATION/ADMIN | ✅ |
+
+### 33. IAM 应用管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 195 | POST | /iam/applications | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_APPLICATIONS/ORGANIZATION/WRITE | ✅ |
+| 196 | GET | /iam/applications | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_APPLICATIONS/ORGANIZATION/READ | ✅ |
+| 197 | GET | /iam/applications/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 198 | PUT | /iam/applications/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_APPLICATIONS/ORGANIZATION/WRITE | ✅ |
+| 199 | DELETE | /iam/applications/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_APPLICATIONS/ORGANIZATION/ADMIN | ✅ |
+| 200 | POST | /iam/applications/:id/regenerate-secret | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_APPLICATIONS/ORGANIZATION/ADMIN | ✅ 重新生成Secret是敏感操作，ADMIN合理 |
+
+### 34. IAM 审计日志（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 201 | GET | /iam/audit/config | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_AUDIT/ORGANIZATION/READ | ✅ |
+| 202 | PUT | /iam/audit/config | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_AUDIT/ORGANIZATION/ADMIN | ✅ 修改审计配置需ADMIN |
+| 203 | GET | /iam/audit/permission-history | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_AUDIT/ORGANIZATION/READ | ✅ |
+| 204 | GET | /iam/audit/access-history | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 205 | GET | /iam/audit/denied-access | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 206 | GET | /iam/audit/permission-changes-by-principal | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 207 | GET | /iam/audit/permission-changes-by-performer | JWT + BypassIAMForAdmin | 同上 | ✅ |
+
+### 35. IAM 用户管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 208 | GET | /iam/users/stats | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_USERS/ORGANIZATION/READ | ✅ |
+| 209 | GET | /iam/users | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 210 | POST | /iam/users | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_USERS/ORGANIZATION/WRITE | ✅ |
+| 211 | POST | /iam/users/:id/roles | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_USERS/ORGANIZATION/ADMIN | ✅ 角色分配需ADMIN，防止权限提升 |
+| 212 | DELETE | /iam/users/:id/roles/:aid | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 213 | GET | /iam/users/:id/roles | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_USERS/ORGANIZATION/READ | ✅ |
+| 214 | GET | /iam/users/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 215 | PUT | /iam/users/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_USERS/ORGANIZATION/WRITE | ✅ |
+| 216 | POST | /iam/users/:id/activate | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_USERS/ORGANIZATION/ADMIN | ✅ 激活/停用用户需ADMIN |
+| 217 | POST | /iam/users/:id/deactivate | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 218 | DELETE | /iam/users/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+
+### 36. IAM 角色管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 219 | GET | /iam/roles | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ROLES/ORGANIZATION/READ | ✅ |
+| 220 | GET | /iam/roles/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 221 | POST | /iam/roles | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ROLES/ORGANIZATION/WRITE | ✅ |
+| 222 | PUT | /iam/roles/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 223 | DELETE | /iam/roles/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ROLES/ORGANIZATION/ADMIN | ✅ 删除角色需ADMIN |
+| 224 | POST | /iam/roles/:id/policies | JWT + BypassIAMForAdmin | admin绕过 / IAM: IAM_ROLES/ORGANIZATION/WRITE | ✅ |
+| 225 | DELETE | /iam/roles/:id/policies/:pid | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 226 | POST | /iam/roles/:id/clone | JWT + BypassIAMForAdmin | 同上 | ✅ |
+
+### 37. 全局设置 — Terraform版本（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 227 | GET | /global/settings/terraform-versions | JWT + BypassIAMForAdmin | admin绕过 / IAM: TERRAFORM_VERSIONS/ORGANIZATION/READ | ✅ |
+| 228 | GET | /global/settings/terraform-versions/default | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 229 | GET | /global/settings/terraform-versions/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 230 | POST | /global/settings/terraform-versions | JWT + BypassIAMForAdmin | admin绕过 / IAM: TERRAFORM_VERSIONS/ORGANIZATION/WRITE | ✅ |
+| 231 | PUT | /global/settings/terraform-versions/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 232 | POST | /global/settings/terraform-versions/:id/set-default | JWT + BypassIAMForAdmin | admin绕过 / IAM: TERRAFORM_VERSIONS/ORGANIZATION/ADMIN | ✅ 设置默认版本影响全局，ADMIN合理 |
+| 233 | DELETE | /global/settings/terraform-versions/:id | JWT + BypassIAMForAdmin | 同上 | ✅ |
+
+### 38. 全局设置 — AI配置（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 234 | GET | /global/settings/ai-configs | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/READ | ✅ |
+| 235 | POST | /global/settings/ai-configs | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/WRITE | ✅ |
+| 236 | GET | /global/settings/ai-configs/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/READ | ✅ |
+| 237 | PUT | /global/settings/ai-configs/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/WRITE | ✅ |
+| 238 | DELETE | /global/settings/ai-configs/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/ADMIN | ✅ |
+| 239 | PUT | /global/settings/ai-configs/priorities | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/WRITE | ✅ |
+| 240 | PUT | /global/settings/ai-configs/:id/set-default | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/ADMIN | ✅ |
+| 241 | GET | /global/settings/ai-config/regions | JWT + BypassIAMForAdmin | admin绕过 / IAM: AI_CONFIGS/ORGANIZATION/READ | ✅ |
+| 242 | GET | /global/settings/ai-config/models | JWT + BypassIAMForAdmin | 同上 | ✅ |
+
+### 39. 全局设置 — 平台配置/MFA（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 243 | GET | /global/settings/platform-config | JWT + BypassIAMForAdmin | admin绕过 / IAM: SYSTEM_SETTINGS/ORGANIZATION/READ | ✅ |
+| 244 | PUT | /global/settings/platform-config | JWT + BypassIAMForAdmin | admin绕过 / IAM: SYSTEM_SETTINGS/ORGANIZATION/ADMIN | ✅ |
+| 245 | GET | /global/settings/mfa | JWT + BypassIAMForAdmin | admin绕过 / IAM: SYSTEM_SETTINGS/ORGANIZATION/READ | ✅ |
+| 246 | PUT | /global/settings/mfa | JWT + BypassIAMForAdmin | admin绕过 / IAM: SYSTEM_SETTINGS/ORGANIZATION/ADMIN | ✅ MFA全局配置修改需ADMIN |
+
+### 40. 管理员MFA管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 247 | GET | /admin/users/:uid/mfa/status | JWT + BypassIAMForAdmin | admin绕过 / IAM: USER_MANAGEMENT/ORGANIZATION/READ | ✅ |
+| 248 | POST | /admin/users/:uid/mfa/reset | JWT + BypassIAMForAdmin | admin绕过 / IAM: USER_MANAGEMENT/ORGANIZATION/ADMIN | ✅ 重置他人MFA需ADMIN |
+
+### 41. 通知管理（JWT + BypassIAMForAdmin，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 249 | GET | /notifications | JWT + BypassIAMForAdmin | admin绕过 / 非admin隐式拒绝 | ⚠️ 无IAM权限检查，依赖中间件链隐式行为。非admin无法访问但无法委派权限 |
+| 250 | GET | /notifications/available | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+| 251 | GET | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+| 252 | POST | /notifications | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+| 253 | PUT | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+| 254 | DELETE | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+| 255 | POST | /notifications/:nid/test | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+
+### 42. Manifest 可视化编排（JWT，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 256 | GET | /organizations/:oid/manifests | JWT (orgManifests组) | 无IAM | ❌ Manifest列表无权限控制，任何认证用户可查看所有Manifest |
+| 257 | POST | /organizations/:oid/manifests | JWT | 无IAM | ❌ 任何认证用户可创建Manifest，可触发多Workspace联动部署 |
+| 258 | GET | /organizations/:oid/manifests/:id | JWT | 无IAM | ❌ |
+| 259 | PUT | /organizations/:oid/manifests/:id | JWT | 无IAM | ❌ |
+| 260 | DELETE | /organizations/:oid/manifests/:id | JWT | 无IAM | ❌ |
+| 261 | PUT | /organizations/:oid/manifests/:id/draft | JWT | 无IAM | ❌ |
+| 262 | GET | /organizations/:oid/manifests/:id/versions | JWT | 无IAM | ❌ |
+| 263 | POST | /organizations/:oid/manifests/:id/versions | JWT | 无IAM | ❌ 发布版本无权限控制 |
+| 264 | GET | /organizations/:oid/manifests/:id/versions/:vid | JWT | 无IAM | ❌ |
+| 265 | GET | /organizations/:oid/manifests/:id/deployments | JWT | 无IAM | ❌ |
+| 266 | POST | /organizations/:oid/manifests/:id/deployments | JWT | 无IAM | ❌ **严重**: 创建部署可触发Terraform Apply |
+| 267 | GET | /organizations/:oid/manifests/:id/deployments/:did | JWT | 无IAM | ❌ |
+| 268 | PUT | /organizations/:oid/manifests/:id/deployments/:did | JWT | 无IAM | ❌ |
+| 269 | DELETE | /organizations/:oid/manifests/:id/deployments/:did | JWT | 无IAM | ❌ |
+| 270 | GET | /organizations/:oid/manifests/:id/deployments/:did/resources | JWT | 无IAM | ❌ |
+| 271 | POST | /organizations/:oid/manifests/:id/deployments/:did/uninstall | JWT | 无IAM | ❌ **严重**: 卸载部署触发Terraform Destroy |
+| 272 | GET | /organizations/:oid/manifests/:id/export | JWT | 无IAM | ❌ 导出泄露基础设施架构 |
+| 273 | GET | /organizations/:oid/manifests/:id/export-zip | JWT | 无IAM | ❌ 同上 |
+| 274 | POST | /organizations/:oid/manifests/import | JWT | 无IAM | ❌ 导入可注入恶意配置 |
+| 275 | POST | /organizations/:oid/manifests/import-json | JWT | 无IAM | ❌ 同上 |
+
+> **Manifest模块总评**: 20个接口全部缺少IAM权限检查。注意router_manifest.go中虽然传入了adminProtected路由组，但orgManifests自行加了`middleware.JWTAuth()`，实际上跳过了BypassIAMForAdmin中间件链。这是因为Manifest路由组自己创建了独立的中间件链。建议统一为admin绕过 + IAM fallback模式。
+
+### 43. Module 管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 276 | GET | /modules | JWT + AuditLogger | admin绕过 / IAM: MODULES/ORGANIZATION/READ | ✅ |
+| 277 | GET | /modules/:id | JWT + AuditLogger | 同上 | ✅ |
+| 278 | GET | /modules/:id/files | JWT + AuditLogger | 同上 | ✅ |
+| 279 | GET | /modules/:id/schemas | JWT + AuditLogger | 同上 | ✅ |
+| 280 | GET | /modules/:id/demos | JWT + AuditLogger | 同上 | ✅ |
+| 281 | GET | /modules/:id/prompts | JWT + AuditLogger | 同上 | ✅ |
+| 282 | POST | /modules | JWT + AuditLogger | admin绕过 / IAM: MODULES/ORGANIZATION/WRITE | ✅ |
+| 283 | PUT | /modules/:id | JWT + AuditLogger | 同上 | ✅ |
+| 284 | PATCH | /modules/:id | JWT + AuditLogger | 同上 | ✅ |
+| 285 | POST | /modules/:id/sync | JWT + AuditLogger | 同上 | ✅ |
+| 286 | POST | /modules/parse-tf | JWT + AuditLogger | 同上 | ✅ |
+| 287 | POST | /modules/:id/schemas | JWT + AuditLogger | 同上 | ✅ |
+| 288 | POST | /modules/:id/schemas/generate | JWT + AuditLogger | 同上 | ✅ |
+| 289 | POST | /modules/:id/demos | JWT + AuditLogger | 同上 | ✅ |
+| 290 | DELETE | /modules/:id | JWT + AuditLogger | admin绕过 / IAM: MODULES/ORGANIZATION/ADMIN | ✅ |
+| 291+ | 其余Module Version/Schema V2接口 | JWT + AuditLogger | 遵循相同READ/WRITE/ADMIN分级 | ✅ 权限分级一致 |
+
+### 44. AI 分析（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 292 | POST | /ai/analyze-error | JWT + AuditLogger | admin绕过 / IAM: AI_ANALYSIS/ORGANIZATION/WRITE或ADMIN | ✅ |
+| 293 | POST | /ai/form/generate | JWT + AuditLogger | 同上 | ✅ |
+| 294 | POST | /ai/form/generate-with-cmdb | JWT + AuditLogger | 同上 | ✅ |
+| 295 | POST | /ai/form/generate-with-cmdb-skill | JWT + AuditLogger | 同上 | ✅ |
+| 296 | POST | /ai/form/generate-with-cmdb-skill-sse | JWT + AuditLogger | 同上 | ✅ |
+| 297 | POST | /ai/skill/preview-prompt | JWT + AuditLogger | admin绕过 / IAM: AI_ANALYSIS/ORGANIZATION/ADMIN | ✅ Prompt预览仅限ADMIN，防泄露Skill定义 |
+| 298 | GET | /ai/embedding/config-status | JWT + AuditLogger | 无IAM | ⚠️ 缺少IAM权限检查，暴露AI配置状态。建议加AI_ANALYSIS/ORGANIZATION/READ |
+| 299 | POST | /ai/cmdb/vector-search | JWT + AuditLogger | admin绕过 / IAM: AI_ANALYSIS/ORGANIZATION/READ或WRITE或ADMIN | ✅ |
+
+### 45. Admin Embedding/Skills/Cache（JWT + BypassIAMForAdmin，无IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 300 | GET | /admin/embedding/status | JWT + BypassIAMForAdmin | admin绕过 / 非admin隐式拒绝 | ⚠️ 无IAM，无法委派给非admin |
+| 301 | POST | /admin/embedding/sync-all | JWT + BypassIAMForAdmin | 同上 | ⚠️ 高开销操作，应有明确IAM权限 |
+| 302 | GET | /admin/skills | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 303 | GET | /admin/skills/preview-discovery | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 304 | GET | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 305 | POST | /admin/skills | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 306 | PUT | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 307 | DELETE | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 | ⚠️ 不可逆操作应有ADMIN级别IAM |
+| 308 | POST | /admin/skills/:id/activate | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 309 | POST | /admin/skills/:id/deactivate | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 310 | GET | /admin/skills/:id/usage-stats | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 311-314 | /admin/modules/:mid/skill/* | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 315-319 | /admin/module-versions/:id/skill/* | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
+| 320-324 | /admin/embedding-cache/* | JWT + BypassIAMForAdmin | 同上 | ⚠️ DELETE /clear 需要ADMIN级别IAM |
+
+### 46. Workspace Embedding（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 325 | GET | /workspaces/:id/embedding-status | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE/WORKSPACE/READ+ | ✅ |
+| 326 | POST | /workspaces/:id/embedding/sync | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE/WORKSPACE/WRITE+ | ✅ |
+| 327 | POST | /workspaces/:id/embedding/rebuild | JWT + AuditLogger | admin绕过 / IAM: WORKSPACE/WORKSPACE/ADMIN | ✅ rebuild是高开销操作，ADMIN合理 |
+
+### 47. Demo 管理（JWT + BypassIAMForAdmin + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 328 | GET | /demos/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: MODULE_DEMOS/ORGANIZATION/READ | ✅ |
+| 329 | PUT | /demos/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: MODULE_DEMOS/ORGANIZATION/WRITE | ✅ |
+| 330 | DELETE | /demos/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: MODULE_DEMOS/ORGANIZATION/ADMIN | ✅ |
+| 331 | GET | /demos/:id/versions | JWT + BypassIAMForAdmin | admin绕过 / IAM: MODULE_DEMOS/ORGANIZATION/READ | ✅ |
+| 332 | GET | /demos/:id/compare | JWT + BypassIAMForAdmin | 同上 | ✅ |
+| 333 | POST | /demos/:id/rollback | JWT + BypassIAMForAdmin | admin绕过 / IAM: MODULE_DEMOS/ORGANIZATION/WRITE | ✅ |
+| 334 | GET | /demo-versions/:versionId | JWT | admin绕过 / IAM: MODULE_DEMOS/ORGANIZATION/READ | ✅ |
+
+### 48. Schema 管理（JWT + BypassIAMForAdmin + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 335 | GET | /schemas/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: SCHEMAS/ORGANIZATION/READ | ✅ |
+| 336 | PUT | /schemas/:id | JWT + BypassIAMForAdmin | admin绕过 / IAM: SCHEMAS/ORGANIZATION/WRITE | ✅ |
+
+### 49. Task 日志（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 337 | GET | /tasks/:task_id/output/stream | JWT + AuditLogger | admin绕过 / IAM: TASK_LOGS/ORGANIZATION/READ | ✅ |
+| 338 | GET | /tasks/:task_id/logs | JWT + AuditLogger | 同上 | ✅ |
+| 339 | GET | /tasks/:task_id/logs/download | JWT + AuditLogger | 同上 | ✅ |
+| 340 | GET | /terraform/streams/stats | JWT + AuditLogger | 同上 | ✅ |
+
+### 50. Project 管理（JWT + admin绕过 + IAM）
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 341 | GET | /projects | JWT + AuditLogger | admin绕过 / IAM: WORKSPACES/ORGANIZATION/READ | ✅ 复用WORKSPACES权限，因为项目列表与workspace可见性关联 |
+| 342 | GET | /projects/:id/workspaces | JWT + AuditLogger | 同上 | ✅ |
+
+### 51. CMDB 资源索引
+
+**只读接口（仅JWT，无IAM）**:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 343 | GET | /cmdb/search | JWT + AuditLogger | 无IAM | ⚠️ 任何认证用户可搜索所有workspace资源，违反workspace级数据隔离 |
+| 344 | GET | /cmdb/suggestions | JWT + AuditLogger | 无IAM | ⚠️ 同上 |
+| 345 | GET | /cmdb/stats | JWT + AuditLogger | 无IAM | ⚠️ 暴露全局资源统计 |
+| 346 | GET | /cmdb/resource-types | JWT + AuditLogger | 无IAM | ⚠️ 泄露内部资源类型定义 |
+| 347 | GET | /cmdb/workspace-counts | JWT + AuditLogger | 无IAM | ⚠️ 暴露所有workspace的资源规模 |
+| 348 | GET | /cmdb/workspaces/:wid/tree | JWT + AuditLogger | 无IAM | ⚠️ 可查看任意workspace的资源树 |
+| 349 | GET | /cmdb/workspaces/:wid/resources | JWT + AuditLogger | 无IAM | ⚠️ 可查看任意workspace的资源详情 |
+
+**管理接口（JWT + IAM: cmdb/ORGANIZATION/ADMIN）**:
+
+| # | Method | Path | 认证 | 授权 | 合理性 |
+|---|--------|------|------|------|--------|
+| 350 | POST | /cmdb/workspaces/:wid/sync | JWT + AuditLogger | IAM: cmdb/ORGANIZATION/ADMIN | ✅ |
+| 351 | POST | /cmdb/sync-all | JWT + AuditLogger | 同上 | ✅ |
+| 352-358 | /cmdb/external-sources/* | JWT + AuditLogger | IAM: cmdb/ORGANIZATION/ADMIN | ✅ 外部数据源管理需ADMIN |
+
+> **CMDB权限评估**: 注意CMDB管理接口的权限资源类型使用小写`cmdb`而非大写`CMDB`，与其他接口不一致。虽然功能正确（Permission Checker可能不区分大小写），但建议统一为大写以保持代码一致性。
+
+---
+
+## 授权合理性总结
+
+### 统计
+
+| 评级 | 数量 | 说明 |
+|------|------|------|
+| ✅ 合理 | ~310 | 认证+授权完整，权限级别匹配操作敏感度 |
+| ⚠️ 可优化 | ~40 | 功能正确但缺少IAM或审计，可改进 |
+| ❌ 需整改 | ~25 | 存在越权风险或缺少必要认证 |
+
+### 设计亮点
+
+1. **WORKSPACE_STATE_SENSITIVE 权限分离**: State完整内容（含密码/密钥）与State元数据使用不同权限，细粒度控制敏感数据访问
+2. **多资源类型OR授权（RequireAnyPermission）**: workspace下的task操作允许TASK_DATA_ACCESS、WORKSPACE_EXECUTION、WORKSPACE_MANAGEMENT任一满足，灵活支持不同角色模型
+3. **Agent双层校验**: Pool Token + Workspace Check确保Agent只能访问被授权的Workspace
+4. **操作敏感度分级**: READ → WRITE → ADMIN三级权限与GET → POST/PUT → DELETE/危险操作对齐
+
+### 主要风险点
+
+1. **❌ run-task-callback无认证**: 3个接口，可伪造安全扫描结果绕过审批
+2. **❌ secrets无IAM**: 5个接口，任何认证用户可读写所有资源的密文
+3. **❌ manifest无IAM**: 20个接口，可触发未授权的Terraform Apply/Destroy
+4. **⚠️ Dashboard无admin绕过**: 与其他接口模式不一致，admin可能被意外拒绝
+5. **⚠️ CMDB只读接口无数据隔离**: 违反workspace级最小知情原则
+6. **⚠️ admin路由依赖隐式拒绝**: notifications/skills/embedding等通过中间件链隐式阻断非admin，而非显式IAM检查

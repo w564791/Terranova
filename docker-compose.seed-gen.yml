@@ -1,0 +1,39 @@
+version: '3.8'
+
+# ============================================================
+# 用于生成新种子 SQL 的临时数据库
+# 使用方式:
+#   1. 启动:  docker compose -f docker-compose.seed-gen.yml up -d
+#   2. 等待初始化完成 (约 10s):
+#      docker compose -f docker-compose.seed-gen.yml logs -f seed-pg
+#   3. 执行迁移 SQL:
+#      psql -h 127.0.0.1 -p 25432 -U postgres -d iac_platform \
+#        -f backend/migrations/fix_builtin_role_policies.sql
+#   4. 导出新种子数据:
+#      pg_dump -h 127.0.0.1 -p 25432 -U postgres \
+#        --no-owner --no-privileges --data-only \
+#        iac_platform > manifests/db/init_seed_data_new.sql
+#   5. 清理:  docker compose -f docker-compose.seed-gen.yml down -v
+# ============================================================
+
+services:
+  seed-pg:
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    container_name: iac-seed-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "25432:5432"
+    volumes:
+      - seed_pg_data:/var/lib/postgresql
+      - ./manifests/db/init_seed_data.sql:/docker-entrypoint-initdb.d/01-init-seed.sql
+      - ./backend/migrations/fix_builtin_role_policies.sql:/docker-entrypoint-initdb.d/02-fix-role-policies.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  seed_pg_data:

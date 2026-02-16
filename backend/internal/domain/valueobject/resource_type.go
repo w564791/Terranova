@@ -51,6 +51,10 @@ const (
 	ResourceTypeAIConfigs ResourceType = "AI_CONFIGS"
 	// ResourceTypeAIAnalysis AI分析
 	ResourceTypeAIAnalysis ResourceType = "AI_ANALYSIS"
+	// ResourceTypeSystemSettings 系统设置（平台配置、MFA全局配置）
+	ResourceTypeSystemSettings ResourceType = "SYSTEM_SETTINGS"
+	// ResourceTypeRunTasks Run Task管理
+	ResourceTypeRunTasks ResourceType = "RUN_TASKS"
 )
 
 // 项目级资源
@@ -77,6 +81,8 @@ const (
 	ResourceTypeWorkspaceResources ResourceType = "WORKSPACE_RESOURCES"
 	// ResourceTypeWorkspaceManagement 工作空间管理
 	ResourceTypeWorkspaceManagement ResourceType = "WORKSPACE_MANAGEMENT"
+	// ResourceTypeWorkspaceStateSensitive 敏感状态内容查看
+	ResourceTypeWorkspaceStateSensitive ResourceType = "WORKSPACE_STATE_SENSITIVE"
 )
 
 // String 返回资源类型的字符串表示
@@ -96,12 +102,14 @@ func (r ResourceType) IsValid() bool {
 		ResourceTypeIAMProjects, ResourceTypeIAMApplications, ResourceTypeIAMAudit,
 		ResourceTypeIAMUsers, ResourceTypeIAMRoles,
 		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis,
+		ResourceTypeSystemSettings, ResourceTypeRunTasks,
 		// 项目级
 		ResourceTypeProjectSettings, ResourceTypeProjectTeams,
 		ResourceTypeProjectWorkspaces,
 		// 工作空间级
 		ResourceTypeTaskData, ResourceTypeWorkspaceExec,
-		ResourceTypeWorkspaceState, ResourceTypeWorkspaceVars, ResourceTypeWorkspaceResources, ResourceTypeWorkspaceManagement:
+		ResourceTypeWorkspaceState, ResourceTypeWorkspaceVars, ResourceTypeWorkspaceResources, ResourceTypeWorkspaceManagement,
+		ResourceTypeWorkspaceStateSensitive:
 		return true
 	default:
 		return false
@@ -119,7 +127,8 @@ func (r ResourceType) GetScopeLevel() ScopeType {
 		ResourceTypeIAMPermissions, ResourceTypeIAMTeams, ResourceTypeIAMOrganizations,
 		ResourceTypeIAMProjects, ResourceTypeIAMApplications, ResourceTypeIAMAudit,
 		ResourceTypeIAMUsers, ResourceTypeIAMRoles,
-		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis:
+		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis,
+		ResourceTypeSystemSettings, ResourceTypeRunTasks:
 		return ScopeTypeOrganization
 
 	// 项目级资源
@@ -129,7 +138,8 @@ func (r ResourceType) GetScopeLevel() ScopeType {
 
 	// 工作空间级资源
 	case ResourceTypeTaskData, ResourceTypeWorkspaceExec,
-		ResourceTypeWorkspaceState, ResourceTypeWorkspaceVars, ResourceTypeWorkspaceResources, ResourceTypeWorkspaceManagement:
+		ResourceTypeWorkspaceState, ResourceTypeWorkspaceVars, ResourceTypeWorkspaceResources, ResourceTypeWorkspaceManagement,
+		ResourceTypeWorkspaceStateSensitive:
 		return ScopeTypeWorkspace
 
 	default:
