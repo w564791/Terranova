@@ -1,0 +1,25 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: RestrictServiceAccount
+metadata:
+  name: restrict-sa-terraform-ns
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - terraform
+  parameters:
+    bindings:
+      # iac-platform SA 拥有高权限 RBAC（secrets/pods 读写）
+      # 仅允许 backend Pod 和 agent Pod 挂载
+      - serviceAccountName: iac-platform
+        allowedPodLabels:
+          - labels:
+              app.kubernetes.io/name: iac-platform
+              app.kubernetes.io/component: backend
+          - labels:
+              app: iac-platform
+              component: agent
+      # default SA 无额外 RBAC 权限，不做限制

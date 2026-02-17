@@ -1,0 +1,29 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: iac-platform
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+    app.kubernetes.io/component: backend
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iac-platform
+      app.kubernetes.io/component: backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: iac-frontend
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+    app.kubernetes.io/component: frontend
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iac-platform
+      app.kubernetes.io/component: frontend

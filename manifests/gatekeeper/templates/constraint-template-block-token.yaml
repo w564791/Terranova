@@ -1,0 +1,45 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: blocktokenrequest
+spec:
+  crd:
+    spec:
+      names:
+        kind: BlockTokenRequest
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            exemptServiceAccounts:
+              type: array
+              description: >-
+                ServiceAccount names exempt from this policy (e.g. system
+                controllers that need to create tokens).
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package blocktokenrequest
+
+        violation[{"msg": msg}] {
+          input.review.operation == "CREATE"
+          input.review.resource.resource == "serviceaccounts"
+          input.review.subResource == "token"
+
+          sa_name := input.review.name
+          sa_namespace := input.review.namespace
+
+          not is_exempt(sa_name)
+
+          msg := sprintf(
+            "creating token for ServiceAccount %s/%s is denied by policy: TokenRequest API is restricted in this namespace",
+            [sa_namespace, sa_name]
+          )
+        }
+
+        is_exempt(sa_name) {
+          exempt := input.parameters.exemptServiceAccounts[_]
+          exempt == sa_name
+        }

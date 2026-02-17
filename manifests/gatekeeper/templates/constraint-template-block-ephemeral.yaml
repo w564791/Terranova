@@ -1,0 +1,26 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: blockephemeralcontainer
+spec:
+  crd:
+    spec:
+      names:
+        kind: BlockEphemeralContainer
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties: {}
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package blockephemeralcontainer
+
+        violation[{"msg": msg}] {
+          ec := input.review.object.spec.ephemeralContainers
+          count(ec) > 0
+          msg := sprintf(
+            "Pod %s/%s: adding ephemeral containers is not allowed in this namespace",
+            [input.review.namespace, input.review.object.metadata.name]
+          )
+        }

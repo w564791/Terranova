@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: BlockPodConnect
+metadata:
+  name: block-pod-connect-terraform-ns
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - terraform
+  parameters:
+    blockedSubresources:
+      - attach
+      - portforward

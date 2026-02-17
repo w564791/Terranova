@@ -1,0 +1,76 @@
+# Backend NetworkPolicy
+# 允许入站: nginx(8080) + Agent(8080,8090) + Envoy Gateway Proxy(8080)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: iac-platform
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: iac-platform
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    # 1. Frontend (nginx) -> Backend:8080 (API 反向代理)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: iac-platform
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+    # 2. Agent -> Backend:8080 + 8090 (API + WebSocket C&C)
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app: iac-platform
+              component: agent
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8090
+    # 3. Envoy Gateway Proxy -> Backend:8080 (HTTPRoute 直连)
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: iac-platform
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Frontend NetworkPolicy
+# 允许入站: 仅 Envoy Gateway Proxy(443)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: iac-frontend
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+    app.kubernetes.io/component: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: iac-platform
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    # Envoy Gateway Proxy -> Frontend:443
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: iac-platform
+      ports:
+        - protocol: TCP
+          port: 443
