@@ -38,7 +38,7 @@ type TaskQueueManager struct {
 	k8sJobService    *K8sJobService
 	k8sDeploymentSvc *K8sDeploymentService // K8s Pod管理服务（用于槽位管理）
 	agentCCHandler   AgentCCHandler        // Interface for Agent C&C communication
-	pgLocker         *pglock.Locker        // PG advisory locks for workspace serialization
+	pgLocker         LockProvider          // PG advisory locks for workspace serialization
 	pubsub           *pgpubsub.PubSub      // PG NOTIFY/LISTEN for cross-replica dispatch
 }
 
@@ -47,6 +47,13 @@ type AgentCCHandler interface {
 	SendTaskToAgent(agentID string, taskID uint, workspaceID string, action string) error
 	IsAgentAvailable(agentID string, taskType models.TaskType) bool
 	GetConnectedAgents() []string
+}
+
+// LockProvider abstracts advisory lock operations for testability.
+// *pglock.Locker satisfies this interface.
+type LockProvider interface {
+	TryLock(key int64) (bool, error)
+	Unlock(key int64) (bool, error)
 }
 
 // NewTaskQueueManager 创建任务队列管理器

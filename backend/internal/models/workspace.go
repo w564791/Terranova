@@ -319,7 +319,7 @@ type WorkspaceTask struct {
 	PlanHash   string                 `json:"plan_hash" gorm:"type:varchar(64)"`                   // Plan文件SHA256 hash（用于优化）
 	Outputs    JSONB                  `json:"outputs" gorm:"type:jsonb"`                           // Terraform outputs
 	Stage      string                 `json:"stage" gorm:"type:varchar(30);default:pending;index"` // 执行阶段
-	Context    map[string]interface{} `json:"context" gorm:"type:jsonb"`                           // 阶段上下文数据
+	Context    JSONB                  `json:"context" gorm:"type:jsonb"`                           // 阶段上下文数据
 
 	// Plan+Apply流程字段
 	SnapshotID       string `json:"snapshot_id" gorm:"type:varchar(64)"` // 资源版本快照ID（旧版本）
