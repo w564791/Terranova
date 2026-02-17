@@ -74,7 +74,7 @@
         "iam_path": "/service-role/",
         "name": "AccessAnalyzerMonitorServicePolicy_QX25IMWH37",
         "policy_document": "${jsonencode(\n    {\n        \"Version\": \"2012-10-17\",\n        \"Statement\": [\n            {\n                \"Effect\": \"Allow\",\n                \"Action\": \"cloudtrail:GetTrail\",\n                \"Resource\": \"*\"\n            }\n        ]\n    }\n  )}",
-        "source": "tfe-applications.kcprd.com/default/iam/kucoin",
+        "source": "xxxx",
         "use_business_line_as_path": false
       }
     ]

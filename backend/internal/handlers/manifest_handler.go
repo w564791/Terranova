@@ -2530,7 +2530,6 @@ func (h *ManifestHandler) createTaskSnapshot(task *models.WorkspaceTask, workspa
 // Format: {cloudProvider}_{moduleName}
 // Examples:
 //   - terraform-aws-modules/ec2-instance/aws + resourceName="ec2-ff" → AWS_ec2-ff
-//   - tfe-applications.kcprd.com/default/actions/kucoin + resourceName="actions" → AWS_actions
 func (h *ManifestHandler) extractResourceType(moduleSource string, resourceName string) string {
 	// Prefer resourceName (module name)
 	moduleName := resourceName

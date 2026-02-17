@@ -33,7 +33,6 @@ Task 600在执行过程中，**Apply阶段重复执行了完整的Init过程**�
 ```
 Initializing the backend...
 Upgrading modules...
-- Downloading tfe-applications.kcprd.com/default/s3/kucoin 0.0.7
 - AWS_tesr-ccd_ken-aaa-2025-10-12-cde
 - AWS_tesr-ccd_ken-aaa-2025-10-22e
 - AWS_tesr-ccd_ken-aaa-2025-aaaeee
@@ -69,7 +68,6 @@ Initialization time: 94.7 seconds
 ========== INIT BEGIN at 2025-11-08 08:13:06.417 ==========
 Initializing the backend...
 Upgrading modules...
-- Downloading tfe-applications.kcprd.com/default/s3/kucoin 0.0.7
 - AWS_tesr-ccd_ken-aaa-2025-10-12-cde
 - AWS_tesr-ccd_ken-aaa-2025-10-22e
 - AWS_tesr-ccd_ken-aaa-2025-aaaeee
