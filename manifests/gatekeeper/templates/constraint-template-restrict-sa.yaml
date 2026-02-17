@@ -1,0 +1,85 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: restrictserviceaccount
+spec:
+  crd:
+    spec:
+      names:
+        kind: RestrictServiceAccount
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            bindings:
+              type: array
+              description: >-
+                SA-to-Pod label binding rules. Each entry maps a privileged
+                ServiceAccount to the pod labels allowed to mount it.
+                SAs not listed here are unrestricted.
+              items:
+                type: object
+                properties:
+                  serviceAccountName:
+                    type: string
+                  allowedPodLabels:
+                    type: array
+                    description: >-
+                      List of label sets. A pod is allowed to use this SA
+                      if it matches ANY one of these label sets (all labels
+                      in that set must be present on the pod).
+                    items:
+                      type: object
+                      properties:
+                        labels:
+                          type: object
+                          additionalProperties:
+                            type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package restrictserviceaccount
+
+        violation[{"msg": msg}] {
+          sa := _service_account_name
+          pod_labels := _pod_labels
+
+          # Only evaluate SAs that have a binding entry
+          binding := input.parameters.bindings[_]
+          binding.serviceAccountName == sa
+
+          # Deny if pod labels don't match any allowed set
+          not _any_label_set_matches(pod_labels, binding.allowedPodLabels)
+
+          msg := sprintf(
+            "Pod %s/%s with current labels is not allowed to use ServiceAccount %q",
+            [input.review.namespace, input.review.object.metadata.name, sa]
+          )
+        }
+
+        _service_account_name = sa {
+          sa := input.review.object.spec.serviceAccountName
+        }
+
+        _service_account_name = "default" {
+          not input.review.object.spec.serviceAccountName
+        }
+
+        _pod_labels = labels {
+          labels := input.review.object.metadata.labels
+        }
+
+        _pod_labels = {} {
+          not input.review.object.metadata.labels
+        }
+
+        _any_label_set_matches(pod_labels, allowed_sets) {
+          label_set := allowed_sets[_]
+          _match_all_labels(pod_labels, label_set.labels)
+        }
+
+        _match_all_labels(pod_labels, required_labels) {
+          keys := {k | required_labels[k]}
+          matched := {k | some k; keys[k]; pod_labels[k] == required_labels[k]}
+          count(matched) == count(keys)
+        }

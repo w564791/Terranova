@@ -1,0 +1,22 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: BlockExecByLabel
+metadata:
+  name: block-exec-agent-backend
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - terraform
+  parameters:
+    labelSelectors:
+      # Agent pods use the legacy label convention
+      - labels:
+          app: iac-platform
+          component: agent
+      # Backend pods use the kubernetes.io recommended labels
+      - labels:
+          app.kubernetes.io/name: iac-platform
+          app.kubernetes.io/component: backend

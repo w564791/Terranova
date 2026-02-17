@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - config-sync.yaml
+  # ConstraintTemplates
+  - templates/constraint-template-block-exec.yaml
+  - templates/constraint-template-block-token.yaml
+  - templates/constraint-template-restrict-sa.yaml
+  - templates/constraint-template-restrict-secret.yaml
+  - templates/constraint-template-block-ephemeral.yaml
+  - templates/constraint-template-block-pod-connect.yaml
+  - templates/constraint-template-block-privileged.yaml
+  # Constraints
+  - constraints/block-exec-agent-backend.yaml
+  - constraints/block-token-terraform-ns.yaml
+  - constraints/restrict-sa-terraform-ns.yaml
+  - constraints/restrict-secret-terraform-ns.yaml
+  - constraints/block-ephemeral-terraform-ns.yaml
+  - constraints/block-pod-connect-terraform-ns.yaml
+  - constraints/block-privileged-terraform-ns.yaml

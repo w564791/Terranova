@@ -133,11 +133,30 @@ manifests/
 │   ├── Dockerfile                  # DB init container image
 │   ├── entrypoint.sh               # psql entrypoint script
 │   └── init_seed_data.sql          # Schema + seed data
-└── gateway/                        # Envoy Gateway API
+├── gateway/                        # Envoy Gateway API
+│   ├── kustomization.yaml
+│   ├── gateway.yaml                # GatewayClass + Gateway (HTTPS 443 + 8090)
+│   ├── httproute.yaml              # Routes: frontend(/), API(/api/,/health)
+│   └── backend-tls-policy.yaml     # Gateway → backend/frontend HTTPS policy
+└── gatekeeper/                     # OPA Gatekeeper 准入策略（可选，需单独部署）
     ├── kustomization.yaml
-    ├── gateway.yaml                # GatewayClass + Gateway (HTTPS 443 + 8090)
-    ├── httproute.yaml              # Routes: frontend(/), API(/api/,/health)
-    └── backend-tls-policy.yaml     # Gateway → backend/frontend HTTPS policy
+    ├── config-sync.yaml            # 同步 Pod 数据到 Gatekeeper 缓存
+    ├── templates/
+    │   ├── constraint-template-block-exec.yaml       # BlockExecByLabel
+    │   ├── constraint-template-block-token.yaml      # BlockTokenRequest
+    │   ├── constraint-template-restrict-sa.yaml      # RestrictServiceAccount
+    │   ├── constraint-template-restrict-secret.yaml  # RestrictSecretAccess
+    │   ├── constraint-template-block-ephemeral.yaml  # BlockEphemeralContainer
+    │   ├── constraint-template-block-pod-connect.yaml # BlockPodConnect
+    │   └── constraint-template-block-privileged.yaml # BlockPrivilegedPod
+    └── constraints/
+        ├── block-exec-agent-backend.yaml             # 禁止 exec 进 agent/backend Pod
+        ├── block-token-terraform-ns.yaml             # 禁止 terraform NS 的 SA token 创建
+        ├── restrict-sa-terraform-ns.yaml             # 高权限 SA 绑定 Pod 标签
+        ├── restrict-secret-terraform-ns.yaml         # Secret 引用绑定 Pod 标签
+        ├── block-ephemeral-terraform-ns.yaml         # 禁止注入 ephemeral container
+        ├── block-pod-connect-terraform-ns.yaml       # 禁止 attach / port-forward
+        └── block-privileged-terraform-ns.yaml        # 禁止特权容器 / hostPath
 ```
 
 ## Quick Deploy
@@ -219,25 +238,204 @@ curl -k https://localhost:8443/health
 ## Architecture
 
 ```
-External Traffic
-       │
-       ▼
-┌─────────────┐  TLS Terminate (iac-gateway-tls)
-│   Gateway   │  Ports: 443 (Web/API), 8090 (Agent CC)
-└──────┬──────┘
-       │ HTTPS (cert-manager internal CA)
-       ├──────────────────────┐
-       ▼                      ▼
-┌─────────────┐        ┌─────────────┐
-│  Frontend   │        │   Backend   │
-│  (nginx)    │───────▶│  (Go API)   │◀── Agent Pods
-│  :443 TLS   │  proxy │ :8080 :8090 │    (CC WebSocket)
-└─────────────┘        └──────┬──────┘
-                              │
-                              ▼
-                       ┌─────────────┐
-                       │ PostgreSQL  │
-                       └─────────────┘
+External Traffic                         kubectl (exec/attach/debug/...)
+       │                                          │
+       ▼                                          ▼
+┌─────────────────┐ TLS Terminate        ┌────────────────┐
+│     Gateway     │ 443 / 8090           │ kube-apiserver │
+└────────┬────────┘                      └───────┬────────┘
+         │ HTTPS (internal CA)              Admission Webhook
+         │                               ┌───────▼────────┐
+         │                               │   Gatekeeper   │
+         │                               │  (OPA Engine)  │
+         │                               └───────┬────────┘
+         │                                       ╳ exec → backend/agent
+         │                                       ╳ attach / port-forward
+         │                                       ╳ create token → SA
+         │                                       ╳ ephemeral container
+         │                                       ╳ privileged / hostPath
+         │                                       ╳ SA 与 Pod 标签不匹配
+         │                                       ╳ Secret 与 Pod 标签不匹配
+         │
+    ┌────┴──────────────┐
+    ▼                   ▼
+┌──────────┐     ┌─────────────┐
+│ Frontend │     │   Backend   │◀── Agent Pods
+│ (nginx)  │────▶│  (Go API)   │    (CC WebSocket)
+│ :443 TLS │proxy│ :8080 :8090 │
+└──────────┘     └──────┬──────┘
+                        │
+                        ▼
+                 ┌─────────────┐
+                 │ PostgreSQL  │
+                 └─────────────┘
+```
+## 安全增强
+
+### OPA Gatekeeper 准入控制（可选）
+
+#### 为什么需要
+
+`terraform` 命名空间运行的 Pod 持有高敏感凭证：
+
+- **Backend Pod** — 数据库密码、JWT 签名密钥、云平台凭证
+- **Agent Pod** — Terraform state（含云账号 AK/SK）、Provider 缓存的临时凭证
+
+如果攻击者获得了集群内有限的 RBAC 权限（例如 `pods/exec` 或 `serviceaccounts/token`），即可：
+
+1. **`kubectl exec`** 进入 backend/agent Pod，直接读取环境变量或文件系统中的凭证
+2. **`kubectl create token`** 为 `terraform` 命名空间的 ServiceAccount 签发 token，冒充其身份调用 Kubernetes API
+3. **创建 Pod 挂载高权限 SA**（如 `iac-platform`），用任意标签绕过身份绑定，借此获取该 SA 的 RBAC 权限（可读写 Secrets、操作 Pod）
+
+Gatekeeper 策略在准入层拦截这三类操作，作为 RBAC 之外的纵深防御。
+
+#### 影响范围
+
+| 策略 | 拦截操作 | 受保护资源 | 不受影响 |
+|------|---------|-----------|---------|
+| `BlockExecByLabel` | `kubectl exec` / `kubectl cp` | agent + backend Pod | frontend、postgres Pod |
+| `BlockTokenRequest` | `kubectl create token` | terraform NS 所有 SA | 其他 NS 的 SA |
+| `RestrictServiceAccount` | Pod 创建时校验 SA-标签绑定 | `iac-platform` SA 仅允许 backend + agent Pod | 使用 `default` SA 的 Pod |
+| `RestrictSecretAccess` | Pod 创建时校验 Secret-标签绑定 | 所有已声明的 Secret（见下方绑定表） | 未列入保护的 Secret |
+| `BlockEphemeralContainer` | `kubectl debug`（注入调试容器） | terraform NS 所有 Pod | 其他 NS 的 Pod |
+| `BlockPodConnect` | `kubectl attach` / `kubectl port-forward` | terraform NS 所有 Pod | 其他 NS 的 Pod |
+| `BlockPrivilegedPod` | 创建特权容器、hostPath、hostPID、hostNetwork | terraform NS 所有 Pod | 其他 NS 的 Pod |
+
+**Secret-标签绑定关系：**
+
+| Secret | 允许的 Pod 标签 |
+|--------|----------------|
+| `iac-platform`（DB 凭证） | backend, postgres, db-init, agent |
+| `iac-jwt`（JWT 密钥） | backend, agent |
+| `iac-platform-tls` | backend |
+| `iac-frontend-tls` | frontend |
+| `iac-postgres-tls` | postgres |
+| `iac-internal-ca` | db-init |
+| `iac-gateway-tls` | 无（仅 Gateway 资源引用，任何 Pod 不得挂载） |
+
+> **注意**：`kubectl cp` 底层使用 exec，同样被 `BlockExecByLabel` 拦截。
+
+#### 安装 Gatekeeper
+
+Gatekeeper 默认不拦截 CONNECT 操作（exec 属于 CONNECT verb）。安装时必须启用 `enableConnectOperations`：
+
+```bash
+helm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts
+helm repo update
+
+helm install gatekeeper gatekeeper/gatekeeper \
+  --namespace gatekeeper-system --create-namespace \
+  --set enableConnectOperations=true
+
+# 等待就绪
+kubectl -n gatekeeper-system rollout status deployment/gatekeeper-audit
+kubectl -n gatekeeper-system rollout status deployment/gatekeeper-controller-manager
+```
+
+#### 部署策略
+
+Gatekeeper 策略独立于主应用，不包含在 `kustomization.yaml` 中，需单独部署：
+
+```bash
+# 部署所有策略
+kubectl kustomize manifests/gatekeeper | kubectl apply -f -
+
+# 或分步部署（推荐，确保 CRD 先注册）
+# 1. 同步配置 + ConstraintTemplate
+kubectl apply -f manifests/gatekeeper/config-sync.yaml
+kubectl apply -f manifests/gatekeeper/templates/
+
+# 2. 等待 Template CRD 就绪
+for crd in blockexecbylabel blocktokenrequest restrictserviceaccount \
+           restrictsecretaccess blockephemeralcontainer blockpodconnect \
+           blockprivilegedpod; do
+  kubectl wait --for=condition=established \
+    crd/${crd}.constraints.gatekeeper.sh --timeout=60s
+done
+
+# 3. 部署 Constraint 实例
+kubectl apply -f manifests/gatekeeper/constraints/
+```
+
+#### 验证
+
+```bash
+# exec 应被拒绝
+kubectl exec -n terraform <backend-pod> -- /bin/sh   # denied
+kubectl exec -n terraform <agent-pod> -- /bin/sh     # denied
+
+# exec 应允许
+kubectl exec -n terraform <frontend-pod> -- echo ok  # allowed
+kubectl exec -n terraform <postgres-pod> -- echo ok  # allowed
+
+# token 应被拒绝
+kubectl create token iac-platform -n terraform       # denied
+
+# token 应允许（其他命名空间）
+kubectl create token default -n default              # allowed
+
+# SA 绑定 — 用错误标签挂载 iac-platform SA 应被拒绝
+kubectl run rogue --image=busybox -n terraform \
+  --overrides='{"spec":{"serviceAccountName":"iac-platform"}}' -- sleep 3600  # denied
+
+# Secret 绑定 — 用 default SA 挂载受保护 secret 应被拒绝
+kubectl run steal --image=busybox -n terraform \
+  --overrides='{"spec":{"volumes":[{"name":"s","secret":{"secretName":"iac-jwt"}}],
+  "containers":[{"name":"steal","image":"busybox","volumeMounts":
+  [{"name":"s","mountPath":"/s"}]}]}}' -- sleep 3600                          # denied
+
+# ephemeral container — kubectl debug 应被拒绝
+kubectl debug -n terraform <backend-pod> -it --image=busybox                  # denied
+
+# attach / port-forward 应被拒绝
+kubectl attach -n terraform <backend-pod>                                     # denied
+kubectl port-forward -n terraform <postgres-pod> 5432:5432                    # denied
+
+# 特权容器 应被拒绝
+kubectl run priv --image=busybox -n terraform \
+  --overrides='{"spec":{"containers":[{"name":"priv","image":"busybox",
+  "securityContext":{"privileged":true}}]}}' -- sleep 3600                    # denied
+
+# 正常部署不受影响（使用 default SA、无 secret 挂载）
+kubectl run test --image=busybox -n terraform -- sleep 3600                   # allowed
+```
+
+#### 豁免配置
+
+`BlockTokenRequest` 预留了 `exemptServiceAccounts` 参数。如需豁免特定 ServiceAccount（例如系统控制器），编辑 `constraints/block-token-terraform-ns.yaml`：
+
+```yaml
+parameters:
+  exemptServiceAccounts:
+    - system-controller-sa
+```
+
+`RestrictServiceAccount` 通过 `bindings` 配置 SA 与 Pod 标签的绑定关系。如需新增绑定，编辑 `constraints/restrict-sa-terraform-ns.yaml`：
+
+```yaml
+parameters:
+  bindings:
+    - serviceAccountName: iac-platform
+      allowedPodLabels:
+        - labels:
+            app.kubernetes.io/component: backend
+        - labels:
+            component: agent
+    - serviceAccountName: new-privileged-sa
+      allowedPodLabels:
+        - labels:
+            app.kubernetes.io/component: new-component
+```
+
+`RestrictSecretAccess` 通过 `protectedSecrets` 配置 Secret 与 Pod 标签的绑定关系。如需新增受保护 Secret 或扩展允许访问的 Pod，编辑 `constraints/restrict-secret-terraform-ns.yaml`：
+
+```yaml
+parameters:
+  protectedSecrets:
+    - secretName: new-secret
+      allowedPodLabels:
+        - labels:
+            app.kubernetes.io/component: new-component
 ```
 
 ## Uninstall

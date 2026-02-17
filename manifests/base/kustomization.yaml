@@ -9,6 +9,8 @@ resources:
   - service-frontend.yaml
   - deployment-backend.yaml
   - deployment-frontend.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
 secretGenerator:
   - name: iac-jwt
     namespace: terraform

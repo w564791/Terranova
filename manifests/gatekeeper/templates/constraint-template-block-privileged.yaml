@@ -1,0 +1,65 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: blockprivilegedpod
+spec:
+  crd:
+    spec:
+      names:
+        kind: BlockPrivilegedPod
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties: {}
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package blockprivilegedpod
+
+        violation[{"msg": msg}] {
+          c := _all_containers[_]
+          c.securityContext.privileged == true
+          msg := sprintf(
+            "Pod %s/%s: privileged containers are not allowed (container: %s)",
+            [input.review.namespace, _pod_name, c.name]
+          )
+        }
+
+        violation[{"msg": msg}] {
+          input.review.object.spec.hostPID == true
+          msg := sprintf(
+            "Pod %s/%s: hostPID is not allowed",
+            [input.review.namespace, _pod_name]
+          )
+        }
+
+        violation[{"msg": msg}] {
+          input.review.object.spec.hostNetwork == true
+          msg := sprintf(
+            "Pod %s/%s: hostNetwork is not allowed",
+            [input.review.namespace, _pod_name]
+          )
+        }
+
+        violation[{"msg": msg}] {
+          volume := input.review.object.spec.volumes[_]
+          volume.hostPath
+          msg := sprintf(
+            "Pod %s/%s: hostPath volume %q is not allowed",
+            [input.review.namespace, _pod_name, volume.name]
+          )
+        }
+
+        _pod_name = input.review.object.metadata.name
+
+        _all_containers[c] {
+          c := input.review.object.spec.containers[_]
+        }
+
+        _all_containers[c] {
+          c := input.review.object.spec.initContainers[_]
+        }
+
+        _all_containers[c] {
+          c := input.review.object.spec.ephemeralContainers[_]
+        }

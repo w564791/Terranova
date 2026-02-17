@@ -1,0 +1,55 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: blockexecbylabel
+spec:
+  crd:
+    spec:
+      names:
+        kind: BlockExecByLabel
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            labelSelectors:
+              type: array
+              description: >-
+                List of label sets. If a pod matches ANY set (all labels in
+                that set present), exec is denied.
+              items:
+                type: object
+                properties:
+                  labels:
+                    type: object
+                    additionalProperties:
+                      type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package blockexecbylabel
+
+        violation[{"msg": msg}] {
+          input.review.operation == "CONNECT"
+          input.review.resource.resource == "pods"
+          input.review.subResource == "exec"
+
+          pod_name := input.review.name
+          pod_namespace := input.review.namespace
+
+          # Look up the pod from Gatekeeper's cached inventory
+          pod := data.inventory.namespace[pod_namespace]["v1"]["Pod"][pod_name]
+
+          label_set := input.parameters.labelSelectors[_]
+          match_all_labels(pod.metadata.labels, label_set.labels)
+
+          msg := sprintf(
+            "exec into pod %s/%s is denied by policy: pod matches protected label selector",
+            [pod_namespace, pod_name]
+          )
+        }
+
+        match_all_labels(pod_labels, required_labels) {
+          keys := {k | required_labels[k]}
+          matched := {k | some k; keys[k]; pod_labels[k] == required_labels[k]}
+          count(matched) == count(keys)
+        }
