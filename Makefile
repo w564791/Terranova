@@ -1,6 +1,7 @@
 # IaC平台开发工具
 
-.PHONY: help dev-up dev-down db-init db-reset logs build-server build-agent build-all \
+.PHONY: help dev-up dev-down db-init db-reset logs test vet check \
+	build-server build-agent build-all \
 	docker-build docker-build-frontend docker-build-agent docker-build-db-init docker-build-all \
 	docker-push docker-push-frontend docker-push-agent docker-push-db-init docker-push-all \
 	run-server run-agent local-server local-agent \
@@ -68,6 +69,20 @@ test-db: ## 测试数据库连接
 	docker-compose exec postgres psql -U postgres -d iac_platform -c "\dt"
 
 # =============================================================================
+# 测试与检查
+# =============================================================================
+
+vet: ## 运行 go vet 静态检查
+	@echo "运行 go vet..."
+	cd backend && go vet ./...
+
+test: ## 运行后端单元测试
+	@echo "运行后端单元测试..."
+	cd backend && CGO_ENABLED=1 go test -count=1 -timeout 120s $$(go list ./... | grep -v /controllers)
+
+check: vet test ## 运行所有检查（vet + test），构建前必须通过
+
+# =============================================================================
 # 本地构建（Go 二进制）
 # =============================================================================
 
@@ -119,7 +134,7 @@ docker-build-db-init: ## 构建 DB 初始化 Docker 镜像（本地，当前架�
 		manifests/db/
 	@echo "镜像构建完成: $(IMAGE_DB_INIT):$(VERSION)"
 
-docker-build-all: docker-build docker-build-frontend docker-build-agent docker-build-db-init ## 构建所有 Docker 镜像
+docker-build-all: check docker-build docker-build-frontend docker-build-agent docker-build-db-init ## 构建所有 Docker 镜像（先运行测试）
 
 docker-push: ## 构建多架构后端镜像并推送 (arm64+amd64)
 	@echo "构建并推送: $(IMAGE_SERVER):$(VERSION) [$(PLATFORMS)]"
@@ -153,7 +168,7 @@ docker-push-db-init: ## 构建多架构 DB 初始化镜像并推送 (arm64+amd64
 		--push manifests/db/
 	@echo "推送完成"
 
-docker-push-all: docker-push docker-push-frontend docker-push-agent docker-push-db-init ## 构建并推送所有多架构镜像
+docker-push-all: check docker-push docker-push-frontend docker-push-agent docker-push-db-init ## 构建并推送所有多架构镜像（先运行测试）
 
 # =============================================================================
 # Docker 容器运行（编译后运行）
