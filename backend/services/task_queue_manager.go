@@ -900,26 +900,44 @@ func (m *TaskQueueManager) StartPendingTasksMonitor(ctx context.Context, interva
 	}
 }
 
-// checkAndRetryPendingTasks 检查并重试所有pending任务
+// checkAndRetryPendingTasks 检查并重试所有pending任务和已确认的apply_pending任务
 // 【修复】不再排除 Run Triggers 创建的任务，因为 Agent 模式下 ExecuteTriggersCreateOnly 不会调用 TryExecuteNextTask
 // Run Trigger 创建的任务需要通过这个定期检查机制来执行
+// 【修复】同时扫描已确认的 apply_pending 任务——多副本场景下 ExecuteConfirmedApply 通过 PG NOTIFY
+// 跨副本投递可能失败（agent 断连/重连到其他副本），此时需要 monitor 重试
 func (m *TaskQueueManager) checkAndRetryPendingTasks() {
-	// 获取所有有pending任务的workspace（包括 Run Trigger 任务）
+	// 1. 获取所有有pending任务的workspace（包括 Run Trigger 任务）
 	var workspaceIDs []string
 	m.db.Model(&models.WorkspaceTask{}).
 		Where("status = ?", models.TaskStatusPending).
 		Distinct("workspace_id").
 		Pluck("workspace_id", &workspaceIDs)
 
-	if len(workspaceIDs) == 0 {
-		return // 没有pending任务,跳过
+	if len(workspaceIDs) > 0 {
+		log.Printf("[TaskQueue] Checking %d workspaces with pending tasks", len(workspaceIDs))
+		for _, wsID := range workspaceIDs {
+			go m.TryExecuteNextTask(wsID)
+		}
 	}
 
-	log.Printf("[TaskQueue] Checking %d workspaces with pending tasks", len(workspaceIDs))
+	// 2. 获取已确认但未投递的 apply_pending 任务并重试
+	// apply_confirmed_by IS NOT NULL 表示用户已确认，但任务仍在 apply_pending 说明投递失败
+	var confirmedApplyTasks []models.WorkspaceTask
+	m.db.Where("status = ? AND apply_confirmed_by IS NOT NULL",
+		models.TaskStatusApplyPending).
+		Find(&confirmedApplyTasks)
 
-	// 为每个workspace尝试执行下一个任务
-	for _, wsID := range workspaceIDs {
-		go m.TryExecuteNextTask(wsID)
+	if len(confirmedApplyTasks) > 0 {
+		log.Printf("[TaskQueue] Found %d confirmed apply_pending tasks to retry", len(confirmedApplyTasks))
+		for _, task := range confirmedApplyTasks {
+			t := task // capture loop variable
+			go func() {
+				log.Printf("[TaskQueue] Retrying confirmed apply task %d for workspace %s", t.ID, t.WorkspaceID)
+				if err := m.ExecuteConfirmedApply(t.WorkspaceID, t.ID); err != nil {
+					log.Printf("[TaskQueue] Retry failed for confirmed apply task %d: %v", t.ID, err)
+				}
+			}()
+		}
 	}
 }
 
