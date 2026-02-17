@@ -172,7 +172,7 @@ priority: 50
   "managed-by": "ops-team",
   "managed-by-terraform": "true",
   "component": "eks",
-  "karpenter.sh/managed-by": "kucoin",
+  "karpenter.sh/managed-by": "ops",
   "env": "pro",
   "group-name": "eks-node"
 }

@@ -90,7 +90,7 @@ SET capability_prompts = jsonb_set(
 以下内容是配置值，不需要从 CMDB 查询：
 - 实例类型（如 t3.medium, c6i.metal 等）
 - 主机名/节点组名称（如 ken-test）
-- 标签键值对（如 kucoin.io/link-type=core）
+- 标签键值对（如 ops.io/link-type=core）
 - 数量、大小等数值配置
 - 布尔值配置（如启用/禁用某功能）
 

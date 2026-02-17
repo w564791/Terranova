@@ -54,9 +54,9 @@ workspace: ws-abc123
         {
           "index_key": 0,          // 可选，用于 count/for_each
           "attributes": {
-            "id": "kucoin-ops-nodegroup-example-ken-test-a-20260109081400701500000004",
+            "id": "ops-nodegroup-example-ken-test-a-20260109081400701500000004",
             "arn": "arn:aws:autoscaling:...",
-            "name": "kucoin-ops-nodegroup-example-ken-test-a-20260109081400701500000004",
+            "name": "ops-nodegroup-example-ken-test-a-20260109081400701500000004",
             "tags": [...],
             // ... 其他属性
           },
