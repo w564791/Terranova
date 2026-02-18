@@ -218,7 +218,7 @@ func (loop *AIFeedbackLoop) formatValidationResults(result *SolverResult) string
 	}
 
 	if len(result.Warnings) > 0 {
-		sb.WriteString("⚠️ 警告：\n")
+		sb.WriteString(" 警告：\n")
 		for _, warning := range result.Warnings {
 			sb.WriteString(fmt.Sprintf("  - %s\n", warning))
 		}
