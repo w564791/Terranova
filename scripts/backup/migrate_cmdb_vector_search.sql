@@ -165,7 +165,7 @@ BEGIN
     IF col_count = 4 THEN
         RAISE NOTICE '✅ resource_index 表 embedding 列添加成功（共 4 列）';
     ELSE
-        RAISE WARNING '⚠️ resource_index 表部分列添加失败，当前只有 % 列', col_count;
+        RAISE WARNING ' resource_index 表部分列添加失败，当前只有 % 列', col_count;
     END IF;
     
     -- 检查 embedding_tasks 表
@@ -176,7 +176,7 @@ BEGIN
     IF table_exists THEN
         RAISE NOTICE '✅ embedding_tasks 表创建成功';
     ELSE
-        RAISE WARNING '⚠️ embedding_tasks 表创建失败';
+        RAISE WARNING ' embedding_tasks 表创建失败';
     END IF;
     
     -- 检查 AI 配置
@@ -187,12 +187,12 @@ BEGIN
     IF config_count >= 1 THEN
         RAISE NOTICE '✅ embedding AI 配置添加成功（共 % 个配置）', config_count;
     ELSE
-        RAISE WARNING '⚠️ embedding AI 配置添加失败或不完整';
+        RAISE WARNING ' embedding AI 配置添加失败或不完整';
     END IF;
     
     RAISE NOTICE '';
     RAISE NOTICE '========================================';
-    RAISE NOTICE '⚠️ 重要提示：';
+    RAISE NOTICE ' 重要提示：';
     RAISE NOTICE '1. 请在 AI 配置管理界面填写 OpenAI API Key';
     RAISE NOTICE '2. 向量索引将在有数据后自动创建';
     RAISE NOTICE '3. 对于小数据集，精确搜索性能足够';

@@ -2650,7 +2650,7 @@ const renderField = (field: FieldConfig, value: unknown) => {
       className={hasPlaceholder ? styles.placeholderField : ''}
       help={hasPlaceholder ? (
         <span className={styles.placeholderHelp}>
-          ⚠️ 请替换为实际值
+           请替换为实际值
         </span>
       ) : undefined}
     >

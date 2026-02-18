@@ -144,7 +144,7 @@ export const StateUpload: React.FC<StateUploadProps> = ({ workspaceId, onUploadS
             type="error"
             className={styles.forceWarning}
             icon={<WarningOutlined />}
-            message="⚠️ 危险操作警告"
+            message=" 危险操作警告"
             description={
               <div>
                 <p>

@@ -562,7 +562,7 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
     
     // 如果 groups 为空或无效，使用默认分组
     if (!groups || !Array.isArray(groups) || groups.length === 0) {
-      // console.log('⚠️ Using DEFAULT_GROUPS because groups is empty or invalid');
+      // console.log(' Using DEFAULT_GROUPS because groups is empty or invalid');
       return DEFAULT_GROUPS;
     }
     
@@ -571,7 +571,7 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
     // console.log('✅ Valid groups:', validGroups);
     
     if (validGroups.length === 0) {
-      // console.log('⚠️ Using DEFAULT_GROUPS because no valid groups found');
+      // console.log(' Using DEFAULT_GROUPS because no valid groups found');
       return DEFAULT_GROUPS;
     }
     

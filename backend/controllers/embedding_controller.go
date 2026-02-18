@@ -3,7 +3,9 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"time"
 
+	"iac-platform/internal/models"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -61,6 +63,41 @@ func (c *EmbeddingController) GetWorkspaceEmbeddingStatus(ctx *gin.Context) {
 	}
 
 	status := c.worker.GetWorkspaceStatus(workspaceID)
+
+	// 填充 CMDB 同步状态
+	var workspace models.Workspace
+	if err := c.db.Select("cmdb_sync_status", "cmdb_sync_triggered_by", "cmdb_sync_started_at", "cmdb_sync_completed_at").
+		Where("workspace_id = ?", workspaceID).First(&workspace).Error; err == nil {
+
+		status.CMDBSyncStatus = workspace.CMDBSyncStatus
+		status.CMDBSyncTriggeredBy = workspace.CMDBSyncTriggeredBy
+		if workspace.CMDBSyncStartedAt != nil {
+			t := workspace.CMDBSyncStartedAt.Format(time.RFC3339)
+			status.CMDBSyncStartedAt = &t
+		}
+		if workspace.CMDBSyncCompletedAt != nil {
+			t := workspace.CMDBSyncCompletedAt.Format(time.RFC3339)
+			status.CMDBSyncCompletedAt = &t
+		}
+
+		// 自动转换：如果状态是 syncing 但已无活跃任务，则转为 idle
+		if workspace.CMDBSyncStatus == models.CMDBSyncStatusSyncing &&
+			status.PendingTasks == 0 && status.ProcessingTasks == 0 {
+			now := time.Now()
+			c.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(map[string]interface{}{
+				"cmdb_sync_status":       models.CMDBSyncStatusIdle,
+				"cmdb_sync_completed_at": now,
+			})
+			status.CMDBSyncStatus = models.CMDBSyncStatusIdle
+			t := now.Format(time.RFC3339)
+			status.CMDBSyncCompletedAt = &t
+			log.Printf("[Embedding] Auto-transitioned workspace %s CMDB sync status to idle (no active tasks)", workspaceID)
+		}
+	}
+
+	// 综合判断是否繁忙
+	status.IsBusy = status.CMDBSyncStatus == models.CMDBSyncStatusSyncing ||
+		status.PendingTasks > 0 || status.ProcessingTasks > 0
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -129,8 +166,32 @@ func (c *EmbeddingController) SyncWorkspace(ctx *gin.Context) {
 		return
 	}
 
+	// 互斥检查：是否有同步任务在运行
+	if busy, reason := c.isWorkspaceBusy(workspaceID); busy {
+		ctx.JSON(http.StatusConflict, gin.H{
+			"code":    409,
+			"message": reason,
+		})
+		return
+	}
+
+	// 标记同步状态
+	now := time.Now()
+	c.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(map[string]interface{}{
+		"cmdb_sync_status":       models.CMDBSyncStatusSyncing,
+		"cmdb_sync_triggered_by": models.CMDBSyncTriggerManual,
+		"cmdb_sync_started_at":   now,
+		"cmdb_sync_completed_at": nil,
+	})
+
 	err := c.worker.SyncWorkspace(workspaceID)
 	if err != nil {
+		// 同步失败，重置状态
+		completedAt := time.Now()
+		c.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(map[string]interface{}{
+			"cmdb_sync_status":       models.CMDBSyncStatusIdle,
+			"cmdb_sync_completed_at": completedAt,
+		})
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": err.Error(),
@@ -168,8 +229,32 @@ func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 		return
 	}
 
+	// 互斥检查：是否有同步任务在运行
+	if busy, reason := c.isWorkspaceBusy(workspaceID); busy {
+		ctx.JSON(http.StatusConflict, gin.H{
+			"code":    409,
+			"message": reason,
+		})
+		return
+	}
+
+	// 标记同步状态
+	now := time.Now()
+	c.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(map[string]interface{}{
+		"cmdb_sync_status":       models.CMDBSyncStatusSyncing,
+		"cmdb_sync_triggered_by": models.CMDBSyncTriggerRebuild,
+		"cmdb_sync_started_at":   now,
+		"cmdb_sync_completed_at": nil,
+	})
+
 	err := c.worker.RebuildWorkspace(workspaceID)
 	if err != nil {
+		// 重建失败，重置状态
+		completedAt := time.Now()
+		c.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(map[string]interface{}{
+			"cmdb_sync_status":       models.CMDBSyncStatusIdle,
+			"cmdb_sync_completed_at": completedAt,
+		})
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": err.Error(),
@@ -390,4 +475,43 @@ func (c *EmbeddingController) fallbackToKeywordSearch(ctx *gin.Context, req Vect
 			"fallback_reason": reason,
 		},
 	})
+}
+
+// isWorkspaceBusy 检查 workspace 是否有同步任务在运行
+// 返回 (busy, reason)
+func (c *EmbeddingController) isWorkspaceBusy(workspaceID string) (bool, string) {
+	// 1. 检查 CMDB 同步状态
+	var workspace models.Workspace
+	if err := c.db.Select("cmdb_sync_status", "cmdb_sync_triggered_by").
+		Where("workspace_id = ?", workspaceID).First(&workspace).Error; err != nil {
+		log.Printf("[Embedding] Failed to check workspace %s sync status: %v", workspaceID, err)
+		return false, ""
+	}
+
+	if workspace.CMDBSyncStatus == models.CMDBSyncStatusSyncing {
+		triggerDesc := map[string]string{
+			models.CMDBSyncTriggerAuto:    "apply 后自动同步",
+			models.CMDBSyncTriggerManual:  "手动同步",
+			models.CMDBSyncTriggerRebuild: "重建",
+		}
+		desc := triggerDesc[workspace.CMDBSyncTriggeredBy]
+		if desc == "" {
+			desc = "同步"
+		}
+		return true, "当前有" + desc + "任务正在运行，请等待完成后再操作"
+	}
+
+	// 2. 检查是否有正在处理的 embedding 任务
+	var activeTasks int64
+	c.db.Model(&models.EmbeddingTask{}).
+		Where("workspace_id = ? AND status IN ?", workspaceID, []string{
+			models.EmbeddingTaskStatusPending,
+			models.EmbeddingTaskStatusProcessing,
+		}).Count(&activeTasks)
+
+	if activeTasks > 0 {
+		return true, "当前有 embedding 任务正在处理中，请等待完成后再操作"
+	}
+
+	return false, ""
 }

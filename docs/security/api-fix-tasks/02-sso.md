@@ -19,23 +19,23 @@
 
 | # | Method | Path | 认证 | 授权 | 状态 |
 |---|--------|------|------|------|------|
-| 6 | GET | /api/v1/auth/sso/identities | JWT | 无 | ⚠️ 缺AuditLogger |
-| 7 | POST | /api/v1/auth/sso/identities/link | JWT | 无 | ⚠️ 缺AuditLogger |
-| 8 | DELETE | /api/v1/auth/sso/identities/:id | JWT | 无 | ⚠️ 缺AuditLogger |
-| 9 | PUT | /api/v1/auth/sso/identities/:id/primary | JWT | 无 | ⚠️ 缺AuditLogger |
+| 6 | GET | /api/v1/auth/sso/identities | JWT | 无 |  缺AuditLogger |
+| 7 | POST | /api/v1/auth/sso/identities/link | JWT | 无 |  缺AuditLogger |
+| 8 | DELETE | /api/v1/auth/sso/identities/:id | JWT | 无 |  缺AuditLogger |
+| 9 | PUT | /api/v1/auth/sso/identities/:id/primary | JWT | 无 |  缺AuditLogger |
 
 ### SSO 管理端点（JWT + RequireRole("admin")，旧版）
 
 | # | Method | Path | 认证 | 授权 | 状态 |
 |---|--------|------|------|------|------|
-| 10 | GET | /api/v1/admin/sso/providers | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 11 | GET | /api/v1/admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 12 | POST | /api/v1/admin/sso/providers | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 13 | PUT | /api/v1/admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 14 | DELETE | /api/v1/admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 15 | GET | /api/v1/admin/sso/config | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 16 | PUT | /api/v1/admin/sso/config | JWT | RequireRole("admin") | ⚠️ 旧版Role |
-| 17 | GET | /api/v1/admin/sso/logs | JWT | RequireRole("admin") | ⚠️ 旧版Role |
+| 10 | GET | /api/v1/admin/sso/providers | JWT | RequireRole("admin") |  旧版Role |
+| 11 | GET | /api/v1/admin/sso/providers/:id | JWT | RequireRole("admin") |  旧版Role |
+| 12 | POST | /api/v1/admin/sso/providers | JWT | RequireRole("admin") |  旧版Role |
+| 13 | PUT | /api/v1/admin/sso/providers/:id | JWT | RequireRole("admin") |  旧版Role |
+| 14 | DELETE | /api/v1/admin/sso/providers/:id | JWT | RequireRole("admin") |  旧版Role |
+| 15 | GET | /api/v1/admin/sso/config | JWT | RequireRole("admin") |  旧版Role |
+| 16 | PUT | /api/v1/admin/sso/config | JWT | RequireRole("admin") |  旧版Role |
+| 17 | GET | /api/v1/admin/sso/logs | JWT | RequireRole("admin") |  旧版Role |
 
 ## 需修复项
 

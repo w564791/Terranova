@@ -1079,6 +1079,20 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 		return
 	}
 
+	// 【安全】applying 阶段取消可能导致 Terraform state 损坏，需要 force 确认
+	if task.Stage == "applying" {
+		forceStr := ctx.Query("force")
+		if forceStr != "true" {
+			ctx.JSON(http.StatusConflict, gin.H{
+				"error":          "Task is currently applying. Cancelling during apply may corrupt Terraform state. Use force=true to confirm.",
+				"requires_force": true,
+				"stage":          task.Stage,
+			})
+			return
+		}
+		log.Printf("[CancelTask] ⚠️ Force cancelling task %d during apply stage (may cause state corruption)", taskID)
+	}
+
 	// 如果任务正在Agent上运行，发送取消信号
 	if task.Status == models.TaskStatusRunning && task.AgentID != nil {
 		// 获取Agent信息 - 注意：agent_id是主键，不是id

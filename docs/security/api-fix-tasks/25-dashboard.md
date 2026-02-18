@@ -2,14 +2,14 @@
 
 > 源文件: `router_dashboard.go`
 > API 数量: 2
-> 状态: ⚠️ 缺少 admin 绕过
+> 状态:  缺少 admin 绕过
 
 ## 全部 API 列表
 
 | # | Method | Path | 认证 | 授权 | 目标权限 | 状态 |
 |---|--------|------|------|------|----------|------|
-| 1 | GET | /api/v1/dashboard/overview | JWT+AuditLogger | ORGANIZATION/ORG/READ（无admin绕过） | ORGANIZATION/ORG/READ + admin绕过 | ⚠️ |
-| 2 | GET | /api/v1/dashboard/compliance | JWT+AuditLogger | ORGANIZATION/ORG/READ（无admin绕过） | ORGANIZATION/ORG/READ + admin绕过 | ⚠️ |
+| 1 | GET | /api/v1/dashboard/overview | JWT+AuditLogger | ORGANIZATION/ORG/READ（无admin绕过） | ORGANIZATION/ORG/READ + admin绕过 |  |
+| 2 | GET | /api/v1/dashboard/compliance | JWT+AuditLogger | ORGANIZATION/ORG/READ（无admin绕过） | ORGANIZATION/ORG/READ + admin绕过 |  |
 
 ## 修复方案
 

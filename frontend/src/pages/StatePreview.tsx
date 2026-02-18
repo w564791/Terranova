@@ -779,7 +779,7 @@ const StatePreview: React.FC = () => {
         {rollbackForce && (
           <Alert
             type="error"
-            message="⚠️ 危险操作警告"
+            message=" 危险操作警告"
             description={
               <div>
                 <p><strong>强制回滚将跳过所有安全校验，可能导致：</strong></p>

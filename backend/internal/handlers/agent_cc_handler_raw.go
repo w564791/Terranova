@@ -26,6 +26,11 @@ import (
 // TaskDispatchChannel is the PG NOTIFY channel used for cross-replica agent task dispatch.
 const TaskDispatchChannel = "task_dispatch"
 
+// LogStreamForwardChannel is the PG NOTIFY channel used for forwarding
+// real-time log lines across replicas so that frontends connected to any
+// replica can see live task output.
+const LogStreamForwardChannel = "log_stream_forward"
+
 // TaskDispatchMessage is the payload sent over PG NOTIFY when the leader
 // cannot deliver a task locally and needs another replica to handle it.
 type TaskDispatchMessage struct {
@@ -36,6 +41,19 @@ type TaskDispatchMessage struct {
 	SourcePod   string `json:"source_pod"`
 }
 
+// LogStreamForwardMessage is the payload sent over PG NOTIFY to forward
+// real-time log lines from the replica that receives them (via agent WebSocket)
+// to all other replicas for frontend delivery.
+type LogStreamForwardMessage struct {
+	TaskID    uint   `json:"task_id"`
+	Type      string `json:"type"`
+	Line      string `json:"line"`
+	LineNum   int    `json:"line_num"`
+	Stage     string `json:"stage,omitempty"`
+	Status    string `json:"status,omitempty"`
+	SourcePod string `json:"source_pod"`
+}
+
 // RawAgentCCHandler handles Agent C&C WebSocket connections using raw http.Handler
 type RawAgentCCHandler struct {
 	db            *gorm.DB
@@ -44,6 +62,7 @@ type RawAgentCCHandler struct {
 	upgrader      gorillaws.Upgrader
 	agents        map[string]*RawAgentConnection
 	mu            sync.RWMutex
+	podName       string // cached pod name for PG NOTIFY source identification
 }
 
 // RawAgentConnection represents a C&C connection to an agent
@@ -61,9 +80,14 @@ type RawAgentConnection struct {
 
 // NewRawAgentCCHandler creates a new raw C&C handler
 func NewRawAgentCCHandler(db *gorm.DB, streamManager *services.OutputStreamManager) *RawAgentCCHandler {
+	podName := os.Getenv("POD_NAME")
+	if podName == "" {
+		podName, _ = os.Hostname()
+	}
 	return &RawAgentCCHandler{
 		db:            db,
 		streamManager: streamManager,
+		podName:       podName,
 		upgrader: gorillaws.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -693,6 +717,31 @@ func (h *RawAgentCCHandler) handleLogStream(agentConn *RawAgentConnection, paylo
 			stream.Broadcast(outputMsg) // Use Broadcast, not Publish
 		}
 	}
+
+	// Forward via PG NOTIFY for cross-replica delivery.
+	// Other replicas that have frontend WebSocket clients subscribed to this
+	// task will receive this message and broadcast it to their local clients.
+	forwardMsg := LogStreamForwardMessage{
+		TaskID:    uint(taskID),
+		Type:      msgType,
+		Line:      line,
+		LineNum:   int(lineNum),
+		Stage:     stage,
+		Status:    status,
+		SourcePod: h.podName,
+	}
+	// PG NOTIFY has an 8000 byte payload limit. Truncate line if necessary.
+	msgBytes, err := json.Marshal(forwardMsg)
+	if err == nil && len(msgBytes) > 7500 {
+		// Truncate the line to fit within PG NOTIFY limits
+		excess := len(msgBytes) - 7500
+		if len(forwardMsg.Line) > excess {
+			forwardMsg.Line = forwardMsg.Line[:len(forwardMsg.Line)-excess] + "...(truncated)"
+		}
+	}
+	if err := pgpubsub.Notify(h.db, LogStreamForwardChannel, forwardMsg); err != nil {
+		log.Printf("[LogStream] Failed to forward log via PG NOTIFY for task %d: %v", uint(taskID), err)
+	}
 }
 
 // handleResourceStatusUpdate updates resource status in database (Agent mode)
@@ -1092,4 +1141,42 @@ func (h *RawAgentCCHandler) SetupTaskDispatchListener(pubsub *pgpubsub.PubSub) {
 	})
 
 	log.Printf("[TaskDispatch] Listener configured on pod %s", podName)
+}
+
+// SetupLogStreamListener subscribes to the LogStreamForwardChannel so that
+// log lines forwarded from other replicas (via PG NOTIFY) are broadcast to
+// local frontend WebSocket subscribers. This enables real-time log streaming
+// in a multi-replica deployment where the agent WebSocket connects to one
+// replica but the frontend may be connected to another.
+func (h *RawAgentCCHandler) SetupLogStreamListener(pubsub *pgpubsub.PubSub) {
+	pubsub.Subscribe(LogStreamForwardChannel, func(payload string) {
+		var msg LogStreamForwardMessage
+		if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+			log.Printf("[LogStream] Failed to unmarshal forwarded log message: %v", err)
+			return
+		}
+
+		// Skip messages that originated from this pod — we already broadcast locally.
+		if msg.SourcePod == h.podName {
+			return
+		}
+
+		// Broadcast to local OutputStreamManager for any frontend clients on this replica.
+		if h.streamManager != nil {
+			stream := h.streamManager.GetOrCreate(msg.TaskID)
+			if stream != nil {
+				outputMsg := services.OutputMessage{
+					Type:      msg.Type,
+					Line:      msg.Line,
+					Timestamp: time.Now(),
+					LineNum:   msg.LineNum,
+					Stage:     msg.Stage,
+					Status:    msg.Status,
+				}
+				stream.Broadcast(outputMsg)
+			}
+		}
+	})
+
+	log.Printf("[LogStream] Cross-replica log stream listener configured on pod %s", h.podName)
 }

@@ -1221,7 +1221,7 @@ type WidgetType =
 |------|------|
 | **对应ValueType** | TypeObject (8) |
 | **数据类型** | `object` (properties) |
-| **实现状态** | ⚠️ 暂时复用KeyValueWidget |
+| **实现状态** |  暂时复用KeyValueWidget |
 | **典型场景** | 根卷配置、网络接口配置 |
 
 **特点：**
@@ -1256,7 +1256,7 @@ type WidgetType =
 |------|------|
 | **对应ValueType** | TypeListObject (11) |
 | **数据类型** | `array` (items: object) |
-| **实现状态** | ⚠️ 暂时复用KeyValueWidget |
+| **实现状态** |  暂时复用KeyValueWidget |
 | **典型场景** | EBS卷配置列表、入站规则列表 |
 
 **支持的属性：**
@@ -1332,7 +1332,7 @@ type WidgetType =
 |------|------|
 | **对应ValueType** | TypeJsonString (9) |
 | **数据类型** | `string` (format: json) |
-| **实现状态** | ⚠️ 暂时复用TextWidget |
+| **实现状态** |  暂时复用TextWidget |
 | **典型场景** | IAM策略文档、Lambda配置 |
 
 **支持的属性：**
@@ -1365,7 +1365,7 @@ type WidgetType =
 |------|------|
 | **对应ValueType** | TypeString (4) (sensitive) |
 | **数据类型** | `string` |
-| **实现状态** | ⚠️ 暂时复用TextWidget |
+| **实现状态** |  暂时复用TextWidget |
 | **典型场景** | 数据库密码、API密钥 |
 
 **支持的属性：**
@@ -1395,7 +1395,7 @@ type WidgetType =
 |------|------|
 | **对应ValueType** | TypeString (4) |
 | **数据类型** | `string` (format: date-time) |
-| **实现状态** | ⚠️ 暂时复用TextWidget |
+| **实现状态** |  暂时复用TextWidget |
 | **典型场景** | 计划任务时间、过期时间 |
 
 **支持的属性：**
@@ -2338,10 +2338,10 @@ variable "vpc_id" {
 | `enable` 启用字段 | ✅ 已实现 | CascadeEngine + FormRenderer |
 | `disable` 禁用字段 | ✅ 已实现 | CascadeEngine + FormRenderer（支持禁用原因提示） |
 | `setValue` 设置值 | ✅ 已实现 | CascadeEngine + FormRenderer |
-| `setOptions` 设置选项 | ⚠️ 部分实现 | CascadeEngine 支持，Widget 层面待集成 |
+| `setOptions` 设置选项 |  部分实现 | CascadeEngine 支持，Widget 层面待集成 |
 | `setRequired` 设置必填 | ✅ 已实现 | CascadeEngine + FormRenderer |
 | `clearValue` 清空值 | ✅ 已实现 | CascadeEngine + FormRenderer |
-| `reloadSource` 重新加载数据源 | ⚠️ 部分实现 | CascadeEngine 支持，数据源层面待集成 |
+| `reloadSource` 重新加载数据源 |  部分实现 | CascadeEngine 支持，数据源层面待集成 |
 | **前端集成** | | |
 | schema-form-renderer.html 预览 | ✅ 已实现 | 基础级联功能 |
 | React FormRenderer 组件 | ✅ 已实现 | 完整级联功能 |

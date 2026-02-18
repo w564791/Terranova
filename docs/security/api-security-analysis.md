@@ -656,16 +656,16 @@ manifests/*
 
 > 更新时间: 2026-02-15
 > 分析内容: 每个 API 的认证方式、授权资源、权限级别、以及合理性评估
-> 图例: ✅ 合理 | ⚠️ 可优化 | ❌ 需整改
+> 图例: ✅ 合理 |  可优化 | ❌ 需整改
 
 ### 1. 公开端点（无认证）
 
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
 | 1 | GET | /health | 无 | 无 | ✅ 健康检查端点，负载均衡/容器编排必需公开 |
-| 2 | GET | /metrics | 无 | 无 | ⚠️ Prometheus指标暴露系统内部信息（goroutine数、请求延迟、内存使用），建议加Basic Auth或独立metrics token |
+| 2 | GET | /metrics | 无 | 无 |  Prometheus指标暴露系统内部信息（goroutine数、请求延迟、内存使用），建议加Basic Auth或独立metrics token |
 | 3 | GET | /static/* | 无 | 无 | ✅ 静态资源，无敏感数据 |
-| 4 | GET | /swagger/*any | 无 | 无 | ⚠️ 生产环境建议禁用或加认证，API文档暴露全部接口定义 |
+| 4 | GET | /swagger/*any | 无 | 无 |  生产环境建议禁用或加认证，API文档暴露全部接口定义 |
 
 ### 2. 系统初始化（无认证）
 
@@ -700,23 +700,23 @@ manifests/*
 
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
-| 19 | GET | /auth/sso/identities | JWT | 无 | ⚠️ 用户自服务操作，JWT认证可接受，但缺少AuditLogger中间件记录操作。Handler应确保仅返回当前用户自身的身份 |
-| 20 | POST | /auth/sso/identities/link | JWT | 无 | ⚠️ 绑定SSO身份。风险：攻击者获取JWT后可绑定自控SSO身份作为后门。建议加AuditLogger并确保handler校验user_id一致性 |
-| 21 | DELETE | /auth/sso/identities/:id | JWT | 无 | ⚠️ 解绑SSO身份。风险：可绕过组织强制SSO绑定策略。建议加AuditLogger |
-| 22 | PUT | /auth/sso/identities/:id/primary | JWT | 无 | ⚠️ 设置主要登录方式。同上，缺少审计日志 |
+| 19 | GET | /auth/sso/identities | JWT | 无 |  用户自服务操作，JWT认证可接受，但缺少AuditLogger中间件记录操作。Handler应确保仅返回当前用户自身的身份 |
+| 20 | POST | /auth/sso/identities/link | JWT | 无 |  绑定SSO身份。风险：攻击者获取JWT后可绑定自控SSO身份作为后门。建议加AuditLogger并确保handler校验user_id一致性 |
+| 21 | DELETE | /auth/sso/identities/:id | JWT | 无 |  解绑SSO身份。风险：可绕过组织强制SSO绑定策略。建议加AuditLogger |
+| 22 | PUT | /auth/sso/identities/:id/primary | JWT | 无 |  设置主要登录方式。同上，缺少审计日志 |
 
 ### 6. SSO 管理端点（JWT + RequireRole("admin")）
 
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
-| 23 | GET | /admin/sso/providers | JWT | RequireRole("admin") | ⚠️ 使用旧版role检查，无IAM权限。功能正确但无法委派给非admin的安全运维人员 |
-| 24 | GET | /admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 同上 |
-| 25 | POST | /admin/sso/providers | JWT | RequireRole("admin") | ⚠️ 同上。创建SSO Provider是高权限操作，admin-only合理，但应迁移到IAM体系 |
-| 26 | PUT | /admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 同上 |
-| 27 | DELETE | /admin/sso/providers/:id | JWT | RequireRole("admin") | ⚠️ 同上 |
-| 28 | GET | /admin/sso/config | JWT | RequireRole("admin") | ⚠️ 同上 |
-| 29 | PUT | /admin/sso/config | JWT | RequireRole("admin") | ⚠️ 同上。全局SSO配置修改应为ADMIN级别 |
-| 30 | GET | /admin/sso/logs | JWT | RequireRole("admin") | ⚠️ 同上 |
+| 23 | GET | /admin/sso/providers | JWT | RequireRole("admin") |  使用旧版role检查，无IAM权限。功能正确但无法委派给非admin的安全运维人员 |
+| 24 | GET | /admin/sso/providers/:id | JWT | RequireRole("admin") |  同上 |
+| 25 | POST | /admin/sso/providers | JWT | RequireRole("admin") |  同上。创建SSO Provider是高权限操作，admin-only合理，但应迁移到IAM体系 |
+| 26 | PUT | /admin/sso/providers/:id | JWT | RequireRole("admin") |  同上 |
+| 27 | DELETE | /admin/sso/providers/:id | JWT | RequireRole("admin") |  同上 |
+| 28 | GET | /admin/sso/config | JWT | RequireRole("admin") |  同上 |
+| 29 | PUT | /admin/sso/config | JWT | RequireRole("admin") |  同上。全局SSO配置修改应为ADMIN级别 |
+| 30 | GET | /admin/sso/logs | JWT | RequireRole("admin") |  同上 |
 
 ### 7. WebSocket 端点（JWT）
 
@@ -724,7 +724,7 @@ manifests/*
 |---|--------|------|------|------|--------|
 | 31 | GET | /ws/editing/:session_id | JWT | 无 | ✅ 协同编辑WebSocket，JWT认证足够，session_id本身提供访问隔离 |
 | 32 | GET | /ws/sessions | JWT | 无 | ✅ 查看活跃会话列表，仅需认证 |
-| 33 | GET | /ws/agent-pools/:pool_id/metrics | JWT | 无 | ⚠️ 可查看任意pool的实时指标。建议增加AGENT_POOLS READ权限校验 |
+| 33 | GET | /ws/agent-pools/:pool_id/metrics | JWT | 无 |  可查看任意pool的实时指标。建议增加AGENT_POOLS READ权限校验 |
 
 ### 8. Agent API（Pool Token认证）
 
@@ -824,10 +824,10 @@ manifests/*
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
 | 73 | POST | /user/reset-password | JWT + BypassIAMForAdmin | admin绕过 / IAM: USER_MANAGEMENT/USER/WRITE | ✅ 管理员重置他人密码，有完整权限检查 |
-| 74 | POST | /user/change-password | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 修改自身密码，handler中校验仅能改自己的。风险低，但SSO-only用户不应能设本地密码 |
-| 75 | POST | /user/tokens | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 创建API Token，handler限制只能管理自己的Token。建议可选的组织级策略限制Token创建 |
-| 76 | GET | /user/tokens | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 同上，列出自己的Token |
-| 77 | DELETE | /user/tokens/:token_name | JWT + BypassIAMForAdmin | 无IAM | ⚠️ 同上，撤销自己的Token |
+| 74 | POST | /user/change-password | JWT + BypassIAMForAdmin | 无IAM |  修改自身密码，handler中校验仅能改自己的。风险低，但SSO-only用户不应能设本地密码 |
+| 75 | POST | /user/tokens | JWT + BypassIAMForAdmin | 无IAM |  创建API Token，handler限制只能管理自己的Token。建议可选的组织级策略限制Token创建 |
+| 76 | GET | /user/tokens | JWT + BypassIAMForAdmin | 无IAM |  同上，列出自己的Token |
+| 77 | DELETE | /user/tokens/:token_name | JWT + BypassIAMForAdmin | 无IAM |  同上，撤销自己的Token |
 
 ### 19. Workspace 管理（JWT + admin绕过 + IAM）
 
@@ -1136,13 +1136,13 @@ manifests/*
 
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
-| 249 | GET | /notifications | JWT + BypassIAMForAdmin | admin绕过 / 非admin隐式拒绝 | ⚠️ 无IAM权限检查，依赖中间件链隐式行为。非admin无法访问但无法委派权限 |
-| 250 | GET | /notifications/available | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
-| 251 | GET | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
-| 252 | POST | /notifications | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
-| 253 | PUT | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
-| 254 | DELETE | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
-| 255 | POST | /notifications/:nid/test | JWT + BypassIAMForAdmin | 同上 | ⚠️ 同上 |
+| 249 | GET | /notifications | JWT + BypassIAMForAdmin | admin绕过 / 非admin隐式拒绝 |  无IAM权限检查，依赖中间件链隐式行为。非admin无法访问但无法委派权限 |
+| 250 | GET | /notifications/available | JWT + BypassIAMForAdmin | 同上 |  同上 |
+| 251 | GET | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 |  同上 |
+| 252 | POST | /notifications | JWT + BypassIAMForAdmin | 同上 |  同上 |
+| 253 | PUT | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 |  同上 |
+| 254 | DELETE | /notifications/:nid | JWT + BypassIAMForAdmin | 同上 |  同上 |
+| 255 | POST | /notifications/:nid/test | JWT + BypassIAMForAdmin | 同上 |  同上 |
 
 ### 42. Manifest 可视化编排（JWT，无IAM）
 
@@ -1202,27 +1202,27 @@ manifests/*
 | 295 | POST | /ai/form/generate-with-cmdb-skill | JWT + AuditLogger | 同上 | ✅ |
 | 296 | POST | /ai/form/generate-with-cmdb-skill-sse | JWT + AuditLogger | 同上 | ✅ |
 | 297 | POST | /ai/skill/preview-prompt | JWT + AuditLogger | admin绕过 / IAM: AI_ANALYSIS/ORGANIZATION/ADMIN | ✅ Prompt预览仅限ADMIN，防泄露Skill定义 |
-| 298 | GET | /ai/embedding/config-status | JWT + AuditLogger | 无IAM | ⚠️ 缺少IAM权限检查，暴露AI配置状态。建议加AI_ANALYSIS/ORGANIZATION/READ |
+| 298 | GET | /ai/embedding/config-status | JWT + AuditLogger | 无IAM |  缺少IAM权限检查，暴露AI配置状态。建议加AI_ANALYSIS/ORGANIZATION/READ |
 | 299 | POST | /ai/cmdb/vector-search | JWT + AuditLogger | admin绕过 / IAM: AI_ANALYSIS/ORGANIZATION/READ或WRITE或ADMIN | ✅ |
 
 ### 45. Admin Embedding/Skills/Cache（JWT + BypassIAMForAdmin，无IAM）
 
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
-| 300 | GET | /admin/embedding/status | JWT + BypassIAMForAdmin | admin绕过 / 非admin隐式拒绝 | ⚠️ 无IAM，无法委派给非admin |
-| 301 | POST | /admin/embedding/sync-all | JWT + BypassIAMForAdmin | 同上 | ⚠️ 高开销操作，应有明确IAM权限 |
-| 302 | GET | /admin/skills | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 303 | GET | /admin/skills/preview-discovery | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 304 | GET | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 305 | POST | /admin/skills | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 306 | PUT | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 307 | DELETE | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 | ⚠️ 不可逆操作应有ADMIN级别IAM |
-| 308 | POST | /admin/skills/:id/activate | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 309 | POST | /admin/skills/:id/deactivate | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 310 | GET | /admin/skills/:id/usage-stats | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 311-314 | /admin/modules/:mid/skill/* | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 315-319 | /admin/module-versions/:id/skill/* | JWT + BypassIAMForAdmin | 同上 | ⚠️ |
-| 320-324 | /admin/embedding-cache/* | JWT + BypassIAMForAdmin | 同上 | ⚠️ DELETE /clear 需要ADMIN级别IAM |
+| 300 | GET | /admin/embedding/status | JWT + BypassIAMForAdmin | admin绕过 / 非admin隐式拒绝 |  无IAM，无法委派给非admin |
+| 301 | POST | /admin/embedding/sync-all | JWT + BypassIAMForAdmin | 同上 |  高开销操作，应有明确IAM权限 |
+| 302 | GET | /admin/skills | JWT + BypassIAMForAdmin | 同上 |  |
+| 303 | GET | /admin/skills/preview-discovery | JWT + BypassIAMForAdmin | 同上 |  |
+| 304 | GET | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 |  |
+| 305 | POST | /admin/skills | JWT + BypassIAMForAdmin | 同上 |  |
+| 306 | PUT | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 |  |
+| 307 | DELETE | /admin/skills/:id | JWT + BypassIAMForAdmin | 同上 |  不可逆操作应有ADMIN级别IAM |
+| 308 | POST | /admin/skills/:id/activate | JWT + BypassIAMForAdmin | 同上 |  |
+| 309 | POST | /admin/skills/:id/deactivate | JWT + BypassIAMForAdmin | 同上 |  |
+| 310 | GET | /admin/skills/:id/usage-stats | JWT + BypassIAMForAdmin | 同上 |  |
+| 311-314 | /admin/modules/:mid/skill/* | JWT + BypassIAMForAdmin | 同上 |  |
+| 315-319 | /admin/module-versions/:id/skill/* | JWT + BypassIAMForAdmin | 同上 |  |
+| 320-324 | /admin/embedding-cache/* | JWT + BypassIAMForAdmin | 同上 |  DELETE /clear 需要ADMIN级别IAM |
 
 ### 46. Workspace Embedding（JWT + admin绕过 + IAM）
 
@@ -1273,13 +1273,13 @@ manifests/*
 
 | # | Method | Path | 认证 | 授权 | 合理性 |
 |---|--------|------|------|------|--------|
-| 343 | GET | /cmdb/search | JWT + AuditLogger | 无IAM | ⚠️ 任何认证用户可搜索所有workspace资源，违反workspace级数据隔离 |
-| 344 | GET | /cmdb/suggestions | JWT + AuditLogger | 无IAM | ⚠️ 同上 |
-| 345 | GET | /cmdb/stats | JWT + AuditLogger | 无IAM | ⚠️ 暴露全局资源统计 |
-| 346 | GET | /cmdb/resource-types | JWT + AuditLogger | 无IAM | ⚠️ 泄露内部资源类型定义 |
-| 347 | GET | /cmdb/workspace-counts | JWT + AuditLogger | 无IAM | ⚠️ 暴露所有workspace的资源规模 |
-| 348 | GET | /cmdb/workspaces/:wid/tree | JWT + AuditLogger | 无IAM | ⚠️ 可查看任意workspace的资源树 |
-| 349 | GET | /cmdb/workspaces/:wid/resources | JWT + AuditLogger | 无IAM | ⚠️ 可查看任意workspace的资源详情 |
+| 343 | GET | /cmdb/search | JWT + AuditLogger | 无IAM |  任何认证用户可搜索所有workspace资源，违反workspace级数据隔离 |
+| 344 | GET | /cmdb/suggestions | JWT + AuditLogger | 无IAM |  同上 |
+| 345 | GET | /cmdb/stats | JWT + AuditLogger | 无IAM |  暴露全局资源统计 |
+| 346 | GET | /cmdb/resource-types | JWT + AuditLogger | 无IAM |  泄露内部资源类型定义 |
+| 347 | GET | /cmdb/workspace-counts | JWT + AuditLogger | 无IAM |  暴露所有workspace的资源规模 |
+| 348 | GET | /cmdb/workspaces/:wid/tree | JWT + AuditLogger | 无IAM |  可查看任意workspace的资源树 |
+| 349 | GET | /cmdb/workspaces/:wid/resources | JWT + AuditLogger | 无IAM |  可查看任意workspace的资源详情 |
 
 **管理接口（JWT + IAM: cmdb/ORGANIZATION/ADMIN）**:
 
@@ -1300,7 +1300,7 @@ manifests/*
 | 评级 | 数量 | 说明 |
 |------|------|------|
 | ✅ 合理 | ~310 | 认证+授权完整，权限级别匹配操作敏感度 |
-| ⚠️ 可优化 | ~40 | 功能正确但缺少IAM或审计，可改进 |
+|  可优化 | ~40 | 功能正确但缺少IAM或审计，可改进 |
 | ❌ 需整改 | ~25 | 存在越权风险或缺少必要认证 |
 
 ### 设计亮点
@@ -1315,6 +1315,6 @@ manifests/*
 1. **❌ run-task-callback无认证**: 3个接口，可伪造安全扫描结果绕过审批
 2. **❌ secrets无IAM**: 5个接口，任何认证用户可读写所有资源的密文
 3. **❌ manifest无IAM**: 20个接口，可触发未授权的Terraform Apply/Destroy
-4. **⚠️ Dashboard无admin绕过**: 与其他接口模式不一致，admin可能被意外拒绝
-5. **⚠️ CMDB只读接口无数据隔离**: 违反workspace级最小知情原则
-6. **⚠️ admin路由依赖隐式拒绝**: notifications/skills/embedding等通过中间件链隐式阻断非admin，而非显式IAM检查
+4. ** Dashboard无admin绕过**: 与其他接口模式不一致，admin可能被意外拒绝
+5. ** CMDB只读接口无数据隔离**: 违反workspace级最小知情原则
+6. ** admin路由依赖隐式拒绝**: notifications/skills/embedding等通过中间件链隐式阻断非admin，而非显式IAM检查

@@ -52,6 +52,13 @@ type EmbeddingStatus struct {
 	FailedTasks     int64   `json:"failed_tasks"`
 	Progress        float64 `json:"progress"`       // 0-100
 	EstimatedTime   string  `json:"estimated_time"` // 预估剩余时间
+
+	// CMDB 同步状态（前端用于展示和互斥控制）
+	CMDBSyncStatus      string  `json:"cmdb_sync_status"`                 // idle, syncing
+	CMDBSyncTriggeredBy string  `json:"cmdb_sync_triggered_by,omitempty"` // auto, manual, rebuild
+	CMDBSyncStartedAt   *string `json:"cmdb_sync_started_at,omitempty"`   // ISO8601
+	CMDBSyncCompletedAt *string `json:"cmdb_sync_completed_at,omitempty"` // ISO8601
+	IsBusy              bool    `json:"is_busy"`                          // 综合判断：syncing 或有 pending/processing 任务
 }
 
 // EmbeddingWorkerStatus Worker 状态

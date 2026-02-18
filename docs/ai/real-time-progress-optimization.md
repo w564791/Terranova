@@ -525,10 +525,10 @@ const generateWithSSE = async (params: GenerateParams, onProgress: (event: Progr
 |------|----------|--------|--------------|
 | `backend/services/progress_event.go` | **新增** | ~50 行 | ❌ 无影响（新文件） |
 | `backend/controllers/ai_cmdb_skill_controller.go` | 修改 | ~80 行 | ❌ 无影响（新增端点，不修改现有端点） |
-| `backend/services/ai_cmdb_skill_service.go` | 修改 | ~100 行 | ⚠️ 低风险（添加进度回调参数） |
+| `backend/services/ai_cmdb_skill_service.go` | 修改 | ~100 行 |  低风险（添加进度回调参数） |
 | `backend/routes/routes.go` | 修改 | ~5 行 | ❌ 无影响（新增路由） |
 | `frontend/src/services/aiForm.ts` | 修改 | ~50 行 | ❌ 无影响（新增函数） |
-| `frontend/src/components/.../AIConfigGenerator.tsx` | 修改 | ~100 行 | ⚠️ 低风险（修改进度渲染逻辑） |
+| `frontend/src/components/.../AIConfigGenerator.tsx` | 修改 | ~100 行 |  低风险（修改进度渲染逻辑） |
 
 **总改动量**：约 400 行代码
 
@@ -540,7 +540,7 @@ const generateWithSSE = async (params: GenerateParams, onProgress: (event: Progr
 |----------|------|------|
 | `POST /generate-with-cmdb-skill` | ❌ 无影响 | 保持不变，作为降级方案 |
 | `GenerateConfigWithCMDBSkill()` | ❌ 无影响 | 保持不变 |
-| `GenerateConfigWithCMDBSkillOptimized()` | ⚠️ 低风险 | 添加可选的进度回调参数 |
+| `GenerateConfigWithCMDBSkillOptimized()` |  低风险 | 添加可选的进度回调参数 |
 
 **后端改动策略**：
 - 新增 SSE 端点，不修改现有 POST 端点
@@ -562,7 +562,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 | 现有功能 | 影响 | 说明 |
 |----------|------|------|
 | 配置生成 | ❌ 无影响 | 核心逻辑不变 |
-| 进度显示 | ⚠️ 低风险 | 从模拟改为真实，UI 样式不变 |
+| 进度显示 |  低风险 | 从模拟改为真实，UI 样式不变 |
 | CMDB 选择 | ❌ 无影响 | 逻辑不变 |
 | 错误处理 | ❌ 无影响 | 逻辑不变 |
 
@@ -609,7 +609,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 |------|------|------|------|
 | **EventSource** | 浏览器原生支持、自动重连 | 不支持自定义 Header | ❌ 不适用 |
 | **fetch + ReadableStream** | 支持自定义 Header、与现有认证一致 | 需要手动处理重连 | ✅ 推荐 |
-| **Query String Token** | 实现简单 | Token 可能被日志记录 | ⚠️ 备选 |
+| **Query String Token** | 实现简单 | Token 可能被日志记录 |  备选 |
 
 **推荐方案**：使用 `fetch` + `ReadableStream`，保持现有的 Authorization Header 认证
 

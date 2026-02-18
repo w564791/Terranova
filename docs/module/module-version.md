@@ -293,7 +293,7 @@ POST /modules/:id/schemas/v2?version_id=modv-xxx
 
 ---
 
-## ⚠️ 关键约束
+##  关键约束
 
 1. **默认版本永不自动修改**
    - 只有用户手动点击"设为默认版本"才会修改

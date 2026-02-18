@@ -883,7 +883,7 @@ const AddResources: React.FC = () => {
           moduleConfig.version = module.version;
           console.log(`📦 Adding version ${module.version} to module ${module.name} (from Module table)`);
         } else {
-          console.log(`⚠️ Module ${module.name} has no version configured`);
+          console.log(` Module ${module.name} has no version configured`);
         }
         
         const tfCode = {

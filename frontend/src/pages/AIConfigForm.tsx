@@ -747,7 +747,7 @@ const AIConfigForm = () => {
                    !formData.model_id.includes('titan-embed-text-v2') && 
                    !formData.model_id.includes('cohere.embed') && (
                     <span style={{ color: '#ff4d4f', marginLeft: '8px' }}>
-                      ⚠️ 当前模型不支持批量，请选择 Titan V2 或 Cohere Embed
+                       当前模型不支持批量，请选择 Titan V2 或 Cohere Embed
                     </span>
                   )}
                   {(formData.service_type === 'openai' || 
@@ -879,7 +879,7 @@ const AIConfigForm = () => {
                         <li>减少不必要的 Skill 加载，提升响应速度和生成质量</li>
                       </ul>
                       <span style={{ color: '#faad14', fontSize: '11px' }}>
-                        ⚠️ 此功能为实验性功能，仅适用于表单生成场景
+                         此功能为实验性功能，仅适用于表单生成场景
                       </span>
                     </div>
                   </div>
@@ -908,7 +908,7 @@ const AIConfigForm = () => {
                         borderRadius: '4px',
                         color: '#ad6800'
                       }}>
-                        <strong>⚠️ 未找到可用的 Skill</strong>
+                        <strong> 未找到可用的 Skill</strong>
                         <br />
                         请先在「AI Skills」页面创建 Skill，或运行初始化脚本插入默认 Skill。
                       </div>
@@ -1198,7 +1198,7 @@ const AIConfigForm = () => {
                                       </div>
                                     ) : (
                                       <div style={{ marginTop: '8px', color: '#ff4d4f' }}>
-                                        ⚠️ 未找到匹配的 Domain Skills，请检查 Task Skill 的 domain_tags 配置
+                                         未找到匹配的 Domain Skills，请检查 Task Skill 的 domain_tags 配置
                                       </div>
                                     )}
                                   </div>

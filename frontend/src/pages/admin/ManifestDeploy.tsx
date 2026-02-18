@@ -507,7 +507,7 @@ const ManifestDeploy: React.FC = () => {
       {/* 卸载确认对话框 */}
       <ConfirmDialog
         isOpen={uninstallDialog.isOpen}
-        title={uninstallDialog.driftedResources.length > 0 ? '⚠️ 检测到漂移资源' : '确认卸载部署'}
+        title={uninstallDialog.driftedResources.length > 0 ? ' 检测到漂移资源' : '确认卸载部署'}
         type="danger"
         confirmText={uninstallDialog.loading ? '卸载中...' : '确认卸载'}
         cancelText="取消"

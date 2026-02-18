@@ -1215,6 +1215,13 @@ func (s *TerraformExecutor) ExecutePlan(
 			}
 		}
 
+		// 【防御】检查任务是否在 plan 输出解析期间被取消
+		if ctx.Err() == context.Canceled {
+			logger.Info("Task cancelled by user during plan output processing")
+			s.saveTaskCancellation(task, logger, "plan")
+			return fmt.Errorf("task cancelled by user")
+		}
+
 		if totalChanges == 0 && !hasOutputChanges {
 			// 没有资源变更也没有 output 变更，直接完成任务，不需要Apply
 			task.Status = models.TaskStatusPlannedAndFinished
@@ -1606,8 +1613,24 @@ func (s *TerraformExecutor) saveTaskFailure(
 			logger.Info("✓ Workspace unlocked")
 		}
 
-		// Apply失败时，清理工作目录
+		// Apply失败时，尝试保存 partial state（terraform 可能已创建部分资源）
 		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
+		if s.db != nil {
+			stateFile := filepath.Join(workDir, "terraform.tfstate")
+			if _, statErr := os.Stat(stateFile); statErr == nil {
+				logger.Info("Attempting to save partial state after apply failure...")
+				var workspace models.Workspace
+				if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr == nil {
+					if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
+						logger.Warn("Failed to save partial state: %v", saveErr)
+					} else {
+						logger.Info("✓ Partial state saved to database")
+					}
+				}
+			}
+		}
+
+		// 清理工作目录
 		logger.Info("Cleaning up work directory after apply failure: %s", workDir)
 		if cleanupErr := s.CleanupWorkspace(workDir); cleanupErr != nil {
 			logger.Warn("Failed to cleanup work directory: %v", cleanupErr)
@@ -1615,19 +1638,7 @@ func (s *TerraformExecutor) saveTaskFailure(
 			logger.Info("✓ Work directory cleaned up")
 		}
 
-		// Apply失败时也触发CMDB同步，因为部分资源可能已经创建或修改
-		// 仅在 Local 模式下执行（Agent 模式由 agent_handler.go 处理）
-		if s.db != nil {
-			go func(wsID string) {
-				log.Printf("[CMDB] Apply failed for task %d, syncing CMDB for workspace %s (partial changes may exist)", task.ID, wsID)
-				cmdbService := NewCMDBService(s.db)
-				if err := cmdbService.SyncWorkspaceResources(wsID); err != nil {
-					log.Printf("[CMDB] Failed to sync workspace %s after apply failure: %v", wsID, err)
-				} else {
-					log.Printf("[CMDB] Successfully synced workspace %s after apply failure", wsID)
-				}
-			}(task.WorkspaceID)
-		}
+		// 注意：CMDB 同步由 TaskQueueManager.syncCMDBAfterApply 统一处理
 	}
 
 	// 使用 DataAccessor 更新任务
@@ -2481,19 +2492,7 @@ func (s *TerraformExecutor) SaveNewStateVersion(
 		saveErr = s.SaveStateToDatabase(workspace, task, stateData)
 		if saveErr == nil {
 			log.Printf("State saved to database successfully")
-
-			// 异步触发CMDB资源索引同步
-			if s.db != nil {
-				go func(wsID string) {
-					cmdbService := NewCMDBService(s.db)
-					if err := cmdbService.SyncWorkspaceResources(wsID); err != nil {
-						log.Printf("CMDB sync failed for workspace %s: %v", wsID, err)
-					} else {
-						log.Printf("CMDB sync completed for workspace %s", wsID)
-					}
-				}(workspace.WorkspaceID)
-			}
-
+			// 注意：CMDB 同步由 TaskQueueManager.syncCMDBAfterApply 统一处理
 			return nil
 		}
 

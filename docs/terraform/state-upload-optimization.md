@@ -119,7 +119,7 @@ func (s *StateService) ForceUploadState(newState map[string]interface{}, workspa
   
   {showForceWarning && (
     <Alert type="error" className="force-warning">
-      <AlertTitle>⚠️ 危险操作警告</AlertTitle>
+      <AlertTitle> 危险操作警告</AlertTitle>
       <AlertDescription>
         <p><strong>强制上传将跳过所有安全校验，可能导致：</strong></p>
         <ul>
@@ -713,14 +713,14 @@ func (s *StateService) UploadState(
 2. Skip validation
 3. Save state
 4. Keep locked (持久)
-⚠️ 需要用户手动解锁
+ 需要用户手动解锁
 
 回滚流程：
 1. Lock workspace (临时)
 2. Create rollback version
 3. Save state
 4. Keep locked (持久)
-⚠️ 需要用户手动解锁
+ 需要用户手动解锁
 ```
 
 ## 7. 实施进度

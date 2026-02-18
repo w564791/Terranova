@@ -366,13 +366,13 @@ npm run build
 | 外键约束 | ✅ 完成 | `scripts/add_state_upload_optimization_fields.sql` |
 | 数据迁移（从content提取lineage/serial） | ✅ 完成 | `scripts/add_state_upload_optimization_fields.sql` |
 
-### ⚠️ 部分完成的功能
+###  部分完成的功能
 
 | 设计要求 | 实现状态 | 说明 |
 |---------|---------|------|
-| 用户头像显示 | ⚠️ 部分完成 | 显示 userId，需集成用户服务获取头像 |
-| 滚动到源版本 | ⚠️ 部分完成 | scrollToVersion 已实现，链接已集成 |
-| 权限控制 | ⚠️ 部分完成 | 使用 WORKSPACE_STATE:WRITE，未区分 force_write |
+| 用户头像显示 |  部分完成 | 显示 userId，需集成用户服务获取头像 |
+| 滚动到源版本 |  部分完成 | scrollToVersion 已实现，链接已集成 |
+| 权限控制 |  部分完成 | 使用 WORKSPACE_STATE:WRITE，未区分 force_write |
 
 ### ❌ 待实现的功能
 

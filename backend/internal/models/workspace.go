@@ -225,6 +225,12 @@ type Workspace struct {
 	DriftCheckEndTime   string `json:"drift_check_end_time" gorm:"type:time;default:22:00:00"`   // 每天允许检测的结束时间
 	DriftCheckInterval  int    `json:"drift_check_interval" gorm:"default:1440"`                 // 检测间隔（分钟）
 
+	// CMDB 同步状态（用于前端展示和互斥控制）
+	CMDBSyncStatus      string     `json:"cmdb_sync_status" gorm:"type:varchar(20);default:idle"`      // idle, syncing
+	CMDBSyncTriggeredBy string     `json:"cmdb_sync_triggered_by" gorm:"type:varchar(20)"`             // auto, manual, rebuild
+	CMDBSyncStartedAt   *time.Time `json:"cmdb_sync_started_at"`                                      // 同步开始时间
+	CMDBSyncCompletedAt *time.Time `json:"cmdb_sync_completed_at"`                                    // 同步完成时间
+
 	// 关联
 	AgentPoolID        *uint                 `json:"agent_pool_id" gorm:"index"`                    // Agent Pool ID (deprecated, use CurrentPoolID)
 	CurrentPoolID      *string               `json:"current_pool_id" gorm:"type:varchar(50);index"` // Current Pool ID (pool-level authorization)
@@ -236,6 +242,19 @@ type Workspace struct {
 func (Workspace) TableName() string {
 	return "workspaces"
 }
+
+// CMDB 同步状态常量
+const (
+	CMDBSyncStatusIdle    = "idle"    // 空闲
+	CMDBSyncStatusSyncing = "syncing" // 同步中
+)
+
+// CMDB 同步触发来源
+const (
+	CMDBSyncTriggerAuto    = "auto"    // apply 后自动触发
+	CMDBSyncTriggerManual  = "manual"  // 前端手动触发 sync
+	CMDBSyncTriggerRebuild = "rebuild" // 前端手动触发 rebuild
+)
 
 // TaskType 任务类型枚举
 type TaskType string

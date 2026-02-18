@@ -360,7 +360,7 @@ const TextareaWidget: React.FC<WidgetProps> = ({
             )}
             {hasPlaceholder && (
               <span style={{ color: '#cf222e', display: 'block', fontSize: 12, marginTop: 4 }}>
-                ⚠️ 请替换占位符为实际值，否则无法提交
+                 请替换占位符为实际值，否则无法提交
               </span>
             )}
           </span>
