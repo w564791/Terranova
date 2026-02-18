@@ -463,7 +463,7 @@ func (s *NotificationSender) buildLarkCardPayload(
 		title = "🚫 Task Cancelled"
 		template = "grey"
 	case models.NotificationEventDriftDetected:
-		title = "⚠️ Drift Detected"
+		title = " Drift Detected"
 		template = "orange"
 	default:
 		title = "📢 IaC Platform Notification"

@@ -1265,7 +1265,7 @@ func (s *SchemaSolver) generateAIInstructions(result *SolverResult) string {
 
 	// 警告建议修复
 	if len(warnings) > 0 {
-		sb.WriteString("⚠️ 警告（建议修复）：\n")
+		sb.WriteString(" 警告（建议修复）：\n")
 		for i, feedback := range warnings {
 			sb.WriteString(fmt.Sprintf("\n%d. [%s] %s\n", i+1, feedback.Field, feedback.AIPrompt))
 		}

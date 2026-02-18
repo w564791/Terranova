@@ -1090,7 +1090,7 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 			})
 			return
 		}
-		log.Printf("[CancelTask] ⚠️ Force cancelling task %d during apply stage (may cause state corruption)", taskID)
+		log.Printf("[CancelTask]  Force cancelling task %d during apply stage (may cause state corruption)", taskID)
 	}
 
 	// 如果任务正在Agent上运行，发送取消信号

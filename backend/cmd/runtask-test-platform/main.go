@@ -285,7 +285,7 @@ func handleTest(w http.ResponseWriter, r *http.Request) {
 			log.Printf("   ❌ Invalid signature format")
 		}
 	} else {
-		log.Printf("   ⚠️  No HMAC signature provided")
+		log.Printf("     No HMAC signature provided")
 		hmacError = "No signature provided"
 	}
 
@@ -501,7 +501,7 @@ func handleTimeout(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("⏳ [TIMEOUT] Received request for task %d, stage: %s", payload.TaskID, payload.Stage)
 	log.Printf("   Callback URL: %s", payload.TaskResultCallbackURL)
-	log.Printf("   ⚠️  Will NOT send callback (simulating timeout)")
+	log.Printf("     Will NOT send callback (simulating timeout)")
 
 	// 返回 200 OK，但不发送回调
 	w.WriteHeader(http.StatusOK)
