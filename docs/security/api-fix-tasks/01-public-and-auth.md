@@ -8,7 +8,7 @@
 | # | Method | Path | 认证 | 授权 | 状态 |
 |---|--------|------|------|------|------|
 | 1 | GET | /health | 无 | 无 | ✅ 健康检查，必须公开 |
-| 2 | GET | /metrics | 无 | 无 | ⚠️ 暴露系统指标，建议加 Basic Auth |
+| 2 | GET | /metrics | 无 | 无 |  暴露系统指标，建议加 Basic Auth |
 | 3 | GET | /static/* | 无 | 无 | ✅ 静态资源 |
 | 4 | GET | /swagger/*any | 无 | 无 | ✅ 生产环境可考虑禁用 |
 | 5 | GET | /api/v1/setup/status | 无 | 无 | ✅ 判断是否需要初始化 |

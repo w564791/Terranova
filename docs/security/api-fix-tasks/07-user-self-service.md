@@ -8,10 +8,10 @@
 | # | Method | Path | 认证 | 授权 | 状态 |
 |---|--------|------|------|------|------|
 | 1 | POST | /api/v1/user/reset-password | JWT+BypassIAMForAdmin | admin绕过 / USER_MANAGEMENT/USER/WRITE | ✅ 管理员重置他人密码 |
-| 2 | POST | /api/v1/user/change-password | JWT+BypassIAMForAdmin | 无IAM | ⚠️ 用户改自己密码，风险低 |
-| 3 | POST | /api/v1/user/tokens | JWT+BypassIAMForAdmin | 无IAM | ⚠️ 用户创建自己的Token |
-| 4 | GET | /api/v1/user/tokens | JWT+BypassIAMForAdmin | 无IAM | ⚠️ 用户查看自己的Token |
-| 5 | DELETE | /api/v1/user/tokens/:token_name | JWT+BypassIAMForAdmin | 无IAM | ⚠️ 用户撤销自己的Token |
+| 2 | POST | /api/v1/user/change-password | JWT+BypassIAMForAdmin | 无IAM |  用户改自己密码，风险低 |
+| 3 | POST | /api/v1/user/tokens | JWT+BypassIAMForAdmin | 无IAM |  用户创建自己的Token |
+| 4 | GET | /api/v1/user/tokens | JWT+BypassIAMForAdmin | 无IAM |  用户查看自己的Token |
+| 5 | DELETE | /api/v1/user/tokens/:token_name | JWT+BypassIAMForAdmin | 无IAM |  用户撤销自己的Token |
 
 ## 修复建议 (#2-#5, 可选)
 

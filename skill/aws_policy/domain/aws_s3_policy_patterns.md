@@ -618,7 +618,7 @@ tags: ["domain", "aws", "s3", "policy", "bucket-policy", "resource-policy", "sec
 | 直接 Principal | `"AWS": "arn:aws:iam::xxx:role/xxx"` | 无 | **是** | **高** |
 | Condition 方式 | `"*"` | `aws:PrincipalArn` + `StringLike` | **否** | **无** |
 
-### ⚠️ 安全警告：必须指定账户 ID
+###  安全警告：必须指定账户 ID
 
 **高风险行为**：在 `aws:PrincipalArn` 中使用通配符账户 ID（`*`）：
 ```json

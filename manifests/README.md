@@ -93,6 +93,8 @@ helm install eg oci://docker.io/envoyproxy/gateway-helm \
 kubectl -n envoy-gateway-system rollout status deployment/envoy-gateway
 ```
 
+> **关于 WebSocket**：Envoy Gateway 通过 HTTPS (ALPN) 与浏览器协商 HTTP/2。HTTP/2 的 WebSocket 使用 Extended CONNECT (RFC 8441)，但 Go 的 gorilla/websocket 库不支持。因此 **所有用户流量（包括 /api/）统一走前端 nginx 代理**，由 nginx 以 HTTP/1.1 + 标准 WebSocket 升级头连接后端，避免协议不兼容。详见 httproute.yaml 和 nginx.conf。
+
 Ref: https://gateway.envoyproxy.io/docs/install/
 
 ## Docker Images
@@ -136,7 +138,7 @@ manifests/
 ├── gateway/                        # Envoy Gateway API
 │   ├── kustomization.yaml
 │   ├── gateway.yaml                # GatewayClass + Gateway (HTTPS 443 + 8090)
-│   ├── httproute.yaml              # Routes: frontend(/), API(/api/,/health)
+│   ├── httproute.yaml              # Routes: frontend(/, /api/ via nginx), health(/health direct)
 │   └── backend-tls-policy.yaml     # Gateway → backend/frontend HTTPS policy
 └── gatekeeper/                     # OPA Gatekeeper 准入策略（可选，需单独部署）
     ├── kustomization.yaml
@@ -257,13 +259,13 @@ External Traffic                         kubectl (exec/attach/debug/...)
          │                                       ╳ SA 与 Pod 标签不匹配
          │                                       ╳ Secret 与 Pod 标签不匹配
          │
-    ┌────┴──────────────┐
-    ▼                   ▼
-┌──────────┐     ┌─────────────┐
-│ Frontend │     │   Backend   │◀── Agent Pods
-│ (nginx)  │────▶│  (Go API)   │    (CC WebSocket)
-│ :443 TLS │proxy│ :8080 :8090 │
-└──────────┘     └──────┬──────┘
+         │
+         ▼ HTTPS (internal CA)
+    ┌──────────┐  proxy /api/  ┌─────────────┐
+    │ Frontend │──────────────▶│   Backend   │◀── Agent Pods
+    │ (nginx)  │  HTTP/1.1+WS  │  (Go API)   │    (CC WebSocket)
+    │ :443 TLS │               │ :8080 :8090 │
+    └──────────┘               └──────┬──────┘
                         │
                         ▼
                  ┌─────────────┐

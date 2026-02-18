@@ -110,7 +110,7 @@ SELECT
     COUNT(*) as total_rows,
     COUNT(embedding) as rows_with_embedding
 FROM resource_index;
-" 2>/dev/null || echo "⚠️ resource_index 表可能不存在或无法访问"
+" 2>/dev/null || echo " resource_index 表可能不存在或无法访问"
 
 echo ""
 echo "============================================================"

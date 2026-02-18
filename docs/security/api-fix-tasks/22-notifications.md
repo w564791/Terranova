@@ -1,20 +1,20 @@
-# 22 — 通知管理 ⚠️ P1
+# 22 — 通知管理  P1
 
 > 源文件: `router_notification.go`
 > API 数量: 7
-> 状态: ⚠️ 全部缺 IAM 权限检查
+> 状态:  全部缺 IAM 权限检查
 
 ## 全部 API 列表
 
 | # | Method | Path | 认证 | 授权 | 目标权限 | 状态 |
 |---|--------|------|------|------|----------|------|
-| 1 | GET | /api/v1/notifications | JWT+BypassIAMForAdmin | admin绕过/隐式拒绝非admin | NOTIFICATIONS/ORG/READ | ⚠️ |
-| 2 | GET | /api/v1/notifications/available | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/READ | ⚠️ |
-| 3 | GET | /api/v1/notifications/:notification_id | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/READ | ⚠️ |
-| 4 | POST | /api/v1/notifications | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/WRITE | ⚠️ |
-| 5 | PUT | /api/v1/notifications/:notification_id | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/WRITE | ⚠️ |
-| 6 | DELETE | /api/v1/notifications/:notification_id | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/ADMIN | ⚠️ |
-| 7 | POST | /api/v1/notifications/:notification_id/test | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/WRITE | ⚠️ |
+| 1 | GET | /api/v1/notifications | JWT+BypassIAMForAdmin | admin绕过/隐式拒绝非admin | NOTIFICATIONS/ORG/READ |  |
+| 2 | GET | /api/v1/notifications/available | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/READ |  |
+| 3 | GET | /api/v1/notifications/:notification_id | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/READ |  |
+| 4 | POST | /api/v1/notifications | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/WRITE |  |
+| 5 | PUT | /api/v1/notifications/:notification_id | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/WRITE |  |
+| 6 | DELETE | /api/v1/notifications/:notification_id | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/ADMIN |  |
+| 7 | POST | /api/v1/notifications/:notification_id/test | JWT+BypassIAMForAdmin | 同上 | NOTIFICATIONS/ORG/WRITE |  |
 
 ## 修复方案
 

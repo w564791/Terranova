@@ -9,13 +9,13 @@
 
 | # | Method | Path | 认证 | 授权 | 目标权限 | 状态 |
 |---|--------|------|------|------|----------|------|
-| 1 | GET | /api/v1/cmdb/search | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
-| 2 | GET | /api/v1/cmdb/suggestions | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
-| 3 | GET | /api/v1/cmdb/stats | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
-| 4 | GET | /api/v1/cmdb/resource-types | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
-| 5 | GET | /api/v1/cmdb/workspace-counts | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
-| 6 | GET | /api/v1/cmdb/workspaces/:workspace_id/tree | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
-| 7 | GET | /api/v1/cmdb/workspaces/:workspace_id/resources | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ | ⚠️ |
+| 1 | GET | /api/v1/cmdb/search | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
+| 2 | GET | /api/v1/cmdb/suggestions | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
+| 3 | GET | /api/v1/cmdb/stats | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
+| 4 | GET | /api/v1/cmdb/resource-types | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
+| 5 | GET | /api/v1/cmdb/workspace-counts | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
+| 6 | GET | /api/v1/cmdb/workspaces/:workspace_id/tree | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
+| 7 | GET | /api/v1/cmdb/workspaces/:workspace_id/resources | JWT+BypassIAMForAdmin | 无IAM | CMDB/ORG/READ |  |
 
 ### 同步操作
 

@@ -211,6 +211,10 @@ func main() {
 	rawCCHandler.SetupTaskDispatchListener(pubsub)
 	log.Println("[TaskDispatch] Cross-replica task dispatch configured via PG NOTIFY/LISTEN")
 
+	// Wire up PG PubSub for cross-replica real-time log streaming (HA)
+	rawCCHandler.SetupLogStreamListener(pubsub)
+	log.Println("[LogStream] Cross-replica log stream forwarding configured via PG NOTIFY/LISTEN")
+
 	// 【Phase 2优化】将K8s Deployment Service注入到TaskQueueManager（用于槽位管理）
 	if k8sDeploymentService != nil {
 		queueManager.SetK8sDeploymentService(k8sDeploymentService)

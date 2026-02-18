@@ -757,6 +757,17 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		return
 	}
 
+	// 【防御】拒绝覆盖已取消的任务状态
+	// 竞态场景：用户取消任务(→cancelled)后，Agent仍可能发来状态更新(→apply_pending)
+	if task.Status == models.TaskStatusCancelled {
+		log.Printf("[UpdateTaskStatus] Rejected status update for task %d: task already cancelled, agent tried to set %s", taskID, req.Status)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "task has been cancelled, status update rejected",
+			"current_status": string(task.Status),
+		})
+		return
+	}
+
 	// Build updates map to avoid overwriting other fields (like plan_data, plan_json)
 	updates := map[string]interface{}{
 		"status": req.Status,
@@ -841,24 +852,8 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		}()
 	}
 
-	// 异步触发 CMDB 资源索引同步（Agent/K8s Agent 模式）
-	// 在 applied 或 failed 状态时都触发同步，因为即使 apply 失败，部分资源可能已经创建或修改
-	// 只针对 apply 类型的任务（plan_and_apply 或 apply）
-	if req.Status == models.TaskStatusApplied || req.Status == models.TaskStatusFailed {
-		// 检查是否是 apply 类型的任务
-		isApplyTask := task.TaskType == "plan_and_apply" || task.TaskType == "apply"
-		if isApplyTask || req.Status == models.TaskStatusApplied {
-			go func(wsID string, status models.TaskStatus) {
-				log.Printf("[CMDB] Task %d completed with status %s, syncing CMDB for workspace %s", taskID, status, wsID)
-				cmdbService := services.NewCMDBService(h.db)
-				if err := cmdbService.SyncWorkspaceResources(wsID); err != nil {
-					log.Printf("[CMDB] Failed to sync workspace %s: %v", wsID, err)
-				} else {
-					log.Printf("[CMDB] Successfully synced workspace %s", wsID)
-				}
-			}(task.WorkspaceID, req.Status)
-		}
-	}
+	// 注意：CMDB 同步由 TaskQueueManager.syncCMDBAfterApply 统一处理（server 侧）
+	// 无论 Local、Agent、K8s Agent 模式，均在 OnTaskCompleted → syncCMDBAfterApply 触发
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "task status updated",

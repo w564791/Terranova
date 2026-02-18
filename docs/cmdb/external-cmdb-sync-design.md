@@ -694,11 +694,11 @@ func (s *SyncScheduler) checkAndSync() {
 
 | 组件 | 影响程度 | 说明 |
 |------|----------|------|
-| `resource_index` 表 | ⚠️ 低影响 | 新增2个可选字段，不影响现有数据 |
+| `resource_index` 表 |  低影响 | 新增2个可选字段，不影响现有数据 |
 | `secrets` 表 | ✅ 无影响 | 复用现有表，新增resource_type枚举值 |
-| CMDB Service | ⚠️ 低影响 | 新增方法，不修改现有方法 |
-| CMDB Handler | ⚠️ 低影响 | 新增API端点，不修改现有端点 |
-| 前端CMDB页面 | ⚠️ 低影响 | 新增Tab，不修改现有功能 |
+| CMDB Service |  低影响 | 新增方法，不修改现有方法 |
+| CMDB Handler |  低影响 | 新增API端点，不修改现有端点 |
+| 前端CMDB页面 |  低影响 | 新增Tab，不修改现有功能 |
 
 ### 9.2 详细分析
 

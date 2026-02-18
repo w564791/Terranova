@@ -476,6 +476,17 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 				selectedSlotID = slotID
 				selectedAgentID = pod.AgentID
 
+				// DB fallback for empty AgentID (cross-replica registration)
+				if selectedAgentID == "" {
+					var dbAgent models.Agent
+					if err := m.db.Where("name = ? AND status = ?", pod.PodName, "online").
+						Order("registered_at DESC").First(&dbAgent).Error; err == nil {
+						selectedAgentID = dbAgent.AgentID
+						m.k8sDeploymentSvc.podManager.RegisterAgent(pod.PodName, dbAgent.AgentID)
+						log.Printf("[TaskQueue] Resolved agent %s for pod %s from DB (cross-replica registration)", selectedAgentID, pod.PodName)
+					}
+				}
+
 				log.Printf("[TaskQueue] Found reserved slot %d on pod %s for apply_pending task %d (will reuse for apply)",
 					slotID, pod.PodName, task.ID)
 			} else {
@@ -517,19 +528,32 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 			selectedSlotID = slotID
 			selectedAgentID = pod.AgentID
 
-			log.Printf("[TaskQueue] Allocated slot %d on pod %s for task %d", slotID, pod.PodName, task.ID)
+			// PodManager.AgentID may be empty if agent registered on another replica.
+			// Fall back to DB lookup by pod name (agent's Name field = pod name).
+			if selectedAgentID == "" {
+				var dbAgent models.Agent
+				if err := m.db.Where("name = ? AND status = ?", pod.PodName, "online").
+					Order("registered_at DESC").First(&dbAgent).Error; err == nil {
+					selectedAgentID = dbAgent.AgentID
+					// Backfill PodManager so future dispatches don't need DB lookup
+					m.k8sDeploymentSvc.podManager.RegisterAgent(pod.PodName, dbAgent.AgentID)
+					log.Printf("[TaskQueue] Resolved agent %s for pod %s from DB (cross-replica registration)", selectedAgentID, pod.PodName)
+				} else {
+					log.Printf("[TaskQueue] Pod %s has no registered agent in DB yet, will retry", pod.PodName)
+				}
+			}
+
+			log.Printf("[TaskQueue] Allocated slot %d on pod %s for task %d (agent: %s)", slotID, pod.PodName, task.ID, selectedAgentID)
 		}
 	}
 
 	// 3. Get actually connected agents from AgentCCHandler
 	connectedAgentIDs := m.agentCCHandler.GetConnectedAgents()
-	if len(connectedAgentIDs) == 0 {
-		// If we allocated a slot, release it before retrying
-		if selectedPodName != "" {
-			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
-			log.Printf("[TaskQueue] Released slot %d on pod %s (no connected agents)", selectedSlotID, selectedPodName)
-		}
 
+	// In K8s mode with slot management, if we already have a selectedAgentID from slot allocation,
+	// don't bail out when no agents are connected locally — the agent may be connected to another
+	// replica. Check agent's connected_pod to determine if cross-replica dispatch is possible.
+	if len(connectedAgentIDs) == 0 && selectedAgentID == "" {
 		log.Printf("[TaskQueue] No connected agents found, task %d will retry", task.ID)
 
 		// For K8s mode: trigger immediate scale-up check if no agents are connected
@@ -542,27 +566,65 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 		return nil
 	}
 
-	log.Printf("[TaskQueue] Found %d connected agents: %v", len(connectedAgentIDs), connectedAgentIDs)
+	if len(connectedAgentIDs) == 0 && selectedAgentID != "" {
+		// K8s slot allocated but no agents connected locally — check if agent is connected
+		// to another replica by looking at connected_pod in the agents table
+		var agentRecord models.Agent
+		if err := m.db.Where("agent_id = ?", selectedAgentID).First(&agentRecord).Error; err != nil {
+			log.Printf("[TaskQueue] Pre-selected agent %s not found in database, releasing slot", selectedAgentID)
+			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
+			m.scheduleRetry(task.WorkspaceID, 10*time.Second)
+			return nil
+		}
+
+		if agentRecord.ConnectedPod == nil || *agentRecord.ConnectedPod == "" {
+			// Agent not connected to any replica — release slot and retry
+			log.Printf("[TaskQueue] Agent %s has no connected_pod (not connected to any replica), releasing slot and retrying", selectedAgentID)
+			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
+
+			if workspace.ExecutionMode == models.ExecutionModeK8s && m.k8sDeploymentSvc != nil {
+				go m.triggerK8sScaleUpForPool(*workspace.CurrentPoolID)
+			}
+
+			m.scheduleRetry(task.WorkspaceID, 15*time.Second)
+			return nil
+		}
+
+		log.Printf("[TaskQueue] No locally connected agents, but agent %s is connected to replica %s — will use cross-replica dispatch",
+			selectedAgentID, *agentRecord.ConnectedPod)
+	}
+
+	if len(connectedAgentIDs) > 0 {
+		log.Printf("[TaskQueue] Found %d connected agents: %v", len(connectedAgentIDs), connectedAgentIDs)
+	}
 
 	// 4. Filter agents by pool and find available one
 	var selectedAgent *models.Agent
 
 	// If we already selected an agent via slot allocation, use that agent
 	if selectedAgentID != "" {
+		// First check if the agent is connected locally
+		locallyConnected := false
 		for _, agentID := range connectedAgentIDs {
 			if agentID == selectedAgentID {
-				var agent models.Agent
-				if err := m.db.Where("agent_id = ?", agentID).First(&agent).Error; err == nil {
-					selectedAgent = &agent
-					log.Printf("[TaskQueue] Using pre-selected agent %s from slot allocation", agentID)
-					break
-				}
+				locallyConnected = true
+				break
 			}
 		}
 
-		// If the pre-selected agent is not connected, release the slot and find another
-		if selectedAgent == nil {
-			log.Printf("[TaskQueue] Pre-selected agent %s is not connected, releasing slot and finding another", selectedAgentID)
+		// Load agent from DB — needed for both local and cross-replica dispatch
+		var agent models.Agent
+		if err := m.db.Where("agent_id = ?", selectedAgentID).First(&agent).Error; err == nil {
+			selectedAgent = &agent
+			if locallyConnected {
+				log.Printf("[TaskQueue] Using pre-selected agent %s from slot allocation (locally connected)", selectedAgentID)
+			} else {
+				// Agent not connected locally — still use it, SendTaskToAgent will fail
+				// and we'll fall through to PG NOTIFY for cross-replica delivery
+				log.Printf("[TaskQueue] Using pre-selected agent %s from slot allocation (cross-replica dispatch)", selectedAgentID)
+			}
+		} else {
+			log.Printf("[TaskQueue] Pre-selected agent %s not found in database: %v, releasing slot", selectedAgentID, err)
 			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
 			selectedPodName = ""
 			selectedSlotID = -1
@@ -1174,22 +1236,64 @@ func (m *TaskQueueManager) processDriftCheckResult(task *models.WorkspaceTask) {
 	}
 }
 
-// syncCMDBAfterApply Apply 完成后同步 CMDB
-// 这个方法在 Server 端执行，确保 Local、Agent、K8s Agent 三种模式都能正确同步
-// 无论 Apply 成功还是失败都会触发同步，因为部分资源可能已经创建或修改
+// syncCMDBAfterApply Apply 完成后同步 CMDB（唯一入口）
+// 在 Server 端执行，确保 Local、Agent、K8s Agent 三种模式统一处理
+// 无论 Apply 成功还是失败都会触发，因为失败的 apply 中可能有部分资源已创建
+// 但如果本次 task 未产生新的 state version（如 init/validation 阶段就失败），则跳过同步
 func (m *TaskQueueManager) syncCMDBAfterApply(task *models.WorkspaceTask) {
+	// 前置检查：本次 task 是否产生了新的 state version
+	// 如果没有（全部失败，无任何资源变更），跳过同步
+	var stateCount int64
+	if err := m.db.Model(&models.WorkspaceStateVersion{}).
+		Where("task_id = ?", task.ID).
+		Count(&stateCount).Error; err != nil {
+		log.Printf("[CMDB] Failed to check state version for task %d: %v, skipping sync", task.ID, err)
+		return
+	}
+	if stateCount == 0 {
+		log.Printf("[CMDB] Task %d (status: %s) produced no new state version, skipping CMDB sync",
+			task.ID, task.Status)
+		return
+	}
+
+	// 检查是否已有同步任务在运行（前端手动触发的 sync/rebuild）
+	var workspace models.Workspace
+	if err := m.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; err != nil {
+		log.Printf("[CMDB] Failed to get workspace %s: %v, skipping sync", task.WorkspaceID, err)
+		return
+	}
+	if workspace.CMDBSyncStatus == models.CMDBSyncStatusSyncing {
+		log.Printf("[CMDB] Workspace %s already has a sync in progress (triggered_by: %s), skipping auto sync",
+			task.WorkspaceID, workspace.CMDBSyncTriggeredBy)
+		return
+	}
+
+	// 标记同步状态
+	now := time.Now()
+	m.db.Model(&models.Workspace{}).Where("workspace_id = ?", task.WorkspaceID).Updates(map[string]interface{}{
+		"cmdb_sync_status":       models.CMDBSyncStatusSyncing,
+		"cmdb_sync_triggered_by": models.CMDBSyncTriggerAuto,
+		"cmdb_sync_started_at":   now,
+		"cmdb_sync_completed_at": nil,
+	})
+
 	log.Printf("[CMDB] Apply completed for task %d (status: %s), syncing CMDB for workspace %s",
 		task.ID, task.Status, task.WorkspaceID)
 
-	// 创建 CMDBService
 	cmdbService := NewCMDBService(m.db)
-
-	// 同步 CMDB
 	if err := cmdbService.SyncWorkspaceResources(task.WorkspaceID); err != nil {
 		log.Printf("[CMDB] Failed to sync workspace %s after apply: %v", task.WorkspaceID, err)
+		// 同步失败，重置状态
+		completedAt := time.Now()
+		m.db.Model(&models.Workspace{}).Where("workspace_id = ?", task.WorkspaceID).Updates(map[string]interface{}{
+			"cmdb_sync_status":       models.CMDBSyncStatusIdle,
+			"cmdb_sync_completed_at": completedAt,
+		})
 	} else {
 		log.Printf("[CMDB] Successfully synced workspace %s after apply (task %d, status: %s)",
 			task.WorkspaceID, task.ID, task.Status)
+		// 注意：不在这里设置 idle，因为 embedding 任务还在后台处理
+		// 状态会在 GetWorkspaceEmbeddingStatus 中自动转换（当 pending+processing=0 时）
 	}
 }
 

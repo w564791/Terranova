@@ -250,7 +250,7 @@ module "s3_bucket" {
 | warning | 建议修复的警告 |
 | suggestion | 可选的建议 |
 
-## ⚠️ 重要设计决策
+##  重要设计决策
 
 ### SchemaSolver 不做的事情
 
@@ -302,7 +302,7 @@ grep -E "(SchemaSolver|加载了|应用了|验证成功|验证失败)" /tmp/plat
 - 没有互斥冲突
 - 依赖关系满足
 
-⚠️ **注意：这不代表 AI 提供了所有必要的参数！**
+ **注意：这不代表 AI 提供了所有必要的参数！**
 - SchemaSolver 只验证 AI 提供的参数
 - 如果 Schema 没有 required 字段（如 S3 bucket），不会因为缺少字段而报错
 - S3 bucket 的 71 个字段都是可选的（`required: []`）

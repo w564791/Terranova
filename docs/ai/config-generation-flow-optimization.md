@@ -887,12 +887,12 @@ func (a *SkillAssembler) AssemblePromptWithSelectedSkills(
 | 1 | `terraform_module_best_practices` | terraform_module_best_practices | ❌ null | Terraform Module 最佳实践，包括命名规范、变量设计、输出定义等 | ✅ |
 | 2 | `aws_resource_tagging` | aws_resource_tagging | ❌ null | AWS 资源标签规范，定义必填标签、可选标签和命名规则 | ✅ |
 | 3 | `skill_doc_writing_standards` | skill_doc_writing_standards | ❌ null | Skill 文档编写标准，用于生成 Module Skill 文档 | ✅ |
-| 4 | `schema_validation_rules` | Schema 验证规则 | ✅ Schema 验证规则 | Schema 验证规则，用于验证用户输入是否符合 OpenAPI Schema 约束 | ⚠️ 可优化 |
+| 4 | `schema_validation_rules` | Schema 验证规则 | ✅ Schema 验证规则 | Schema 验证规则，用于验证用户输入是否符合 OpenAPI Schema 约束 |  可优化 |
 | 5 | `openapi_schema_interpretation` | openapi_schema_interpretation | ❌ null | OpenAPI Schema 解释规则，用于理解 Module 的参数定义 | ✅ |
 | 6 | `cmdb_resource_matching` | CMDB 资源匹配 | ❌ null | 从 CMDB 查询结果中匹配用户需要的资源，支持精确匹配和模糊匹配 | ✅ |
-| 7 | `cmdb_resource_types` | CMDB 资源类型映射 | ✅ CMDB 资源类型映射表 | CMDB 资源类型与 Terraform 资源类型的映射关系 | ⚠️ 可优化 |
+| 7 | `cmdb_resource_types` | CMDB 资源类型映射 | ✅ CMDB 资源类型映射表 | CMDB 资源类型与 Terraform 资源类型的映射关系 |  可优化 |
 | 8 | `region_mapping` | 区域映射 | ❌ null | AWS 区域映射规则，处理区域代码和名称的转换 | ✅ |
-| 9 | `security_detection_rules` | 安全检测规则 | ✅ 定义各类安全威胁的检测规则 | 安全威胁检测规则，用于识别恶意输入和越狱攻击 | ⚠️ 可优化 |
+| 9 | `security_detection_rules` | 安全检测规则 | ✅ 定义各类安全威胁的检测规则 | 安全威胁检测规则，用于识别恶意输入和越狱攻击 |  可优化 |
 | 10 | `aws_s3_policy_patterns` | AWS S3 桶策略模式 | ❌ null | S3 桶策略模式，用于生成允许/拒绝特定 Principal 访问的策略 | ✅ |
 | 11 | `aws_kms_policy_patterns` | AWS KMS 密钥策略模式 | ✅ 完整 | KMS 密钥策略模式，包括密钥管理员、密钥用户、服务集成等场景 | ✅ 已有 |
 | 12 | `aws_secrets_manager_policy_patterns` | AWS Secrets Manager 策略模式 | ✅ 完整 | Secrets Manager 策略模式，包括基本访问、跨账户、Lambda 轮换等场景 | ✅ 已有 |

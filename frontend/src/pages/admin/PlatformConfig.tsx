@@ -283,7 +283,7 @@ const PlatformConfig: React.FC = () => {
         </div>
 
         <div className={styles.notice}>
-          <strong>⚠️ 注意：</strong>
+          <strong> 注意：</strong>
           修改配置后需要重启后端服务才能生效。如果您使用的是 Docker 部署，请重启相关容器。
         </div>
       </div>

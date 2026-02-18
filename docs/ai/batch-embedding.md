@@ -277,6 +277,6 @@ export interface AIConfig {
 |------|--------|------|
 | Batch Embedding 核心功能 | 6 | ✅ 完全符合文档预期 |
 | 配套优化（保留 embedding 数据） | 2 | ✅ 必要的配套改进 |
-| 独立功能改进（CMDB 同步） | 2 | ⚠️ 独立功能，与 Batch Embedding 间接相关 |
+| 独立功能改进（CMDB 同步） | 2 |  独立功能，与 Batch Embedding 间接相关 |
 
 **结论**: Batch Embedding 核心功能的实现**完全符合文档预期**，且实现质量比文档描述更完善。额外的配套优化确保了 embedding 数据在 CMDB 同步时不会丢失。

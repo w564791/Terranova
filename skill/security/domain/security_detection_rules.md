@@ -135,7 +135,7 @@ Social Engineering:
 
 **Definition**: Input that contains no meaningful intent, is unintelligible, or cannot be understood as a valid request.
 
-**⚠️ This is the FIRST check to perform. Meaningless input must be blocked before any other analysis.**
+** This is the FIRST check to perform. Meaningless input must be blocked before any other analysis.**
 
 **Common Patterns**:
 

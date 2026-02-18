@@ -9,7 +9,7 @@
 |---|--------|------|------|------|------|
 | 1 | GET | /api/v1/ws/editing/:session_id | JWT | 无 | ✅ session_id 提供隔离 |
 | 2 | GET | /api/v1/ws/sessions | JWT | 无 | ✅ 查看活跃会话 |
-| 3 | GET | /api/v1/ws/agent-pools/:pool_id/metrics | JWT | 无 | ⚠️ 可查看任意Pool指标 |
+| 3 | GET | /api/v1/ws/agent-pools/:pool_id/metrics | JWT | 无 |  可查看任意Pool指标 |
 
 ## 需修复项
 
