@@ -326,7 +326,20 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 	// 6. 本地模式 - 直接执行任务
 	log.Printf("[TaskQueue] Starting task %d (type: %s, status: %s) for workspace %s in Local mode",
 		task.ID, task.TaskType, task.Status, workspaceID)
-	go m.executeTask(task)
+
+	// 在 CAS 前确定执行动作（CAS 会改变 task.Status）
+	action := "plan"
+	if task.Status == models.TaskStatusApplyPending {
+		action = "apply"
+	}
+
+	// 在启动 goroutine 前通过 CAS 将 task 标记为 running，防止其他 pod 重复拾取
+	if err := m.casTaskStatus(task, action); err != nil {
+		log.Printf("[TaskQueue] CAS failed for task %d: %v", task.ID, err)
+		return nil
+	}
+
+	go m.executeTask(task, action)
 
 	return nil
 }
@@ -807,22 +820,59 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 	return nil
 }
 
-// executeTask 执行任务
-func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask) {
+// casTaskStatus 在启动 goroutine 前，使用 DB 级别原子 CAS 将 task 标记为 running，
+// 防止 advisory lock 释放后其他 pod 重复拾取同一任务。
+// action 为 "plan" 或 "apply"，由调用方在 CAS 前根据 task.Status 确定。
+func (m *TaskQueueManager) casTaskStatus(task *models.WorkspaceTask, action string) error {
+	expectedStatus := task.Status // pending 或 apply_pending
+	newStage := "planning"
+	if action == "apply" {
+		newStage = "applying"
+	}
+	now := time.Now()
+
+	result := m.db.Model(task).
+		Where("status = ?", expectedStatus).
+		Updates(map[string]interface{}{
+			"status":     models.TaskStatusRunning,
+			"stage":      newStage,
+			"started_at": now,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("CAS failed: task %d status already changed from %s", task.ID, expectedStatus)
+	}
+
+	task.Status = models.TaskStatusRunning
+	task.Stage = newStage
+	task.StartedAt = &now
+	return nil
+}
+
+// executeTask 执行任务。action 为 "plan" 或 "apply"，由调用方在 CAS 前确定。
+func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string) {
+	// panic recovery：CAS 已将 task 标记为 running，若 panic 则需标记 failed 防止永久卡住
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[TaskQueue] PANIC in executeTask for task %d: %v\n%s", task.ID, r, debug.Stack())
+			task.Status = models.TaskStatusFailed
+			task.ErrorMessage = fmt.Sprintf("internal panic: %v", r)
+			now := time.Now()
+			task.CompletedAt = &now
+			m.db.Save(task)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
 	var err error
 
-	// 检查任务状态，决定执行plan还是apply
-	if task.Status == models.TaskStatusApplyPending {
+	if action == "apply" {
 		// 执行Apply阶段
 		log.Printf("[TaskQueue] Executing apply for task %d (workspace %s)", task.ID, task.WorkspaceID)
-
-		// 更新状态为running
-		task.Status = models.TaskStatusRunning
-		task.Stage = "applying"
-		m.db.Save(task)
 
 		// 设置PlanTaskID指向自己（plan_and_apply任务的plan数据在自己身上）
 		task.PlanTaskID = &task.ID
@@ -844,12 +894,6 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask) {
 	} else {
 		// 执行Plan阶段
 		log.Printf("[TaskQueue] Executing plan for task %d (workspace %s)", task.ID, task.WorkspaceID)
-
-		// 更新任务状态为running
-		task.Status = models.TaskStatusRunning
-		task.Stage = "planning"
-		task.StartedAt = timePtr(time.Now())
-		m.db.Save(task)
 
 		// 发送任务开始执行通知（Local 模式，与 Agent 模式 pushTaskToAgent 对齐）
 		go m.sendTaskStartNotification(task, "plan")
@@ -1394,7 +1438,12 @@ func (m *TaskQueueManager) ExecuteConfirmedApply(workspaceID string, taskID uint
 		return m.pushTaskToAgent(&task, &workspace)
 	}
 
-	// Local mode
-	go m.executeTask(&task)
+	// Local mode — CAS 标记 running 后再启动 goroutine
+	if err := m.casTaskStatus(&task, "apply"); err != nil {
+		log.Printf("[TaskQueue] CAS failed for confirmed apply task %d: %v", task.ID, err)
+		return fmt.Errorf("failed to mark task as running: %w", err)
+	}
+
+	go m.executeTask(&task, "apply")
 	return nil
 }

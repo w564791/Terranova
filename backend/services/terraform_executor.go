@@ -1884,16 +1884,22 @@ func (s *TerraformExecutor) ExecuteApply(
 		ProviderConfig: planTask.SnapshotProviderConfig,
 	}
 
-	// 获取workspace的基本信息（名称、执行模式等，这些不影响terraform执行）
+	// 获取workspace的基本信息（ID 是 SaveStateToDatabase 必须的主键）
 	workspaceInfo, err := s.dataAccessor.GetWorkspace(task.WorkspaceID)
 	if err != nil {
-		logger.Warn("Failed to get workspace info: %v (continuing with snapshot data)", err)
-	} else {
-		workspace.Name = workspaceInfo.Name
-		workspace.ExecutionMode = workspaceInfo.ExecutionMode
-		workspace.TerraformVersion = workspaceInfo.TerraformVersion
-		workspace.SystemVariables = workspaceInfo.SystemVariables
+		logger.LogError("fetching", err, map[string]interface{}{
+			"task_id":      task.ID,
+			"workspace_id": task.WorkspaceID,
+		}, nil)
+		logger.StageEnd("fetching")
+		s.saveTaskFailure(task, logger, err, "apply")
+		return fmt.Errorf("failed to get workspace info: %w", err)
 	}
+	workspace.ID = workspaceInfo.ID
+	workspace.Name = workspaceInfo.Name
+	workspace.ExecutionMode = workspaceInfo.ExecutionMode
+	workspace.TerraformVersion = workspaceInfo.TerraformVersion
+	workspace.SystemVariables = workspaceInfo.SystemVariables
 
 	logger.Info("✓ Workspace configuration reconstructed from snapshot")
 	logger.Info("  - Name: %s", workspace.Name)
@@ -1971,6 +1977,10 @@ func (s *TerraformExecutor) ExecuteApply(
 			s.saveTaskFailure(task, logger, err, "apply")
 			return err
 		}
+
+		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）
+		logger.Info("Restoring terraform lock file...")
+		s.restoreTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
 	}
 
 	logger.Info("Configuration fetch completed successfully")
