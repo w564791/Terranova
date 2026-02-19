@@ -1,5 +1,5 @@
-FROM alpine:3.23.3
-RUN apk add --no-cache ca-certificates tzdata
+FROM amazonlinux:latest
+RUN dnf install -y ca-certificates tzdata git unzip shadow-utils && dnf clean all
 WORKDIR /app
 ARG TARGETARCH
 COPY linux-${TARGETARCH}/iac-platform .

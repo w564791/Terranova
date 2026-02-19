@@ -120,6 +120,37 @@ func main() {
 	defer pubsub.Stop()
 	log.Println("PG PubSub initialized for cross-replica WebSocket broadcasting")
 
+	// 设置 OutputStreamManager 的跨副本日志转发器
+	// Local 模式的 terraform 日志通过此回调经 PG NOTIFY 到达其他副本的前端 WebSocket
+	localPodName, _ := os.Hostname()
+	if envPod := os.Getenv("POD_NAME"); envPod != "" {
+		localPodName = envPod
+	}
+	streamManager.SetLogForwarder(func(taskID uint, msg services.OutputMessage) {
+		type logFwdMsg struct {
+			TaskID    uint   `json:"task_id"`
+			Type      string `json:"type"`
+			Line      string `json:"line"`
+			LineNum   int    `json:"line_num"`
+			Stage     string `json:"stage,omitempty"`
+			Status    string `json:"status,omitempty"`
+			SourcePod string `json:"source_pod"`
+		}
+		fwd := logFwdMsg{
+			TaskID:    taskID,
+			Type:      msg.Type,
+			Line:      msg.Line,
+			LineNum:   msg.LineNum,
+			Stage:     msg.Stage,
+			Status:    msg.Status,
+			SourcePod: localPodName,
+		}
+		if err := pgpubsub.Notify(db, "log_stream_forward", fwd); err != nil {
+			log.Printf("[LogStream] Failed to forward local-mode log via PG NOTIFY for task %d: %v", taskID, err)
+		}
+	})
+	log.Println("[LogStream] Cross-replica log forwarder configured for local-mode tasks")
+
 	// 初始化Agent Metrics Hub（所有副本运行）
 	agentMetricsHub := websocket.NewAgentMetricsHub()
 	go agentMetricsHub.Run()
@@ -204,6 +235,7 @@ func main() {
 	// 将Agent C&C Handler注入到TaskQueueManager（必须在 RecoverPendingTasks 之前）
 	// 使用rawCCHandler因为这是实际处理agent连接的handler
 	queueManager.SetAgentCCHandler(rawCCHandler)
+	rawCCHandler.SetTaskQueueManager(queueManager)
 	log.Println("[TaskQueue] Agent C&C handler configured (using Raw WebSocket handler)")
 
 	// Wire up PG PubSub for cross-replica agent task dispatch (HA)

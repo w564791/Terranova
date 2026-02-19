@@ -85,6 +85,10 @@ func (rb *RingBuffer) Size() int {
 	return rb.size
 }
 
+// LogForwarder is a callback for cross-replica log forwarding via PG NOTIFY.
+// taskID identifies the task; msg is the log message to forward.
+type LogForwarder func(taskID uint, msg OutputMessage)
+
 // OutputStream 单个任务的输出流
 type OutputStream struct {
 	TaskID    uint
@@ -93,6 +97,7 @@ type OutputStream struct {
 	mutex     sync.RWMutex
 	closed    bool
 	startTime time.Time
+	forwarder LogForwarder // cross-replica PG NOTIFY forwarder (nil = no forwarding)
 }
 
 // NewOutputStream 创建输出流
@@ -144,8 +149,27 @@ func (s *OutputStream) Unsubscribe(clientID string) {
 	}
 }
 
-// Broadcast 广播消息到所有客户端
+// Broadcast 广播消息到所有本地客户端，并通过 PG NOTIFY 转发到其他副本。
+// Agent C&C 和跨副本 listener 路径应使用 BroadcastLocal 以避免重复转发。
 func (s *OutputStream) Broadcast(msg OutputMessage) {
+	s.broadcastToLocal(msg)
+
+	// 转发到其他副本（local 模式产生的日志需要跨副本传播）
+	if s.forwarder != nil {
+		s.forwarder(s.TaskID, msg)
+	}
+}
+
+// BroadcastLocal 仅广播到本地客户端，不触发跨副本转发。
+// 用于：1) Agent C&C handleLogStream（已自行处理 PG NOTIFY）
+//
+//	2) SetupLogStreamListener（接收来自其他副本的消息，不应再转发）
+func (s *OutputStream) BroadcastLocal(msg OutputMessage) {
+	s.broadcastToLocal(msg)
+}
+
+// broadcastToLocal 内部方法：写入缓冲区并广播到本地 WebSocket 客户端
+func (s *OutputStream) broadcastToLocal(msg OutputMessage) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -219,8 +243,9 @@ func (s *OutputStream) GetBufferedLogs() string {
 
 // OutputStreamManager 管理所有任务的输出流
 type OutputStreamManager struct {
-	streams map[uint]*OutputStream
-	mutex   sync.RWMutex
+	streams      map[uint]*OutputStream
+	mutex        sync.RWMutex
+	logForwarder LogForwarder // 新建 stream 继承此 forwarder
 }
 
 // NewOutputStreamManager 创建流管理器
@@ -228,6 +253,15 @@ func NewOutputStreamManager() *OutputStreamManager {
 	return &OutputStreamManager{
 		streams: make(map[uint]*OutputStream),
 	}
+}
+
+// SetLogForwarder 设置跨副本日志转发函数。
+// 设置后，新创建的 OutputStream 会继承此 forwarder，
+// 使得 local 模式的日志能通过 PG NOTIFY 到达其他副本。
+func (m *OutputStreamManager) SetLogForwarder(f LogForwarder) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.logForwarder = f
 }
 
 // GetOrCreate 获取或创建输出流
@@ -240,6 +274,7 @@ func (m *OutputStreamManager) GetOrCreate(taskID uint) *OutputStream {
 	}
 
 	stream := NewOutputStream(taskID)
+	stream.forwarder = m.logForwarder // 继承跨副本转发函数
 	m.streams[taskID] = stream
 
 	log.Printf("Created OutputStream for task %d", taskID)

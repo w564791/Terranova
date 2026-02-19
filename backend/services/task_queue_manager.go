@@ -828,6 +828,9 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask) {
 		task.PlanTaskID = &task.ID
 		m.db.Save(task)
 
+		// 发送任务开始执行通知（Local 模式，与 Agent 模式 pushTaskToAgent 对齐）
+		go m.sendTaskStartNotification(task, "apply")
+
 		// 执行Apply
 		err = m.executor.ExecuteApply(ctx, task)
 
@@ -844,8 +847,12 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask) {
 
 		// 更新任务状态为running
 		task.Status = models.TaskStatusRunning
+		task.Stage = "planning"
 		task.StartedAt = timePtr(time.Now())
 		m.db.Save(task)
+
+		// 发送任务开始执行通知（Local 模式，与 Agent 模式 pushTaskToAgent 对齐）
+		go m.sendTaskStartNotification(task, "plan")
 
 		// 执行Plan
 		err = m.executor.ExecutePlan(ctx, task)
@@ -885,6 +892,9 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask) {
 			(task.Status == models.TaskStatusApplied || task.Status == models.TaskStatusFailed) {
 			go m.SyncCMDBAfterApply(task)
 		}
+
+		// Drift 状态清理（与 Agent 模式 sendTaskCompletedNotification 对齐）
+		go m.clearDriftIfApplicable(task)
 
 		go m.TryExecuteNextTask(task.WorkspaceID)
 	} else {
@@ -1098,7 +1108,7 @@ func (m *TaskQueueManager) ReleaseTaskSlot(taskID uint) error {
 	return nil
 }
 
-// ReserveSlotForApplyPending reserves Slot 0 for an apply_pending task
+// ReserveSlotForApplyPending reserves the slot for an apply_pending task
 // This should be called when a plan_and_apply task completes its plan phase
 // The reserved slot ensures the Pod won't be deleted during scale-down
 func (m *TaskQueueManager) ReserveSlotForApplyPending(taskID uint) error {
@@ -1112,12 +1122,6 @@ func (m *TaskQueueManager) ReserveSlotForApplyPending(taskID uint) error {
 	pod, slotID, err := m.k8sDeploymentSvc.podManager.FindPodByTaskID(taskID)
 	if err != nil {
 		log.Printf("[TaskQueue] Warning: Task %d not found in any slot, cannot reserve", taskID)
-		return nil
-	}
-
-	// Reserve the slot (must be Slot 0 for plan_and_apply tasks)
-	if slotID != 0 {
-		log.Printf("[TaskQueue] Warning: Task %d is on slot %d, but only Slot 0 can be reserved", taskID, slotID)
 		return nil
 	}
 
@@ -1234,6 +1238,63 @@ func (m *TaskQueueManager) processDriftCheckResult(task *models.WorkspaceTask) {
 	} else {
 		log.Printf("[DriftCheck] Successfully processed drift check result for task %d", task.ID)
 	}
+}
+
+// clearDriftIfApplicable 在任务到达终态后清理 drift 状态
+// 与 Agent 模式 sendTaskCompletedNotification 中的 drift 清理逻辑对齐
+func (m *TaskQueueManager) clearDriftIfApplicable(task *models.WorkspaceTask) {
+	driftService := NewDriftCheckService(m.db)
+
+	switch task.Status {
+	case models.TaskStatusApplied:
+		// Apply 成功完成 — 如果是全量 apply（无 --target），清除 drift
+		if !m.taskHasTargetParam(task) {
+			log.Printf("[Drift] Clearing drift status for workspace %s after full apply (task %d)", task.WorkspaceID, task.ID)
+			if err := driftService.ClearDriftOnFullApply(task.WorkspaceID); err != nil {
+				log.Printf("[Drift] Failed to clear drift for workspace %s: %v", task.WorkspaceID, err)
+			}
+		}
+
+	case models.TaskStatusPlannedAndFinished:
+		// Plan+Apply 完成但无变更 — 清除 drift
+		if !m.taskHasTargetParam(task) {
+			log.Printf("[Drift] Clearing drift status for workspace %s after plan_and_apply with no changes (task %d)", task.WorkspaceID, task.ID)
+			if err := driftService.ClearDriftOnFullApply(task.WorkspaceID); err != nil {
+				log.Printf("[Drift] Failed to clear drift for workspace %s: %v", task.WorkspaceID, err)
+			}
+		}
+
+	case models.TaskStatusSuccess:
+		// Plan-only 成功且无变更 — 清除 drift
+		if !m.taskHasTargetParam(task) && !m.taskHasResourceChanges(task) {
+			log.Printf("[Drift] Clearing drift status for workspace %s after plan with no changes (task %d)", task.WorkspaceID, task.ID)
+			if err := driftService.ClearDriftOnFullApply(task.WorkspaceID); err != nil {
+				log.Printf("[Drift] Failed to clear drift for workspace %s: %v", task.WorkspaceID, err)
+			}
+		}
+	}
+}
+
+// taskHasTargetParam 检查任务是否使用了 --target 参数
+func (m *TaskQueueManager) taskHasTargetParam(task *models.WorkspaceTask) bool {
+	var variable models.WorkspaceVariable
+	err := m.db.Where("workspace_id = ? AND key = ? AND is_deleted = ?",
+		task.WorkspaceID, "TF_CLI_ARGS", false).First(&variable).Error
+	if err != nil {
+		return false
+	}
+	return strings.Contains(variable.Value, "--target") || strings.Contains(variable.Value, "-target")
+}
+
+// taskHasResourceChanges 检查任务是否有资源变更
+func (m *TaskQueueManager) taskHasResourceChanges(task *models.WorkspaceTask) bool {
+	var count int64
+	if err := m.db.Model(&models.WorkspaceTaskResourceChange{}).
+		Where("task_id = ? AND action != ?", task.ID, "no-op").
+		Count(&count).Error; err != nil {
+		return true // 保守起见，假设有变更
+	}
+	return count > 0
 }
 
 // SyncCMDBAfterApply Apply 完成后同步 CMDB（唯一入口）

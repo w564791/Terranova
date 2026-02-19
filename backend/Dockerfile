@@ -8,8 +8,8 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /iac-platform main.go
 
 # -- Stage 2: Runtime --
-FROM alpine:3.23.3
-RUN apk add --no-cache ca-certificates tzdata
+FROM amazonlinux:latest
+RUN dnf install -y ca-certificates tzdata git unzip shadow-utils && dnf clean all
 WORKDIR /app
 COPY --from=builder /iac-platform .
 EXPOSE 8080 8090

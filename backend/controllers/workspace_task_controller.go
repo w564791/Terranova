@@ -559,9 +559,8 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 		if err != nil {
 			log.Printf("Failed to parse start_date: %v", err)
 		} else {
-			// 直接使用 UTC 时间进行比较，不需要转换
-			query = query.Where("created_at >= ?", startTime.UTC())
-			log.Printf("Time filter: start_date=%s (UTC)", startTime.UTC().Format(time.RFC3339))
+			query = query.Where("created_at >= ?", startTime)
+			log.Printf("Time filter: start_date=%s", startTime.Format(time.RFC3339))
 		}
 	}
 	endDate := ctx.Query("end_date")
@@ -571,9 +570,8 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 		if err != nil {
 			log.Printf("Failed to parse end_date: %v", err)
 		} else {
-			// 直接使用 UTC 时间进行比较，不需要转换
-			query = query.Where("created_at <= ?", endTime.UTC())
-			log.Printf("Time filter: end_date=%s (UTC)", endTime.UTC().Format(time.RFC3339))
+			query = query.Where("created_at <= ?", endTime)
+			log.Printf("Time filter: end_date=%s", endTime.Format(time.RFC3339))
 		}
 	}
 
@@ -713,15 +711,13 @@ func applySearchAndTimeFilters(search, startDate, endDate string) func(*gorm.DB)
 			)
 		}
 		if startDate != "" {
-			// 直接使用 UTC 时间进行比较
 			if startTime, err := time.Parse(time.RFC3339, startDate); err == nil {
-				db = db.Where("created_at >= ?", startTime.UTC())
+				db = db.Where("created_at >= ?", startTime)
 			}
 		}
 		if endDate != "" {
-			// 直接使用 UTC 时间进行比较
 			if endTime, err := time.Parse(time.RFC3339, endDate); err == nil {
-				db = db.Where("created_at <= ?", endTime.UTC())
+				db = db.Where("created_at <= ?", endTime)
 			}
 		}
 		return db

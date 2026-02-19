@@ -67,12 +67,27 @@ func (j *JSONB) Scan(value interface{}) error {
 
 	// 如果是array，将其存储在"_array"键下（临时方案，用于兼容）
 	// 注意：这只是为了让GORM能够读取旧数据，新数据不应该是数组格式
+	// 使用 UnwrapArray() 方法取出原始数组
 	if arrayData, ok := data.([]interface{}); ok {
 		*j = map[string]interface{}{"_array": arrayData}
 		return nil
 	}
 
 	return fmt.Errorf("JSONB data is neither map nor array")
+}
+
+// UnwrapArray 从 JSONB 中提取被 Scan 包装的数组数据。
+// DB 中存储的 JSON 数组在 Scan 后变为 {"_array": [...]},
+// 此方法将其还原为 []byte JSON 数组，供 json.Unmarshal 使用。
+// 如果 JSONB 本身就是 map 格式（无 _array 键），则原样 marshal 返回。
+func (j JSONB) UnwrapArray() ([]byte, error) {
+	if j == nil {
+		return []byte("[]"), nil
+	}
+	if arr, ok := j["_array"]; ok {
+		return json.Marshal(arr)
+	}
+	return json.Marshal(j)
 }
 
 // WorkspaceVariableArray 自定义WorkspaceVariable数组类型（用于JSONB存储）

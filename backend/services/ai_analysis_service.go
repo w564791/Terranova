@@ -46,9 +46,8 @@ func (s *AIAnalysisService) CheckRateLimitWithConfig(userID string, limitSeconds
 		return true, 0
 	}
 
-	// 使用 UTC 时间计算，避免时区问题
-	now := time.Now().UTC()
-	lastAnalysis := rateLimit.LastAnalysisAt.UTC()
+	now := time.Now()
+	lastAnalysis := rateLimit.LastAnalysisAt
 
 	// 计算距离上次分析的时间（秒）
 	elapsedSeconds := int(now.Sub(lastAnalysis).Seconds())
@@ -69,8 +68,7 @@ func (s *AIAnalysisService) CheckRateLimitWithConfig(userID string, limitSeconds
 
 // UpdateRateLimit 更新速率限制记录
 func (s *AIAnalysisService) UpdateRateLimit(userID string) error {
-	// 使用 UTC 时间，避免时区问题
-	now := time.Now().UTC()
+	now := time.Now()
 
 	// 使用 ON CONFLICT 实现真正的 UPSERT
 	return s.db.Exec(`

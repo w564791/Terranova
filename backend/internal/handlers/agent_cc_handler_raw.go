@@ -56,13 +56,14 @@ type LogStreamForwardMessage struct {
 
 // RawAgentCCHandler handles Agent C&C WebSocket connections using raw http.Handler
 type RawAgentCCHandler struct {
-	db            *gorm.DB
-	streamManager *services.OutputStreamManager
-	metricsHub    *websocket.AgentMetricsHub
-	upgrader      gorillaws.Upgrader
-	agents        map[string]*RawAgentConnection
-	mu            sync.RWMutex
-	podName       string // cached pod name for PG NOTIFY source identification
+	db               *gorm.DB
+	streamManager    *services.OutputStreamManager
+	metricsHub       *websocket.AgentMetricsHub
+	taskQueueManager *services.TaskQueueManager
+	upgrader         gorillaws.Upgrader
+	agents           map[string]*RawAgentConnection
+	mu               sync.RWMutex
+	podName          string // cached pod name for PG NOTIFY source identification
 }
 
 // RawAgentConnection represents a C&C connection to an agent
@@ -499,6 +500,17 @@ func (h *RawAgentCCHandler) handleTaskCompleted(agentConn *RawAgentConnection, p
 
 	// 发送任务完成通知
 	go h.sendTaskCompletedNotification(uint(taskID))
+
+	// K8s Slot 释放 + 触发下个任务（幂等，与 HTTP handler 重复触发不冲突）
+	if h.taskQueueManager != nil {
+		go h.taskQueueManager.ReleaseTaskSlot(uint(taskID))
+		go func() {
+			var task models.WorkspaceTask
+			if err := h.db.First(&task, uint(taskID)).Error; err == nil {
+				h.taskQueueManager.TryExecuteNextTask(task.WorkspaceID)
+			}
+		}()
+	}
 }
 
 // sendTaskCompletedNotification 发送任务完成通知（根据任务状态发送不同类型的通知）
@@ -652,6 +664,17 @@ func (h *RawAgentCCHandler) handleTaskFailed(agentConn *RawAgentConnection, payl
 
 	// 发送任务失败通知
 	go h.sendTaskFailedNotification(uint(taskID))
+
+	// K8s Slot 释放 + 触发下个任务（幂等，与 HTTP handler 重复触发不冲突）
+	if h.taskQueueManager != nil {
+		go h.taskQueueManager.ReleaseTaskSlot(uint(taskID))
+		go func() {
+			var task models.WorkspaceTask
+			if err := h.db.First(&task, uint(taskID)).Error; err == nil {
+				h.taskQueueManager.TryExecuteNextTask(task.WorkspaceID)
+			}
+		}()
+	}
 }
 
 // sendTaskFailedNotification 发送任务失败通知
@@ -703,6 +726,7 @@ func (h *RawAgentCCHandler) handleLogStream(agentConn *RawAgentConnection, paylo
 	}
 
 	// Forward to OutputStreamManager for frontend WebSocket clients
+	// 使用 BroadcastLocal：agent C&C 路径自行处理 PG NOTIFY，避免重复转发
 	if h.streamManager != nil {
 		stream := h.streamManager.GetOrCreate(uint(taskID))
 		if stream != nil {
@@ -714,7 +738,7 @@ func (h *RawAgentCCHandler) handleLogStream(agentConn *RawAgentConnection, paylo
 				Stage:     stage,
 				Status:    status,
 			}
-			stream.Broadcast(outputMsg) // Use Broadcast, not Publish
+			stream.BroadcastLocal(outputMsg)
 		}
 	}
 
@@ -972,6 +996,12 @@ func (h *RawAgentCCHandler) SetMetricsHub(hub *websocket.AgentMetricsHub) {
 	log.Println("[Raw] Agent Metrics Hub configured")
 }
 
+// SetTaskQueueManager sets the task queue manager (for slot release and next task trigger)
+func (h *RawAgentCCHandler) SetTaskQueueManager(qm *services.TaskQueueManager) {
+	h.taskQueueManager = qm
+	log.Println("[Raw] TaskQueueManager configured for C&C handler")
+}
+
 // processDriftCheckResult 处理 drift_check 任务结果
 func (h *RawAgentCCHandler) processDriftCheckResult(taskID uint) {
 	driftService := services.NewDriftCheckService(h.db)
@@ -1162,6 +1192,7 @@ func (h *RawAgentCCHandler) SetupLogStreamListener(pubsub *pgpubsub.PubSub) {
 		}
 
 		// Broadcast to local OutputStreamManager for any frontend clients on this replica.
+		// 使用 BroadcastLocal：这是接收来自其他副本的消息，不应再转发
 		if h.streamManager != nil {
 			stream := h.streamManager.GetOrCreate(msg.TaskID)
 			if stream != nil {
@@ -1173,7 +1204,7 @@ func (h *RawAgentCCHandler) SetupLogStreamListener(pubsub *pgpubsub.PubSub) {
 					Stage:     msg.Stage,
 					Status:    msg.Status,
 				}
-				stream.Broadcast(outputMsg)
+				stream.BroadcastLocal(outputMsg)
 			}
 		}
 	})

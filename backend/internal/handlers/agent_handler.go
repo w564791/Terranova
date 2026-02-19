@@ -665,6 +665,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 
 	// IMPORTANT: Feed logs into OutputStreamManager for real-time WebSocket streaming
 	// This allows frontend to see agent logs in real-time via WebSocket
+	// 使用 BroadcastLocal：agent 模式已通过 C&C WebSocket 路径处理跨副本转发
 	if h.streamManager != nil {
 		stream := h.streamManager.GetOrCreate(taskID)
 		if stream != nil {
@@ -672,7 +673,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 			lines := strings.Split(req.Content, "\n")
 			for _, line := range lines {
 				if line != "" {
-					stream.Broadcast(services.OutputMessage{
+					stream.BroadcastLocal(services.OutputMessage{
 						Type:      "output",
 						Line:      line,
 						Timestamp: time.Now(),
@@ -867,6 +868,44 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		taskCopy := task
 		taskCopy.Status = req.Status
 		go h.taskQueueManager.SyncCMDBAfterApply(&taskCopy)
+	}
+
+	// Drift Check 结果处理（Agent 模式补齐）
+	if task.TaskType == models.TaskTypeDriftCheck &&
+		(req.Status == models.TaskStatusSuccess ||
+			req.Status == models.TaskStatusFailed ||
+			req.Status == models.TaskStatusApplied ||
+			req.Status == models.TaskStatusPlannedAndFinished ||
+			req.Status == models.TaskStatusCancelled) {
+		taskCopy := task
+		taskCopy.Status = req.Status
+		go services.NewDriftCheckService(h.db).ProcessDriftCheckResult(&taskCopy)
+	}
+
+	// 任务到达终态后，立即触发下个任务执行（Agent 模式补齐）
+	// 此前依赖 checkAndRetryPendingTasks 定时轮询，延迟可达 30-60s
+	if h.taskQueueManager != nil &&
+		(req.Status == models.TaskStatusSuccess ||
+			req.Status == models.TaskStatusApplied ||
+			req.Status == models.TaskStatusPlannedAndFinished ||
+			req.Status == models.TaskStatusFailed ||
+			req.Status == models.TaskStatusCancelled) {
+		go h.taskQueueManager.TryExecuteNextTask(task.WorkspaceID)
+	}
+
+	// K8s Slot 释放 — 任务到达终态后释放 pod slot（Agent 模式补齐）
+	if h.taskQueueManager != nil &&
+		(req.Status == models.TaskStatusSuccess ||
+			req.Status == models.TaskStatusApplied ||
+			req.Status == models.TaskStatusPlannedAndFinished ||
+			req.Status == models.TaskStatusFailed ||
+			req.Status == models.TaskStatusCancelled) {
+		go h.taskQueueManager.ReleaseTaskSlot(taskID)
+	}
+
+	// K8s Slot 预留 — 转入 apply_pending 时预留 slot 防 scale-down（Agent 模式补齐）
+	if h.taskQueueManager != nil && req.Status == models.TaskStatusApplyPending {
+		go h.taskQueueManager.ReserveSlotForApplyPending(taskID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1131,9 +1170,9 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 	}
 	// 【修复】解析快照变量:如果是旧格式(只有引用),需要从数据库查询完整数据
 	if task.SnapshotVariables != nil {
-		// 尝试解析快照变量 - SnapshotVariables现在是JSONB (map[string]interface{})
-		// 需要先序列化再反序列化
-		snapshotVarsJSON, _ := json.Marshal(task.SnapshotVariables)
+		// JSONB.Scan 将 DB 中的 JSON 数组包装为 {"_array": [...]},
+		// 使用 UnwrapArray() 还原为原始数组 JSON
+		snapshotVarsJSON, _ := task.SnapshotVariables.UnwrapArray()
 		var snapshotVars []map[string]interface{}
 		if err := json.Unmarshal(snapshotVarsJSON, &snapshotVars); err == nil && len(snapshotVars) > 0 {
 			// 检查第一个元素是否包含key字段

@@ -177,8 +177,9 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
     }
 
     if (resource.apply_status === 'applying') {
-      const text = resource.action === 'create' ? 'Creating...' 
-        : resource.action === 'update' ? 'Modifying...' 
+      const text = resource.action === 'create' ? 'Creating...'
+        : resource.action === 'update' ? 'Modifying...'
+        : resource.action === 'replace' ? 'Replacing...'
         : 'Destroying...';
       return { text, className: styles.resourceStatusText };
     }
@@ -191,6 +192,8 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
         return { text: 'Modified', className: styles.statusTextUpdated };
       } else if (resource.action === 'delete') {
         return { text: 'Destroyed', className: styles.statusTextDestroyed };
+      } else if (resource.action === 'replace') {
+        return { text: 'Replaced', className: styles.statusTextDestroyed };
       }
     }
 

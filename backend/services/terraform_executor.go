@@ -2847,10 +2847,9 @@ func (s *TerraformExecutor) parsePlanChanges(planJSON map[string]interface{}) (i
 	return add, change, destroy
 }
 
-// timePtr 返回时间指针（使用 UTC 时间，与 GORM autoCreateTime 保持一致）
+// timePtr 返回时间指针
 func timePtr(t time.Time) *time.Time {
-	utc := t.UTC()
-	return &utc
+	return &t
 }
 
 // ============================================================================
@@ -4195,9 +4194,16 @@ func (s *TerraformExecutor) ResolveVariableSnapshots(
 	}
 
 	// 尝试将snapshotData转换为JSON
-	snapshotBytes, err := json.Marshal(snapshotData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal snapshot data: %w", err)
+	// 如果是 JSONB 类型，使用 UnwrapArray 正确处理 {"_array": [...]} 包装
+	var snapshotBytes []byte
+	var marshalErr error
+	if jsonb, ok := snapshotData.(models.JSONB); ok {
+		snapshotBytes, marshalErr = jsonb.UnwrapArray()
+	} else {
+		snapshotBytes, marshalErr = json.Marshal(snapshotData)
+	}
+	if marshalErr != nil {
+		return nil, fmt.Errorf("failed to marshal snapshot data: %w", marshalErr)
 	}
 
 	// 先尝试解析为map数组格式（新格式，包含完整变量数据）
