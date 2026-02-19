@@ -12,13 +12,18 @@ import (
 )
 
 // setupAgentAPIRoutes sets up Agent API routes (使用 Pool Token 认证，不需要 JWT)
-func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *services.OutputStreamManager, agentMetricsHub *websocket.AgentMetricsHub, runTaskExecutor *services.RunTaskExecutor) {
+func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *services.OutputStreamManager, agentMetricsHub *websocket.AgentMetricsHub, runTaskExecutor *services.RunTaskExecutor, queueManager *services.TaskQueueManager) {
 	// Initialize handlers
 	agentHandler := handlers.NewAgentHandler(db, streamManager, agentMetricsHub)
 
 	// 注入 Run Task 执行器（用于 Agent 模式下的 post_plan Run Tasks）
 	if runTaskExecutor != nil {
 		agentHandler.SetRunTaskExecutor(runTaskExecutor)
+	}
+
+	// 注入任务队列管理器（用于 Agent 模式下 CMDB 同步等 server 侧逻辑）
+	if queueManager != nil {
+		agentHandler.SetTaskQueueManager(queueManager)
 	}
 	agentPoolSecretsHandler := handlers.NewAgentPoolSecretsHandler(db)
 

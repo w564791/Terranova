@@ -883,7 +883,7 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask) {
 		// 这里统一处理，确保 Local、Agent、K8s Agent 三种模式都能正确同步
 		if task.TaskType == models.TaskTypePlanAndApply &&
 			(task.Status == models.TaskStatusApplied || task.Status == models.TaskStatusFailed) {
-			go m.syncCMDBAfterApply(task)
+			go m.SyncCMDBAfterApply(task)
 		}
 
 		go m.TryExecuteNextTask(task.WorkspaceID)
@@ -1236,11 +1236,11 @@ func (m *TaskQueueManager) processDriftCheckResult(task *models.WorkspaceTask) {
 	}
 }
 
-// syncCMDBAfterApply Apply 完成后同步 CMDB（唯一入口）
+// SyncCMDBAfterApply Apply 完成后同步 CMDB（唯一入口）
 // 在 Server 端执行，确保 Local、Agent、K8s Agent 三种模式统一处理
 // 无论 Apply 成功还是失败都会触发，因为失败的 apply 中可能有部分资源已创建
 // 但如果本次 task 未产生新的 state version（如 init/validation 阶段就失败），则跳过同步
-func (m *TaskQueueManager) syncCMDBAfterApply(task *models.WorkspaceTask) {
+func (m *TaskQueueManager) SyncCMDBAfterApply(task *models.WorkspaceTask) {
 	// 前置检查：本次 task 是否产生了新的 state version
 	// 如果没有（全部失败，无任何资源变更），跳过同步
 	var stateCount int64
@@ -1256,26 +1256,27 @@ func (m *TaskQueueManager) syncCMDBAfterApply(task *models.WorkspaceTask) {
 		return
 	}
 
-	// 检查是否已有同步任务在运行（前端手动触发的 sync/rebuild）
-	var workspace models.Workspace
-	if err := m.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; err != nil {
-		log.Printf("[CMDB] Failed to get workspace %s: %v, skipping sync", task.WorkspaceID, err)
-		return
-	}
-	if workspace.CMDBSyncStatus == models.CMDBSyncStatusSyncing {
-		log.Printf("[CMDB] Workspace %s already has a sync in progress (triggered_by: %s), skipping auto sync",
-			task.WorkspaceID, workspace.CMDBSyncTriggeredBy)
-		return
-	}
-
-	// 标记同步状态
+	// 原子 CAS：仅当 cmdb_sync_status != syncing 时才设置为 syncing
+	// 多副本场景下，多个副本可能同时收到 Agent 状态上报（重试等），
+	// 用 DB WHERE 条件保证只有一个副本能成功抢到同步权
 	now := time.Now()
-	m.db.Model(&models.Workspace{}).Where("workspace_id = ?", task.WorkspaceID).Updates(map[string]interface{}{
-		"cmdb_sync_status":       models.CMDBSyncStatusSyncing,
-		"cmdb_sync_triggered_by": models.CMDBSyncTriggerAuto,
-		"cmdb_sync_started_at":   now,
-		"cmdb_sync_completed_at": nil,
-	})
+	result := m.db.Model(&models.Workspace{}).
+		Where("workspace_id = ? AND cmdb_sync_status != ?", task.WorkspaceID, models.CMDBSyncStatusSyncing).
+		Updates(map[string]interface{}{
+			"cmdb_sync_status":       models.CMDBSyncStatusSyncing,
+			"cmdb_sync_triggered_by": models.CMDBSyncTriggerAuto,
+			"cmdb_sync_started_at":   now,
+			"cmdb_sync_completed_at": nil,
+		})
+	if result.Error != nil {
+		log.Printf("[CMDB] Failed to acquire sync lock for workspace %s: %v", task.WorkspaceID, result.Error)
+		return
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("[CMDB] Workspace %s already has a sync in progress, skipping (task %d)",
+			task.WorkspaceID, task.ID)
+		return
+	}
 
 	log.Printf("[CMDB] Apply completed for task %d (status: %s), syncing CMDB for workspace %s",
 		task.ID, task.Status, task.WorkspaceID)

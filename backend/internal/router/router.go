@@ -93,7 +93,7 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	api.POST("/auth/logout", middleware.JWTAuth(), handlers.NewAuthHandler(db).Logout)
 
 	// Agent API routes (使用 Pool Token 认证，不需要 JWT)
-	setupAgentAPIRoutes(api, db, streamManager, agentMetricsHub, runTaskExecutor)
+	setupAgentAPIRoutes(api, db, streamManager, agentMetricsHub, runTaskExecutor, queueManager)
 
 	// Run Task Callback routes (公开路由，不需要认证，供外部 Run Task 服务回调)
 	setupRunTaskCallbackRoutes(api, db, runTaskExecutor)

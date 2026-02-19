@@ -206,7 +206,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		ID int `gorm:"column:id"`
 	}
 	if err := tx.Table("iam_roles").Where("name = ? AND is_system = ?", "admin", true).First(&adminRole).Error; err != nil {
-		log.Printf("⚠️ [Setup] Admin IAM role not found, skipping role assignment: %v", err)
+		log.Printf(" [Setup] Admin IAM role not found, skipping role assignment: %v", err)
 		// 不回滚，角色分配是可选的
 	} else {
 		// 查找默认组织 ID 用于角色分配
@@ -214,7 +214,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 			ID int `gorm:"column:id"`
 		}
 		if err := tx.Table("organizations").Where("name = ?", "default").First(&defaultOrgForRole).Error; err != nil {
-			log.Printf("⚠️ [Setup] Default organization not found for role assignment, skipping: %v", err)
+			log.Printf(" [Setup] Default organization not found for role assignment, skipping: %v", err)
 		} else {
 			// 分配角色 - 使用正确的字段名和类型
 			// scope_type 只能是 ORGANIZATION, PROJECT, WORKSPACE
@@ -228,7 +228,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 				"assigned_at": time.Now(),
 			}
 			if err := tx.Table("iam_user_roles").Create(&iamUserRole).Error; err != nil {
-				log.Printf("⚠️ [Setup] Failed to assign admin IAM role: %v", err)
+				log.Printf(" [Setup] Failed to assign admin IAM role: %v", err)
 				// 不回滚，角色分配是可选的
 			} else {
 				log.Printf("[Setup] Admin IAM role assigned to user %s", user.Username)
@@ -241,7 +241,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		ID int `gorm:"column:id"`
 	}
 	if err := tx.Table("organizations").Where("name = ?", "default").First(&defaultOrg).Error; err != nil {
-		log.Printf("⚠️ [Setup] Default organization not found, skipping org assignment: %v", err)
+		log.Printf(" [Setup] Default organization not found, skipping org assignment: %v", err)
 	} else {
 		// user_organizations 表只有 user_id, org_id, joined_at 字段
 		userOrg := map[string]interface{}{
@@ -250,7 +250,7 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 			"joined_at": time.Now(),
 		}
 		if err := tx.Table("user_organizations").Create(&userOrg).Error; err != nil {
-			log.Printf("⚠️ [Setup] Failed to assign user to default org: %v", err)
+			log.Printf(" [Setup] Failed to assign user to default org: %v", err)
 		} else {
 			log.Printf("[Setup] User %s assigned to default organization", user.Username)
 		}
@@ -273,9 +273,9 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 		"code":    201,
 		"message": "系统初始化成功，管理员账号已创建",
 		"data": gin.H{
-			"id":             user.ID,
-			"username":       user.Username,
-			"email":          user.Email,
+			"id":              user.ID,
+			"username":        user.Username,
+			"email":           user.Email,
 			"is_system_admin": user.IsSystemAdmin,
 		},
 		"timestamp": time.Now(),

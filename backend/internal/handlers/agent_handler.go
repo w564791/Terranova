@@ -26,7 +26,8 @@ type AgentHandler struct {
 	streamManager         *services.OutputStreamManager
 	hcpCredentialsService *services.HCPCredentialsService
 	metricsHub            *websocket.AgentMetricsHub
-	runTaskExecutor       *services.RunTaskExecutor // Run Task 执行器
+	runTaskExecutor       *services.RunTaskExecutor    // Run Task 执行器
+	taskQueueManager      *services.TaskQueueManager   // 任务队列管理器（用于 CMDB 同步等 server 侧逻辑）
 }
 
 // NewAgentHandler creates a new agent handler
@@ -44,6 +45,11 @@ func NewAgentHandler(db *gorm.DB, streamManager *services.OutputStreamManager, m
 // SetRunTaskExecutor sets the Run Task executor
 func (h *AgentHandler) SetRunTaskExecutor(executor *services.RunTaskExecutor) {
 	h.runTaskExecutor = executor
+}
+
+// SetTaskQueueManager sets the task queue manager (for CMDB sync after agent task completion)
+func (h *AgentHandler) SetTaskQueueManager(qm *services.TaskQueueManager) {
+	h.taskQueueManager = qm
 }
 
 // RegisterAgent handles agent registration
@@ -852,13 +858,21 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		}()
 	}
 
-	// 注意：CMDB 同步由 TaskQueueManager.syncCMDBAfterApply 统一处理（server 侧）
-	// 无论 Local、Agent、K8s Agent 模式，均在 OnTaskCompleted → syncCMDBAfterApply 触发
+	// Apply 完成后（无论成功还是失败）同步 CMDB
+	// 失败的 apply 中可能有部分资源已创建，也需要同步
+	if h.taskQueueManager != nil &&
+		task.TaskType == models.TaskTypePlanAndApply &&
+		(req.Status == models.TaskStatusApplied || req.Status == models.TaskStatusFailed) {
+		// 使用 req.Status 而非 task.Status，因为 DB 已更新但内存对象未刷新
+		taskCopy := task
+		taskCopy.Status = req.Status
+		go h.taskQueueManager.SyncCMDBAfterApply(&taskCopy)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "task status updated",
 		"task_id": taskID,
-		"status":  task.Status,
+		"status":  req.Status,
 	})
 }
 
