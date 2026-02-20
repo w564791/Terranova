@@ -1,0 +1,44 @@
+# K8s RBAC for IAC Platform leader election
+# Apply with: kubectl apply -f ha-rbac.yaml -n <namespace>
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: iac-platform
+  namespace: terraform
+  labels:
+    app: iac-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: iac-platform-leader-election
+  namespace: terraform
+  labels:
+    app: iac-platform
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch","update","create","delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: iac-platform-leader-election
+  namespace: terraform
+  labels:
+    app: iac-platform
+subjects:
+  - kind: ServiceAccount
+    name: iac-platform
+roleRef:
+  kind: Role
+  name: iac-platform-leader-election
+  apiGroup: rbac.authorization.k8s.io

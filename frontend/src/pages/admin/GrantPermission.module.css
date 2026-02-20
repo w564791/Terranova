@@ -1,0 +1,521 @@
+/* 容器 */
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 页面头部 */
+.header {
+  margin-bottom: 24px;
+}
+
+/* 授权类型选择器 */
+.typeSelector {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.typeButton {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: transparent;
+  color: #666;
+}
+
+.typeButton:hover {
+  background: #e8e8e8;
+  color: #333;
+}
+
+.typeButton.active {
+  background: #1890ff;
+  color: white;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.description {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+/* 授权表单 */
+.grantForm {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+/* 表单区块 */
+.section {
+  padding: 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+}
+
+/* 表单行 */
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.formRow:last-child {
+  margin-bottom: 0;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.required {
+  color: #ff4d4f;
+  margin-left: 4px;
+}
+
+.input,
+.textarea {
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s;
+  background: white;
+}
+
+.input:hover,
+.textarea:hover {
+  border-color: #40a9ff;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.input.error {
+  border-color: #ff4d4f;
+}
+
+.input.error:focus {
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+}
+
+.errorText {
+  font-size: 12px;
+  color: #ff4d4f;
+  margin-top: 4px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* 权限选择区域 */
+.permissionsSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.selectedCount {
+  font-size: 14px;
+  color: #1890ff;
+  font-weight: 500;
+  padding: 4px 12px;
+  background: #e6f7ff;
+  border-radius: 4px;
+}
+
+.permissionsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.permissionGroup {
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.permissionGroupTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1890ff;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e6f7ff;
+}
+
+.permissionItems {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.permissionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 6px;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.permissionItem:hover {
+  background: #f0f7ff;
+  border-color: #d6e4ff;
+}
+
+.permissionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  margin-right: 20px;
+}
+
+.permissionName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.permissionDesc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.permissionLevelDetails {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f7ff;
+  border-left: 3px solid #1890ff;
+  border-radius: 4px;
+}
+
+.levelDetail {
+  font-size: 12px;
+  color: #333;
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+
+.levelDetail:last-child {
+  margin-bottom: 0;
+}
+
+.levelDetail strong {
+  color: #1890ff;
+  font-weight: 600;
+  margin-right: 6px;
+  min-width: 60px;
+  display: inline-block;
+}
+
+.permissionLevels {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.levelCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 2px solid #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  user-select: none;
+}
+
+.levelCheckbox:hover {
+  border-color: #1890ff;
+  background: #f0f7ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);
+}
+
+.levelCheckbox.checked {
+  border-color: #1890ff;
+  background: #e6f7ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+}
+
+.levelCheckbox input[type='checkbox'] {
+  margin: 0;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.levelLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+}
+
+.levelCheckbox.checked .levelLabel {
+  color: #1890ff;
+  font-weight: 600;
+}
+
+/* 表单按钮 */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  background: #fafafa;
+  border-top: 1px solid #e8e8e8;
+}
+
+.button {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 120px;
+}
+
+.button.primary {
+  background: #1890ff;
+  color: white;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: #40a9ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+}
+
+.button.primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.button.primary:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.button.secondary {
+  background: white;
+  color: #333;
+  border: 1px solid #d9d9d9;
+}
+
+.button.secondary:hover:not(:disabled) {
+  border-color: #1890ff;
+  color: #1890ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.button.secondary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.button.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 角色选择网格 */
+.rolesGridHeader {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.selectedRoleCount {
+  font-size: 14px;
+  color: #1890ff;
+  font-weight: 500;
+  padding: 4px 12px;
+  background: #e6f7ff;
+  border-radius: 4px;
+}
+
+.rolesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.roleCard {
+  position: relative;
+  padding: 16px;
+  background: white;
+  border: 2px solid #e8e8e8;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.roleCard:hover {
+  border-color: #1890ff;
+  background: #f0f7ff;
+}
+
+.roleCard.selected {
+  border-color: #1890ff;
+  background: #e6f7ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+}
+
+.roleCheckbox {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.roleCardContent {
+  /* 角色卡片内容 */
+}
+
+.roleCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.roleCardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.systemBadge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+
+.rolePolicyCount {
+  font-size: 12px;
+  color: #666;
+  padding: 2px 8px;
+  background: #f0f0f0;
+  border-radius: 10px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .formRow {
+    grid-template-columns: 1fr;
+  }
+
+  .permissionItem {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .permissionInfo {
+    margin-right: 0;
+  }
+
+  .permissionLevels {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .levelCheckbox {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .formActions {
+    flex-direction: column-reverse;
+  }
+
+  .button {
+    width: 100%;
+  }
+}

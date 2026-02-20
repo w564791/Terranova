@@ -1,0 +1,751 @@
+.applyingView {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Copy Toast */
+.copyToast {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: #10b981;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Resource List */
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resourceItem {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.resourceItem:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.resourceHeader {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  gap: 10px;
+  transition: background-color 0.2s;
+}
+
+.resourceHeader:hover {
+  background: #f9fafb;
+}
+
+/* Status Icon */
+.resourceStatus {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.statusApplying {
+  color: #f59e0b;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.statusCompleted {
+  color: #16a34a;
+}
+
+.statusFailed {
+  color: #dc2626;
+}
+
+.statusPending {
+  color: #9ca3af;
+}
+
+/* Action Icon */
+.resourceAction {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.actionCreate {
+  color: #16a34a;
+}
+
+.actionUpdate {
+  color: #2563eb;
+}
+
+.actionDelete {
+  color: #dc2626;
+}
+
+.actionReplace {
+  color: #ea580c;
+}
+
+/* Resource Address */
+.resourceAddress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  min-width: 0;
+  word-break: break-all;
+}
+
+/* Copy Button */
+.copyButton {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #9ca3af;
+  opacity: 0;
+  transition: all 0.2s;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resourceHeader:hover .copyButton,
+.detailValue:hover .copyButton,
+.outputActualValue:hover .copyButton {
+  opacity: 0.6;
+}
+
+.copyButton:hover {
+  opacity: 1 !important;
+  background: rgba(0, 0, 0, 0.05);
+  color: #6b7280;
+}
+
+/* Status Text */
+.resourceStatusText {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #6b7280;
+  padding: 3px 8px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.statusTextCreated {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #166534;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: #dcfce7;
+  border-radius: 3px;
+}
+
+.statusTextUpdated {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #1e40af;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: #dbeafe;
+  border-radius: 3px;
+}
+
+.statusTextDestroyed {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #991b1b;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: #fee2e2;
+  border-radius: 3px;
+}
+
+.statusTextFailed {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #991b1b;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: #fee2e2;
+  border-radius: 3px;
+}
+
+/* Expand Icon */
+.expandIcon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+/* Resource Details */
+.resourceDetails {
+  padding: 10px 16px 10px 58px; /* 左侧对齐资源地址 */
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.detailItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.detailLabel {
+  flex-shrink: 0;
+  font-weight: 500;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.detailValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #1f2937;
+  background: #e5e7eb;
+  padding: 4px 10px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.detailValueMuted {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Outputs Section */
+.outputsSection {
+  margin-top: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.outputsHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.outputsHeader:hover {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+}
+
+.chevron {
+  font-size: 10px;
+  color: #166534;
+}
+
+.outputsTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #166534;
+}
+
+.outputsCount {
+  font-size: 11px;
+  color: #16a34a;
+  background: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.outputsList {
+  display: flex;
+  flex-direction: column;
+}
+
+.outputItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  background: white;
+  transition: background 0.2s;
+}
+
+.outputItem:last-child {
+  border-bottom: none;
+}
+
+.outputItem:hover {
+  background: #f9fafb;
+}
+
+.outputName {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+  flex-shrink: 0;
+}
+
+.outputValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.outputActualValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #166534;
+  background: #dcfce7;
+  padding: 4px 10px;
+  border-radius: 3px;
+}
+
+.outputSensitive {
+  color: #991b1b;
+  font-style: italic;
+  background: #fee2e2;
+  padding: 4px 10px;
+  border-radius: 3px;
+}
+
+.outputUnknown {
+  color: #7c3aed;
+  font-style: italic;
+  background: #faf5ff;
+  padding: 4px 10px;
+  border-radius: 3px;
+}
+
+/* Legacy compatibility */
+.summary {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.summary h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stats span {
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statInProgress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.statCompleted {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.statFailed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.statPending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Triggers Action Indicator */
+.triggersActionIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: #7c3aed;
+  font-size: 12px;
+}
+
+.triggersActionIndicator svg {
+  flex-shrink: 0;
+}
+
+.triggersActionBadge {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 11px;
+  color: #7c3aed;
+  background: #f5f3ff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Triggered Actions Section (inside resource details) */
+.triggeredActionsSection {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.triggeredActionsLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.triggeredActionItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.triggeredActionArrow {
+  color: #7c3aed;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.triggeredActionAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #1f2937;
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+.triggeredActionType {
+  font-size: 10px;
+  color: #7c3aed;
+  background: #f5f3ff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.triggeredActionEvent {
+  font-size: 10px;
+  color: #059669;
+  background: #d1fae5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* Action Invocations Section */
+.actionInvocationsSection {
+  margin-top: 16px;
+  border: 1px solid #e9d5ff;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #faf5ff;
+}
+
+.actionInvocationsHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.actionInvocationsHeader:hover {
+  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+}
+
+.actionInvocationsTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #7c3aed;
+  display: flex;
+  align-items: center;
+}
+
+.actionInvocationsCount {
+  font-size: 12px;
+  color: #7c3aed;
+  background: white;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  border: 1px solid #e9d5ff;
+}
+
+.actionInvocationsBadge {
+  font-size: 10px;
+  color: #059669;
+  background: #d1fae5;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.actionInvocationsList {
+  display: flex;
+  flex-direction: column;
+  background: white;
+}
+
+.actionInvocationItem {
+  border-bottom: 1px solid #f3e8ff;
+}
+
+.actionInvocationItem:last-child {
+  border-bottom: none;
+}
+
+.actionInvocationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.actionInvocationHeader:hover {
+  background: #faf5ff;
+}
+
+.actionInvocationLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.actionInvocationAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  word-break: break-all;
+}
+
+.actionInvocationRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.actionInvocationTypeTag {
+  font-size: 11px;
+  color: #7c3aed;
+  background: #f5f3ff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.actionInvocationTriggerBadge {
+  font-size: 10px;
+  color: #059669;
+  background: #d1fae5;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.actionInvocationBody {
+  padding: 12px 14px 14px 36px;
+  background: #fafafa;
+  border-top: 1px solid #f3e8ff;
+}
+
+/* Action Trigger Relation */
+.actionTriggerRelation {
+  margin-bottom: 12px;
+}
+
+.triggerRelationLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.triggerRelationFlow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.triggerResourceAddress {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #1f2937;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* Action Config Section */
+.actionConfigSection {
+  margin-bottom: 12px;
+}
+
+.actionConfigLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.actionConfigGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actionConfigRow {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.actionConfigKey {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.actionConfigValue {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #166534;
+  word-break: break-all;
+}
+
+.knownAfterApply {
+  font-style: italic;
+  color: #7c3aed;
+  font-size: 11px;
+}
+
+.executedValue {
+  font-style: italic;
+  color: #059669;
+  font-size: 11px;
+  background: #d1fae5;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.resolvedValue {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #059669;
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.resolvedBadge {
+  font-size: 9px;
+  color: #059669;
+  background: #d1fae5;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* Action Provider Info */
+.actionProviderInfo {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.actionProviderLabel {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.actionProviderValue {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #1f2937;
+}

@@ -1,0 +1,1318 @@
+/* 页面包装器 - 整体外框 */
+.pageWrapper {
+  min-height: 100vh;
+  background: #f3f4f6;
+  padding: 24px;
+}
+
+/* 容器 */
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 32px;
+}
+
+/* 加载状态 */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 20px;
+  color: #6b7280;
+  gap: 16px;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  text-align: center;
+  padding: 100px 20px;
+  color: #ef4444;
+  font-size: 16px;
+}
+
+/* 顶部导航 */
+.topNav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.2s;
+}
+
+.backButton:hover {
+  color: #6366f1;
+}
+
+.backIcon {
+  font-size: 18px;
+}
+
+.topActions {
+  display: flex;
+  gap: 8px;
+}
+
+.topBtn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+.topBtn:hover {
+  background: #e5e7eb;
+}
+
+.topBtn.success {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.topBtn.success:hover {
+  background: #bbf7d0;
+}
+
+.topBtn.warning {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.topBtn.warning:hover {
+  background: #fde68a;
+}
+
+.topBtn.danger {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.topBtn.danger:hover:not(:disabled) {
+  background: #fecaca;
+}
+
+.topBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 模块头部 */
+.moduleHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+
+.headerLeft {
+  flex: 1;
+}
+
+.moduleMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.providerBadge {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.statusDot.active {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.statusDot.inactive {
+  background: #9ca3af;
+}
+
+.statusText {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.moduleName {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px 0;
+  line-height: 1.2;
+}
+
+.moduleDescription {
+  font-size: 15px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 版本选择器 */
+.versionSelector {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.versionLabel {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.versionDropdownWrapper {
+  position: relative;
+}
+
+.versionButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 140px;
+}
+
+.versionButton:hover {
+  border-color: #6366f1;
+}
+
+.versionNumber {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.defaultTag {
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dropdownArrow {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.versionDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  min-width: 260px;
+  overflow: hidden;
+}
+
+.versionItem {
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+}
+
+.versionItem:hover {
+  background: #f9fafb;
+}
+
+.versionItem.active {
+  background: #eef2ff;
+}
+
+.versionItemInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.versionItemNumber {
+  font-weight: 600;
+  color: #111827;
+}
+
+.versionItemMeta {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.versionActions {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.versionItem:hover .versionActions {
+  opacity: 1;
+}
+
+.setDefaultBtn {
+  padding: 4px 10px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.setDefaultBtn:hover {
+  background: #6366f1;
+  color: white;
+}
+
+.deleteVersionBtn {
+  padding: 4px 10px;
+  background: #fef2f2;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.deleteVersionBtn:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.addVersionItem {
+  padding: 14px 16px;
+  color: #6366f1;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.addVersionItem:hover {
+  background: #eef2ff;
+}
+
+/* Source 信息条 */
+.sourceBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+
+.sourceLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.sourceCode {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  color: #374151;
+  background: none;
+  word-break: break-all;
+}
+
+/* 快捷操作 */
+.quickActions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.quickAction {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quickAction:hover {
+  border-color: #6366f1;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.quickActionIcon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border-radius: 10px;
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.quickActionIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.quickActionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quickActionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.quickActionDesc {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.quickActionArrow {
+  font-size: 18px;
+  color: #d1d5db;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+
+.quickAction:hover .quickActionArrow {
+  color: #6366f1;
+  transform: translateX(4px);
+}
+
+/* 区块样式 */
+.section {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.sectionHeader {
+  padding: 18px 20px 0;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.sectionContent {
+  padding: 16px 20px 20px;
+}
+
+/* 信息条 */
+.infoBar {
+  display: flex;
+  gap: 32px;
+  padding: 16px 20px;
+  background: #f9fafb;
+  border-radius: 10px;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.infoLabel {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.infoValue {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* 下拉滑动抽屉样式 */
+.drawerOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+  backdrop-filter: blur(2px);
+}
+
+.drawerOverlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  background: white;
+  border-radius: 0 0 20px 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  z-index: 1001;
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.drawer.open {
+  transform: translateX(-50%) translateY(0);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  flex-shrink: 0;
+}
+
+.drawerTitle {
+  font-size: 17px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.drawerTitleIcon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  color: white;
+}
+
+.drawerTitleIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.drawerCloseBtn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s;
+}
+
+.drawerCloseBtn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.drawerCloseBtn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.drawerContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  background: #fafbfc;
+}
+
+.drawerFooter {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+  background: white;
+}
+
+/* 内联表单样式 */
+.inlineForm {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.inlineFormHeader {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.inlineFormTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.inlineFormRow {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.inlineFormGroup {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.inlineFormGroup .inlineFormInput,
+.inlineFormGroup .inlineFormSelect {
+  min-height: 42px;
+}
+
+.inlineFormLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.inlineFormInput,
+.inlineFormSelect {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  background: white;
+}
+
+.inlineFormInput:focus,
+.inlineFormSelect:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.inlineFormInput::placeholder {
+  color: #9ca3af;
+}
+
+.inlineFormTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  background: white;
+}
+
+.inlineFormTextarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.inlineFormTextarea::placeholder {
+  color: #9ca3af;
+}
+
+.inlineFormHint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.inlineFormCheckbox {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-top: 24px;
+}
+
+.inlineCheckboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+}
+
+.inlineCheckboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.inlineFormActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.inlineFormSubmit {
+  padding: 10px 20px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.inlineFormSubmit:hover:not(:disabled) {
+  background: #4f46e5;
+}
+
+.inlineFormSubmit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inlineFormCancel {
+  padding: 10px 20px;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.inlineFormCancel:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* 保留旧的弹窗样式用于确认对话框 */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 28px;
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 24px 0;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formGroup label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.input,
+.select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.checkboxLabel {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #6366f1;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.cancelBtn,
+.confirmBtn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelBtn {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.cancelBtn:hover {
+  background: #e5e7eb;
+}
+
+.confirmBtn {
+  background: #6366f1;
+  border: none;
+  color: white;
+}
+
+.confirmBtn:hover {
+  background: #4f46e5;
+}
+
+.confirmBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 抽屉内表单样式 */
+.drawerFormGroup {
+  margin-bottom: 24px;
+}
+
+.drawerFormGroup label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.drawerFormGroup .required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.drawerInput,
+.drawerSelect,
+.drawerTextarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  background: white;
+}
+
+.drawerInput:focus,
+.drawerSelect:focus,
+.drawerTextarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.drawerInput::placeholder,
+.drawerTextarea::placeholder {
+  color: #9ca3af;
+}
+
+.drawerTextarea {
+  font-family: inherit;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.drawerCheckboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.drawerCheckboxLabel:hover {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+
+.drawerCheckboxLabel input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.drawerCheckboxText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawerCheckboxTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.drawerCheckboxDesc {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.drawerHint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 6px;
+}
+
+.drawerDivider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 24px 0;
+}
+
+.drawerSectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .pageWrapper {
+    padding: 12px;
+  }
+
+  .container {
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .topNav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .topActions {
+    width: 100%;
+  }
+
+  .topBtn {
+    flex: 1;
+  }
+
+  .moduleHeader {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .versionSelector {
+    text-align: left;
+    width: 100%;
+  }
+
+  .versionButton {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .versionDropdown {
+    left: 0;
+    right: 0;
+  }
+
+  .moduleName {
+    font-size: 24px;
+  }
+
+  .quickActions {
+    grid-template-columns: 1fr;
+  }
+
+  .infoBar {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .infoItem {
+    min-width: calc(50% - 8px);
+  }
+}
+
+/* AI 提示词区块 */
+.promptsSection {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.promptsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.promptsTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.promptsIcon {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.addPromptBtn {
+  padding: 8px 16px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.addPromptBtn:hover {
+  background: #4f46e5;
+}
+
+/* 空状态 */
+.promptsEmpty {
+  text-align: center;
+  padding: 32px 20px;
+  background: white;
+  border-radius: 8px;
+  border: 1px dashed #d1d5db;
+}
+
+.promptsEmptyIcon {
+  color: #9ca3af;
+  margin-bottom: 12px;
+}
+
+.promptsEmpty p {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0 0 16px 0;
+}
+
+.addFirstPromptBtn {
+  padding: 10px 20px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.addFirstPromptBtn:hover {
+  background: #4f46e5;
+}
+
+/* 提示词列表 */
+.promptsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.promptCard {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.promptCard:hover {
+  border-color: #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.promptCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.promptCardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.promptCardActions {
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.promptCard:hover .promptCardActions {
+  opacity: 1;
+}
+
+.promptEditBtn,
+.promptDeleteBtn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.promptEditBtn {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.promptEditBtn:hover {
+  background: #6366f1;
+  color: white;
+}
+
+.promptDeleteBtn {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.promptDeleteBtn:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.promptCardContent {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* textarea 样式 */
+.textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+@media (max-width: 480px) {
+  .moduleName {
+    font-size: 22px;
+  }
+
+  .topActions {
+    flex-wrap: wrap;
+  }
+
+  .topBtn {
+    min-width: calc(50% - 4px);
+  }
+
+  .promptsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .addPromptBtn {
+    width: 100%;
+  }
+
+  .promptCardActions {
+    opacity: 1;
+  }
+
+  .drawer {
+    width: calc(100vw - 16px);
+    max-width: none;
+    border-radius: 0 0 16px 16px;
+  }
+
+  .drawerHeader {
+    padding: 16px 20px;
+  }
+
+  .drawerContent {
+    padding: 20px;
+  }
+
+  .drawerFooter {
+    padding: 16px 20px;
+  }
+}

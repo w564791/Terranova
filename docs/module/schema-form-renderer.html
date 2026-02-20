@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAPI Schema Form Renderer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+    .container { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: #fff; border-right: 1px solid #e0e0e0; position: fixed; height: 100vh; overflow-y: auto; }
+    .sidebar-header { padding: 20px; border-bottom: 1px solid #e0e0e0; }
+    .sidebar-title { font-size: 18px; font-weight: 600; }
+    .sidebar-subtitle { font-size: 12px; color: #666; margin-top: 4px; }
+    .tab-list { list-style: none; padding: 10px 0; }
+    .tab-item { padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-left: 3px solid transparent; font-size: 14px; }
+    .tab-item:hover { background: #f5f5f5; }
+    .tab-item.active { background: #e3f2fd; border-left-color: #1976d2; color: #1976d2; }
+    .tab-item.hidden { display: none; }
+    .show-more-btn { padding: 12px 20px; background: none; border: none; color: #1976d2; cursor: pointer; font-size: 13px; }
+    .main-content { flex: 1; padding: 30px; margin-left: 220px; padding-bottom: 100px; }
+    
+    /* 横置Tab布局 */
+    .container.layout-top { flex-direction: column; }
+    .container.layout-top .sidebar { position: relative; width: 100%; height: auto; border-right: none; border-bottom: 1px solid #e0e0e0; }
+    .container.layout-top .sidebar-header { display: inline-block; vertical-align: middle; border-bottom: none; padding: 16px 24px; }
+    .container.layout-top .tab-list { display: flex; flex-wrap: wrap; padding: 0 16px 12px; gap: 4px; }
+    .container.layout-top .tab-item { padding: 8px 16px; border-left: none; border-bottom: 3px solid transparent; border-radius: 4px 4px 0 0; }
+    .container.layout-top .tab-item.active { border-left: none; border-bottom-color: #1976d2; background: #e3f2fd; }
+    .container.layout-top .show-more-btn { display: inline-block; padding: 8px 16px; }
+    .container.layout-top .main-content { margin-left: 0; padding: 24px; }
+    .container.layout-top .form-actions { left: 0; }
+    .form-header { margin-bottom: 30px; }
+    .form-header h1 { font-size: 24px; margin-bottom: 8px; }
+    .form-header p { color: #666; }
+    .form-group { display: none; }
+    .form-group.active { display: block; }
+    .form-section { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .section-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e0e0e0; }
+    .field-row { margin-bottom: 20px; }
+    .field-label { display: flex; align-items: center; gap: 6px; font-weight: 500; margin-bottom: 6px; }
+    .field-label .required { color: #f44336; }
+    .field-help { font-size: 12px; color: #666; margin-top: 4px; }
+    input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #1976d2; box-shadow: 0 0 0 3px rgba(25,118,210,0.1); }
+    input.invalid, select.invalid, textarea.invalid { border-color: #f44336; background: #fff5f5; }
+    input.invalid:focus, select.invalid:focus, textarea.invalid:focus { box-shadow: 0 0 0 3px rgba(244,67,54,0.1); }
+    .field-error { font-size: 12px; color: #f44336; margin-top: 4px; display: none; }
+    .field-error.show { display: block; }
+    .input-with-prefix { display: flex; }
+    .input-prefix { padding: 10px 12px; background: #f5f5f5; border: 1px solid #ddd; border-right: none; border-radius: 6px 0 0 6px; color: #666; }
+    .input-with-prefix input { border-radius: 0 6px 6px 0; }
+    .switch-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+    .switch-info { flex: 1; }
+    .switch-label { font-weight: 500; }
+    .switch-help { font-size: 12px; color: #666; margin-top: 2px; }
+    .switch { position: relative; width: 44px; height: 24px; margin-left: 16px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch-slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; transition: 0.3s; border-radius: 24px; }
+    .switch-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%; }
+    .switch input:checked + .switch-slider { background: #1976d2; }
+    .switch input:checked + .switch-slider:before { transform: translateX(20px); }
+    .kv-editor { border: 1px solid #ddd; border-radius: 6px; }
+    .kv-header { display: grid; grid-template-columns: 1fr 1fr 40px; background: #f5f5f5; padding: 10px 12px; font-size: 13px; color: #666; }
+    .kv-row { display: grid; grid-template-columns: 1fr 1fr 40px; border-top: 1px solid #e0e0e0; }
+    .kv-row input { border: none; border-radius: 0; padding: 10px 12px; }
+    .kv-row input.required-key { background: #fff3e0; }
+    .kv-delete { background: none; border: none; color: #999; cursor: pointer; }
+    .kv-delete:hover { color: #f44336; }
+    .kv-add { padding: 10px 12px; border-top: 1px solid #e0e0e0; }
+    .kv-add button { background: none; border: 1px dashed #1976d2; color: #1976d2; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+    /* Tags/List widget */
+    .tags-editor { border: 1px solid #ddd; border-radius: 6px; padding: 12px; min-height: 50px; }
+    .tags-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .tag-item { display: inline-flex; align-items: center; background: #e3f2fd; color: #1976d2; padding: 6px 10px; border-radius: 16px; font-size: 13px; }
+    .tag-item button { background: none; border: none; color: #1976d2; margin-left: 6px; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+    .tag-item button:hover { color: #f44336; }
+    .tag-input-row { display: flex; gap: 8px; }
+    .tag-input-row input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .tag-input-row button { background: #1976d2; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .tag-input-row button:hover { background: #1565c0; }
+    .object-list { border: 1px solid #ddd; border-radius: 6px; }
+    .object-list-item { border-bottom: 1px solid #e0e0e0; }
+    .object-list-header { display: flex; justify-content: space-between; padding: 12px 16px; background: #fafafa; cursor: pointer; }
+    .object-list-content { display: none; padding: 16px; }
+    .object-list-item.expanded .object-list-content { display: block; }
+    .object-list-add { padding: 12px 16px; }
+    .object-list-add button { background: none; border: 1px dashed #1976d2; color: #1976d2; padding: 8px 16px; border-radius: 4px; cursor: pointer; width: 100%; }
+    .nested-object { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px; margin-top: 12px; }
+    .json-editor { font-family: Monaco, Menlo, monospace; font-size: 13px; min-height: 150px; }
+    .form-actions { position: fixed; bottom: 0; left: 220px; right: 0; background: #fff; border-top: 1px solid #e0e0e0; padding: 16px 30px; display: flex; justify-content: space-between; }
+    .btn { padding: 10px 24px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    .btn-primary { background: #1976d2; color: #fff; border: none; }
+    .btn-secondary { background: #fff; color: #333; border: 1px solid #ddd; }
+    .btn-text { background: none; border: none; color: #1976d2; }
+    .field-hidden { display: none !important; }
+    .cascade-hint { background: #fff3e0; border: 1px solid #ffcc80; border-radius: 4px; padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #e65100; }
+    .debug-panel { position: fixed; bottom: 80px; right: 20px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; width: 400px; max-height: 300px; overflow: auto; display: none; z-index: 200; }
+    .debug-panel.show { display: block; }
+    .debug-panel pre { font-size: 11px; background: #f5f5f5; padding: 12px; border-radius: 4px; max-height: 200px; overflow: auto; }
+    
+    /* Schema选择器样式 */
+    .schema-selector { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      justify-content: center; 
+      min-height: 100vh; 
+      padding: 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .schema-selector-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .schema-selector h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .schema-selector p {
+      color: #666;
+      margin-bottom: 30px;
+    }
+    .schema-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 30px;
+    }
+    .schema-option {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .schema-option:hover {
+      border-color: #1976d2;
+      background: #f5f9ff;
+    }
+    .schema-option.selected {
+      border-color: #1976d2;
+      background: #e3f2fd;
+    }
+    .schema-option input[type="radio"] {
+      width: 20px;
+      height: 20px;
+      margin-right: 16px;
+    }
+    .schema-option-info {
+      flex: 1;
+    }
+    .schema-option-title {
+      font-weight: 600;
+      font-size: 16px;
+      color: #333;
+    }
+    .schema-option-desc {
+      font-size: 13px;
+      color: #666;
+      margin-top: 4px;
+    }
+    .schema-option-badge {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .file-upload-area {
+      border: 2px dashed #ccc;
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 20px;
+    }
+    .file-upload-area:hover {
+      border-color: #1976d2;
+      background: #f5f9ff;
+    }
+    .file-upload-area.dragover {
+      border-color: #1976d2;
+      background: #e3f2fd;
+    }
+    .file-upload-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    .file-upload-text {
+      color: #666;
+    }
+    .file-upload-text strong {
+      color: #1976d2;
+    }
+    .load-schema-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .load-schema-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    .load-schema-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- Schema选择器 -->
+  <div class="schema-selector" id="schemaSelector">
+    <div class="schema-selector-card">
+      <h1>📋 OpenAPI Schema 表单渲染器</h1>
+      <p>选择一个预设的Schema文件，或上传自定义的JSON Schema文件</p>
+      
+      <div class="schema-options" id="schemaOptions">
+        <label class="schema-option selected" onclick="selectSchema('s3-module-openapi-schema.json')">
+          <input type="radio" name="schema" value="s3-module-openapi-schema.json" checked>
+          <div class="schema-option-info">
+            <div class="schema-option-title">🪣 AWS S3 Bucket Module</div>
+            <div class="schema-option-desc">S3存储桶模块，包含版本控制、加密、生命周期等配置</div>
+          </div>
+          <span class="schema-option-badge">推荐</span>
+        </label>
+        <label class="schema-option" onclick="selectSchema('ec2-module-openapi-schema.json')">
+          <input type="radio" name="schema" value="ec2-module-openapi-schema.json">
+          <div class="schema-option-info">
+            <div class="schema-option-title">🖥️ AWS EC2 Instance Module</div>
+            <div class="schema-option-desc">EC2实例模块，包含80+个配置参数</div>
+          </div>
+        </label>
+      </div>
+      
+      <div class="file-upload-area" id="fileUploadArea" onclick="document.getElementById('fileInput').click()">
+        <div class="file-upload-icon">📁</div>
+        <div class="file-upload-text">
+          <strong>点击上传</strong> 或拖拽JSON文件到此处
+        </div>
+        <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFileSelect(event)">
+      </div>
+      
+      <button class="load-schema-btn" id="loadSchemaBtn" onclick="loadSelectedSchema()">
+        🚀 加载Schema并渲染表单
+      </button>
+    </div>
+  </div>
+
+  <!-- 表单容器 -->
+  <div class="container hidden" id="formContainer">
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title" id="moduleTitle">Loading...</div>
+        <div class="sidebar-subtitle" id="moduleVersion"></div>
+      </div>
+      <ul class="tab-list" id="tabList"></ul>
+      <button class="show-more-btn" id="showMoreBtn" onclick="toggleHiddenTabs()" style="display:none;">显示更多 ▼</button>
+    </nav>
+    <main class="main-content" id="mainContent"><div style="text-align:center;padding:60px;color:#666;">加载中...</div></main>
+    <div class="form-actions">
+      <div>
+        <button class="btn-text" onclick="backToSelector()">⬅️ 返回</button>
+        <button class="btn-text" onclick="toggleDebug()">🔧 调试</button>
+        <button class="btn-text" onclick="exportData()">📤 导出</button>
+      </div>
+      <div><button class="btn btn-secondary">取消</button><button class="btn btn-primary" onclick="submitForm()">创建</button></div>
+    </div>
+  </div>
+  <div class="debug-panel" id="debugPanel"><h4>表单数据</h4><pre id="debugOutput">{}</pre></div>
+
+  <script>
+    let schema = null, uiConfig = {}, formData = {}, cascadeRules = [], externalSources = {};
+    let selectedSchemaUrl = 's3-module-openapi-schema.json';
+    let uploadedSchemaData = null;
+    const icons = { settings: '⚙️', security: '🔒', lock: '🔐', history: '📜', schedule: '⏱️', public: '🌐', description: '📝', tune: '🎛️', code: '💻' };
+
+    // 模拟外部数据源数据
+    const mockExternalData = {
+      ami_list: [
+        { value: 'ami-0123456789abcdef0', label: 'Amazon Linux 2 AMI (HVM)', description: 'Amazon Linux 2 AMI 2.0.20231218.0 x86_64 HVM gp2' },
+        { value: 'ami-0abcdef1234567890', label: 'Ubuntu Server 22.04 LTS', description: 'Canonical, Ubuntu, 22.04 LTS, amd64 jammy image' },
+        { value: 'ami-0fedcba9876543210', label: 'Red Hat Enterprise Linux 9', description: 'RHEL-9.0.0_HVM-20230127-x86_64-0-Hourly2-GP2' },
+        { value: 'ami-0111222333444555a', label: 'Windows Server 2022 Base', description: 'Microsoft Windows Server 2022 Full Locale English AMI' },
+      ],
+      instance_types: [
+        { value: 't3.micro', label: 't3.micro', vcpu: 2, memory: 1024 },
+        { value: 't3.small', label: 't3.small', vcpu: 2, memory: 2048 },
+        { value: 't3.medium', label: 't3.medium', vcpu: 2, memory: 4096 },
+        { value: 'm5.large', label: 'm5.large', vcpu: 2, memory: 8192 },
+      ],
+      availability_zones: [
+        { value: 'us-east-1a', label: 'us-east-1a' },
+        { value: 'us-east-1b', label: 'us-east-1b' },
+        { value: 'us-east-1c', label: 'us-east-1c' },
+      ],
+      subnet_list: [
+        { value: 'subnet-0123456789abcdef0', label: 'Public Subnet 1', group: 'us-east-1a' },
+        { value: 'subnet-0abcdef1234567890', label: 'Private Subnet 1', group: 'us-east-1a' },
+      ],
+      security_groups: [
+        { value: 'sg-0123456789abcdef0', label: 'default', description: 'Default security group' },
+        { value: 'sg-0abcdef1234567890', label: 'web-sg', description: 'Security group for web servers' },
+      ],
+      key_pairs: [
+        { value: 'my-key-pair', label: 'my-key-pair' },
+        { value: 'production-key', label: 'production-key' },
+      ],
+      iam_instance_profiles: [
+        { value: 'EC2-Admin-Role', label: 'EC2-Admin-Role' },
+        { value: 'S3-Access-Role', label: 'S3-Access-Role' },
+      ],
+    };
+
+    // Schema选择
+    function selectSchema(url) {
+      selectedSchemaUrl = url;
+      uploadedSchemaData = null;
+      document.querySelectorAll('.schema-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.querySelector('input').value === url);
+      });
+      document.getElementById('loadSchemaBtn').disabled = false;
+    }
+
+    // 文件上传处理
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            uploadedSchemaData = JSON.parse(e.target.result);
+            selectedSchemaUrl = null;
+            document.querySelectorAll('.schema-option').forEach(opt => opt.classList.remove('selected'));
+            document.getElementById('loadSchemaBtn').disabled = false;
+            document.getElementById('loadSchemaBtn').textContent = `🚀 加载 "${file.name}"`;
+          } catch (err) {
+            alert('JSON解析失败: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      }
+    }
+
+    // 拖拽上传
+    const uploadArea = document.getElementById('fileUploadArea');
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith('.json')) {
+        document.getElementById('fileInput').files = e.dataTransfer.files;
+        handleFileSelect({ target: { files: [file] } });
+      }
+    });
+
+    // 加载选中的Schema
+    async function loadSelectedSchema() {
+      if (uploadedSchemaData) {
+        schema = uploadedSchemaData;
+      } else if (selectedSchemaUrl) {
+        const res = await fetch(selectedSchemaUrl);
+        schema = await res.json();
+      }
+      
+      if (schema) {
+        uiConfig = schema['x-iac-platform']?.ui || {};
+        cascadeRules = schema['x-iac-platform']?.cascade?.rules || [];
+        document.getElementById('schemaSelector').classList.add('hidden');
+        document.getElementById('formContainer').classList.remove('hidden');
+        initForm();
+      }
+    }
+
+    // 返回选择器
+    function backToSelector() {
+      document.getElementById('schemaSelector').classList.remove('hidden');
+      document.getElementById('formContainer').classList.add('hidden');
+      formData = {};
+      updateDebug();
+    }
+
+    function initForm() {
+      document.getElementById('moduleTitle').textContent = schema.info?.title || 'Module';
+      document.getElementById('moduleVersion').textContent = 'v' + (schema.info?.version || '1.0');
+      const mainSchema = Object.values(schema.components?.schemas || {})[0] || {};
+      
+      // 解析外部数据源配置
+      externalSources = {};
+      const sources = schema['x-iac-platform']?.external?.sources || [];
+      sources.forEach(s => { externalSources[s.id] = s; });
+      console.log('External sources:', Object.keys(externalSources));
+      
+      // 应用布局配置
+      const layout = uiConfig.layout || {};
+      const container = document.getElementById('formContainer');
+      if (layout.position === 'top') {
+        container.classList.add('layout-top');
+      } else {
+        container.classList.remove('layout-top');
+      }
+      
+      renderTabs();
+      renderForm(mainSchema);
+      switchTab(uiConfig.groups?.[0]?.id || 'default');
+      
+      // 加载外部数据源
+      loadExternalData();
+    }
+
+    // 加载外部数据源
+    async function loadExternalData() {
+      const fields = uiConfig.fields || {};
+      for (const [name, cfg] of Object.entries(fields)) {
+        if (cfg.source) {
+          await loadFieldOptions(name, cfg);
+        }
+      }
+    }
+
+    // 加载字段选项
+    async function loadFieldOptions(fieldName, cfg) {
+      const sourceId = cfg.source;
+      console.log(`Loading options for ${fieldName} from ${sourceId}...`);
+      
+      // 使用模拟数据
+      let options = mockExternalData[sourceId] || [];
+      
+      // 模拟API调用延迟
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // 更新UI
+      const select = document.getElementById('input-' + fieldName);
+      if (!select) return;
+      
+      select.innerHTML = '<option value="">-- 请选择 --</option>';
+      if (cfg.allowCustom) {
+        select.innerHTML += '<option value="__custom__">📝 输入自定义值...</option>';
+      }
+      
+      options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.vcpu ? `${opt.label} (${opt.vcpu} vCPU, ${opt.memory} MB)` : (opt.description ? `${opt.label} - ${opt.description.substring(0, 30)}...` : opt.label);
+        if (opt.description) option.title = opt.description;
+        select.appendChild(option);
+      });
+      
+      console.log(`Updated ${fieldName} with ${options.length} options`);
+    }
+
+    function renderTabs() {
+      const groups = (uiConfig.groups || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+      // Show all tabs - don't hide any tabs, just mark them as not expanded by default
+      document.getElementById('tabList').innerHTML = groups.map(g => {
+        return `<li class="tab-item" data-tab="${g.id}" onclick="switchTab('${g.id}')">${icons[g.icon] || '📋'} ${g.title}</li>`;
+      }).join('');
+      document.getElementById('showMoreBtn').style.display = 'none';
+    }
+
+    function renderForm(mainSchema) {
+      const groups = uiConfig.groups || [{ id: 'default', title: '配置' }];
+      const fields = uiConfig.fields || {};
+      const props = mainSchema.properties || {};
+      const required = mainSchema.required || [];
+      
+      let html = `<div class="form-header"><h1>创建 ${schema.info?.title || 'Resource'}</h1><p>${schema.info?.description || ''}</p></div>`;
+      
+      groups.forEach(g => {
+        const gFields = Object.entries(fields).filter(([_, c]) => c.group === g.id).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+        if (!gFields.length) return;
+        
+        html += `<div class="form-group" id="group-${g.id}"><div class="form-section"><h3 class="section-title">${icons[g.icon] || '📋'} ${g.title}</h3>`;
+        gFields.forEach(([name, cfg]) => {
+          const prop = props[name] || {};
+          const isReq = required.includes(name);
+          html += renderField(name, prop, cfg, isReq);
+        });
+        html += `</div></div>`;
+      });
+      
+      document.getElementById('mainContent').innerHTML = html;
+    }
+
+    function renderField(name, prop, cfg, isReq) {
+      const widget = cfg.widget || inferWidget(prop);
+      const label = cfg.label || prop.title || name;
+      const help = cfg.help || prop.description || '';
+      // Don't hide fields by default - they should be visible when their tab is active
+      
+      let html = `<div class="field-row" id="field-${name}">`;
+      
+      if (widget === 'switch') {
+        html += `<div class="switch-row"><div class="switch-info"><div class="switch-label">${label}</div>${help ? `<div class="switch-help">${help}</div>` : ''}</div>
+          <label class="switch"><input type="checkbox" id="input-${name}" ${prop.default ? 'checked' : ''} onchange="handleChange('${name}',this.checked)"><span class="switch-slider"></span></label></div>`;
+      } else {
+        html += `<label class="field-label">${label}${isReq ? '<span class="required">*</span>' : ''}</label>`;
+        
+        if (widget === 'select') {
+          html += `<select id="input-${name}" onchange="handleChange('${name}',this.value)"><option value="">-- 请选择 --</option>${(prop.enum || []).map(o => `<option value="${o}" ${o === prop.default ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+        } else if (widget === 'key-value') {
+          const reqKeys = cfg.requiredKeys || prop['x-required-keys'] || [];
+          html += `<div class="kv-editor" id="kv-${name}"><div class="kv-header"><span>键</span><span>值</span><span></span></div>`;
+          reqKeys.forEach(k => { html += `<div class="kv-row"><input value="${k}" readonly class="required-key"><input placeholder="输入值" onchange="handleKvChange('${name}')"><button class="kv-delete" disabled>✕</button></div>`; });
+          html += `<div class="kv-add"><button onclick="addKvRow('${name}')">+ 添加</button></div></div>`;
+        } else if (widget === 'tags') {
+          // Tags widget for list(string) type
+          html += `<div class="tags-editor" id="tags-${name}">
+            <div class="tags-container" id="tags-container-${name}"></div>
+            <div class="tag-input-row">
+              <input type="text" id="tag-input-${name}" placeholder="${cfg.placeholder || '输入值后按回车或点击添加'}" onkeypress="if(event.key==='Enter'){event.preventDefault();addTag('${name}');}">
+              <button type="button" onclick="addTag('${name}')">添加</button>
+            </div>
+          </div>`;
+        } else if (widget === 'json-editor') {
+          html += `<textarea class="json-editor" id="input-${name}" placeholder='{"key": "value"}' onchange="handleChange('${name}',this.value)"></textarea>`;
+        } else if (widget === 'object-list') {
+          html += `<div class="object-list" id="list-${name}"><div class="object-list-add"><button onclick="addListItem('${name}')">${cfg.addButtonText || '+ 添加'}</button></div></div>`;
+        } else if (widget === 'object') {
+          html += `<div class="nested-object" id="nested-${name}">`;
+          Object.entries(prop.properties || {}).forEach(([k, v]) => {
+            html += `<div class="field-row"><label class="field-label">${v.title || k}</label>`;
+            if (v.type === 'boolean') {
+              html += `<label class="switch"><input type="checkbox" id="input-${name}-${k}" ${v.default ? 'checked' : ''} onchange="handleNestedChange('${name}','${k}',this.checked)"><span class="switch-slider"></span></label>`;
+            } else if (v.enum) {
+              html += `<select id="input-${name}-${k}" onchange="handleNestedChange('${name}','${k}',this.value)">${v.enum.map(o => `<option value="${o}">${o}</option>`).join('')}</select>`;
+            } else {
+              html += `<input type="${v.type === 'integer' ? 'number' : 'text'}" id="input-${name}-${k}" placeholder="${v.default || ''}" onchange="handleNestedChange('${name}','${k}',this.value)">`;
+            }
+            html += `</div>`;
+          });
+          html += `</div>`;
+        } else {
+          const prefix = cfg.prefix || '';
+          const pattern = prop.pattern || '';
+          const patternAttr = pattern ? `data-pattern="${pattern.replace(/"/g, '&quot;')}"` : '';
+          const validation = prop['x-validation'] || [];
+          const errorMsg = validation[0]?.errorMessage || (pattern ? `格式不正确，需要匹配: ${pattern}` : '');
+          const errorMsgAttr = errorMsg ? `data-error="${errorMsg.replace(/"/g, '&quot;')}"` : '';
+          
+          if (prefix) {
+            html += `<div class="input-with-prefix"><span class="input-prefix">${prefix}</span><input type="text" id="input-${name}" placeholder="${cfg.placeholder || ''}" ${patternAttr} ${errorMsgAttr} onchange="handleChange('${name}',this.value)" oninput="validateField('${name}',this.value)"></div>`;
+          } else {
+            html += `<input type="${prop.type === 'integer' || prop.type === 'number' ? 'number' : 'text'}" id="input-${name}" placeholder="${cfg.placeholder || ''}" ${patternAttr} ${errorMsgAttr} onchange="handleChange('${name}',this.value)" oninput="validateField('${name}',this.value)">`;
+          }
+        }
+        if (help) html += `<div class="field-help">${help}</div>`;
+        // 添加错误提示元素
+        html += `<div class="field-error" id="error-${name}"></div>`;
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    function inferWidget(prop) {
+      if (prop.enum) return 'select';
+      if (prop.type === 'boolean') return 'switch';
+      if (prop.type === 'array' && prop.items?.type === 'object') return 'object-list';
+      if (prop.type === 'object' && prop.additionalProperties) return 'key-value';
+      if (prop.type === 'object') return 'object';
+      if (prop.contentMediaType === 'application/json') return 'json-editor';
+      return 'text';
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+      document.querySelectorAll('.form-group').forEach(g => g.classList.toggle('active', g.id === 'group-' + tabId));
+    }
+
+    function toggleHiddenTabs() {
+      document.querySelectorAll('.tab-item.hidden').forEach(t => t.classList.remove('hidden'));
+      document.getElementById('showMoreBtn').style.display = 'none';
+    }
+
+    function handleChange(name, value) {
+      formData[name] = value;
+      applyCascade(name, value);
+      updateDebug();
+    }
+
+    function handleNestedChange(parent, key, value) {
+      if (!formData[parent]) formData[parent] = {};
+      formData[parent][key] = value;
+      updateDebug();
+    }
+
+    function handleKvChange(name) {
+      const editor = document.getElementById('kv-' + name);
+      const rows = editor.querySelectorAll('.kv-row');
+      const data = {};
+      rows.forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        if (inputs[0].value && inputs[1].value) data[inputs[0].value] = inputs[1].value;
+      });
+      formData[name] = data;
+      updateDebug();
+    }
+
+    function addKvRow(name) {
+      const editor = document.getElementById('kv-' + name);
+      const addBtn = editor.querySelector('.kv-add');
+      const row = document.createElement('div');
+      row.className = 'kv-row';
+      row.innerHTML = `<input type="text" placeholder="Key"><input type="text" placeholder="Value" onchange="handleKvChange('${name}')"><button class="kv-delete" onclick="this.parentElement.remove();handleKvChange('${name}')">✕</button>`;
+      editor.insertBefore(row, addBtn);
+    }
+
+    function addListItem(name) {
+      const list = document.getElementById('list-' + name);
+      const addBtn = list.querySelector('.object-list-add');
+      const idx = list.querySelectorAll('.object-list-item').length;
+      const item = document.createElement('div');
+      item.className = 'object-list-item expanded';
+      item.innerHTML = `<div class="object-list-header" onclick="this.parentElement.classList.toggle('expanded')"><span>▼ 项目 #${idx + 1}</span><button class="kv-delete" onclick="event.stopPropagation();this.closest('.object-list-item').remove()">✕</button></div><div class="object-list-content"><div class="field-row"><label class="field-label">ID</label><input type="text" placeholder="输入ID"></div></div>`;
+      list.insertBefore(item, addBtn);
+    }
+
+    // Tags widget functions
+    function addTag(name) {
+      const input = document.getElementById('tag-input-' + name);
+      const value = input.value.trim();
+      if (!value) return;
+      
+      // Initialize array if not exists
+      if (!formData[name]) formData[name] = [];
+      
+      // Check for duplicates
+      if (formData[name].includes(value)) {
+        alert('该值已存在');
+        return;
+      }
+      
+      // Add to data
+      formData[name].push(value);
+      
+      // Update UI
+      renderTags(name);
+      
+      // Clear input
+      input.value = '';
+      input.focus();
+      
+      updateDebug();
+    }
+
+    function removeTag(name, index) {
+      if (!formData[name]) return;
+      formData[name].splice(index, 1);
+      renderTags(name);
+      updateDebug();
+    }
+
+    function renderTags(name) {
+      const container = document.getElementById('tags-container-' + name);
+      if (!container) return;
+      
+      const tags = formData[name] || [];
+      container.innerHTML = tags.map((tag, idx) => 
+        `<span class="tag-item">${escapeHtml(tag)}<button type="button" onclick="removeTag('${name}', ${idx})">×</button></span>`
+      ).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function applyCascade(name, value) {
+      cascadeRules.forEach(rule => {
+        if (rule.trigger?.field === name) {
+          const match = (rule.trigger.operator === 'eq' && value === rule.trigger.value) || (rule.trigger.value === value);
+          rule.actions?.forEach(action => {
+            action.fields?.forEach(f => {
+              const el = document.getElementById('field-' + f);
+              if (!el) return;
+              if (action.type === 'show') el.classList.toggle('field-hidden', !match);
+              if (action.type === 'hide') el.classList.toggle('field-hidden', match);
+              if (action.type === 'disable' && match) {
+                const input = el.querySelector('input,select');
+                if (input) input.disabled = true;
+              }
+            });
+            if (action.type === 'setValue' && match) {
+              const input = document.getElementById('input-' + action.field);
+              if (input) { input.checked = action.value; formData[action.field] = action.value; }
+            }
+          });
+        }
+      });
+    }
+
+    // 字段验证函数
+    function validateField(name, value) {
+      const input = document.getElementById('input-' + name);
+      const errorEl = document.getElementById('error-' + name);
+      
+      if (!input || !errorEl) return true;
+      
+      const pattern = input.dataset.pattern;
+      const errorMsg = input.dataset.error;
+      
+      // 如果值为空，不验证（除非是必填字段）
+      if (!value || value.trim() === '') {
+        input.classList.remove('invalid');
+        errorEl.classList.remove('show');
+        errorEl.textContent = '';
+        return true;
+      }
+      
+      // 如果有pattern，进行正则验证
+      if (pattern) {
+        try {
+          const regex = new RegExp(pattern);
+          if (!regex.test(value)) {
+            input.classList.add('invalid');
+            errorEl.classList.add('show');
+            errorEl.textContent = errorMsg || `格式不正确，需要匹配: ${pattern}`;
+            return false;
+          }
+        } catch (e) {
+          console.error('Invalid regex pattern:', pattern, e);
+        }
+      }
+      
+      // 验证通过
+      input.classList.remove('invalid');
+      errorEl.classList.remove('show');
+      errorEl.textContent = '';
+      return true;
+    }
+
+    // 验证所有字段
+    function validateAllFields() {
+      let isValid = true;
+      const mainSchema = Object.values(schema.components?.schemas || {})[0] || {};
+      const props = mainSchema.properties || {};
+      const required = mainSchema.required || [];
+      
+      Object.keys(props).forEach(name => {
+        const input = document.getElementById('input-' + name);
+        if (input) {
+          const value = input.type === 'checkbox' ? input.checked : input.value;
+          
+          // 检查必填
+          if (required.includes(name) && (!value || value === '')) {
+            const errorEl = document.getElementById('error-' + name);
+            if (errorEl) {
+              input.classList.add('invalid');
+              errorEl.classList.add('show');
+              errorEl.textContent = '此字段为必填项';
+              isValid = false;
+            }
+          } else if (typeof value === 'string') {
+            // 检查pattern
+            if (!validateField(name, value)) {
+              isValid = false;
+            }
+          }
+        }
+      });
+      
+      return isValid;
+    }
+
+    function toggleDebug() { document.getElementById('debugPanel').classList.toggle('show'); }
+    function updateDebug() { document.getElementById('debugOutput').textContent = JSON.stringify(formData, null, 2); }
+    function exportData() { console.log(JSON.stringify(formData, null, 2)); alert('数据已输出到控制台'); }
+    function submitForm() { 
+      if (!validateAllFields()) {
+        alert('请修正表单中的错误');
+        return;
+      }
+      console.log('Submit:', formData); 
+      alert('表单数据:\n' + JSON.stringify(formData, null, 2)); 
+    }
+  </script>
+</body>
+</html>

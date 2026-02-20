@@ -1,0 +1,612 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.backButton {
+  padding: 8px 16px;
+  background-color: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.backButton:hover {
+  background-color: #e6e6e6;
+  border-color: #bfbfbf;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 30px;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 16px;
+  color: #666;
+  transition: all 0.3s;
+  margin-bottom: -2px;
+}
+
+.tab:hover {
+  color: #1890ff;
+}
+
+.activeTab {
+  color: #1890ff;
+  border-bottom-color: #1890ff;
+  font-weight: 500;
+}
+
+.content {
+  background: white;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+}
+
+.description {
+  color: #666;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.form {
+  max-width: 500px;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formGroup label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.input,
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.hint {
+  display: block;
+  margin-top: 4px;
+  color: #999;
+  font-size: 12px;
+}
+
+.submitButton {
+  padding: 10px 24px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.submitButton:hover:not(:disabled) {
+  background-color: #40a9ff;
+}
+
+.submitButton:disabled {
+  background-color: #d9d9d9;
+  cursor: not-allowed;
+}
+
+.createButton {
+  padding: 8px 16px;
+  background-color: #52c41a;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.createButton:hover:not(:disabled) {
+  background-color: #73d13d;
+}
+
+.createButton:disabled {
+  background-color: #d9d9d9;
+  cursor: not-allowed;
+}
+
+.successMessage {
+  padding: 12px 16px;
+  background-color: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 4px;
+  color: #52c41a;
+  margin-bottom: 16px;
+}
+
+.errorMessage {
+  padding: 12px 16px;
+  background-color: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 4px;
+  color: #ff4d4f;
+  margin-bottom: 16px;
+}
+
+.tokenCreated {
+  background-color: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.tokenCreated h3 {
+  margin: 0 0 12px 0;
+  color: #1890ff;
+}
+
+.warning {
+  color: #fa8c16;
+  font-weight: 500;
+  margin: 12px 0;
+}
+
+.tokenDisplay {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: white;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+.tokenDisplay code {
+  flex: 1;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  word-break: break-all;
+  color: #1890ff;
+}
+
+.copyButton {
+  padding: 6px 12px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.copyButton:hover {
+  background-color: #40a9ff;
+}
+
+.closeButton {
+  padding: 8px 16px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.closeButton:hover {
+  background-color: #40a9ff;
+}
+
+.createTokenForm {
+  background-color: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.createTokenForm h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.formActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.cancelButton {
+  padding: 8px 16px;
+  background-color: white;
+  color: #666;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.cancelButton:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+.tokenList {
+  margin-top: 20px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 60px 40px;
+  background-color: #fafafa;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.emptyIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.emptyText {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.emptyHint {
+  font-size: 14px;
+  color: #999;
+}
+
+.errorState {
+  text-align: center;
+  padding: 60px 40px;
+  background-color: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.errorIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.errorText {
+  font-size: 16px;
+  color: #ff4d4f;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.retryButton {
+  padding: 8px 24px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.retryButton:hover {
+  background-color: #40a9ff;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.table th,
+.table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table th {
+  background-color: #fafafa;
+  font-weight: 600;
+  color: #333;
+}
+
+.table tr:hover {
+  background-color: #fafafa;
+}
+
+.tokenId {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background-color: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #666;
+}
+
+.status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status.active {
+  background-color: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.status.revoked {
+  background-color: #fff1f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+.revokeButton {
+  padding: 4px 12px;
+  background-color: #ff4d4f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+}
+
+.revokeButton:hover {
+  background-color: #ff7875;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.confirmButton {
+  padding: 4px 12px;
+  background-color: #ff4d4f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.confirmButton:hover {
+  background-color: #ff7875;
+}
+
+.cancelSmallButton {
+  padding: 4px 12px;
+  background-color: white;
+  color: #666;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.cancelSmallButton:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+/* MFA Styles */
+.loadingState {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.mfaContent {
+  max-width: 600px;
+}
+
+.mfaStatusCard {
+  background: #f9f9f9;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.mfaStatusHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.mfaStatusBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.mfaStatusBadge.mfaEnabled {
+  background-color: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.mfaStatusBadge.mfaDisabled {
+  background-color: #f5f5f5;
+  color: #999;
+  border: 1px solid #d9d9d9;
+}
+
+.mfaStatusTime {
+  margin: 0;
+  font-size: 13px;
+  color: #999;
+}
+
+.mfaInfo {
+  display: flex;
+  gap: 40px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.mfaInfoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mfaInfoLabel {
+  font-size: 13px;
+  color: #999;
+}
+
+.mfaInfoValue {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+}
+
+.mfaWarning {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 4px;
+  color: #d48806;
+  font-size: 14px;
+}
+
+.mfaActions {
+  margin-bottom: 24px;
+}
+
+.mfaEnableButton {
+  padding: 12px 24px;
+  background-color: #52c41a;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.mfaEnableButton:hover {
+  background-color: #73d13d;
+}
+
+.mfaManageButton {
+  padding: 12px 24px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.mfaManageButton:hover {
+  background-color: #40a9ff;
+}
+
+.mfaTips {
+  background: #f6f8fa;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.mfaTips h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.mfaTips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.mfaTips li {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 4px;
+}

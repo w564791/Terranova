@@ -1,0 +1,471 @@
+{
+  "module_id": 6,
+  "version": "2.0.0",
+  "status": "active",
+  "schema_data": {
+    "name": {
+      "type": "string",
+      "required": false,
+      "description": "Forces new resource, The name of the bucket. If omitted, Terraform will be destroy and re build resources.",
+      "force_new": true
+    },
+    "bucket_prefix": {
+      "type": "string",
+      "required": false,
+      "description": "Forces new resource, Creates a unique bucket name beginning with the specified prefix. Conflicts with bucket.",
+      "force_new": true
+    },
+    "acl": {
+      "type": "string",
+      "required": false,
+      "description": "(Optional) The canned ACL to apply. Conflicts with `grant`",
+      "options": [
+        "private",
+        "public-read",
+        "public-read-write",
+        "aws-exec-read",
+        "authenticated-read",
+        "bucket-owner-read",
+        "bucket-owner-full-control",
+        "log-delivery-write"
+      ]
+    },
+    "policy": {
+      "type": "json",
+      "required": false,
+      "description": "(Optional) A valid bucket policy JSON document."
+    },
+    "force_destroy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "(Optional, Default:false) A boolean that indicates all objects should be deleted from the bucket so that the bucket can be destroyed without error."
+    },
+    "tags": {
+      "type": "map",
+      "required": true,
+      "description": "Resource tags (key-value pairs that user can freely add)",
+      "must_include": ["business-line", "managed-by"]
+    },
+    "default_tags": {
+      "type": "map",
+      "required": false,
+      "default": {
+        "managed-by": "ken",
+        "business-line": "ops",
+        "managed-by-terraform": "true"
+      },
+      "description": "The default tags for s3 bucket"
+    },
+    "attach_elb_log_delivery_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should have ELB log delivery policy attached"
+    },
+    "attach_lb_log_delivery_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should have ALB/NLB log delivery policy attached"
+    },
+    "attach_access_log_delivery_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should have S3 access log delivery policy attached"
+    },
+    "attach_cloudtrail_log_delivery_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should have CloudTrail log delivery policy attached"
+    },
+    "attach_deny_insecure_transport_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should have deny non-SSL transport policy attached"
+    },
+    "attach_require_latest_tls_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should require the latest version of TLS"
+    },
+    "attach_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Controls if S3 bucket should have bucket policy attached"
+    },
+    "attach_public_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Controls if a user defined public bucket policy will be attached"
+    },
+    "allowed_kms_key_arn": {
+      "type": "string",
+      "required": false,
+      "description": "The ARN of KMS key which should be allowed in PutObject"
+    },
+    "acceleration_status": {
+      "type": "string",
+      "required": false,
+      "description": "(Optional) Sets the accelerate configuration of an existing bucket.",
+      "options": ["Enabled", "Suspended"]
+    },
+    "request_payer": {
+      "type": "string",
+      "required": false,
+      "description": "(Optional) Specifies who should bear the cost of Amazon S3 data transfer.",
+      "options": ["BucketOwner", "Requester"]
+    },
+    "website": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing static web-site hosting or redirect configuration.",
+      "properties": {
+        "index_document": {
+          "type": "string",
+          "required": false,
+          "description": "The name of the index document"
+        },
+        "error_document": {
+          "type": "string",
+          "required": false,
+          "description": "The name of the error document"
+        },
+        "redirect_all_requests_to": {
+          "type": "string",
+          "required": false,
+          "description": "Redirect all requests to this hostname"
+        }
+      }
+    },
+    "cors_rule": {
+      "type": "array",
+      "required": false,
+      "default": [],
+      "description": "List of maps containing rules for Cross-Origin Resource Sharing.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "allowed_headers": {
+            "type": "array",
+            "items": {"type": "string"},
+            "required": false,
+            "description": "List of headers allowed"
+          },
+          "allowed_methods": {
+            "type": "array",
+            "items": {"type": "string"},
+            "required": true,
+            "description": "List of HTTP methods allowed"
+          },
+          "allowed_origins": {
+            "type": "array",
+            "items": {"type": "string"},
+            "required": true,
+            "description": "List of origins allowed"
+          },
+          "expose_headers": {
+            "type": "array",
+            "items": {"type": "string"},
+            "required": false,
+            "description": "List of expose headers"
+          },
+          "max_age_seconds": {
+            "type": "number",
+            "required": false,
+            "description": "Time in seconds that browser can cache the response"
+          }
+        }
+      }
+    },
+    "versioning": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing versioning configuration.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Enable versioning"
+        },
+        "mfa_delete": {
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Enable MFA delete"
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing access bucket logging configuration.",
+      "properties": {
+        "target_bucket": {
+          "type": "string",
+          "required": true,
+          "description": "The name of the bucket where logs will be stored"
+        },
+        "target_prefix": {
+          "type": "string",
+          "required": false,
+          "description": "A prefix for all log object keys"
+        }
+      }
+    },
+    "lifecycle_rule": {
+      "type": "array",
+      "required": false,
+      "default": [],
+      "description": "S3 bucket lifecycle configuration",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "required": true,
+            "description": "Unique identifier for the rule"
+          },
+          "enabled": {
+            "type": "boolean",
+            "required": true,
+            "default": true,
+            "description": "Whether enable this lifecycle rule"
+          },
+          "filter": {
+            "type": "object",
+            "required": false,
+            "description": "Configuration block used to identify objects that a Lifecycle Rule applies to",
+            "properties": {
+              "prefix": {
+                "type": "string",
+                "required": false,
+                "default": "",
+                "description": "Prefix identifying one or more objects to which the rule applies"
+              },
+              "tags": {
+                "type": "map",
+                "required": false,
+                "default": {},
+                "description": "Tags to filter objects"
+              },
+              "object_size_greater_than": {
+                "type": "number",
+                "required": false,
+                "description": "Minimum object size (in bytes) to which the rule applies"
+              },
+              "object_size_less_than": {
+                "type": "number",
+                "required": false,
+                "description": "Maximum object size (in bytes) to which the rule applies"
+              }
+            }
+          },
+          "expiration": {
+            "type": "array",
+            "required": false,
+            "items": {
+              "type": "object",
+              "properties": {
+                "days": {
+                  "type": "number",
+                  "required": false,
+                  "default": 30,
+                  "description": "Lifetime, in days, of the objects that are subject to the rule"
+                },
+                "date": {
+                  "type": "string",
+                  "required": false,
+                  "description": "Date the object is to be moved or deleted (RFC3339 format)"
+                },
+                "expired_object_delete_marker": {
+                  "type": "boolean",
+                  "required": false,
+                  "description": "Indicates whether Amazon S3 will remove a delete marker"
+                }
+              }
+            }
+          },
+          "transition": {
+            "type": "array",
+            "required": false,
+            "default": [
+              {"days": 30, "storage_class": "ONEZONE_IA"},
+              {"days": 60, "storage_class": "GLACIER"}
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "days": {
+                  "type": "number",
+                  "required": true,
+                  "default": 30,
+                  "description": "Number of days after creation when objects are transitioned"
+                },
+                "storage_class": {
+                  "type": "string",
+                  "required": true,
+                  "default": "STANDARD_IA",
+                  "options": [
+                    "GLACIER",
+                    "STANDARD_IA",
+                    "ONEZONE_IA",
+                    "INTELLIGENT_TIERING",
+                    "DEEP_ARCHIVE",
+                    "GLACIER_IR"
+                  ],
+                  "description": "Class of storage used to store the object"
+                }
+              }
+            }
+          },
+          "abort_incomplete_multipart_upload_days": {
+            "type": "number",
+            "required": false,
+            "default": 7,
+            "description": "Days since initiation of incomplete multipart upload before removal"
+          },
+          "noncurrent_version_expiration": {
+            "type": "array",
+            "required": false,
+            "items": {
+              "type": "object",
+              "properties": {
+                "days": {
+                  "type": "number",
+                  "required": true,
+                  "default": 30,
+                  "description": "Number of days an object is noncurrent before expiration"
+                },
+                "newer_noncurrent_versions": {
+                  "type": "number",
+                  "required": true,
+                  "default": 2,
+                  "description": "Number of noncurrent versions Amazon S3 will retain"
+                }
+              }
+            }
+          },
+          "noncurrent_version_transition": {
+            "type": "array",
+            "required": false,
+            "items": {
+              "type": "object",
+              "properties": {
+                "days": {
+                  "type": "number",
+                  "required": true,
+                  "default": 30,
+                  "description": "Number of days an object is noncurrent before transition"
+                },
+                "storage_class": {
+                  "type": "string",
+                  "required": true,
+                  "default": "STANDARD_IA",
+                  "options": [
+                    "GLACIER",
+                    "STANDARD_IA",
+                    "ONEZONE_IA",
+                    "INTELLIGENT_TIERING",
+                    "DEEP_ARCHIVE",
+                    "GLACIER_IR"
+                  ],
+                  "description": "Class of storage for noncurrent versions"
+                },
+                "newer_noncurrent_versions": {
+                  "type": "number",
+                  "required": true,
+                  "default": 2,
+                  "description": "Number of noncurrent versions to retain"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "replication_configuration": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing cross-region replication configuration."
+    },
+    "server_side_encryption_configuration": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing server-side encryption configuration."
+    },
+    "intelligent_tiering": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing intelligent tiering configuration."
+    },
+    "object_lock_configuration": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Map containing S3 object locking configuration."
+    },
+    "object_lock_enabled": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Whether S3 bucket should have an Object Lock configuration enabled."
+    },
+    "block_public_acls": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Whether Amazon S3 should block public ACLs for this bucket."
+    },
+    "block_public_policy": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Whether Amazon S3 should block public bucket policies for this bucket."
+    },
+    "ignore_public_acls": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Whether Amazon S3 should ignore public ACLs for this bucket."
+    },
+    "restrict_public_buckets": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Whether Amazon S3 should restrict public bucket policies for this bucket."
+    },
+    "control_object_ownership": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Whether to manage S3 Bucket Ownership Controls on this bucket."
+    },
+    "object_ownership": {
+      "type": "string",
+      "required": false,
+      "default": "BucketOwnerEnforced",
+      "description": "Object ownership.",
+      "options": ["BucketOwnerEnforced", "BucketOwnerPreferred", "ObjectWriter"]
+    },
+    "putin_khuylo": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Do you agree that Putin doesn't respect Ukrainian sovereignty and territorial integrity?"
+    }
+  }
+}

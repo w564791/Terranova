@@ -1,0 +1,224 @@
+package services
+
+import (
+	"errors"
+	"math/rand"
+	"time"
+
+	"iac-platform/internal/models"
+
+	"gorm.io/gorm"
+)
+
+// AgentPoolService Agent池服务
+type AgentPoolService struct {
+	db           *gorm.DB
+	agentService *AgentService
+}
+
+// NewAgentPoolService 创建Agent池服务
+func NewAgentPoolService(db *gorm.DB, agentService *AgentService) *AgentPoolService {
+	return &AgentPoolService{
+		db:           db,
+		agentService: agentService,
+	}
+}
+
+// SelectAgent 根据策略选择Agent
+func (s *AgentPoolService) SelectAgent(poolID uint, labels []string) (*models.Agent, error) {
+	var pool models.AgentPool
+	if err := s.db.First(&pool, poolID).Error; err != nil {
+		return nil, err
+	}
+
+	// 获取Pool中的所有在线Agent
+	agents, err := s.getPoolAgents(pool, labels)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(agents) == 0 {
+		return nil, errors.New("no available agents in pool")
+	}
+
+	// 根据策略选择Agent
+	switch pool.SelectionStrategy {
+	case models.StrategyRoundRobin:
+		return s.selectRoundRobin(agents)
+	case models.StrategyLeastBusy:
+		return s.selectLeastBusy(agents)
+	case models.StrategyRandom:
+		return s.selectRandom(agents)
+	case models.StrategyLabelMatch:
+		return s.selectByLabels(agents, labels)
+	default:
+		return s.selectRoundRobin(agents)
+	}
+}
+
+// getPoolAgents 获取Pool中的在线Agent
+func (s *AgentPoolService) getPoolAgents(pool models.AgentPool, labels []string) ([]*models.Agent, error) {
+	var agents []*models.Agent
+
+	// 构建查询
+	query := s.db.Model(&models.Agent{}).
+		Where("status = ? AND deleted_at IS NULL", models.AgentStatusOnline)
+
+	// 如果Pool有Agent ID列表，只查询这些Agent
+	if len(pool.AgentIDs) > 0 {
+		query = query.Where("agent_id IN ?", pool.AgentIDs)
+	}
+
+	// 如果Pool有标签要求，过滤Agent
+	if len(pool.RequiredLabels) > 0 {
+		for _, label := range pool.RequiredLabels {
+			query = query.Where("labels @> ?", `["`+label+`"]`)
+		}
+	}
+
+	err := query.Find(&agents).Error
+	return agents, err
+}
+
+// selectRoundRobin Round Robin策略
+func (s *AgentPoolService) selectRoundRobin(agents []*models.Agent) (*models.Agent, error) {
+	// 简单实现：选择第一个
+	// TODO: 实现真正的Round Robin（需要记录上次选择的Agent）
+	return agents[0], nil
+}
+
+// selectLeastBusy Least Busy策略
+func (s *AgentPoolService) selectLeastBusy(agents []*models.Agent) (*models.Agent, error) {
+	// 选择当前任务数最少的Agent
+	var selected *models.Agent
+	minTasks := int(^uint(0) >> 1) // Max int
+
+	for _, agent := range agents {
+		// 计算当前正在执行的任务数
+		var runningTasks int64
+		s.db.Model(&models.WorkspaceTask{}).
+			Where("agent_id = ? AND status = ?", agent.ID, models.TaskStatusRunning).
+			Count(&runningTasks)
+
+		if int(runningTasks) < minTasks {
+			minTasks = int(runningTasks)
+			selected = agent
+		}
+	}
+
+	return selected, nil
+}
+
+// selectRandom Random策略
+func (s *AgentPoolService) selectRandom(agents []*models.Agent) (*models.Agent, error) {
+	idx := rand.Intn(len(agents))
+	return agents[idx], nil
+}
+
+// selectByLabels Label Match策略
+func (s *AgentPoolService) selectByLabels(agents []*models.Agent, requiredLabels []string) (*models.Agent, error) {
+	// 选择标签匹配度最高的Agent
+	var selected *models.Agent
+	maxMatches := 0
+
+	for _, agent := range agents {
+		matches := 0
+		for _, required := range requiredLabels {
+			for _, agentLabel := range agent.Labels {
+				if agentLabel == required {
+					matches++
+					break
+				}
+			}
+		}
+
+		if matches > maxMatches {
+			maxMatches = matches
+			selected = agent
+		}
+	}
+
+	if selected == nil && len(agents) > 0 {
+		selected = agents[0]
+	}
+
+	return selected, nil
+}
+
+// CreatePool 创建Agent Pool
+func (s *AgentPoolService) CreatePool(pool *models.AgentPool) error {
+	return s.db.Create(pool).Error
+}
+
+// GetPool 获取Pool
+func (s *AgentPoolService) GetPool(id uint) (*models.AgentPool, error) {
+	var pool models.AgentPool
+	err := s.db.First(&pool, id).Error
+	return &pool, err
+}
+
+// ListPools 获取Pool列表
+func (s *AgentPoolService) ListPools() ([]models.AgentPool, error) {
+	var pools []models.AgentPool
+	err := s.db.Where("deleted_at IS NULL").Find(&pools).Error
+	return pools, err
+}
+
+// UpdatePool 更新Pool
+func (s *AgentPoolService) UpdatePool(id uint, updates map[string]interface{}) error {
+	result := s.db.Model(&models.AgentPool{}).Where("id = ?", id).Updates(updates)
+	if result.RowsAffected == 0 {
+		return errors.New("pool not found")
+	}
+	return result.Error
+}
+
+// DeletePool 删除Pool
+func (s *AgentPoolService) DeletePool(id uint) error {
+	now := time.Now()
+	result := s.db.Model(&models.AgentPool{}).Where("id = ?", id).Update("deleted_at", now)
+	if result.RowsAffected == 0 {
+		return errors.New("pool not found")
+	}
+	return result.Error
+}
+
+// AddAgentToPool 添加Agent到Pool
+func (s *AgentPoolService) AddAgentToPool(poolID uint, agentID string) error {
+	var pool models.AgentPool
+	if err := s.db.First(&pool, poolID).Error; err != nil {
+		return err
+	}
+
+	// 检查Agent是否已在Pool中
+	for _, id := range pool.AgentIDs {
+		if id == agentID {
+			return nil // 已存在
+		}
+	}
+
+	// 添加Agent ID
+	pool.AgentIDs = append(pool.AgentIDs, agentID)
+
+	return s.db.Save(&pool).Error
+}
+
+// RemoveAgentFromPool 从Pool移除Agent
+func (s *AgentPoolService) RemoveAgentFromPool(poolID uint, agentID string) error {
+	var pool models.AgentPool
+	if err := s.db.First(&pool, poolID).Error; err != nil {
+		return err
+	}
+
+	// 移除Agent ID
+	newAgentIDs := make([]string, 0)
+	for _, id := range pool.AgentIDs {
+		if id != agentID {
+			newAgentIDs = append(newAgentIDs, id)
+		}
+	}
+
+	pool.AgentIDs = newAgentIDs
+
+	return s.db.Save(&pool).Error
+}

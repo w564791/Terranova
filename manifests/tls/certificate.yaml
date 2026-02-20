@@ -1,0 +1,87 @@
+# 内部 CA：先创建一个自签名 Issuer 签发 CA 证书，再用 CA 签发服务证书
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-bootstrap
+  namespace: terraform
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iac-internal-ca
+  namespace: terraform
+spec:
+  isCA: true
+  commonName: iac-internal-ca
+  secretName: iac-internal-ca
+  issuerRef:
+    name: selfsigned-bootstrap
+    kind: Issuer
+  duration: 87600h    # 10 years
+  renewBefore: 8760h  # 1 year
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: iac-internal-ca
+  namespace: terraform
+spec:
+  ca:
+    secretName: iac-internal-ca
+---
+# 后端服务内部证书（API 8080 + CC 8090）
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iac-platform-tls
+  namespace: terraform
+spec:
+  secretName: iac-platform-tls
+  issuerRef:
+    name: iac-internal-ca
+    kind: Issuer
+  dnsNames:
+    - iac-platform
+    - iac-platform.terraform.svc
+    - iac-platform.terraform.svc.cluster.local
+  duration: 8760h
+  renewBefore: 720h
+---
+# 前端 nginx 内部证书
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iac-frontend-tls
+  namespace: terraform
+spec:
+  secretName: iac-frontend-tls
+  issuerRef:
+    name: iac-internal-ca
+    kind: Issuer
+  dnsNames:
+    - iac-frontend
+    - iac-frontend.terraform.svc
+    - iac-frontend.terraform.svc.cluster.local
+  duration: 8760h
+  renewBefore: 720h
+---
+# PostgreSQL 服务端证书（DB_SSLMODE != disable 时使用）
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iac-postgres-tls
+  namespace: terraform
+spec:
+  secretName: iac-postgres-tls
+  issuerRef:
+    name: iac-internal-ca
+    kind: Issuer
+  dnsNames:
+    - iac-postgres
+    - iac-postgres.terraform.svc
+    - iac-postgres.terraform.svc.cluster.local
+  duration: 8760h
+  renewBefore: 720h

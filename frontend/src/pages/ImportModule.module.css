@@ -1,0 +1,926 @@
+/* Import Module页面样式 */
+/* Schema 编辑器区域 */
+.schemaEditorSection {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.schemaEditorHeader {
+  margin-bottom: 20px;
+}
+
+.schemaEditorHeader h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.schemaEditorHeader p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+.container {
+  padding: var(--spacing-xl);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.backButton {
+  background: none;
+  border: none;
+  color: var(--color-blue-600);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  padding: var(--spacing-sm);
+  transition: color 0.2s;
+}
+
+.backButton:hover {
+  color: var(--color-blue-700);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.content {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-xl);
+}
+
+/* 导入方式选择器 */
+.methodSelector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-xl);
+  border-bottom: 2px solid var(--color-gray-200);
+}
+
+.methodButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.methodButton:hover {
+  border-color: var(--color-blue-300);
+  background: var(--color-blue-50);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.methodButton.active {
+  border-color: var(--color-blue-500);
+  background: var(--color-blue-50);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.methodIcon {
+  font-size: 32px;
+}
+
+.methodName {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-900);
+  font-size: var(--font-size-base);
+}
+
+.methodDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-600);
+  text-align: center;
+}
+
+/* 表单样式 */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.commonFields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-gray-700);
+}
+
+.required {
+  color: var(--color-red-500);
+}
+
+.input,
+.select,
+.textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-family: var(--font-primary);
+  transition: all 0.2s;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.codeTextarea {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  padding: 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  background: var(--color-gray-50);
+  resize: vertical;
+}
+
+.codeTextarea:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 导入区域 */
+.importSection {
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.importSection h3 {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-900);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-lg);
+}
+
+.sectionHeader h3 {
+  margin: 0;
+}
+
+.exampleButton {
+  background: var(--color-white);
+  border: 1px solid var(--color-blue-300);
+  color: var(--color-blue-600);
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.exampleButton:hover {
+  background: var(--color-blue-50);
+  border-color: var(--color-blue-500);
+}
+
+/* 文件上传 */
+.fileUpload {
+  position: relative;
+  margin-bottom: var(--spacing-md);
+}
+
+.fileInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.fileLabel {
+  display: block;
+  padding: var(--spacing-lg);
+  border: 2px dashed var(--color-gray-300);
+  border-radius: var(--radius-md);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--color-gray-600);
+  background: var(--color-gray-50);
+}
+
+.fileLabel:hover {
+  border-color: var(--color-blue-400);
+  background: var(--color-blue-50);
+  color: var(--color-blue-600);
+}
+
+.or {
+  text-align: center;
+  color: var(--color-gray-500);
+  margin: var(--spacing-md) 0;
+  font-size: var(--font-size-sm);
+}
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-blue-50);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-blue-500);
+  margin-top: var(--spacing-md);
+}
+
+.hintIcon {
+  font-size: 18px;
+}
+
+.hint p {
+  margin: 0;
+  color: var(--color-gray-700);
+  font-size: var(--font-size-sm);
+}
+
+/* 操作按钮 */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.cancelButton,
+.submitButton {
+  padding: 10px 24px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.cancelButton {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  color: var(--color-gray-700);
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.submitButton {
+  background: var(--color-blue-500);
+  color: var(--color-white);
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--color-blue-600);
+  box-shadow: var(--shadow-md);
+}
+
+.cancelButton:disabled,
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 模块名称检查样式 */
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.inputWrapper .input {
+  flex: 1;
+}
+
+.inputError {
+  border-color: var(--color-red-500) !important;
+}
+
+.inputSuccess {
+  border-color: var(--color-green-500) !important;
+}
+
+.checkingIcon,
+.availableIcon,
+.existsIcon {
+  font-size: 18px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.checkingIcon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.availableIcon {
+  color: var(--color-green-500);
+  font-weight: bold;
+}
+
+.existsIcon {
+  color: var(--color-red-500);
+  font-weight: bold;
+}
+
+.errorHint {
+  margin: 4px 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-red-600);
+}
+
+.successHint {
+  margin: 4px 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-green-600);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .methodSelector {
+    grid-template-columns: 1fr;
+  }
+
+  .commonFields {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancelButton,
+  .submitButton {
+    width: 100%;
+  }
+}
+
+/* OpenAPI Schema 编辑器样式 */
+.schemaEditor {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.schemaEditorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.schemaEditorTitle h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.schemaStats {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.schemaStats strong {
+  font-weight: 600;
+}
+
+.basicCount {
+  color: #3b82f6;
+}
+
+.advancedCount {
+  color: #6b7280;
+}
+
+.schemaEditorActions {
+  display: flex;
+  gap: 8px;
+}
+
+.viewModeButton {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.viewModeButton:hover {
+  background: #f9fafb;
+}
+
+.viewModeButton.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.searchBox {
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.tableContainer {
+  overflow-x: auto;
+  margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.schemaTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.schemaTable thead {
+  background: #f9fafb;
+}
+
+.schemaTable th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.schemaTable tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.schemaTable tbody tr:hover {
+  background: #f9fafb;
+}
+
+.schemaTable td {
+  padding: 12px 16px;
+  color: #6b7280;
+}
+
+.fieldNameCell {
+  font-weight: 500;
+  color: #111827;
+}
+
+.fieldName {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.fieldAlias {
+  font-size: 12px;
+  color: #6b7280;
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+.levelBadge,
+.requiredBadge {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.levelBadge.basicLevel {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.levelBadge.basicLevel:hover {
+  background: #bfdbfe;
+}
+
+.levelBadge.advancedLevel {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.levelBadge.advancedLevel:hover {
+  background: #e5e7eb;
+}
+
+.requiredBadge.required {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.requiredBadge.optional {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.defaultValueCell {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.descriptionCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actionsCell {
+  display: flex;
+  gap: 8px;
+}
+
+.editButton,
+.deleteButton {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editButton {
+  background: #3b82f6;
+  color: white;
+}
+
+.editButton:hover {
+  background: #2563eb;
+}
+
+.deleteButton {
+  background: #ef4444;
+  color: white;
+}
+
+.deleteButton:hover {
+  background: #dc2626;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 16px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.jsonEditorContainer {
+  margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 500px;
+  position: relative;
+}
+
+/* 确保 Monaco Editor 在 container 内正确显示 */
+.jsonEditorContainer > div {
+  min-height: 500px;
+}
+
+.schemaEditorFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.saveButton,
+.cancelButton {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.saveButton {
+  background: #10b981;
+  color: white;
+}
+
+.saveButton:hover {
+  background: #059669;
+}
+
+/* 字段编辑器模态框 */
+.fieldEditorOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fieldEditorModal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.fieldEditorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.fieldEditorHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.closeButton:hover {
+  color: #111827;
+}
+
+.fieldEditorContent {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.fieldSection {
+  margin-bottom: 24px;
+}
+
+.fieldSection:last-child {
+  margin-bottom: 0;
+}
+
+.fieldSection h4 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fieldGroup {
+  margin-bottom: 16px;
+}
+
+.fieldGroup label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.fieldInput,
+.fieldSelect,
+.fieldTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.fieldInput:focus,
+.fieldSelect:focus,
+.fieldTextarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.fieldTextarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.fieldHint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.fieldCheckboxGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.fieldCheckboxGroup label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.fieldCheckboxGroup input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.fieldEditorFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+/* 其他样式 */
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.inputWithStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inputWithStatus .input {
+  flex: 1;
+}
+
+.checking {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.available {
+  color: #10b981;
+  font-size: 12px;
+}
+
+.exists {
+  color: #ef4444;
+  font-size: 12px;
+}
+
+.orDivider {
+  text-align: center;
+  color: #6b7280;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.jsonEditorWrapper {
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 300px;
+  position: relative;
+}
+
+/* 确保 Monaco Editor 在 wrapper 内正确显示 */
+.jsonEditorWrapper > div {
+  min-height: 300px;
+}
+
+.importButton {
+  width: 100%;
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.importButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.importButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

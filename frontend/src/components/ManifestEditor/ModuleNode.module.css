@@ -1,0 +1,108 @@
+.nodeWrapper {
+  position: relative;
+}
+
+.nodeWrapper.selected .nodeCard {
+  box-shadow: 0 0 0 2px #1890ff;
+}
+
+.nodeCard {
+  min-width: 80px;
+  max-width: 120px;
+  border-width: 1px;
+  transition: all 0.2s;
+  border-radius: 4px;
+  resize: both;
+  overflow: hidden;
+}
+
+.nodeCard :global(.ant-card-body) {
+  padding: 6px 8px !important;
+}
+
+.nodeCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.nodeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
+
+.nodeName {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  max-width: 80px;
+}
+
+.nodeSource {
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 8px;
+}
+
+.nodeFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  gap: 4px;
+}
+
+/* 连接点基础样式 - 四向连接点 */
+.handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: #1890ff !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+  /* 始终可见，方便连线 */
+  opacity: 0.8;
+  cursor: crosshair;
+}
+
+/* 悬停节点时高亮连接点 */
+.nodeWrapper:hover .handle {
+  opacity: 1;
+  background: #1890ff !important;
+}
+
+/* 悬停连接点时高亮 */
+.handle:hover {
+  background: #52c41a !important;
+  box-shadow: 0 0 8px rgba(82, 196, 26, 0.8) !important;
+  transform: scale(1.2);
+}
+
+/* 左侧连接点 */
+.handleLeft {
+  left: -4px !important;
+}
+
+/* 右侧连接点 */
+.handleRight {
+  right: -4px !important;
+}
+
+/* 顶部连接点 */
+.handleTop {
+  top: -4px !important;
+}
+
+/* 底部连接点 */
+.handleBottom {
+  bottom: -4px !important;
+}
+
+/* 连接时高亮 */
+.handle.connecting {
+  background: #1890ff !important;
+  box-shadow: 0 0 8px rgba(24, 144, 255, 1) !important;
+}

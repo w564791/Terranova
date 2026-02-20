@@ -1,0 +1,39 @@
+# Gateway → 后端 HTTPS（使用 cert-manager 内部 CA 验证）
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: iac-platform-backend
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: iac-platform
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: iac-internal-ca
+    hostname: iac-platform.terraform.svc
+---
+# Gateway → 前端 nginx HTTPS
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: iac-frontend-backend
+  namespace: terraform
+  labels:
+    app.kubernetes.io/name: iac-platform
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: iac-frontend
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: iac-internal-ca
+    hostname: iac-frontend.terraform.svc

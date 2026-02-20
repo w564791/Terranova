@@ -1,0 +1,7902 @@
+basePath: /
+definitions:
+  controllers.AnalyzeErrorRequest:
+    properties:
+      error_message:
+        type: string
+      task_id:
+        type: integer
+      task_type:
+        type: string
+      terraform_version:
+        type: string
+    required:
+    - error_message
+    - task_id
+    - task_type
+    - terraform_version
+    type: object
+  entity.Organization:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        description: user_id
+        type: string
+      description:
+        type: string
+      display_name:
+        description: 显示名称
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        description: 唯一标识名称
+        type: string
+      settings:
+        additionalProperties: true
+        description: 组织配置
+        type: object
+      updated_at:
+        type: string
+    type: object
+  entity.PermissionDefinition:
+    properties:
+      created_at:
+        type: string
+      description:
+        description: 描述
+        type: string
+      display_name:
+        description: 显示名称
+        type: string
+      id:
+        description: '业务语义ID: orgpm-xxx, wspm-xxx'
+        type: string
+      is_system:
+        description: 是否为系统内置
+        type: boolean
+      name:
+        description: 权限名称（唯一）
+        type: string
+      resource_type:
+        allOf:
+        - $ref: '#/definitions/valueobject.ResourceType'
+        description: 资源类型
+      scope_level:
+        allOf:
+        - $ref: '#/definitions/valueobject.ScopeType'
+        description: 适用作用域层级
+    type: object
+  entity.PermissionGrant:
+    properties:
+      expires_at:
+        description: 过期时间
+        type: string
+      granted_at:
+        description: 授权时间
+        type: string
+      granted_by:
+        description: 授权人user_id
+        type: string
+      id:
+        type: integer
+      permission:
+        allOf:
+        - $ref: '#/definitions/entity.PermissionDefinition'
+        description: 关联
+      permission_id:
+        description: 权限定义ID（业务语义ID）
+        type: string
+      permission_level:
+        allOf:
+        - $ref: '#/definitions/valueobject.PermissionLevel'
+        description: 权限等级
+      principal_id:
+        description: 主体ID
+        type: string
+      principal_type:
+        allOf:
+        - $ref: '#/definitions/valueobject.PrincipalType'
+        description: 主体类型
+      reason:
+        description: 授权原因
+        type: string
+      scope_id:
+        description: 作用域ID
+        type: integer
+      scope_type:
+        allOf:
+        - $ref: '#/definitions/valueobject.ScopeType'
+        description: 作用域类型
+      source:
+        description: 来源（direct/team/inherited）
+        type: string
+    type: object
+  entity.Project:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        description: user_id
+        type: string
+      description:
+        type: string
+      display_name:
+        description: 显示名称
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_default:
+        description: 是否为默认项目
+        type: boolean
+      name:
+        description: 项目名称
+        type: string
+      org_id:
+        description: 所属组织ID
+        type: integer
+      organization:
+        allOf:
+        - $ref: '#/definitions/entity.Organization'
+        description: 关联
+      settings:
+        additionalProperties: true
+        description: 项目配置
+        type: object
+      updated_at:
+        type: string
+    type: object
+  entity.Role:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_system:
+        type: boolean
+      name:
+        type: string
+      policies:
+        description: 关联字段（不存储在数据库）
+        items:
+          $ref: '#/definitions/entity.RolePolicy'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  entity.RolePolicy:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      permission_display_name:
+        type: string
+      permission_id:
+        description: 业务语义ID
+        type: string
+      permission_level:
+        type: string
+      permission_name:
+        description: 关联字段（不存储在数据库）
+        type: string
+      resource_type:
+        type: string
+      role_id:
+        type: integer
+      scope_type:
+        type: string
+    type: object
+  entity.Team:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        description: 创建人user_id
+        type: string
+      description:
+        type: string
+      display_name:
+        description: 显示名称
+        type: string
+      id:
+        type: string
+      is_system:
+        description: 是否为系统预置团队（不可删除）
+        type: boolean
+      members:
+        items:
+          $ref: '#/definitions/entity.TeamMember'
+        type: array
+      name:
+        description: 团队名称
+        type: string
+      org_id:
+        description: 所属组织ID
+        type: integer
+      organization:
+        allOf:
+        - $ref: '#/definitions/entity.Organization'
+        description: 关联
+      updated_at:
+        type: string
+    type: object
+  entity.TeamMember:
+    properties:
+      id:
+        type: integer
+      joined_at:
+        description: 加入时间
+        type: string
+      joined_by:
+        description: 添加人user_id
+        type: string
+      role:
+        allOf:
+        - $ref: '#/definitions/entity.TeamRole'
+        description: 团队内角色
+      team:
+        allOf:
+        - $ref: '#/definitions/entity.Team'
+        description: 关联
+      team_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  entity.TeamRole:
+    enum:
+    - MEMBER
+    - MAINTAINER
+    type: string
+    x-enum-varnames:
+    - TeamRoleMember
+    - TeamRoleMaintainer
+  entity.UserRole:
+    properties:
+      assigned_at:
+        type: string
+      assigned_by:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: integer
+      reason:
+        type: string
+      role_display_name:
+        type: string
+      role_id:
+        type: integer
+      role_name:
+        description: 关联字段（不存储在数据库）
+        type: string
+      scope_id:
+        type: integer
+      scope_type:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handlers.AddRolePolicyRequest:
+    properties:
+      permission_id:
+        description: 业务语义ID
+        type: string
+      permission_level:
+        type: string
+      scope_type:
+        type: string
+    required:
+    - permission_id
+    - permission_level
+    - scope_type
+    type: object
+  handlers.AddTeamMemberRequest:
+    properties:
+      role:
+        description: MEMBER/MAINTAINER
+        type: string
+      user_id:
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
+  handlers.AssignRoleRequest:
+    properties:
+      expires_at:
+        type: string
+      reason:
+        type: string
+      role_id:
+        type: integer
+      scope_id:
+        type: integer
+      scope_type:
+        type: string
+    required:
+    - role_id
+    - scope_id
+    - scope_type
+    type: object
+  handlers.AuditConfig:
+    properties:
+      enabled:
+        type: boolean
+      include_body:
+        type: boolean
+      include_headers:
+        type: boolean
+    type: object
+  handlers.BatchGrantPermissionItem:
+    properties:
+      permission_id:
+        description: 业务语义ID
+        type: string
+      permission_level:
+        type: string
+    required:
+    - permission_id
+    - permission_level
+    type: object
+  handlers.BatchGrantPermissionRequest:
+    properties:
+      expires_at:
+        type: string
+      permissions:
+        items:
+          $ref: '#/definitions/handlers.BatchGrantPermissionItem'
+        minItems: 1
+        type: array
+      principal_id:
+        type: string
+      principal_type:
+        type: string
+      reason:
+        type: string
+      scope_id:
+        type: integer
+      scope_type:
+        type: string
+    required:
+    - permissions
+    - principal_id
+    - principal_type
+    - scope_id
+    - scope_type
+    type: object
+  handlers.ChangePasswordRequest:
+    properties:
+      new_password:
+        minLength: 6
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  handlers.CheckPermissionRequest:
+    properties:
+      required_level:
+        type: string
+      resource_type:
+        type: string
+      scope_id:
+        type: integer
+      scope_type:
+        type: string
+    required:
+    - required_level
+    - resource_type
+    - scope_id
+    - scope_type
+    type: object
+  handlers.CloneRoleRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      name:
+        type: string
+    required:
+    - display_name
+    - name
+    type: object
+  handlers.CreateOrganizationRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      name:
+        type: string
+      settings:
+        additionalProperties: true
+        type: object
+    required:
+    - name
+    type: object
+  handlers.CreateProjectRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: integer
+      settings:
+        additionalProperties: true
+        type: object
+    required:
+    - name
+    - org_id
+    type: object
+  handlers.CreateRoleRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      name:
+        type: string
+    required:
+    - display_name
+    - name
+    type: object
+  handlers.CreateTeamRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: integer
+    required:
+    - name
+    - org_id
+    type: object
+  handlers.CreateTeamTokenRequest:
+    properties:
+      expires_in_days:
+        description: 0表示永不过期
+        type: integer
+      token_name:
+        type: string
+    required:
+    - token_name
+    type: object
+  handlers.CreateUserTokenRequest:
+    properties:
+      expires_in_days:
+        description: 0表示永不过期
+        type: integer
+      token_name:
+        type: string
+    required:
+    - token_name
+    type: object
+  handlers.GrantPermissionRequest:
+    properties:
+      expires_at:
+        type: string
+      permission_id:
+        description: 业务语义ID
+        type: string
+      permission_level:
+        type: string
+      principal_id:
+        type: string
+      principal_type:
+        type: string
+      reason:
+        type: string
+      scope_id:
+        type: integer
+      scope_type:
+        type: string
+    required:
+    - permission_id
+    - permission_level
+    - principal_id
+    - principal_type
+    - scope_id
+    - scope_type
+    type: object
+  handlers.GrantPresetRequest:
+    properties:
+      preset_name:
+        description: READ/WRITE/ADMIN
+        type: string
+      principal_id:
+        type: string
+      principal_type:
+        type: string
+      reason:
+        type: string
+      scope_id:
+        type: integer
+      scope_type:
+        type: string
+    required:
+    - preset_name
+    - principal_id
+    - principal_type
+    - scope_id
+    - scope_type
+    type: object
+  handlers.ListRolesResponse:
+    properties:
+      roles:
+        items:
+          $ref: '#/definitions/handlers.RoleWithPolicyCount'
+        type: array
+      total:
+        type: integer
+    type: object
+  handlers.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 6
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  handlers.ResetPasswordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        minLength: 6
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
+  handlers.RoleDetailResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_system:
+        type: boolean
+      name:
+        type: string
+      policies:
+        items:
+          $ref: '#/definitions/entity.RolePolicy'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  handlers.RoleWithPolicyCount:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_system:
+        type: boolean
+      name:
+        type: string
+      policies:
+        description: 关联字段（不存储在数据库）
+        items:
+          $ref: '#/definitions/entity.RolePolicy'
+        type: array
+      policy_count:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  handlers.UpdateOrganizationRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      is_active:
+        type: boolean
+      settings:
+        additionalProperties: true
+        type: object
+    type: object
+  handlers.UpdateProjectRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      is_active:
+        type: boolean
+      settings:
+        additionalProperties: true
+        type: object
+    type: object
+  handlers.UpdateRoleRequest:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      is_active:
+        type: boolean
+    type: object
+  models.AIConfig:
+    properties:
+      api_key:
+        description: OpenAI Compatible API 密钥（查询时不返回）
+        type: string
+      aws_region:
+        description: Bedrock 使用
+        type: string
+      base_url:
+        description: OpenAI Compatible API 基础 URL
+        type: string
+      capabilities:
+        description: 支持的能力场景，["*"]表示默认配置，[]表示未配置
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      custom_prompt:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      model_id:
+        description: 所有服务都需要
+        type: string
+      priority:
+        description: 优先级，数值越大优先级越高
+        type: integer
+      rate_limit_seconds:
+        description: 频率限制（秒）
+        type: integer
+      service_type:
+        description: bedrock, openai, azure_openai, ollama 等
+        type: string
+      updated_at:
+        type: string
+      use_inference_profile:
+        description: 是否使用 inference profile（仅 Bedrock）
+        type: boolean
+    type: object
+  models.AgentHeartbeatRequest:
+    properties:
+      agent_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      status:
+        $ref: '#/definitions/models.AgentStatus'
+    required:
+    - agent_id
+    type: object
+  models.AgentRegistrationRequest:
+    properties:
+      agent_id:
+        type: string
+      capabilities:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      endpoint:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      token:
+        type: string
+    required:
+    - agent_id
+    - name
+    - token
+    type: object
+  models.AgentStatus:
+    enum:
+    - online
+    - offline
+    - busy
+    - error
+    type: string
+    x-enum-varnames:
+    - AgentStatusOnline
+    - AgentStatusOffline
+    - AgentStatusBusy
+    - AgentStatusError
+  models.CreateSchemaRequest:
+    properties:
+      schema_data: {}
+      source_type:
+        description: json_import, tf_parse, ai_generate
+        type: string
+      status:
+        type: string
+      version:
+        type: string
+    required:
+    - schema_data
+    - version
+    type: object
+  models.CreateTerraformVersionRequest:
+    properties:
+      checksum:
+        type: string
+      deprecated:
+        type: boolean
+      download_url:
+        type: string
+      enabled:
+        type: boolean
+      version:
+        type: string
+    required:
+    - checksum
+    - download_url
+    - version
+    type: object
+  models.ExecutionMode:
+    enum:
+    - local
+    - agent
+    - k8s
+    type: string
+    x-enum-varnames:
+    - ExecutionModeLocal
+    - ExecutionModeAgent
+    - ExecutionModeK8s
+  models.JSONB:
+    additionalProperties: true
+    type: object
+  models.ModuleDemo:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator:
+        $ref: '#/definitions/models.User'
+      current_version:
+        $ref: '#/definitions/models.ModuleDemoVersion'
+      current_version_id:
+        type: integer
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      module_id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+      usage_notes:
+        type: string
+    type: object
+  models.ModuleDemoVersion:
+    properties:
+      change_summary:
+        type: string
+      change_type:
+        description: create, update, rollback
+        type: string
+      config_data:
+        $ref: '#/definitions/models.JSONB'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator:
+        $ref: '#/definitions/models.User'
+      demo_id:
+        type: integer
+      diff_from_previous:
+        type: string
+      id:
+        type: integer
+      is_latest:
+        type: boolean
+      version:
+        type: integer
+    type: object
+  models.TaskStatus:
+    enum:
+    - pending
+    - waiting
+    - running
+    - plan_completed
+    - apply_pending
+    - success
+    - applied
+    - failed
+    - cancelled
+    type: string
+    x-enum-comments:
+      TaskStatusApplied: Apply任务成功完成
+      TaskStatusApplyPending: 等待用户确认Apply
+      TaskStatusPlanCompleted: Plan完成，等待Apply确认
+      TaskStatusSuccess: Plan任务成功完成
+      TaskStatusWaiting: 等待前置任务完成
+    x-enum-descriptions:
+    - ""
+    - 等待前置任务完成
+    - ""
+    - Plan完成，等待Apply确认
+    - 等待用户确认Apply
+    - Plan任务成功完成
+    - Apply任务成功完成
+    - ""
+    - ""
+    x-enum-varnames:
+    - TaskStatusPending
+    - TaskStatusWaiting
+    - TaskStatusRunning
+    - TaskStatusPlanCompleted
+    - TaskStatusApplyPending
+    - TaskStatusSuccess
+    - TaskStatusApplied
+    - TaskStatusFailed
+    - TaskStatusCancelled
+  models.TaskType:
+    enum:
+    - plan
+    - apply
+    - plan_and_apply
+    type: string
+    x-enum-comments:
+      TaskTypePlanAndApply: Plan+Apply组合任务
+    x-enum-descriptions:
+    - ""
+    - ""
+    - Plan+Apply组合任务
+    x-enum-varnames:
+    - TaskTypePlan
+    - TaskTypeApply
+    - TaskTypePlanAndApply
+  models.TerraformVersion:
+    properties:
+      checksum:
+        type: string
+      created_at:
+        type: string
+      deprecated:
+        type: boolean
+      download_url:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      is_default:
+        description: 是否为默认版本
+        type: boolean
+      updated_at:
+        type: string
+      version:
+        type: string
+    required:
+    - checksum
+    - download_url
+    - version
+    type: object
+  models.TerraformVersionListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.TerraformVersion'
+        type: array
+      total:
+        type: integer
+    type: object
+  models.UpdateSchemaRequest:
+    properties:
+      schema_data: {}
+      status:
+        type: string
+    type: object
+  models.UpdateTerraformVersionRequest:
+    properties:
+      checksum:
+        type: string
+      deprecated:
+        type: boolean
+      download_url:
+        type: string
+      enabled:
+        type: boolean
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_system_admin:
+        type: boolean
+      last_login_at:
+        type: string
+      oauth_id:
+        type: string
+      oauth_provider:
+        type: string
+      role:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  models.Workspace:
+    properties:
+      agent_id:
+        type: integer
+      agent_pool_id:
+        description: 关联
+        type: integer
+      auto_apply:
+        description: Apply方法
+        type: boolean
+      created_at:
+        type: string
+      created_by:
+        type: string
+      current_code_version:
+        $ref: '#/definitions/models.WorkspaceCodeVersion'
+      current_code_version_id:
+        description: Terraform执行引擎字段
+        type: integer
+      description:
+        type: string
+      drift_count:
+        description: Drift资源数量
+        type: integer
+      execution_mode:
+        allOf:
+        - $ref: '#/definitions/models.ExecutionMode'
+        description: 执行模式
+      id:
+        description: 基础字段
+        type: integer
+      init_config:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 初始化配置
+      is_locked:
+        description: 锁定状态
+        type: boolean
+      k8s_config_id:
+        description: K8s配置ID
+        type: integer
+      last_apply_at:
+        description: 最后一次Apply执行时间
+        type: string
+      last_drift_check:
+        description: 最后一次Drift检测时间
+        type: string
+      last_plan_at:
+        description: 最后一次Plan执行时间
+        type: string
+      lock_reason:
+        type: string
+      locked_at:
+        type: string
+      locked_by:
+        type: string
+      log_config:
+        $ref: '#/definitions/models.JSONB'
+      max_retries:
+        type: integer
+      name:
+        type: string
+      notify_settings:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 通知和日志配置
+      plan_only:
+        type: boolean
+      provider_config:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: Provider配置
+      resource_count:
+        description: Overview统计字段
+        type: integer
+      retry_enabled:
+        description: 重试配置
+        type: boolean
+      show_unchanged_resources:
+        description: Plan数据配置
+        type: boolean
+      state:
+        allOf:
+        - $ref: '#/definitions/models.WorkspaceState'
+        description: 生命周期状态
+      state_backend:
+        description: 状态后端
+        type: string
+      state_config:
+        $ref: '#/definitions/models.JSONB'
+      system_variables:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 系统变量
+      tags:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: Tags
+      terraform_version:
+        description: Terraform配置
+        type: string
+      tf_code:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 文件存储
+      tf_state:
+        $ref: '#/definitions/models.JSONB'
+      ui_mode:
+        description: UI配置
+        type: string
+      updated_at:
+        type: string
+      workdir:
+        type: string
+      workspace_execution_mode:
+        description: '执行模式: plan_only或plan_and_apply'
+        type: string
+    type: object
+  models.WorkspaceCodeVersion:
+    properties:
+      change_summary:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator:
+        $ref: '#/definitions/models.User'
+      id:
+        type: integer
+      provider_config:
+        additionalProperties: true
+        type: object
+      state_version:
+        $ref: '#/definitions/models.WorkspaceStateVersion'
+      state_version_id:
+        type: integer
+      tf_code:
+        additionalProperties: true
+        type: object
+      version:
+        type: integer
+      workspace_id:
+        type: integer
+    type: object
+  models.WorkspaceState:
+    enum:
+    - created
+    - planning
+    - plan_done
+    - waiting_apply
+    - applying
+    - completed
+    - failed
+    type: string
+    x-enum-varnames:
+    - WorkspaceStateCreated
+    - WorkspaceStatePlanning
+    - WorkspaceStatePlanDone
+    - WorkspaceStateWaitingApply
+    - WorkspaceStateApplying
+    - WorkspaceStateCompleted
+    - WorkspaceStateFailed
+  models.WorkspaceStateVersion:
+    properties:
+      checksum:
+        type: string
+      content:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 文件内容
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        description: 基础字段
+        type: integer
+      resource_count:
+        description: State中的资源数量
+        type: integer
+      size_bytes:
+        type: integer
+      task:
+        $ref: '#/definitions/models.WorkspaceTask'
+      task_id:
+        description: 关联任务和资源统计
+        type: integer
+      version:
+        description: 版本信息
+        type: integer
+      workspace:
+        allOf:
+        - $ref: '#/definitions/models.Workspace'
+        description: 关联
+      workspace_id:
+        type: integer
+    type: object
+  models.WorkspaceTask:
+    properties:
+      agent_id:
+        type: integer
+      apply_description:
+        description: Apply描述
+        type: string
+      apply_output:
+        type: string
+      changes_add:
+        description: Plan变更统计
+        type: integer
+      changes_change:
+        description: Plan显示的修改资源数
+        type: integer
+      changes_destroy:
+        description: Plan显示的删除资源数
+        type: integer
+      completed_at:
+        type: string
+      context:
+        additionalProperties: true
+        description: 阶段上下文数据
+        type: object
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        description: 任务描述
+        type: string
+      duration:
+        description: 秒
+        type: integer
+      error_message:
+        type: string
+      execution_mode:
+        allOf:
+        - $ref: '#/definitions/models.ExecutionMode'
+        description: 执行信息
+      execution_node:
+        description: 执行节点标识
+        type: string
+      id:
+        description: 基础字段
+        type: integer
+      k8s_config_id:
+        type: integer
+      k8s_namespace:
+        type: string
+      k8s_pod_name:
+        type: string
+      lock_expires_at:
+        description: 锁过期时间
+        type: string
+      locked_at:
+        description: 锁定时间
+        type: string
+      locked_by:
+        description: 任务锁（防止多Agent同时获取同一任务）
+        type: string
+      max_retries:
+        type: integer
+      outputs:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: Terraform outputs
+      plan_json:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: Plan JSON格式数据
+      plan_output:
+        description: Terraform输出
+        type: string
+      plan_task:
+        $ref: '#/definitions/models.WorkspaceTask'
+      plan_task_id:
+        description: Terraform执行引擎字段
+        type: integer
+      retry_count:
+        description: 重试信息
+        type: integer
+      snapshot_id:
+        description: Plan+Apply流程字段
+        type: string
+      stage:
+        description: 执行阶段
+        type: string
+      started_at:
+        description: 执行时间
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/models.TaskStatus'
+        description: 任务状态
+      task_type:
+        allOf:
+        - $ref: '#/definitions/models.TaskType'
+        description: 任务类型
+      updated_at:
+        type: string
+      workspace:
+        allOf:
+        - $ref: '#/definitions/models.Workspace'
+        description: 关联
+      workspace_id:
+        type: integer
+    type: object
+  models.WorkspaceTaskResourceChange:
+    properties:
+      action:
+        description: 变更信息
+        type: string
+      apply_completed_at:
+        type: string
+      apply_error:
+        type: string
+      apply_started_at:
+        type: string
+      apply_status:
+        description: Apply 阶段状态（用于实时更新）
+        type: string
+      changes_after:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: after 数据（完整）
+      changes_before:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: before 数据（完整）
+      created_at:
+        type: string
+      id:
+        description: 基础字段
+        type: integer
+      module_address:
+        description: 模块地址
+        type: string
+      resource_address:
+        description: 资源标识
+        type: string
+      resource_attributes:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 资源属性（如ARN等）
+      resource_id:
+        description: 资源详情（从terraform state提取）
+        type: string
+      resource_name:
+        description: 资源名称
+        type: string
+      resource_type:
+        description: 资源类型
+        type: string
+      task:
+        allOf:
+        - $ref: '#/definitions/models.WorkspaceTask'
+        description: 关联
+      task_id:
+        type: integer
+      updated_at:
+        type: string
+      workspace:
+        $ref: '#/definitions/models.Workspace'
+      workspace_id:
+        type: integer
+    type: object
+  service.CheckPermissionResult:
+    properties:
+      cache_hit:
+        type: boolean
+      deny_reason:
+        type: string
+      effective_level:
+        $ref: '#/definitions/valueobject.PermissionLevel'
+      grants:
+        items:
+          $ref: '#/definitions/entity.PermissionGrant'
+        type: array
+      is_allowed:
+        type: boolean
+      source:
+        description: regular/temporary
+        type: string
+    type: object
+  service.CreateApplicationRequest:
+    properties:
+      callback_urls:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      expires_at:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: integer
+    required:
+    - name
+    - org_id
+    type: object
+  service.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 6
+        type: string
+      role:
+        enum:
+        - user
+        - admin
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - password
+    - role
+    - username
+    type: object
+  service.UpdateApplicationRequest:
+    properties:
+      callback_urls:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      expires_at:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+    type: object
+  service.UpdateUserRequest:
+    properties:
+      is_active:
+        type: boolean
+      role:
+        type: string
+    type: object
+  services.LatestRunInfo:
+    properties:
+      apply_duration:
+        description: 秒
+        type: integer
+      changes_add:
+        type: integer
+      changes_change:
+        type: integer
+      changes_destroy:
+        type: integer
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      plan_duration:
+        description: 秒
+        type: integer
+      status:
+        type: string
+      task_type:
+        description: 添加task_type字段
+        type: string
+    type: object
+  services.PriorityUpdate:
+    properties:
+      id:
+        type: integer
+      priority:
+        type: integer
+    type: object
+  services.ResourceSummary:
+    properties:
+      count:
+        description: 数量
+        type: integer
+      type:
+        description: 资源类型，如 aws_instance
+        type: string
+    type: object
+  services.WorkspaceOverviewResponse:
+    properties:
+      auto_apply:
+        type: boolean
+      created_at:
+        description: 时间戳
+        type: string
+      description:
+        type: string
+      drift_count:
+        type: integer
+      execution_mode:
+        description: 执行配置
+        type: string
+      id:
+        description: 基本信息
+        type: integer
+      is_locked:
+        type: boolean
+      last_apply_at:
+        type: string
+      last_drift_check:
+        type: string
+      last_plan_at:
+        type: string
+      latest_run:
+        allOf:
+        - $ref: '#/definitions/services.LatestRunInfo'
+        description: 最近运行
+      lock_reason:
+        type: string
+      locked_by:
+        type: string
+      locked_by_username:
+        description: 锁定者用户名
+        type: string
+      name:
+        type: string
+      resource_count:
+        description: 统计信息
+        type: integer
+      resources:
+        description: 资源列表
+        items:
+          $ref: '#/definitions/services.ResourceSummary'
+        type: array
+      terraform_version:
+        type: string
+      updated_at:
+        type: string
+      working_directory:
+        type: string
+    type: object
+  valueobject.PermissionLevel:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    type: integer
+    x-enum-varnames:
+    - PermissionLevelNone
+    - PermissionLevelRead
+    - PermissionLevelWrite
+    - PermissionLevelAdmin
+  valueobject.PrincipalType:
+    enum:
+    - USER
+    - TEAM
+    - APPLICATION
+    type: string
+    x-enum-varnames:
+    - PrincipalTypeUser
+    - PrincipalTypeTeam
+    - PrincipalTypeApplication
+  valueobject.ResourceType:
+    enum:
+    - APPLICATION_REGISTRATION
+    - ORGANIZATION
+    - USER_MANAGEMENT
+    - PROJECTS
+    - WORKSPACES
+    - MODULES
+    - MODULE_DEMOS
+    - SCHEMAS
+    - TASK_LOGS
+    - AGENTS
+    - AGENT_POOLS
+    - IAM_PERMISSIONS
+    - IAM_TEAMS
+    - IAM_ORGANIZATIONS
+    - IAM_PROJECTS
+    - IAM_APPLICATIONS
+    - IAM_AUDIT
+    - IAM_USERS
+    - IAM_ROLES
+    - TERRAFORM_VERSIONS
+    - AI_CONFIGS
+    - AI_ANALYSIS
+    - PROJECT_SETTINGS
+    - PROJECT_TEAM_MANAGEMENT
+    - PROJECT_WORKSPACES
+    - TASK_DATA_ACCESS
+    - WORKSPACE_EXECUTION
+    - WORKSPACE_STATE
+    - WORKSPACE_VARIABLES
+    - WORKSPACE_RESOURCES
+    - WORKSPACE_MANAGEMENT
+    type: string
+    x-enum-varnames:
+    - ResourceTypeAppRegistration
+    - ResourceTypeOrgSettings
+    - ResourceTypeUserManagement
+    - ResourceTypeAllProjects
+    - ResourceTypeAllWorkspaces
+    - ResourceTypeModules
+    - ResourceTypeModuleDemos
+    - ResourceTypeSchemas
+    - ResourceTypeTaskLogs
+    - ResourceTypeAgents
+    - ResourceTypeAgentPools
+    - ResourceTypeIAMPermissions
+    - ResourceTypeIAMTeams
+    - ResourceTypeIAMOrganizations
+    - ResourceTypeIAMProjects
+    - ResourceTypeIAMApplications
+    - ResourceTypeIAMAudit
+    - ResourceTypeIAMUsers
+    - ResourceTypeIAMRoles
+    - ResourceTypeTerraformVersions
+    - ResourceTypeAIConfigs
+    - ResourceTypeAIAnalysis
+    - ResourceTypeProjectSettings
+    - ResourceTypeProjectTeams
+    - ResourceTypeProjectWorkspaces
+    - ResourceTypeTaskData
+    - ResourceTypeWorkspaceExec
+    - ResourceTypeWorkspaceState
+    - ResourceTypeWorkspaceVars
+    - ResourceTypeWorkspaceResources
+    - ResourceTypeWorkspaceManagement
+  valueobject.ScopeType:
+    enum:
+    - ORGANIZATION
+    - PROJECT
+    - WORKSPACE
+    type: string
+    x-enum-varnames:
+    - ScopeTypeOrganization
+    - ScopeTypeProject
+    - ScopeTypeWorkspace
+host: localhost:8080
+info:
+  contact:
+    email: support@iac-platform.com
+    name: API Support
+  description: Infrastructure as Code Platform API Documentation
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: IAC Platform API
+  version: "1.0"
+paths:
+  /api/v1/admin/ai-config/models:
+    get:
+      consumes:
+      - application/json
+      description: 根据AWS区域获取可用的AI模型列表
+      parameters:
+      - description: AWS Region
+        in: query
+        name: region
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回模型列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 缺少region参数
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取可用AI模型列表
+      tags:
+      - AI
+  /api/v1/admin/ai-config/regions:
+    get:
+      consumes:
+      - application/json
+      description: 获取支持AI服务的AWS区域列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回区域列表
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取可用AWS区域列表
+      tags:
+      - AI
+  /api/v1/admin/ai-configs:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有AI配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回配置列表
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取 AI 配置列表
+      tags:
+      - AI
+    post:
+      consumes:
+      - application/json
+      description: 创建新的AI配置
+      parameters:
+      - description: AI配置信息
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/models.AIConfig'
+      - description: 强制更新（禁用其他配置）
+        in: query
+        name: force_update
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 配置创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建AI配置
+      tags:
+      - AI
+  /api/v1/admin/ai-configs/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的AI配置
+      parameters:
+      - description: 配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的配置ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除AI配置
+      tags:
+      - AI
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取AI配置详情
+      parameters:
+      - description: 配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回配置详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的配置ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 配置不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取AI配置详情
+      tags:
+      - AI
+    put:
+      consumes:
+      - application/json
+      description: 更新AI配置信息
+      parameters:
+      - description: 配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: AI配置信息
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/models.AIConfig'
+      - description: 强制更新（禁用其他配置）
+        in: query
+        name: force_update
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新AI配置
+      tags:
+      - AI
+  /api/v1/admin/ai-configs/{id}/set-default:
+    put:
+      consumes:
+      - application/json
+      description: 将指定配置设置为默认配置（支持所有场景）
+      parameters:
+      - description: 配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 设置成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的配置ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 设置失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 设置为默认AI配置
+      tags:
+      - AI
+  /api/v1/admin/ai-configs/priorities:
+    put:
+      consumes:
+      - application/json
+      description: 批量更新多个AI配置的优先级
+      parameters:
+      - description: 优先级更新列表
+        in: body
+        name: updates
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/services.PriorityUpdate'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 批量更新AI配置优先级
+      tags:
+      - AI
+  /api/v1/admin/terraform-versions:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有已配置的Terraform版本，支持按enabled和deprecated过滤
+      parameters:
+      - description: 是否启用
+        in: query
+        name: enabled
+        type: boolean
+      - description: 是否弃用
+        in: query
+        name: deprecated
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TerraformVersionListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 获取Terraform版本列表
+      tags:
+      - Admin
+    post:
+      consumes:
+      - application/json
+      description: 创建新的Terraform版本配置
+      parameters:
+      - description: 创建请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateTerraformVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.TerraformVersion'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 创建Terraform版本
+      tags:
+      - Admin
+  /api/v1/admin/terraform-versions/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除Terraform版本配置（如果有workspace在使用或是默认版本则无法删除）
+      parameters:
+      - description: 版本ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 删除Terraform版本
+      tags:
+      - Admin
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取Terraform版本详情
+      parameters:
+      - description: 版本ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TerraformVersion'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 获取Terraform版本详情
+      tags:
+      - Admin
+    put:
+      consumes:
+      - application/json
+      description: 更新Terraform版本配置
+      parameters:
+      - description: 版本ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateTerraformVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TerraformVersion'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 更新Terraform版本
+      tags:
+      - Admin
+  /api/v1/admin/terraform-versions/{id}/set-default:
+    post:
+      consumes:
+      - application/json
+      description: 设置指定版本为默认版本（全局唯一）
+      parameters:
+      - description: 版本ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TerraformVersion'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 设置默认Terraform版本
+      tags:
+      - Admin
+  /api/v1/admin/terraform-versions/default:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前设置的默认Terraform版本
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TerraformVersion'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 获取默认Terraform版本
+      tags:
+      - Admin
+  /api/v1/agent-pools:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有Agent Pool
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Pool列表
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Agent Pool列表
+      tags:
+      - Agent Pool
+    post:
+      consumes:
+      - application/json
+      description: 创建新的Agent Pool
+      parameters:
+      - description: Pool信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建Agent Pool
+      tags:
+      - Agent Pool
+  /api/v1/agent-pools/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的Agent Pool
+      parameters:
+      - description: Pool ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Pool ID
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除Agent Pool
+      tags:
+      - Agent Pool
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取Agent Pool详情
+      parameters:
+      - description: Pool ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Pool详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Pool ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Pool不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Agent Pool详情
+      tags:
+      - Agent Pool
+    put:
+      consumes:
+      - application/json
+      description: 更新Agent Pool配置
+      parameters:
+      - description: Pool ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新Agent Pool
+      tags:
+      - Agent Pool
+  /api/v1/agent-pools/{id}/agents:
+    post:
+      consumes:
+      - application/json
+      description: 将Agent添加到指定的Pool
+      parameters:
+      - description: Pool ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Agent ID
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 添加成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 添加Agent到Pool
+      tags:
+      - Agent Pool
+  /api/v1/agent-pools/{id}/agents/{agent_id}:
+    delete:
+      consumes:
+      - application/json
+      description: 从指定Pool中移除Agent
+      parameters:
+      - description: Pool ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Agent ID
+        in: path
+        name: agent_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 移除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 从Pool移除Agent
+      tags:
+      - Agent Pool
+  /api/v1/agents:
+    get:
+      consumes:
+      - application/json
+      description: 获取Agent列表，支持按状态和标签过滤
+      parameters:
+      - description: 状态过滤
+        in: query
+        name: status
+        type: string
+      - description: 标签过滤（逗号分隔）
+        in: query
+        name: labels
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Agent列表
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Agent列表
+      tags:
+      - Agent
+  /api/v1/agents/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的Agent
+      parameters:
+      - description: Agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Agent ID
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除Agent
+      tags:
+      - Agent
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取Agent的详细信息
+      parameters:
+      - description: Agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Agent详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Agent ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Agent不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Agent详情
+      tags:
+      - Agent
+    put:
+      consumes:
+      - application/json
+      description: 更新Agent的配置信息
+      parameters:
+      - description: Agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新Agent信息
+      tags:
+      - Agent
+  /api/v1/agents/{id}/regenerate-token:
+    post:
+      consumes:
+      - application/json
+      description: 为Agent重新生成新的访问令牌
+      parameters:
+      - description: Agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token重新生成成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Agent ID
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 重新生成Agent Token
+      tags:
+      - Agent
+  /api/v1/agents/{id}/revoke-token:
+    post:
+      consumes:
+      - application/json
+      description: 撤销Agent的访问令牌
+      parameters:
+      - description: Agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token已撤销
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Agent ID
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 撤销Agent Token
+      tags:
+      - Agent
+  /api/v1/agents/heartbeat:
+    post:
+      consumes:
+      - application/json
+      description: Agent发送心跳保持在线状态
+      parameters:
+      - description: 心跳信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AgentHeartbeatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 心跳更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Agent心跳
+      tags:
+      - Agent
+  /api/v1/agents/register:
+    post:
+      consumes:
+      - application/json
+      description: 注册新的Agent到平台
+      parameters:
+      - description: Agent注册信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AgentRegistrationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 注册成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 注册失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 注册Agent
+      tags:
+      - Agent
+  /api/v1/ai/analyze-error:
+    post:
+      consumes:
+      - application/json
+      description: 使用AI分析Terraform任务错误并提供解决方案
+      parameters:
+      - description: 错误分析请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.AnalyzeErrorRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 分析完成
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "429":
+          description: 请求过于频繁
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 分析失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: AI分析错误
+      tags:
+      - AI
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 使用用户名和密码登录系统
+      parameters:
+      - description: 登录信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 用户名或密码错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用户登录
+      tags:
+      - Auth
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 用户登出系统
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登出成功
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用户登出
+      tags:
+      - Auth
+  /api/v1/auth/me:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的详细信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 用户不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取当前用户信息
+      tags:
+      - Auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 使用当前有效的token获取新的token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token刷新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权或用户不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 刷新访问令牌
+      tags:
+      - Auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: 注册新用户账号
+      parameters:
+      - description: 注册信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 注册成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: 用户名或邮箱已存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用户注册
+      tags:
+      - Auth
+  /api/v1/dashboard/compliance:
+    get:
+      consumes:
+      - application/json
+      description: 获取任务的成功、失败、待处理等统计信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回任务统计
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务统计信息
+      tags:
+      - Dashboard
+  /api/v1/dashboard/overview:
+    get:
+      consumes:
+      - application/json
+      description: 获取平台的概览统计信息，包括项目数、工作空间数、任务统计等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回统计信息
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Dashboard概览统计
+      tags:
+      - Dashboard
+  /api/v1/demo-versions/{versionId}:
+    get:
+      consumes:
+      - application/json
+      description: 根据版本ID获取Demo版本详情
+      parameters:
+      - description: 版本ID
+        in: path
+        name: versionId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回版本详情
+          schema:
+            $ref: '#/definitions/models.ModuleDemoVersion'
+        "400":
+          description: 无效的版本ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 版本不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Demo版本详情
+      tags:
+      - Module Demo
+  /api/v1/demos/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的Demo配置
+      parameters:
+      - description: Demo ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 无效的Demo ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除Demo配置
+      tags:
+      - Module Demo
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取Demo配置详情
+      parameters:
+      - description: Demo ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Demo详情
+          schema:
+            $ref: '#/definitions/models.ModuleDemo'
+        "400":
+          description: 无效的Demo ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Demo不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Demo详情
+      tags:
+      - Module Demo
+    put:
+      consumes:
+      - application/json
+      description: 更新Demo配置信息
+      parameters:
+      - description: Demo ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Demo配置信息
+        in: body
+        name: demo
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.ModuleDemo'
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新Demo配置
+      tags:
+      - Module Demo
+  /api/v1/demos/{id}/compare:
+    get:
+      consumes:
+      - application/json
+      description: 对比两个Demo版本的差异
+      parameters:
+      - description: Demo ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 版本1 ID
+        in: query
+        name: version1
+        required: true
+        type: integer
+      - description: 版本2 ID
+        in: query
+        name: version2
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回对比结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 对比失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 对比Demo版本
+      tags:
+      - Module Demo
+  /api/v1/demos/{id}/rollback:
+    post:
+      consumes:
+      - application/json
+      description: 将Demo回滚到指定的历史版本
+      parameters:
+      - description: Demo ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回滚请求（包含version_id）
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 回滚成功
+          schema:
+            $ref: '#/definitions/models.ModuleDemo'
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 回滚失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 回滚Demo版本
+      tags:
+      - Module Demo
+  /api/v1/demos/{id}/versions:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定Demo的所有历史版本
+      parameters:
+      - description: Demo ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回版本列表
+          schema:
+            items:
+              $ref: '#/definitions/models.ModuleDemoVersion'
+            type: array
+        "400":
+          description: 无效的Demo ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Demo版本列表
+      tags:
+      - Module Demo
+  /api/v1/iam/applications:
+    get:
+      parameters:
+      - description: 组织ID
+        in: query
+        name: org_id
+        required: true
+        type: integer
+      - description: 是否启用
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取应用列表
+      tags:
+      - IAM-Application
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建应用请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.CreateApplicationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建应用
+      tags:
+      - IAM-Application
+  /api/v1/iam/applications/{id}:
+    delete:
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 删除应用
+      tags:
+      - IAM-Application
+    get:
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取应用详情
+      tags:
+      - IAM-Application
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新应用请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateApplicationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新应用
+      tags:
+      - IAM-Application
+  /api/v1/iam/applications/{id}/regenerate-secret:
+    post:
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 重新生成应用密钥
+      tags:
+      - IAM-Application
+  /api/v1/iam/audit/access-history:
+    get:
+      parameters:
+      - description: 用户ID
+        in: query
+        name: user_id
+        type: integer
+      - description: 资源类型
+        in: query
+        name: resource_type
+        type: string
+      - description: 请求方法
+        in: query
+        name: method
+        type: string
+      - description: HTTP状态码运算符
+        in: query
+        name: http_code_operator
+        type: string
+      - description: HTTP状态码值
+        in: query
+        name: http_code_value
+        type: integer
+      - description: 开始时间
+        in: query
+        name: start_time
+        type: string
+      - description: 结束时间
+        in: query
+        name: end_time
+        type: string
+      - description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询资源访问历史
+      tags:
+      - IAM-Audit
+  /api/v1/iam/audit/config:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuditConfig'
+      summary: 获取审计配置
+      tags:
+      - IAM-Audit
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 审计配置
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AuditConfig'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新审计配置
+      tags:
+      - IAM-Audit
+  /api/v1/iam/audit/denied-access:
+    get:
+      parameters:
+      - description: 开始时间
+        in: query
+        name: start_time
+        type: string
+      - description: 结束时间
+        in: query
+        name: end_time
+        type: string
+      - description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询被拒绝的访问记录
+      tags:
+      - IAM-Audit
+  /api/v1/iam/audit/permission-changes-by-performer:
+    get:
+      parameters:
+      - description: 操作人ID
+        in: query
+        name: performer_id
+        required: true
+        type: integer
+      - description: 开始时间
+        in: query
+        name: start_time
+        type: string
+      - description: 结束时间
+        in: query
+        name: end_time
+        type: string
+      - description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询指定操作人的权限变更历史
+      tags:
+      - IAM-Audit
+  /api/v1/iam/audit/permission-changes-by-principal:
+    get:
+      parameters:
+      - description: 主体类型
+        in: query
+        name: principal_type
+        required: true
+        type: string
+      - description: 主体ID
+        in: query
+        name: principal_id
+        required: true
+        type: integer
+      - description: 开始时间
+        in: query
+        name: start_time
+        type: string
+      - description: 结束时间
+        in: query
+        name: end_time
+        type: string
+      - description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询指定主体的权限变更历史
+      tags:
+      - IAM-Audit
+  /api/v1/iam/audit/permission-history:
+    get:
+      parameters:
+      - description: 作用域类型
+        in: query
+        name: scope_type
+        required: true
+        type: string
+      - description: 作用域ID
+        in: query
+        name: scope_id
+        required: true
+        type: integer
+      - description: 开始时间
+        in: query
+        name: start_time
+        type: string
+      - description: 结束时间
+        in: query
+        name: end_time
+        type: string
+      - description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询权限变更历史
+      tags:
+      - IAM-Audit
+  /api/v1/iam/roles:
+    get:
+      description: 获取所有IAM角色列表，包括系统预定义角色和自定义角色
+      parameters:
+      - description: 是否只显示激活的角色
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ListRolesResponse'
+      summary: 列出所有角色
+      tags:
+      - IAM-Roles
+    post:
+      consumes:
+      - application/json
+      description: 创建一个新的自定义角色（系统角色不能通过API创建）
+      parameters:
+      - description: 角色信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/entity.Role'
+      summary: 创建自定义角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/roles/{id}:
+    delete:
+      description: 删除自定义角色（系统角色不能删除）
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: 删除角色
+      tags:
+      - IAM-Roles
+    get:
+      description: 获取指定角色的详细信息，包括所有权限策略
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RoleDetailResponse'
+      summary: 获取角色详情
+      tags:
+      - IAM-Roles
+    put:
+      consumes:
+      - application/json
+      description: 更新角色信息（系统角色的某些字段不能修改）
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 角色信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Role'
+      summary: 更新角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/roles/{id}/clone:
+    post:
+      consumes:
+      - application/json
+      description: 克隆一个现有角色，包括其所有权限策略
+      parameters:
+      - description: 源角色ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 新角色信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CloneRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/entity.Role'
+      summary: 克隆角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/roles/{id}/policies:
+    post:
+      consumes:
+      - application/json
+      description: 为指定角色添加一个权限策略
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 策略信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddRolePolicyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.RolePolicy'
+      summary: 为角色添加权限策略
+      tags:
+      - IAM-Roles
+  /api/v1/iam/roles/{id}/policies/{policy_id}:
+    delete:
+      description: 从指定角色移除一个权限策略
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 策略ID
+        in: path
+        name: policy_id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: 移除角色的权限策略
+      tags:
+      - IAM-Roles
+  /api/v1/iam/teams/{id}/permissions:
+    get:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出团队的所有权限（跨所有作用域）
+      tags:
+      - Permission
+  /api/v1/iam/teams/{id}/roles:
+    get:
+      description: 获取团队在所有作用域的角色分配
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出团队的所有角色
+      tags:
+      - IAM-Roles
+    post:
+      consumes:
+      - application/json
+      description: 在指定作用域为团队分配角色
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 分配信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 为团队分配角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/teams/{id}/roles/{assignment_id}:
+    delete:
+      description: 撤销团队在指定作用域的角色分配
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 角色分配ID
+        in: path
+        name: assignment_id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: 撤销团队角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/teams/{id}/tokens:
+    get:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出团队Token
+      tags:
+      - IAM-Team
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 创建Token请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTeamTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建团队Token
+      tags:
+      - IAM-Team
+  /api/v1/iam/teams/{id}/tokens/{token_id}:
+    delete:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 吊销团队Token
+      tags:
+      - IAM-Team
+  /api/v1/iam/users:
+    get:
+      parameters:
+      - description: 角色筛选
+        in: query
+        name: role
+        type: string
+      - description: 状态筛选
+        in: query
+        name: is_active
+        type: boolean
+      - description: 搜索关键词
+        in: query
+        name: search
+        type: string
+      - description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      - description: 偏移量
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出用户
+      tags:
+      - IAM-User
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建用户请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建用户
+      tags:
+      - IAM-User
+  /api/v1/iam/users/{id}:
+    delete:
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 删除用户
+      tags:
+      - IAM-User
+    get:
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取用户详情
+      tags:
+      - IAM-User
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新用户请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新用户
+      tags:
+      - IAM-User
+  /api/v1/iam/users/{id}/activate:
+    post:
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 激活用户
+      tags:
+      - IAM-User
+  /api/v1/iam/users/{id}/deactivate:
+    post:
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 停用用户
+      tags:
+      - IAM-User
+  /api/v1/iam/users/{id}/permissions:
+    get:
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出用户的所有权限（跨所有作用域）
+      tags:
+      - Permission
+  /api/v1/iam/users/{id}/roles:
+    get:
+      description: 获取用户在所有作用域的角色分配
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出用户的所有角色
+      tags:
+      - IAM-Roles
+    post:
+      consumes:
+      - application/json
+      description: 在指定作用域为用户分配角色
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 分配信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.UserRole'
+      summary: 为用户分配角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/users/{id}/roles/{assignment_id}:
+    delete:
+      description: 撤销用户在指定作用域的角色分配
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 角色分配ID
+        in: path
+        name: assignment_id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: 撤销用户角色
+      tags:
+      - IAM-Roles
+  /api/v1/iam/users/stats:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取用户统计
+      tags:
+      - IAM-User
+  /api/v1/modules:
+    get:
+      consumes:
+      - application/json
+      description: 获取模块列表，支持分页、按provider过滤和搜索
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: size
+        type: integer
+      - description: Provider过滤（AWS/Azure/GCP等）
+        in: query
+        name: provider
+        type: string
+      - description: 搜索关键词
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回模块列表
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取模块列表
+      tags:
+      - Module
+    post:
+      consumes:
+      - application/json
+      description: 创建一个新的Terraform模块
+      parameters:
+      - description: 模块信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 模块创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建新模块
+      tags:
+      - Module
+  /api/v1/modules/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的模块
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除模块
+      tags:
+      - Module
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取模块的详细信息
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回模块详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 模块不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取模块详情
+      tags:
+      - Module
+    put:
+      consumes:
+      - application/json
+      description: 更新模块的配置信息
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 模块不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新模块信息
+      tags:
+      - Module
+  /api/v1/modules/{id}/demos:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定模块的所有Demo配置
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Demo列表
+          schema:
+            items:
+              $ref: '#/definitions/models.ModuleDemo'
+            type: array
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取模块Demo列表
+      tags:
+      - Module Demo
+    post:
+      consumes:
+      - application/json
+      description: 为指定模块创建新的Demo配置
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Demo配置信息
+        in: body
+        name: demo
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/models.ModuleDemo'
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建模块Demo
+      tags:
+      - Module Demo
+  /api/v1/modules/{id}/files:
+    get:
+      consumes:
+      - application/json
+      description: 获取模块的Terraform文件内容
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回文件内容
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 文件未找到
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取模块文件
+      tags:
+      - Module
+  /api/v1/modules/{id}/schemas:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定模块的所有Schema配置
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Schema列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取模块Schema列表
+      tags:
+      - Schema
+    post:
+      consumes:
+      - application/json
+      description: 为指定模块创建新的Schema配置
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Schema信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateSchemaRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Schema创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建模块Schema
+      tags:
+      - Schema
+  /api/v1/modules/{id}/schemas/generate:
+    post:
+      consumes:
+      - application/json
+      description: 使用AI解析模块文件自动生成Schema配置
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Schema生成成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 生成失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: AI生成Schema
+      tags:
+      - Schema
+  /api/v1/modules/{id}/sync:
+    post:
+      consumes:
+      - application/json
+      description: 从Git仓库同步模块的Terraform文件
+      parameters:
+      - description: 模块ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 同步成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的模块ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 同步失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 同步模块文件
+      tags:
+      - Module
+  /api/v1/modules/parse-tf:
+    post:
+      consumes:
+      - application/json
+      description: 解析Terraform变量文件并生成Schema
+      parameters:
+      - description: TF文件内容
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 解析成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 解析失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 解析Terraform文件
+      tags:
+      - Module
+  /api/v1/organizations:
+    get:
+      parameters:
+      - description: 是否启用
+        in: query
+        name: is_active
+        type: boolean
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.Organization'
+            type: array
+      summary: 列出所有组织
+      tags:
+      - Organization
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建组织请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Organization'
+      summary: 创建组织
+      tags:
+      - Organization
+  /api/v1/organizations/{id}:
+    delete:
+      parameters:
+      - description: 组织ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 删除组织
+      tags:
+      - Organization
+    get:
+      parameters:
+      - description: 组织ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Organization'
+      summary: 获取组织详情
+      tags:
+      - Organization
+    put:
+      parameters:
+      - description: 组织ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新组织请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateOrganizationRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 更新组织
+      tags:
+      - Organization
+  /api/v1/permissions/{scope_type}/{id}:
+    delete:
+      parameters:
+      - description: 作用域类型
+        in: path
+        name: scope_type
+        required: true
+        type: string
+      - description: 权限分配ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 撤销权限
+      tags:
+      - Permission
+  /api/v1/permissions/{scope_type}/{scope_id}:
+    get:
+      parameters:
+      - description: 作用域类型
+        in: path
+        name: scope_type
+        required: true
+        type: string
+      - description: 作用域ID
+        in: path
+        name: scope_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.PermissionGrant'
+            type: array
+      summary: 列出指定作用域的所有权限
+      tags:
+      - Permission
+  /api/v1/permissions/batch-grant:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 批量授予权限请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BatchGrantPermissionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 批量授予权限
+      tags:
+      - Permission
+  /api/v1/permissions/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 权限检查请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CheckPermissionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.CheckPermissionResult'
+      summary: 检查用户权限
+      tags:
+      - Permission
+  /api/v1/permissions/definitions:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.PermissionDefinition'
+            type: array
+      summary: 列出所有权限定义
+      tags:
+      - Permission
+  /api/v1/permissions/grant:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 授予权限请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GrantPermissionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 授予权限
+      tags:
+      - Permission
+  /api/v1/permissions/grant-preset:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 授予预设权限请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GrantPresetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 授予预设权限集
+      tags:
+      - Permission
+  /api/v1/projects:
+    get:
+      parameters:
+      - description: 组织ID
+        in: query
+        name: org_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.Project'
+            type: array
+      summary: 列出组织的所有项目
+      tags:
+      - Project
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建项目请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Project'
+      summary: 创建项目
+      tags:
+      - Project
+  /api/v1/projects/{id}:
+    delete:
+      parameters:
+      - description: 项目ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 删除项目
+      tags:
+      - Project
+    get:
+      parameters:
+      - description: 项目ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Project'
+      summary: 获取项目详情
+      tags:
+      - Project
+    put:
+      parameters:
+      - description: 项目ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新项目请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateProjectRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 更新项目
+      tags:
+      - Project
+  /api/v1/schemas/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取Schema的详细信息
+      parameters:
+      - description: Schema ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回Schema详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的Schema ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Schema不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取Schema详情
+      tags:
+      - Schema
+    put:
+      consumes:
+      - application/json
+      description: 更新Schema的配置信息
+      parameters:
+      - description: Schema ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateSchemaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新Schema配置
+      tags:
+      - Schema
+  /api/v1/tasks/{task_id}/logs:
+    get:
+      consumes:
+      - application/json
+      description: 获取任务的历史日志，支持JSON和文本格式
+      parameters:
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      - default: all
+        description: 日志类型（plan/apply/all）
+        in: query
+        name: type
+        type: string
+      - default: json
+        description: 输出格式（json/text）
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回日志
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务日志
+      tags:
+      - Task Log
+  /api/v1/tasks/{task_id}/logs/download:
+    get:
+      consumes:
+      - application/json
+      description: 下载任务日志为文本文件
+      parameters:
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      - default: all
+        description: 日志类型（plan/apply/all）
+        in: query
+        name: type
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: 日志文件
+          schema:
+            type: file
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 下载任务日志文件
+      tags:
+      - Task Log
+  /api/v1/tasks/{task_id}/output/stream:
+    get:
+      consumes:
+      - application/json
+      description: 通过WebSocket实时获取任务执行日志
+      parameters:
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: WebSocket连接建立
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的任务ID
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: WebSocket实时日志流
+      tags:
+      - Task Log
+  /api/v1/teams:
+    get:
+      parameters:
+      - description: 组织ID
+        in: query
+        name: org_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.Team'
+            type: array
+      summary: 列出组织的所有团队
+      tags:
+      - Team
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建团队请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTeamRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Team'
+      summary: 创建团队
+      tags:
+      - Team
+  /api/v1/teams/{id}:
+    delete:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 删除团队
+      tags:
+      - Team
+    get:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Team'
+      summary: 获取团队详情
+      tags:
+      - Team
+  /api/v1/teams/{id}/members:
+    get:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.TeamMember'
+            type: array
+      summary: 列出团队成员
+      tags:
+      - Team
+    post:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 添加成员请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddTeamMemberRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 添加团队成员
+      tags:
+      - Team
+  /api/v1/teams/{id}/members/{user_id}:
+    delete:
+      parameters:
+      - description: 团队ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 用户ID
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 移除团队成员
+      tags:
+      - Team
+  /api/v1/terraform/streams/stats:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有输出流的统计信息（调试用）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回统计信息
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取输出流统计
+      tags:
+      - Task Log
+  /api/v1/user/change-password:
+    post:
+      consumes:
+      - application/json
+      description: 修改当前用户的密码
+      parameters:
+      - description: 修改密码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 修改密码
+      tags:
+      - User Settings
+  /api/v1/user/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 用户重置自己的密码
+      parameters:
+      - description: 密码重置信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码重置成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效或当前密码错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 用户不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 重置密码
+      tags:
+      - Auth
+  /api/v1/user/tokens:
+    get:
+      description: 获取当前用户的所有Token列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 列出用户Token
+      tags:
+      - User Settings
+    post:
+      consumes:
+      - application/json
+      description: 为当前用户创建一个新的访问Token
+      parameters:
+      - description: 创建Token请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateUserTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建用户Token
+      tags:
+      - User Settings
+  /api/v1/user/tokens/{token_id}:
+    delete:
+      description: 吊销当前用户的指定Token
+      parameters:
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 吊销用户Token
+      tags:
+      - User Settings
+  /api/v1/workspaces/{id}/current-state:
+    get:
+      consumes:
+      - application/json
+      description: 获取工作空间当前的State信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回当前State
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: State不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取当前State
+      tags:
+      - State Version
+  /api/v1/workspaces/{id}/overview:
+    get:
+      consumes:
+      - application/json
+      description: 获取Workspace的完整概览信息，包括资源统计、最近运行、配置等
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.WorkspaceOverviewResponse'
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 工作空间不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取Workspace Overview
+      tags:
+      - Workspace
+  /api/v1/workspaces/{id}/resources:
+    get:
+      consumes:
+      - application/json
+      description: 获取工作空间的资源列表，支持分页、搜索和排序
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 搜索关键词
+        in: query
+        name: search
+        type: string
+      - default: created_at
+        description: 排序字段
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: 排序方向（asc/desc）
+        in: query
+        name: sort_order
+        type: string
+      - description: 包含已删除资源
+        in: query
+        name: include_inactive
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回资源列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取资源列表
+      tags:
+      - Resource
+    post:
+      consumes:
+      - application/json
+      description: 向工作空间添加新的Terraform资源
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 资源添加成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 添加失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 添加资源
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的资源（软删除）
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的资源ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除资源
+      tags:
+      - Resource
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取资源的详细信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回资源详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的资源ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 资源不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取资源详情
+      tags:
+      - Resource
+    put:
+      consumes:
+      - application/json
+      description: 更新资源配置并创建新版本
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新资源
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}/dependencies:
+    get:
+      consumes:
+      - application/json
+      description: 获取资源的依赖关系图
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回依赖关系
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的资源ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取资源依赖关系
+      tags:
+      - Resource
+    put:
+      consumes:
+      - application/json
+      description: 更新资源的依赖关系配置
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 依赖关系配置
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新资源依赖关系
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}/drift:
+    delete:
+      consumes:
+      - application/json
+      description: 删除资源的编辑草稿
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 会话ID
+        in: query
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除编辑草稿
+      tags:
+      - Resource Editing
+    get:
+      consumes:
+      - application/json
+      description: 获取资源的编辑草稿
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 会话ID
+        in: query
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回草稿
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取编辑草稿
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/drift/save:
+    post:
+      consumes:
+      - application/json
+      description: 保存资源的编辑草稿
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 草稿内容
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 草稿保存成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 保存失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 保存编辑草稿
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/drift/takeover:
+    post:
+      consumes:
+      - application/json
+      description: 强制接管其他用户的编辑会话
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 接管信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 接管成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 接管失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 接管编辑会话
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/editing/end:
+    post:
+      consumes:
+      - application/json
+      description: 结束编辑会话并释放锁
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 会话信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 结束编辑成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 结束编辑失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 结束编辑资源
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/editing/heartbeat:
+    post:
+      consumes:
+      - application/json
+      description: 更新编辑会话心跳保持锁定状态
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 会话信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 心跳更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 心跳更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 编辑会话心跳
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/editing/start:
+    post:
+      consumes:
+      - application/json
+      description: 开始编辑资源并获取编辑锁
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 会话信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 开始编辑成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 开始编辑失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 开始编辑资源
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/editing/status:
+    get:
+      consumes:
+      - application/json
+      description: 获取资源的编辑状态和锁定信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 会话ID
+        in: query
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回编辑状态
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取编辑状态
+      tags:
+      - Resource Editing
+  /api/v1/workspaces/{id}/resources/{resource_id}/restore:
+    post:
+      consumes:
+      - application/json
+      description: 恢复软删除的资源
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 恢复成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的资源ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 恢复失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 恢复已删除的资源
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}/versions:
+    get:
+      consumes:
+      - application/json
+      description: 获取资源的所有历史版本
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回版本列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的资源ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取资源版本历史
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}/versions/{version}:
+    get:
+      consumes:
+      - application/json
+      description: 获取资源指定版本的详细信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回版本详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 版本不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取资源版本详情
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}/versions/{version}/rollback:
+    post:
+      consumes:
+      - application/json
+      description: 将资源回滚到指定的历史版本
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 目标版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 回滚成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 回滚失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 回滚资源版本
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/{resource_id}/versions/compare:
+    get:
+      consumes:
+      - application/json
+      description: 对比资源的两个版本差异
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 源版本号
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: 目标版本号
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回对比结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 对比失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 对比资源版本
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/deploy:
+    post:
+      consumes:
+      - application/json
+      description: 创建Plan任务部署选定的资源
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 资源ID列表
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 部署任务创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 部署资源
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/resources/import:
+    post:
+      consumes:
+      - application/json
+      description: 从Terraform代码批量导入资源
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: TF代码
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 导入成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 导入失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 导入Terraform资源
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/snapshots:
+    get:
+      consumes:
+      - application/json
+      description: 获取工作空间的所有快照
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回快照列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取快照列表
+      tags:
+      - Resource
+    post:
+      consumes:
+      - application/json
+      description: 创建工作空间资源的快照
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 快照信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 快照创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建资源快照
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/snapshots/{snapshot_id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的快照
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 快照ID
+        in: path
+        name: snapshot_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的快照ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除快照
+      tags:
+      - Resource
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取快照的详细信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 快照ID
+        in: path
+        name: snapshot_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回快照详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的快照ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 快照不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取快照详情
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/snapshots/{snapshot_id}/restore:
+    post:
+      consumes:
+      - application/json
+      description: 将工作空间资源恢复到快照状态
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 快照ID
+        in: path
+        name: snapshot_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 恢复成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的快照ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 恢复失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 恢复快照
+      tags:
+      - Resource
+  /api/v1/workspaces/{id}/state-versions:
+    get:
+      consumes:
+      - application/json
+      description: 获取工作空间的所有State版本
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回版本列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取State版本列表
+      tags:
+      - State Version
+  /api/v1/workspaces/{id}/state-versions/{version}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的State版本（软删除）
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数或不能删除最新版本
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除State版本
+      tags:
+      - State Version
+    get:
+      consumes:
+      - application/json
+      description: 下载指定版本的State文件内容
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: State文件
+          schema:
+            type: file
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 版本不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 下载State版本文件
+      tags:
+      - State Version
+  /api/v1/workspaces/{id}/state-versions/{version}/metadata:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定版本的State元数据信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回元数据
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 版本不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取State版本元数据
+      tags:
+      - State Version
+  /api/v1/workspaces/{id}/state-versions/{version}/rollback:
+    post:
+      consumes:
+      - application/json
+      description: 将工作空间State回滚到指定版本
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 目标版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 回滚成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数或workspace已锁定
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 版本不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 回滚失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 回滚State版本
+      tags:
+      - State Version
+  /api/v1/workspaces/{id}/state-versions/compare:
+    get:
+      consumes:
+      - application/json
+      description: 对比两个State版本的差异
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 源版本号
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: 目标版本号
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回对比结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 版本不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 对比失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 对比State版本
+      tags:
+      - State Version
+  /api/v1/workspaces/{id}/tasks:
+    get:
+      consumes:
+      - application/json
+      description: 获取工作空间的任务列表，支持分页、搜索和过滤
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 搜索关键词
+        in: query
+        name: search
+        type: string
+      - description: 状态过滤
+        in: query
+        name: status
+        type: string
+      - description: 任务类型过滤
+        in: query
+        name: task_type
+        type: string
+      - description: 开始日期（RFC3339格式）
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期（RFC3339格式）
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回任务列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务列表
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取任务的详细信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回任务详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务详情
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: 取消指定的任务
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 取消成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的任务ID或任务已完成
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 取消失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 取消任务
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/cancel-previous:
+    post:
+      consumes:
+      - application/json
+      description: 取消当前任务之前的所有等待中的任务
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 取消成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数或任务状态不正确
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 取消失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 取消之前的等待任务
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/comments:
+    get:
+      consumes:
+      - application/json
+      description: 获取任务的所有评论
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回评论列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务评论列表
+      tags:
+      - Workspace Task
+    post:
+      consumes:
+      - application/json
+      description: 为任务添加评论
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      - description: 评论内容
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 评论创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效或评论数量超限
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 添加任务评论
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply:
+    post:
+      consumes:
+      - application/json
+      description: 确认执行Plan+Apply任务的Apply阶段
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      - description: Apply描述
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Apply已加入队列
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效或任务状态不正确
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: 资源已变更
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 确认执行Apply
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/error-analysis:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定任务的AI错误分析结果
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回分析结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的任务ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 未找到分析结果
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 解析失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务错误分析结果
+      tags:
+      - AI
+  /api/v1/workspaces/{id}/tasks/{task_id}/logs:
+    get:
+      consumes:
+      - application/json
+      description: 获取任务的执行日志
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回日志
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的任务ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 获取失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务日志
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/resource-changes:
+    get:
+      consumes:
+      - application/json
+      description: 获取任务的资源变更详情和摘要
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回资源变更列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的参数
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取任务资源变更列表
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/resource-changes/{resource_id}:
+    patch:
+      consumes:
+      - application/json
+      description: 更新资源的Apply执行状态
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      - description: 资源ID
+        in: path
+        name: resource_id
+        required: true
+        type: integer
+      - description: 状态更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.WorkspaceTaskResourceChange'
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 资源不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新资源Apply状态
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/retry-state-save:
+    post:
+      consumes:
+      - application/json
+      description: 重试保存失败的State文件
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: State保存成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 任务不是State保存失败状态
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务或备份文件不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 保存失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 重试State保存
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/state-backup:
+    get:
+      consumes:
+      - application/json
+      description: 下载任务的State备份文件
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: State备份文件
+          schema:
+            type: file
+        "400":
+          description: 无法找到备份路径
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 任务或备份文件不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 下载State备份文件
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/apply:
+    post:
+      consumes:
+      - application/json
+      description: 创建Terraform Apply任务（需要先有成功的Plan）
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 任务创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 没有可用的Plan或参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 工作空间不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "423":
+          description: 工作空间已锁定
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建Apply任务
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/tasks/plan:
+    post:
+      consumes:
+      - application/json
+      description: 创建Terraform Plan任务或Plan+Apply任务
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务配置（description和run_type可选）
+        in: body
+        name: request
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 任务创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 工作空间不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "423":
+          description: 工作空间已锁定
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建Plan任务
+      tags:
+      - Workspace Task
+  /api/v1/workspaces/{id}/variables:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定工作空间的所有变量，支持按类型过滤
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: all
+        description: 变量类型过滤（terraform/env/all）
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回变量列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取工作空间变量列表
+      tags:
+      - Workspace Variable
+    post:
+      consumes:
+      - application/json
+      description: 为指定工作空间创建新的变量（Terraform变量或环境变量）
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 变量信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 变量创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建工作空间变量
+      tags:
+      - Workspace Variable
+  /api/v1/workspaces/{id}/variables/{var_id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的工作空间变量
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 变量ID
+        in: path
+        name: var_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的变量ID
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除变量
+      tags:
+      - Workspace Variable
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取变量的详细信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 变量ID
+        in: path
+        name: var_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回变量详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的变量ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 变量不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取变量详情
+      tags:
+      - Workspace Variable
+    put:
+      consumes:
+      - application/json
+      description: 更新变量的配置信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 变量ID
+        in: path
+        name: var_id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新变量
+      tags:
+      - Workspace Variable
+  /api/v1/workspaces/form-data:
+    get:
+      consumes:
+      - application/json
+      description: 获取创建Workspace时需要的Terraform版本、Agent Pool、K8s配置等数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取Workspace表单数据
+      tags:
+      - Workspace
+  /workspaces:
+    get:
+      consumes:
+      - application/json
+      description: 获取工作空间列表，支持分页和搜索
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: size
+        type: integer
+      - description: 搜索关键词（支持name、description、tags）
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回工作空间列表
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取工作空间列表
+      tags:
+      - Workspace
+    post:
+      consumes:
+      - application/json
+      description: 创建一个新的工作空间
+      parameters:
+      - description: 工作空间信息
+        in: body
+        name: workspace
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 成功创建工作空间
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 创建失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 创建新的工作空间
+      tags:
+      - Workspace
+  /workspaces/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的工作空间
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 删除失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 删除工作空间
+      tags:
+      - Workspace
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取工作空间的详细信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回工作空间详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 无效的工作空间ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 工作空间不存在
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 获取单个工作空间详情
+      tags:
+      - Workspace
+    put:
+      consumes:
+      - application/json
+      description: 更新工作空间的配置信息
+      parameters:
+      - description: 工作空间ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新的工作空间信息
+        in: body
+        name: workspace
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 更新失败
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: 更新工作空间
+      tags:
+      - Workspace
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

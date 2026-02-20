@@ -1,0 +1,189 @@
+.container {
+  padding: 20px;
+  max-width: 100%;
+  background: #f8fafc;
+  min-height: calc(100vh - 68px - 24px);
+  margin: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  font-size: 16px;
+  color: #6c757d;
+}
+
+/* Section Styles */
+.section {
+  margin-bottom: 48px;
+}
+
+.sectionHeader {
+  margin-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 28px;
+  font-weight: 600;
+  color: #212529;
+  margin: 0 0 8px 0;
+}
+
+.sectionSubtitle {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0;
+}
+
+.sectionSubtitle strong {
+  font-weight: 600;
+  color: #212529;
+}
+
+.subsectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #212529;
+  margin: 0 0 20px 0;
+}
+
+/* Stats Grid - Overview Cards */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.statCard {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
+}
+
+.statCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.statLabel {
+  font-size: 13px;
+  color: #6c757d;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.infoIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e9ecef;
+  color: #6c757d;
+  font-size: 12px;
+  cursor: help;
+  font-style: normal;
+}
+
+.statValue {
+  font-size: 36px;
+  font-weight: 600;
+  color: #212529;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.statHint {
+  font-size: 12px;
+  color: #868e96;
+  margin-top: 4px;
+}
+
+/* Compliance Grid */
+.complianceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.complianceCard {
+  text-align: center;
+}
+
+.complianceLabel {
+  font-size: 13px;
+  color: #6c757d;
+  margin-bottom: 12px;
+}
+
+.complianceValue {
+  font-size: 48px;
+  font-weight: 600;
+  color: #212529;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.complianceHint {
+  font-size: 13px;
+  color: #868e96;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 20px 16px;
+  }
+
+  .sectionTitle {
+    font-size: 24px;
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .statCard {
+    padding: 16px;
+  }
+
+  .statValue {
+    font-size: 28px;
+  }
+
+  .complianceGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .complianceValue {
+    font-size: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .complianceGrid {
+    grid-template-columns: 1fr;
+  }
+}

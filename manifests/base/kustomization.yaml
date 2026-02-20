@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - ha-rbac.yaml
+  - service-backend.yaml
+  - service-frontend.yaml
+  - deployment-backend.yaml
+  - deployment-frontend.yaml
+secretGenerator:
+  - name: iac-jwt
+    namespace: terraform
+    literals:
+      - JWT_SECRET=uc8y3a10LpX8f1t7cagNxJP0A7nSmKs6NuouQj4whsA=
+    options:
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/name: iac-platform

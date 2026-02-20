@@ -1,0 +1,248 @@
+/* DateRangePicker Container */
+.container {
+  position: relative;
+  width: 100%;
+}
+
+/* 输入行 */
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-gray-600);
+}
+
+.dateButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--color-gray-900);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 130px;
+}
+
+.dateButton:hover {
+  border-color: var(--color-gray-400);
+  background: var(--color-gray-50);
+}
+
+.dateButton:focus {
+  outline: none;
+  border-color: var(--color-blue-600);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.arrow {
+  font-size: 14px;
+  color: var(--color-gray-400);
+  margin-top: 16px;
+}
+
+/* 日历弹出面板 - 缩小尺寸 */
+.pickerPanel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  padding: 12px;
+  width: fit-content;
+}
+
+/* 日历容器 */
+.calendarContainer {
+  margin-bottom: 12px;
+}
+
+/* 覆盖react-datepicker默认样式 - 缩小尺寸 */
+.calendar {
+  font-family: var(--font-primary);
+  border: none;
+  font-size: 13px;
+}
+
+.calendar :global(.react-datepicker__month-container) {
+  float: left;
+  margin: 0 4px;
+}
+
+.calendar :global(.react-datepicker__header) {
+  background-color: var(--color-gray-50);
+  border-bottom: 1px solid var(--color-gray-200);
+  padding: 6px 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.calendar :global(.react-datepicker__current-month) {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin-bottom: 6px;
+}
+
+.calendar :global(.react-datepicker__day-names) {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 2px;
+}
+
+.calendar :global(.react-datepicker__day-name) {
+  width: 28px;
+  line-height: 28px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-gray-600);
+}
+
+.calendar :global(.react-datepicker__week) {
+  display: flex;
+  justify-content: space-around;
+}
+
+.calendar :global(.react-datepicker__day) {
+  width: 28px;
+  line-height: 28px;
+  margin: 1px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-gray-900);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.calendar :global(.react-datepicker__day:hover) {
+  background-color: var(--color-gray-100);
+}
+
+.calendar :global(.react-datepicker__day--selected),
+.calendar :global(.react-datepicker__day--in-range),
+.calendar :global(.react-datepicker__day--in-selecting-range) {
+  background-color: var(--color-blue-100);
+  color: var(--color-blue-700);
+}
+
+.calendar :global(.react-datepicker__day--range-start),
+.calendar :global(.react-datepicker__day--range-end) {
+  background-color: var(--color-blue-600);
+  color: var(--color-white);
+  font-weight: 600;
+}
+
+.calendar :global(.react-datepicker__day--keyboard-selected) {
+  background-color: var(--color-blue-50);
+  color: var(--color-blue-900);
+}
+
+.calendar :global(.react-datepicker__day--outside-month) {
+  color: var(--color-gray-400);
+}
+
+.calendar :global(.react-datepicker__day--disabled) {
+  color: var(--color-gray-300);
+  cursor: not-allowed;
+}
+
+.calendar :global(.react-datepicker__day--today) {
+  font-weight: 600;
+  border: 1px solid var(--color-blue-600);
+}
+
+.calendar :global(.react-datepicker__navigation) {
+  top: 8px;
+}
+
+.calendar :global(.react-datepicker__navigation-icon::before) {
+  border-color: var(--color-gray-600);
+}
+
+/* 操作按钮 */
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.actionRight {
+  display: flex;
+  gap: 6px;
+}
+
+.clearButton {
+  padding: 6px 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.cancelButton {
+  padding: 6px 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.applyButton {
+  padding: 6px 16px;
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.applyButton:hover:not(:disabled) {
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
+}
+
+.applyButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

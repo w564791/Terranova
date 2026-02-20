@@ -1,0 +1,719 @@
+/* State Preview Layout */
+.stateLayout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-gray-50);
+}
+
+/* 左侧导航栏 - 黑色主题（与WorkspaceDetail一致） */
+.sidebar {
+  width: 256px;
+  background: #1E1E1E;
+  border-right: 1px solid #2D2D2D;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.sidebarHeader {
+  padding: 20px 16px;
+  border-bottom: 1px solid #2D2D2D;
+}
+
+.backButton {
+  background: none;
+  border: none;
+  color: #BFBFBF;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  margin-bottom: 16px;
+  transition: color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.backButton:hover {
+  color: #FFFFFF;
+}
+
+.workspaceTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav {
+  flex: 1;
+  padding: var(--spacing-sm) 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  padding: 10px var(--spacing-md);
+  color: #BFBFBF;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  width: 100%;
+  cursor: pointer;
+  font-family: var(--font-primary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.navItem:hover {
+  background: #2D2D2D;
+  color: #FFFFFF;
+}
+
+.navItemActive {
+  background: #1E1E1E;
+  color: #1677FF;
+  border-left-color: #1677FF;
+}
+
+.navLabel {
+  flex: 1;
+}
+
+/* 右侧主内容区 */
+.mainContent {
+  flex: 1;
+  margin-left: 256px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-gray-50);
+  max-width: calc(100vw - 256px);
+  overflow-x: hidden;
+}
+
+/* 全局头部 */
+.globalHeader {
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-gray-200);
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-lg);
+}
+
+.globalHeaderLeft {
+  flex: 1;
+}
+
+.globalTitle {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 12px 0;
+}
+
+.globalMeta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.metaItem {
+  font-size: 13px;
+  color: var(--color-gray-600);
+  display: flex;
+  align-items: center;
+}
+
+.metaItem::after {
+  content: '•';
+  margin-left: 16px;
+  color: var(--color-gray-400);
+}
+
+.metaItem:last-child::after {
+  display: none;
+}
+
+.globalHeaderRight {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.lockButton,
+.newRunButton {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.lockButton {
+  background: var(--color-white);
+  border-color: var(--color-gray-300);
+  color: var(--color-gray-700);
+}
+
+.lockButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.newRunButton {
+  background: var(--color-blue-600);
+  border-color: var(--color-blue-600);
+  color: var(--color-white);
+}
+
+.newRunButton:hover {
+  background: var(--color-blue-700);
+}
+
+/* State内容区 */
+.stateContent {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.stateHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.backToListButton {
+  background: none;
+  border: none;
+  color: var(--color-blue-600);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 0;
+  transition: color 0.2s;
+}
+
+.backToListButton:hover {
+  color: var(--color-blue-700);
+}
+
+.stateActions {
+  display: flex;
+  gap: 8px;
+}
+
+.downloadButton {
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  color: var(--color-white);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.downloadButton:hover {
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
+}
+
+.rollbackButton {
+  background: var(--color-white);
+  border: 1px solid #fa8c16;
+  color: #fa8c16;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rollbackButton:hover {
+  background: #fff7e6;
+  border-color: #d46b08;
+  color: #d46b08;
+}
+
+/* 回滚信息 */
+.rollbackInfo {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.rollbackInfo p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--color-gray-700);
+}
+
+.rollbackInfo p:first-child {
+  margin-top: 0;
+}
+
+.rollbackInfo p:last-child {
+  margin-bottom: 0;
+}
+
+/* State信息卡片 */
+.stateInfoCard {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.stateInfoHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.stateTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.viewTaskButton {
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  color: var(--color-white);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.viewTaskButton:hover {
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
+}
+
+.stateMetadata {
+  display: flex;
+  gap: 32px;
+}
+
+.metadataItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metadataLabel {
+  font-size: 12px;
+  color: var(--color-gray-600);
+  font-weight: 500;
+}
+
+.metadataValue {
+  font-size: 16px;
+  color: var(--color-gray-900);
+  font-weight: 600;
+}
+
+/* 过滤器区域 */
+.filterSection {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 视图切换按钮组 */
+.viewToggle {
+  display: flex;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.viewToggleButton {
+  background: var(--color-white);
+  border: none;
+  color: var(--color-gray-600);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewToggleButton:not(:last-child) {
+  border-right: 1px solid var(--color-gray-300);
+}
+
+.viewToggleButton:hover {
+  background: var(--color-gray-50);
+  color: var(--color-gray-900);
+}
+
+.viewToggleActive {
+  background: var(--color-blue-50);
+  color: var(--color-blue-600);
+}
+
+.viewToggleActive:hover {
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+}
+
+.filterInput {
+  flex: 1;
+  min-width: 300px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-gray-900);
+  transition: all 0.2s;
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: var(--color-blue-600);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.applyButton {
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  color: var(--color-white);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.applyButton:hover {
+  background: var(--color-blue-700);
+}
+
+.learnMoreLink {
+  color: var(--color-blue-600);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.learnMoreLink:hover {
+  text-decoration: underline;
+}
+
+.filterActions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.expandButton,
+.fullScreenButton {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  color: var(--color-gray-700);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expandButton:hover,
+.fullScreenButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+/* JSON查看器 */
+.jsonViewer {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 100%;
+  height: 600px;
+  overflow: hidden;
+}
+
+.jsonContent {
+  margin: 0;
+  padding: 20px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-gray-900);
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+  background: #f8f9fa;
+  white-space: pre;
+  word-wrap: normal;
+  box-sizing: border-box;
+}
+
+.jsonContent code {
+  font-family: inherit;
+  display: block;
+}
+
+/* 资源视图容器 */
+.resourceViewContainer {
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* JSON Syntax Highlighting */
+.jsonString {
+  color: #22863a; /* Green for strings */
+}
+
+.jsonNumber {
+  color: #005cc5; /* Blue for numbers */
+}
+
+.jsonBoolean {
+  color: #6f42c1; /* Purple for booleans */
+}
+
+.jsonNull {
+  color: #6a737d; /* Gray for null */
+}
+
+.jsonKey {
+  color: #d73a49; /* Red for keys */
+  font-weight: 500;
+}
+
+/* Search Match Highlighting */
+.searchMatch {
+  background-color: #fff3cd; /* Yellow background for all matches */
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.currentMatch {
+  background-color: #ff9800; /* Orange background for current match */
+  color: white;
+  border-radius: 2px;
+  padding: 1px 2px;
+  font-weight: 600;
+}
+
+/* Search Controls */
+.matchCounter {
+  background: var(--color-gray-100);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  white-space: nowrap;
+}
+
+.navButton {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  color: var(--color-gray-700);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.navButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.navButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.caseSensitiveLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.caseSensitiveCheckbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* Loading and Error states */
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--color-gray-50);
+}
+
+.loading {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--color-gray-600);
+  font-size: 16px;
+}
+
+/* Retrieve State 提示区域 */
+.retrievePrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+  color: #666;
+  padding: 40px;
+}
+
+.retrieveIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.retrieveText {
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--color-gray-600);
+}
+
+.retrieveButton {
+  background: var(--color-blue-600);
+  border: 1px solid var(--color-blue-600);
+  color: var(--color-white);
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retrieveButton:hover {
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
+}
+
+.retryButton {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  color: var(--color-gray-700);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retryButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-gray-200);
+  border-top-color: var(--color-blue-600);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .mainContent {
+    margin-left: 0;
+  }
+
+  .stateContent {
+    padding: var(--spacing-md);
+  }
+
+  .filterSection {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterInput {
+    min-width: 100%;
+  }
+
+  .filterActions {
+    margin-left: 0;
+    width: 100%;
+  }
+}

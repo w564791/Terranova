@@ -1,0 +1,756 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.label {
+  font-weight: 500;
+  color: var(--color-gray-700);
+  font-size: 14px;
+}
+
+.required {
+  color: var(--color-red-500);
+  margin-left: 4px;
+}
+
+.input,
+.select {
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Number输入框样式 */
+.numberInputWrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.numberInput {
+  width: 100%;
+  padding: var(--spacing-sm);
+  padding-right: 25px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  transition: border-color 0.2s;
+  -webkit-appearance: textfield;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* 隐藏Chrome/Safari的默认箭头 */
+.numberInput::-webkit-inner-spin-button,
+.numberInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 隐藏Firefox的默认箭头 */
+.numberInput[type=number] {
+  -moz-appearance: textfield;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.numberControls {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  bottom: 1px;
+  display: flex;
+  flex-direction: column;
+  width: 20px;
+}
+
+.numberUp,
+.numberDown {
+  flex: 1;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+  cursor: pointer;
+  font-size: 8px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  border-left: 1px solid var(--color-gray-300);
+}
+
+.numberUp {
+  border-radius: 0 calc(var(--radius-md) - 1px) 0 0;
+  border-bottom: 1px solid var(--color-gray-300);
+}
+
+.numberDown {
+  border-radius: 0 0 calc(var(--radius-md) - 1px) 0;
+}
+
+.numberUp:hover,
+.numberDown:hover {
+  background: var(--color-gray-200);
+  color: var(--color-gray-800);
+}
+
+.numberUp:active,
+.numberDown:active {
+  background: var(--color-gray-300);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.checkbox input {
+  margin: 0;
+}
+
+.description {
+  font-size: 12px;
+  color: var(--color-gray-500);
+}
+
+.error {
+  font-size: 12px;
+  color: var(--color-red-500);
+}
+
+.objectField {
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--color-gray-50);
+  margin-top: var(--spacing-xs);
+}
+
+.objectField .field {
+  margin-bottom: var(--spacing-md);
+}
+
+.objectField .field:last-child {
+  margin-bottom: 0;
+}
+
+/* 数组字段 - 统一浅色块 */
+.arrayField {
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--color-gray-50);
+  position: relative;
+}
+
+.arrayDescription {
+  margin-bottom: var(--spacing-sm);
+  font-size: 12px;
+  color: var(--color-gray-600);
+}
+
+.arrayDescription small {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--color-gray-600);
+  background: var(--color-gray-200);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  margin-left: var(--spacing-xs);
+}
+
+.arrayItem {
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  background: var(--color-white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  margin-left: var(--spacing-sm);
+}
+
+/* 简化的数组项连接线 */
+.arrayItem::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 20px;
+  width: 6px;
+  height: 1px;
+  background: var(--color-gray-300);
+}
+
+.arrayItem:last-child {
+  margin-bottom: var(--spacing-md);
+}
+
+.arrayItemHeader {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.arrayItemIndex {
+  display: none; /* 隐藏#序号 */
+}
+
+.removeButton {
+  background: var(--color-red-500);
+  color: white;
+  border: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.removeButton:hover {
+  background: var(--color-red-600);
+}
+
+.arrayItemContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-left: var(--spacing-sm);
+  border-left: 1px solid var(--color-gray-200);
+  margin-left: 4px;
+}
+
+.addButton {
+  background: var(--color-blue-500);
+  color: white;
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.addButton:hover {
+  background: var(--color-blue-600);
+}
+
+/* TypeMap样式 - 统一浅色块 */
+.mapField {
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--color-gray-50);
+  position: relative;
+}
+
+.mapDescription {
+  margin-bottom: var(--spacing-sm);
+  font-size: 12px;
+  color: var(--color-gray-600);
+}
+
+.mapDescription small {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--color-gray-600);
+  background: var(--color-blue-100);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  margin-left: var(--spacing-xs);
+}
+
+.mapItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  margin-left: var(--spacing-sm);
+}
+
+/* TypeObject样式 - 统一浅色块 */
+.objectField {
+  border: 1px solid var(--color-gray-200);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-xs);
+  position: relative;
+}
+
+.objectDescription {
+  margin-bottom: var(--spacing-sm);
+  font-size: 12px;
+  color: var(--color-gray-600);
+}
+
+.objectDescription small {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--color-gray-600);
+  background: var(--color-gray-200);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  margin-left: var(--spacing-xs);
+}
+
+.objectProperties {
+  padding-left: var(--spacing-sm);
+  border-left: 1px solid var(--color-gray-200);
+  margin-left: 4px;
+}
+
+/* 开关按钮样式 - 优化2 */
+.switchButton {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  padding: 0;
+  display: inline-block;
+}
+
+.switchOn {
+  background-color: #10b981;
+}
+
+.switchOff {
+  background-color: #d1d5db;
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: white;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.switchOn .switchThumb {
+  transform: translateX(22px);
+}
+
+.switchOff .switchThumb {
+  transform: translateX(2px);
+}
+
+
+/* force_new警告图标 - 优化4 */
+.forceNew {
+  margin-left: 8px;
+  font-size: 16px;
+  cursor: help;
+}
+
+/* HTML描述样式 - 优化5 */
+.description a {
+  color: var(--color-blue-500);
+  text-decoration: none;
+}
+
+.description a:hover {
+  text-decoration: underline;
+}
+
+.description p {
+  margin: 0;
+}
+
+.description code {
+  background: var(--color-gray-100);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+/* must_include提示 - 优化7 */
+.mapDescription .required {
+  color: #ef4444;
+  font-weight: 500;
+  display: block;
+  margin-top: 4px;
+}
+
+/* 可搜索选择框样式 - 优化2 */
+.searchableSelect {
+  position: relative;
+}
+
+.selectDisplay {
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  transition: border-color 0.2s;
+}
+
+.selectDisplay:hover {
+  border-color: var(--color-gray-400);
+}
+
+.selectArrow {
+  font-size: 12px;
+  color: var(--color-gray-500);
+  transition: transform 0.2s;
+}
+
+.selectDropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 300px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.selectSearch {
+  padding: var(--spacing-sm);
+  border: none;
+  border-bottom: 1px solid var(--color-gray-200);
+  font-size: 14px;
+}
+
+.selectSearch:focus {
+  outline: none;
+  background: var(--color-gray-50);
+}
+
+.selectOptions {
+  overflow-y: auto;
+  max-height: 250px;
+}
+
+.selectOption {
+  padding: var(--spacing-sm);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.selectOption:hover {
+  background: var(--color-gray-50);
+}
+
+.selectOption.selected {
+  background: var(--color-blue-50);
+  color: var(--color-blue-600);
+  font-weight: 500;
+}
+
+.noOptions {
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--color-gray-500);
+  font-size: 13px;
+}
+
+/* 必填Map项样式 - 优化4 */
+.requiredMapItem {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.requiredMapItem input:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.requiredInput {
+  border-color: #ef4444 !important;
+}
+
+.requiredInput:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+/* 嵌套Object的高级字段样式 */
+.advancedPropRow {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+}
+
+.advancedPropContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.advancedPropActions {
+  flex-shrink: 0;
+  padding-top: 28px;
+}
+
+.removePropButton {
+  background: var(--color-white);
+  color: var(--color-red-600);
+  border: 1px solid var(--color-red-300);
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.removePropButton:hover {
+  background: var(--color-red-50);
+  border-color: var(--color-red-400);
+  color: var(--color-red-700);
+}
+
+/* 嵌套Object的字段选择器 */
+.propSelector {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  border: 1px dashed var(--color-gray-300);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.addPropButton {
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addPropButton:hover {
+  background: var(--color-gray-200);
+  border-color: var(--color-gray-400);
+}
+
+.propSelectorPanel {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  padding: 0;
+  margin-top: var(--spacing-sm);
+  text-align: left;
+  overflow: hidden;
+}
+
+.propSelectorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.propSelectorHeader span {
+  font-weight: 500;
+  color: var(--color-gray-700);
+  font-size: 13px;
+}
+
+.cancelButton {
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: var(--color-gray-200);
+  border-color: var(--color-gray-400);
+}
+
+.searchBox {
+  padding: 0 var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.searchInput {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.propSelectorList {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  padding-top: 0;
+}
+
+.propOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  font-size: 12px;
+}
+
+.propOption:hover {
+  background: var(--color-blue-50);
+  border-color: var(--color-blue-300);
+}
+
+.propName {
+  font-weight: 500;
+  color: var(--color-gray-800);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.propDescription {
+  font-size: 11px;
+  color: var(--color-gray-500);
+  line-height: 1.3;
+}
+
+/* 移动端响应式设计 */
+@media (max-width: 768px) {
+  /* 缩小switch按钮 */
+  .switchButton {
+    width: 36px !important;
+    height: 20px !important;
+    border-radius: 10px !important;
+  }
+
+  .switchThumb {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  .switchOn .switchThumb {
+    transform: translateX(18px) !important;
+  }
+
+  /* 优化表单字段间距 */
+  .field {
+    gap: 4px;
+  }
+
+  .label {
+    font-size: 13px;
+  }
+
+  .input,
+  .select,
+  .numberInput {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .description {
+    font-size: 11px;
+  }
+
+  /* 优化数组和对象字段 */
+  .arrayField,
+  .mapField,
+  .objectField {
+    padding: var(--spacing-sm);
+  }
+
+  .arrayItem {
+    padding: var(--spacing-sm);
+  }
+
+  .addButton {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+}
+
+/* 小屏手机优化 (< 480px) */
+@media (max-width: 480px) {
+  .switchButton {
+    width: 32px !important;
+    height: 18px !important;
+    border-radius: 9px !important;
+  }
+
+  .switchThumb {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .switchOn .switchThumb {
+    transform: translateX(16px) !important;
+  }
+
+  .label {
+    font-size: 12px;
+  }
+
+  .input,
+  .select,
+  .numberInput {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+}

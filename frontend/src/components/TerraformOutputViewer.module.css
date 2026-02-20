@@ -1,0 +1,311 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--color-gray-50);
+  gap: 16px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.tabs button {
+  padding: 8px 16px;
+  border: 1px solid var(--color-gray-300);
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  transition: all 0.2s;
+}
+
+.tabs button:hover:not(:disabled) {
+  background: var(--color-gray-100);
+  border-color: var(--color-gray-400);
+}
+
+.tabs button.active {
+  background: var(--color-blue-500);
+  color: var(--color-white);
+  border-color: var(--color-blue-500);
+}
+
+.tabs button.disabled {
+  background: var(--color-gray-100);
+  color: var(--color-gray-400);
+  border-color: var(--color-gray-200);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tabs button.disabled:hover {
+  background: var(--color-gray-100);
+  border-color: var(--color-gray-200);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.running {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-blue-600);
+  font-weight: 500;
+}
+
+.waiting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-yellow-600);
+  font-weight: 500;
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.completed {
+  color: var(--color-green-600);
+  font-weight: 500;
+}
+
+.disconnected {
+  color: var(--color-gray-500);
+}
+
+.lineCount {
+  color: var(--color-gray-600);
+  font-size: 13px;
+}
+
+.output {
+  flex: 1;
+  overflow-y: auto;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 16px;
+}
+
+.line {
+  display: flex;
+  padding: 2px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.line:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lineNum {
+  flex-shrink: 0;
+  width: 50px;
+  color: #858585;
+  text-align: right;
+  padding-right: 16px;
+  user-select: none;
+}
+
+.content {
+  flex: 1;
+  color: #d4d4d4;
+}
+
+.line.error .content {
+  color: #f48771;
+}
+
+/* 阶段标记样式 */
+.stageMarker {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 8px 0;
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-left: 4px solid #3b82f6;
+  font-weight: 600;
+  color: #60a5fa;
+  border-radius: 4px;
+}
+
+.stageIcon {
+  margin-right: 12px;
+  font-size: 14px;
+  color: #3b82f6;
+}
+
+.stageName {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 12px;
+  font-size: 13px;
+}
+
+.stageStatus {
+  margin-right: auto;
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.stageTime {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: normal;
+}
+
+.scrollButton {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  padding: 8px 16px;
+  background: var(--color-blue-500);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.2s;
+}
+
+.scrollButton:hover {
+  background: var(--color-blue-600);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+}
+
+.scrollButton:active {
+  transform: translateY(0);
+}
+
+/* 滚动条样式 */
+.output::-webkit-scrollbar {
+  width: 12px;
+}
+
+.output::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+
+.output::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 6px;
+}
+
+.output::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* Waiting状态样式 */
+.waitingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  text-align: center;
+  min-height: 400px;
+}
+
+.waitingIcon {
+  font-size: 64px;
+  margin-bottom: 24px;
+}
+
+.waitingTitle {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin-bottom: 12px;
+  font-family: var(--font-heading);
+}
+
+.waitingDesc {
+  font-size: 16px;
+  color: var(--color-gray-600);
+  margin-bottom: 24px;
+  max-width: 500px;
+  line-height: 1.6;
+}
+
+.waitingLink {
+  margin-bottom: 32px;
+}
+
+.waitingLink a {
+  color: var(--color-blue-600);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.waitingLink a:hover {
+  text-decoration: underline;
+}
+
+.waitingActions {
+  display: flex;
+  gap: 12px;
+}
+
+.cancelButton {
+  padding: 10px 24px;
+  background: var(--color-red-500);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: var(--color-red-600);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}

@@ -1,0 +1,45 @@
+/* Swagger UI 自定义样式 - 修复长文本溢出问题 */
+
+/* 修复 curl 命令显示 */
+.swagger-ui .curl-command {
+    word-wrap: break-word !important;
+    word-break: break-all !important;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+}
+
+/* 修复 Response body 显示 */
+.swagger-ui .response-col_description__inner div.renderedMarkdown,
+.swagger-ui .response-col_description__inner div.markdown,
+.swagger-ui .response-col_description__inner pre,
+.swagger-ui .response-col_description__inner code {
+    word-wrap: break-word !important;
+    word-break: break-all !important;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+}
+
+.swagger-ui .responses-inner .response .response-col_description {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+}
+
+.swagger-ui pre {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+}
+
+.swagger-ui .microlight {
+    word-break: break-all !important;
+    white-space: pre-wrap !important;
+}
+
+/* 修复 Request URL 显示 */
+.swagger-ui .request-url {
+    word-break: break-all !important;
+    white-space: pre-wrap !important;
+}

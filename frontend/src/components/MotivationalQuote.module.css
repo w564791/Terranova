@@ -1,0 +1,58 @@
+.container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  /* background 由组件动态设置 */
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: fit-content;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: background 0.5s ease; /* 平滑过渡效果 */
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.greeting {
+  font-weight: 600;
+  font-size: 15px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.separator {
+  opacity: 0.6;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.text {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .container {
+    display: none; /* 移动端隐藏 */
+  }
+}
+
+@media (max-width: 1200px) {
+  .container {
+    max-width: 400px;
+  }
+  
+  .text {
+    font-size: 13px;
+  }
+}

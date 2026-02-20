@@ -1,0 +1,1695 @@
+/* 整体布局 - 左侧边栏 + 右侧内容 */
+.taskLayout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-gray-50);
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* 侧边栏样式由 WorkspaceSidebar 组件提供 */
+
+/* 右侧主内容区 */
+.mainContent {
+  flex: 1;
+  margin-left: 256px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-gray-50);
+  min-width: 0; /* 防止 flex 子元素溢出 */
+  overflow-x: hidden;
+}
+
+/* 全局头部 - 与WorkspaceDetail一致 */
+.globalHeader {
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-gray-200);
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.globalHeaderLeft {
+  flex: 1;
+}
+
+.globalHeaderRight {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.lockButton,
+.newRunButton {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.lockButton {
+  background: var(--color-white);
+  border-color: var(--color-gray-300);
+  color: var(--color-gray-700);
+}
+
+.lockButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.newRunButton {
+  background: var(--color-blue-600);
+  border-color: var(--color-blue-600);
+  color: var(--color-white);
+}
+
+.newRunButton:hover {
+  background: var(--color-blue-700);
+}
+
+.globalTitle {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 12px 0;
+  font-family: var(--font-heading);
+}
+
+.globalMeta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  font-size: 13px;
+  color: var(--color-gray-600);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metaItem::after {
+  content: '•';
+  margin-left: 16px;
+  color: var(--color-gray-400);
+  flex-shrink: 0;
+}
+
+.metaItem:last-child::after {
+  display: none;
+}
+
+.container {
+  min-height: 100vh;
+  background: var(--color-gray-50);
+  padding: 24px;
+}
+
+/* 任务标题区域 */
+.taskTitleSection {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin: 20px 20px 16px 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.taskTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.taskTitleLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.taskTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.taskStatusBadge {
+  flex-shrink: 0;
+}
+
+/* Status Tags using project color scheme */
+.statusTagPending {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.statusTagRunning {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.statusTagWarning {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #FEF3C7;
+  color: #92400E;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.statusTagSuccess {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--color-green-100);
+  color: var(--color-green-600);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.statusTagError {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.statusTagCancelled {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--color-gray-200);
+  color: var(--color-gray-600);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.statusBadges {
+  display: flex;
+  gap: 8px;
+}
+
+.badgeCurrent {
+  padding: 4px 12px;
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badgeSuccess {
+  padding: 4px 12px;
+  background: var(--color-green-100);
+  color: var(--color-green-700);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badgeWarning {
+  padding: 4px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badgePending {
+  padding: 4px 12px;
+  background: #e0f2f1;
+  color: #00897b;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badgeError {
+  background-color: var(--color-red-100);
+  color: var(--color-red-700);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badgeCancelled {
+  padding: 4px 12px;
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Task Metadata Section */
+.taskMetadata {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin: 0 20px 16px 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.metadataRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metadataLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-600);
+  min-width: 70px;
+}
+
+.metadataValue {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-900);
+}
+
+/* Confirm Apply按钮 */
+.taskTitleRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cancelButton {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cancelButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.cancelButton:active {
+  transform: translateY(0);
+}
+
+.confirmApplyButton {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirmApplyButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.confirmApplyButton:active {
+  transform: translateY(0);
+}
+
+/* Override Button for Advisory Run Task failures */
+.overrideButton {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overrideButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.overrideButton:active {
+  transform: translateY(0);
+}
+
+.overrideButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelPreviousButton {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cancelPreviousButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+}
+
+.cancelPreviousButton:active {
+  transform: translateY(0);
+}
+
+/* Modal样式 */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modalHeader {
+  padding: 24px;
+  border-bottom: 1px solid var(--color-gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.modalClose {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: var(--color-gray-400);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modalClose:hover {
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+}
+
+.modalClose:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modalBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modalDescription {
+  color: var(--color-gray-600);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 20px 0;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  margin-bottom: 8px;
+}
+
+.required {
+  color: var(--color-red-600);
+}
+
+.formTextarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.2s;
+}
+
+.formTextarea:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.formTextarea:disabled {
+  background: var(--color-gray-50);
+  cursor: not-allowed;
+}
+
+.changesSummary {
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.changesSummaryTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  margin-bottom: 8px;
+}
+
+.changesSummaryContent {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.modalFooter {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btnCancel {
+  padding: 10px 20px;
+  border: 1px solid var(--color-gray-300);
+  background: white;
+  color: var(--color-gray-700);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnCancel:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.btnCancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnConfirm {
+  padding: 10px 20px;
+  border: none;
+  background: var(--color-green-600);
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnConfirm:hover:not(:disabled) {
+  background: var(--color-green-700);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.btnConfirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 统计信息卡片 */
+.statsCards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 0 20px 16px 20px;
+}
+
+.statCard {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.statLabel {
+  font-size: 13px;
+  color: var(--color-gray-600);
+  margin-bottom: 8px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.changeAdd {
+  color: var(--color-green-600);
+  font-weight: 600;
+}
+
+.changeModify {
+  color: var(--color-blue-600);
+  font-weight: 600;
+}
+
+.changeDestroy {
+  color: var(--color-red-600);
+  font-weight: 600;
+}
+
+/* Run Trigger Tags in Stats Card */
+.triggerTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+}
+
+/* 触发信息 */
+.triggerInfo {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 0 20px 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.triggerAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.triggerText {
+  font-size: 14px;
+  color: var(--color-gray-700);
+  line-height: 1.5;
+}
+
+.triggerUser {
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.triggerType {
+  font-weight: 600;
+  color: var(--color-blue-600);
+}
+
+/* 错误卡片 */
+.errorCard {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 0 20px 16px 20px;
+}
+
+/* 取消任务卡片 */
+.cancelledCard {
+  background: #a3a2a2;
+  border: 1px solid #8a8989;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 0 20px 16px 20px;
+}
+
+.errorHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.errorIcon {
+  color: #DC2626;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cancelledCard .errorIcon {
+  color: #FFFFFF;
+}
+
+.errorTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #991B1B;
+}
+
+.cancelledCard .errorTitle {
+  color: #FFFFFF;
+}
+
+.errorContent {
+  margin: 0;
+  font-size: 13px;
+  color: #7F1D1D;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: white;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #FECACA;
+}
+
+.cancelledCard .errorContent {
+  color: #2D2D2D;
+  background: #F5F5F5;
+  border: 1px solid #8a8989;
+}
+
+.taskInfo {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin: 20px 20px 16px 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.description {
+  padding-top: 20px;
+  border-top: 1px solid var(--color-gray-200);
+  margin-top: 20px;
+}
+
+.description p {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  color: var(--color-gray-700);
+  line-height: 1.6;
+}
+
+.errorMessage {
+  padding: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  margin-top: 20px;
+}
+
+.errorMessage pre {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: var(--color-red-700);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.timestamps {
+  display: flex;
+  gap: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-gray-200);
+  margin-top: 20px;
+}
+
+.timestamp {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.logSection {
+  margin: 0 20px 32px 20px;
+}
+
+.logContainer {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.logSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--color-white);
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.uiModeToggle {
+  display: flex;
+  gap: 0;
+  background: var(--color-gray-100);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.toggleButton {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-600);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggleButton:hover {
+  color: var(--color-gray-900);
+  background: var(--color-gray-200);
+}
+
+.toggleButtonActive {
+  color: var(--color-white);
+  background: var(--color-blue-600);
+}
+
+.toggleButtonActive:hover {
+  background: var(--color-blue-700);
+}
+
+/* Log Tabs for Classic mode */
+.logTabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px;
+  background: var(--color-gray-50);
+  border-bottom: 2px solid var(--color-gray-200);
+}
+
+.logTab {
+  padding: 8px 20px;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logTab:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.logTabActive {
+  background: var(--color-blue-50);
+  border-color: var(--color-blue-500);
+  color: var(--color-blue-700);
+  font-weight: 600;
+}
+
+/* 加载容器 - 保持布局一致性 */
+.loadingContainer {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--color-gray-600);
+}
+
+/* 错误容器 - 保持布局一致性 */
+.errorContainer {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--color-gray-200);
+  border-top-color: var(--color-blue-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  gap: 16px;
+  color: var(--color-red-600);
+}
+
+/* State保存失败恢复按钮 */
+.errorActions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #FECACA;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.retryButton {
+  padding: 8px 16px;
+  background: var(--color-blue-600);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.retryButton:hover {
+  background: var(--color-blue-700);
+  transform: translateY(-1px);
+}
+
+.downloadButton {
+  padding: 8px 16px;
+  background: var(--color-green-600);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.downloadButton:hover {
+  background: var(--color-green-700);
+  transform: translateY(-1px);
+}
+
+.backupPath {
+  font-size: 12px;
+  color: #7F1D1D;
+  flex: 1 1 100%;
+}
+
+.backupPath code {
+  background: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  border: 1px solid #FECACA;
+}
+
+/* Bottom Section - Contains action buttons and comment input */
+.bottomSection {
+  margin: 0 20px 20px 20px;
+}
+
+/* 操作按钮区域 - 页面底部居中 */
+.actionButtons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+}
+
+/* Add Comment Button */
+.addCommentButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.addCommentButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.addCommentButton:active {
+  transform: translateY(0);
+}
+
+.addCommentButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelButton:disabled,
+.confirmApplyButton:disabled,
+.cancelPreviousButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Comment Input Section */
+.commentInputWrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.commentInputSection {
+  background: white;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 600px;
+}
+
+.commentInputTitle {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Comments Wrapper - 2/3 width and centered */
+.commentsWrapper {
+  display: flex;
+  justify-content: center;
+  margin: 0 20px 20px 20px;
+}
+
+.commentsWrapper > div {
+  width: 100%;
+  max-width: 66.67%;
+}
+
+/* Structured Run Output Placeholder */
+.structuredPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 40px;
+  text-align: center;
+}
+
+.placeholderIcon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.structuredPlaceholder h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 12px 0;
+  font-family: var(--font-heading);
+}
+
+.structuredPlaceholder p {
+  font-size: 14px;
+  color: var(--color-gray-600);
+  margin: 0 0 8px 0;
+  line-height: 1.6;
+}
+
+.placeholderHint {
+  font-size: 13px;
+  color: var(--color-gray-500);
+  font-style: italic;
+}
+
+/* ========== 移动端响应式样式 ========== */
+
+/* 移动端汉堡菜单按钮 */
+.mobileSidebarButton {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s ease;
+}
+
+.mobileSidebarButton:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+.mobileSidebarButton:active {
+  transform: scale(0.95);
+}
+
+/* 移动端遮罩层 */
+.mobileSidebarOverlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 显示移动端汉堡菜单按钮 */
+  .mobileSidebarButton {
+    display: block;
+  }
+
+  /* 显示移动端遮罩层 */
+  .mobileSidebarOverlay {
+    display: block;
+  }
+
+  /* 侧边栏默认隐藏在屏幕外 */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    transform: translateX(-100%);
+    z-index: 1000;
+    box-shadow: none;
+  }
+
+  /* 移动端打开状态 */
+  .sidebar.sidebarMobileOpen {
+    transform: translateX(0);
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+  }
+
+  /* 主内容区域占满全屏 */
+  .mainContent {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* 全局头部调整 - 不需要留出汉堡菜单空间，因为按钮是悬浮的 */
+  .globalHeader {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .globalTitle {
+    font-size: 20px;
+    word-break: break-word;
+  }
+
+  .globalMeta {
+    font-size: 11px;
+    gap: 8px;
+  }
+
+  .metaItem {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .metaItem::after {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+
+  .globalHeaderRight {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .lockButton,
+  .newRunButton {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  /* 任务标题区域 */
+  .taskTitleSection {
+    margin: 16px 12px 12px 12px;
+    padding: 16px;
+  }
+
+  /* Task Metadata Section - Mobile */
+  .taskMetadata {
+    margin: 0 12px 12px 12px;
+    padding: 12px 16px;
+    gap: 16px;
+  }
+
+  .metadataRow {
+    gap: 8px;
+  }
+
+  .metadataLabel {
+    font-size: 12px;
+    min-width: 60px;
+  }
+
+  .metadataValue {
+    font-size: 13px;
+  }
+
+  .taskTitle {
+    font-size: 18px;
+    word-break: break-word;
+  }
+
+  .statusBadges {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .badgeCurrent,
+  .badgeSuccess,
+  .badgeWarning,
+  .badgePending,
+  .badgeError,
+  .badgeCancelled {
+    font-size: 11px;
+    padding: 3px 10px;
+  }
+
+  /* 统计卡片 */
+  .statsCards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin: 0 12px 12px 12px;
+  }
+
+  .statCard {
+    padding: 14px;
+  }
+
+  .statLabel {
+    font-size: 12px;
+  }
+
+  .statValue {
+    font-size: 16px;
+  }
+
+  /* 触发信息 */
+  .triggerInfo {
+    margin: 0 12px 12px 12px;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .triggerAvatar {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .triggerText {
+    font-size: 13px;
+  }
+
+  /* 错误卡片 */
+  .errorCard,
+  .cancelledCard {
+    margin: 0 12px 12px 12px;
+    padding: 12px;
+  }
+
+  .errorHeader {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .errorIcon {
+    font-size: 16px;
+  }
+
+  .errorTitle {
+    font-size: 14px;
+  }
+
+  .errorContent {
+    font-size: 12px;
+    padding: 10px;
+  }
+
+  .errorActions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .retryButton,
+  .downloadButton {
+    width: 100%;
+    padding: 10px 16px;
+  }
+
+  /* 日志区域 */
+  .logSection {
+    margin: 0 12px 20px 12px;
+  }
+
+  .logSectionHeader {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .sectionTitle {
+    font-size: 15px;
+  }
+
+  /* UI模式切换按钮 */
+  .uiModeToggle {
+    flex-shrink: 0;
+  }
+
+  .toggleButton {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
+
+  /* 日志标签 */
+  .logTabs {
+    padding: 8px;
+    gap: 2px;
+  }
+
+  .logTab {
+    padding: 6px 16px;
+    font-size: 12px;
+  }
+
+  /* 评论区域 */
+  .commentsWrapper {
+    margin: 0 12px 16px 12px;
+  }
+
+  .commentsWrapper > div {
+    max-width: 100%;
+  }
+
+  /* 底部操作区域 */
+  .bottomSection {
+    margin: 0 12px 16px 12px;
+  }
+
+  .actionButtons {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 16px 0;
+    justify-content: stretch;
+  }
+
+  .actionButtons button {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 140px;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .addCommentButton,
+  .cancelButton,
+  .confirmApplyButton,
+  .cancelPreviousButton {
+    white-space: nowrap;
+  }
+
+  /* 评论输入区域 */
+  .commentInputWrapper {
+    margin-top: 12px;
+  }
+
+  .commentInputSection {
+    padding: 16px;
+  }
+
+  .commentInputTitle {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  /* Modal优化 */
+  .modalContent {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .modalHeader {
+    padding: 16px;
+  }
+
+  .modalTitle {
+    font-size: 18px;
+  }
+
+  .modalBody {
+    padding: 16px;
+  }
+
+  .modalFooter {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
+  .btnCancel,
+  .btnConfirm {
+    flex: 1;
+    min-width: 120px;
+  }
+}
+
+/* 小屏手机优化 (< 480px) */
+@media (max-width: 480px) {
+  .sidebar {
+    width: 260px;
+  }
+
+  .globalHeader {
+    padding: 12px;
+  }
+
+  .globalTitle {
+    font-size: 18px;
+  }
+
+  .taskTitle {
+    font-size: 16px;
+  }
+
+  .statsCards {
+    margin: 0 8px 8px 8px;
+  }
+
+  .triggerInfo,
+  .errorCard,
+  .cancelledCard,
+  .logSection,
+  .commentsWrapper,
+  .bottomSection {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+
+  .mobileSidebarButton {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .actionButtons button {
+    flex: 1 1 100%;
+    min-width: unset;
+  }
+}
+
+/* ========== Stats Row with View Mode Toggle ========== */
+.statsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 0 20px 16px 20px;
+}
+
+.statsRow .statsCards {
+  margin: 0;
+  flex: 1;
+}
+
+/* View Mode Toggle - Global */
+.viewModeToggle {
+  display: flex;
+  gap: 0;
+  background: var(--color-gray-100);
+  border-radius: 6px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.viewModeBtn {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-600);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.viewModeBtn:hover {
+  color: var(--color-gray-900);
+}
+
+.viewModeBtnActive {
+  color: var(--color-white);
+  background: var(--color-blue-600);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.viewModeBtnActive:hover {
+  color: var(--color-white);
+  background: var(--color-blue-700);
+}
+
+/* Classic View Container */
+.classicView {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  margin: 0 20px 16px 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* AI Analysis Section - for classic view */
+.aiAnalysisSection {
+  margin: 0 20px 16px 20px;
+}
+
+.logViewerWrapper {
+  min-height: 400px;
+}
+
+/* Mobile responsive for stats row */
+@media (max-width: 768px) {
+  .statsRow {
+    flex-direction: column;
+    margin: 0 12px 12px 12px;
+  }
+
+  .statsRow .statsCards {
+    width: 100%;
+  }
+
+  .viewModeToggle {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .viewModeBtn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .classicView {
+    margin: 0 12px 12px 12px;
+  }
+
+  .aiAnalysisSection {
+    margin: 0 12px 12px 12px;
+  }
+}

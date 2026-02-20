@@ -1,0 +1,28 @@
+.container {
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.formCard {
+  border-radius: 8px;
+}
+
+.description {
+  display: block;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.form {
+  margin-top: 24px;
+}
+
+.actions {
+  margin-top: 32px;
+  margin-bottom: 0;
+}

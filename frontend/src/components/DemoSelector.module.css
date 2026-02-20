@@ -1,0 +1,121 @@
+/* Demo选择器容器 */
+.container {
+  position: relative;
+  display: inline-block;
+}
+
+/* 选择器按钮 */
+.selectorButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 36px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  color: #495057;
+  transition: all 0.2s;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.selectorButton:hover:not(:disabled) {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.selectorButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: #f8f9fa;
+}
+
+.arrow {
+  font-size: 12px;
+  color: #6c757d;
+  transition: transform 0.2s;
+}
+
+/* 下拉菜单 */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 350px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+}
+
+/* 下拉选项 */
+.dropdownItem {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dropdownItem:last-child {
+  border-bottom: none;
+}
+
+.dropdownItem:hover {
+  background-color: #f3f4f6;
+}
+
+/* Demo名称 */
+.demoName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+/* Demo元信息 */
+.demoMeta {
+  font-size: 13px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.demoDesc {
+  color: #6b7280;
+}
+
+.separator {
+  color: #9ca3af;
+  margin: 0 4px;
+}
+
+.demoTime {
+  color: #6b7280;
+}
+
+/* 滚动条样式 */
+.dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.dropdown::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.dropdown::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

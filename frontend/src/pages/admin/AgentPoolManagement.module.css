@@ -1,0 +1,160 @@
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.createButton {
+  padding: 10px 20px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.3s;
+}
+
+.createButton:hover {
+  background: #40a9ff;
+}
+
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: #666;
+}
+
+.poolList {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px;
+  color: #666;
+}
+
+.emptyState p {
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+
+.emptyState button {
+  padding: 10px 20px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #262626;
+  font-size: 14px;
+}
+
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #595959;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.clickableRow {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clickableRow:hover {
+  background: #e6f7ff !important;
+  transform: translateX(2px);
+}
+
+.poolName {
+  font-weight: 600;
+  color: var(--color-blue-600);
+}
+
+.poolNameLink {
+  color: var(--color-blue-600);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.poolNameLink:hover {
+  text-decoration: underline;
+}
+
+.description {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentCount {
+  font-weight: 600;
+  color: #52c41a;
+}
+
+.statusBadge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statusActive {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.statusInactive {
+  background: #fff1f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+.statusMaintenance {
+  background: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe58f;
+}

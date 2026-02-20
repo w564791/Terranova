@@ -1,0 +1,1094 @@
+package services
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"iac-platform/internal/application/service"
+	"iac-platform/internal/models"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+
+	"gorm.io/gorm"
+)
+
+// K8sDeploymentService handles K8s Deployment creation and management for agent pools
+type K8sDeploymentService struct {
+	db                    *gorm.DB
+	clientset             *kubernetes.Clientset
+	freezeScheduleService *FreezeScheduleService
+	hostIP                string // Platform server IP for agents to connect back
+	poolTokenService      *service.PoolTokenService
+	poolIdleTimes         map[string]time.Time // Track when each pool became idle (no tasks)
+}
+
+// NewK8sDeploymentService creates a new K8s Deployment service
+func NewK8sDeploymentService(db *gorm.DB) (*K8sDeploymentService, error) {
+	// Try in-cluster config first, then fall back to kubeconfig
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		// Fall back to kubeconfig
+		kubeconfig := os.Getenv("KUBECONFIG")
+		if kubeconfig == "" {
+			kubeconfig = os.Getenv("HOME") + "/.kube/config"
+		}
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build k8s config: %w", err)
+		}
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create k8s clientset: %w", err)
+	}
+
+	// Get HOST_IP from environment variable
+	hostIP := os.Getenv("HOST_IP")
+	if hostIP == "" {
+		log.Printf("[K8sDeployment] Warning: HOST_IP not set, agents may not be able to connect back to platform")
+	}
+
+	return &K8sDeploymentService{
+		db:                    db,
+		clientset:             clientset,
+		freezeScheduleService: NewFreezeScheduleService(),
+		hostIP:                hostIP,
+		poolTokenService:      service.NewPoolTokenService(db),
+		poolIdleTimes:         make(map[string]time.Time),
+	}, nil
+}
+
+// EnsureSecretForPool ensures a Secret exists for the pool's agent token
+// Returns the secret name
+func (s *K8sDeploymentService) EnsureSecretForPool(ctx context.Context, pool *models.AgentPool) (string, error) {
+	secretName := fmt.Sprintf("iac-agent-token-%s", pool.PoolID)
+	namespace := "terraform"
+
+	// Check if secret already exists
+	existingSecret, err := s.clientset.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err == nil {
+		// Secret exists, ensure annotations are up to date
+		needsUpdate := false
+		if existingSecret.Annotations == nil {
+			existingSecret.Annotations = make(map[string]string)
+			needsUpdate = true
+		}
+
+		// Check if annotations need to be added/updated
+		if _, ok := existingSecret.Annotations["iac-platform/token-name"]; !ok {
+			// Get current active token to update annotations
+			var activeToken models.PoolToken
+			if err := s.db.WithContext(ctx).
+				Where("pool_id = ? AND is_active = ?", pool.PoolID, true).
+				First(&activeToken).Error; err == nil {
+				existingSecret.Annotations["iac-platform/token-name"] = activeToken.TokenName
+				existingSecret.Annotations["iac-platform/created-by"] = func() string {
+					if activeToken.CreatedBy != nil {
+						return *activeToken.CreatedBy
+					}
+					return "system"
+				}()
+				existingSecret.Annotations["iac-platform/created-at"] = activeToken.CreatedAt.Format(time.RFC3339)
+				needsUpdate = true
+			}
+		}
+
+		// Update secret if annotations were added
+		if needsUpdate {
+			_, err = s.clientset.CoreV1().Secrets(namespace).Update(ctx, existingSecret, metav1.UpdateOptions{})
+			if err != nil {
+				log.Printf("[K8sDeployment] Warning: failed to update secret annotations: %v", err)
+			} else {
+				log.Printf("[K8sDeployment] Updated secret %s annotations", secretName)
+			}
+		}
+
+		// Check if it needs rotation (30 days old)
+		creationTime := existingSecret.CreationTimestamp.Time
+		age := time.Since(creationTime)
+
+		if age > 30*24*time.Hour {
+			log.Printf("[K8sDeployment] Secret %s is %v old, needs rotation", secretName, age)
+			// Check if deployment has 0 replicas before rotating
+			_, currentReplicas, err := s.GetDeploymentReplicas(ctx, pool.PoolID)
+			if err != nil {
+				return secretName, fmt.Errorf("failed to check replicas before rotation: %w", err)
+			}
+
+			if currentReplicas > 0 {
+				log.Printf("[K8sDeployment] Cannot rotate secret %s: deployment has %d replicas (must be 0)", secretName, currentReplicas)
+				return secretName, nil // Return existing secret, will retry rotation later
+			}
+
+			// Safe to rotate
+			log.Printf("[K8sDeployment] Rotating secret %s (deployment has 0 replicas)", secretName)
+			if err := s.rotateSecret(ctx, pool, secretName, namespace); err != nil {
+				return secretName, fmt.Errorf("failed to rotate secret: %w", err)
+			}
+		}
+
+		return secretName, nil
+	}
+
+	if !errors.IsNotFound(err) {
+		return "", fmt.Errorf("failed to check secret existence: %w", err)
+	}
+
+	// Check if there's already an active token for this K8s pool
+	// K8s pools should only have 1 active token at a time
+	var existingTokens []models.PoolToken
+	if err := s.db.WithContext(ctx).
+		Where("pool_id = ? AND is_active = ?", pool.PoolID, true).
+		Find(&existingTokens).Error; err != nil {
+		return "", fmt.Errorf("failed to check existing tokens: %w", err)
+	}
+
+	// Revoke all existing active tokens before creating new one
+	for _, existingToken := range existingTokens {
+		log.Printf("[K8sDeployment] Revoking existing token %s before creating new one", existingToken.TokenName)
+		if err := s.poolTokenService.RevokeToken(ctx, pool.PoolID, existingToken.TokenName, "system-auto-revoke"); err != nil {
+			log.Printf("[K8sDeployment] Warning: failed to revoke existing token %s: %v", existingToken.TokenName, err)
+		}
+	}
+
+	// Generate token name with format: tn-{16位随机数}
+	tokenName, err := generateTokenName()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token name: %w", err)
+	}
+
+	// Create new secret
+	token, err := s.poolTokenService.GenerateStaticToken(ctx, pool.PoolID, tokenName, "system", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app":       "iac-platform",
+				"component": "agent-token",
+				"pool-id":   pool.PoolID,
+			},
+			Annotations: map[string]string{
+				"iac-platform/token-name": token.TokenName,
+				"iac-platform/created-by": func() string {
+					if token.CreatedBy != nil {
+						return *token.CreatedBy
+					}
+					return "system"
+				}(),
+				"iac-platform/created-at": token.CreatedAt.Format(time.RFC3339),
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			"token": token.Token,
+		},
+	}
+
+	_, err = s.clientset.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.Printf("[K8sDeployment] Secret %s already exists (race condition)", secretName)
+			return secretName, nil
+		}
+		return "", fmt.Errorf("failed to create secret: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Successfully created secret %s in namespace %s", secretName, namespace)
+	return secretName, nil
+}
+
+// rotateSecret rotates the agent token secret
+func (s *K8sDeploymentService) rotateSecret(ctx context.Context, pool *models.AgentPool, secretName, namespace string) error {
+	// 1. Revoke all existing active tokens
+	var existingTokens []models.PoolToken
+	if err := s.db.WithContext(ctx).
+		Where("pool_id = ? AND is_active = ?", pool.PoolID, true).
+		Find(&existingTokens).Error; err != nil {
+		log.Printf("[K8sDeployment] Warning: failed to query existing tokens: %v", err)
+	}
+
+	for _, existingToken := range existingTokens {
+		log.Printf("[K8sDeployment] Revoking existing token %s during rotation", existingToken.TokenName)
+		if err := s.poolTokenService.RevokeToken(ctx, pool.PoolID, existingToken.TokenName, "system-rotation"); err != nil {
+			log.Printf("[K8sDeployment] Warning: failed to revoke token %s: %v", existingToken.TokenName, err)
+		}
+	}
+
+	// 2. Generate new token with format: tn-{16位随机数}
+	tokenName, err := generateTokenName()
+	if err != nil {
+		return fmt.Errorf("failed to generate token name: %w", err)
+	}
+
+	token, err := s.poolTokenService.GenerateStaticToken(ctx, pool.PoolID, tokenName, "system-rotation", nil)
+	if err != nil {
+		return fmt.Errorf("failed to generate new token: %w", err)
+	}
+
+	// 3. Update secret
+	secret, err := s.clientset.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get secret: %w", err)
+	}
+
+	secret.StringData = map[string]string{
+		"token": token.Token,
+	}
+
+	// Update annotations with new token info
+	if secret.Annotations == nil {
+		secret.Annotations = make(map[string]string)
+	}
+	secret.Annotations["iac-platform/token-name"] = token.TokenName
+	secret.Annotations["iac-platform/rotated-by"] = "system-rotation"
+	secret.Annotations["iac-platform/rotated-at"] = time.Now().Format(time.RFC3339)
+
+	_, err = s.clientset.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update secret: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Successfully rotated secret %s", secretName)
+	return nil
+}
+
+// EnsureDeploymentForPool ensures a Deployment exists for the given K8s agent pool
+// This should be called on service startup for all K8s pools
+// If deployment exists, it will be updated with the latest configuration
+func (s *K8sDeploymentService) EnsureDeploymentForPool(ctx context.Context, pool *models.AgentPool) error {
+	if pool.PoolType != models.AgentPoolTypeK8s {
+		return fmt.Errorf("pool %s is not a K8s pool", pool.PoolID)
+	}
+
+	// Parse K8s config
+	if pool.K8sConfig == nil {
+		return fmt.Errorf("pool %s does not have K8s configuration", pool.PoolID)
+	}
+
+	var k8sConfig models.K8sJobTemplateConfig
+	if err := json.Unmarshal([]byte(*pool.K8sConfig), &k8sConfig); err != nil {
+		return fmt.Errorf("failed to parse K8s config: %w", err)
+	}
+
+	deploymentName := fmt.Sprintf("iac-agent-%s", pool.PoolID)
+	namespace := "terraform" // Default namespace
+
+	// Ensure secret exists first
+	secretName, err := s.EnsureSecretForPool(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("failed to ensure secret: %w", err)
+	}
+
+	// Check if deployment already exists
+	existingDeployment, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err == nil {
+		// Deployment exists, update it with new configuration
+		log.Printf("[K8sDeployment] Deployment %s already exists, updating with latest config", deploymentName)
+		return s.UpdateDeploymentConfig(ctx, pool, existingDeployment)
+	}
+
+	if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to check deployment existence: %w", err)
+	}
+
+	// Create deployment with initial replicas = 0 (will be scaled up by auto-scaler)
+	deployment := s.buildDeployment(deploymentName, namespace, pool, &k8sConfig, 0, secretName)
+
+	_, err = s.clientset.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.Printf("[K8sDeployment] Deployment %s already exists (race condition)", deploymentName)
+			return nil // Idempotent
+		}
+		return fmt.Errorf("failed to create deployment: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Successfully created deployment %s in namespace %s", deploymentName, namespace)
+	return nil
+}
+
+// UpdateDeploymentConfig updates an existing deployment with new configuration
+func (s *K8sDeploymentService) UpdateDeploymentConfig(ctx context.Context, pool *models.AgentPool, existingDeployment *appsv1.Deployment) error {
+	// Parse K8s config
+	var k8sConfig models.K8sJobTemplateConfig
+	if err := json.Unmarshal([]byte(*pool.K8sConfig), &k8sConfig); err != nil {
+		return fmt.Errorf("failed to parse K8s config: %w", err)
+	}
+
+	// Keep current replica count
+	currentReplicas := int32(0)
+	if existingDeployment.Spec.Replicas != nil {
+		currentReplicas = *existingDeployment.Spec.Replicas
+	}
+
+	// Ensure secret exists
+	secretName, err := s.EnsureSecretForPool(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("failed to ensure secret: %w", err)
+	}
+
+	// Build new deployment spec with current replica count
+	newDeployment := s.buildDeployment(existingDeployment.Name, existingDeployment.Namespace, pool, &k8sConfig, currentReplicas, secretName)
+
+	// Preserve the existing deployment's metadata (like UID, ResourceVersion)
+	newDeployment.ObjectMeta.ResourceVersion = existingDeployment.ObjectMeta.ResourceVersion
+	newDeployment.ObjectMeta.UID = existingDeployment.ObjectMeta.UID
+
+	// Update the deployment
+	_, err = s.clientset.AppsV1().Deployments(existingDeployment.Namespace).Update(ctx, newDeployment, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update deployment: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Successfully updated deployment %s with new configuration (replicas: %d)", existingDeployment.Name, currentReplicas)
+	return nil
+}
+
+// ScaleDeployment scales the deployment to the specified number of replicas
+func (s *K8sDeploymentService) ScaleDeployment(ctx context.Context, poolID string, replicas int32) error {
+	deploymentName := fmt.Sprintf("iac-agent-%s", poolID)
+	namespace := "terraform"
+
+	// Get current deployment
+	deployment, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	// Update replicas
+	deployment.Spec.Replicas = &replicas
+
+	_, err = s.clientset.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to scale deployment: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Scaled deployment %s to %d replicas", deploymentName, replicas)
+	return nil
+}
+
+// GetDeploymentReplicas returns the current and desired replica count
+func (s *K8sDeploymentService) GetDeploymentReplicas(ctx context.Context, poolID string) (current, desired int32, err error) {
+	deploymentName := fmt.Sprintf("iac-agent-%s", poolID)
+	namespace := "terraform"
+
+	deployment, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	desired = int32(0)
+	if deployment.Spec.Replicas != nil {
+		desired = *deployment.Spec.Replicas
+	}
+
+	current = deployment.Status.ReadyReplicas
+
+	return current, desired, nil
+}
+
+// DeleteDeployment deletes the deployment for a pool
+func (s *K8sDeploymentService) DeleteDeployment(ctx context.Context, poolID string) error {
+	deploymentName := fmt.Sprintf("iac-agent-%s", poolID)
+	namespace := "terraform"
+
+	propagationPolicy := metav1.DeletePropagationBackground
+	err := s.clientset.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{
+		PropagationPolicy: &propagationPolicy,
+	})
+
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete deployment: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Deleted deployment %s from namespace %s", deploymentName, namespace)
+	return nil
+}
+
+// buildDeployment constructs a K8s Deployment object
+func (s *K8sDeploymentService) buildDeployment(deploymentName, namespace string, pool *models.AgentPool, config *models.K8sJobTemplateConfig, replicas int32, secretName string) *appsv1.Deployment {
+	// Image pull policy
+	imagePullPolicy := corev1.PullIfNotPresent
+	if config.ImagePullPolicy != "" {
+		imagePullPolicy = corev1.PullPolicy(config.ImagePullPolicy)
+	}
+
+	// Build environment variables
+	envVars := []corev1.EnvVar{
+		{Name: "POOL_ID", Value: pool.PoolID},
+		{Name: "POOL_NAME", Value: pool.Name},
+		{Name: "POOL_TYPE", Value: "k8s"},
+		// IAC_AGENT_NAME will use pod hostname (auto-injected by K8s)
+		{
+			Name: "IAC_AGENT_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			},
+		},
+		// IAC_AGENT_TOKEN from secret
+		{
+			Name: "IAC_AGENT_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: secretName,
+					},
+					Key: "token",
+				},
+			},
+		},
+	}
+
+	// Add custom env vars from config (including CC_SERVER_PORT, SERVER_PORT if configured)
+	for key, value := range config.Env {
+		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
+	}
+
+	// Build resource requirements
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{},
+		Limits:   corev1.ResourceList{},
+	}
+
+	// Parse CPU and memory limits
+	if config.Resources != nil {
+		if config.Resources.Limits != nil {
+			if cpu, ok := config.Resources.Limits["cpu"]; ok {
+				if quantity, err := resource.ParseQuantity(cpu); err == nil {
+					resources.Limits[corev1.ResourceCPU] = quantity
+				}
+			}
+			if memory, ok := config.Resources.Limits["memory"]; ok {
+				if quantity, err := resource.ParseQuantity(memory); err == nil {
+					resources.Limits[corev1.ResourceMemory] = quantity
+				}
+			}
+		}
+		if config.Resources.Requests != nil {
+			if cpu, ok := config.Resources.Requests["cpu"]; ok {
+				if quantity, err := resource.ParseQuantity(cpu); err == nil {
+					resources.Requests[corev1.ResourceCPU] = quantity
+				}
+			}
+			if memory, ok := config.Resources.Requests["memory"]; ok {
+				if quantity, err := resource.ParseQuantity(memory); err == nil {
+					resources.Requests[corev1.ResourceMemory] = quantity
+				}
+			}
+		}
+	}
+
+	// Build container
+	container := corev1.Container{
+		Name:            "agent",
+		Image:           config.Image,
+		ImagePullPolicy: imagePullPolicy,
+		Env:             envVars,
+		Resources:       resources,
+	}
+
+	if len(config.Command) > 0 {
+		container.Command = config.Command
+	}
+	if len(config.Args) > 0 {
+		container.Args = config.Args
+	}
+
+	// Build Deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app":       "iac-platform",
+				"component": "agent",
+				"pool-id":   pool.PoolID,
+				"pool-name": pool.Name,
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app":       "iac-platform",
+					"component": "agent",
+					"pool-id":   pool.PoolID,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app":       "iac-platform",
+						"component": "agent",
+						"pool-id":   pool.PoolID,
+						"pool-name": pool.Name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyAlways,
+					Containers:    []corev1.Container{container},
+				},
+			},
+		},
+	}
+
+	return deployment
+}
+
+// CountPendingTasksForPool counts the number of active tasks for a specific pool
+// and calculates the required number of agents based on agent capacity
+// 
+// Agent capacity design:
+// - Each agent can handle: 3 plan tasks + 1 plan_and_apply task
+// - Plan tasks can run concurrently (up to 3 per agent)
+// - Plan_and_apply tasks require exclusive agent (1 per agent)
+//
+// FIX: Only count RUNNING tasks for scaling up, not pending tasks
+// Pending tasks may be blocked by workspace locks or other constraints,
+// not necessarily waiting for available agents
+func (s *K8sDeploymentService) CountPendingTasksForPool(ctx context.Context, poolID string) (int64, error) {
+	// Count plan tasks (ONLY running, not pending)
+	// Pending tasks might be blocked by workspace locks, not lack of agents
+	var planTaskCount int64
+	err := s.db.WithContext(ctx).
+		Model(&models.WorkspaceTask{}).
+		Joins("JOIN workspaces ON workspaces.workspace_id = workspace_tasks.workspace_id").
+		Where("workspaces.current_pool_id = ?", poolID).
+		Where("workspaces.execution_mode = ?", models.ExecutionModeK8s).
+		Where("workspace_tasks.task_type = ?", models.TaskTypePlan).
+		Where("workspace_tasks.status = ?", models.TaskStatusRunning).
+		Count(&planTaskCount).Error
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to count plan tasks: %w", err)
+	}
+
+	// Count plan_and_apply tasks (running + apply_pending)
+	// apply_pending tasks need agents to stay alive for apply execution after user confirmation
+	// Do NOT count pending tasks - they may be blocked by other constraints
+	var planAndApplyTaskCount int64
+	err = s.db.WithContext(ctx).
+		Model(&models.WorkspaceTask{}).
+		Joins("JOIN workspaces ON workspaces.workspace_id = workspace_tasks.workspace_id").
+		Where("workspaces.current_pool_id = ?", poolID).
+		Where("workspaces.execution_mode = ?", models.ExecutionModeK8s).
+		Where("workspace_tasks.task_type = ?", models.TaskTypePlanAndApply).
+		Where("workspace_tasks.status IN (?)", []models.TaskStatus{
+			models.TaskStatusRunning,
+			models.TaskStatusApplyPending,
+		}).
+		Count(&planAndApplyTaskCount).Error
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to count plan_and_apply tasks: %w", err)
+	}
+
+	// Calculate required agents based on capacity:
+	// - Plan tasks: 3 per agent (round up)
+	// - Plan_and_apply tasks: 1 per agent
+	// Required agents = max(ceil(plan_tasks / 3), plan_and_apply_tasks)
+	
+	agentsForPlanTasks := (planTaskCount + 2) / 3 // Ceiling division
+	agentsForPlanAndApplyTasks := planAndApplyTaskCount
+
+	requiredAgents := agentsForPlanTasks
+	if agentsForPlanAndApplyTasks > requiredAgents {
+		requiredAgents = agentsForPlanAndApplyTasks
+	}
+
+	log.Printf("[K8sDeployment] Pool %s capacity calculation: plan_tasks=%d (running only), plan_and_apply_tasks=%d (running+apply_pending), agents_for_plan=%d, agents_for_plan_and_apply=%d, required_agents=%d",
+		poolID, planTaskCount, planAndApplyTaskCount, agentsForPlanTasks, agentsForPlanAndApplyTasks, requiredAgents)
+
+	return requiredAgents, nil
+}
+
+// AutoScaleDeployment performs auto-scaling logic for a pool's deployment
+// Returns the new replica count and whether scaling was performed
+//
+// Gradual scale-down strategy:
+// - When tasks are running: scale to match task count
+// - When no tasks: scale to 1 pod (keep warm)
+// - After 1 minute idle: scale to 0 pods (save resources)
+func (s *K8sDeploymentService) AutoScaleDeployment(ctx context.Context, pool *models.AgentPool) (int32, bool, error) {
+	// Parse K8s config
+	if pool.K8sConfig == nil {
+		return 0, false, fmt.Errorf("pool %s does not have K8s configuration", pool.PoolID)
+	}
+
+	var k8sConfig models.K8sJobTemplateConfig
+	if err := json.Unmarshal([]byte(*pool.K8sConfig), &k8sConfig); err != nil {
+		return 0, false, fmt.Errorf("failed to parse K8s config: %w", err)
+	}
+
+	// Check freeze schedule (with one-time unfreeze support)
+	if inFreeze, reason := s.freezeScheduleService.IsInFreezeWindowWithUnfreeze(k8sConfig.FreezeSchedules, pool.OneTimeUnfreezeUntil); inFreeze {
+		log.Printf("[K8sDeployment] Pool %s is in freeze window: %s, skipping auto-scale", pool.PoolID, reason)
+		return 0, false, nil
+	}
+
+	// Get current replicas
+	_, currentReplicas, err := s.GetDeploymentReplicas(ctx, pool.PoolID)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get current replicas: %w", err)
+	}
+
+	// Count active tasks (running only, not pending)
+	activeTaskCount, err := s.CountPendingTasksForPool(ctx, pool.PoolID)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to count active tasks: %w", err)
+	}
+
+	// Check if there are "first pending tasks" waiting for agents
+	// Only count the first pending task in each workspace (not blocked by other tasks)
+	// This prevents counting tasks that are blocked by workspace locks or earlier tasks
+	var firstPendingTaskCount int64
+	
+	// Use subquery to find workspaces where the first task is pending and not blocked
+	err = s.db.WithContext(ctx).
+		Table("workspace_tasks AS wt1").
+		Joins("JOIN workspaces ON workspaces.workspace_id = wt1.workspace_id").
+		Where("workspaces.current_pool_id = ?", pool.PoolID).
+		Where("workspaces.execution_mode = ?", models.ExecutionModeK8s).
+		Where("wt1.status = ?", models.TaskStatusPending).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM workspace_tasks AS wt2 
+			WHERE wt2.workspace_id = wt1.workspace_id 
+			AND wt2.id < wt1.id 
+			AND wt2.status IN ('pending', 'running', 'apply_pending')
+		)`).
+		Count(&firstPendingTaskCount).Error
+	
+	if err != nil {
+		log.Printf("[K8sDeployment] Warning: failed to count first pending tasks: %v", err)
+		firstPendingTaskCount = 0
+	}
+
+	// Determine desired replicas with gradual scale-down
+	var desiredReplicas int32
+
+	if activeTaskCount == 0 {
+		// Check if we have "first pending tasks" (not blocked by other tasks in same workspace)
+		if firstPendingTaskCount > 0 {
+			// Has first pending tasks - but check if existing agents have capacity first
+			// FIX: Check online agent capacity before scaling up
+			onlineAgentCount, availableCapacity, err := s.getOnlineAgentCapacity(ctx, pool.PoolID)
+			if err != nil {
+				log.Printf("[K8sDeployment] Warning: failed to check agent capacity: %v, will scale conservatively", err)
+				// On error, scale conservatively
+				if currentReplicas == 0 {
+					desiredReplicas = 1
+				} else {
+					desiredReplicas = currentReplicas
+				}
+			} else {
+				log.Printf("[K8sDeployment] Pool %s capacity check: online_agents=%d, available_capacity=%d, first_pending_tasks=%d",
+					pool.PoolID, onlineAgentCount, availableCapacity, firstPendingTaskCount)
+				
+				if onlineAgentCount == 0 {
+					// Cold start - no agents online
+					desiredReplicas = 1
+					log.Printf("[K8sDeployment] Pool %s has %d first-pending tasks but 0 online agents (cold start), scaling to 1 pod",
+						pool.PoolID, firstPendingTaskCount)
+				} else if availableCapacity > 0 {
+					// Has online agents with available capacity - don't scale up
+					desiredReplicas = currentReplicas
+					log.Printf("[K8sDeployment] Pool %s has %d first-pending tasks but %d online agents with %d available capacity, no scale-up needed",
+						pool.PoolID, firstPendingTaskCount, onlineAgentCount, availableCapacity)
+				} else {
+					// Online agents are at full capacity - scale up gradually
+					desiredReplicas = currentReplicas + 1
+					if desiredReplicas > int32(k8sConfig.MaxReplicas) {
+						desiredReplicas = int32(k8sConfig.MaxReplicas)
+					}
+					log.Printf("[K8sDeployment] Pool %s has %d first-pending tasks, %d online agents at full capacity, scaling to %d (gradual scale-up)",
+						pool.PoolID, firstPendingTaskCount, onlineAgentCount, desiredReplicas)
+				}
+			}
+			// Don't set idle time when we have first-pending tasks
+		} else {
+		// No active tasks - implement gradual scale-down
+		idleTime, exists := s.poolIdleTimes[pool.PoolID]
+		
+		if !exists {
+			// First time seeing this pool idle, record the time
+			s.poolIdleTimes[pool.PoolID] = time.Now()
+			log.Printf("[K8sDeployment] Pool %s became idle, starting idle timer", pool.PoolID)
+			
+			// Scale to 1 pod (keep warm for quick response)
+			desiredReplicas = 1
+			} else {
+				// Pool has been idle for some time
+				idleDuration := time.Since(idleTime)
+				
+				if idleDuration >= 1*time.Minute {
+					// Idle for 1+ minutes, scale to 0 (save resources)
+					desiredReplicas = 0
+					log.Printf("[K8sDeployment] Pool %s idle for %v, scaling to 0 pods",
+						pool.PoolID, idleDuration)
+				} else {
+					// Idle but less than 1 minute, keep 1 pod warm
+					desiredReplicas = 1
+					log.Printf("[K8sDeployment] Pool %s idle for %v, keeping 1 pod warm (will scale to 0 after 1min)",
+						pool.PoolID, idleDuration)
+				}
+			}
+		}
+	} else {
+		// Has active tasks - reset idle timer and scale to match workload
+		delete(s.poolIdleTimes, pool.PoolID)
+		
+		desiredReplicas = int32(activeTaskCount)
+
+		// Respect max_replicas constraint
+		if desiredReplicas > int32(k8sConfig.MaxReplicas) {
+			desiredReplicas = int32(k8sConfig.MaxReplicas)
+		}
+
+		// Ensure at least min_replicas
+		if desiredReplicas < int32(k8sConfig.MinReplicas) {
+			desiredReplicas = int32(k8sConfig.MinReplicas)
+		}
+	}
+
+	// Only scale if there's a change
+	if desiredReplicas == currentReplicas {
+		return currentReplicas, false, nil
+	}
+
+	// FIX: Before scaling DOWN, verify no agents have running tasks
+	// K8s scale-down is unordered and may terminate pods with active tasks
+	if desiredReplicas < currentReplicas {
+		hasRunningTasks, err := s.hasAnyAgentWithRunningTasks(ctx, pool.PoolID)
+		if err != nil {
+			log.Printf("[K8sDeployment] Warning: failed to check for running tasks before scale-down: %v", err)
+			// Don't block scale-down on check failure, but log it
+		} else if hasRunningTasks {
+			log.Printf("[K8sDeployment] Skipping scale-down for pool %s: agents still have running tasks (current=%d, desired=%d)",
+				pool.PoolID, currentReplicas, desiredReplicas)
+			return currentReplicas, false, nil
+		}
+	}
+
+	// Perform scaling
+	if err := s.ScaleDeployment(ctx, pool.PoolID, desiredReplicas); err != nil {
+		return 0, false, fmt.Errorf("failed to scale deployment: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Auto-scaled pool %s from %d to %d replicas (active tasks: %d, running only)",
+		pool.PoolID, currentReplicas, desiredReplicas, activeTaskCount)
+
+	return desiredReplicas, true, nil
+}
+
+// hasAnyAgentWithRunningTasks checks if any agent in the pool has running tasks
+// This prevents scale-down from terminating agents that are actively executing tasks
+func (s *K8sDeploymentService) hasAnyAgentWithRunningTasks(ctx context.Context, poolID string) (bool, error) {
+	// Check if there are any running tasks assigned to agents in this pool
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&models.WorkspaceTask{}).
+		Joins("JOIN workspaces ON workspaces.workspace_id = workspace_tasks.workspace_id").
+		Where("workspaces.current_pool_id = ?", poolID).
+		Where("workspaces.execution_mode = ?", models.ExecutionModeK8s).
+		Where("workspace_tasks.agent_id IS NOT NULL AND workspace_tasks.agent_id != ''").
+		Where("workspace_tasks.status IN (?)", []models.TaskStatus{
+			models.TaskStatusRunning,
+			models.TaskStatusApplyPending,
+		}).
+		Count(&count).Error
+
+	if err != nil {
+		return false, fmt.Errorf("failed to check for running tasks: %w", err)
+	}
+
+	if count > 0 {
+		log.Printf("[K8sDeployment] Pool %s has %d tasks with assigned agents in running/apply_pending status", poolID, count)
+	}
+
+	return count > 0, nil
+}
+
+// StartAutoScaler starts a goroutine that periodically checks and scales deployments
+func (s *K8sDeploymentService) StartAutoScaler(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	log.Printf("[K8sDeployment] Starting auto-scaler with interval: %v", interval)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[K8sDeployment] Auto-scaler stopped")
+			return
+		case <-ticker.C:
+			s.runAutoScalerCycle(ctx)
+		}
+	}
+}
+
+// runAutoScalerCycle runs one cycle of auto-scaling for all K8s pools
+func (s *K8sDeploymentService) runAutoScalerCycle(ctx context.Context) {
+	// Get all K8s pools
+	var pools []models.AgentPool
+	err := s.db.WithContext(ctx).
+		Where("pool_type = ?", models.AgentPoolTypeK8s).
+		Find(&pools).Error
+
+	if err != nil {
+		log.Printf("[K8sDeployment] Error fetching K8s pools: %v", err)
+		return
+	}
+
+	for _, pool := range pools {
+		// Check and rotate secret if needed
+		if err := s.checkAndRotateSecret(ctx, &pool); err != nil {
+			log.Printf("[K8sDeployment] Error checking secret rotation for pool %s: %v", pool.PoolID, err)
+		}
+
+		_, scaled, err := s.AutoScaleDeployment(ctx, &pool)
+		if err != nil {
+			log.Printf("[K8sDeployment] Error auto-scaling pool %s: %v", pool.PoolID, err)
+			continue
+		}
+
+		if scaled {
+			log.Printf("[K8sDeployment] Successfully scaled pool %s", pool.PoolID)
+		}
+	}
+}
+
+// checkAndRotateSecret checks if secret needs rotation and rotates it if deployment is scaled to 0
+func (s *K8sDeploymentService) checkAndRotateSecret(ctx context.Context, pool *models.AgentPool) error {
+	secretName := fmt.Sprintf("iac-agent-token-%s", pool.PoolID)
+	namespace := "terraform"
+
+	// Get secret
+	secret, err := s.clientset.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Secret doesn't exist, will be created when deployment is ensured
+			return nil
+		}
+		return fmt.Errorf("failed to get secret: %w", err)
+	}
+
+	// Check age
+	age := time.Since(secret.CreationTimestamp.Time)
+	if age <= 30*24*time.Hour {
+		// Secret is still fresh
+		return nil
+	}
+
+	log.Printf("[K8sDeployment] Secret %s is %v old, checking if rotation is possible", secretName, age)
+
+	// Check if deployment has 0 replicas
+	_, currentReplicas, err := s.GetDeploymentReplicas(ctx, pool.PoolID)
+	if err != nil {
+		return fmt.Errorf("failed to check replicas: %w", err)
+	}
+
+	if currentReplicas > 0 {
+		log.Printf("[K8sDeployment] Cannot rotate secret %s: deployment has %d replicas (must be 0)", secretName, currentReplicas)
+		return nil
+	}
+
+	// Safe to rotate
+	log.Printf("[K8sDeployment] Rotating secret %s (deployment has 0 replicas)", secretName)
+	return s.rotateSecret(ctx, pool, secretName, namespace)
+}
+
+// ForceRotateToken forces token rotation, updates secret, and restarts deployment
+// This is called from the API when user manually triggers rotation
+func (s *K8sDeploymentService) ForceRotateToken(ctx context.Context, pool *models.AgentPool, rotatedBy string) error {
+	secretName := fmt.Sprintf("iac-agent-token-%s", pool.PoolID)
+	namespace := "terraform"
+
+	log.Printf("[K8sDeployment] Force rotating token for pool %s by user %s", pool.PoolID, rotatedBy)
+
+	// 1. Scale deployment to 0
+	deploymentName := fmt.Sprintf("iac-agent-%s", pool.PoolID)
+	deployment, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	originalReplicas := int32(0)
+	if deployment.Spec.Replicas != nil {
+		originalReplicas = *deployment.Spec.Replicas
+	}
+
+	// Scale to 0
+	if originalReplicas > 0 {
+		log.Printf("[K8sDeployment] Scaling deployment %s to 0 before rotation", deploymentName)
+		if err := s.ScaleDeployment(ctx, pool.PoolID, 0); err != nil {
+			return fmt.Errorf("failed to scale down deployment: %w", err)
+		}
+
+		// Wait for pods to terminate (max 30 seconds)
+		for i := 0; i < 30; i++ {
+			time.Sleep(1 * time.Second)
+			current, _, err := s.GetDeploymentReplicas(ctx, pool.PoolID)
+			if err != nil {
+				log.Printf("[K8sDeployment] Warning: failed to check replicas: %v", err)
+				continue
+			}
+			if current == 0 {
+				log.Printf("[K8sDeployment] All pods terminated")
+				break
+			}
+			if i == 29 {
+				return fmt.Errorf("timeout waiting for pods to terminate")
+			}
+		}
+	}
+
+	// 2. Rotate secret
+	if err := s.rotateSecret(ctx, pool, secretName, namespace); err != nil {
+		return fmt.Errorf("failed to rotate secret: %w", err)
+	}
+
+	// 3. Restart deployment (scale back to original replicas or trigger rollout)
+	if originalReplicas > 0 {
+		log.Printf("[K8sDeployment] Scaling deployment %s back to %d replicas", deploymentName, originalReplicas)
+		if err := s.ScaleDeployment(ctx, pool.PoolID, originalReplicas); err != nil {
+			return fmt.Errorf("failed to scale up deployment: %w", err)
+		}
+	} else {
+		// If it was 0, trigger a rollout restart to pick up new secret
+		log.Printf("[K8sDeployment] Triggering rollout restart for deployment %s", deploymentName)
+		if err := s.restartDeployment(ctx, pool.PoolID); err != nil {
+			log.Printf("[K8sDeployment] Warning: failed to trigger rollout restart: %v", err)
+		}
+	}
+
+	log.Printf("[K8sDeployment] Successfully force rotated token for pool %s", pool.PoolID)
+	return nil
+}
+
+// restartDeployment triggers a rollout restart by updating an annotation
+func (s *K8sDeploymentService) restartDeployment(ctx context.Context, poolID string) error {
+	deploymentName := fmt.Sprintf("iac-agent-%s", poolID)
+	namespace := "terraform"
+
+	deployment, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	// Add/update restart annotation to trigger rollout
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
+	}
+	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	_, err = s.clientset.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update deployment: %w", err)
+	}
+
+	log.Printf("[K8sDeployment] Triggered rollout restart for deployment %s", deploymentName)
+	return nil
+}
+
+// getOnlineAgentCapacity checks online agents and calculates available capacity
+// Returns: (online agent count, available capacity slots, error)
+// 
+// Capacity calculation:
+// - Each agent can handle: 3 plan tasks + 1 plan_and_apply task
+// - Available capacity = total capacity - currently running tasks
+func (s *K8sDeploymentService) getOnlineAgentCapacity(ctx context.Context, poolID string) (int, int, error) {
+	// Get all online agents in this pool
+	var agents []models.Agent
+	err := s.db.WithContext(ctx).
+		Where("pool_id = ?", poolID).
+		Find(&agents).Error
+	
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query agents: %w", err)
+	}
+
+	// Filter online agents (last ping within 2 minutes)
+	onlineAgents := make([]models.Agent, 0)
+	for _, agent := range agents {
+		if agent.IsOnline() {
+			onlineAgents = append(onlineAgents, agent)
+		}
+	}
+
+	onlineCount := len(onlineAgents)
+	if onlineCount == 0 {
+		return 0, 0, nil
+	}
+
+	// Calculate total capacity: each agent can handle 3 plan tasks + 1 plan_and_apply task
+	// For simplicity, we use a combined capacity of 3 slots per agent
+	totalCapacity := onlineCount * 3
+
+	// Count currently running tasks assigned to these agents
+	agentIDs := make([]string, len(onlineAgents))
+	for i, agent := range onlineAgents {
+		agentIDs[i] = agent.AgentID
+	}
+
+	var runningTaskCount int64
+	err = s.db.WithContext(ctx).
+		Model(&models.WorkspaceTask{}).
+		Where("agent_id IN (?)", agentIDs).
+		Where("status IN (?)", []models.TaskStatus{
+			models.TaskStatusRunning,
+			models.TaskStatusApplyPending,
+		}).
+		Count(&runningTaskCount).Error
+	
+	if err != nil {
+		return onlineCount, 0, fmt.Errorf("failed to count running tasks: %w", err)
+	}
+
+	// Calculate available capacity
+	availableCapacity := totalCapacity - int(runningTaskCount)
+	if availableCapacity < 0 {
+		availableCapacity = 0
+	}
+
+	log.Printf("[K8sDeployment] Pool %s capacity: online_agents=%d, total_capacity=%d, running_tasks=%d, available=%d",
+		poolID, onlineCount, totalCapacity, runningTaskCount, availableCapacity)
+
+	return onlineCount, availableCapacity, nil
+}
+
+// generateTokenName generates a token name with format: tn-{16位随机a-z0-9}
+func generateTokenName() (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	const length = 16
+
+	b := make([]byte, length)
+	for i := range b {
+		n, err := rand.Read(b[i : i+1])
+		if err != nil || n != 1 {
+			return "", fmt.Errorf("failed to generate random bytes: %w", err)
+		}
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+
+	return fmt.Sprintf("tn-%s", string(b)), nil
+}

@@ -1,0 +1,804 @@
+/* 容器 */
+.container {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* 页面头部 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  gap: 20px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.description {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.createButton {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #52c41a;
+  color: white;
+  white-space: nowrap;
+}
+
+.createButton:hover {
+  background: #73d13d;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(82, 196, 26, 0.3);
+}
+
+/* 内容区域 */
+.content {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 24px;
+  min-height: 600px;
+}
+
+/* 左侧：角色列表 */
+.rolesList {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+.rolesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fafafa;
+}
+
+.rolesTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.rolesCount {
+  font-size: 14px;
+  color: #666;
+  padding: 4px 12px;
+  background: #f0f0f0;
+  border-radius: 12px;
+}
+
+.rolesGrid {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+
+.roleCard {
+  padding: 16px;
+  background: #fafafa;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.roleCard:hover {
+  background: #f0f7ff;
+  border-color: #d6e4ff;
+}
+
+.roleCard.selected {
+  background: #e6f7ff;
+  border-color: #1890ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+}
+
+.roleCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.roleCardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roleCardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cloneButton {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #e6f7ff;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.cloneButton:hover {
+  background: #1890ff;
+  transform: scale(1.1);
+}
+
+.roleCard.cloning {
+  border-color: #52c41a;
+  background: #f6ffed;
+}
+
+.systemBadge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+
+.policyCount {
+  font-size: 12px;
+  color: #666;
+  padding: 2px 8px;
+  background: white;
+  border-radius: 10px;
+}
+
+.roleCardDesc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* 右侧：角色详情 */
+.roleDetail {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+.emptyDetail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.emptyText {
+  font-size: 18px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.emptyHint {
+  font-size: 14px;
+  color: #999;
+}
+
+.detailHeader {
+  padding: 24px;
+  border-bottom: 2px solid #e8e8e8;
+  background: #fafafa;
+}
+
+.detailTitle {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detailDesc {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* 权限策略部分 */
+.policiesSection {
+  padding: 24px;
+}
+
+.policiesTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+}
+
+.addPolicyButtonContainer {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+  margin-top: 16px;
+  border-top: 1px dashed #d9d9d9;
+}
+
+.addPolicyButton {
+  padding: 10px 32px;
+  border: 2px dashed #1890ff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: white;
+  color: #1890ff;
+}
+
+.addPolicyButton:hover {
+  background: #e6f7ff;
+  border-color: #40a9ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.2);
+}
+
+.addPolicyButtonCenter {
+  padding: 12px 40px;
+  border: 2px dashed #1890ff;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: white;
+  color: #1890ff;
+  margin-top: 20px;
+}
+
+.addPolicyButtonCenter:hover {
+  background: #e6f7ff;
+  border-color: #40a9ff;
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.3);
+}
+
+.policiesGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+}
+
+.policyGroup {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.policyGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.resourceType {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.policyItems {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.policyItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.policyItem:hover {
+  background: #f0f7ff;
+}
+
+.policyName {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.policyActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.removePolicyButton {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #fff1f0;
+  color: #ff4d4f;
+  border-radius: 4px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.removePolicyButton:hover {
+  background: #ff4d4f;
+  color: white;
+  transform: scale(1.1);
+}
+
+.levelSelect {
+  padding: 6px 10px;
+  border: 1px solid #1890ff;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #e6f7ff;
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.saveButton,
+.cancelButton {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.saveButton {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.saveButton:hover {
+  background: #52c41a;
+  color: white;
+}
+
+.cancelButton {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.cancelButton:hover {
+  background: #d9d9d9;
+  color: #333;
+}
+
+/* 徽章样式 */
+.scopeBadge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.scopeBadge.organization {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.scopeBadge.project {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.scopeBadge.workspace {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.levelBadge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.levelBadge.none {
+  background: #f5f5f5;
+  color: #999;
+}
+
+.levelBadge.read {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.levelBadge.write {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.levelBadge.admin {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+/* 空状态 */
+.noPolicies {
+  padding: 60px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.noPoliciesText {
+  color: #999;
+  font-size: 15px;
+}
+
+.loading {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 16px;
+  color: #666;
+}
+
+/* 创建角色表单 */
+.createFormOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.createFormModal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #666;
+}
+
+.closeButton:hover {
+  background: #e8e8e8;
+  color: #333;
+}
+
+.createForm {
+  padding: 24px;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.required {
+  color: #ff4d4f;
+  margin-left: 4px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s;
+  box-sizing: border-box;
+}
+
+.input:hover,
+.textarea:hover {
+  border-color: #40a9ff;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.hint {
+  display: block;
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.button {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 100px;
+}
+
+.button.primary {
+  background: #52c41a;
+  color: white;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: #73d13d;
+}
+
+.button.primary:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.button.secondary {
+  background: white;
+  color: #333;
+  border: 1px solid #d9d9d9;
+}
+
+.button.secondary:hover:not(:disabled) {
+  border-color: #52c41a;
+  color: #52c41a;
+}
+
+.button.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 内联添加权限表单 */
+.inlineForm {
+  margin-top: 24px;
+  padding: 24px;
+  background: #f0f7ff;
+  border: 2px solid #1890ff;
+  border-radius: 8px;
+  animation: slideDown 0.3s;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding: 0 24px;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    padding: 24px;
+  }
+}
+
+.inlineFormTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1890ff;
+  margin: 0 0 20px 0;
+}
+
+.inlineFormContent {
+  /* 表单内容 */
+}
+
+.inlineFormRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.inlineFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #d6e4ff;
+}
+
+/* 内联克隆表单 */
+.cloneFormInline {
+  margin: 0 16px 12px 16px;
+  padding: 20px;
+  background: #f6ffed;
+  border: 2px solid #52c41a;
+  border-radius: 8px;
+  animation: slideDown 0.3s;
+}
+
+.cloneFormTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #52c41a;
+  margin: 0 0 16px 0;
+}
+
+.cloneForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cloneFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #d9f7be;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .inlineFormRow {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1024px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .rolesList {
+    max-height: 400px;
+  }
+
+  .rolesGrid {
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .roleCardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .policiesGrid {
+    max-height: none;
+  }
+}

@@ -1,0 +1,223 @@
+/* JSON Diff 组件样式 */
+.container {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.noDiff {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 16px;
+}
+
+.noDiffIcon {
+  font-size: 24px;
+  color: #22c55e;
+}
+
+/* 统计信息 */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.statItem {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.statItem strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.statItem.added {
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.statItem.removed {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.statItem.modified {
+  color: #d97706;
+  font-weight: 500;
+}
+
+/* 差异列表 */
+.diffList {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.diffItem {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  transition: background-color 0.2s;
+}
+
+.diffItem:last-child {
+  border-bottom: none;
+}
+
+.diffItem:hover {
+  background: #f9fafb;
+}
+
+.diffItem.added {
+  background: #f0fdf4;
+  border-left: 4px solid #22c55e;
+}
+
+.diffItem.added:hover {
+  background: #dcfce7;
+}
+
+.diffItem.removed {
+  background: #fef2f2;
+  border-left: 4px solid #ef4444;
+}
+
+.diffItem.removed:hover {
+  background: #fee2e2;
+}
+
+.diffItem.modified {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+}
+
+.diffItem.modified:hover {
+  background: #fef3c7;
+}
+
+/* 路径显示 */
+.diffPath {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.diffIcon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.added .diffIcon {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.removed .diffIcon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.modified .diffIcon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.pathCode {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  color: #374151;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* 值显示 */
+.diffContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.valueBox {
+  flex: 1;
+  min-width: 200px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.valueBox.oldValue {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.valueBox.newValue {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.valueLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.valueCode {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1f2937;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #9ca3af;
+  padding: 0 8px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .diffContent {
+    flex-direction: column;
+  }
+  
+  .valueBox {
+    width: 100%;
+  }
+  
+  .arrow {
+    transform: rotate(90deg);
+    padding: 8px 0;
+  }
+}

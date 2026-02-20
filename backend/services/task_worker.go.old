@@ -1,0 +1,117 @@
+package services
+
+import (
+	"fmt"
+	"log"
+	"time"
+
+	"iac-platform/internal/models"
+
+	"gorm.io/gorm"
+)
+
+// TaskWorker 任务执行worker
+type TaskWorker struct {
+	db            *gorm.DB
+	localExecutor *LocalExecutorService
+	pollInterval  time.Duration
+	stopChan      chan struct{}
+}
+
+// NewTaskWorker 创建worker实例
+func NewTaskWorker(db *gorm.DB, baseWorkdir string) *TaskWorker {
+	return &TaskWorker{
+		db:            db,
+		localExecutor: NewLocalExecutorService(db, baseWorkdir),
+		pollInterval:  5 * time.Second,
+		stopChan:      make(chan struct{}),
+	}
+}
+
+// Start 启动worker
+func (tw *TaskWorker) Start() {
+	log.Println("TaskWorker started")
+	go tw.run()
+}
+
+// Stop 停止worker
+func (tw *TaskWorker) Stop() {
+	log.Println("TaskWorker stopping...")
+	close(tw.stopChan)
+}
+
+// run worker主循环
+func (tw *TaskWorker) run() {
+	ticker := time.NewTicker(tw.pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			tw.processPendingTasks()
+		case <-tw.stopChan:
+			log.Println("TaskWorker stopped")
+			return
+		}
+	}
+}
+
+// processPendingTasks 处理待执行的任务
+func (tw *TaskWorker) processPendingTasks() {
+	// 查询pending状态的任务
+	var tasks []models.WorkspaceTask
+	if err := tw.db.Where("status = ? AND execution_mode = ?",
+		models.TaskStatusPending,
+		models.ExecutionModeLocal).
+		Order("created_at ASC").
+		Limit(10).
+		Find(&tasks).Error; err != nil {
+		log.Printf("查询pending任务失败: %v", err)
+		return
+	}
+
+	// 处理每个任务
+	for _, task := range tasks {
+		tw.processTask(task)
+	}
+}
+
+// processTask 处理单个任务
+func (tw *TaskWorker) processTask(task models.WorkspaceTask) {
+	log.Printf("Processing task %d (type: %s, workspace: %d)",
+		task.ID, task.TaskType, task.WorkspaceID)
+
+	var err error
+	switch task.TaskType {
+	case models.TaskTypePlan:
+		err = tw.localExecutor.ExecutePlan(task.ID)
+	case models.TaskTypeApply:
+		err = tw.localExecutor.ExecuteApply(task.ID)
+	default:
+		log.Printf("Unknown task type: %s", task.TaskType)
+		return
+	}
+
+	if err != nil {
+		log.Printf("Task %d execution failed: %v", task.ID, err)
+	} else {
+		log.Printf("Task %d completed successfully", task.ID)
+	}
+}
+
+// ProcessTaskSync 同步处理任务（用于测试）
+func (tw *TaskWorker) ProcessTaskSync(taskID uint) error {
+	var task models.WorkspaceTask
+	if err := tw.db.First(&task, taskID).Error; err != nil {
+		return fmt.Errorf("任务不存在: %w", err)
+	}
+
+	switch task.TaskType {
+	case models.TaskTypePlan:
+		return tw.localExecutor.ExecutePlan(task.ID)
+	case models.TaskTypeApply:
+		return tw.localExecutor.ExecuteApply(task.ID)
+	default:
+		return fmt.Errorf("未知的任务类型: %s", task.TaskType)
+	}
+}

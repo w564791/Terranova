@@ -1,0 +1,171 @@
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.content {
+  background: white;
+  border-radius: 16px;
+  padding: 60px 40px;
+  max-width: 600px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.icon {
+  font-size: 80px;
+  margin-bottom: 24px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+}
+
+.message {
+  font-size: 18px;
+  color: #666;
+  margin: 0 0 12px 0;
+  line-height: 1.6;
+}
+
+.hint {
+  font-size: 16px;
+  color: #999;
+  margin: 0 0 32px 0;
+}
+
+.userInfo {
+  background: #f0f7ff;
+  border: 2px solid #1890ff;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 32px 0;
+}
+
+.userInfoLabel {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.userInfoValue {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.username {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1890ff;
+  font-family: 'Monaco', 'Menlo', monospace;
+  background: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+}
+
+.copyButton {
+  padding: 10px 20px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copyButton:hover {
+  background: #40a9ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
+}
+
+.copyButton:active {
+  transform: translateY(0);
+}
+
+.userInfoHint {
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
+}
+
+.info {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: left;
+}
+
+.info h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 16px 0;
+}
+
+.info ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.info li {
+  padding: 8px 0;
+  color: #666;
+  font-size: 15px;
+  position: relative;
+  padding-left: 24px;
+}
+
+.info li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #667eea;
+  font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .content {
+    padding: 40px 24px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .message {
+    font-size: 16px;
+  }
+
+  .icon {
+    font-size: 60px;
+  }
+}

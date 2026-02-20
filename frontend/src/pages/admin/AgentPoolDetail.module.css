@@ -1,0 +1,1001 @@
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 8px 0 0 0;
+}
+
+.backButton {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #595959;
+  margin-bottom: 8px;
+  transition: all 0.3s;
+}
+
+.backButton:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.editButton,
+.deleteButton {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.editButton {
+  background: #1890ff;
+  color: white;
+  border: none;
+}
+
+.editButton:hover {
+  background: #40a9ff;
+}
+
+.deleteButton {
+  background: white;
+  color: #ff4d4f;
+  border: 1px solid #ff4d4f;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #fff1f0;
+}
+
+.deleteButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 48px;
+  color: #666;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.infoItem label {
+  display: block;
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-bottom: 4px;
+}
+
+.infoItem .value {
+  font-size: 14px;
+  color: #262626;
+  font-weight: 500;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 32px;
+  color: #8c8c8c;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+}
+
+.table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #262626;
+  font-size: 14px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #595959;
+}
+
+.agentName {
+  font-weight: 500;
+  color: #1890ff;
+}
+
+.agentId {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.statusBadge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statusActive {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.statusInactive {
+  background: #fff1f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+.statusMaintenance {
+  background: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe58f;
+}
+
+.statusIdle {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.statusBusy {
+  background: #fff7e6;
+  color: #fa8c16;
+  border: 1px solid #ffd591;
+}
+
+.statusOffline {
+  background: #fff1f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+/* Section Header */
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+}
+
+.addButton {
+  padding: 8px 16px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.addButton:hover {
+  background: #40a9ff;
+}
+
+.workspaceId {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.revokeButton {
+  padding: 4px 12px;
+  background: white;
+  color: #ff4d4f;
+  border: 1px solid #ff4d4f;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.revokeButton:hover {
+  background: #ff4d4f;
+}
+
+/* Token Management Styles */
+.tokenCreated {
+  padding: 24px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.tokenCreated h3 {
+  color: #52c41a;
+  margin: 0 0 16px 0;
+  font-size: 18px;
+}
+
+.warning {
+  color: #fa8c16;
+  font-weight: 500;
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: #fff7e6;
+  border-left: 3px solid #fa8c16;
+}
+
+.tokenDisplay {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+  padding: 12px;
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+}
+
+.tokenDisplay code {
+  flex: 1;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  color: #262626;
+  word-break: break-all;
+}
+
+.copyButton {
+  padding: 6px 16px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s;
+}
+
+.copyButton:hover {
+  background: #40a9ff;
+}
+
+.tokenInfo {
+  margin: 16px 0;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.tokenInfo p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #595959;
+}
+
+.tokenInfo strong {
+  color: #262626;
+  margin-right: 8px;
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formGroup label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #262626;
+  font-size: 14px;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #40a9ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.tokenName {
+  font-weight: 500;
+  color: #262626;
+}
+
+.revokedText {
+  color: #8c8c8c;
+  font-style: italic;
+}
+
+.hint {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-top: 8px;
+}
+
+/* Inline Add Workspace Form */
+.addWorkspaceForm {
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.formHint {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #595959;
+  line-height: 1.6;
+}
+
+.workspaceList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.workspaceItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.workspaceItem:hover {
+  border-color: #1890ff;
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);
+}
+
+.workspaceItem input[type="checkbox"] {
+  margin-top: 2px;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.workspaceInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspaceName {
+  font-size: 14px;
+  font-weight: 500;
+  color: #262626;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceIdSmall {
+  font-size: 12px;
+  color: #8c8c8c;
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin-bottom: 4px;
+}
+
+.workspaceDesc {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.confirmButton {
+  padding: 8px 20px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 500;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background: #40a9ff;
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.3);
+}
+
+.confirmButton:disabled {
+  background: #f5f5f5;
+  color: #bfbfbf;
+  cursor: not-allowed;
+}
+
+/* Confirmation Dialog Styles */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirmDialog {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 90%;
+}
+
+.dialogHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dialogHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.dialogContent {
+  padding: 24px;
+}
+
+.dialogContent p {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #595959;
+  line-height: 1.6;
+}
+
+.dialogContent strong {
+  color: #262626;
+  font-weight: 600;
+}
+
+.warningText {
+  color: #fa8c16;
+  background: #fff7e6;
+  padding: 12px;
+  border-radius: 4px;
+  border-left: 3px solid #fa8c16;
+  margin: 16px 0 0 0 !important;
+}
+
+.dialogActions {
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.dialogActions .cancelButton {
+  padding: 8px 20px;
+  background: white;
+  color: #595959;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.dialogActions .cancelButton:hover {
+  color: #262626;
+  border-color: #40a9ff;
+}
+
+.dialogActions .confirmButton {
+  padding: 8px 20px;
+  background: #ff4d4f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 500;
+}
+
+.dialogActions .confirmButton:hover {
+  background: #ff7875;
+}
+
+/* K8s Configuration Display */
+.k8sConfigDisplay {
+  padding: 16px;
+}
+
+.configItem {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.configItem:last-child {
+  border-bottom: none;
+}
+
+.configItem label {
+  font-weight: 500;
+  color: #595959;
+  min-width: 150px;
+}
+
+.configItem span {
+  color: #262626;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+}
+
+.helpText {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #8c8c8c;
+  line-height: 1.5;
+}
+
+/* YAML Preview */
+.yamlPreview {
+  background: #1e1e1e;
+  border-radius: 4px;
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.yamlPreview pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.yamlPreview code {
+  color: #d4d4d4;
+  white-space: pre;
+}
+
+.yamlInfo {
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 4px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.yamlInfo h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #1890ff;
+  font-weight: 600;
+}
+
+.yamlInfo ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.yamlInfo li {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.yamlInfo li:last-child {
+  margin-bottom: 0;
+}
+
+.yamlInfo strong {
+  color: #1890ff;
+  font-weight: 600;
+}
+
+/* Environment Variables */
+.envList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.envPair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.removeButton {
+  padding: 6px 10px;
+  background: white;
+  color: #ff4d4f;
+  border: 1px solid #ff4d4f;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.removeButton:hover {
+  background: #fff1f0;
+}
+
+.addEnvButton {
+  padding: 6px 12px;
+  background: white;
+  color: #1890ff;
+  border: 1px solid #1890ff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+  margin-bottom: 8px;
+}
+
+.addEnvButton:hover {
+  background: #e6f7ff;
+}
+
+/* Freeze Schedule */
+.weekdaySelector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weekdayItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.weekdayItem:hover {
+  border-color: #1890ff;
+  background: #e6f7ff;
+}
+
+.weekdayItem input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.weekdayItem span {
+  font-size: 14px;
+  color: #262626;
+  user-select: none;
+}
+
+/* Freeze Schedule Form - 完全参考审计日志样式 */
+.freezeScheduleForm {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.freezeFilters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filterGroup label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+}
+
+.select {
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 150px;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #40a9ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.searchButton {
+  padding: 8px 20px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.3s;
+  height: 38px;
+}
+
+.searchButton:hover:not(:disabled) {
+  background: #40a9ff;
+}
+
+.searchButton:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.timePickerGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timeSelect {
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 70px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.timeSelect:focus {
+  outline: none;
+  border-color: #40a9ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.timeSeparator {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  padding: 0 4px;
+}
+
+.weekdaySection {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.weekdayLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.weekdaySelector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.weekdayCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.weekdayCheckbox:hover {
+  background: #e6f7ff;
+  border-color: #40a9ff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.weekdayCheckbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.weekdayCheckbox span {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.weekdayChecked {
+  background: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.weekdayChecked span {
+  color: #1890ff;
+}
+
+/* Schedule List */
+.scheduleList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scheduleItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.scheduleItem:hover {
+  border-color: #40a9ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+}
+
+.scheduleInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scheduleActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.editScheduleButton {
+  padding: 4px 12px;
+  background: white;
+  color: #1890ff;
+  border: 1px solid #1890ff;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.editScheduleButton:hover {
+  background: #e6f7ff;
+  border-color: #40a9ff;
+}
+
+.scheduleTime {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scheduleIcon {
+  font-size: 18px;
+}
+
+.scheduleTimeText {
+  font-size: 15px;
+  font-weight: 500;
+  color: #262626;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.scheduleDays {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 26px;
+}
+
+.scheduleDaysLabel {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.scheduleDaysText {
+  font-size: 13px;
+  color: #595959;
+}
