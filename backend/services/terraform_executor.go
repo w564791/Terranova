@@ -670,6 +670,13 @@ func (s *TerraformExecutor) ExecutePlan(
 	// 获取Workspace配置 - 使用 DataAccessor
 	workspace, err := s.dataAccessor.GetWorkspace(task.WorkspaceID)
 	if err != nil {
+		// Logger 尚未创建，直接更新 task 状态为 failed
+		task.Status = models.TaskStatusFailed
+		task.ErrorMessage = fmt.Sprintf("failed to get workspace: %v", err)
+		task.CompletedAt = timePtr(time.Now())
+		if updateErr := s.dataAccessor.UpdateTask(task); updateErr != nil {
+			log.Printf("[ERROR] Failed to update task %d status after GetWorkspace failure: %v", task.ID, updateErr)
+		}
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
@@ -739,6 +746,7 @@ func (s *TerraformExecutor) ExecutePlan(
 			"workspace_id": task.WorkspaceID,
 		}, nil)
 		logger.StageEnd("fetching")
+		s.saveTaskFailure(task, logger, err, "plan")
 		return err
 	}
 	// DO NOT use defer for cleanup - it will delete the directory while terraform is still running
@@ -882,6 +890,30 @@ func (s *TerraformExecutor) ExecutePlan(
 	}
 
 	logger.StageEnd("init")
+
+	// ========== 阶段2.5: Pre-Plan Run Tasks ==========
+	logger.StageBegin("pre_plan_run_tasks")
+	logger.Info("Executing pre-plan Run Tasks...")
+	runTasksPassed, runTasksErr := s.executeRunTasksForStage(ctx, task, models.RunTaskStagePrePlan, logger)
+	if runTasksErr != nil {
+		logger.StageEnd("pre_plan_run_tasks")
+		if ctx.Err() == context.Canceled {
+			logger.Info("Task cancelled by user during pre-plan run tasks")
+			s.saveTaskCancellation(task, logger, "plan")
+			return fmt.Errorf("task cancelled by user")
+		}
+		logger.Error("Pre-plan Run Tasks execution error: %v", runTasksErr)
+		s.saveTaskFailure(task, logger, runTasksErr, "plan")
+		return fmt.Errorf("pre-plan run tasks failed: %w", runTasksErr)
+	}
+	if !runTasksPassed {
+		logger.Error("Pre-plan Run Tasks blocked execution (mandatory task failed)")
+		logger.StageEnd("pre_plan_run_tasks")
+		s.saveTaskFailure(task, logger, fmt.Errorf("pre-plan run task failed (mandatory)"), "plan")
+		return fmt.Errorf("pre-plan run tasks blocked execution")
+	}
+	logger.Info("✓ Pre-plan Run Tasks completed")
+	logger.StageEnd("pre_plan_run_tasks")
 
 	// ========== 阶段3: Planning ==========
 	logger.StageBegin("planning")
@@ -1130,10 +1162,15 @@ func (s *TerraformExecutor) ExecutePlan(
 	logger.StageBegin("post_plan_run_tasks")
 	logger.Info("Executing post-plan Run Tasks...")
 
-	runTasksPassed, runTasksErr := s.executeRunTasksForStage(ctx, task, models.RunTaskStagePostPlan, logger)
+	runTasksPassed, runTasksErr = s.executeRunTasksForStage(ctx, task, models.RunTaskStagePostPlan, logger)
 	if runTasksErr != nil {
-		logger.Error("Post-plan Run Tasks execution error: %v", runTasksErr)
 		logger.StageEnd("post_plan_run_tasks")
+		if ctx.Err() == context.Canceled {
+			logger.Info("Task cancelled by user during post-plan run tasks")
+			s.saveTaskCancellation(task, logger, "plan")
+			return fmt.Errorf("task cancelled by user")
+		}
+		logger.Error("Post-plan Run Tasks execution error: %v", runTasksErr)
 		s.saveTaskFailure(task, logger, runTasksErr, "plan")
 		return fmt.Errorf("post-plan run tasks failed: %w", runTasksErr)
 	}
@@ -1142,11 +1179,7 @@ func (s *TerraformExecutor) ExecutePlan(
 		// Mandatory Run Task 失败，任务被阻止
 		logger.Error("Post-plan Run Tasks blocked execution (mandatory task failed)")
 		logger.StageEnd("post_plan_run_tasks")
-		// 设置任务状态为失败
-		task.Status = models.TaskStatusFailed
-		task.ErrorMessage = "Post-plan Run Task failed (mandatory)"
-		task.CompletedAt = timePtr(time.Now())
-		s.dataAccessor.UpdateTask(task)
+		s.saveTaskFailure(task, logger, fmt.Errorf("post-plan run task failed (mandatory)"), "plan")
 		return fmt.Errorf("post-plan run tasks blocked execution")
 	}
 
@@ -1251,10 +1284,11 @@ func (s *TerraformExecutor) ExecutePlan(
 			logger.Info("Locking workspace to prevent configuration changes during plan-apply gap...")
 			lockReason := fmt.Sprintf("Locked for apply (task #%d). Do not modify resources/variables until apply completes.", task.ID)
 			if err := s.lockWorkspace(workspace.WorkspaceID, "system", lockReason); err != nil {
-				logger.Warn("Failed to lock workspace: %v", err)
-			} else {
-				logger.Info("✓ Workspace locked successfully")
+				logger.Error("Failed to lock workspace: %v", err)
+				s.saveTaskFailure(task, logger, fmt.Errorf("failed to lock workspace: %w", err), "plan")
+				return fmt.Errorf("failed to lock workspace after plan: %w", err)
 			}
+			logger.Info("✓ Workspace locked successfully")
 
 			// 保留工作目录给Apply使用
 			logger.Info("Preserving work directory for apply: %s", workDir)
@@ -1540,6 +1574,7 @@ func (s *TerraformExecutor) saveTaskLog(
 }
 
 // saveTaskCancellation 保存任务取消信息（不显示为错误）
+// 对齐 saveTaskFailure 的清理逻辑：解锁workspace、保存partial state、清理工作目录、发送通知
 func (s *TerraformExecutor) saveTaskCancellation(
 	task *models.WorkspaceTask,
 	logger *TerraformLogger,
@@ -1554,8 +1589,50 @@ func (s *TerraformExecutor) saveTaskCancellation(
 
 	if taskType == "plan" {
 		task.PlanOutput = fullOutput
+
+		// Plan 取消时，清理工作目录
+		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
+		logger.Info("Cleaning up work directory after plan cancellation: %s", workDir)
+		if cleanupErr := s.CleanupWorkspace(workDir); cleanupErr != nil {
+			logger.Warn("Failed to cleanup work directory: %v", cleanupErr)
+		} else {
+			logger.Info("✓ Work directory cleaned up")
+		}
 	} else {
 		task.ApplyOutput = fullOutput
+
+		// Apply 取消时，解锁 workspace（对齐 saveTaskFailure）
+		logger.Info("Unlocking workspace after apply cancellation...")
+		if unlockErr := s.dataAccessor.UnlockWorkspace(task.WorkspaceID); unlockErr != nil {
+			logger.Warn("Failed to unlock workspace: %v", unlockErr)
+		} else {
+			logger.Info("✓ Workspace unlocked")
+		}
+
+		// Apply 取消时，尝试保存 partial state（terraform 可能已创建部分资源）
+		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
+		if s.db != nil {
+			stateFile := filepath.Join(workDir, "terraform.tfstate")
+			if _, statErr := os.Stat(stateFile); statErr == nil {
+				logger.Info("Attempting to save partial state after apply cancellation...")
+				var workspace models.Workspace
+				if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr == nil {
+					if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
+						logger.Warn("Failed to save partial state: %v", saveErr)
+					} else {
+						logger.Info("✓ Partial state saved to database")
+					}
+				}
+			}
+		}
+
+		// Apply 取消时，清理工作目录
+		logger.Info("Cleaning up work directory after apply cancellation: %s", workDir)
+		if cleanupErr := s.CleanupWorkspace(workDir); cleanupErr != nil {
+			logger.Warn("Failed to cleanup work directory: %v", cleanupErr)
+		} else {
+			logger.Info("✓ Work directory cleaned up")
+		}
 	}
 
 	// 使用 DataAccessor 更新任务
@@ -1567,6 +1644,23 @@ func (s *TerraformExecutor) saveTaskCancellation(
 	s.saveTaskLog(task.ID, taskType, fullOutput, "info")
 
 	log.Printf("Task %d cancelled, status updated to cancelled, output saved (%d bytes)", task.ID, len(fullOutput))
+
+	// 发送任务取消通知（仅在 Local 模式下）
+	if s.notificationSender != nil && s.db != nil {
+		go func() {
+			ctx := context.Background()
+			if err := s.notificationSender.TriggerNotifications(
+				ctx,
+				task.WorkspaceID,
+				models.NotificationEventTaskCancelled,
+				task,
+			); err != nil {
+				log.Printf("[Notification] Failed to send task_cancelled notification for task %d: %v", task.ID, err)
+			} else {
+				log.Printf("[Notification] Successfully triggered task_cancelled notification for task %d", task.ID)
+			}
+		}()
+	}
 }
 
 // saveTaskFailure 保存任务失败信息（包括完整日志）
@@ -1813,6 +1907,7 @@ func (s *TerraformExecutor) ExecuteApply(
 				"workspace_id": task.WorkspaceID,
 			}, nil)
 			logger.StageEnd("fetching")
+			s.saveTaskFailure(task, logger, err, "apply")
 			return err
 		}
 		logger.Info("✓ Work directory created: %s", workDir)
@@ -2114,11 +2209,36 @@ func (s *TerraformExecutor) ExecuteApply(
 		logger.Info("Plan restore skipped (using preserved plan file from same agent)")
 	}
 
+	// ========== 阶段3.5: Pre-Apply Run Tasks ==========
+	logger.StageBegin("pre_apply_run_tasks")
+	logger.Info("Executing pre-apply Run Tasks...")
+	preApplyPassed, preApplyErr := s.executeRunTasksForStage(ctx, task, models.RunTaskStagePreApply, logger)
+	if preApplyErr != nil {
+		logger.StageEnd("pre_apply_run_tasks")
+		if ctx.Err() == context.Canceled {
+			logger.Info("Task cancelled by user during pre-apply run tasks")
+			s.saveTaskCancellation(task, logger, "apply")
+			return fmt.Errorf("task cancelled by user")
+		}
+		logger.Error("Pre-apply Run Tasks execution error: %v", preApplyErr)
+		s.saveTaskFailure(task, logger, preApplyErr, "apply")
+		return fmt.Errorf("pre-apply run tasks failed: %w", preApplyErr)
+	}
+	if !preApplyPassed {
+		logger.Error("Pre-apply Run Tasks blocked execution (mandatory task failed)")
+		logger.StageEnd("pre_apply_run_tasks")
+		s.saveTaskFailure(task, logger, fmt.Errorf("pre-apply run task failed (mandatory)"), "apply")
+		return fmt.Errorf("pre-apply run tasks blocked execution")
+	}
+	logger.Info("✓ Pre-apply Run Tasks completed")
+	logger.StageEnd("pre_apply_run_tasks")
+
 	// ========== 阶段4: Applying ==========
 	logger.StageBegin("applying")
 
 	// ========== 进入关键区：Applying ==========
 	s.signalManager.EnterCriticalSection("applying")
+	defer s.signalManager.ExitCriticalSection("applying")
 
 	// 获取Terraform二进制文件路径（已在Fetching阶段下载）
 	// 必须使用下载的版本，不允许回退到系统terraform
@@ -2208,6 +2328,11 @@ func (s *TerraformExecutor) ExecuteApply(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[PANIC] Recovered in apply stdout reader for task %d: %v", task.ID, r)
+			}
+		}()
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -2221,6 +2346,11 @@ func (s *TerraformExecutor) ExecuteApply(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[PANIC] Recovered in apply stderr reader for task %d: %v", task.ID, r)
+			}
+		}()
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -2258,8 +2388,7 @@ func (s *TerraformExecutor) ExecuteApply(
 	logger.Info("✓ Apply completed successfully")
 	logger.Info("Apply execution time: %.1f seconds", duration.Seconds())
 
-	// ========== 退出关键区：Applying ==========
-	s.signalManager.ExitCriticalSection("applying")
+	// 注意：关键区退出由 defer 自动处理
 
 	// 提取terraform outputs
 	logger.Info("Extracting terraform outputs...")
@@ -2413,6 +2542,19 @@ func (s *TerraformExecutor) ExecuteApply(
 	// 这样可以确保 Local、Agent、K8s Agent 三种模式都能正确同步
 
 	log.Printf("Task %d applied successfully", task.ID)
+
+	// ========== Post-Apply Run Tasks ==========
+	// 注意：post_apply 阶段 apply 已经完成，mandatory 失败不应回滚 apply 状态，仅记录警告
+	logger.StageBegin("post_apply_run_tasks")
+	logger.Info("Executing post-apply Run Tasks...")
+	postApplyPassed, postApplyErr := s.executeRunTasksForStage(ctx, task, models.RunTaskStagePostApply, logger)
+	if postApplyErr != nil {
+		logger.Error("Post-apply Run Tasks error: %v", postApplyErr)
+	}
+	if !postApplyPassed {
+		logger.Warn("Post-apply Run Tasks had mandatory failures (apply already completed)")
+	}
+	logger.StageEnd("post_apply_run_tasks")
 
 	// 注意：Run Triggers 在 Server 端处理（通过 TaskQueueManager.OnTaskCompleted）
 	// 这样可以确保 Local、Agent、K8s Agent 三种模式都能正确触发

@@ -1087,6 +1087,12 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 		}
 	}
 
+	// Cancel the execution context for locally-running tasks so that
+	// long-running waits (e.g. RunTask callback polling) abort promptly.
+	if task.Status == models.TaskStatusRunning {
+		c.queueManager.CancelTaskExecution(uint(taskID))
+	}
+
 	// 从OutputStreamManager获取当前日志（如果任务正在运行）
 	stream := c.streamManager.Get(uint(taskID))
 	if stream != nil {

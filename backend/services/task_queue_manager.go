@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"iac-platform/internal/models"
@@ -40,6 +41,9 @@ type TaskQueueManager struct {
 	agentCCHandler   AgentCCHandler        // Interface for Agent C&C communication
 	pgLocker         LockProvider          // PG advisory locks for workspace serialization
 	pubsub           *pgpubsub.PubSub      // PG NOTIFY/LISTEN for cross-replica dispatch
+
+	taskCancelsMu sync.Mutex
+	taskCancels   map[uint]context.CancelFunc // cancel functions for running tasks
 }
 
 // AgentCCHandler interface for sending tasks to agents
@@ -70,6 +74,7 @@ func NewTaskQueueManager(db *gorm.DB, executor *TerraformExecutor) *TaskQueueMan
 		executor:      executor,
 		k8sJobService: k8sJobService,
 		pgLocker:      pglock.New(db),
+		taskCancels:   make(map[uint]context.CancelFunc),
 	}
 }
 
@@ -868,6 +873,16 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
+	// Register cancel function so CancelTaskExecution can signal this goroutine
+	m.taskCancelsMu.Lock()
+	m.taskCancels[task.ID] = cancel
+	m.taskCancelsMu.Unlock()
+	defer func() {
+		m.taskCancelsMu.Lock()
+		delete(m.taskCancels, task.ID)
+		m.taskCancelsMu.Unlock()
+	}()
+
 	var err error
 
 	if action == "apply" {
@@ -943,6 +958,20 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 		go m.TryExecuteNextTask(task.WorkspaceID)
 	} else {
 		log.Printf("[TaskQueue] Task %d in non-final status %s, not triggering next task", task.ID, task.Status)
+	}
+}
+
+// CancelTaskExecution cancels the context of a running task, causing the
+// executor goroutine to observe ctx.Done() and proceed with cancellation cleanup.
+func (m *TaskQueueManager) CancelTaskExecution(taskID uint) {
+	m.taskCancelsMu.Lock()
+	cancelFn, ok := m.taskCancels[taskID]
+	m.taskCancelsMu.Unlock()
+	if ok {
+		log.Printf("[TaskQueue] Cancelling context for task %d", taskID)
+		cancelFn()
+	} else {
+		log.Printf("[TaskQueue] No running context found for task %d (may not be running locally)", taskID)
 	}
 }
 

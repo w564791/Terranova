@@ -100,6 +100,10 @@ func (c *RunTaskTimeoutChecker) markAsTimeout(result *models.RunTaskResult, mess
 	result.CompletedAt = &now
 	result.UpdatedAt = now
 
+	// Clean up access token on timeout
+	result.AccessToken = ""
+	result.AccessTokenUsed = true
+
 	if err := c.db.Save(result).Error; err != nil {
 		log.Printf("[RunTaskTimeoutChecker] Error updating result %s: %v", result.ResultID, err)
 	}

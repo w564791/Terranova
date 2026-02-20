@@ -24,6 +24,10 @@ func setupRunTaskCallbackRoutes(api *gin.RouterGroup, db *gorm.DB, runTaskExecut
 
 		// Get single result (可选：也可以设为公开，方便调试)
 		runTaskResults.GET("/:result_id", callbackHandler.GetRunTaskResult)
+
+		// Public data endpoints (token-authenticated, for external RunTask services)
+		runTaskResults.GET("/:result_id/plan-json", callbackHandler.GetPlanJSON)
+		runTaskResults.GET("/:result_id/resource-changes", callbackHandler.GetResourceChanges)
 	}
 }
 

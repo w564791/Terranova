@@ -8,7 +8,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /iac-platform main.go
 
 # -- Stage 2: Runtime --
-FROM amazonlinux:latest
+FROM amazonlinux:2023
 RUN dnf install -y ca-certificates tzdata git unzip shadow-utils && dnf clean all
 ENV TZ=Asia/Singapore
 WORKDIR /app

@@ -1,4 +1,4 @@
-FROM amazonlinux:latest
+FROM amazonlinux:2023
 RUN dnf install -y ca-certificates tzdata git unzip shadow-utils && dnf clean all
 ENV TZ=Asia/Singapore
 WORKDIR /app

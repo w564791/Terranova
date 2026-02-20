@@ -14,13 +14,18 @@ import (
 
 // RunTaskCallbackHandler handles run task callback requests
 type RunTaskCallbackHandler struct {
-	db       *gorm.DB
-	executor *services.RunTaskExecutor
+	db           *gorm.DB
+	executor     *services.RunTaskExecutor
+	tokenService *services.RunTaskTokenService
 }
 
 // NewRunTaskCallbackHandler creates a new run task callback handler
 func NewRunTaskCallbackHandler(db *gorm.DB, executor *services.RunTaskExecutor) *RunTaskCallbackHandler {
-	return &RunTaskCallbackHandler{db: db, executor: executor}
+	return &RunTaskCallbackHandler{
+		db:           db,
+		executor:     executor,
+		tokenService: executor.GetTokenService(),
+	}
 }
 
 // HandleCallback handles callback from external run task service
@@ -38,6 +43,28 @@ func (h *RunTaskCallbackHandler) HandleCallback(c *gin.Context) {
 	resultID := c.Param("result_id")
 	if resultID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "result_id is required"})
+		return
+	}
+
+	// Validate Bearer token
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == authHeader {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "bearer token required"})
+		return
+	}
+	claims, err := h.tokenService.ValidateAccessToken(token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		return
+	}
+	// Verify the token's result_id matches the path parameter
+	if claims.ResultID != resultID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "token does not match result"})
 		return
 	}
 
@@ -135,4 +162,92 @@ func (h *RunTaskCallbackHandler) GetRunTaskResult(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result.ToResponse())
+}
+
+// validateRunTaskToken extracts and validates Bearer token, returns claims or sends error response
+func (h *RunTaskCallbackHandler) validateRunTaskToken(c *gin.Context, resultID string) *services.RunTaskTokenClaims {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
+		return nil
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == authHeader {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "bearer token required"})
+		return nil
+	}
+	claims, err := h.tokenService.ValidateAccessToken(token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		return nil
+	}
+	if claims.ResultID != resultID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "token does not match result"})
+		return nil
+	}
+	return claims
+}
+
+// GetPlanJSON returns plan JSON data for a run task result (token-authenticated)
+// @Summary Get plan JSON for run task result
+// @Description Get plan JSON data using run task access token
+// @Tags Run Task Data
+// @Produce json
+// @Param result_id path string true "Result ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401,403,404 {object} map[string]interface{}
+// @Router /api/v1/run-task-results/{result_id}/plan-json [get]
+func (h *RunTaskCallbackHandler) GetPlanJSON(c *gin.Context) {
+	resultID := c.Param("result_id")
+	if resultID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "result_id is required"})
+		return
+	}
+
+	claims := h.validateRunTaskToken(c, resultID)
+	if claims == nil {
+		return // error already sent
+	}
+
+	// Get task plan_json using claims
+	var task models.WorkspaceTask
+	if err := h.db.Where("id = ? AND workspace_id = ?", claims.TaskID, claims.WorkspaceID).First(&task).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"plan_json": task.PlanJSON})
+}
+
+// GetResourceChanges returns resource changes for a run task result (token-authenticated)
+// @Summary Get resource changes for run task result
+// @Description Get resource changes data using run task access token
+// @Tags Run Task Data
+// @Produce json
+// @Param result_id path string true "Result ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401,403,404 {object} map[string]interface{}
+// @Router /api/v1/run-task-results/{result_id}/resource-changes [get]
+func (h *RunTaskCallbackHandler) GetResourceChanges(c *gin.Context) {
+	resultID := c.Param("result_id")
+	if resultID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "result_id is required"})
+		return
+	}
+
+	claims := h.validateRunTaskToken(c, resultID)
+	if claims == nil {
+		return // error already sent
+	}
+
+	// Get resource changes for this task
+	var resourceChanges []models.WorkspaceTaskResourceChange
+	if err := h.db.Where("task_id = ?", claims.TaskID).
+		Order("change_order ASC").
+		Find(&resourceChanges).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get resource changes"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"resource_changes": resourceChanges})
 }

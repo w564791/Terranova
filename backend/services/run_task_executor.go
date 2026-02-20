@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"iac-platform/internal/config"
 	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
 
@@ -27,18 +28,28 @@ type RunTaskExecutor struct {
 	db                    *gorm.DB
 	httpClient            *http.Client
 	platformConfigService *PlatformConfigService
+	tokenService          *RunTaskTokenService
 	mu                    sync.Mutex
 }
 
 // NewRunTaskExecutor creates a new run task executor
 func NewRunTaskExecutor(db *gorm.DB, baseURL string) *RunTaskExecutor {
+	// Reuse the platform JWT_SECRET for RunTask token signing
+	tokenSecret := config.GetJWTSecret()
+
 	return &RunTaskExecutor{
 		db: db,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		platformConfigService: NewPlatformConfigService(db),
+		tokenService:          NewRunTaskTokenService(tokenSecret),
 	}
+}
+
+// GetTokenService returns the token service (for use by handlers)
+func (e *RunTaskExecutor) GetTokenService() *RunTaskTokenService {
+	return e.tokenService
 }
 
 // getBaseURL returns the current platform base URL from config
@@ -131,10 +142,9 @@ func (e *RunTaskExecutor) ExecuteRunTasksForStage(
 
 	log.Printf("[RunTask] Executing %d run tasks for workspace %s stage %s", len(workspaceRunTasks), task.WorkspaceID, stage)
 
-	// Execute all run tasks in parallel and collect result IDs
+	// Execute all run tasks in parallel and collect results
 	var wg sync.WaitGroup
-	resultIDs := make(chan string, len(workspaceRunTasks))
-	execErrors := make(chan error, len(workspaceRunTasks))
+	allResults := make(chan *runTaskExecResult, len(workspaceRunTasks))
 
 	for _, wrt := range workspaceRunTasks {
 		if wrt.RunTask == nil || !wrt.RunTask.Enabled {
@@ -144,29 +154,27 @@ func (e *RunTaskExecutor) ExecuteRunTasksForStage(
 		wg.Add(1)
 		go func(wrt models.WorkspaceRunTask) {
 			defer wg.Done()
-			result := e.executeRunTask(ctx, task, &wrt)
-			if result.err != nil {
-				execErrors <- result.err
-			} else {
-				resultIDs <- result.resultID
-			}
+			allResults <- e.executeRunTask(ctx, task, &wrt)
 		}(wrt)
 	}
 
 	// Wait for all webhooks to be sent
 	wg.Wait()
-	close(resultIDs)
-	close(execErrors)
+	close(allResults)
 
-	// Collect result IDs
+	// Collect successful result IDs and check failed results
 	var pendingResultIDs []string
-	for id := range resultIDs {
-		pendingResultIDs = append(pendingResultIDs, id)
-	}
-
-	// Check for execution errors
-	for err := range execErrors {
-		log.Printf("[RunTask] Execution error: %v", err)
+	for result := range allResults {
+		if result.err != nil {
+			log.Printf("[RunTask] Execution error for run task %s: %v", result.runTaskID, result.err)
+			// Check if the failed webhook was for a mandatory run task
+			if result.enforcement == models.RunTaskEnforcementMandatory {
+				log.Printf("[RunTask] Mandatory run task %s webhook failed, blocking execution", result.runTaskID)
+				return false, fmt.Errorf("mandatory run task %s webhook failed: %v", result.runTaskID, result.err)
+			}
+		} else {
+			pendingResultIDs = append(pendingResultIDs, result.resultID)
+		}
 	}
 
 	if len(pendingResultIDs) == 0 {
@@ -188,10 +196,14 @@ func (e *RunTaskExecutor) waitForCallbacks(ctx context.Context, resultIDs []stri
 	maxWaitTime := 10 * time.Minute
 
 	deadline := time.Now().Add(maxWaitTime)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			log.Printf("[RunTask] Context cancelled while waiting for callbacks (task %d), marking pending results as error", taskID)
+			e.cancelPendingResults(resultIDs)
 			return false, ctx.Err()
 		default:
 		}
@@ -270,8 +282,37 @@ func (e *RunTaskExecutor) waitForCallbacks(ctx context.Context, resultIDs []stri
 			return true, nil
 		}
 
-		// Wait before next poll
-		time.Sleep(pollInterval)
+		// Wait before next poll, but also respond to context cancellation
+		select {
+		case <-ctx.Done():
+			log.Printf("[RunTask] Context cancelled while waiting for callbacks (task %d), marking pending results as error", taskID)
+			e.cancelPendingResults(resultIDs)
+			return false, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// cancelPendingResults marks all pending/running run task results as error when the parent task is cancelled.
+func (e *RunTaskExecutor) cancelPendingResults(resultIDs []string) {
+	for _, resultID := range resultIDs {
+		var result models.RunTaskResult
+		if err := e.db.Where("result_id = ?", resultID).First(&result).Error; err != nil {
+			continue
+		}
+		if result.Status == models.RunTaskResultPending || result.Status == models.RunTaskResultRunning {
+			now := time.Now()
+			result.Status = models.RunTaskResultError
+			result.Message = "Parent task cancelled by user"
+			result.CompletedAt = &now
+			result.AccessToken = ""
+			result.AccessTokenUsed = true
+			if err := e.db.Save(&result).Error; err != nil {
+				log.Printf("[RunTask] Failed to cancel result %s: %v", resultID, err)
+			} else {
+				log.Printf("[RunTask] Marked result %s as error (parent task cancelled)", resultID)
+			}
+		}
 	}
 }
 
@@ -337,6 +378,31 @@ func (e *RunTaskExecutor) executeRunTask(
 		result.err = fmt.Errorf("failed to create run task result: %w", err)
 		result.passed = false
 		return result
+	}
+
+	// Generate access token for this result
+	expiresIn := time.Duration(wrt.RunTask.TimeoutSeconds) * time.Second
+	if expiresIn > 24*time.Hour {
+		expiresIn = 24 * time.Hour
+	}
+	if expiresIn == 0 {
+		expiresIn = 1 * time.Hour
+	}
+	accessToken, tokenExpiresAt, tokenErr := e.tokenService.GenerateAccessToken(
+		resultID, task.ID, task.WorkspaceID, string(wrt.Stage), expiresIn,
+	)
+	if tokenErr != nil {
+		log.Printf("[RunTask] Warning: failed to generate access token for result %s: %v", resultID, tokenErr)
+	} else {
+		// Encrypt token before storing in database
+		encryptedToken, encErr := crypto.EncryptValue(accessToken)
+		if encErr != nil {
+			log.Printf("[RunTask] Warning: failed to encrypt access token for result %s: %v", resultID, encErr)
+			encryptedToken = accessToken // fallback to plaintext
+		}
+		taskResult.AccessToken = encryptedToken
+		taskResult.AccessTokenExpiresAt = &tokenExpiresAt
+		e.db.Save(taskResult)
 	}
 
 	// Build webhook payload
@@ -413,10 +479,13 @@ func (e *RunTaskExecutor) buildWebhookPayload(
 	wrt *models.WorkspaceRunTask,
 	result *models.RunTaskResult,
 ) models.JSONB {
+	// Decrypt access token for outbound payload
+	accessToken, _ := crypto.DecryptValue(result.AccessToken)
+
 	payload := models.JSONB{
 		"payload_version": 1,
 		"stage":           string(wrt.Stage),
-		"access_token":    result.AccessToken,
+		"access_token":    accessToken,
 		"capabilities": map[string]interface{}{
 			"outcomes": true,
 		},
@@ -434,10 +503,11 @@ func (e *RunTaskExecutor) buildWebhookPayload(
 	}
 
 	// Add plan data URLs for post_plan/pre_apply/post_apply stages
+	// Use public token-authenticated routes that external RunTask services can access
 	if wrt.Stage != models.RunTaskStagePrePlan {
 		baseURL := e.getBaseURL()
-		payload["plan_json_api_url"] = fmt.Sprintf("%s/api/v1/workspaces/%s/tasks/%d/plan-json", baseURL, task.WorkspaceID, task.ID)
-		payload["resource_changes_api_url"] = fmt.Sprintf("%s/api/v1/workspaces/%s/tasks/%d/resource-changes", baseURL, task.WorkspaceID, task.ID)
+		payload["plan_json_api_url"] = fmt.Sprintf("%s/api/v1/run-task-results/%s/plan-json", baseURL, result.ResultID)
+		payload["resource_changes_api_url"] = fmt.Sprintf("%s/api/v1/run-task-results/%s/resource-changes", baseURL, result.ResultID)
 	}
 
 	return payload
@@ -526,6 +596,13 @@ func (e *RunTaskExecutor) HandleCallback(resultID string, callbackData *models.R
 			}
 			e.db.Create(outcome)
 		}
+	}
+
+	// Clean up access token when result is completed (passed/failed)
+	if result.Status == models.RunTaskResultPassed || result.Status == models.RunTaskResultFailed {
+		result.AccessToken = ""
+		result.AccessTokenUsed = true
+		e.db.Save(&result)
 	}
 
 	log.Printf("[RunTask] Callback processed for result %s, status: %s", resultID, result.Status)

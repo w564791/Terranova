@@ -88,10 +88,15 @@ type OutcomeAttributes struct {
 }
 
 var (
-	port       = getEnv("PORT", "18090")
-	baseURL    = getEnv("BASE_URL", "http://localhost:18090")
-	hmacKey    = getEnv("HMAC_KEY", "test-hmac-secret-key")
-	httpClient = &http.Client{Timeout: 30 * time.Second}
+	port    = getEnv("PORT", "18090")
+	baseURL = getEnv("BASE_URL", "http://localhost:18090")
+	hmacKey = getEnv("HMAC_KEY", "test-hmac-secret-key")
+	// CALLBACK_BASE_URL: 当测试平台在本地运行、服务端在容器中通过 kubectl port-forward 暴露时，
+	// 平台生成的 callback URL 使用的是容器内部地址（如 https://iac-platform:8080），本地无法访问。
+	// 设置此变量后，会自动将 callback/data URL 中的 host 替换为本地可达的地址。
+	// 示例: CALLBACK_BASE_URL=http://localhost:8080
+	callbackBaseURL = getEnv("CALLBACK_BASE_URL", "https://www.iac-platform.com:8443")
+	httpClient      = &http.Client{Timeout: 30 * time.Second}
 )
 
 func main() {
@@ -141,6 +146,11 @@ func main() {
 	log.Printf("   延迟测试: %s/delayed-success", baseURL)
 	log.Printf("")
 	log.Printf("🔑 HMAC Key: %s", hmacKey)
+	if callbackBaseURL != "" {
+		log.Printf("🔄 CALLBACK_BASE_URL: %s (callback/data URL 将被重写)", callbackBaseURL)
+	} else {
+		log.Printf("💡 如果服务端在容器中通过 port-forward 暴露，设置 CALLBACK_BASE_URL=http://localhost:<port>")
+	}
 	log.Printf("")
 	log.Printf("📝 保存 Run Task 时会自动调用 {endpoint_url}/test 进行验证")
 
@@ -614,7 +624,40 @@ func parsePayload(r *http.Request) (*RunTaskPayload, error) {
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
+	// 当设置了 CALLBACK_BASE_URL 时，替换所有平台 URL 的 host 部分
+	if callbackBaseURL != "" {
+		payload.TaskResultCallbackURL = rewriteURL(payload.TaskResultCallbackURL)
+		payload.PlanJSONAPIURL = rewriteURL(payload.PlanJSONAPIURL)
+		payload.ResourceChangesAPIURL = rewriteURL(payload.ResourceChangesAPIURL)
+		log.Printf("🔄 URLs rewritten with CALLBACK_BASE_URL=%s", callbackBaseURL)
+		log.Printf("   Callback URL: %s", payload.TaskResultCallbackURL)
+	}
+
 	return &payload, nil
+}
+
+// rewriteURL 将 URL 的 scheme+host 部分替换为 callbackBaseURL
+// 例如: https://iac-platform:8080/api/v1/... → http://localhost:8080/api/v1/...
+func rewriteURL(rawURL string) string {
+	if rawURL == "" || callbackBaseURL == "" {
+		return rawURL
+	}
+	// 找到第三个 "/" 的位置（scheme://host 之后）
+	idx := 0
+	slashes := 0
+	for i, c := range rawURL {
+		if c == '/' {
+			slashes++
+			if slashes == 3 {
+				idx = i
+				break
+			}
+		}
+	}
+	if idx == 0 {
+		return rawURL
+	}
+	return strings.TrimRight(callbackBaseURL, "/") + rawURL[idx:]
 }
 
 // sendCallback 发送回调请求

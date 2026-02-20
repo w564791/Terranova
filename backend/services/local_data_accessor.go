@@ -290,14 +290,12 @@ func (a *LocalDataAccessor) CheckResourceVersionExists(resourceID string, versio
 func (a *LocalDataAccessor) LockWorkspace(workspaceID, userID, reason string) error {
 	db := a.getDB()
 
+	now := time.Now()
 	updates := map[string]interface{}{
-		"locked":    true,
-		"locked_by": userID,
-		"locked_at": "NOW()",
-	}
-
-	if reason != "" {
-		updates["lock_reason"] = reason
+		"is_locked":   true,
+		"locked_by":   userID,
+		"locked_at":   now,
+		"lock_reason": reason,
 	}
 
 	if err := db.Model(&models.Workspace{}).
@@ -314,10 +312,10 @@ func (a *LocalDataAccessor) UnlockWorkspace(workspaceID string) error {
 	db := a.getDB()
 
 	updates := map[string]interface{}{
-		"locked":      false,
+		"is_locked":   false,
 		"locked_by":   nil,
 		"locked_at":   nil,
-		"lock_reason": nil,
+		"lock_reason": "",
 	}
 
 	if err := db.Model(&models.Workspace{}).
