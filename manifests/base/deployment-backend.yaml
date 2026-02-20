@@ -44,6 +44,8 @@ spec:
             - secretRef:
                 name: iac-jwt
           env:
+            - name: TZ
+              value: Asia/Singapore
             - name: POD_NAME
               valueFrom:
                 fieldRef:

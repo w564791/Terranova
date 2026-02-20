@@ -550,28 +550,30 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 		)
 	}
 
-	// 时间范围过滤 - 直接使用 UTC 时间
-	// 前端发送的是 UTC 时间（通过 toISOString()），数据库中存储的也是 UTC 时间
+	// 时间范围过滤
+	// 前端发送 UTC 时间（toISOString()），但 DB 列是 timestamp without time zone，
+	// 存的是本地时间。pgx 对 timestamp 列会 discardTimeZone（只保留数值丢弃时区），
+	// 所以必须先将 UTC 转为本地时区，确保查询条件和存储值在同一时区基准。
 	startDate := ctx.Query("start_date")
 	if startDate != "" {
-		// 解析ISO 8601时间字符串
 		startTime, err := time.Parse(time.RFC3339, startDate)
 		if err != nil {
 			log.Printf("Failed to parse start_date: %v", err)
 		} else {
+			startTime = startTime.Local()
 			query = query.Where("created_at >= ?", startTime)
-			log.Printf("Time filter: start_date=%s", startTime.Format(time.RFC3339))
+			log.Printf("Time filter: start_date=%s (local)", startTime.Format(time.RFC3339))
 		}
 	}
 	endDate := ctx.Query("end_date")
 	if endDate != "" {
-		// 解析ISO 8601时间字符串
 		endTime, err := time.Parse(time.RFC3339, endDate)
 		if err != nil {
 			log.Printf("Failed to parse end_date: %v", err)
 		} else {
+			endTime = endTime.Local()
 			query = query.Where("created_at <= ?", endTime)
-			log.Printf("Time filter: end_date=%s", endTime.Format(time.RFC3339))
+			log.Printf("Time filter: end_date=%s (local)", endTime.Format(time.RFC3339))
 		}
 	}
 
@@ -608,24 +610,14 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 		return
 	}
 
-	// 计算filter counts - 基于相同的搜索和时间范围条件
-	baseCountQuery := c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID)
-
-	// 应用搜索条件
-	if search != "" {
-		searchPattern := "%" + search + "%"
-		baseCountQuery = baseCountQuery.Where(
-			"description LIKE ? OR CAST(id AS TEXT) LIKE ? OR task_type LIKE ?",
-			searchPattern, searchPattern, searchPattern,
-		)
-	}
-
-	// 应用时间范围条件
-	if startDate != "" {
-		baseCountQuery = baseCountQuery.Where("created_at >= ?", startDate)
-	}
-	if endDate != "" {
-		baseCountQuery = baseCountQuery.Where("created_at <= ?", endDate)
+	// 计算filter counts - 统一使用 scope 确保条件一致
+	// countBase 封装 workspace + background + search + time 过滤，与主查询条件对齐
+	countBase := func() *gorm.DB {
+		q := c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID)
+		if !showBackground {
+			q = q.Where("is_background = ? OR is_background IS NULL", false)
+		}
+		return q.Scopes(applySearchAndTimeFilters(search, startDate, endDate))
 	}
 
 	filterCounts := map[string]int64{
@@ -638,42 +630,27 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 		"cancelled":       0,
 	}
 
-	// Count all (已经应用了搜索和时间范围)
-	var countAll int64
-	baseCountQuery.Count(&countAll)
-	filterCounts["all"] = countAll
-
-	// Count by status - 每次都需要重新创建query以避免条件累积
 	var count int64
 
-	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID).
-		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
-		Where("status = ?", "failed").Count(&count)
+	countBase().Count(&count)
+	filterCounts["all"] = count
+
+	countBase().Where("status = ?", "failed").Count(&count)
 	filterCounts["errored"] = count
 
-	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID).
-		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
-		Where("status = ?", "running").Count(&count)
+	countBase().Where("status = ?", "running").Count(&count)
 	filterCounts["running"] = count
 
-	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID).
-		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
-		Where("status IN ?", []string{"on_hold", "pending", "apply_pending"}).Count(&count)
+	countBase().Where("status IN ?", []string{"on_hold", "pending", "apply_pending"}).Count(&count)
 	filterCounts["on_hold"] = count
 
-	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID).
-		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
-		Where("status = ?", "cancelled").Count(&count)
+	countBase().Where("status = ?", "cancelled").Count(&count)
 	filterCounts["cancelled"] = count
 
-	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID).
-		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
-		Where("status IN ?", []string{"success", "applied"}).Count(&count)
+	countBase().Where("status IN ?", []string{"success", "applied"}).Count(&count)
 	filterCounts["success"] = count
 
-	c.db.Model(&models.WorkspaceTask{}).Where("workspace_id = ?", workspace.WorkspaceID).
-		Scopes(applySearchAndTimeFilters(search, startDate, endDate)).
-		Where("status IN ?", []string{"requires_approval", "apply_pending"}).Count(&count)
+	countBase().Where("status IN ?", []string{"requires_approval", "apply_pending"}).Count(&count)
 	filterCounts["needs_attention"] = count
 
 	// 分页查询 - 只选择列表页需要的字段，排除大字段
@@ -712,12 +689,12 @@ func applySearchAndTimeFilters(search, startDate, endDate string) func(*gorm.DB)
 		}
 		if startDate != "" {
 			if startTime, err := time.Parse(time.RFC3339, startDate); err == nil {
-				db = db.Where("created_at >= ?", startTime)
+				db = db.Where("created_at >= ?", startTime.Local())
 			}
 		}
 		if endDate != "" {
 			if endTime, err := time.Parse(time.RFC3339, endDate); err == nil {
-				db = db.Where("created_at <= ?", endTime)
+				db = db.Where("created_at <= ?", endTime.Local())
 			}
 		}
 		return db
