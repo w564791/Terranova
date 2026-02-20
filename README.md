@@ -50,13 +50,14 @@ docker compose up -d
 - **完全脱离命令行**: 纯 Web 界面操作，无需 HCL 语法知识
 - **全局搜索支持**: 所有功能模块均支持搜索，快速定位资源
 - **表单化操作**: 基于 OpenAPI Schema 的智能表单渲染
+- **AI资源生成**: 基于schema的资源生成,天生合规
 
 ### 👥 角色分离设计
 | 角色 | 职责 |
 |------|------|
 | **平台管理员** | 全局配置、Agent 管理、系统设置 |
-| **策略管理员** | Run Tasks、安全策略、合规检查 |
-| **高级工程师** | Module 设计、Schema 定义、Skill 配置 |
+| **策略工程师** | Run Tasks、安全策略、合规检查 |
+| **module工程师** | Module 设计、Schema 定义、Skill 配置 |
 | **交付工程师** | Workspace 管理、资源部署、日常运维 |
 
 ---
@@ -126,7 +127,7 @@ docker compose up -d
       ↓
   LLM 生成候选参数
       ↓
-  平台 SchemaSolver 做最终裁决（待实施）
+  平台 SchemaSolver 做最终裁决
   ```
 
 #### 向量化 CMDB
@@ -399,42 +400,10 @@ docker compose up -d
 - PostgreSQL 18+ (pgvector)
 - Docker & Docker Compose
 
-### 启动开发环境
-
-```bash
-# 1. 克隆项目
-git clone <repository-url>
-cd iac-platform
-
-# 2. 启动数据库
-cp docker-compose.example.yml docker-compose.yml
-docker compose up -d postgres
-
-# 3. 启动后端
-cd backend
-go mod tidy
-go run main.go
-
-# 4. 启动前端
-cd frontend
-npm install
-npm run dev
-```
-
-### 访问地址
-| 服务 | 地址 |
-|------|------|
-| 前端 | http://localhost:5173 |
-| 后端 API | http://localhost:8080 |
 
 ---
 
 ## 📚 文档
-
-### 快速入门
-- [快速开始指南](docs/01-QUICK_START_FOR_AI.md)
-- [执行指南](docs/02-EXECUTION_GUIDE.md)
-- [开发指南](docs/03-development-guide.md)
 
 ### 核心模块
 | 模块 | 文档路径 |
@@ -509,6 +478,7 @@ npm run dev
 - ✅ OpenAPI V3 可视化编辑
 - ✅ 提示词 CRUD
 - ✅ Module Skill 能力下放
+- ✅ SchemaSolver 最终裁决
 
 </details>
 
@@ -556,7 +526,7 @@ npm run dev
 ### 🚧 规划中功能
 
 - ⏳ 单次授权审批流
-- ⏳ SchemaSolver 最终裁决
+
 - ⏳ 成本预测分析
 - ⏳ GitOps 完整集成
 
@@ -582,13 +552,6 @@ npm run dev
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
-
----
-
-## 📞 联系方式
-
-- **问题反馈**: [GitHub Issues](https://github.com/your-org/iac-platform/issues)
-- **功能建议**: [GitHub Discussions](https://github.com/your-org/iac-platform/discussions)
 
 ---
 
