@@ -1,5 +1,8 @@
 # IAC Platform Kubernetes Deployment
 
+> **快速体验？** 如果只是 POC / 演示 / 评估，推荐使用项目根目录的 [Docker Compose 快速部署](../docker-compose.example.yml)，无需 K8s 环境，三条命令即可启动。
+>
+> 本文档面向 **生产环境** 的 Kubernetes 部署，提供 TLS 加密、HA 高可用、网络策略、OPA 安全策略等完整能力。
 
 ## Prerequisites
 

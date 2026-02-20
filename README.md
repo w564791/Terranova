@@ -10,26 +10,37 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-start-kubernetes-deployment">Quick Start</a> •
+  <a href="#-部署">部署</a> •
   <a href="#-核心亮点">核心亮点</a> •
   <a href="#-功能特性">功能特性</a> •
-  <a href="#-快速开始">快速开始</a> •
+  <a href="#-本地开发">本地开发</a> •
   <a href="#-技术架构">技术架构</a> •
   <a href="#-文档">文档</a>
 </p>
 
 ---
 
-## 🚀 Quick Start (Kubernetes Deployment)
+## 🚀 部署
 
-详细的 Kubernetes 部署指南请参考 **[manifests/README.md](manifests/README.md)**，包含：
+| 方式 | 适用场景 | 说明 |
+|------|---------|------|
+| **[Docker Compose 快速部署](docker-compose.example.yml)** | POC / 演示 / 评估 | 单机运行，无需 K8s，最快体验平台全部功能 |
+| **[Kubernetes 生产部署](manifests/README.md)** | 生产环境 | TLS 加密、HA 高可用、网络策略、OPA 安全策略 |
 
-- Prerequisites（cert-manager、Envoy Gateway 安装）
-- 本地 TLS 证书生成（mkcert）
-- Quick Deploy 一键部署
-- Configuration 配置说明
-- Local Access 本地访问
-- Architecture 架构图
+**快速体验推荐 Docker Compose**，仅需 Docker 环境即可启动：
+
+```bash
+# 复制配置文件
+cp docker-compose.example.yml docker-compose.yml
+
+# 启动（前台运行，Ctrl+C 停止）
+docker compose up
+
+# 或后台运行
+docker compose up -d
+```
+
+启动后访问：http://localhost
 
 ---
 
@@ -380,34 +391,31 @@
 
 ---
 
-## 🚀 快速开始
+## 🛠️ 本地开发
 
 ### 环境要求
-- Go 1.21+
-- Node.js 18+
-- PostgreSQL 15+
-- Redis 6+
+- Go 1.25+
+- Node.js 22+
+- PostgreSQL 18+ (pgvector)
 - Docker & Docker Compose
 
-### 本地开发
+### 启动开发环境
 
 ```bash
 # 1. 克隆项目
 git clone <repository-url>
 cd iac-platform
 
-# 2. 启动依赖服务
-docker-compose up -d postgres redis
+# 2. 启动数据库
+cp docker-compose.example.yml docker-compose.yml
+docker compose up -d postgres
 
-# 3. 初始化数据库
-psql -h localhost -U postgres -d iac_platform -f docs/12-database-schema.sql
-
-# 4. 启动后端
+# 3. 启动后端
 cd backend
 go mod tidy
 go run main.go
 
-# 5. 启动前端
+# 4. 启动前端
 cd frontend
 npm install
 npm run dev
@@ -416,9 +424,8 @@ npm run dev
 ### 访问地址
 | 服务 | 地址 |
 |------|------|
-| 前端 | http://localhost:3000 |
+| 前端 | http://localhost:5173 |
 | 后端 API | http://localhost:8080 |
-| API 文档 | http://localhost:8080/swagger/index.html |
 
 ---
 

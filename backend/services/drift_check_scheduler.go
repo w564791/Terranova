@@ -97,6 +97,11 @@ func (s *DriftCheckScheduler) checkWorkspaces() {
 	log.Printf("[DriftScheduler] Found %d workspaces with drift check enabled", len(workspaces))
 
 	for _, ws := range workspaces {
+		// 跳过从未成功 apply 过的 workspace（新建 workspace 无状态，无需检测漂移）
+		if !s.hasEverApplied(ws.WorkspaceID) {
+			continue
+		}
+
 		// 检查是否已经存在 drift（如果已有 drift，不需要再检测）
 		if s.hasDrift(ws.WorkspaceID) {
 			log.Printf("[DriftScheduler] Workspace %s: already has drift, skipping (fix drift first)", ws.WorkspaceID)
@@ -181,6 +186,20 @@ func (s *DriftCheckScheduler) hasRunningTask(workspaceID string) bool {
 	if err != nil {
 		log.Printf("[DriftScheduler] Failed to check running tasks: %v", err)
 		return true // 保守起见，假设有任务在运行
+	}
+	return count > 0
+}
+
+// hasEverApplied 检查 workspace 是否有过成功的 apply
+// 新建的 workspace 无状态，不需要 drift 检测
+func (s *DriftCheckScheduler) hasEverApplied(workspaceID string) bool {
+	var count int64
+	err := s.db.Model(&models.WorkspaceTask{}).
+		Where("workspace_id = ? AND status = ?", workspaceID, models.TaskStatusApplied).
+		Count(&count).Error
+	if err != nil {
+		log.Printf("[DriftScheduler] Failed to check apply history for %s: %v", workspaceID, err)
+		return false
 	}
 	return count > 0
 }
