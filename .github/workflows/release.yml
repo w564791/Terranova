@@ -232,8 +232,30 @@ jobs:
           # 生成 checksums
           cd release && sha256sum * > checksums.txt
 
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Load changelog
+        id: changelog
+        run: |
+          CHANGELOG_FILE="release/changelog-${{ steps.version.outputs.VERSION }}.md"
+          if [ -f "$CHANGELOG_FILE" ]; then
+            # Write to GITHUB_OUTPUT using heredoc delimiter
+            {
+              echo "body<<CHANGELOG_EOF"
+              cat "$CHANGELOG_FILE"
+              echo "CHANGELOG_EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No changelog found at $CHANGELOG_FILE, falling back to auto-generated notes"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.found == 'true' && steps.changelog.outputs.body || '' }}
+          generate_release_notes: ${{ steps.changelog.outputs.found != 'true' }}
           files: release/*
