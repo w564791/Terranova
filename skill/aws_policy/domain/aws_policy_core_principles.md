@@ -186,6 +186,36 @@ arn:partition:service:region:account-id:resource-type/resource-id
 }
 ```
 
+### Terraform 场景：避免循环依赖
+
+当资源策略中引用的 IAM Role 和资源本身在同一 Terraform 配置中创建时，直接使用 `"Principal": {"AWS": "arn:..."}` 会触发 AWS 的 **Principal 强校验**（验证 Role 是否存在），导致循环依赖。
+
+**解决方案**：使用 `Principal: "*"` 配合 `aws:PrincipalArn` 条件，跳过强校验：
+
+```json
+{
+  "Sid": "AllowRoleAccessAvoidCircularDependency",
+  "Effect": "Allow",
+  "Principal": "*",
+  "Action": ["s3:GetObject", "s3:PutObject"],
+  "Resource": ["arn:aws:s3:::my-bucket", "arn:aws:s3:::my-bucket/*"],
+  "Condition": {
+    "StringLike": {
+      "aws:PrincipalArn": "arn:aws:iam::123456789012:role/MyAppRole*"
+    }
+  }
+}
+```
+
+| 方式 | Principal | 是否强校验 | 循环依赖风险 |
+|------|-----------|------------|--------------|
+| 直接 Principal | `"AWS": "arn:...role/xxx"` | 是 | **高** |
+| Condition 方式 | `"*"` + `aws:PrincipalArn` | 否 | **无** |
+
+**安全要求**：使用此模式时，`aws:PrincipalArn` 中**必须包含具体账户 ID**，禁止使用通配符账户（`arn:aws:iam::*:role/...`），防止任意账户的同名 Role 获得访问权限。
+
+**适用范围**：本平台生成的资源策略默认采用此模式，因为 Role 和资源通常在同一 Terraform 配置中管理。
+
 ---
 
 ## 第四部分：策略验证规则

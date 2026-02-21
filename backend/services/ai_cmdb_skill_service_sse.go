@@ -257,7 +257,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 				case 2:
 					prevStepName = "意图断言"
 				case 3:
-					prevStepName = "并行(CMDB+Skill)"
+					prevStepName = "CMDB查询+Skill选择"
 				case 4:
 					prevStepName = "组装Prompt"
 				case 5:
@@ -324,6 +324,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 	// 步骤 3: 并行执行 CMDB 查询和 Skill 选择
 	var cmdbData string
 	var selectedSkills []string
+	var cmdbUsedSkills []string // CMDB 查询阶段使用的 Skills（用于 UI 展示）
 
 	// 判断是否是第二步流程（用户选择后）
 	isSecondPhase := len(convertedSelections) > 0
@@ -368,23 +369,26 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 			progressCallback, totalSteps, completedSteps, true, // skipStep4Display = true
 		)
 	} else {
-		reportProgress(3, "并行(CMDB+Skill)", "正在并行执行 CMDB 查询和 Skill 选择...")
+		reportProgress(3, "CMDB查询+Skill选择", "正在执行 CMDB 查询...")
 		parallelTimer := NewTimer()
-		SetActiveParallelTasks(2)
+		SetActiveParallelTasks(1)
 		parallelResult := s.executeParallel(userID, userDescription)
 		SetActiveParallelTasks(0)
 		RecordAICallDuration("form_generation_optimized", "parallel_execution", parallelTimer.ElapsedMs())
+
+		// 提取 CMDB 查询阶段使用的 Skills
+		cmdbUsedSkills = parallelResult.CMDBUsedSkills
 
 		// 处理 CMDB 结果
 		if parallelResult.CMDBError != nil {
 			log.Printf("[AICMDBSkillService] CMDB 查询失败: %v，继续执行", parallelResult.CMDBError)
 		} else if parallelResult.NeedSelection {
-			// 记录并行处理步骤的耗时（包含 AI 选择的 Domain Skills）
+			// 记录 CMDB 查询步骤的耗时
 			if lastStepTimer != nil && len(completedSteps) < 3 {
 				completedSteps = append(completedSteps, CompletedStep{
-					Name:       "并行(CMDB+Skill)",
+					Name:       "CMDB查询",
 					ElapsedMs:  int64(lastStepTimer.ElapsedMs()),
-					UsedSkills: parallelResult.SelectedSkills, // 显示 AI 选择的 Domain Skills
+					UsedSkills: cmdbUsedSkills,
 				})
 			}
 			// 发送 need_selection 事件（包含已完成步骤）
@@ -407,25 +411,34 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 			cmdbData = s.buildCMDBDataString(parallelResult.CMDBResults)
 		}
 
-		// 处理 Skill 选择结果
-		if parallelResult.SkillError != nil {
-			log.Printf("[AICMDBSkillService] Skill 选择失败: %v，降级到标签匹配", parallelResult.SkillError)
+		// 阶段二：根据用户描述 AI 选择 Domain Skills（用于资源生成）
+		skillSelectionTimer := NewTimer()
+		secondPhaseSkills, err := s.selectDomainSkillsByAI(userDescription, "second")
+		RecordAICallDuration("form_generation_optimized", "second_phase_skill_selection", skillSelectionTimer.ElapsedMs())
+		log.Printf("[AICMDBSkillService] [耗时] 阶段二 Skill 选择: %.0fms", skillSelectionTimer.ElapsedMs())
+		if err != nil {
+			log.Printf("[AICMDBSkillService] 阶段二 Skill 选择失败: %v，降级到组合配置", err)
 		} else {
-			selectedSkills = parallelResult.SelectedSkills
+			selectedSkills = secondPhaseSkills
+			log.Printf("[AICMDBSkillService] 阶段二 AI 选择的 Domain Skills: %v", selectedSkills)
 		}
 	}
 
 	// 步骤 4: 组装 Prompt
-	// 先记录步骤 3 的耗时（包含 AI 选择的 Domain Skills）
+	// 先记录步骤 3 的耗时
 	if lastStepTimer != nil && len(completedSteps) < 3 {
-		prevStepName := "并行(CMDB+Skill)"
+		prevStepName := "CMDB查询+Skill选择"
+		var stepSkills []string
 		if isSecondPhase {
 			prevStepName = "处理选择+Skill"
+			stepSkills = selectedSkills // 第二步流程显示生成阶段选择的 Domain Skills
+		} else {
+			stepSkills = cmdbUsedSkills // 第一步流程显示 CMDB 查询阶段使用的 Skills
 		}
 		completedSteps = append(completedSteps, CompletedStep{
 			Name:       prevStepName,
 			ElapsedMs:  int64(lastStepTimer.ElapsedMs()),
-			UsedSkills: selectedSkills, // 显示 AI 选择的 Domain Skills
+			UsedSkills: stepSkills,
 		})
 	}
 

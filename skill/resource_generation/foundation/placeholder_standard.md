@@ -65,3 +65,45 @@ priority: 0
     "cluster-name": "{{PLACEHOLDER:cluster-name}}"
   }
 }
+```
+
+## 复合对象字段规则
+
+对于 `policy`、`statement`、`assume_role_policy` 等结构化 JSON 对象字段，**禁止将整个字段设为占位符**。
+
+### 正确做法
+生成完整的对象结构，仅对无法确定的**叶子字段**使用占位符：
+
+```json
+{
+  "policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": ["s3:GetObject"],
+        "Resource": "arn:aws:s3:::bucket-name/*",
+        "Condition": {
+          "StringLike": {
+            "aws:PrincipalArn": "{{PLACEHOLDER:read_role_arn}}"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### 禁止的做法
+
+| 禁止格式 | 原因 |
+|----------|------|
+| `"policy": "{{PLACEHOLDER:policy}}"` | 丢失结构信息，用户无法知道需要填什么 |
+| `"policy": {}` | 空对象不表达任何意图 |
+| `"policy": null` | 无法区分占位符还是空值 |
+
+### 规则
+1. 结构必须完整——即使部分叶子值未知，也必须输出完整的 JSON 骨架
+2. 占位符只能出现在叶子节点（最小粒度字段）
+3. 占位符命名要有描述性：`{{PLACEHOLDER:ec2_readonly_role_arn}}`，不要用泛化的 `{{PLACEHOLDER:role_arn}}`

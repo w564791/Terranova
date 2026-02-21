@@ -114,6 +114,12 @@ const (
 	DomainSkillModeHybrid DomainSkillMode = "hybrid" // 混合模式：固定选择 + 自动发现补充
 )
 
+// MetaRulesConfig 元规则配置
+type MetaRulesConfig struct {
+	Enabled  bool   `json:"enabled"`
+	Template string `json:"template,omitempty"` // 自定义模板，空则使用内置默认
+}
+
 // SkillComposition Skill 组合配置
 type SkillComposition struct {
 	FoundationSkills    []string               `json:"foundation_skills"`      // Foundation 层 Skill 名称列表
@@ -122,6 +128,7 @@ type SkillComposition struct {
 	AutoLoadModuleSkill bool                   `json:"auto_load_module_skill"` // 是否自动加载 Module 生成的 Skill
 	DomainSkillMode     DomainSkillMode        `json:"domain_skill_mode"`      // Domain Skill 加载模式：fixed/auto/hybrid
 	ConditionalRules    []SkillConditionalRule `json:"conditional_rules"`      // 条件加载规则
+	MetaRules           *MetaRulesConfig       `json:"meta_rules,omitempty"`   // 元规则配置
 }
 
 // Scan 实现 sql.Scanner 接口

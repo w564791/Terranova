@@ -49,14 +49,14 @@ type DomainSkillSelectionResult struct {
 	Reason         string   `json:"reason"`
 }
 
-// ParallelExecutionResult 并行执行结果
+// ParallelExecutionResult CMDB 查询执行结果
+// Domain Skill 选择在 CMDB 查询完成后单独执行（阶段二）
 type ParallelExecutionResult struct {
 	CMDBResults    *CMDBQueryResults
 	NeedSelection  bool
 	CMDBLookups    []CMDBLookupResult
 	CMDBError      error
-	SelectedSkills []string
-	SkillError     error
+	CMDBUsedSkills []string // CMDB 查询阶段实际使用的 Skills（来自 cmdb_query_plan AI Config）
 }
 
 // AICMDBSkillService AI + CMDB + Skill 集成服务
@@ -1316,7 +1316,11 @@ func (s *AICMDBSkillService) parseCMDBAssessmentWithQueryPlan(output string) (*C
 	return &result, nil
 }
 
-// assessAndQueryCMDB 合并 CMDB 判断和查询（优化版）
+// assessAndQueryCMDB CMDB 判断和查询
+// 分为两步，分别使用不同的 AI Config（均从数据库读取 SkillComposition）：
+//   - 步骤 1: cmdb_need_assessment (AI Config ID=14) — 判断是否需要查询 CMDB
+//   - 步骤 2: cmdb_query_plan (AI Config ID=8) — 生成 CMDB 查询计划并执行
+//
 // 返回: CMDB 查询结果, 是否需要用户选择, 选择列表, 错误
 func (s *AICMDBSkillService) assessAndQueryCMDB(
 	userID string,
@@ -1336,33 +1340,38 @@ func (s *AICMDBSkillService) assessAndQueryCMDB(
 		return nil, false, nil, nil
 	}
 
-	// 2. AI 判断 + 生成查询计划（合并为一次调用）
+	// 2. AI 判断是否需要 CMDB（使用 cmdb_need_assessment AI Config，从 DB 读取 SkillComposition）
 	assessmentTimer := NewTimer()
-	assessment, err := s.assessCMDBWithQueryPlan(userDescription)
+	needCMDB, reason := s.shouldUseCMDBByAI(userDescription)
 	assessmentDuration := assessmentTimer.ElapsedMs()
 	RecordAICallDuration("form_generation_optimized", "cmdb_ai_assessment", assessmentDuration)
 	log.Printf("[AICMDBSkillService] [耗时] CMDB AI 评估: %.0fms", assessmentDuration)
 
-	if err != nil {
-		log.Printf("[AICMDBSkillService] CMDB 评估失败: %v，继续执行（不使用 CMDB）", err)
-		RecordCMDBAssessment(false, 0, "ai_error", assessmentDuration)
-		return nil, false, nil, nil
-	}
-
-	if !assessment.NeedCMDB {
-		log.Printf("[AICMDBSkillService] AI 判断: 不需要 CMDB, 原因: %s", assessment.Reason)
+	if !needCMDB {
+		log.Printf("[AICMDBSkillService] AI 判断: 不需要 CMDB, 原因: %s", reason)
 		RecordCMDBAssessment(false, 0, "ai", assessmentDuration)
 		return nil, false, nil, nil
 	}
 
-	// 记录 CMDB 评估结果
-	RecordCMDBAssessment(true, len(assessment.ResourceTypes), "ai", assessmentDuration)
-	log.Printf("[AICMDBSkillService] AI 判断: 需要 CMDB, 原因: %s, 资源类型: %v",
-		assessment.Reason, assessment.ResourceTypes)
+	RecordCMDBAssessment(true, 0, "ai", assessmentDuration)
+	log.Printf("[AICMDBSkillService] AI 判断: 需要 CMDB, 原因: %s", reason)
 
-	// 3. 执行 CMDB 查询
+	// 3. 生成 CMDB 查询计划（使用 cmdb_query_plan AI Config，从 DB 读取 SkillComposition）
+	queryPlanTimer := NewTimer()
+	cmdbService := NewAICMDBService(s.db)
+	queryPlan, err := cmdbService.parseQueryPlan(userDescription)
+	queryPlanDuration := queryPlanTimer.ElapsedMs()
+	RecordAICallDuration("form_generation_optimized", "cmdb_query_plan", queryPlanDuration)
+	log.Printf("[AICMDBSkillService] [耗时] CMDB 查询计划生成: %.0fms", queryPlanDuration)
+
+	if err != nil {
+		log.Printf("[AICMDBSkillService] CMDB 查询计划生成失败: %v，继续执行（不使用 CMDB）", err)
+		return nil, false, nil, nil
+	}
+
+	// 4. 执行 CMDB 查询
 	queryTimer := NewTimer()
-	results, err := s.executeCMDBQueriesFromPlan(userID, assessment.QueryPlan)
+	results, err := cmdbService.executeCMDBQueries(userID, queryPlan)
 	queryDuration := queryTimer.ElapsedMs()
 	RecordAICallDuration("form_generation_optimized", "cmdb_query_execution", queryDuration)
 	log.Printf("[AICMDBSkillService] [耗时] CMDB 查询执行: %.0fms", queryDuration)
@@ -1372,10 +1381,9 @@ func (s *AICMDBSkillService) assessAndQueryCMDB(
 		return nil, false, nil, nil
 	}
 
-	// 4. 检查是否需要用户选择，并记录每个资源类型的查询结果
+	// 5. 检查是否需要用户选择，并记录每个资源类型的查询结果
 	needSelection, lookups := s.checkNeedSelection(results)
 
-	// 记录每个资源类型的查询结果
 	for key, result := range results.Results {
 		candidateCount := 0
 		if result.Candidates != nil {
@@ -1384,7 +1392,6 @@ func (s *AICMDBSkillService) assessAndQueryCMDB(
 		IncCMDBQueryCount(key, result.Found, candidateCount)
 	}
 
-	// 记录 CMDB 总耗时
 	RecordAICallDuration("form_generation_optimized", "cmdb_total", totalTimer.ElapsedMs())
 	log.Printf("[AICMDBSkillService] [耗时] CMDB 评估+查询总计: %.0fms", totalTimer.ElapsedMs())
 
@@ -1533,14 +1540,14 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 		)
 	}
 
-	// 5. 并行执行 CMDB 查询和 Skill 选择
+	// 5. 执行 CMDB 查询
 	parallelTimer := NewTimer()
-	log.Printf("[AICMDBSkillService] 步骤 2: 并行执行 CMDB 查询和 Skill 选择")
-	SetActiveParallelTasks(2) // 设置活跃并行任务数
+	log.Printf("[AICMDBSkillService] 步骤 2: 执行 CMDB 查询")
+	SetActiveParallelTasks(1)
 	parallelResult := s.executeParallel(userID, userDescription)
-	SetActiveParallelTasks(0) // 重置活跃并行任务数
+	SetActiveParallelTasks(0)
 	RecordAICallDuration("form_generation_optimized", "parallel_execution", parallelTimer.ElapsedMs())
-	log.Printf("[AICMDBSkillService] [耗时] 步骤 2 并行执行: %.0fms", parallelTimer.ElapsedMs())
+	log.Printf("[AICMDBSkillService] [耗时] 步骤 2 CMDB 查询: %.0fms", parallelTimer.ElapsedMs())
 
 	// 6. 处理 CMDB 错误（降级：继续执行，不使用 CMDB）
 	var cmdbData string
@@ -1561,14 +1568,17 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 		cmdbData = s.buildCMDBDataString(parallelResult.CMDBResults)
 	}
 
-	// 7. 处理 Skill 选择错误（降级：使用标签匹配）
+	// 7. 阶段二：根据用户描述 AI 选择 Domain Skills（用于资源生成）
 	var selectedSkills []string
-	if parallelResult.SkillError != nil {
-		log.Printf("[AICMDBSkillService] Skill 选择失败: %v，降级到标签匹配", parallelResult.SkillError)
-		IncAICallCount("form_generation_optimized", "skill_selection_error")
+	skillSelectionTimer := NewTimer()
+	secondPhaseSkills, err := s.selectDomainSkillsByAI(userDescription, "second")
+	RecordAICallDuration("form_generation_optimized", "second_phase_skill_selection", skillSelectionTimer.ElapsedMs())
+	log.Printf("[AICMDBSkillService] [耗时] 阶段二 Skill 选择: %.0fms", skillSelectionTimer.ElapsedMs())
+	if err != nil {
+		log.Printf("[AICMDBSkillService] 阶段二 Skill 选择失败: %v，降级到组合配置", err)
 	} else {
-		selectedSkills = parallelResult.SelectedSkills
-		log.Printf("[AICMDBSkillService] AI 选择的 Domain Skills: %v", selectedSkills)
+		selectedSkills = secondPhaseSkills
+		log.Printf("[AICMDBSkillService] 阶段二 AI 选择的 Domain Skills: %v", selectedSkills)
 	}
 
 	// 8. 生成配置
@@ -1578,96 +1588,56 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 	)
 }
 
-// executeParallel 并行执行 CMDB 查询和 Skill 选择
+// executeParallel 执行 CMDB 查询（带超时）
+// Domain Skill 选择不在此处执行，资源生成阶段的 Domain Skill 选择在 CMDB 查询完成后单独执行（阶段二）
 func (s *AICMDBSkillService) executeParallel(userID string, userDescription string) *ParallelExecutionResult {
 	result := &ParallelExecutionResult{}
 
-	// 使用 channel 实现并行
 	cmdbDone := make(chan struct{})
-	skillDone := make(chan struct{})
 
-	// 记录各任务的耗时
-	var cmdbDuration, skillDuration float64
-
-	// 协程 1: CMDB 判断 + 查询
+	// CMDB 判断 + 查询
 	go func() {
 		defer close(cmdbDone)
 		cmdbTimer := NewTimer()
 		cmdbResults, needSelection, lookups, err := s.assessAndQueryCMDB(userID, userDescription)
-		cmdbDuration = cmdbTimer.ElapsedMs()
+		cmdbDuration := cmdbTimer.ElapsedMs()
 		result.CMDBResults = cmdbResults
 		result.NeedSelection = needSelection
 		result.CMDBLookups = lookups
 		result.CMDBError = err
 
-		// 记录 CMDB 任务耗时
+		// 如果 CMDB 查询成功执行（有结果或需要选择），获取 CMDB 查询阶段使用的 Skills
+		if err == nil && (cmdbResults != nil || needSelection) {
+			if queryConfig, configErr := s.configService.GetConfigForCapability("cmdb_query_plan"); configErr == nil && queryConfig != nil {
+				comp := &queryConfig.SkillComposition
+				var skills []string
+				if comp.TaskSkill != "" {
+					skills = append(skills, comp.TaskSkill)
+				}
+				skills = append(skills, comp.FoundationSkills...)
+				skills = append(skills, comp.DomainSkills...)
+				result.CMDBUsedSkills = skills
+				log.Printf("[AICMDBSkillService] CMDB 查询阶段使用的 Skills: %v", skills)
+			}
+		}
+
 		status := "success"
 		if err != nil {
 			status = "error"
 		}
 		RecordParallelExecutionDuration("cmdb_query", status, cmdbDuration)
-		log.Printf("[AICMDBSkillService] [并行] CMDB 任务完成: %.0fms, 状态: %s", cmdbDuration, status)
+		log.Printf("[AICMDBSkillService] CMDB 查询完成: %.0fms, 状态: %s", cmdbDuration, status)
 	}()
 
-	// 协程 2: AI 选择 Domain Skills（第一步：资源发现阶段）
-	go func() {
-		defer close(skillDone)
-		skillTimer := NewTimer()
-		selectedSkills, err := s.selectDomainSkillsByAI(userDescription, "first")
-		skillDuration = skillTimer.ElapsedMs()
-		result.SelectedSkills = selectedSkills
-		result.SkillError = err
-
-		// 记录 Skill 选择任务耗时
-		status := "success"
-		if err != nil {
-			status = "error"
-		}
-		RecordParallelExecutionDuration("skill_selection", status, skillDuration)
-		log.Printf("[AICMDBSkillService] [并行] Skill 选择任务完成: %.0fms, 状态: %s", skillDuration, status)
-	}()
-
-	// 等待两个协程完成（带超时）
-	timeout := time.After(ParallelExecutionTimeout)
-
+	// 等待 CMDB 查询完成（带超时）
 	select {
 	case <-cmdbDone:
-		// CMDB 完成，等待 Skill
-		select {
-		case <-skillDone:
-			// 两个都完成
-			log.Printf("[AICMDBSkillService] [并行] 两个任务都已完成")
-		case <-timeout:
-			result.SkillError = fmt.Errorf("Skill 选择超时")
-			RecordParallelExecutionDuration("skill_selection", "timeout", float64(ParallelExecutionTimeout.Milliseconds()))
-			IncAICallCount("form_generation_optimized", "skill_timeout")
-			log.Printf("[AICMDBSkillService] [并行] Skill 选择超时")
-		}
-	case <-skillDone:
-		// Skill 完成，等待 CMDB
-		select {
-		case <-cmdbDone:
-			// 两个都完成
-			log.Printf("[AICMDBSkillService] [并行] 两个任务都已完成")
-		case <-timeout:
-			result.CMDBError = fmt.Errorf("CMDB 查询超时")
-			RecordParallelExecutionDuration("cmdb_query", "timeout", float64(ParallelExecutionTimeout.Milliseconds()))
-			IncAICallCount("form_generation_optimized", "cmdb_timeout")
-			log.Printf("[AICMDBSkillService] [并行] CMDB 查询超时")
-		}
-	case <-timeout:
-		// 总超时
-		if result.CMDBResults == nil {
-			result.CMDBError = fmt.Errorf("CMDB 查询超时")
-			RecordParallelExecutionDuration("cmdb_query", "timeout", float64(ParallelExecutionTimeout.Milliseconds()))
-			IncAICallCount("form_generation_optimized", "cmdb_timeout")
-		}
-		if result.SelectedSkills == nil {
-			result.SkillError = fmt.Errorf("Skill 选择超时")
-			RecordParallelExecutionDuration("skill_selection", "timeout", float64(ParallelExecutionTimeout.Milliseconds()))
-			IncAICallCount("form_generation_optimized", "skill_timeout")
-		}
-		log.Printf("[AICMDBSkillService] [并行] 总超时")
+		log.Printf("[AICMDBSkillService] CMDB 查询任务已完成")
+	case <-time.After(ParallelExecutionTimeout):
+		result.CMDBError = fmt.Errorf("CMDB 查询超时")
+		RecordParallelExecutionDuration("cmdb_query", "timeout", float64(ParallelExecutionTimeout.Milliseconds()))
+		IncAICallCount("form_generation_optimized", "cmdb_timeout")
+		log.Printf("[AICMDBSkillService] CMDB 查询超时")
 	}
 
 	return result

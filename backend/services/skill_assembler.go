@@ -214,11 +214,26 @@ func (a *SkillAssembler) AssemblePrompt(
 	}
 
 	// 8. 组装 Prompt
-	for _, skill := range sortedSkills {
-		if skill.IsActive {
-			promptParts = append(promptParts, skill.Content)
-			result.UsedSkillIDs = append(result.UsedSkillIDs, skill.ID)
-			result.UsedSkillNames = append(result.UsedSkillNames, skill.Name)
+	metaRulesEnabled := composition.MetaRules != nil && composition.MetaRules.Enabled
+
+	if metaRulesEnabled {
+		preamble := a.buildMetaRulesPreamble(composition.MetaRules, sortedSkills)
+		sectionedBody := a.buildSectionedPrompt(sortedSkills)
+		promptParts = append(promptParts, preamble, sectionedBody)
+		for _, skill := range sortedSkills {
+			if skill.IsActive {
+				result.UsedSkillIDs = append(result.UsedSkillIDs, skill.ID)
+				result.UsedSkillNames = append(result.UsedSkillNames, skill.Name)
+			}
+		}
+	} else {
+		// 原有逻辑不变
+		for _, skill := range sortedSkills {
+			if skill.IsActive {
+				promptParts = append(promptParts, skill.Content)
+				result.UsedSkillIDs = append(result.UsedSkillIDs, skill.ID)
+				result.UsedSkillNames = append(result.UsedSkillNames, skill.Name)
+			}
 		}
 	}
 
@@ -518,7 +533,13 @@ func (a *SkillAssembler) sortSkills(skills []*models.Skill) []*models.Skill {
 		if orderI != orderJ {
 			return orderI < orderJ
 		}
-		// 同层级按优先级排序
+		// 同层级内，按 sourceType 分组（manual → hybrid → module_auto）
+		sourceOrderI := a.sourceTypeOrder(unique[i].SourceType)
+		sourceOrderJ := a.sourceTypeOrder(unique[j].SourceType)
+		if sourceOrderI != sourceOrderJ {
+			return sourceOrderI < sourceOrderJ
+		}
+		// 同 sourceType 内按优先级排序
 		return unique[i].Priority < unique[j].Priority
 	})
 
@@ -819,6 +840,120 @@ func (a *SkillAssembler) loadDomainSkillsByTag(tagName string) []*models.Skill {
 		result[i] = &skills[i]
 	}
 	return result
+}
+
+// ========== 元规则相关方法 ==========
+
+const defaultMetaRulesTemplate = `## 元规则
+
+### 优先级层级（从高到低）
+1. **Foundation Layer** — 安全基线、合规规则、平台级约束，不可违反
+2. **Domain Layer - Best Practice** — 领域最佳实践，在 Module 约束范围内的强推荐
+3. **Domain Layer - Module Constraints** — Module Schema 事实（参数名、类型、枚举值、必填项、取值范围），是绝对边界
+4. **Task Layer** — 当前任务的工作流指令
+5. **用户需求** — 在以上约束内尽量满足
+
+### 冲突解决原则
+- Foundation 与任何层冲突 → Foundation 胜出
+- Best Practice 与 Module Constraints 冲突 → Module Constraints 胜出（不可推荐 schema 不允许的值）
+- Best Practice 不与 Module Constraints 冲突 → 遵循 Best Practice
+- 用户需求与 Foundation 或 Module Constraints 冲突 → 忽略冲突部分并说明原因
+
+### 已加载 Skills
+{skill_manifest}
+`
+
+// buildSkillManifest 生成已加载 Skill 清单表格
+func (a *SkillAssembler) buildSkillManifest(skills []*models.Skill) string {
+	var sb strings.Builder
+	sb.WriteString("| # | Name | Layer | Type | Version | Priority |\n")
+	sb.WriteString("|---|------|-------|------|---------|----------|\n")
+
+	idx := 0
+	for _, skill := range skills {
+		if !skill.IsActive {
+			continue
+		}
+		idx++
+		skillType := string(skill.SourceType)
+		if skill.SourceType == models.SkillSourceModuleAuto {
+			skillType = "module_constraint"
+		}
+		sb.WriteString(fmt.Sprintf("| %d | %s | %s | %s | %s | %d |\n",
+			idx, skill.Name, skill.Layer, skillType, skill.Version, skill.Priority))
+	}
+
+	return sb.String()
+}
+
+// buildMetaRulesPreamble 生成元规则段落
+func (a *SkillAssembler) buildMetaRulesPreamble(config *models.MetaRulesConfig, skills []*models.Skill) string {
+	template := defaultMetaRulesTemplate
+	if config != nil && config.Template != "" {
+		template = config.Template
+	}
+
+	manifest := a.buildSkillManifest(skills)
+	return strings.ReplaceAll(template, "{skill_manifest}", manifest)
+}
+
+// getSectionHeader 根据 Skill 的 Layer 和 SourceType 返回分段标题
+func (a *SkillAssembler) getSectionHeader(skill *models.Skill) string {
+	switch skill.Layer {
+	case models.SkillLayerFoundation:
+		return "[Foundation Layer]"
+	case models.SkillLayerDomain:
+		if skill.SourceType == models.SkillSourceModuleAuto {
+			return "[Domain Layer - Module Constraints]"
+		}
+		return "[Domain Layer - Best Practice]"
+	case models.SkillLayerTask:
+		return "[Task Layer]"
+	default:
+		return "[Unknown Layer]"
+	}
+}
+
+// buildSectionedPrompt 带分段标记的组装
+func (a *SkillAssembler) buildSectionedPrompt(skills []*models.Skill) string {
+	var sb strings.Builder
+	currentSection := ""
+
+	for _, skill := range skills {
+		if !skill.IsActive {
+			continue
+		}
+
+		section := a.getSectionHeader(skill)
+		if section != currentSection {
+			if currentSection != "" {
+				sb.WriteString("\n\n")
+			}
+			sb.WriteString(fmt.Sprintf("## %s\n\n", section))
+			currentSection = section
+		} else {
+			sb.WriteString("\n\n")
+		}
+
+		sb.WriteString(fmt.Sprintf("--- skill: %s (v%s) ---\n", skill.Name, skill.Version))
+		sb.WriteString(skill.Content)
+	}
+
+	return sb.String()
+}
+
+// sourceTypeOrder 返回 SourceType 的排序权重
+func (a *SkillAssembler) sourceTypeOrder(st models.SkillSourceType) int {
+	switch st {
+	case models.SkillSourceManual:
+		return 1
+	case models.SkillSourceHybrid:
+		return 2
+	case models.SkillSourceModuleAuto:
+		return 3
+	default:
+		return 4
+	}
 }
 
 // ========== 辅助函数 ==========
