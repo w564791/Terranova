@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 )
 
 type Config struct {
@@ -67,4 +68,26 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if v, err := strconv.Atoi(value); err == nil {
+			return v
+		}
+	}
+	return defaultValue
+}
+
+// GetSchemaSolverMaxRetries 获取 SchemaSolver AI 反馈循环最大重试次数
+// 环境变量: SCHEMA_SOLVER_MAX_RETRIES，默认 2
+func GetSchemaSolverMaxRetries() int {
+	v := getEnvInt("SCHEMA_SOLVER_MAX_RETRIES", 2)
+	if v < 1 {
+		return 1
+	}
+	if v > 5 {
+		return 5
+	}
+	return v
 }

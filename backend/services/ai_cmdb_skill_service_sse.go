@@ -1,6 +1,7 @@
 package services
 
 import (
+	"iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"log"
 )
@@ -581,7 +582,7 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 
 				// 使用反馈循环让 AI 修正
 				loop := NewAIFeedbackLoop(s.db, moduleID)
-				loop.SetMaxRetries(2) // 最多重试 2 次
+				loop.SetMaxRetries(config.GetSchemaSolverMaxRetries())
 				loopResult, loopErr := loop.ExecuteWithRetry(userDescription, response.Config, aiConfig)
 
 				if loopErr != nil {
