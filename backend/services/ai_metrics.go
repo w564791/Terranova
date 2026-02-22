@@ -3,287 +3,199 @@ package services
 import (
 	"fmt"
 	"net/http"
-	"sort"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// AIMetrics AI 服务的 Prometheus 指标
-// 简单实现，不依赖 prometheus 客户端库
-type AIMetrics struct {
-	mu sync.RWMutex
+// ---------- private registry & metric vars ----------
 
-	// Histogram 数据：记录耗时分布
-	// key: metric_name + labels
-	histograms map[string]*HistogramData
+var (
+	aiRegistry     *prometheus.Registry
+	aiRegistryOnce sync.Once
 
-	// Counter 数据：记录调用次数
-	counters map[string]float64
+	// Histograms
+	aiCallDuration          *prometheus.HistogramVec
+	vectorSearchDuration    *prometheus.HistogramVec
+	skillAssemblyDuration   *prometheus.HistogramVec
+	parallelExecutionDur    *prometheus.HistogramVec
+	domainSkillSelectionDur *prometheus.HistogramVec
+	cmdbAssessmentDur       *prometheus.HistogramVec
 
-	// Gauge 数据：记录当前值
-	gauges map[string]float64
-}
+	// Counters
+	aiCallTotal        *prometheus.CounterVec
+	vectorSearchTotal  *prometheus.CounterVec
+	cmdbQueryTotal     *prometheus.CounterVec
 
-// HistogramData 直方图数据
-type HistogramData struct {
-	Count   uint64
-	Sum     float64
-	Buckets map[float64]uint64 // bucket 上限 -> 计数
-}
+	// Gauges
+	activeParallelTasks *prometheus.GaugeVec
+)
 
-// 默认的 bucket 边界（毫秒）
+// defaultBuckets bucket 边界（毫秒）
 var defaultBuckets = []float64{10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000}
 
-// 全局 AI 指标实例
-var aiMetrics *AIMetrics
-var aiMetricsOnce sync.Once
+// initAIMetrics lazily creates the private registry and registers all metrics.
+func initAIMetrics() {
+	aiRegistryOnce.Do(func() {
+		aiRegistry = prometheus.NewRegistry()
 
-// GetAIMetrics 获取全局 AI 指标实例
-func GetAIMetrics() *AIMetrics {
-	aiMetricsOnce.Do(func() {
-		aiMetrics = &AIMetrics{
-			histograms: make(map[string]*HistogramData),
-			counters:   make(map[string]float64),
-			gauges:     make(map[string]float64),
-		}
+		// --- Histograms ---
+
+		aiCallDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_ai_call_duration_ms",
+			Help:    "AI service call duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"capability", "stage"})
+
+		vectorSearchDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_vector_search_duration_ms",
+			Help:    "Vector search duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"resource_type", "stage"})
+
+		skillAssemblyDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_skill_assembly_duration_ms",
+			Help:    "Skill assembly duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"capability", "skill_count"})
+
+		parallelExecutionDur = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_parallel_execution_ms",
+			Help:    "Parallel execution duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"task", "status"})
+
+		domainSkillSelectionDur = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_domain_skill_selection_ms",
+			Help:    "Domain skill selection duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"skill_count", "method"})
+
+		cmdbAssessmentDur = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_cmdb_assessment_ms",
+			Help:    "CMDB assessment duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"need_cmdb", "resource_type_count", "method"})
+
+		// --- Counters ---
+
+		aiCallTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "iac_ai_call_total",
+			Help: "Total number of AI service calls",
+		}, []string{"capability", "status"})
+
+		vectorSearchTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "iac_vector_search_total",
+			Help: "Total number of vector searches",
+		}, []string{"resource_type", "status"})
+
+		cmdbQueryTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "iac_cmdb_query_total",
+			Help: "Total number of CMDB queries",
+		}, []string{"resource_type", "status", "candidate_count"})
+
+		// --- Gauges ---
+
+		activeParallelTasks = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "iac_active_parallel_tasks",
+			Help: "Current number of active parallel tasks",
+		}, []string{})
+
+		// Register everything
+		aiRegistry.MustRegister(
+			aiCallDuration,
+			vectorSearchDuration,
+			skillAssemblyDuration,
+			parallelExecutionDur,
+			domainSkillSelectionDur,
+			cmdbAssessmentDur,
+			aiCallTotal,
+			vectorSearchTotal,
+			cmdbQueryTotal,
+			activeParallelTasks,
+		)
 	})
-	return aiMetrics
 }
 
-// RecordDuration 记录耗时（毫秒）
-func (m *AIMetrics) RecordDuration(name string, labels map[string]string, durationMs float64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	key := m.buildKey(name, labels)
-	hist, ok := m.histograms[key]
-	if !ok {
-		hist = &HistogramData{
-			Buckets: make(map[float64]uint64),
-		}
-		for _, b := range defaultBuckets {
-			hist.Buckets[b] = 0
-		}
-		m.histograms[key] = hist
-	}
-
-	hist.Count++
-	hist.Sum += durationMs
-
-	// 更新 bucket 计数
-	for _, b := range defaultBuckets {
-		if durationMs <= b {
-			hist.Buckets[b]++
-		}
-	}
+// GetAIMetricsRegistry returns the private Prometheus registry used by all AI
+// metrics. It is intended for Task 6 to merge into the combined /metrics
+// endpoint via a prometheus.Gatherer.
+func GetAIMetricsRegistry() *prometheus.Registry {
+	initAIMetrics()
+	return aiRegistry
 }
 
-// IncCounter 增加计数器
-func (m *AIMetrics) IncCounter(name string, labels map[string]string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	key := m.buildKey(name, labels)
-	m.counters[key]++
-}
-
-// AddCounter 增加计数器指定值
-func (m *AIMetrics) AddCounter(name string, labels map[string]string, value float64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	key := m.buildKey(name, labels)
-	m.counters[key] += value
-}
-
-// SetGauge 设置 Gauge 值
-func (m *AIMetrics) SetGauge(name string, labels map[string]string, value float64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	key := m.buildKey(name, labels)
-	m.gauges[key] = value
-}
-
-// buildKey 构建指标 key
-func (m *AIMetrics) buildKey(name string, labels map[string]string) string {
-	if len(labels) == 0 {
-		return name
-	}
-
-	// 按 key 排序，确保一致性
-	keys := make([]string, 0, len(labels))
-	for k := range labels {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	parts := make([]string, 0, len(labels))
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%q", k, labels[k]))
-	}
-
-	return fmt.Sprintf("%s{%s}", name, strings.Join(parts, ","))
-}
-
-// Export 导出 Prometheus 格式的指标
-func (m *AIMetrics) Export() string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	var sb strings.Builder
-
-	// 导出 Histogram
-	for key, hist := range m.histograms {
-		name, labels := m.parseKey(key)
-
-		// 写入 HELP 和 TYPE（简化版，只写一次）
-		sb.WriteString(fmt.Sprintf("# HELP %s AI service duration in milliseconds\n", name))
-		sb.WriteString(fmt.Sprintf("# TYPE %s histogram\n", name))
-
-		// 写入 bucket
-		bucketKeys := make([]float64, 0, len(hist.Buckets))
-		for b := range hist.Buckets {
-			bucketKeys = append(bucketKeys, b)
-		}
-		sort.Float64s(bucketKeys)
-
-		cumulative := uint64(0)
-		for _, b := range bucketKeys {
-			cumulative += hist.Buckets[b]
-			bucketLabels := m.addLabel(labels, "le", fmt.Sprintf("%.0f", b))
-			sb.WriteString(fmt.Sprintf("%s_bucket%s %d\n", name, bucketLabels, cumulative))
-		}
-
-		// +Inf bucket
-		infLabels := m.addLabel(labels, "le", "+Inf")
-		sb.WriteString(fmt.Sprintf("%s_bucket%s %d\n", name, infLabels, hist.Count))
-
-		// sum 和 count
-		sb.WriteString(fmt.Sprintf("%s_sum%s %.2f\n", name, labels, hist.Sum))
-		sb.WriteString(fmt.Sprintf("%s_count%s %d\n", name, labels, hist.Count))
-	}
-
-	// 导出 Counter
-	for key, value := range m.counters {
-		name, labels := m.parseKey(key)
-		sb.WriteString(fmt.Sprintf("# HELP %s AI service counter\n", name))
-		sb.WriteString(fmt.Sprintf("# TYPE %s counter\n", name))
-		sb.WriteString(fmt.Sprintf("%s%s %.0f\n", name, labels, value))
-	}
-
-	// 导出 Gauge
-	for key, value := range m.gauges {
-		name, labels := m.parseKey(key)
-		sb.WriteString(fmt.Sprintf("# HELP %s AI service gauge\n", name))
-		sb.WriteString(fmt.Sprintf("# TYPE %s gauge\n", name))
-		sb.WriteString(fmt.Sprintf("%s%s %.2f\n", name, labels, value))
-	}
-
-	return sb.String()
-}
-
-// parseKey 解析 key 为 name 和 labels
-func (m *AIMetrics) parseKey(key string) (string, string) {
-	idx := strings.Index(key, "{")
-	if idx == -1 {
-		return key, ""
-	}
-	return key[:idx], key[idx:]
-}
-
-// addLabel 添加 label 到现有 labels
-func (m *AIMetrics) addLabel(labels string, key, value string) string {
-	newLabel := fmt.Sprintf("%s=%q", key, value)
-	if labels == "" {
-		return "{" + newLabel + "}"
-	}
-	// 移除最后的 }，添加新 label
-	return labels[:len(labels)-1] + "," + newLabel + "}"
-}
-
-// MetricsHandler 返回 Prometheus 指标的 HTTP Handler
+// MetricsHandler returns an http.HandlerFunc that serves all AI metrics in
+// Prometheus exposition format.
 func MetricsHandler() http.HandlerFunc {
+	initAIMetrics()
+	h := promhttp.HandlerFor(aiRegistry, promhttp.HandlerOpts{})
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(GetAIMetrics().Export()))
+		h.ServeHTTP(w, r)
 	}
 }
 
-// ========== 便捷方法 ==========
+// ========== Convenience Functions (12 exported, signatures unchanged) ==========
 
-// RecordAICallDuration 记录 AI 调用耗时
+// RecordAICallDuration records AI call duration in milliseconds.
 func RecordAICallDuration(capability, stage string, durationMs float64) {
-	GetAIMetrics().RecordDuration("iac_ai_call_duration_ms", map[string]string{
-		"capability": capability,
-		"stage":      stage,
-	}, durationMs)
+	initAIMetrics()
+	aiCallDuration.WithLabelValues(capability, stage).Observe(durationMs)
 }
 
-// RecordVectorSearchDuration 记录向量搜索耗时
+// RecordVectorSearchDuration records vector search duration in milliseconds.
 func RecordVectorSearchDuration(resourceType, stage string, durationMs float64) {
-	GetAIMetrics().RecordDuration("iac_vector_search_duration_ms", map[string]string{
-		"resource_type": resourceType,
-		"stage":         stage,
-	}, durationMs)
+	initAIMetrics()
+	vectorSearchDuration.WithLabelValues(resourceType, stage).Observe(durationMs)
 }
 
-// RecordSkillAssemblyDuration 记录 Skill 组装耗时
+// RecordSkillAssemblyDuration records skill assembly duration in milliseconds.
 func RecordSkillAssemblyDuration(capability string, skillCount int, durationMs float64) {
-	GetAIMetrics().RecordDuration("iac_skill_assembly_duration_ms", map[string]string{
-		"capability":  capability,
-		"skill_count": fmt.Sprintf("%d", skillCount),
-	}, durationMs)
+	initAIMetrics()
+	skillAssemblyDuration.WithLabelValues(capability, fmt.Sprintf("%d", skillCount)).Observe(durationMs)
 }
 
-// IncAICallCount 增加 AI 调用计数
+// IncAICallCount increments the AI call counter.
 func IncAICallCount(capability, status string) {
-	GetAIMetrics().IncCounter("iac_ai_call_total", map[string]string{
-		"capability": capability,
-		"status":     status,
-	})
+	initAIMetrics()
+	aiCallTotal.WithLabelValues(capability, status).Inc()
 }
 
-// IncVectorSearchCount 增加向量搜索计数
+// IncVectorSearchCount increments the vector search counter.
 func IncVectorSearchCount(resourceType string, found bool) {
 	status := "not_found"
 	if found {
 		status = "found"
 	}
-	GetAIMetrics().IncCounter("iac_vector_search_total", map[string]string{
-		"resource_type": resourceType,
-		"status":        status,
-	})
+	initAIMetrics()
+	vectorSearchTotal.WithLabelValues(resourceType, status).Inc()
 }
 
-// RecordParallelExecutionDuration 记录并行执行耗时
+// RecordParallelExecutionDuration records parallel execution duration in milliseconds.
 func RecordParallelExecutionDuration(task, status string, durationMs float64) {
-	GetAIMetrics().RecordDuration("iac_parallel_execution_ms", map[string]string{
-		"task":   task,
-		"status": status,
-	}, durationMs)
+	initAIMetrics()
+	parallelExecutionDur.WithLabelValues(task, status).Observe(durationMs)
 }
 
-// RecordDomainSkillSelection 记录 Domain Skill 选择
+// RecordDomainSkillSelection records domain skill selection duration in milliseconds.
 func RecordDomainSkillSelection(skillCount int, method string, durationMs float64) {
-	GetAIMetrics().RecordDuration("iac_domain_skill_selection_ms", map[string]string{
-		"skill_count": fmt.Sprintf("%d", skillCount),
-		"method":      method,
-	}, durationMs)
+	initAIMetrics()
+	domainSkillSelectionDur.WithLabelValues(fmt.Sprintf("%d", skillCount), method).Observe(durationMs)
 }
 
-// RecordCMDBAssessment 记录 CMDB 评估
+// RecordCMDBAssessment records CMDB assessment duration in milliseconds.
 func RecordCMDBAssessment(needCMDB bool, resourceTypeCount int, method string, durationMs float64) {
-	GetAIMetrics().RecordDuration("iac_cmdb_assessment_ms", map[string]string{
-		"need_cmdb":           fmt.Sprintf("%t", needCMDB),
-		"resource_type_count": fmt.Sprintf("%d", resourceTypeCount),
-		"method":              method,
-	}, durationMs)
+	initAIMetrics()
+	cmdbAssessmentDur.WithLabelValues(
+		fmt.Sprintf("%t", needCMDB),
+		fmt.Sprintf("%d", resourceTypeCount),
+		method,
+	).Observe(durationMs)
 }
 
-// IncCMDBQueryCount 增加 CMDB 查询计数
+// IncCMDBQueryCount increments the CMDB query counter.
 func IncCMDBQueryCount(resourceType string, found bool, candidateCount int) {
 	status := "not_found"
 	if found {
@@ -293,29 +205,27 @@ func IncCMDBQueryCount(resourceType string, found bool, candidateCount int) {
 			status = "found"
 		}
 	}
-	GetAIMetrics().IncCounter("iac_cmdb_query_total", map[string]string{
-		"resource_type":   resourceType,
-		"status":          status,
-		"candidate_count": fmt.Sprintf("%d", candidateCount),
-	})
+	initAIMetrics()
+	cmdbQueryTotal.WithLabelValues(resourceType, status, fmt.Sprintf("%d", candidateCount)).Inc()
 }
 
-// SetActiveParallelTasks 设置当前活跃的并行任务数
+// SetActiveParallelTasks sets the current number of active parallel tasks.
 func SetActiveParallelTasks(count int) {
-	GetAIMetrics().SetGauge("iac_active_parallel_tasks", map[string]string{}, float64(count))
+	initAIMetrics()
+	activeParallelTasks.WithLabelValues().Set(float64(count))
 }
 
-// Timer 计时器，用于方便地记录耗时
+// Timer is a simple timer for conveniently recording durations.
 type Timer struct {
 	start time.Time
 }
 
-// NewTimer 创建新的计时器
+// NewTimer creates a new Timer that records the current time.
 func NewTimer() *Timer {
 	return &Timer{start: time.Now()}
 }
 
-// ElapsedMs 返回经过的毫秒数
+// ElapsedMs returns the number of milliseconds elapsed since the Timer was created.
 func (t *Timer) ElapsedMs() float64 {
 	return float64(time.Since(t.start).Milliseconds())
 }
