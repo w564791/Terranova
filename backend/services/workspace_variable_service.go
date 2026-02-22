@@ -224,8 +224,16 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 
 	// 乐观锁检查：验证客户端提供的版本号是否与当前版本号一致
 	if expectedVersion != current.Version {
-		return nil, fmt.Errorf("版本冲突：当前版本为 %d，您提供的版本为 %d，变量已被其他用户修改，请刷新后重试", 
+		return nil, fmt.Errorf("版本冲突：当前版本为 %d，您提供的版本为 %d，变量已被其他用户修改，请刷新后重试",
 			current.Version, expectedVersion)
+	}
+
+	// 安全约束：禁止将敏感变量降级为非敏感（sensitive: true → false）
+	// 只允许升级（false → true），防止已加密的值以明文存入新版本
+	if newSensitive, ok := updates["sensitive"].(bool); ok {
+		if current.Sensitive && !newSensitive {
+			return nil, fmt.Errorf("不允许将敏感变量降级为非敏感，如需更改请删除后重新创建")
+		}
 	}
 
 	// 如果更新key，检查新key是否已存在
