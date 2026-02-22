@@ -18,12 +18,13 @@ import (
 )
 
 func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *websocket.Hub, agentMetricsHub *websocket.AgentMetricsHub, queueManager *services.TaskQueueManager, rawCCHandler *handlers.RawAgentCCHandler, runTaskExecutor *services.RunTaskExecutor) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
 
 	// 设置全局数据库连接（用于JWT中间件查询用户信息）
 	middleware.SetGlobalDB(db)
 
-	// 中间件
+	// 中间件（顺序：Recovery → CORS → Logger → ErrorHandler → ...）
+	r.Use(gin.Recovery())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.ErrorHandler())
