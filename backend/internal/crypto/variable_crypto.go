@@ -7,18 +7,24 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
+	"sync"
 
 	"iac-platform/internal/config"
 )
 
-var encryptionKey []byte
+var (
+	encryptionKey []byte
+	keyOnce       sync.Once
+)
 
-func init() {
-	// 使用JWT_SECRET作为加密密钥
-	// 通过SHA256哈希确保密钥长度为32字节（AES-256要求）
-	jwtSecret := config.GetJWTSecret()
-	hash := sha256.Sum256([]byte(jwtSecret))
-	encryptionKey = hash[:]
+// getEncryptionKey 懒加载加密密钥，首次调用时从 JWT_SECRET 派生
+func getEncryptionKey() []byte {
+	keyOnce.Do(func() {
+		jwtSecret := config.GetJWTSecret()
+		hash := sha256.Sum256([]byte(jwtSecret))
+		encryptionKey = hash[:]
+	})
+	return encryptionKey
 }
 
 // EncryptValue 加密变量值
@@ -27,7 +33,7 @@ func EncryptValue(plaintext string) (string, error) {
 		return "", nil
 	}
 
-	block, err := aes.NewCipher(encryptionKey)
+	block, err := aes.NewCipher(getEncryptionKey())
 	if err != nil {
 		return "", err
 	}
@@ -58,7 +64,7 @@ func DecryptValue(ciphertext string) (string, error) {
 		return ciphertext, nil
 	}
 
-	block, err := aes.NewCipher(encryptionKey)
+	block, err := aes.NewCipher(getEncryptionKey())
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +103,7 @@ func IsEncrypted(value string) bool {
 	}
 
 	// 检查长度是否合理（至少包含nonce）
-	block, err := aes.NewCipher(encryptionKey)
+	block, err := aes.NewCipher(getEncryptionKey())
 	if err != nil {
 		return false
 	}
