@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"iac-platform/internal/models"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -513,13 +514,13 @@ func (s *AIAnalysisService) callOpenAICompatible(baseURL, apiKey, modelID, promp
 	// 解析 AI 返回的 JSON
 	text := response.Choices[0].Message.Content
 
-	// 记录原始响应用于调试
-	fmt.Printf("OpenAI 原始响应: %s\n", text)
+	// 记录原始响应元数据
+	log.Printf("[AIAnalysis] Received response (length: %d)", len(text))
 
 	// 提取 JSON 内容（处理 markdown 代码块）
 	text = extractJSON(text)
 
-	fmt.Printf("提取后的内容: %s\n", text)
+	log.Printf("[AIAnalysis] Extracted JSON content (length: %d)", len(text))
 
 	// 尝试解析 JSON
 	var result AnalysisResult
@@ -551,17 +552,12 @@ func (s *AIAnalysisService) callOpenAICompatible(baseURL, apiKey, modelID, promp
 // 保留 \t (0x09), \n (0x0A), \r (0x0D)，移除其他控制字符
 // 注意：使用 rune 遍历，正确处理多字节 UTF-8 字符（如中文）
 func cleanInvalidChars(text string) string {
-	// 调试：记录输入的前 100 个字节
-	inputLen := len(text)
-	if inputLen > 100 {
-		inputLen = 100
-	}
-	fmt.Printf("[cleanInvalidChars] 输入长度: %d, 前 %d 字节: %x\n", len(text), inputLen, []byte(text[:inputLen]))
+	log.Printf("[AIAnalysis] cleanInvalidChars input length: %d", len(text))
 
 	var cleaned strings.Builder
 	cleaned.Grow(len(text))
 	filteredCount := 0
-	for i, r := range text {
+	for _, r := range text {
 		// rune 是 Unicode 码点，中文字符的码点远大于 0x9F
 		// 只需要过滤 ASCII 控制字符范围 (0x00-0x1F, 0x7F)
 		// 以及 C1 控制字符范围 (0x80-0x9F)
@@ -577,18 +573,13 @@ func cleanInvalidChars(text string) string {
 		} else {
 			// 被过滤的字符
 			filteredCount++
-			if filteredCount <= 10 {
-				fmt.Printf("[cleanInvalidChars] 过滤字符: 位置=%d, rune=0x%X\n", i, r)
-			}
 		}
 	}
 
 	result := cleaned.String()
-	outputLen := len(result)
-	if outputLen > 100 {
-		outputLen = 100
+	if filteredCount > 0 {
+		log.Printf("[AIAnalysis] cleanInvalidChars filtered %d characters, output length: %d", filteredCount, len(result))
 	}
-	fmt.Printf("[cleanInvalidChars] 输出长度: %d, 前 %d 字节: %x, 过滤了 %d 个字符\n", len(result), outputLen, []byte(result[:outputLen]), filteredCount)
 
 	return result
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -248,26 +249,26 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("[MFA Debug] Looking for user with ID: %s\n", mfaToken.UserID)
+	log.Printf("[MFA] Looking for user with ID: %s", mfaToken.UserID)
 
 	// 获取用户
 	var user models.User
 	if err := h.db.Where("user_id = ?", mfaToken.UserID).First(&user).Error; err != nil {
-		fmt.Printf("[MFA Debug] User not found: %v\n", err)
+		log.Printf("[MFA] User not found: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "User not found"})
 		return
 	}
 
-	fmt.Printf("[MFA Debug] User found: %s, MFAEnabled: %v, MFASecret length: %d\n", user.Username, user.MFAEnabled, len(user.MFASecret))
+	log.Printf("[MFA] User found: %s", user.Username)
 
 	// 尝试验证TOTP码
 	err = h.mfaService.VerifyMFACode(&user, req.Code)
 	if err != nil {
-		fmt.Printf("[MFA Debug] TOTP verification failed: %v, trying backup code\n", err)
+		log.Printf("[MFA] TOTP verification failed: %v", err)
 		// 如果TOTP验证失败，尝试验证备用恢复码
 		err = h.mfaService.VerifyBackupCode(&user, req.Code)
 		if err != nil {
-			fmt.Printf("[MFA Debug] Backup code verification also failed: %v\n", err)
+			log.Printf("[MFA] Backup code verification failed: %v", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "验证码无效"})
 			return
 		}
@@ -282,7 +283,7 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 	// 生成session ID
 	sessionID, err := generateSessionID()
 	if err != nil {
-		fmt.Printf("[MFA Debug] Failed to generate session ID: %v\n", err)
+		log.Printf("[MFA] Failed to generate session ID: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to generate session"})
 		return
 	}
@@ -301,22 +302,22 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 	}
 
 	if err := h.db.Create(&session).Error; err != nil {
-		fmt.Printf("[MFA Debug] Failed to create session: %v\n", err)
+		log.Printf("[MFA] Failed to create session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to create session"})
 		return
 	}
 
-	fmt.Printf("[MFA Debug] Session created: %s for user %s\n", sessionID, user.Username)
+	log.Printf("[MFA] Session created for user %s", user.Username)
 
 	// 生成JWT token（包含session_id）
 	token, err := generateJWTWithSession(user.ID, user.Username, sessionID)
 	if err != nil {
-		fmt.Printf("[MFA Debug] Failed to generate JWT: %v\n", err)
+		log.Printf("[MFA] Failed to generate JWT: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to generate token"})
 		return
 	}
 
-	fmt.Printf("[MFA Debug] MFA verification successful for user %s, token generated\n", user.Username)
+	log.Printf("[MFA] MFA verification successful for user %s", user.Username)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,

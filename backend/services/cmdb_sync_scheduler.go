@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -38,7 +37,7 @@ func (s *CMDBSyncScheduler) Start(ctx context.Context, checkInterval time.Durati
 	defer s.mu.Unlock()
 
 	if s.running {
-		fmt.Println("[CMDB Sync Scheduler] Already running")
+		log.Printf("[CMDBSyncScheduler] Already running")
 		return
 	}
 
@@ -50,7 +49,7 @@ func (s *CMDBSyncScheduler) Start(ctx context.Context, checkInterval time.Durati
 	s.running = true
 
 	go func() {
-		fmt.Printf("[CMDB Sync Scheduler] Started with check interval: %v\n", checkInterval)
+		log.Printf("[CMDBSyncScheduler] Started with check interval: %v", checkInterval)
 
 		// 启动时立即检查一次
 		s.checkAndSync()
@@ -63,7 +62,7 @@ func (s *CMDBSyncScheduler) Start(ctx context.Context, checkInterval time.Durati
 			case <-s.ticker.C:
 				s.checkAndSync()
 			case <-s.stopChan:
-				fmt.Println("[CMDB Sync Scheduler] Stopped")
+				log.Println("[CMDBSyncScheduler] Stopped")
 				return
 			}
 		}
@@ -93,7 +92,7 @@ func (s *CMDBSyncScheduler) IsRunning() bool {
 
 // checkAndSync 检查并同步需要同步的数据源
 func (s *CMDBSyncScheduler) checkAndSync() {
-	fmt.Println("[CMDB Sync Scheduler] Checking for sources to sync...")
+	log.Println("[CMDBSyncScheduler] Checking for sources to sync...")
 
 	// 查找需要同步的数据源
 	// 条件：
@@ -113,16 +112,16 @@ func (s *CMDBSyncScheduler) checkAndSync() {
 		Find(&sources).Error
 
 	if err != nil {
-		fmt.Printf("[CMDB Sync Scheduler] Error querying sources: %v\n", err)
+		log.Printf("[CMDBSyncScheduler] Error querying sources: %v", err)
 		return
 	}
 
 	if len(sources) == 0 {
-		fmt.Println("[CMDB Sync Scheduler] No sources need syncing")
+		log.Println("[CMDBSyncScheduler] No sources need syncing")
 		return
 	}
 
-	fmt.Printf("[CMDB Sync Scheduler] Found %d sources to sync\n", len(sources))
+	log.Printf("[CMDBSyncScheduler] Found %d sources to sync", len(sources))
 
 	// 并发同步各个数据源
 	var wg sync.WaitGroup
@@ -135,21 +134,21 @@ func (s *CMDBSyncScheduler) checkAndSync() {
 	}
 	wg.Wait()
 
-	fmt.Println("[CMDB Sync Scheduler] Sync check completed")
+	log.Println("[CMDBSyncScheduler] Sync check completed")
 }
 
 // syncSource 同步单个数据源
 func (s *CMDBSyncScheduler) syncSource(source models.CMDBExternalSource) {
-	fmt.Printf("[CMDB Sync Scheduler] Starting sync for source: %s (%s)\n", source.Name, source.SourceID)
+	log.Printf("[CMDBSyncScheduler] Starting sync for source: %s (%s)", source.Name, source.SourceID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	err := s.externalSourceService.SyncExternalSource(ctx, source.SourceID)
 	if err != nil {
-		fmt.Printf("[CMDB Sync Scheduler] Sync failed for source %s: %v\n", source.SourceID, err)
+		log.Printf("[CMDBSyncScheduler] Sync failed for source %s: %v", source.SourceID, err)
 	} else {
-		fmt.Printf("[CMDB Sync Scheduler] Sync completed for source: %s\n", source.SourceID)
+		log.Printf("[CMDBSyncScheduler] Sync completed for source: %s", source.SourceID)
 	}
 }
 

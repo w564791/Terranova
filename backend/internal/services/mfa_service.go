@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -272,11 +273,11 @@ func (s *MFAService) VerifyMFACode(user *models.User, code string) error {
 	// 解密密钥
 	secret, err := crypto.DecryptValue(user.MFASecret)
 	if err != nil {
-		fmt.Printf("[MFA Debug] Failed to decrypt secret for user %s: %v\n", user.Username, err)
+		log.Printf("[MFA] Failed to decrypt secret for user %s: %v", user.Username, err)
 		return fmt.Errorf("failed to decrypt secret: %w", err)
 	}
 
-	fmt.Printf("[MFA Debug] User: %s, Code: %s, Secret length: %d\n", user.Username, code, len(secret))
+	log.Printf("[MFA] Verifying code for user: %s", user.Username)
 
 	// 验证TOTP码 - 使用更宽松的时间窗口
 	valid := totp.Validate(code, secret)
@@ -288,23 +289,19 @@ func (s *MFAService) VerifyMFACode(user *models.User, code string) error {
 			Digits:    otp.DigitsSix,
 			Algorithm: otp.AlgorithmSHA1,
 		})
-		fmt.Printf("[MFA Debug] ValidateCustom result: %v, err: %v\n", validCustom, err)
+		log.Printf("[MFA] ValidateCustom result: %v, err: %v", validCustom, err)
 
 		if !validCustom {
-			// 生成当前应该的验证码用于调试
-			expectedCode, _ := totp.GenerateCode(secret, time.Now())
-			fmt.Printf("[MFA Debug] Expected code: %s, Received code: %s, Server time: %s\n",
-				expectedCode, code, time.Now().Format(time.RFC3339))
-
 			// 增加失败次数
 			s.incrementFailedAttempts(user, config)
+			log.Printf("[MFA] Verification failed for user %s", user.Username)
 			return fmt.Errorf("invalid verification code")
 		}
 	}
 
 	// 重置失败次数
 	s.resetFailedAttempts(user)
-
+	log.Printf("[MFA] Verification successful for user %s", user.Username)
 	return nil
 }
 
@@ -499,29 +496,29 @@ func (s *MFAService) CreateMFAToken(userID, ipAddress string) (*models.MFAToken,
 
 // ValidateMFAToken 验证MFA临时令牌
 func (s *MFAService) ValidateMFAToken(token, ipAddress string) (*models.MFAToken, error) {
-	fmt.Printf("[MFA Debug] ValidateMFAToken called with token: %s, IP: %s\n", token[:min(10, len(token))]+"...", ipAddress)
+	log.Printf("[MFA] Validating MFA token")
 
 	var mfaToken models.MFAToken
 	if err := s.db.Where("token = ?", token).First(&mfaToken).Error; err != nil {
-		fmt.Printf("[MFA Debug] Token not found in database: %v\n", err)
+		log.Printf("[MFA] Token not found in database: %v", err)
 		return nil, fmt.Errorf("invalid MFA token")
 	}
 
-	fmt.Printf("[MFA Debug] Token found: UserID=%s, ExpiresAt=%s, Used=%v, IPAddress=%s\n",
-		mfaToken.UserID, mfaToken.ExpiresAt.Format(time.RFC3339), mfaToken.Used, mfaToken.IPAddress)
+	log.Printf("[MFA] Token found: UserID=%s, ExpiresAt=%s, Used=%v",
+		mfaToken.UserID, mfaToken.ExpiresAt.Format(time.RFC3339), mfaToken.Used)
 
 	if !mfaToken.IsValid() {
-		fmt.Printf("[MFA Debug] Token is invalid (expired or used)\n")
+		log.Printf("[MFA] Token is invalid (expired or used)")
 		return nil, fmt.Errorf("MFA token is expired or already used")
 	}
 
 	// 验证IP地址（可选，增强安全性）
 	if mfaToken.IPAddress != "" && mfaToken.IPAddress != ipAddress {
-		fmt.Printf("[MFA Debug] IP mismatch: expected %s, got %s\n", mfaToken.IPAddress, ipAddress)
+		log.Printf("[MFA] IP mismatch for user %s", mfaToken.UserID)
 		return nil, fmt.Errorf("IP address mismatch")
 	}
 
-	fmt.Printf("[MFA Debug] Token validation successful\n")
+	log.Printf("[MFA] Token validation successful")
 	return &mfaToken, nil
 }
 

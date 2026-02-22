@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"iac-platform/internal/models"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -123,7 +124,7 @@ func (a *LocalDataAccessor) SaveStateVersion(version *models.WorkspaceStateVersi
 		Where("workspace_id = ?", version.WorkspaceID).
 		Update("resource_count", version.ResourceCount).Error; err != nil {
 		// 记录错误但不返回，因为 state 已经保存成功
-		fmt.Printf("Warning: failed to update workspace resource_count: %v\n", err)
+		log.Printf("[LocalData] Warning: failed to update workspace resource_count: %v", err)
 	}
 
 	return nil

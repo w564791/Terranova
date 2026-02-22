@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"iac-platform/internal/models"
+	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -184,7 +185,7 @@ func (l *TerraformLogger) log(level LogLevel, format string, args ...interface{}
 
 	// 打印到控制台（Agent 模式）
 	if l.printToConsole {
-		fmt.Println(logLine)
+		log.Print(logLine)
 	}
 
 	// 保存到完整输出
@@ -238,7 +239,7 @@ func (l *TerraformLogger) RawOutput(line string) {
 
 	// 打印到控制台（Agent 模式）
 	if l.printToConsole {
-		fmt.Println(line)
+		log.Print(line)
 	}
 
 	// 保存到完整输出
@@ -274,7 +275,7 @@ func (l *TerraformLogger) StageBegin(stage string) {
 
 	// 打印到控制台（Agent 模式）
 	if l.printToConsole {
-		fmt.Println(marker)
+		log.Print(marker)
 	}
 
 	// 保存到完整输出
@@ -310,7 +311,7 @@ func (l *TerraformLogger) StageEnd(stage string) {
 
 	// 打印到控制台（Agent 模式）
 	if l.printToConsole {
-		fmt.Println(marker)
+		log.Print(marker)
 	}
 
 	// 保存到完整输出

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"iac-platform/internal/domain/entity"
@@ -323,7 +324,7 @@ func (s *PermissionServiceImpl) GrantPresetPermissions(
 
 		if err := s.GrantPermission(ctx, grantReq); err != nil {
 			// 继续授予其他权限，记录错误
-			fmt.Printf("failed to grant permission %s: %v\n", presetPerm.PermissionID, err)
+			log.Printf("[Permission] Failed to grant permission %s: %v", presetPerm.PermissionID, err)
 		}
 	}
 

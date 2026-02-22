@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"log"
 	"time"
 )
 
@@ -38,23 +39,18 @@ func (a *RemoteDataAccessor) LoadTaskData(taskID uint) error {
 
 	a.taskData = data
 
-	// 【调试】打印加载的数据概要
-	fmt.Printf("[LoadTaskData] Task %d data loaded:\n", taskID)
-	fmt.Printf("[LoadTaskData]   - workspace: %v\n", data["workspace"] != nil)
-	fmt.Printf("[LoadTaskData]   - resources: %d items\n", len(getSlice(data, "resources")))
-	fmt.Printf("[LoadTaskData]   - variables: %d items\n", len(getSlice(data, "variables")))
-	fmt.Printf("[LoadTaskData]   - outputs: %d items\n", len(getSlice(data, "outputs")))
-	fmt.Printf("[LoadTaskData]   - remote_data: %d items\n", len(getSlice(data, "remote_data")))
-	fmt.Printf("[LoadTaskData]   - state_version: %v\n", data["state_version"] != nil)
+	// 记录加载的数据概要
+	log.Printf("[RemoteDataAccessor] Task %d data loaded: workspace=%v, resources=%d, variables=%d, outputs=%d, remote_data=%d",
+		taskID,
+		data["workspace"] != nil,
+		len(getSlice(data, "resources")),
+		len(getSlice(data, "variables")),
+		len(getSlice(data, "outputs")),
+		len(getSlice(data, "remote_data")))
 
-	// 【调试】打印 module_versions
+	// 记录 module_versions
 	if moduleVersions, ok := data["module_versions"].(map[string]interface{}); ok {
-		fmt.Printf("[LoadTaskData]   - module_versions: %d items\n", len(moduleVersions))
-		for key, version := range moduleVersions {
-			fmt.Printf("[LoadTaskData]     - %s: %v\n", key, version)
-		}
-	} else {
-		fmt.Printf("[LoadTaskData]   - module_versions: NOT FOUND or invalid type\n")
+		log.Printf("[RemoteDataAccessor] Module versions loaded: %d items", len(moduleVersions))
 	}
 
 	return nil

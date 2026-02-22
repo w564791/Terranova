@@ -7,12 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"iac-platform/internal/crypto"
-	"iac-platform/internal/models"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"iac-platform/internal/crypto"
+	"iac-platform/internal/models"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -608,7 +610,7 @@ func (s *CMDBExternalSourceService) createEmbeddingTasksForExternalSource(source
 	// 批量插入，忽略重复
 	s.db.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&tasks, 1000)
 
-	fmt.Printf("[CMDBExternalSource] 为数据源 %s 创建 %d 个 embedding 任务\n", sourceID, len(tasks))
+	log.Printf("[CMDBExternalSource] Created %d embedding tasks for source %s", len(tasks), sourceID)
 }
 
 // doSync 执行同步
@@ -648,28 +650,22 @@ func (s *CMDBExternalSourceService) doSync(ctx context.Context, source *models.C
 		return 0, 0, 0, err
 	}
 
-	// 打印调试信息
-	fmt.Printf("[CMDB Sync Debug] Extracted data type: %T\n", data)
-
 	// 确保data是数组类型
 	var dataArray []interface{}
 	switch v := data.(type) {
 	case []interface{}:
 		dataArray = v
-		fmt.Printf("[CMDB Sync Debug] Data is []interface{}, length: %d\n", len(dataArray))
 	case []map[string]interface{}:
 		// 转换为[]interface{}
 		for _, item := range v {
 			dataArray = append(dataArray, item)
 		}
-		fmt.Printf("[CMDB Sync Debug] Data is []map[string]interface{}, converted length: %d\n", len(dataArray))
 	default:
 		// 如果不是数组，包装成单元素数组
 		dataArray = []interface{}{data}
-		fmt.Printf("[CMDB Sync Debug] Data is not array (type: %T), wrapped as single element\n", data)
 	}
 
-	fmt.Printf("[CMDB Sync Debug] Final dataArray length: %d\n", len(dataArray))
+	log.Printf("[CMDBSync] Extracted data: type=%T, dataArray length=%d", data, len(dataArray))
 
 	// 5. 获取字段映射
 	var fieldMapping map[string]string

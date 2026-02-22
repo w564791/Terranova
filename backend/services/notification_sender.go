@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -643,7 +644,7 @@ func (s *NotificationSender) TriggerNotifications(
 		go func(config *models.NotificationConfig) {
 			if err := s.SendNotification(ctx, config, event, task, &workspace); err != nil {
 				// 记录错误但不阻塞
-				fmt.Printf("Failed to send notification %s: %v\n", config.NotificationID, err)
+				log.Printf("[Notification] Failed to send notification %s: %v", config.NotificationID, err)
 			}
 		}(wn.Notification)
 	}
@@ -668,7 +669,7 @@ func (s *NotificationSender) TriggerNotifications(
 		// 异步发送通知
 		go func(config models.NotificationConfig) {
 			if err := s.SendNotification(ctx, &config, event, task, &workspace); err != nil {
-				fmt.Printf("Failed to send global notification %s: %v\n", config.NotificationID, err)
+				log.Printf("[Notification] Failed to send global notification %s: %v", config.NotificationID, err)
 			}
 		}(gn)
 	}

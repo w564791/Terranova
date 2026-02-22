@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -153,12 +154,12 @@ func (s *CMDBService) SyncWorkspaceResources(workspaceID string) error {
 
 	// 4. 触发 embedding 生成（异步，不阻塞主流程）
 	go func() {
-		fmt.Printf("[CMDB] Starting embedding sync for workspace %s\n", workspaceID)
+		log.Printf("[CMDB] Starting embedding sync for workspace %s", workspaceID)
 		embeddingWorker := NewEmbeddingWorker(s.db)
 		if err := embeddingWorker.SyncWorkspace(workspaceID); err != nil {
-			fmt.Printf("[CMDB] Embedding sync failed for workspace %s: %v\n", workspaceID, err)
+			log.Printf("[CMDB] Embedding sync failed for workspace %s: %v", workspaceID, err)
 		} else {
-			fmt.Printf("[CMDB] Embedding sync completed for workspace %s\n", workspaceID)
+			log.Printf("[CMDB] Embedding sync completed for workspace %s", workspaceID)
 		}
 	}()
 
@@ -792,7 +793,7 @@ func (s *CMDBService) SyncAllWorkspaces() error {
 	for _, ws := range workspaces {
 		if err := s.SyncWorkspaceResources(ws.WorkspaceID); err != nil {
 			// 记录错误但继续处理其他workspace
-			fmt.Printf("Failed to sync workspace %s: %v\n", ws.WorkspaceID, err)
+			log.Printf("[CMDB] Failed to sync workspace %s: %v", ws.WorkspaceID, err)
 		}
 	}
 

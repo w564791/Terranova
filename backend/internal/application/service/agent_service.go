@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"iac-platform/internal/domain/entity"
@@ -219,7 +220,7 @@ func (s *AgentService) CleanupOfflineAgents() error {
 	}
 
 	if result.RowsAffected > 0 {
-		fmt.Printf("[AgentCleanup] Marked %d agents as offline (no heartbeat for 2+ minutes)\n", result.RowsAffected)
+		log.Printf("[AgentCleanup] Marked %d agents as offline (no heartbeat for 2+ minutes)", result.RowsAffected)
 	}
 
 	// Delete agents with no heartbeat for 5 minutes
@@ -233,7 +234,7 @@ func (s *AgentService) CleanupOfflineAgents() error {
 	}
 
 	if result.RowsAffected > 0 {
-		fmt.Printf("[AgentCleanup] Deleted %d old agents (no heartbeat for 5+ minutes)\n", result.RowsAffected)
+		log.Printf("[AgentCleanup] Deleted %d old agents (no heartbeat for 5+ minutes)", result.RowsAffected)
 	}
 
 	return nil

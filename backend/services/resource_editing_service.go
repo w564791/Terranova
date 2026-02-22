@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"iac-platform/internal/models"
@@ -438,7 +439,7 @@ func (s *ResourceEditingService) CleanupExpiredLocks() error {
 	}
 
 	if result.RowsAffected > 0 {
-		fmt.Printf("清理了 %d 个过期锁\n", result.RowsAffected)
+		log.Printf("[ResourceEdit] Cleaned up %d expired locks", result.RowsAffected)
 	}
 
 	return nil
@@ -455,7 +456,7 @@ func (s *ResourceEditingService) CleanupOldDrifts() error {
 	}
 
 	if result.RowsAffected > 0 {
-		fmt.Printf("清理了 %d 个旧草稿\n", result.RowsAffected)
+		log.Printf("[ResourceEdit] Cleaned up %d old drafts", result.RowsAffected)
 	}
 
 	return nil
@@ -587,11 +588,11 @@ func (s *ResourceEditingService) GetRequestStatus(
 			request.TargetSession,
 		); err != nil {
 			// 接管失败，标记为expired
-			fmt.Printf(" 超时自动接管失败: %v\n", err)
+			log.Printf("[ResourceEdit] Timeout takeover failed: %v", err)
 			request.Status = "expired"
 		} else {
 			// 接管成功，标记为approved
-			fmt.Printf(" 超时自动接管成功: request_id=%d\n", requestID)
+			log.Printf("[ResourceEdit] Timeout takeover successful: request_id=%d", requestID)
 			request.Status = "approved"
 		}
 		s.db.Save(&request)
@@ -612,7 +613,7 @@ func (s *ResourceEditingService) CleanupExpiredRequests() error {
 	}
 
 	if result.RowsAffected > 0 {
-		fmt.Printf("标记了 %d 个过期pending请求\n", result.RowsAffected)
+		log.Printf("[ResourceEdit] Marked %d expired pending requests", result.RowsAffected)
 	}
 
 	// 2. 删除7天前的历史记录（approved, rejected, expired）
@@ -625,7 +626,7 @@ func (s *ResourceEditingService) CleanupExpiredRequests() error {
 	}
 
 	if deleteResult.RowsAffected > 0 {
-		fmt.Printf("删除了 %d 条历史接管请求记录\n", deleteResult.RowsAffected)
+		log.Printf("[ResourceEdit] Deleted %d historical takeover request records", deleteResult.RowsAffected)
 	}
 
 	return nil

@@ -504,7 +504,7 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 			token, err := generator.GenerateTokenForAgent(workspace.WorkspaceID, rd.SourceWorkspaceID, &taskID)
 			if err != nil {
 				// Log error but continue
-				fmt.Printf("[GetTaskData] Failed to generate token for remote data %s: %v\n", rd.RemoteDataID, err)
+				log.Printf("[Agent] Failed to generate token for remote data %s: %v", rd.RemoteDataID, err)
 				continue
 			}
 
@@ -1087,11 +1087,10 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 		return
 	}
 
-	// 【调试】打印 agent_id 的值
 	if task.AgentID != nil {
-		fmt.Printf("[GetPlanTask] Task %d agent_id from DB: %s\n", taskID, *task.AgentID)
+		log.Printf("[Agent] Task %d agent_id: %s", taskID, *task.AgentID)
 	} else {
-		fmt.Printf("[GetPlanTask] Task %d agent_id from DB: nil\n", taskID)
+		log.Printf("[Agent] Task %d agent_id: nil", taskID)
 	}
 
 	// 【新增】根据快照中的版本号，从数据库加载完整的资源数据
@@ -1330,11 +1329,11 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 			// 重新加载任务以获取最新数据
 			var taskForRunTask models.WorkspaceTask
 			if err := h.db.First(&taskForRunTask, taskID).Error; err != nil {
-				fmt.Printf("[RunTask] Failed to reload task %d for post_plan Run Tasks: %v\n", taskID, err)
+				log.Printf("[RunTask] Failed to reload task %d for post_plan Run Tasks: %v", taskID, err)
 				return
 			}
 
-			fmt.Printf("[RunTask] Executing post_plan Run Tasks for task %d (Agent mode, after plan_data upload)\n", taskID)
+			log.Printf("[RunTask] Executing post_plan Run Tasks for task %d (Agent mode, after plan_data upload)", taskID)
 
 			// 执行 post_plan Run Tasks
 			// 【重要】使用 context.Background() 而不是 c.Request.Context()
@@ -1343,7 +1342,7 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 			ctx := context.Background()
 			passed, err := h.runTaskExecutor.ExecuteRunTasksForStage(ctx, &taskForRunTask, models.RunTaskStagePostPlan)
 			if err != nil {
-				fmt.Printf("[RunTask] post_plan Run Tasks execution error for task %d: %v\n", taskID, err)
+				log.Printf("[RunTask] post_plan Run Tasks execution error for task %d: %v", taskID, err)
 				// 更新任务状态为失败
 				h.db.Model(&taskForRunTask).Updates(map[string]interface{}{
 					"status":        models.TaskStatusFailed,
@@ -1353,7 +1352,7 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 			}
 
 			if !passed {
-				fmt.Printf("[RunTask] post_plan Run Tasks blocked execution for task %d (mandatory task failed)\n", taskID)
+				log.Printf("[RunTask] post_plan Run Tasks blocked execution for task %d (mandatory task failed)", taskID)
 				// 更新任务状态为失败
 				h.db.Model(&taskForRunTask).Updates(map[string]interface{}{
 					"status":        models.TaskStatusFailed,
@@ -1362,7 +1361,7 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 				return
 			}
 
-			fmt.Printf("[RunTask] post_plan Run Tasks completed successfully for task %d\n", taskID)
+			log.Printf("[RunTask] post_plan Run Tasks completed successfully for task %d", taskID)
 		}()
 	}
 

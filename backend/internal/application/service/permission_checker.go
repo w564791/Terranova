@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"iac-platform/internal/domain/entity"
@@ -376,12 +377,12 @@ func (c *PermissionCheckerImpl) collectWorkspaceLevelGrants(
 		Select("workspace_id").
 		Where("id = ?", workspaceID).
 		First(&workspace).Error; err != nil {
-		fmt.Printf("[DEBUG] Failed to get workspace_id for id=%d: %v\n", workspaceID, err)
+		log.Printf("[Permission] Failed to get workspace_id for id=%d: %v", workspaceID, err)
 		return nil, fmt.Errorf("failed to get workspace_id: %w", err)
 	}
 
-	fmt.Printf("[DEBUG] collectWorkspaceLevelGrants: workspaceID=%d, workspace_id=%s, userID=%s, userTeams=%v, resourceType=%s\n",
-		workspaceID, workspace.WorkspaceID, userID, userTeams, resourceType)
+	log.Printf("[Permission] Collecting grants: workspace=%d, workspace_id=%s, user=%s, resourceType=%s",
+		workspaceID, workspace.WorkspaceID, userID, resourceType)
 
 	// 用户直接授权
 	userPerms, err := c.permissionRepo.QueryWorkspacePermissions(
@@ -390,7 +391,7 @@ func (c *PermissionCheckerImpl) collectWorkspaceLevelGrants(
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("[DEBUG] User permissions found: %d\n", len(userPerms))
+	log.Printf("[Permission] User permissions found: %d", len(userPerms))
 	for _, perm := range userPerms {
 		grants = append(grants, perm.ToPermissionGrant())
 	}
@@ -403,7 +404,7 @@ func (c *PermissionCheckerImpl) collectWorkspaceLevelGrants(
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("[DEBUG] Team permissions found: %d\n", len(teamPerms))
+		log.Printf("[Permission] Team permissions found: %d", len(teamPerms))
 		for _, perm := range teamPerms {
 			grant := perm.ToPermissionGrant()
 			grant.Source = "team"
@@ -411,7 +412,7 @@ func (c *PermissionCheckerImpl) collectWorkspaceLevelGrants(
 		}
 	}
 
-	fmt.Printf("[DEBUG] Total workspace grants collected: %d\n", len(grants))
+	log.Printf("[Permission] Total workspace grants collected: %d", len(grants))
 	return grants, nil
 }
 
