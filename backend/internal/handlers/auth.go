@@ -3,6 +3,7 @@ package handlers
 import (
 	cryptoRand "crypto/rand"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
+
+// dummyHash 用于用户不存在时执行 bcrypt 比较，防止时序攻击
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-timing-defense"), bcrypt.DefaultCost)
 
 type AuthHandler struct {
 	db         *gorm.DB
@@ -66,11 +70,23 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	var user models.User
+	userNotFound := false
 	if err := h.db.Where("username = ? AND is_active = ?", req.Username, true).First(&user).Error; err != nil {
-		println("Login failed: User not found -", req.Username, "Error:", err.Error())
+		userNotFound = true
+	}
+
+	// 始终执行 bcrypt 比较，防止时序攻击枚举用户名
+	hashToCompare := dummyHash
+	if !userNotFound {
+		hashToCompare = []byte(user.PasswordHash)
+	}
+	passwordErr := bcrypt.CompareHashAndPassword(hashToCompare, []byte(req.Password))
+
+	if userNotFound || passwordErr != nil {
+		log.Printf("[Auth] Login failed for username: %s", req.Username)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":      401,
-			"message":   "User not found",
+			"message":   "Invalid credentials",
 			"timestamp": time.Now(),
 		})
 		return
@@ -86,22 +102,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Log user ID for debugging
-	// println(" User found:", user.Username, "ID:", user.ID, "ID length:", len(user.ID))
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		println("❌ Login failed: Invalid password for user", user.Username)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code":      401,
-			"message":   "Invalid password",
-			"timestamp": time.Now(),
-		})
-		return
-	}
-
 	// Check if user ID is empty
 	if user.ID == "" {
-		println(" WARNING: User ID is empty for", user.Username)
+		log.Printf("[Auth] WARNING: User ID is empty for %s", user.Username)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "User ID is empty, please contact administrator",
@@ -115,7 +118,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// 用户已启用MFA，需要进行两步验证
 		mfaToken, err := h.mfaService.CreateMFAToken(user.ID, c.ClientIP())
 		if err != nil {
-			println("❌ Failed to create MFA token:", err.Error())
+			log.Printf("[Auth] Failed to create MFA token: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":      500,
 				"message":   "Failed to create MFA token",
@@ -131,7 +134,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			requiredBackupCodes = mfaConfig.RequiredBackupCodes
 		}
 
-		println("🔐 MFA required for user:", user.Username)
+		log.Printf("[Auth] MFA required for user: %s", user.Username)
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "需要MFA验证",
@@ -156,7 +159,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// 先生成临时token让用户可以设置MFA
 		mfaToken, err := h.mfaService.CreateMFAToken(user.ID, c.ClientIP())
 		if err != nil {
-			println("❌ Failed to create MFA token:", err.Error())
+			log.Printf("[Auth] Failed to create MFA token: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":      500,
 				"message":   "Failed to create MFA token",
@@ -165,7 +168,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			return
 		}
 
-		println("🔐 MFA setup required for user:", user.Username)
+		log.Printf("[Auth] MFA setup required for user: %s", user.Username)
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "需要设置MFA",
@@ -185,7 +188,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 生成session ID
 	sessionID, err := generateSessionID()
 	if err != nil {
-		println("❌ Failed to generate session ID:", err.Error())
+		log.Printf("[Auth] Failed to generate session ID: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to generate session",
@@ -208,7 +211,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := h.db.Create(&session).Error; err != nil {
-		println("❌ Failed to create session:", err.Error())
+		log.Printf("[Auth] Failed to create session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to create session",
@@ -220,7 +223,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 生成JWT token（包含session_id）
 	token, err := generateJWTWithSession(user.ID, user.Username, sessionID)
 	if err != nil {
-		println("❌ Failed to generate JWT:", err.Error())
+		log.Printf("[Auth] Failed to generate JWT: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to generate token",
@@ -229,7 +232,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	println("🔐 Login successful:", user.Username, "Session:", sessionID)
+	log.Printf("[Auth] Login successful: %s", user.Username)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -486,7 +489,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 
 	var user models.User
 	if err := h.db.Where("user_id = ? AND is_active = ?", userID, true).First(&user).Error; err != nil {
-		println("GetMe: User not found -", userID, "Error:", err.Error())
+		log.Printf("[Auth] GetMe: user not found: %s", userID)
 		c.JSON(http.StatusNotFound, gin.H{
 			"code":      404,
 			"message":   "User not found",
@@ -495,7 +498,6 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 		return
 	}
 
-	// println(": User found -", user.Username, "ID:", user.ID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -531,10 +533,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 				"is_active":  false,
 				"revoked_at": now,
 			})
-		println("🔓 Logout: Session revoked -", sessionID)
+		log.Printf("[Auth] Logout: session revoked for user %s", c.GetString("user_id"))
 	} else {
-		// 如果是user token调用logout，只是一个通知，不做任何操作
-		println("ℹ️ Logout called with user token, no session to revoke")
+		log.Printf("[Auth] Logout called with user token, no session to revoke")
 	}
 
 	c.JSON(http.StatusOK, gin.H{

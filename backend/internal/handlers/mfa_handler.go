@@ -242,10 +242,10 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 		return
 	}
 
-	// 验证MFA临时令牌
-	mfaToken, err := h.mfaService.ValidateMFAToken(req.MFAToken, c.ClientIP())
+	// 验证并消费MFA临时令牌（原子操作，防止竞争条件）
+	mfaToken, err := h.mfaService.ValidateAndConsumeMFAToken(req.MFAToken, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Invalid or expired MFA token"})
 		return
 	}
 
@@ -272,12 +272,6 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "验证码无效"})
 			return
 		}
-	}
-
-	// 标记MFA令牌为已使用
-	if err := h.mfaService.MarkMFATokenUsed(mfaToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to mark token as used"})
-		return
 	}
 
 	// 生成session ID
@@ -560,10 +554,10 @@ func (h *MFAHandler) VerifyAndEnableMFAWithToken(c *gin.Context) {
 		return
 	}
 
-	// 验证 mfa_token
-	mfaToken, err := h.mfaService.ValidateMFAToken(req.MFAToken, c.ClientIP())
+	// 验证并消费 mfa_token（原子操作）
+	mfaToken, err := h.mfaService.ValidateAndConsumeMFAToken(req.MFAToken, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Authorization required"})
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Invalid or expired MFA token"})
 		return
 	}
 
@@ -578,9 +572,6 @@ func (h *MFAHandler) VerifyAndEnableMFAWithToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
-
-	// MFA 启用成功，标记 token 已使用
-	_ = h.mfaService.MarkMFATokenUsed(mfaToken)
 
 	// 生成 session 和 JWT，直接登录
 	sessionID, err := generateSessionID()

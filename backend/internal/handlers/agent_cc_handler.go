@@ -61,9 +61,7 @@ func NewAgentCCHandler(db *gorm.DB) *AgentCCHandler {
 	return &AgentCCHandler{
 		db: db,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
+			CheckOrigin: checkWebSocketOrigin,
 			EnableCompression: false,
 			// Add timeouts
 			HandshakeTimeout: 10 * time.Second,

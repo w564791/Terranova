@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -70,22 +71,30 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 
 		// 根据scope_type决定如何获取scope_id
 		if st == valueobject.ScopeTypeOrganization {
-			// 组织级别权限：优先从查询参数获取org_id，否则使用默认值1
+			// 组织级别权限：优先从查询参数获取org_id
+			// TODO: 多组织架构时需要移除默认值，要求显式传入 org_id
 			scopeID := c.Query("org_id")
 			if scopeID == "" {
-				scopeID = "1" // 默认组织ID
+				scopeID = "1" // 当前单组织默认值
 			}
 			if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
 				scopeIDUint = 1
 			}
 		} else {
-			// 工作空间或项目级别权限：从路径参数获取
+			// 工作空间或项目级别权限：从路径参数获取，必须显式指定
 			scopeID := c.Param("id")
 			if scopeID == "" {
 				scopeID = c.Query("scope_id")
 			}
 			if scopeID == "" {
-				scopeID = "1"
+				log.Printf("[IAM] Missing scope_id for %s %s, user=%v", c.Request.Method, c.Request.URL.Path, userID)
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":      400,
+					"message":   "scope_id or path parameter :id is required",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
 			}
 
 			// 尝试解析为数字，如果失败则保留为字符串（可能是语义化ID）
@@ -131,9 +140,10 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 
 		result, err := m.permissionChecker.CheckPermission(c.Request.Context(), req)
 		if err != nil {
+			log.Printf("[IAM] Permission check failed for user %s: %v", userID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":      500,
-				"message":   "Permission check failed: " + err.Error(),
+				"message":   "Permission check failed",
 				"timestamp": time.Now(),
 			})
 			c.Abort()
@@ -199,7 +209,8 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 			var scopeIDStr string
 
 			if st == valueobject.ScopeTypeOrganization {
-				// 组织级别权限：使用org_id查询参数，默认为1
+				// 组织级别权限：使用org_id查询参数
+				// TODO: 多组织架构时需要移除默认值
 				scopeID := c.Query("org_id")
 				if scopeID == "" {
 					scopeID = "1"
@@ -208,13 +219,14 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 					scopeIDUint = 1
 				}
 			} else {
-				// 工作空间或项目级别权限：从路径参数获取
+				// 工作空间或项目级别权限：从路径参数获取，必须显式指定
 				scopeID := c.Param("id")
 				if scopeID == "" {
 					scopeID = c.Query("scope_id")
 				}
 				if scopeID == "" {
-					scopeID = "1"
+					// 跳过此权限检查（RequireAnyPermission 中其他权限可能匹配）
+					continue
 				}
 				if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
 					scopeIDStr = scopeID

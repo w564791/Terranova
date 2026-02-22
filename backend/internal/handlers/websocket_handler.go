@@ -3,6 +3,8 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"iac-platform/internal/websocket"
 
@@ -10,13 +12,34 @@ import (
 	gorillaws "github.com/gorilla/websocket"
 )
 
+// checkWebSocketOrigin 验证 WebSocket 连接的来源
+// 通过 ALLOWED_ORIGINS 环境变量配置白名单（逗号分隔），未设置则允许所有来源
+func checkWebSocketOrigin(r *http.Request) bool {
+	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsEnv == "" {
+		return true // 未配置白名单时允许所有（开发环境兼容）
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // 无 Origin header（非浏览器客户端）
+	}
+
+	for _, allowed := range strings.Split(allowedOriginsEnv, ",") {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == origin {
+			return true
+		}
+	}
+
+	log.Printf("[WebSocket] Blocked connection from origin: %s", origin)
+	return false
+}
+
 var upgrader = gorillaws.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// 允许所有来源（生产环境应该限制）
-		return true
-	},
+	CheckOrigin:     checkWebSocketOrigin,
 	// 处理子协议：当客户端使用 Sec-WebSocket-Protocol 传递token时，
 	// 服务器必须在响应中返回相同的子协议，否则连接会失败
 	Subprotocols: []string{"access_token"},

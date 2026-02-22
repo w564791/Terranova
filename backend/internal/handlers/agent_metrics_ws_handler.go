@@ -14,9 +14,7 @@ import (
 var agentMetricsUpgrader = gorillaws.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // 允许所有来源，生产环境应该限制
-	},
+	CheckOrigin:     checkWebSocketOrigin,
 }
 
 // AgentMetricsWSHandler handles WebSocket connections for agent metrics

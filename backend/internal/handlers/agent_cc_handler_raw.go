@@ -90,9 +90,7 @@ func NewRawAgentCCHandler(db *gorm.DB, streamManager *services.OutputStreamManag
 		streamManager: streamManager,
 		podName:       podName,
 		upgrader: gorillaws.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
+			CheckOrigin: checkWebSocketOrigin,
 			EnableCompression: false,
 			HandshakeTimeout:  10 * time.Second,
 		},

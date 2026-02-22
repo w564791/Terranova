@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -59,9 +60,10 @@ func ErrorHandler() gin.HandlerFunc {
 
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last()
+			log.Printf("[Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err.Err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":      500,
-				"message":   err.Error(),
+				"message":   "Internal server error",
 				"timestamp": time.Now(),
 			})
 		}
@@ -87,11 +89,6 @@ func JWTAuth() gin.HandlerFunc {
 				}
 			}
 
-			// 如果还没有token，尝试从query参数获取 (用于 WebSocket连接)
-			if tokenString == "" {
-				tokenString = c.Query("token")
-			}
-
 			if tokenString == "" {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"code":      401,
@@ -103,11 +100,14 @@ func JWTAuth() gin.HandlerFunc {
 			}
 		}
 
-		// 使用统一的JWT密钥解析token
+		// 使用统一的JWT密钥解析token，显式验证签名算法
 		jwtSecret := config.GetJWTSecret()
 		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
 			return []byte(jwtSecret), nil
-		})
+		}, jwt.WithValidMethods([]string{"HS256"}))
 
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -150,9 +150,10 @@ func JWTAuth() gin.HandlerFunc {
 		}
 
 		if !userIDSet {
+			log.Printf("[JWT] Invalid user_id type in token: %T", userIDValue)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      401,
-				"message":   fmt.Sprintf("Invalid user_id in token, type: %T", userIDValue),
+				"message":   "Invalid token",
 				"timestamp": time.Now(),
 			})
 			c.Abort()

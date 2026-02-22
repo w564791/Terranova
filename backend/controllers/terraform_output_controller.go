@@ -3,7 +3,9 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"iac-platform/services"
@@ -13,14 +15,35 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// checkWebSocketOrigin 验证 WebSocket 连接的来源
+// 通过 ALLOWED_ORIGINS 环境变量配置白名单（逗号分隔），未设置则允许所有来源
+func checkWebSocketOrigin(r *http.Request) bool {
+	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsEnv == "" {
+		return true // 未配置白名单时允许所有（开发环境兼容）
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // 无 Origin header（非浏览器客户端）
+	}
+
+	for _, allowed := range strings.Split(allowedOriginsEnv, ",") {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == origin {
+			return true
+		}
+	}
+
+	log.Printf("[WebSocket] Blocked connection from origin: %s", origin)
+	return false
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// TODO: 生产环境需要验证origin
-		return true
-	},
-	Subprotocols: []string{"access_token"}, // 支持 access_token 子协议
+	CheckOrigin:     checkWebSocketOrigin,
+	Subprotocols:    []string{"access_token"}, // 支持 access_token 子协议
 }
 
 // TerraformOutputController WebSocket输出控制器

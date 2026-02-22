@@ -494,31 +494,65 @@ func (s *MFAService) CreateMFAToken(userID, ipAddress string) (*models.MFAToken,
 	return mfaToken, nil
 }
 
-// ValidateMFAToken 验证MFA临时令牌
+// ValidateMFAToken 验证MFA临时令牌（只读，不消费）
+// 用于 MFA 设置流程中需要多步骤操作的场景
 func (s *MFAService) ValidateMFAToken(token, ipAddress string) (*models.MFAToken, error) {
+	var mfaToken models.MFAToken
+	if err := s.db.Where("token = ?", token).First(&mfaToken).Error; err != nil {
+		return nil, fmt.Errorf("invalid MFA token")
+	}
+	if !mfaToken.IsValid() {
+		return nil, fmt.Errorf("MFA token is expired or already used")
+	}
+	if mfaToken.IPAddress != "" && mfaToken.IPAddress != ipAddress {
+		return nil, fmt.Errorf("IP address mismatch")
+	}
+	return &mfaToken, nil
+}
+
+// ValidateAndConsumeMFAToken 原子地验证并消费MFA临时令牌（防止竞争条件）
+func (s *MFAService) ValidateAndConsumeMFAToken(token, ipAddress string) (*models.MFAToken, error) {
 	log.Printf("[MFA] Validating MFA token")
 
 	var mfaToken models.MFAToken
-	if err := s.db.Where("token = ?", token).First(&mfaToken).Error; err != nil {
-		log.Printf("[MFA] Token not found in database: %v", err)
-		return nil, fmt.Errorf("invalid MFA token")
+
+	// 使用事务 + FOR UPDATE 行锁确保原子性
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").
+			Where("token = ?", token).
+			First(&mfaToken).Error; err != nil {
+			log.Printf("[MFA] Token not found in database: %v", err)
+			return fmt.Errorf("invalid MFA token")
+		}
+
+		if !mfaToken.IsValid() {
+			log.Printf("[MFA] Token is invalid (expired or used)")
+			return fmt.Errorf("MFA token is expired or already used")
+		}
+
+		// 验证IP地址（可选，增强安全性）
+		if mfaToken.IPAddress != "" && mfaToken.IPAddress != ipAddress {
+			log.Printf("[MFA] IP mismatch for user %s", mfaToken.UserID)
+			return fmt.Errorf("IP address mismatch")
+		}
+
+		// 在同一事务中标记为已使用
+		now := time.Now()
+		if err := tx.Model(&mfaToken).Updates(map[string]interface{}{
+			"used":    true,
+			"used_at": now,
+		}).Error; err != nil {
+			return fmt.Errorf("failed to mark token as used: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	log.Printf("[MFA] Token found: UserID=%s, ExpiresAt=%s, Used=%v",
-		mfaToken.UserID, mfaToken.ExpiresAt.Format(time.RFC3339), mfaToken.Used)
-
-	if !mfaToken.IsValid() {
-		log.Printf("[MFA] Token is invalid (expired or used)")
-		return nil, fmt.Errorf("MFA token is expired or already used")
-	}
-
-	// 验证IP地址（可选，增强安全性）
-	if mfaToken.IPAddress != "" && mfaToken.IPAddress != ipAddress {
-		log.Printf("[MFA] IP mismatch for user %s", mfaToken.UserID)
-		return nil, fmt.Errorf("IP address mismatch")
-	}
-
-	log.Printf("[MFA] Token validation successful")
+	log.Printf("[MFA] Token validation and consumption successful")
 	return &mfaToken, nil
 }
 
@@ -527,15 +561,6 @@ func min(a, b int) int {
 		return a
 	}
 	return b
-}
-
-// MarkMFATokenUsed 标记MFA令牌为已使用
-func (s *MFAService) MarkMFATokenUsed(token *models.MFAToken) error {
-	now := time.Now()
-	return s.db.Model(token).Updates(map[string]interface{}{
-		"used":    true,
-		"used_at": now,
-	}).Error
 }
 
 // GetMFAStatistics 获取MFA使用统计
