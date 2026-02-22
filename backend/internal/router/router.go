@@ -6,6 +6,7 @@ import (
 	"iac-platform/internal/handlers"
 	"iac-platform/internal/iam"
 	"iac-platform/internal/middleware"
+	"iac-platform/internal/observability/metrics"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
 
@@ -23,8 +24,12 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	// 设置全局数据库连接（用于JWT中间件查询用户信息）
 	middleware.SetGlobalDB(db)
 
-	// 中间件（顺序：Recovery → CORS → Logger → ErrorHandler → ...）
+	// Prometheus 指标注册表
+	metricsReg := metrics.InitRegistry()
+
+	// 中间件（顺序：Recovery → HTTPMetrics → CORS → Logger → ErrorHandler → ...）
 	r.Use(gin.Recovery())
+	r.Use(metrics.HTTPMetricsMiddleware(metricsReg))
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.ErrorHandler())
