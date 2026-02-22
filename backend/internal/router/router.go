@@ -1,6 +1,8 @@
 package router
 
 import (
+	"time"
+
 	"iac-platform/internal/handlers"
 	"iac-platform/internal/iam"
 	"iac-platform/internal/middleware"
@@ -70,16 +72,27 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 		setup.POST("/init", setupHandler.InitAdmin)
 	}
 
-	// 认证路由（无需JWT）
+	// 认证路由（无需JWT，启用限速防暴力破解）
+	loginLimiter := middleware.NewRateLimiter(10, time.Minute) // 10次/分钟
+	mfaLimiter := middleware.NewRateLimiter(5, time.Minute)  // 5次/分钟
+	// 定期清理过期条目，防止内存泄漏
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			loginLimiter.Cleanup()
+			mfaLimiter.Cleanup()
+		}
+	}()
 	auth := api.Group("/auth")
 	{
 		authHandler := handlers.NewAuthHandler(db)
-		auth.POST("/login", authHandler.Login)
+		auth.POST("/login", middleware.RateLimit(loginLimiter), authHandler.Login)
 		// auth.POST("/register", authHandler.Register)
 
 		// MFA路由（登录流程，无需JWT，使用mfa_token认证）
 		mfaHandler := handlers.NewMFAHandler(db)
-		auth.POST("/mfa/verify", mfaHandler.VerifyMFALogin)
+		auth.POST("/mfa/verify", middleware.RateLimit(mfaLimiter), mfaHandler.VerifyMFALogin)
 		auth.POST("/mfa/setup", mfaHandler.SetupMFAWithToken)
 		auth.POST("/mfa/enable", mfaHandler.VerifyAndEnableMFAWithToken)
 	}
