@@ -235,121 +235,13 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 	})
 }
 
-// CreateApplyTask 创建Apply任务
-// @Summary 创建Apply任务（已废弃）
-// @Description [已废弃] 创建Terraform Apply任务（需要先有成功的Plan）。此API已废弃，请使用Plan+Apply工作流（run_type="plan_and_apply"）+ ConfirmApply接口。
-// @Tags Workspace Task
-// @Accept json
-// @Produce json
-// @Param id path string true "工作空间ID"
-// @Success 201 {object} map[string]interface{} "任务创建成功"
-// @Failure 400 {object} map[string]interface{} "没有可用的Plan或参数无效"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 404 {object} map[string]interface{} "工作空间不存在"
-// @Failure 423 {object} map[string]interface{} "工作空间已锁定"
-// @Failure 500 {object} map[string]interface{} "创建失败"
-// @Router /api/v1/workspaces/{id}/tasks/apply [post]
-// @Security Bearer
-// @Deprecated
-func (c *WorkspaceTaskController) CreateApplyTask(ctx *gin.Context) {
-	//  此API已废弃
-	// 推荐使用Plan+Apply工作流：
-	// 1. POST /api/v1/workspaces/{id}/tasks/plan (run_type="plan_and_apply")
-	// 2. POST /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
-		return
-	}
-
-	// 获取当前用户ID
-	userID, exists := ctx.Get("user_id")
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-	uid := userID.(string)
-
-	// 检查workspace是否存在
-	var workspace models.Workspace
-	err := c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
-	}
-
-	// 检查workspace是否被锁定
-	if workspace.IsLocked {
-		ctx.JSON(http.StatusLocked, gin.H{
-			"error":       "Workspace is locked",
-			"locked_by":   workspace.LockedBy,
-			"lock_reason": workspace.LockReason,
-		})
-		return
-	}
-
-	// 获取最近的成功Plan任务
-	var planTask models.WorkspaceTask
-	err = c.db.Where("workspace_id = ? AND task_type = ? AND status = ?",
-		workspace.WorkspaceID, models.TaskTypePlan, models.TaskStatusSuccess).
-		Order("created_at DESC").
-		First(&planTask).Error
-
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "No successful plan task found. Please run plan first.",
-		})
-		return
-	}
-
-	// 创建Apply任务
-	task := &models.WorkspaceTask{
-		WorkspaceID:   workspace.WorkspaceID,
-		TaskType:      models.TaskTypeApply,
-		Status:        models.TaskStatusPending,
-		ExecutionMode: workspace.ExecutionMode,
-		PlanTaskID:    &planTask.ID,
-		CreatedBy:     &uid,
-		Stage:         "pending",
-	}
-
-	if err := c.db.Create(task).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
-		return
-	}
-
-	// 异步执行Apply任务
-	go func() {
-		execCtx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
-		defer cancel()
-
-		// 更新任务状态为运行中
-		task.Status = models.TaskStatusRunning
-		task.StartedAt = timePtr(time.Now())
-		c.db.Save(task)
-
-		// 执行Apply
-		if err := c.executor.ExecuteApply(execCtx, task); err != nil {
-			task.Status = models.TaskStatusFailed
-			task.ErrorMessage = err.Error()
-			task.CompletedAt = timePtr(time.Now())
-			c.db.Save(task)
-			return
-		}
-
-		// 更新workspace状态
-		workspace.State = models.WorkspaceStateCompleted
-		workspace.LastApplyAt = timePtr(time.Now())
-		c.db.Save(&workspace)
-	}()
-
-	ctx.JSON(http.StatusCreated, gin.H{
-		"message": "Apply task created successfully",
-		"task":    task,
-	})
-}
+// CreateApplyTask — 已废弃，不再使用。
+// 当前平台没有独立的 Apply 流程，所有 Apply 均通过 plan_and_apply + ConfirmApply 两阶段工作流完成：
+//   1. POST /api/v1/workspaces/{id}/tasks/plan (run_type="plan_and_apply")
+//   2. POST /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply
+// 此函数未注册到任何 router，属于死代码。
+// 保留原因：如果未来需要支持独立 Apply（基于已有 Plan 的二次 Apply），可参考此实现。
+// func (c *WorkspaceTaskController) CreateApplyTask(ctx *gin.Context) { ... }
 
 // GetTask 获取任务详情
 // @Summary 获取任务详情

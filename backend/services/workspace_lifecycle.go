@@ -197,93 +197,11 @@ func (s *WorkspaceLifecycleService) CompletePlan(taskID uint, success bool, outp
 	return nil
 }
 
-// StartApply 开始Apply任务
-func (s *WorkspaceLifecycleService) StartApply(workspaceID string, userID string) (*models.WorkspaceTask, error) {
-	var workspace models.Workspace
-	if err := s.db.Where("workspace_id = ?", workspaceID).First(&workspace).Error; err != nil {
-		return nil, fmt.Errorf("workspace不存在: %w", err)
-	}
-
-	// 检查是否锁定
-	if workspace.IsLocked {
-		return nil, errors.New("workspace已锁定，无法执行Apply")
-	}
-
-	// 检查当前状态
-	if workspace.State != models.WorkspaceStatePlanDone && workspace.State != models.WorkspaceStateWaitingApply {
-		return nil, fmt.Errorf("当前状态 %s 不允许执行Apply", workspace.State)
-	}
-
-	// 转换状态为Applying
-	if err := s.TransitionState(workspaceID, models.WorkspaceStateApplying); err != nil {
-		return nil, err
-	}
-
-	// 创建Apply任务
-	task := &models.WorkspaceTask{
-		WorkspaceID:   workspace.WorkspaceID, // 使用语义化ID
-		TaskType:      models.TaskTypeApply,
-		Status:        models.TaskStatusPending,
-		ExecutionMode: workspace.ExecutionMode,
-		// AgentID 将由 TaskQueueManager 在分配任务时设置
-		MaxRetries:    workspace.MaxRetries,
-		CreatedBy:     &userID,
-	}
-
-	if err := s.db.Create(task).Error; err != nil {
-		return nil, fmt.Errorf("创建Apply任务失败: %w", err)
-	}
-
-	return task, nil
-}
-
-// CompleteApply 完成Apply任务
-func (s *WorkspaceLifecycleService) CompleteApply(taskID uint, success bool, output string, errorMsg string) error {
-	var task models.WorkspaceTask
-	if err := s.db.First(&task, taskID).Error; err != nil {
-		return fmt.Errorf("任务不存在: %w", err)
-	}
-
-	// 获取workspace的语义化ID
-	var workspace models.Workspace
-	if err := s.db.Select("workspace_id").First(&workspace, task.WorkspaceID).Error; err != nil {
-		return fmt.Errorf("获取workspace失败: %w", err)
-	}
-
-	// 更新任务状态
-	now := time.Now()
-	updates := map[string]interface{}{
-		"completed_at": now,
-		"apply_output": output,
-	}
-
-	if success {
-		updates["status"] = models.TaskStatusSuccess
-		// 转换workspace状态为Completed
-		if err := s.TransitionState(workspace.WorkspaceID, models.WorkspaceStateCompleted); err != nil {
-			return err
-		}
-	} else {
-		updates["status"] = models.TaskStatusFailed
-		updates["error_message"] = errorMsg
-		// 转换workspace状态为Failed
-		if err := s.TransitionState(workspace.WorkspaceID, models.WorkspaceStateFailed); err != nil {
-			return err
-		}
-	}
-
-	// 计算执行时长
-	if task.StartedAt != nil {
-		duration := int(now.Sub(*task.StartedAt).Seconds())
-		updates["duration"] = duration
-	}
-
-	if err := s.db.Model(&task).Updates(updates).Error; err != nil {
-		return fmt.Errorf("更新任务状态失败: %w", err)
-	}
-
-	return nil
-}
+// StartApply / CompleteApply — 已废弃，不再使用。
+// 当前平台没有独立的 Apply 流程，所有 Apply 均通过 plan_and_apply + ConfirmApply 两阶段工作流完成。
+// 这两个函数没有任何调用方，属于死代码。
+// func (s *WorkspaceLifecycleService) StartApply(workspaceID string, userID string) (*models.WorkspaceTask, error) { ... }
+// func (s *WorkspaceLifecycleService) CompleteApply(taskID uint, success bool, output string, errorMsg string) error { ... }
 
 // LockWorkspace 锁定workspace
 func (s *WorkspaceLifecycleService) LockWorkspace(workspaceID string, userID string, reason string) error {

@@ -883,6 +883,17 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 		m.taskCancelsMu.Unlock()
 	}()
 
+	// 防御性检查：如果在 CAS → cancel 注册之间任务已被取消，提前退出
+	if ctx.Err() != nil {
+		log.Printf("[TaskQueue] Task %d context already cancelled before execution, marking as cancelled", task.ID)
+		task.Status = models.TaskStatusCancelled
+		task.ErrorMessage = "cancelled before execution started"
+		now := time.Now()
+		task.CompletedAt = &now
+		m.db.Save(task)
+		return
+	}
+
 	var err error
 
 	if action == "apply" {

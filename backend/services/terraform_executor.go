@@ -1285,6 +1285,11 @@ func (s *TerraformExecutor) ExecutePlan(
 			lockReason := fmt.Sprintf("Locked for apply (task #%d). Do not modify resources/variables until apply completes.", task.ID)
 			if err := s.lockWorkspace(workspace.WorkspaceID, "system", lockReason); err != nil {
 				logger.Error("Failed to lock workspace: %v", err)
+				// 清理已保存的 PlanData/PlanJSON，避免 failed 任务残留无用数据
+				if s.db != nil {
+					s.db.Model(&models.WorkspaceTask{}).Where("id = ?", task.ID).
+						Updates(map[string]interface{}{"plan_data": nil, "plan_json": nil})
+				}
 				s.saveTaskFailure(task, logger, fmt.Errorf("failed to lock workspace: %w", err), "plan")
 				return fmt.Errorf("failed to lock workspace after plan: %w", err)
 			}
