@@ -45,6 +45,7 @@ Result: compliance is built into the generation process. Users rarely see compli
 | Role | Responsibility |
 |------|---------------|
 | **Module Contributors** | Design Modules, define Schema & constraints, codify best practices |
+| **Policy Engineers** | Contribute best-practice Skills, define compliance policies, embed OPA/custom checks into Run Tasks — from "you can't do this" to "you can do this" |
 | **Delivery Engineers** | Operate resources through Forms within safe boundaries |
 | **Platform Maintainers** | Provide platform capabilities, foundation AI Skills |
 
