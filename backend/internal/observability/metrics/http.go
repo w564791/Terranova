@@ -63,12 +63,12 @@ func HTTPMetricsMiddleware(reg *prometheus.Registry) gin.HandlerFunc {
 		}()
 
 		requestsInFlight.Inc()
+		defer requestsInFlight.Dec()
 		start := time.Now()
 
 		c.Next()
 
 		elapsed := time.Since(start).Seconds()
-		requestsInFlight.Dec()
 
 		route := c.FullPath()
 		if route == "" {
