@@ -6,6 +6,7 @@ import (
 	"iac-platform/internal/handlers"
 	"iac-platform/internal/iam"
 	"iac-platform/internal/middleware"
+	"iac-platform/internal/observability/health"
 	"iac-platform/internal/observability/metrics"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
@@ -37,10 +38,8 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	r.Use(middleware.Logger())
 	r.Use(middleware.ErrorHandler())
 
-	// 健康检查
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+	// 健康检查（三级）
+	health.RegisterRoutes(r, db)
 
 	// Prometheus 指标端点（复用业务端口）—— 合并基础设施 + AI 指标
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(

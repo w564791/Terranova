@@ -16,6 +16,7 @@ import (
 	"iac-platform/internal/database"
 	"iac-platform/internal/handlers"
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/health"
 	"iac-platform/internal/router"
 	"iac-platform/internal/websocket"
 	"iac-platform/internal/leaderelection"
@@ -263,6 +264,9 @@ func main() {
 	r := router.Setup(db, streamManager, wsHub, agentMetricsHub, queueManager, rawCCHandler, runTaskExecutor)
 
 	log.Println("System initialized with task queue management and Agent C&C support")
+
+	health.MarkStartupReady()
+	log.Println("Startup health check marked ready")
 
 	// 获取 Embedding Worker（在 router.Setup 之后才可用）
 	embeddingWorker := router.GetEmbeddingWorker()
