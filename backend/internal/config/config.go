@@ -53,7 +53,7 @@ func Load() *Config {
 			SSLRootCert: getEnv("DB_SSLROOTCERT", ""),
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", "your-jwt-secret-key"),
+			Secret: GetJWTSecret(),
 		},
 		AI: AIConfig{
 			Provider: getEnv("AI_PROVIDER", "openai"),
@@ -61,6 +61,14 @@ func Load() *Config {
 			Model:    getEnv("AI_MODEL", "gpt-4"),
 		},
 	}
+}
+
+func requireEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		panic(key + " environment variable is required but not set")
+	}
+	return value
 }
 
 func getEnv(key, defaultValue string) string {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"iac-platform/internal/config"
 	"iac-platform/internal/models"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,25 +25,12 @@ type TeamTokenService struct {
 // 如果jwtSecret为空，则从配置中获取
 func NewTeamTokenService(db *gorm.DB, jwtSecret string) *TeamTokenService {
 	if jwtSecret == "" {
-		// 使用统一的JWT密钥
-		jwtSecret = getJWTSecretFromConfig()
+		jwtSecret = config.GetJWTSecret()
 	}
 	return &TeamTokenService{
 		db:        db,
 		jwtSecret: jwtSecret,
 	}
-}
-
-// getJWTSecretFromConfig 从配置获取JWT密钥
-func getJWTSecretFromConfig() string {
-	// 避免循环依赖，直接读取环境变量
-	secret := ""
-	// 这里应该调用config.GetJWTSecret()，但为了避免循环依赖，直接实现
-	// TODO: 重构以使用config包
-	if secret == "" {
-		secret = "your-jwt-secret-key"
-	}
-	return secret
 }
 
 // TeamTokenClaims JWT Claims for team tokens

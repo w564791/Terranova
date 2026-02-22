@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"iac-platform/internal/config"
 	"iac-platform/internal/infrastructure"
 	"iac-platform/internal/models"
 
@@ -25,26 +26,12 @@ type UserTokenService struct {
 // 如果jwtSecret为空，则从配置中获取
 func NewUserTokenService(db *gorm.DB, jwtSecret string) *UserTokenService {
 	if jwtSecret == "" {
-		jwtSecret = getJWTSecretFromEnv()
+		jwtSecret = config.GetJWTSecret()
 	}
 	return &UserTokenService{
 		db:        db,
 		jwtSecret: jwtSecret,
 	}
-}
-
-// getJWTSecretFromEnv 从环境变量获取JWT密钥
-func getJWTSecretFromEnv() string {
-	// 这里直接使用os.Getenv，避免循环依赖
-	secret := ""
-	// 尝试从环境变量读取
-	if envSecret := ""; envSecret != "" {
-		secret = envSecret
-	}
-	if secret == "" {
-		secret = "your-jwt-secret-key"
-	}
-	return secret
 }
 
 // UserTokenClaims JWT Claims for user tokens
