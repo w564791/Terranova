@@ -2,7 +2,10 @@ package database
 
 import (
 	"fmt"
+	"time"
+
 	"iac-platform/internal/config"
+	"iac-platform/internal/observability/metrics"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -21,6 +24,15 @@ func Initialize(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	}
 
 	// 跳过自动迁移，使用SQL初始化脚本
+
+	// Register observability GORM callbacks
+	metrics.RegisterGORMCallbacks(db)
+
+	// Start DB connection stats collector
+	sqlDB, err := db.DB()
+	if err == nil {
+		metrics.StartDBStatsCollector(sqlDB, 15*time.Second)
+	}
 
 	return db, nil
 }
