@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="960" height="380" fill="#fff" rx="12"/>
+
+  <!-- Column Headers -->
+  <rect x="30" y="20" width="260" height="30" rx="6" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="160" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">痛点</text>
+
+  <rect x="350" y="20" width="260" height="30" rx="6" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="480" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">解决方案</text>
+
+  <rect x="670" y="20" width="260" height="30" rx="6" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="800" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">成效</text>
+
+  <!-- 痛点 -->
+  <rect x="30" y="62" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="80" text-anchor="middle" font-size="10" fill="#334155">高门槛，学习曲线陡峭</text>
+
+  <rect x="30" y="98" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="116" text-anchor="middle" font-size="10" fill="#334155">新模块熟悉慢，需要支援</text>
+
+  <rect x="30" y="134" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="152" text-anchor="middle" font-size="10" fill="#334155">操作易出错，缺乏自助解决能力</text>
+
+  <rect x="30" y="170" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="188" text-anchor="middle" font-size="10" fill="#334155">合规在最后阶段拦截，反复被阻断</text>
+
+  <rect x="30" y="206" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="224" text-anchor="middle" font-size="10" fill="#334155">协作困难，回滚或版本管理麻烦</text>
+
+  <rect x="30" y="242" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="260" text-anchor="middle" font-size="10" fill="#334155">Demo 写了没人看，探索成本高</text>
+
+  <rect x="30" y="278" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="160" y="296" text-anchor="middle" font-size="10" fill="#334155">对新技术/流程心理抗拒</text>
+
+  <!-- 解决方案 -->
+  <rect x="350" y="62" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="80" text-anchor="middle" font-size="10" fill="#334155">表单 + 模板零门槛创建</text>
+
+  <rect x="350" y="98" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="116" text-anchor="middle" font-size="10" fill="#334155">Demo 库一键运行，快速理解模块</text>
+
+  <rect x="350" y="134" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="152" text-anchor="middle" font-size="10" fill="#334155">Schema 驱动 AI 生成合规资源</text>
+
+  <rect x="350" y="170" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="188" text-anchor="middle" font-size="10" fill="#334155">AI 错误分析，自助解决</text>
+
+  <rect x="350" y="206" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="224" text-anchor="middle" font-size="10" fill="#334155">单资源版本回滚 + 克隆模式</text>
+
+  <rect x="350" y="242" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="260" text-anchor="middle" font-size="10" fill="#334155">部署前预览，降低出错风险</text>
+
+  <rect x="350" y="278" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="296" text-anchor="middle" font-size="10" fill="#334155">乐观锁（版本号校验）</text>
+
+  <!-- 成效 -->
+  <rect x="670" y="62" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="80" text-anchor="middle" font-size="10" fill="#334155">新人/非运维也能完成部署</text>
+
+  <rect x="670" y="98" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="116" text-anchor="middle" font-size="10" fill="#334155">只能生成合规资源，几乎无拦截</text>
+
+  <rect x="670" y="134" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="152" text-anchor="middle" font-size="10" fill="#334155">参数校验 + AI + Plan + 锁机制</text>
+
+  <rect x="670" y="170" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="188" text-anchor="middle" font-size="10" fill="#334155">用户自助能力提升</text>
+
+  <rect x="670" y="206" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="224" text-anchor="middle" font-size="10" fill="#334155">Demo + 模板 + 表单快速理解</text>
+
+  <rect x="670" y="242" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="260" text-anchor="middle" font-size="10" fill="#334155">用户敢尝试、敢修改</text>
+
+  <rect x="670" y="278" width="260" height="28" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="800" y="296" text-anchor="middle" font-size="10" fill="#334155">版本控制 + 克隆 + 锁机制</text>
+
+  <!-- Arrows -->
+  <text x="320" y="190" text-anchor="middle" font-size="24" fill="#94A3B8">&#x2192;</text>
+  <text x="640" y="190" text-anchor="middle" font-size="24" fill="#94A3B8">&#x2192;</text>
+
+  <!-- Footer -->
+  <text x="480" y="345" text-anchor="middle" font-size="11" fill="#94A3B8">痛点 → 平台解决方案 → 业务成效</text>
+</svg>

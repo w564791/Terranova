@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="960" height="960" fill="#fff" rx="8"/>
+
+  <!-- Title -->
+  <text x="480" y="28" text-anchor="middle" font-size="17" font-weight="700" fill="#1E293B">IaC Platform 平台架构</text>
+
+  <!-- Feature Highlights -->
+  <rect x="20" y="46" width="920" height="22" rx="6" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="480" y="61" text-anchor="middle" font-size="9.5" font-weight="600" fill="#334155">全UI管理(脱离命令行) · 全局搜索 · Schema表单提交 · 参数关联关系 · AI驱动 · 多角色协作</text>
+
+  <!-- Roles -->
+  <rect x="20" y="78" width="920" height="38" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="30" y="95" font-size="10" font-weight="700" fill="#1E293B">角色分离</text>
+  <rect x="120" y="84" width="190" height="26" rx="4" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="215" y="101" text-anchor="middle" font-size="9" fill="#334155">平台管理员</text>
+  <rect x="320" y="84" width="190" height="26" rx="4" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="415" y="101" text-anchor="middle" font-size="9" fill="#334155">策略管理员</text>
+  <rect x="520" y="84" width="190" height="26" rx="4" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="615" y="101" text-anchor="middle" font-size="9" fill="#334155">Module 贡献者</text>
+  <rect x="720" y="84" width="210" height="26" rx="4" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="825" y="101" text-anchor="middle" font-size="9" fill="#334155">交付工程师</text>
+
+  <!-- ==================== 全局设置 ==================== -->
+  <rect x="20" y="128" width="920" height="196" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="30" y="145" font-size="11" font-weight="700" fill="#1E293B">全局设置</text>
+
+  <rect x="32" y="154" width="290" height="80" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="169" font-size="10" font-weight="600" fill="#334155">Agent 管理</text>
+  <text x="42" y="182" font-size="9" fill="#64748B">K8s 自动扩缩容 · 自定义部署模板</text>
+  <text x="42" y="194" font-size="9" fill="#64748B">认证轮转 · 网络白名单</text>
+  <text x="42" y="206" font-size="9" fill="#64748B">非活跃网段自动关机 · 应急解冻</text>
+  <text x="42" y="218" font-size="9" fill="#64748B">活跃度监控 · 当前任务追踪</text>
+
+  <rect x="335" y="154" width="290" height="80" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="345" y="169" font-size="10" font-weight="600" fill="#334155">IaC 引擎</text>
+  <text x="345" y="182" font-size="9" fill="#64748B">Terraform / OpenTofu 双引擎</text>
+  <text x="345" y="194" font-size="9" fill="#64748B">全局默认版本配置</text>
+  <text x="345" y="206" font-size="9" fill="#64748B">多版本 · 按 Workspace 灵活配置</text>
+  <text x="345" y="218" font-size="9" fill="#64748B">平台级版本管理</text>
+
+  <rect x="638" y="154" width="290" height="80" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="648" y="169" font-size="10" font-weight="600" fill="#334155">Run Tasks</text>
+  <text x="648" y="182" font-size="9" fill="#64748B">Pre/Post Plan · Pre/Post Apply 钩子</text>
+  <text x="648" y="194" font-size="9" fill="#64748B">强制 / 非强制模式</text>
+  <text x="648" y="206" font-size="9" fill="#64748B">代码安全审查</text>
+  <text x="648" y="218" font-size="9" fill="#64748B">单次授权审批流（规划中）</text>
+
+  <rect x="32" y="244" width="443" height="68" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="259" font-size="10" font-weight="600" fill="#334155">全局通知</text>
+  <text x="42" y="272" font-size="9" fill="#64748B">事件: Completed · Created · Planning · Planned</text>
+  <text x="42" y="284" font-size="9" fill="#64748B">Applying · Failed · Cancelled · Approval · Drift</text>
+  <text x="42" y="296" font-size="9" fill="#64748B">Webhook 集成 · 自定义通知通道</text>
+
+  <rect x="487" y="244" width="441" height="68" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="497" y="259" font-size="10" font-weight="600" fill="#334155">权限管理 (RBAC)</text>
+  <text x="497" y="272" font-size="9" fill="#64748B">内建角色 · 自定义角色 · 用户组 · 审计日志</text>
+  <text x="497" y="284" font-size="9" fill="#64748B">个人 Token（登录态绑定）· 团队 Token（持久有效）</text>
+  <text x="497" y="296" font-size="9" fill="#64748B">SSO (Auth0/Google/GitHub/Azure AD/Okta) · MFA</text>
+
+  <!-- ==================== AI 服务 + 模块管理 ==================== -->
+  <rect x="20" y="338" width="452" height="218" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="30" y="355" font-size="11" font-weight="700" fill="#1E293B">AI 服务</text>
+
+  <rect x="32" y="364" width="428" height="56" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="379" font-size="10" font-weight="600" fill="#334155">AI 基础能力</text>
+  <text x="42" y="392" font-size="9" fill="#64748B">错误分析 · 表单资源生成 · 自然语言需求解析</text>
+  <text x="42" y="404" font-size="9" fill="#64748B">安全断言（小模型）每次 LLM 调用前执行</text>
+  <text x="42" y="416" font-size="9" fill="#64748B">AI 继承用户权限</text>
+
+  <rect x="32" y="426" width="428" height="56" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="441" font-size="10" font-weight="600" fill="#334155">Module Skill 系统</text>
+  <text x="42" y="454" font-size="9" fill="#64748B">基于 OpenAPI V3 自动生成 · 内置 Skill Generator</text>
+  <text x="42" y="466" font-size="9" fill="#64748B">流程: Schema → 断言 → CMDB → Skill 组装 → LLM → Resolver</text>
+  <text x="42" y="478" font-size="9" fill="#64748B">SchemaSolver: 最终校验 + 自动修复循环</text>
+
+  <rect x="32" y="488" width="428" height="56" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="503" font-size="10" font-weight="600" fill="#334155">Skill 分层</text>
+  <text x="42" y="516" font-size="9" fill="#64748B">基础层: 不可绕过</text>
+  <text x="42" y="528" font-size="9" fill="#64748B">Domain 层: 按需自动加载</text>
+  <text x="42" y="540" font-size="9" fill="#64748B">Task 层: 根据任务类型加载</text>
+
+  <rect x="488" y="338" width="452" height="218" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="498" y="355" font-size="11" font-weight="700" fill="#1E293B">模块管理</text>
+
+  <rect x="500" y="364" width="428" height="56" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="510" y="379" font-size="10" font-weight="600" fill="#334155">版本管理</text>
+  <text x="510" y="392" font-size="9" fill="#64748B">版本级别 Demo &amp; Schema（可继承）</text>
+  <text x="510" y="404" font-size="9" fill="#64748B">自动解析 TF variables → OpenAPI V3</text>
+  <text x="510" y="416" font-size="9" fill="#64748B">可视化 Schema 编辑器</text>
+
+  <rect x="500" y="426" width="428" height="56" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="510" y="441" font-size="10" font-weight="600" fill="#334155">Schema 定义</text>
+  <text x="510" y="454" font-size="9" fill="#64748B">表单提交 · 参数分组</text>
+  <text x="510" y="466" font-size="9" fill="#64748B">关联关系: 互斥 · 依赖 · 复杂类型支持</text>
+  <text x="510" y="478" font-size="9" fill="#64748B">值填充: CMDB / WS Output / 远程 Workspace</text>
+
+  <rect x="500" y="488" width="428" height="56" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="510" y="503" font-size="10" font-weight="600" fill="#334155">AI 能力</text>
+  <text x="510" y="516" font-size="9" fill="#64748B">AI 代码生成 · 自动表单 · 错误修复</text>
+  <text x="510" y="528" font-size="9" fill="#64748B">提示词 CRUD · AI 助手界面</text>
+  <text x="510" y="540" font-size="9" fill="#64748B">Module Skill 自动生成</text>
+
+  <!-- ==================== CMDB + 编排 + 数据层 ==================== -->
+  <rect x="20" y="570" width="360" height="100" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="30" y="587" font-size="11" font-weight="700" fill="#1E293B">CMDB 配置管理</text>
+  <text x="30" y="604" font-size="9" font-weight="600" fill="#334155">内置</text>
+  <text x="60" y="604" font-size="9" fill="#64748B">每次 apply 自动更新 · 字段: arn/name/tag · 树状结构</text>
+  <text x="30" y="620" font-size="9" font-weight="600" fill="#334155">外置</text>
+  <text x="60" y="620" font-size="9" fill="#64748B">外置 CMDB 同步 · 向量化数据存储</text>
+  <text x="30" y="636" font-size="9" font-weight="600" fill="#334155">AI</text>
+  <text x="60" y="636" font-size="9" fill="#64748B">自然语言资源查询 · 资源生成上下文补全</text>
+  <text x="30" y="652" font-size="9" fill="#94A3B8">手动同步 · 成功/失败增量更新</text>
+
+  <rect x="392" y="570" width="266" height="100" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="402" y="587" font-size="11" font-weight="700" fill="#1E293B">Manifests 编排</text>
+  <text x="402" y="606" font-size="9" fill="#64748B">拖拽式模块编辑</text>
+  <text x="402" y="620" font-size="9" fill="#64748B">依赖关系可视化</text>
+  <text x="402" y="634" font-size="9" fill="#64748B">支持 Form / JSON / AI 全部能力</text>
+  <text x="402" y="648" font-size="9" fill="#64748B">多次部署与历史追踪</text>
+
+  <rect x="670" y="570" width="270" height="100" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="680" y="587" font-size="11" font-weight="700" fill="#1E293B">数据层</text>
+  <text x="680" y="606" font-size="9" fill="#64748B">PostgreSQL + pgvector</text>
+  <text x="680" y="620" font-size="9" fill="#64748B">版本控制 · 每次运行快照</text>
+  <text x="680" y="634" font-size="9" fill="#64748B">软删除 · 审计追踪</text>
+  <text x="680" y="648" font-size="9" fill="#64748B">向量检索 · 全文索引</text>
+
+  <!-- ==================== Workspace ==================== -->
+  <rect x="20" y="684" width="920" height="254" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="30" y="701" font-size="11" font-weight="700" fill="#1E293B">Workspace 工作空间（核心功能）</text>
+
+  <rect x="32" y="710" width="896" height="22" rx="4" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="480" y="725" text-anchor="middle" font-size="9" font-weight="600" fill="#334155">AI + CMDB → 自然语言生成配置 → Schema 合规规范 → 安全标准化资源创建</text>
+
+  <rect x="32" y="742" width="215" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="757" font-size="10" font-weight="600" fill="#334155">资源管理（核心）</text>
+  <text x="42" y="770" font-size="9" fill="#64748B">表单/JSON 双模式编辑</text>
+  <text x="42" y="782" font-size="9" fill="#64748B">版本控制 · 回滚 · 版本对比</text>
+  <text x="42" y="794" font-size="9" fill="#64748B">AI 新增/编辑 · 导出</text>
+  <text x="42" y="806" font-size="9" fill="#64748B">资源锁 · 草稿机制</text>
+
+  <rect x="257" y="742" width="215" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="267" y="757" font-size="10" font-weight="600" fill="#334155">Run &amp; 任务</text>
+  <text x="267" y="770" font-size="9" fill="#64748B">运行历史 · 状态追踪</text>
+  <text x="267" y="782" font-size="9" fill="#64748B">结构化变更视图</text>
+  <text x="267" y="794" font-size="9" fill="#64748B">分进度日志 · 评论</text>
+  <text x="267" y="806" font-size="9" fill="#64748B">AI 错误分析</text>
+
+  <rect x="482" y="742" width="215" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="492" y="757" font-size="10" font-weight="600" fill="#334155">State 管理</text>
+  <text x="492" y="770" font-size="9" fill="#64748B">卡片归类查看</text>
+  <text x="492" y="782" font-size="9" fill="#64748B">JSON 原始数据 · Retrieve IAM</text>
+  <text x="492" y="794" font-size="9" fill="#64748B">版本管理</text>
+  <text x="492" y="806" font-size="9" fill="#64748B">导入校验</text>
+
+  <rect x="707" y="742" width="221" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="717" y="757" font-size="10" font-weight="600" fill="#334155">变量管理</text>
+  <text x="717" y="770" font-size="9" fill="#64748B">版本控制 · 每次运行快照</text>
+  <text x="717" y="782" font-size="9" fill="#64748B">TF / 系统 / 敏感变量</text>
+  <text x="717" y="794" font-size="9" fill="#64748B">API: 任意版本访问</text>
+  <text x="717" y="806" font-size="9" fill="#64748B">串行任务流支持</text>
+
+  <rect x="32" y="830" width="215" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="42" y="845" font-size="10" font-weight="600" fill="#334155">Output &amp; 远程数据</text>
+  <text x="42" y="858" font-size="9" fill="#64748B">跨 Workspace 链接</text>
+  <text x="42" y="870" font-size="9" fill="#64748B">白名单 · 全局允许</text>
+  <text x="42" y="882" font-size="9" fill="#64748B">静态 Output · 远程 WS 调用</text>
+  <text x="42" y="894" font-size="9" fill="#64748B">跨 Workspace 数据共享</text>
+
+  <rect x="257" y="830" width="215" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="267" y="845" font-size="10" font-weight="600" fill="#334155">Drift 检测</text>
+  <text x="267" y="858" font-size="9" fill="#64748B">后台静默检查</text>
+  <text x="267" y="870" font-size="9" fill="#64748B">手动 / 自动触发</text>
+  <text x="267" y="882" font-size="9" fill="#64748B">自定义检测周期</text>
+
+  <rect x="482" y="830" width="215" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="492" y="845" font-size="10" font-weight="600" fill="#334155">Workspace 配置</text>
+  <text x="492" y="858" font-size="9" fill="#64748B">Workspace 锁</text>
+  <text x="492" y="870" font-size="9" fill="#64748B">Provider 版本限制</text>
+  <text x="492" y="882" font-size="9" fill="#64748B">Run Task 配置 · Run Trigger</text>
+  <text x="492" y="894" font-size="9" fill="#64748B">通知设置</text>
+
+  <rect x="707" y="830" width="221" height="78" rx="5" fill="#fff" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="717" y="845" font-size="10" font-weight="600" fill="#334155">版本控制特性</text>
+  <text x="717" y="858" font-size="9" fill="#64748B">资源 / 变量 / State 版本管理</text>
+  <text x="717" y="870" font-size="9" fill="#64748B">草稿机制 · 落后提示</text>
+  <text x="717" y="882" font-size="9" fill="#64748B">软删除与恢复</text>
+  <text x="717" y="894" font-size="9" fill="#64748B">任意版本差异对比</text>
+
+  <!-- Footer -->
+  <text x="480" y="948" text-anchor="middle" font-size="9" fill="#94A3B8">PostgreSQL + pgvector · Go + Gin · React + TypeScript · Terraform / OpenTofu · AWS Bedrock</text>
+</svg>
