@@ -11,6 +11,8 @@ import (
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
@@ -26,6 +28,7 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 
 	// Prometheus 指标注册表
 	metricsReg := metrics.InitRegistry()
+	metrics.RegisterDBMetrics(metricsReg)
 
 	// 中间件（顺序：Recovery → HTTPMetrics → CORS → Logger → ErrorHandler → ...）
 	r.Use(gin.Recovery())
@@ -39,8 +42,11 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// Prometheus 指标端点（复用业务端口）
-	r.GET("/metrics", gin.WrapF(services.MetricsHandler()))
+	// Prometheus 指标端点（复用业务端口）—— 合并基础设施 + AI 指标
+	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(
+		prometheus.Gatherers{metricsReg, services.GetAIMetricsRegistry()},
+		promhttp.HandlerOpts{},
+	)))
 
 	// 静态文件服务 - 提供自定义CSS
 	r.Static("/static", "./static")
