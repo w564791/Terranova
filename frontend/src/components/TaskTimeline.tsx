@@ -95,14 +95,19 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
 
   // Helper: Check if task is in apply-related stage
   const isApplyStage = () => {
-    const applyStages = ['apply', 'applying', 'pre_apply', 'restoring_plan', 'post_apply', 'saving_state', 'apply_pending'];
+    const applyStages = ['applying', 'restoring_plan', 'pre_apply_run_tasks', 'saving_state', 'post_apply', 'applied', 'apply_pending'];
     return task.stage ? applyStages.includes(task.stage) : false;
   };
 
   // Helper: Check if task is in plan-related stage
   const isPlanStage = () => {
-    const planStages = ['init', 'fetching', 'plan', 'planning', 'post_plan', 'saving_plan', 'pending'];
+    const planStages = ['pending', 'init', 'fetching', 'planning', 'saving_plan', 'post_plan_run_tasks'];
     return task.stage ? planStages.includes(task.stage) : true; // Default to plan stage if no stage
+  };
+
+  // Helper: Check if task failed due to Run Task (not plan/apply itself)
+  const isRunTaskFailure = () => {
+    return task.stage === 'post_plan_run_tasks' || task.stage === 'pre_apply_run_tasks';
   };
 
   // Helper: Check if task was cancelled (either by status or error message)
@@ -142,6 +147,8 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
     }
     
     if (task.status === 'failed') {
+      // Run Task failure: plan itself succeeded, Run Task blocked execution
+      if (isRunTaskFailure()) return 'passed';
       // If failed during plan stage
       if (isPlanStage() && !isApplyStage()) return 'failed';
       // If failed during apply stage, plan was successful
@@ -180,6 +187,8 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
     }
     
     if (task.status === 'failed') {
+      // Run Task failure: apply itself never started, don't show apply failed
+      if (isRunTaskFailure()) return null;
       if (isApplyStage()) return 'failed';
       // If failed during plan, don't show apply card
       return null;

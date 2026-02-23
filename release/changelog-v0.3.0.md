@@ -40,6 +40,7 @@
 - **in-flight 指标泄漏修复** — HTTP 中间件使用 `defer` 确保 Gauge Dec 在 panic 时也能执行 (`http.go`)
 - **Tracer shutdown context 修复** — 使用独立 context 进行 tracer shutdown，避免复用已取消的 shutdownCtx (`main.go`)
 - **Agent pool_type 修复** — 连接时从数据库查询 `agent_pools` 表获取实际 pool_type，替代硬编码 "static" (`agent_cc_handler.go`)
+- **Run Task 失败时 UI 错误显示位置修正** — Post-plan / Pre-apply Run Task（mandatory）失败时，`task.Stage` 停留在 `planning`，前端误将错误显示在 Plan/Apply 卡片中；后端设置 `task.Stage` 为 `post_plan_run_tasks` / `pre_apply_run_tasks`，前端据此判断：Plan 卡片显示 passed，Apply 卡片不显示 (`terraform_executor.go`, `TaskTimeline.tsx`)
 
 ### Tests
 

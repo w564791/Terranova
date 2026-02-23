@@ -1177,6 +1177,9 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	if !runTasksPassed {
 		// Mandatory Run Task 失败，任务被阻止
+		// 设置 stage 为 "post_plan_run_tasks" 以区分 plan 本身失败和 Run Task 失败
+		// 前端据此判断：plan 卡片显示 passed，错误显示在 Run Task 区域
+		task.Stage = "post_plan_run_tasks"
 		logger.Error("Post-plan Run Tasks blocked execution (mandatory task failed)")
 		logger.StageEnd("post_plan_run_tasks")
 		s.saveTaskFailure(task, logger, fmt.Errorf("post-plan run task failed (mandatory)"), "plan")
@@ -2237,6 +2240,8 @@ func (s *TerraformExecutor) ExecuteApply(
 		return fmt.Errorf("pre-apply run tasks failed: %w", preApplyErr)
 	}
 	if !preApplyPassed {
+		// 设置 stage 为 "pre_apply_run_tasks" 以区分 apply 本身失败和 Run Task 失败
+		task.Stage = "pre_apply_run_tasks"
 		logger.Error("Pre-apply Run Tasks blocked execution (mandatory task failed)")
 		logger.StageEnd("pre_apply_run_tasks")
 		s.saveTaskFailure(task, logger, fmt.Errorf("pre-apply run task failed (mandatory)"), "apply")
