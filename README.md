@@ -1,6 +1,6 @@
 # Terranova
 
-> A self-hosted Infrastructure-as-Code UI platform — Schema-driven, AI-assisted, compliance-by-design.
+> A self-hosted Infrastructure-as-Code platform — Schema-driven, AI-assisted, compliance-by-design.
 
 <p align="center">
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
