@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 	"io"
 	"log"
 	"net/http"
@@ -740,10 +741,20 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 		Content []struct {
 			Text string `json:"text"`
 		} `json:"content"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
 	}
 
 	if err := json.Unmarshal(output.Body, &response); err != nil {
 		return "", fmt.Errorf("无法解析响应: %w", err)
+	}
+
+	// 记录 token 用量指标
+	if response.Usage.InputTokens > 0 || response.Usage.OutputTokens > 0 {
+		metrics.IncAITokens("bedrock", "prompt", float64(response.Usage.InputTokens))
+		metrics.IncAITokens("bedrock", "completion", float64(response.Usage.OutputTokens))
 	}
 
 	if len(response.Content) == 0 {
@@ -810,10 +821,20 @@ func (s *AIFormService) callOpenAICompatibleForForm(baseURL, apiKey, modelID, pr
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		return "", fmt.Errorf("无法解析响应: %w", err)
+	}
+
+	// 记录 token 用量指标
+	if response.Usage.PromptTokens > 0 || response.Usage.CompletionTokens > 0 {
+		metrics.IncAITokens("openai", "prompt", float64(response.Usage.PromptTokens))
+		metrics.IncAITokens("openai", "completion", float64(response.Usage.CompletionTokens))
 	}
 
 	if len(response.Choices) == 0 {

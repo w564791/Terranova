@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -195,6 +196,11 @@ func (s *EmbeddingService) callOpenAIEmbedding(config *models.AIConfig, text str
 		return nil, fmt.Errorf("OpenAI embedding 调用失败: %w", err)
 	}
 
+	// 记录 token 用量指标
+	if resp.Usage.PromptTokens > 0 {
+		metrics.IncAITokens("openai", "prompt", float64(resp.Usage.PromptTokens))
+	}
+
 	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("OpenAI embedding 返回空结果")
 	}
@@ -213,6 +219,11 @@ func (s *EmbeddingService) callOpenAIEmbeddingBatch(config *models.AIConfig, tex
 	})
 	if err != nil {
 		return nil, fmt.Errorf("OpenAI embedding 批量调用失败: %w", err)
+	}
+
+	// 记录 token 用量指标
+	if resp.Usage.PromptTokens > 0 {
+		metrics.IncAITokens("openai", "prompt", float64(resp.Usage.PromptTokens))
 	}
 
 	if len(resp.Data) != len(texts) {
@@ -488,12 +499,17 @@ func (s *EmbeddingService) callBedrockEmbedding(aiConfig *models.AIConfig, text 
 
 	// 解析响应
 	if strings.Contains(modelID, "titan-embed") {
-		// Titan 响应格式: {"embedding": [0.1, 0.2, ...]}
+		// Titan 响应格式: {"embedding": [0.1, 0.2, ...], "inputTextTokenCount": N}
 		var titanResponse struct {
-			Embedding []float32 `json:"embedding"`
+			Embedding          []float32 `json:"embedding"`
+			InputTextTokenCount int      `json:"inputTextTokenCount"`
 		}
 		if err := json.Unmarshal(output.Body, &titanResponse); err != nil {
 			return nil, fmt.Errorf("无法解析 Titan embedding 响应: %w", err)
+		}
+		// 记录 token 用量指标
+		if titanResponse.InputTextTokenCount > 0 {
+			metrics.IncAITokens("bedrock", "prompt", float64(titanResponse.InputTextTokenCount))
 		}
 		return titanResponse.Embedding, nil
 	} else if strings.Contains(modelID, "cohere.embed") {
