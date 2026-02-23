@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"iac-platform/internal/observability/metrics"
+	"iac-platform/internal/observability/tracing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"gorm.io/driver/postgres"
@@ -34,14 +35,15 @@ func TestAcquireTask_WithGORMCallbacks(t *testing.T) {
 	}
 	defer sqlDB.Close()
 
-	// Register observability GORM callbacks (same as what database.go does).
+	// Register observability GORM callbacks (metrics + tracing, same as what database.go does).
 	reg := prometheus.NewRegistry()
 	metrics.RegisterDBMetrics(reg)
 	metrics.RegisterGORMCallbacks(db)
+	tracing.RegisterGORMTracing(db)
 
 	// Create the service and attempt to acquire a task.
 	// The key assertion is that no panic occurs when GORM callbacks
-	// are registered alongside a SKIP LOCKED query.
+	// (both metrics and tracing) are registered alongside a SKIP LOCKED query.
 	svc := NewTaskLockService(db)
 	_, err = svc.AcquireTask("test-agent", 60)
 
