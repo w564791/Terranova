@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -31,8 +32,9 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	metricsReg := metrics.InitRegistry()
 	metrics.RegisterDBMetrics(metricsReg)
 
-	// 中间件（顺序：Recovery → HTTPMetrics → CORS → Logger → ErrorHandler → ...）
+	// 中间件（顺序：Recovery → otelgin → HTTPMetrics → CORS → Logger → ErrorHandler → ...）
 	r.Use(gin.Recovery())
+	r.Use(otelgin.Middleware("iac-backend"))
 	r.Use(metrics.HTTPMetricsMiddleware(metricsReg))
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
