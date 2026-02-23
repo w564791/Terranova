@@ -436,7 +436,14 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
       console.log('Resources count:', response.resources?.length || 0);
       console.log('Summary:', response.summary);
       
-      setResourceChanges(response.resources || []);
+      // 任务已到终态时，将残留的 applying 状态修正为实际结果
+      let resources = response.resources || [];
+      if (task.status === 'failed' || task.status === 'cancelled') {
+        resources = resources.map(r =>
+          r.apply_status === 'applying' ? { ...r, apply_status: 'failed' } : r
+        );
+      }
+      setResourceChanges(resources);
       setSummary(response.summary || { add: 0, change: 0, destroy: 0 });
       
       // 解析 output_changes - 只在非 applied 状态下设置
