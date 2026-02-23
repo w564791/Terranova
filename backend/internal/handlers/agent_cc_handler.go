@@ -29,6 +29,7 @@ type AgentCCHandler struct {
 // AgentConnection represents a C&C connection to an agent
 type AgentConnection struct {
 	AgentID    string
+	PoolType   string // "static" or "k8s", resolved at connect time from agent_pools
 	conn       *websocket.Conn
 	connMu     sync.Mutex // Protects conn for all operations
 	LastPingAt time.Time
@@ -100,10 +101,20 @@ func (h *AgentCCHandler) HandleCCConnection(c *gin.Context) {
 	// Clean up any existing connection
 	h.cleanupExistingConnection(agentID)
 
+	// Resolve pool type from agent's pool (best-effort, default to "static")
+	poolType := "static"
+	if agent.PoolID != nil {
+		var pool models.AgentPool
+		if err := h.db.Where("pool_id = ?", *agent.PoolID).Select("pool_type").First(&pool).Error; err == nil {
+			poolType = pool.PoolType
+		}
+	}
+
 	// Create new connection with proper lifecycle management
 	ctx, cancel := context.WithCancel(context.Background())
 	agentConn := &AgentConnection{
 		AgentID:    agentID,
+		PoolType:   poolType,
 		conn:       conn,
 		LastPingAt: time.Now(),
 		ctx:        ctx,
@@ -383,7 +394,7 @@ func (h *AgentCCHandler) handleTaskCompleted(agentConn *AgentConnection, payload
 		return
 	}
 	log.Printf("Agent %s reported task %d completed", agentConn.AgentID, uint(taskID))
-	metrics.IncAgentTaskCompleted("agent", "success")
+	metrics.IncAgentTaskCompleted(agentConn.PoolType, "success")
 
 	// 发送任务完成通知
 	go h.sendTaskCompletedNotification(uint(taskID))
@@ -482,7 +493,7 @@ func (h *AgentCCHandler) handleTaskFailed(agentConn *AgentConnection, payload ma
 	}
 
 	log.Printf("Agent %s reported task %d failed: %s", agentConn.AgentID, uint(taskID), errorMsg)
-	metrics.IncAgentTaskCompleted("agent", "failed")
+	metrics.IncAgentTaskCompleted(agentConn.PoolType, "failed")
 
 	// 发送任务失败通知
 	go h.sendTaskFailedNotification(uint(taskID))
@@ -538,7 +549,7 @@ func (h *AgentCCHandler) SendTaskToAgent(agentID string, taskID uint, workspaceI
 	if err := h.sendMessage(agentConn, msg); err != nil {
 		return err
 	}
-	metrics.IncAgentTaskDispatched("agent")
+	metrics.IncAgentTaskDispatched(agentConn.PoolType)
 	return nil
 }
 
