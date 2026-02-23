@@ -83,11 +83,12 @@ func (s *AIAnalysisService) UpdateRateLimit(userID string) error {
 
 // BuildPrompt 构建分析 prompt
 func (s *AIAnalysisService) BuildPrompt(taskType, tfVersion, errorMessage, customPrompt string) string {
-	return s.BuildPromptWithCapability(taskType, tfVersion, errorMessage, customPrompt, "")
+	return s.BuildPromptWithCapability(taskType, tfVersion, errorMessage, "", "", customPrompt, "")
 }
 
 // BuildPromptWithCapability 构建分析 prompt（支持自定义能力场景 prompt）
-func (s *AIAnalysisService) BuildPromptWithCapability(taskType, tfVersion, errorMessage, customPrompt, capabilityPrompt string) string {
+// 支持占位符：{task_type}, {terraform_version}, {error_message}, {failed_resources}, {succeeded_resources}
+func (s *AIAnalysisService) BuildPromptWithCapability(taskType, tfVersion, errorMessage, failedResources, succeededResources, customPrompt, capabilityPrompt string) string {
 	var prompt string
 
 	// 如果有自定义的能力场景 prompt，使用它
@@ -97,43 +98,54 @@ func (s *AIAnalysisService) BuildPromptWithCapability(taskType, tfVersion, error
 		prompt = strings.ReplaceAll(prompt, "{task_type}", taskType)
 		prompt = strings.ReplaceAll(prompt, "{terraform_version}", tfVersion)
 		prompt = strings.ReplaceAll(prompt, "{error_message}", errorMessage)
+		prompt = strings.ReplaceAll(prompt, "{failed_resources}", failedResources)
+		prompt = strings.ReplaceAll(prompt, "{succeeded_resources}", succeededResources)
 	} else {
-		// 使用默认 prompt
-		defaultPrompt := `你是一个专业的 Terraform 和云基础设施专家。
+		// 使用默认 prompt（同样通过占位符替换）
+		capabilityPrompt = `你是一个专业的 Terraform 和云基础设施专家。
 
-【重要规则 - 必须严格遵守】
-1. 这是 Terraform %s 执行过程中的报错，请基于 Terraform 和云服务的专业知识进行分析
-2. 输出必须精简，但要让人看得懂
-3. 每个解决方案需要包含具体的修复建议，可以包含简短的代码示例
-4. 根本原因不超过 50 字
-5. 每个解决方案不超过 100 字（可包含代码）
-6. 预防措施不超过 50 字
-7. 必须返回有效的 JSON 格式，不要有任何额外的文字说明或 markdown 标记
+【任务】
+分析 Terraform {task_type} 执行过程中的错误，结合资源变更上下文给出精准诊断。
+
+【分析要求】
+1. 结合成功资源和失败资源的关系，分析依赖关系和配置差异
+2. 根本原因要具体，指出失败资源的哪个配置项或权限导致问题
+3. 解决方案要可操作，包含具体的 Terraform 代码修改建议
+4. 解决方案数量 1-5 条，按推荐优先级排序
+5. 必须返回有效的 JSON 格式，不要有任何额外的文字说明或 markdown 标记
 
 【执行环境】
-- 执行阶段：%s（plan 表示规划阶段，apply 表示应用阶段）
-- Terraform 版本：%s
-- 错误来源：Terraform 执行输出
+- 执行阶段：{task_type}
+- Terraform 版本：{terraform_version}
+
+【失败资源】
+{failed_resources}
+
+【已成功资源（同 Module）】
+{succeeded_resources}
 
 【错误信息】
-%s
+{error_message}
 
-【输出格式 - 必须严格遵守】
+【输出格式】
 {
-  "error_type": "错误类型（从以下选择：配置错误/权限错误/资源冲突/网络错误/语法错误/依赖错误/其他）",
-  "root_cause": "根本原因（简洁明了，不超过50字）",
+  "error_type": "错误类型（配置错误/权限错误/资源冲突/网络错误/语法错误/依赖错误/状态错误/配额限制/其他）",
+  "root_cause": "根本原因：指出具体资源和失败原因（不超过100字）",
   "solutions": [
-    "解决方案1：具体的修复步骤和建议，可包含代码示例（不超过100字）",
-    "解决方案2：具体的修复步骤和建议，可包含代码示例（不超过100字）",
-    "解决方案3：具体的修复步骤和建议，可包含代码示例（不超过100字）"
+    "解决方案：具体修改建议，可包含代码示例（不超过200字）"
   ],
-  "prevention": "预防措施（不超过50字）",
-  "severity": "严重程度（从以下选择：low/medium/high/critical）"
+  "prevention": "预防措施（不超过100字）",
+  "severity": "low/medium/high/critical"
 }
 
 请立即分析并返回纯 JSON 结果，不要有任何额外的解释、说明或 markdown 标记。`
 
-		prompt = fmt.Sprintf(defaultPrompt, taskType, taskType, tfVersion, errorMessage)
+		prompt = capabilityPrompt
+		prompt = strings.ReplaceAll(prompt, "{task_type}", taskType)
+		prompt = strings.ReplaceAll(prompt, "{terraform_version}", tfVersion)
+		prompt = strings.ReplaceAll(prompt, "{error_message}", errorMessage)
+		prompt = strings.ReplaceAll(prompt, "{failed_resources}", failedResources)
+		prompt = strings.ReplaceAll(prompt, "{succeeded_resources}", succeededResources)
 	}
 
 	// 如果有自定义 prompt（追加内容），追加到末尾
@@ -177,45 +189,64 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 		return nil, 0, fmt.Errorf("任务没有错误信息，无需分析")
 	}
 
-	// 查询资源变更记录，为 AI 提供 apply 执行上下文
+	// 查询资源变更记录，分别构建失败资源和成功资源（含配置详情）
+	var failedResources, succeededResources string
 	var resourceChanges []models.WorkspaceTaskResourceChange
 	s.db.Where("task_id = ?", taskID).Find(&resourceChanges)
 	if len(resourceChanges) > 0 {
-		var contextLines []string
-		var completedResources []string
-		var failedResources []string
-
+		// 1. 收集失败资源及其所属 module，附带 ChangesAfter 配置
+		failedModules := make(map[string]bool)
+		failedAddrSet := make(map[string]bool)
+		var failedLines []string
 		for _, rc := range resourceChanges {
-			if rc.ApplyStatus == "completed" {
-				label := rc.Action
-				switch rc.Action {
-				case "create":
-					label = "已创建"
-				case "update":
-					label = "已修改"
-				case "delete":
-					label = "已删除"
-				case "replace":
-					label = "已替换"
+			if rc.ApplyStatus == "applying" || rc.ApplyStatus == "failed" {
+				failedModules[rc.ModuleAddress] = true
+				failedAddrSet[rc.ResourceAddress] = true
+				line := fmt.Sprintf("- %s (action: %s)", rc.ResourceAddress, rc.Action)
+				if config := marshalJSONB(rc.ChangesAfter); config != "" {
+					line += fmt.Sprintf("\n  配置: %s", config)
 				}
-				completedResources = append(completedResources, fmt.Sprintf("  %s (%s)", rc.ResourceAddress, label))
-			} else if rc.ApplyStatus == "applying" || rc.ApplyStatus == "failed" {
-				failedResources = append(failedResources, fmt.Sprintf("  %s (action: %s)", rc.ResourceAddress, rc.Action))
+				failedLines = append(failedLines, line)
 			}
 		}
-
-		if len(failedResources) > 0 {
-			contextLines = append(contextLines, "失败资源:")
-			contextLines = append(contextLines, failedResources...)
-		}
-		if len(completedResources) > 0 {
-			contextLines = append(contextLines, "已成功的资源:")
-			contextLines = append(contextLines, completedResources...)
+		if len(failedLines) > 0 {
+			failedResources = strings.Join(failedLines, "\n")
 		}
 
-		if len(contextLines) > 0 {
-			resourceContext := strings.Join(contextLines, "\n")
-			errorMessage = fmt.Sprintf("【Apply 执行结果】\n%s\n\n【错误信息】\n%s", resourceContext, errorMessage)
+		// 2. 构建同 module 已成功资源列表（含配置详情）
+		//    来源：workspace_task_resource_changes 中同 workspace + 同 module 已完成的变更记录
+		//    同一资源取最新一条（按 id DESC），用 ChangesAfter 作为配置
+		if len(failedModules) > 0 {
+			failedModulePaths := make([]string, 0, len(failedModules))
+			for m := range failedModules {
+				failedModulePaths = append(failedModulePaths, m)
+			}
+
+			// 查询同 workspace、同 module 下 apply 成功且有配置数据的变更记录（按 id DESC 取最新）
+			// 注意：重试任务可能不带 changes_after，需排除以取到首次任务的完整数据
+			var succeededChanges []models.WorkspaceTaskResourceChange
+			s.db.Where("workspace_id = ? AND module_address IN ? AND apply_status = ? AND changes_after IS NOT NULL",
+				task.WorkspaceID, failedModulePaths, "completed").
+				Order("id DESC").
+				Find(&succeededChanges)
+
+			// 按 resource_address 去重，只保留最新一条
+			seen := make(map[string]bool)
+			var succeededLines []string
+			for _, rc := range succeededChanges {
+				if failedAddrSet[rc.ResourceAddress] || seen[rc.ResourceAddress] {
+					continue
+				}
+				seen[rc.ResourceAddress] = true
+				line := fmt.Sprintf("- %s (%s)", rc.ResourceAddress, rc.ResourceType)
+				if config := marshalJSONB(rc.ChangesAfter); config != "" {
+					line += fmt.Sprintf("\n  配置: %s", config)
+				}
+				succeededLines = append(succeededLines, line)
+			}
+			if len(succeededLines) > 0 {
+				succeededResources = strings.Join(succeededLines, "\n")
+			}
 		}
 	}
 
@@ -231,13 +262,12 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 		tfVersion = "latest"
 	}
 
-	// 调用原有的分析方法
-	return s.AnalyzeError(fmt.Sprintf("%d", taskID), userID, errorMessage, taskType, tfVersion)
+	return s.AnalyzeError(fmt.Sprintf("%d", taskID), userID, errorMessage, failedResources, succeededResources, taskType, tfVersion)
 }
 
 // AnalyzeError 分析错误（内部方法）
 // 注意：此方法仅供内部调用，外部应使用 AnalyzeErrorByTaskID
-func (s *AIAnalysisService) AnalyzeError(taskID, userID string, errorMessage, taskType, tfVersion string) (*AnalysisResult, int, error) {
+func (s *AIAnalysisService) AnalyzeError(taskID, userID string, errorMessage, failedResources, succeededResources, taskType, tfVersion string) (*AnalysisResult, int, error) {
 	startTime := time.Now()
 
 	// 获取支持错误分析的 AI 配置
@@ -265,10 +295,12 @@ func (s *AIAnalysisService) AnalyzeError(taskID, userID string, errorMessage, ta
 	}
 
 	// 构建 prompt（支持自定义能力场景 prompt）
-	prompt := s.BuildPromptWithCapability(taskType, tfVersion, errorMessage, cfg.CustomPrompt, capabilityPrompt)
+	prompt := s.BuildPromptWithCapability(taskType, tfVersion, errorMessage, failedResources, succeededResources, cfg.CustomPrompt, capabilityPrompt)
 
 	// 根据服务类型调用不同的 API
 	var result *AnalysisResult
+	log.Printf("[AIAnalysis] taskID=%s service=%s model=%s prompt:\n%s", taskID, cfg.ServiceType, cfg.ModelID, prompt)
+
 	switch cfg.ServiceType {
 	case "bedrock":
 		result, err = s.callBedrock(cfg.AWSRegion, cfg.ModelID, prompt, cfg.UseInferenceProfile)
@@ -708,3 +740,16 @@ func fixIncompleteJSON(text string) string {
 func trimSpace(s string) string {
 	return strings.TrimSpace(s)
 }
+
+// marshalJSONB 将 JSONB 序列化为紧凑 JSON 字符串
+func marshalJSONB(j models.JSONB) string {
+	if j == nil || len(j) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(j)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
