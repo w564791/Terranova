@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -119,6 +120,7 @@ func (h *AgentCCHandler) HandleCCConnection(c *gin.Context) {
 	h.mu.Unlock()
 
 	log.Printf("Agent %s connected to C&C channel", agentID)
+	metrics.IncAgentConnected()
 
 	// Update agent status
 	h.db.Model(&agent).Updates(map[string]interface{}{
@@ -180,6 +182,7 @@ func (h *AgentCCHandler) handleConnection(agentConn *AgentConnection) {
 			})
 
 		log.Printf("Agent %s disconnected from C&C channel", agentConn.AgentID)
+		metrics.DecAgentConnected()
 
 		// Signal that we're done
 		close(agentConn.done)
@@ -380,6 +383,7 @@ func (h *AgentCCHandler) handleTaskCompleted(agentConn *AgentConnection, payload
 		return
 	}
 	log.Printf("Agent %s reported task %d completed", agentConn.AgentID, uint(taskID))
+	metrics.IncAgentTaskCompleted("agent", "success")
 
 	// 发送任务完成通知
 	go h.sendTaskCompletedNotification(uint(taskID))
@@ -478,6 +482,7 @@ func (h *AgentCCHandler) handleTaskFailed(agentConn *AgentConnection, payload ma
 	}
 
 	log.Printf("Agent %s reported task %d failed: %s", agentConn.AgentID, uint(taskID), errorMsg)
+	metrics.IncAgentTaskCompleted("agent", "failed")
 
 	// 发送任务失败通知
 	go h.sendTaskFailedNotification(uint(taskID))
@@ -530,7 +535,11 @@ func (h *AgentCCHandler) SendTaskToAgent(agentID string, taskID uint, workspaceI
 		},
 	}
 
-	return h.sendMessage(agentConn, msg)
+	if err := h.sendMessage(agentConn, msg); err != nil {
+		return err
+	}
+	metrics.IncAgentTaskDispatched("agent")
+	return nil
 }
 
 // CancelTaskOnAgent sends cancel command to agent
