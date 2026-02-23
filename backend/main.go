@@ -17,6 +17,7 @@ import (
 	"iac-platform/internal/handlers"
 	"iac-platform/internal/models"
 	"iac-platform/internal/observability/health"
+	"iac-platform/internal/observability/tracing"
 	"iac-platform/internal/router"
 	"iac-platform/internal/websocket"
 	"iac-platform/internal/leaderelection"
@@ -68,6 +69,18 @@ func main() {
 	// 创建可被 shutdown 信号取消的顶层 context
 	shutdownCtx, shutdownCancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer shutdownCancel()
+
+	// 初始化分布式追踪
+	tracerShutdown, err := tracing.InitTracer(shutdownCtx)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize tracing: %v", err)
+	} else {
+		defer func() {
+			if err := tracerShutdown(shutdownCtx); err != nil {
+				log.Printf("Warning: Failed to shutdown tracer: %v", err)
+			}
+		}()
+	}
 
 	// 初始化全局信号管理器
 	signalManager := services.GetSignalManager()
