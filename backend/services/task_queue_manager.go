@@ -1396,30 +1396,38 @@ func (m *TaskQueueManager) taskHasResourceChanges(task *models.WorkspaceTask) bo
 
 // SyncCMDBAfterApply Apply 完成后同步 CMDB（唯一入口）
 // 在 Server 端执行，确保 Local、Agent、K8s Agent 三种模式统一处理
-// 无论 Apply 成功还是失败都会触发，因为失败的 apply 中可能有部分资源已创建
-// 但如果本次 task 未产生新的 state version（如 init/validation 阶段就失败），则跳过同步
+// 无论 Apply 成功还是失败都会触发：
+//   - 成功：本次 task 一定产生新 state version
+//   - 失败：可能有 partial state，也可能无新 state（init/validation 阶段就失败）
+//
+// SyncWorkspaceResources 读取 workspace 最新 state version（不限定 task_id），
+// 所以即使本次 task 无新 state，也能同步之前的资源状态到 CMDB。
+// 若 workspace 从未有过 state version，SyncWorkspaceResources 会安全返回 nil。
 func (m *TaskQueueManager) SyncCMDBAfterApply(task *models.WorkspaceTask) {
-	// 前置检查：本次 task 是否产生了新的 state version
-	// 如果没有（全部失败，无任何资源变更），跳过同步
+	// 前置检查：workspace 是否有任何 state version
+	// 如果从未产生过 state（全新 workspace），跳过同步
 	var stateCount int64
 	if err := m.db.Model(&models.WorkspaceStateVersion{}).
-		Where("task_id = ?", task.ID).
+		Where("workspace_id = ?", task.WorkspaceID).
 		Count(&stateCount).Error; err != nil {
-		log.Printf("[CMDB] Failed to check state version for task %d: %v, skipping sync", task.ID, err)
+		log.Printf("[CMDB] Failed to check state version for workspace %s: %v, skipping sync", task.WorkspaceID, err)
 		return
 	}
 	if stateCount == 0 {
-		log.Printf("[CMDB] Task %d (status: %s) produced no new state version, skipping CMDB sync",
-			task.ID, task.Status)
+		log.Printf("[CMDB] Workspace %s has no state versions, skipping CMDB sync (task %d, status: %s)",
+			task.WorkspaceID, task.ID, task.Status)
 		return
 	}
 
 	// 原子 CAS：仅当 cmdb_sync_status != syncing 时才设置为 syncing
 	// 多副本场景下，多个副本可能同时收到 Agent 状态上报（重试等），
 	// 用 DB WHERE 条件保证只有一个副本能成功抢到同步权
+	// 额外容错：如果 syncing 状态超过 10 分钟，视为卡死，允许覆盖
 	now := time.Now()
+	staleThreshold := now.Add(-10 * time.Minute)
 	result := m.db.Model(&models.Workspace{}).
-		Where("workspace_id = ? AND cmdb_sync_status != ?", task.WorkspaceID, models.CMDBSyncStatusSyncing).
+		Where("workspace_id = ? AND (cmdb_sync_status != ? OR cmdb_sync_started_at < ?)",
+			task.WorkspaceID, models.CMDBSyncStatusSyncing, staleThreshold).
 		Updates(map[string]interface{}{
 			"cmdb_sync_status":       models.CMDBSyncStatusSyncing,
 			"cmdb_sync_triggered_by": models.CMDBSyncTriggerAuto,
@@ -1431,7 +1439,7 @@ func (m *TaskQueueManager) SyncCMDBAfterApply(task *models.WorkspaceTask) {
 		return
 	}
 	if result.RowsAffected == 0 {
-		log.Printf("[CMDB] Workspace %s already has a sync in progress, skipping (task %d)",
+		log.Printf("[CMDB] Workspace %s already has a sync in progress (started < 10min ago), skipping (task %d)",
 			task.WorkspaceID, task.ID)
 		return
 	}
@@ -1451,8 +1459,14 @@ func (m *TaskQueueManager) SyncCMDBAfterApply(task *models.WorkspaceTask) {
 	} else {
 		log.Printf("[CMDB] Successfully synced workspace %s after apply (task %d, status: %s)",
 			task.WorkspaceID, task.ID, task.Status)
-		// 注意：不在这里设置 idle，因为 embedding 任务还在后台处理
-		// 状态会在 GetWorkspaceEmbeddingStatus 中自动转换（当 pending+processing=0 时）
+		// 资源索引已同步完成，立即设置 idle。
+		// embedding 在后台异步处理，不应阻塞 cmdb_sync_status，
+		// 否则后续 apply 的 CMDB 同步会被 CAS 锁阻塞。
+		completedAt := time.Now()
+		m.db.Model(&models.Workspace{}).Where("workspace_id = ?", task.WorkspaceID).Updates(map[string]interface{}{
+			"cmdb_sync_status":       models.CMDBSyncStatusIdle,
+			"cmdb_sync_completed_at": completedAt,
+		})
 	}
 }
 
