@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 	"iac-platform/internal/services"
 	"iac-platform/internal/services/sso"
 
@@ -107,12 +108,14 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		errMsg := c.Query("error")
 		errDesc := c.Query("error_description")
 		if errMsg != "" {
+			metrics.IncLoginTotal("sso", "failure")
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    400,
 				"message": fmt.Sprintf("SSO error: %s - %s", errMsg, errDesc),
 			})
 			return
 		}
+		metrics.IncLoginTotal("sso", "failure")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "authorization code is required",
@@ -121,6 +124,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 	}
 
 	if state == "" {
+		metrics.IncLoginTotal("sso", "failure")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"message": "state parameter is required",
@@ -138,6 +142,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		c.Request.UserAgent(),
 	)
 	if err != nil {
+		metrics.IncLoginTotal("sso", "failure")
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":    401,
 			"message": err.Error(),
@@ -158,6 +163,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 				return
 			}
 
+			metrics.IncTokenIssued("mfa")
 			c.JSON(http.StatusOK, gin.H{
 				"code":    200,
 				"message": "MFA setup required for new user",
@@ -192,6 +198,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 			requiredBackupCodes = mfaConfig.RequiredBackupCodes
 		}
 
+		metrics.IncTokenIssued("mfa")
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "MFA verification required",
@@ -221,6 +228,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 			return
 		}
 
+		metrics.IncTokenIssued("mfa")
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "MFA setup required",
@@ -276,6 +284,8 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		return
 	}
 
+	metrics.IncLoginTotal("sso", "success")
+	metrics.IncTokenIssued("access")
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "SSO login successful",

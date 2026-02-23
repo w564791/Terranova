@@ -9,6 +9,7 @@ import (
 
 	"iac-platform/internal/config"
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 	"iac-platform/internal/services"
 	"iac-platform/internal/services/sso"
 
@@ -84,6 +85,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if userNotFound || passwordErr != nil {
 		log.Printf("[Auth] Login failed for username: %s", req.Username)
+		metrics.IncLoginTotal("local", "failure")
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":      401,
 			"message":   "Invalid credentials",
@@ -94,6 +96,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 检查本地登录是否被禁用（超管例外）
 	if h.ssoService.IsLocalLoginDisabled() && !user.IsSystemAdmin {
+		metrics.IncLoginTotal("local", "failure")
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":      403,
 			"message":   "Local login is disabled. Please use SSO to login.",
@@ -105,6 +108,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Check if user ID is empty
 	if user.ID == "" {
 		log.Printf("[Auth] WARNING: User ID is empty for %s", user.Username)
+		metrics.IncLoginTotal("local", "failure")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "User ID is empty, please contact administrator",
@@ -135,6 +139,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 
 		log.Printf("[Auth] MFA required for user: %s", user.Username)
+		metrics.IncTokenIssued("mfa")
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "需要MFA验证",
@@ -169,6 +174,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 
 		log.Printf("[Auth] MFA setup required for user: %s", user.Username)
+		metrics.IncTokenIssued("mfa")
 		c.JSON(http.StatusOK, gin.H{
 			"code":    200,
 			"message": "需要设置MFA",
@@ -233,6 +239,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	log.Printf("[Auth] Login successful: %s", user.Username)
+	metrics.IncLoginTotal("local", "success")
+	metrics.IncTokenIssued("access")
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
