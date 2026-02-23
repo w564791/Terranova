@@ -559,8 +559,38 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 		return
 	}
 
+	// 批量查询创建者用户名
+	userIDs := make([]string, 0)
+	for _, t := range tasks {
+		if t.CreatedBy != nil && *t.CreatedBy != "" {
+			userIDs = append(userIDs, *t.CreatedBy)
+		}
+	}
+	usernameMap := make(map[string]string)
+	if len(userIDs) > 0 {
+		var users []models.User
+		if err := c.db.Where("user_id IN ?", userIDs).Select("user_id", "username").Find(&users).Error; err == nil {
+			for _, u := range users {
+				usernameMap[u.ID] = u.Username
+			}
+		}
+	}
+
+	// 构建带 username 的响应
+	type taskWithUsername struct {
+		models.WorkspaceTask
+		CreatedByUsername string `json:"created_by_username"`
+	}
+	tasksResp := make([]taskWithUsername, len(tasks))
+	for i, t := range tasks {
+		tasksResp[i].WorkspaceTask = t
+		if t.CreatedBy != nil {
+			tasksResp[i].CreatedByUsername = usernameMap[*t.CreatedBy]
+		}
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"tasks":         tasks,
+		"tasks":         tasksResp,
 		"total":         total,
 		"page":          page,
 		"page_size":     pageSize,

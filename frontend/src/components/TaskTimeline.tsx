@@ -4,6 +4,7 @@ import RunTaskResults from './RunTaskResults';
 import StructuredRunOutput from './StructuredRunOutput';
 import SmartLogViewer from './SmartLogViewer';
 import AIErrorAnalysis from './AIErrorAnalysis';
+import { parseBackendTime } from '../utils/time';
 
 interface Task {
   id: number;
@@ -76,7 +77,7 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
 
   const formatRelativeTime = (dateString?: string) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
+    const date = parseBackendTime(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);

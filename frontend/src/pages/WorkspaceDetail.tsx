@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
+import { parseBackendTime } from '../utils/time';
 import api from '../services/api';
 import WorkspaceStateBadge from '../components/WorkspaceStateBadge';
 import type { WorkspaceState } from '../components/WorkspaceStateBadge';
@@ -662,13 +663,11 @@ const WorkspaceDetail: React.FC = () => {
 // 格式化相对时间
 const formatRelativeTime = (dateString: string | null) => {
   if (!dateString) return '从未';
-  
+
   // 处理无效日期（如 "0001-01-01T00:00:00Z"）
   if (dateString.startsWith('0001-01-01')) return '从未';
-  
-  // 直接解析 ISO 8601 格式的时间字符串
-  // 后端返回的时间是 UTC 时间（带 Z 后缀），JavaScript 会自动转换为本地时间
-  const date = new Date(dateString);
+
+  const date = parseBackendTime(dateString);
   const now = new Date();
   
   // 验证日期是否有效
@@ -719,7 +718,7 @@ const OverviewTab: React.FC<{
   
   // 格式化日期
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = parseBackendTime(dateString);
     return date.toLocaleString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
@@ -823,7 +822,7 @@ const OverviewTab: React.FC<{
                   <span className={styles.runIdMeta}>#{globalLatestRun.id}</span>
                   <span className={styles.metaSeparator}>|</span>
                   <span className={styles.runUserMeta}>
-                    {globalLatestRun.created_by ? `user-${globalLatestRun.created_by}` : 'system'} triggered via UI
+                    {globalLatestRun.created_by_username || globalLatestRun.created_by || 'system'} triggered via UI
                   </span>
                   {(globalLatestRun.changes_add !== undefined || globalLatestRun.changes_change !== undefined || globalLatestRun.changes_destroy !== undefined) && (
                     <>
@@ -1032,7 +1031,8 @@ interface Run {
   status: string;
   created_at: string;
   completed_at?: string;
-  created_by?: number;
+  created_by?: string;
+  created_by_username?: string;
   description?: string;
   changes_add?: number;
   changes_change?: number;
@@ -1428,7 +1428,7 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
                 <span className={styles.runIdMeta}>#{globalLatestRun.id}</span>
                 <span className={styles.metaSeparator}>|</span>
                 <span className={styles.runUserMeta}>
-                  {globalLatestRun.created_by ? `user-${globalLatestRun.created_by}` : 'system'} triggered via UI
+                  {globalLatestRun.created_by_username || globalLatestRun.created_by || 'system'} triggered via UI
                 </span>
                 {(globalLatestRun.changes_add !== undefined || globalLatestRun.changes_change !== undefined || globalLatestRun.changes_destroy !== undefined) && (
                   <>
@@ -1638,7 +1638,7 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
                     <span className={styles.runIdMeta}>#{run.id}</span>
                     <span className={styles.metaSeparator}>|</span>
                     <span className={styles.runUserMeta}>
-                      {run.created_by ? `user-${run.created_by}` : 'system'} triggered via UI
+                      {run.created_by_username || run.created_by || 'system'} triggered via UI
                     </span>
                     {(run.changes_add !== undefined || run.changes_change !== undefined || run.changes_destroy !== undefined) && (
                       <>

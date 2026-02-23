@@ -41,6 +41,8 @@
 - **Tracer shutdown context 修复** — 使用独立 context 进行 tracer shutdown，避免复用已取消的 shutdownCtx (`main.go`)
 - **Agent pool_type 修复** — 连接时从数据库查询 `agent_pools` 表获取实际 pool_type，替代硬编码 "static" (`agent_cc_handler.go`)
 - **Run Task 失败时 UI 错误显示位置修正** — Post-plan / Pre-apply Run Task（mandatory）失败时，`task.Stage` 停留在 `planning`，前端误将错误显示在 Plan/Apply 卡片中；后端设置 `task.Stage` 为 `post_plan_run_tasks` / `pre_apply_run_tasks`，前端据此判断：Plan 卡片显示 passed，Apply 卡片不显示 (`terraform_executor.go`, `TaskTimeline.tsx`)
+- **Run 列表时间偏差 8 小时** — DB 列为 `timestamp without time zone`，pgx 读取后将本地时间错误标记为 UTC（`Z` 后缀），前端 `new Date()` 再次转换导致多 8 小时；新增 `parseBackendTime()` 工具函数去掉时区后缀，以本地时间解析 (`utils/time.ts`, `WorkspaceDetail.tsx`, `TaskTimeline.tsx`)
+- **Run 列表创建者显示修复** — `created_by` 已是语义 ID（`user-xxx`），前端再拼 `user-` 前缀导致双重前缀；任务列表 API 新增批量用户名查询返回 `created_by_username`，前端改为显示用户名 (`workspace_task_controller.go`, `WorkspaceDetail.tsx`)
 
 ### Tests
 
