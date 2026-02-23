@@ -1064,6 +1064,7 @@ func (m *TaskQueueManager) StartPendingTasksMonitor(ctx context.Context, interva
 
 	log.Printf("[TaskQueue] Starting pending tasks monitor with interval: %v", interval)
 
+	tickCount := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -1071,6 +1072,12 @@ func (m *TaskQueueManager) StartPendingTasksMonitor(ctx context.Context, interva
 			return
 		case <-ticker.C:
 			m.checkAndRetryPendingTasks()
+
+			// 每 6 个 tick (~60s) 清理一次卡死的 CMDB sync 状态
+			tickCount++
+			if tickCount%6 == 0 {
+				m.cleanupStaleCMDBSyncStatus()
+			}
 		}
 	}
 }
@@ -1112,6 +1119,53 @@ func (m *TaskQueueManager) checkAndRetryPendingTasks() {
 					log.Printf("[TaskQueue] Retry failed for confirmed apply task %d: %v", t.ID, err)
 				}
 			}()
+		}
+	}
+}
+
+// cleanupStaleCMDBSyncStatus 清理卡死的 CMDB sync 状态
+// 两层防护：
+//  1. cmdb_sync_status = 'syncing' 超过 5 分钟且无活跃 embedding 任务 → 重置为 idle
+//  2. cmdb_sync_status = 'syncing' 超过 10 分钟 → 无条件重置（兜底）
+func (m *TaskQueueManager) cleanupStaleCMDBSyncStatus() {
+	staleThreshold := time.Now().Add(-5 * time.Minute)
+	hardThreshold := time.Now().Add(-10 * time.Minute)
+
+	var staleWorkspaces []models.Workspace
+	if err := m.db.Select("workspace_id", "cmdb_sync_started_at").
+		Where("cmdb_sync_status = ? AND cmdb_sync_started_at < ?",
+			models.CMDBSyncStatusSyncing, staleThreshold).
+		Find(&staleWorkspaces).Error; err != nil {
+		return
+	}
+
+	for _, ws := range staleWorkspaces {
+		// 检查是否有活跃的 embedding 任务
+		var activeEmbeddingCount int64
+		m.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status IN ?", ws.WorkspaceID,
+				[]string{string(models.EmbeddingTaskStatusPending), string(models.EmbeddingTaskStatusProcessing)}).
+			Count(&activeEmbeddingCount)
+
+		// 有活跃 embedding 且未超硬阈值 → 跳过
+		if activeEmbeddingCount > 0 && ws.CMDBSyncStartedAt != nil && ws.CMDBSyncStartedAt.After(hardThreshold) {
+			continue
+		}
+
+		now := time.Now()
+		result := m.db.Model(&models.Workspace{}).
+			Where("workspace_id = ? AND cmdb_sync_status = ?", ws.WorkspaceID, models.CMDBSyncStatusSyncing).
+			Updates(map[string]interface{}{
+				"cmdb_sync_status":       models.CMDBSyncStatusIdle,
+				"cmdb_sync_completed_at": now,
+			})
+		if result.RowsAffected > 0 {
+			reason := "no active embedding tasks"
+			if activeEmbeddingCount > 0 {
+				reason = "hard timeout (>10min)"
+			}
+			log.Printf("[CMDB] Reset stale syncing status for workspace %s (%s, started_at: %v)",
+				ws.WorkspaceID, reason, ws.CMDBSyncStartedAt)
 		}
 	}
 }
