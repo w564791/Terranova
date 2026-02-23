@@ -6,6 +6,7 @@ import (
 
 	"iac-platform/internal/config"
 	"iac-platform/internal/observability/metrics"
+	"iac-platform/internal/observability/tracing"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -27,6 +28,7 @@ func Initialize(cfg config.DatabaseConfig) (*gorm.DB, error) {
 
 	// Register observability GORM callbacks
 	metrics.RegisterGORMCallbacks(db)
+	tracing.RegisterGORMTracing(db)
 
 	// Start DB connection stats collector
 	sqlDB, err := db.DB()
