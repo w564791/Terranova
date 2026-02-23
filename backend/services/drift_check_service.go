@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 	"log"
 	"regexp"
 	"strings"
@@ -752,6 +753,9 @@ func (s *DriftCheckService) ProcessDriftCheckResult(task *models.WorkspaceTask) 
 		PlanOutputSummary: planSummary,
 		Resources:         driftResources,
 	}
+
+	// Record drift detection metric
+	metrics.RecordDriftDetected(driftCount > 0)
 
 	// 保存结果
 	return s.SaveDriftResult(task.WorkspaceID, details, driftCount > 0, driftCount, len(resources))

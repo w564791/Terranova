@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/observability/metrics"
 	"iac-platform/internal/pglock"
 	"iac-platform/internal/pgpubsub"
 
@@ -867,6 +868,9 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 			now := time.Now()
 			task.CompletedAt = &now
 			m.db.Save(task)
+			if task.StartedAt != nil {
+				metrics.RecordTaskCompleted(string(task.TaskType), string(task.Status), now.Sub(*task.StartedAt).Seconds())
+			}
 		}
 	}()
 
@@ -891,6 +895,9 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 		now := time.Now()
 		task.CompletedAt = &now
 		m.db.Save(task)
+		if task.StartedAt != nil {
+			metrics.RecordTaskCompleted(string(task.TaskType), string(task.Status), now.Sub(*task.StartedAt).Seconds())
+		}
 		return
 	}
 
@@ -945,6 +952,11 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 		task.Status == models.TaskStatusFailed ||
 		task.Status == models.TaskStatusCancelled {
 		log.Printf("[TaskQueue] Task %d reached final status %s, triggering next task", task.ID, task.Status)
+
+		// Record task completion metrics
+		if task.StartedAt != nil && task.CompletedAt != nil {
+			metrics.RecordTaskCompleted(string(task.TaskType), string(task.Status), task.CompletedAt.Sub(*task.StartedAt).Seconds())
+		}
 
 		// 如果任务成功完成（applied），执行 Run Triggers
 		if task.Status == models.TaskStatusApplied {
