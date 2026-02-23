@@ -1,4 +1,6 @@
-# IaC Platform
+# Terranova
+
+> 自托管的 Infrastructure-as-Code UI 化平台 — Schema 驱动、AI 辅助、天生合规。
 
 <p align="center">
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
@@ -68,7 +70,7 @@ docker compose up -d
 ## 工作原理
 
 <p align="center">
-  <img src="docs/iac-platform-architecture-cn.svg" alt="IaC Platform 架构" width="720"/>
+  <img src="docs/iac-platform-architecture-cn.svg" alt="Terranova 架构" width="720"/>
 </p>
 
 **分层事实模型：**

@@ -1,4 +1,6 @@
-# IaC Platform
+# Terranova
+
+> A self-hosted Infrastructure-as-Code UI platform — Schema-driven, AI-assisted, compliance-by-design.
 
 <p align="center">
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
@@ -68,7 +70,7 @@ For production: see [Kubernetes deployment](manifests/README.md).
 ## How it Works
 
 <p align="center">
-  <img src="docs/iac-platform-architecture.svg" alt="IaC Platform Architecture" width="720"/>
+  <img src="docs/iac-platform-architecture.svg" alt="Terranova Architecture" width="720"/>
 </p>
 
 **Layered truth model:**
