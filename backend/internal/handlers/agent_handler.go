@@ -819,8 +819,12 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 	}
 
 	// Set completed_at if task is finished or if provided in request
+	// Agent 可能运行在不同时区（如 UTC），而 DB 列是 timestamp without time zone，
+	// pgx 使用 wall clock 值存储。因此必须将 Agent 发来的时间转为服务端本地时区，
+	// 确保存储的 wall clock 与 created_at/started_at 一致。
 	if req.CompletedAt != nil {
-		updates["completed_at"] = req.CompletedAt
+		localTime := req.CompletedAt.In(time.Local)
+		updates["completed_at"] = &localTime
 	} else if req.Status == models.TaskStatusSuccess ||
 		req.Status == models.TaskStatusFailed ||
 		req.Status == models.TaskStatusApplied {
