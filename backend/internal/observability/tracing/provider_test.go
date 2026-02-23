@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // TestInitTracer_NoopWhenEndpointUnset verifies that InitTracer returns a
@@ -116,7 +117,7 @@ func TestInitTracer_WithEndpoint(t *testing.T) {
 	}
 
 	// Reset global provider to noop to avoid leaking state to other tests.
-	otel.SetTracerProvider(otel.GetTracerProvider())
+	otel.SetTracerProvider(trace.NewNoopTracerProvider())
 }
 
 // TestInitTracer_EnvVarsNotLeaked is a sanity check that t.Setenv correctly

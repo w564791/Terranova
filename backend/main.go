@@ -76,7 +76,9 @@ func main() {
 		log.Printf("Warning: Failed to initialize tracing: %v", err)
 	} else {
 		defer func() {
-			if err := tracerShutdown(shutdownCtx); err != nil {
+			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := tracerShutdown(flushCtx); err != nil {
 				log.Printf("Warning: Failed to shutdown tracer: %v", err)
 			}
 		}()
