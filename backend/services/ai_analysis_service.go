@@ -177,6 +177,48 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 		return nil, 0, fmt.Errorf("任务没有错误信息，无需分析")
 	}
 
+	// 查询资源变更记录，为 AI 提供 apply 执行上下文
+	var resourceChanges []models.WorkspaceTaskResourceChange
+	s.db.Where("task_id = ?", taskID).Find(&resourceChanges)
+	if len(resourceChanges) > 0 {
+		var contextLines []string
+		var completedResources []string
+		var failedResources []string
+
+		for _, rc := range resourceChanges {
+			if rc.ApplyStatus == "completed" {
+				label := rc.Action
+				switch rc.Action {
+				case "create":
+					label = "已创建"
+				case "update":
+					label = "已修改"
+				case "delete":
+					label = "已删除"
+				case "replace":
+					label = "已替换"
+				}
+				completedResources = append(completedResources, fmt.Sprintf("  %s (%s)", rc.ResourceAddress, label))
+			} else if rc.ApplyStatus == "applying" || rc.ApplyStatus == "failed" {
+				failedResources = append(failedResources, fmt.Sprintf("  %s (action: %s)", rc.ResourceAddress, rc.Action))
+			}
+		}
+
+		if len(failedResources) > 0 {
+			contextLines = append(contextLines, "失败资源:")
+			contextLines = append(contextLines, failedResources...)
+		}
+		if len(completedResources) > 0 {
+			contextLines = append(contextLines, "已成功的资源:")
+			contextLines = append(contextLines, completedResources...)
+		}
+
+		if len(contextLines) > 0 {
+			resourceContext := strings.Join(contextLines, "\n")
+			errorMessage = fmt.Sprintf("【Apply 执行结果】\n%s\n\n【错误信息】\n%s", resourceContext, errorMessage)
+		}
+	}
+
 	// 确定任务类型
 	taskType := string(task.TaskType)
 	if taskType == "" {
