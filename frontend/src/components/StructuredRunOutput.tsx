@@ -154,8 +154,8 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
 
   // 加载资源变更数据
   useEffect(() => {
-    if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'applied' || task.status === 'cancelled' || task.status === 'running') {
-      // 取消的任务也可能有Plan数据，running状态也需要加载（Apply阶段）
+    if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'applied' || task.status === 'cancelled' || task.status === 'running' || task.status === 'failed') {
+      // 取消/失败的任务也可能有Plan数据，running状态也需要加载（Apply阶段）
       console.log('Triggering loadResourceChanges for task:', task.id, 'status:', task.status);
       loadResourceChanges();
     }
@@ -558,7 +558,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
     // 1. Apply has been confirmed
     if (task.apply_confirmed_by || task.apply_confirmed_at) return true;
     // 2. Status indicates plan is done
-    if (['success', 'plan_completed', 'apply_pending', 'applied', 'cancelled'].includes(task.status)) return true;
+    if (['success', 'plan_completed', 'apply_pending', 'applied', 'cancelled', 'failed'].includes(task.status)) return true;
     // 3. Task is running but in apply stage
     if (task.status === 'running') {
       const applyStages = ['apply', 'applying', 'pre_apply', 'restoring_plan', 'post_apply', 'saving_state', 'apply_pending'];
@@ -724,6 +724,15 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
               <div className={styles.loading}>
                 <div className={styles.loadingSpinner}></div>
                 <p>加载资源详情...</p>
+              </div>
+            ) : (
+              <ApplyingView resources={resourceChanges} summary={summary} outputChanges={outputChanges} actionInvocations={actionInvocations} actions={actions} isApplied={true} />
+            )
+          ) : task.status === 'failed' ? (
+            loading ? (
+              <div className={styles.loading}>
+                <div className={styles.loadingSpinner}></div>
+                <p>加载资源数据...</p>
               </div>
             ) : (
               <ApplyingView resources={resourceChanges} summary={summary} outputChanges={outputChanges} actionInvocations={actionInvocations} actions={actions} isApplied={true} />
