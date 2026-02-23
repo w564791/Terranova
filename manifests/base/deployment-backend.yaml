@@ -62,20 +62,29 @@ spec:
             - name: tls
               mountPath: /etc/tls
               readOnly: true
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: https
+              scheme: HTTPS
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: https
               scheme: HTTPS
             initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: https
               scheme: HTTPS
             initialDelaySeconds: 10
-            periodSeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m

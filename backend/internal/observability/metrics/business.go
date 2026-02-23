@@ -59,7 +59,7 @@ func RegisterBusinessMetrics(reg *prometheus.Registry) {
 		prometheus.HistogramOpts{
 			Name:    "iac_workspace_task_duration_seconds",
 			Help:    "Duration of workspace tasks in seconds.",
-			Buckets: prometheus.DefBuckets,
+			Buckets: []float64{5, 15, 30, 60, 120, 300, 600, 1800, 3600},
 		},
 		[]string{"type"},
 	)
