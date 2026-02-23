@@ -31,6 +31,7 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	// Prometheus 指标注册表
 	metricsReg := metrics.InitRegistry()
 	metrics.RegisterDBMetrics(metricsReg)
+	metrics.RegisterBusinessMetrics(metricsReg)
 
 	// 中间件（顺序：Recovery → otelgin → HTTPMetrics → CORS → Logger → ErrorHandler → ...）
 	r.Use(gin.Recovery())
