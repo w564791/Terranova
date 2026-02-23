@@ -499,6 +499,9 @@ func (h *RawAgentCCHandler) handleTaskCompleted(agentConn *RawAgentConnection, p
 	// 发送任务完成通知
 	go h.sendTaskCompletedNotification(uint(taskID))
 
+	// Apply 完成后的 Server 端处理（CMDB 同步 + Run Triggers）
+	go h.postApplyCompletionTasks(uint(taskID))
+
 	// K8s Slot 释放 + 触发下个任务（幂等，与 HTTP handler 重复触发不冲突）
 	if h.taskQueueManager != nil {
 		go h.taskQueueManager.ReleaseTaskSlot(uint(taskID))
@@ -663,6 +666,9 @@ func (h *RawAgentCCHandler) handleTaskFailed(agentConn *RawAgentConnection, payl
 	// 发送任务失败通知
 	go h.sendTaskFailedNotification(uint(taskID))
 
+	// Apply 失败后的 Server 端清理（资源状态更新 + CMDB 同步）
+	go h.postApplyFailureCleanup(uint(taskID))
+
 	// K8s Slot 释放 + 触发下个任务（幂等，与 HTTP handler 重复触发不冲突）
 	if h.taskQueueManager != nil {
 		go h.taskQueueManager.ReleaseTaskSlot(uint(taskID))
@@ -701,6 +707,54 @@ func (h *RawAgentCCHandler) sendTaskFailedNotification(taskID uint) {
 	} else {
 		log.Printf("[Notification] Successfully sent task_failed notification for task %d", taskID)
 	}
+}
+
+// postApplyFailureCleanup 处理 Apply 失败后的 Server 端清理
+// 与 Local 模式的 TaskQueueManager.executeTask 对齐
+func (h *RawAgentCCHandler) postApplyFailureCleanup(taskID uint) {
+	var task models.WorkspaceTask
+	if err := h.db.First(&task, taskID).Error; err != nil {
+		log.Printf("[PostApplyCleanup] Failed to get task %d: %v", taskID, err)
+		return
+	}
+
+	// 仅处理 plan_and_apply 类型的失败任务
+	if task.TaskType != models.TaskTypePlanAndApply {
+		return
+	}
+
+	// CMDB 同步（与 Local 模式 TaskQueueManager 对齐）
+	if h.taskQueueManager != nil {
+		h.taskQueueManager.SyncCMDBAfterApply(&task)
+	}
+}
+
+// postApplyCompletionTasks 处理 Apply 成功后的 Server 端任务
+// 与 Local 模式的 TaskQueueManager.executeTask 对齐
+func (h *RawAgentCCHandler) postApplyCompletionTasks(taskID uint) {
+	var task models.WorkspaceTask
+	if err := h.db.First(&task, taskID).Error; err != nil {
+		log.Printf("[PostApplyComplete] Failed to get task %d: %v", taskID, err)
+		return
+	}
+
+	// 仅处理 plan_and_apply 类型的已完成任务
+	if task.TaskType != models.TaskTypePlanAndApply {
+		return
+	}
+
+	if h.taskQueueManager == nil {
+		return
+	}
+
+	// 1. Apply 成功 → 执行 Run Triggers（与 Local 模式对齐）
+	if task.Status == models.TaskStatusApplied {
+		log.Printf("[PostApplyComplete] Executing Run Triggers for task %d", taskID)
+		h.taskQueueManager.ExecuteRunTriggers(&task)
+	}
+
+	// 2. CMDB 同步（成功和失败都需要）
+	h.taskQueueManager.SyncCMDBAfterApply(&task)
 }
 
 // handleLogStream handles real-time log stream from agent

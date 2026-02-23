@@ -1714,17 +1714,24 @@ func (s *TerraformExecutor) saveTaskFailure(
 
 		// Apply失败时，尝试保存 partial state（terraform 可能已创建部分资源）
 		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
-		if s.db != nil {
-			stateFile := filepath.Join(workDir, "terraform.tfstate")
-			if _, statErr := os.Stat(stateFile); statErr == nil {
-				logger.Info("Attempting to save partial state after apply failure...")
-				var workspace models.Workspace
-				if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr == nil {
-					if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
-						logger.Warn("Failed to save partial state: %v", saveErr)
-					} else {
-						logger.Info("✓ Partial state saved to database")
-					}
+		stateFile := filepath.Join(workDir, "terraform.tfstate")
+		if _, statErr := os.Stat(stateFile); statErr == nil {
+			logger.Info("Attempting to save partial state after apply failure...")
+			var workspace models.Workspace
+			if s.db != nil {
+				// Local 模式：从数据库加载完整 workspace
+				if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr != nil {
+					logger.Warn("Failed to load workspace for partial state save: %v", dbErr)
+				}
+			} else {
+				// Agent 模式：构造最小 workspace（SaveStateToDatabase 在 Agent 模式下只需 WorkspaceID）
+				workspace.WorkspaceID = task.WorkspaceID
+			}
+			if workspace.WorkspaceID != "" {
+				if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
+					logger.Warn("Failed to save partial state: %v", saveErr)
+				} else {
+					logger.Info("✓ Partial state saved to database")
 				}
 			}
 		}

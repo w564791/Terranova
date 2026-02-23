@@ -960,7 +960,7 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 
 		// 如果任务成功完成（applied），执行 Run Triggers
 		if task.Status == models.TaskStatusApplied {
-			go m.executeRunTriggers(task)
+			go m.ExecuteRunTriggers(task)
 		}
 
 		// 如果是 drift_check 任务，处理 drift 检测结果
@@ -1306,7 +1306,8 @@ func (m *TaskQueueManager) sendTaskStartNotification(task *models.WorkspaceTask,
 
 // executeRunTriggers 执行 Run Triggers（任务成功完成后触发下游 workspace）
 // 这个方法在 Server 端执行，确保 Local、Agent、K8s Agent 三种模式都能正确触发
-func (m *TaskQueueManager) executeRunTriggers(task *models.WorkspaceTask) {
+// ExecuteRunTriggers 检查并执行 workspace 的 Run Triggers
+func (m *TaskQueueManager) ExecuteRunTriggers(task *models.WorkspaceTask) {
 	log.Printf("[RunTrigger] Checking run triggers for task %d (workspace %s)", task.ID, task.WorkspaceID)
 
 	// 创建 RunTriggerService
