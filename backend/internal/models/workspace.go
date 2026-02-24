@@ -37,7 +37,24 @@ func (j JSONB) Value() (driver.Value, error) {
 	if j == nil {
 		return nil, nil
 	}
+	// 如果包含_array包装，写入数据库时还原为纯数组
+	if arrayData, ok := j["_array"]; ok && len(j) == 1 {
+		return json.Marshal(arrayData)
+	}
 	return json.Marshal(j)
+}
+
+// MarshalJSON 实现 json.Marshaler 接口
+// 当 JSONB 内部包含 _array 包装时，序列化为纯数组而非 {"_array": [...]}
+func (j JSONB) MarshalJSON() ([]byte, error) {
+	if j == nil {
+		return []byte("null"), nil
+	}
+	if arrayData, ok := j["_array"]; ok && len(j) == 1 {
+		return json.Marshal(arrayData)
+	}
+	// 避免递归调用：转为普通 map 再序列化
+	return json.Marshal(map[string]interface{}(j))
 }
 
 // Scan 实现 sql.Scanner 接口
