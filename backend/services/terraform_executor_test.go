@@ -172,8 +172,8 @@ func TestValidateSnapshot_NilProviderConfig(t *testing.T) {
 	}
 	logger := NewTerraformLogger(nil)
 	err := executor.ValidateResourceVersionSnapshot(task, logger)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "snapshot provider config missing")
+	// nil provider config is valid: template-mode workspaces resolve it dynamically
+	assert.NoError(t, err)
 }
 
 func TestValidateSnapshot_EmptyResources_Success(t *testing.T) {
