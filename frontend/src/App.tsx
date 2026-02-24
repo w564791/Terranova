@@ -36,6 +36,7 @@ import TestDynamicForm from './pages/TestDynamicForm';
 import SchemaManagement from './pages/SchemaManagement';
 import SchemaEditorPage from './pages/SchemaEditorPage';
 import Admin from './pages/Admin';
+import ProviderTemplatesPage from './pages/ProviderTemplatesPage';
 import AIConfigList from './pages/AIConfigList';
 import AIConfigForm from './pages/AIConfigForm';
 import OrganizationManagement from './pages/admin/OrganizationManagement';
@@ -158,6 +159,7 @@ const App: FC = () => {
                 <Route path="modules/:moduleId/schemas" element={<SchemaManagement />} />
                 <Route path="modules/:moduleId/schemas/:schemaId/edit" element={<SchemaEditorPage />} />
                 <Route path="global/settings/terraform-versions" element={<Admin />} />
+                <Route path="global/settings/provider-templates" element={<ProviderTemplatesPage />} />
                 <Route path="global/settings/ai-configs" element={<AIConfigList />} />
                 <Route path="global/settings/ai-configs/create" element={<AIConfigForm />} />
                 <Route path="global/settings/ai-configs/:id/edit" element={<AIConfigForm />} />

@@ -127,6 +127,7 @@ const Layout: React.FC = () => {
       requireGlobalSettingsPermission: true,
       children: [
         { path: '/global/settings/terraform-versions', label: 'IaC Engine', icon: '' },
+        { path: '/global/settings/provider-templates', label: 'Provider Templates', icon: '' },
         { path: '/global/settings/ai-configs', label: 'AI Config', icon: '' },
         { path: '/global/settings/agent-pools', label: 'Agent Pools', icon: '' },
         { path: '/global/settings/run-tasks', label: 'Run Tasks', icon: '' },
