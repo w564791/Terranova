@@ -48,7 +48,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
       source: '',
       config: '{}',
       version: '',
-      constraint_op: '~>',
+      constraint_op: '',
       enabled: true,
       description: '',
     });
@@ -69,7 +69,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
       source: template.source,
       config: JSON.stringify(template.config, null, 2),
       version: template.version,
-      constraint_op: template.constraint_op || '~>',
+      constraint_op: template.constraint_op ?? '',
       enabled: template.enabled,
       description: template.description,
     });
@@ -126,8 +126,8 @@ const ProviderTemplatesAdmin: React.FC = () => {
           type: formData.type,
           source: formData.source,
           config: parsedConfig,
-          version: formData.version || undefined,
-          constraint_op: formData.constraint_op || undefined,
+          version: formData.version,
+          constraint_op: formData.constraint_op,
           enabled: formData.enabled,
           description: formData.description || undefined,
         };
@@ -139,8 +139,8 @@ const ProviderTemplatesAdmin: React.FC = () => {
           type: formData.type,
           source: formData.source,
           config: parsedConfig,
-          version: formData.version || undefined,
-          constraint_op: formData.constraint_op || undefined,
+          version: formData.version,
+          constraint_op: formData.constraint_op,
           enabled: formData.enabled,
           description: formData.description || undefined,
         };
