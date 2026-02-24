@@ -49,6 +49,11 @@ func (c *ProviderTemplateController) ListProviderTemplates(ctx *gin.Context) {
 		return
 	}
 
+	// 过滤敏感信息
+	for i := range templates {
+		templates[i].Config = models.JSONB(services.FilterTemplateSensitiveInfo(templates[i].Config))
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{"items": templates, "total": len(templates)})
 }
 

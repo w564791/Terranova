@@ -310,13 +310,63 @@ func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, over
 	return result, nil
 }
 
-// FilterTemplateSensitiveInfo 过滤模板敏感信息
+// FilterTemplateSensitiveInfo 递归过滤敏感信息，支持嵌套map和数组
 func FilterTemplateSensitiveInfo(config map[string]interface{}) map[string]interface{} {
 	if config == nil {
 		return nil
 	}
 
-	// 已知敏感字段名
+	result := make(map[string]interface{})
+	for k, v := range config {
+		result[k] = filterValue(k, v)
+	}
+
+	return result
+}
+
+// filterValue 根据字段名和值类型递归过滤
+func filterValue(key string, value interface{}) interface{} {
+	if isSensitiveKey(key) {
+		if str, ok := value.(string); ok && len(str) > 0 {
+			return "******"
+		}
+		return value
+	}
+
+	// 递归处理嵌套map
+	if m, ok := value.(map[string]interface{}); ok {
+		filtered := make(map[string]interface{})
+		for k, v := range m {
+			filtered[k] = filterValue(k, v)
+		}
+		return filtered
+	}
+
+	// 递归处理数组
+	if arr, ok := value.([]interface{}); ok {
+		filtered := make([]interface{}, len(arr))
+		for i, item := range arr {
+			if m, ok := item.(map[string]interface{}); ok {
+				fm := make(map[string]interface{})
+				for k, v := range m {
+					fm[k] = filterValue(k, v)
+				}
+				filtered[i] = fm
+			} else {
+				filtered[i] = item
+			}
+		}
+		return filtered
+	}
+
+	return value
+}
+
+// isSensitiveKey 判断字段名是否为敏感字段
+func isSensitiveKey(fieldName string) bool {
+	lower := strings.ToLower(fieldName)
+
+	// 精确匹配
 	sensitiveKeys := map[string]bool{
 		"access_key":    true,
 		"secret_key":    true,
@@ -326,36 +376,12 @@ func FilterTemplateSensitiveInfo(config map[string]interface{}) map[string]inter
 		"client_key":    true,
 		"client_secret": true,
 	}
-
-	// 需要模糊匹配的关键词
-	sensitiveKeywords := []string{"password", "secret", "token", "key"}
-
-	result := make(map[string]interface{})
-	for k, v := range config {
-		if shouldMask(k, sensitiveKeys, sensitiveKeywords) {
-			if str, ok := v.(string); ok && len(str) > 0 {
-				result[k] = "******"
-			} else {
-				result[k] = v
-			}
-		} else {
-			result[k] = v
-		}
-	}
-
-	return result
-}
-
-// shouldMask 判断字段是否需要脱敏
-func shouldMask(fieldName string, sensitiveKeys map[string]bool, sensitiveKeywords []string) bool {
-	lower := strings.ToLower(fieldName)
-
-	// 精确匹配已知敏感字段
 	if sensitiveKeys[lower] {
 		return true
 	}
 
-	// 模糊匹配：字段名包含关键词，且字段名长度大于关键词长度（避免误判如 "type"）
+	// 模糊匹配：字段名包含关键词且长度大于关键词（避免误判）
+	sensitiveKeywords := []string{"password", "secret", "token", "key"}
 	for _, keyword := range sensitiveKeywords {
 		if len(lower) > len(keyword) && strings.Contains(lower, keyword) {
 			return true
