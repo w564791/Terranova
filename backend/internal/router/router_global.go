@@ -51,6 +51,39 @@ func setupGlobalRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *m
 			tfVersionController.DeleteTerraformVersion,
 		)
 
+		// Provider模板管理
+		ptController := controllers.NewProviderTemplateController(db)
+
+		globalSettings.GET("/provider-templates",
+			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "READ"),
+			ptController.ListProviderTemplates,
+		)
+
+		globalSettings.GET("/provider-templates/:id",
+			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "READ"),
+			ptController.GetProviderTemplate,
+		)
+
+		globalSettings.POST("/provider-templates",
+			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "WRITE"),
+			ptController.CreateProviderTemplate,
+		)
+
+		globalSettings.PUT("/provider-templates/:id",
+			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "WRITE"),
+			ptController.UpdateProviderTemplate,
+		)
+
+		globalSettings.POST("/provider-templates/:id/set-default",
+			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "ADMIN"),
+			ptController.SetDefaultTemplate,
+		)
+
+		globalSettings.DELETE("/provider-templates/:id",
+			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "ADMIN"),
+			ptController.DeleteProviderTemplate,
+		)
+
 		// AI配置管理
 		aiController := controllers.NewAIController(db)
 
