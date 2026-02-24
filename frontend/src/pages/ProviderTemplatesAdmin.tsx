@@ -270,8 +270,16 @@ const ProviderTemplatesAdmin: React.FC = () => {
                     <select
                       className={styles.select}
                       value={formData.constraint_op}
-                      onChange={(e) => setFormData({ ...formData, constraint_op: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setFormData({ ...formData, constraint_op: '', version: '' });
+                        } else {
+                          setFormData({ ...formData, constraint_op: val });
+                        }
+                      }}
                     >
+                      <option value="">不限制</option>
                       <option value="~>">~&gt;</option>
                       <option value=">=">&gt;=</option>
                       <option value=">">&gt;</option>
@@ -279,15 +287,21 @@ const ProviderTemplatesAdmin: React.FC = () => {
                       <option value="<=">&lt;=</option>
                       <option value="<">&lt;</option>
                     </select>
-                    <input
-                      type="text"
-                      className={styles.input}
-                      value={formData.version}
-                      onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                      placeholder="6.0"
-                    />
+                    {formData.constraint_op && (
+                      <input
+                        type="text"
+                        className={styles.input}
+                        value={formData.version}
+                        onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                        placeholder="6.0"
+                      />
+                    )}
                   </div>
-                  <span className={styles.hint}>版本约束，例如：~&gt; 6.0</span>
+                  <span className={styles.hint}>
+                    {formData.constraint_op
+                      ? `版本约束，例如：~> 6.0`
+                      : '不限制版本，使用最新可用版本'}
+                  </span>
                 </div>
 
                 {/* Config */}
