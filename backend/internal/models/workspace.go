@@ -116,6 +116,36 @@ func (j JSONB) UnwrapArray() ([]byte, error) {
 	return json.Marshal(j)
 }
 
+// GetTemplateIDs 从 JSONB 中提取 provider_template_ids 为 []uint
+func (j JSONB) GetTemplateIDs() []uint {
+	if j == nil {
+		return nil
+	}
+
+	raw, err := j.UnwrapArray()
+	if err != nil {
+		return nil
+	}
+
+	var ids []uint
+	if err := json.Unmarshal(raw, &ids); err != nil {
+		return nil
+	}
+	return ids
+}
+
+// GetOverridesMap 从 JSONB 中提取 provider_overrides 为 map[string]interface{}
+func (j JSONB) GetOverridesMap() map[string]interface{} {
+	if j == nil {
+		return nil
+	}
+	// JSONB 本身就是 map[string]interface{}，但要排除 _array 包装
+	if _, ok := j["_array"]; ok && len(j) == 1 {
+		return nil
+	}
+	return map[string]interface{}(j)
+}
+
 // WorkspaceVariableArray 自定义WorkspaceVariable数组类型（用于JSONB存储）
 type WorkspaceVariableArray []WorkspaceVariable
 

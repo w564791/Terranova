@@ -16,6 +16,7 @@ import (
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // calculateProviderConfigHash 计算 provider_config 的 SHA256 hash
@@ -204,6 +205,20 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		}
 	}
 
+	// 动态解析 provider_config：如果有模板引用，实时从全局模板解析
+	providerConfig := workspace.ProviderConfig
+	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
+	if len(templateIDs) > 0 {
+		ptService := services.NewProviderTemplateService(wc.workspaceService.GetDB())
+		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		if err != nil {
+			log.Printf("Failed to resolve provider config for workspace %s: %v", workspaceID, err)
+			// 解析失败时回退到存储的 provider_config
+		} else if resolved != nil {
+			providerConfig = models.JSONB(resolved)
+		}
+	}
+
 	// 构建响应，添加locked_by_username和ui_mode
 	response := gin.H{
 		"id":                       workspace.WorkspaceID,
@@ -221,7 +236,7 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		"state_config":             workspace.StateConfig,
 		"tags":                     workspace.Tags,
 		"variables":                workspace.SystemVariables,
-		"provider_config":          services.FilterTemplateSensitiveInfo(workspace.ProviderConfig),
+		"provider_config":          services.FilterTemplateSensitiveInfo(providerConfig),
 		"provider_template_ids":    workspace.ProviderTemplateIDs,
 		"provider_overrides":       services.FilterTemplateSensitiveInfo(workspace.ProviderOverrides),
 		"notify_settings":          workspace.NotifySettings,
@@ -530,7 +545,8 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 		updates["tags"] = req.Tags
 	}
 	if req.ProviderConfig != nil {
-		updates["provider_config"] = req.ProviderConfig
+		pcJSON, _ := json.Marshal(req.ProviderConfig)
+		updates["provider_config"] = gorm.Expr("?::jsonb", string(pcJSON))
 		// 计算 provider_config 的 hash，用于优化 terraform init -upgrade
 		hash := calculateProviderConfigHash(req.ProviderConfig)
 		if hash != "" {
@@ -540,35 +556,20 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 	}
 	// 处理provider模板引用
 	if req.ProviderTemplateIDs != nil {
-		updates["provider_template_ids"] = req.ProviderTemplateIDs
+		// []uint must be explicitly marshaled to JSON for JSONB column;
+		// GORM map-based updates don't invoke the column type's Value() method.
+		templateIDsJSON, _ := json.Marshal(req.ProviderTemplateIDs)
+		updates["provider_template_ids"] = gorm.Expr("?::jsonb", string(templateIDsJSON))
 
-		// 解析并缓存最终的provider_config
-		ptService := services.NewProviderTemplateService(wc.workspaceService.GetDB())
-		resolvedConfig, err := ptService.ResolveProviderConfig(req.ProviderTemplateIDs, req.ProviderOverrides)
-		if err != nil {
-			log.Printf("Failed to resolve provider config: %v", err)
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code":      400,
-				"message":   "Provider模板解析失败",
-				"error":     err.Error(),
-				"timestamp": time.Now().Format(time.RFC3339),
-			})
-			return
-		}
-
-		if resolvedConfig != nil {
-			updates["provider_config"] = resolvedConfig
-			hash := calculateProviderConfigHash(resolvedConfig)
-			if hash != "" {
-				updates["provider_config_hash"] = hash
-			}
-		} else {
+		// 模板模式下清空 provider_config，读取时动态解析
+		if len(req.ProviderTemplateIDs) > 0 {
 			updates["provider_config"] = nil
 			updates["provider_config_hash"] = ""
 		}
 	}
 	if req.ProviderOverrides != nil {
-		updates["provider_overrides"] = req.ProviderOverrides
+		overridesJSON, _ := json.Marshal(req.ProviderOverrides)
+		updates["provider_overrides"] = gorm.Expr("?::jsonb", string(overridesJSON))
 	}
 	if req.NotifySettings != nil {
 		updates["notify_settings"] = req.NotifySettings

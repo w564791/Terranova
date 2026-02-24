@@ -535,6 +535,19 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 		return
 	}
 
+	// Dynamically resolve provider config from global templates if applicable
+	providerConfig := workspace.ProviderConfig
+	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
+	if len(templateIDs) > 0 {
+		ptService := services.NewProviderTemplateService(h.db)
+		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		if err != nil {
+			log.Printf("[Agent] Failed to resolve provider config for workspace %s: %v", workspace.WorkspaceID, err)
+		} else if resolved != nil {
+			providerConfig = models.JSONB(resolved)
+		}
+	}
+
 	// Build response
 	response := gin.H{
 		"task": gin.H{
@@ -552,7 +565,7 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 			"name":               workspace.Name,
 			"terraform_version":  workspace.TerraformVersion,
 			"execution_mode":     workspace.ExecutionMode,
-			"provider_config":    workspace.ProviderConfig,
+			"provider_config":    providerConfig,
 			"tf_code":            workspace.TFCode,
 			"system_variables":   workspace.SystemVariables,
 			"terraform_lock_hcl": workspace.TerraformLockHCL, // 用于恢复 .terraform.lock.hcl 文件

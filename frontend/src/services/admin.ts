@@ -61,6 +61,7 @@ export interface ProviderTemplate {
   name: string;
   type: string;
   source: string;
+  alias: string;
   config: Record<string, any>;
   version: string;
   constraint_op: string;
@@ -76,6 +77,7 @@ export interface CreateProviderTemplateRequest {
   name: string;
   type: string;
   source: string;
+  alias?: string;
   config: Record<string, any>;
   version?: string;
   constraint_op?: string;
@@ -87,6 +89,7 @@ export interface UpdateProviderTemplateRequest {
   name?: string;
   type?: string;
   source?: string;
+  alias?: string;
   config?: Record<string, any>;
   version?: string;
   constraint_op?: string;

@@ -774,6 +774,20 @@ func (s *TerraformExecutor) ExecutePlan(
 	logger.Info("  - Execution mode: %s", workspace.ExecutionMode)
 	logger.Info("  - Terraform version: %s", workspace.TerraformVersion)
 
+	// 1.2.1 模板模式下动态解析 provider_config（仅 Local 模式需要，Agent 模式由 API 层已解析）
+	planTemplateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
+	if len(planTemplateIDs) > 0 && s.db != nil {
+		logger.Info("Resolving provider config from %d template(s)...", len(planTemplateIDs))
+		ptService := NewProviderTemplateService(s.db)
+		resolved, resolveErr := ptService.ResolveProviderConfig(planTemplateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		if resolveErr != nil {
+			logger.Warn("Failed to resolve provider templates: %v", resolveErr)
+		} else if resolved != nil {
+			workspace.ProviderConfig = models.JSONB(resolved)
+			logger.Info("✓ Provider config resolved from templates")
+		}
+	}
+
 	// 1.3 获取资源（使用 DataAccessor）
 	logger.Info("Fetching workspace resources...")
 	resources, err := s.dataAccessor.GetWorkspaceResources(workspace.WorkspaceID)
@@ -3195,8 +3209,18 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	}
 	logger.Debug("Captured %d variable references", len(variableSnapshots))
 
-	// 3. 快照Provider配置
+	// 3. 快照Provider配置（模板模式下动态解析，仅 Local 模式；Agent 模式由 API 层已解析）
 	providerConfig := workspace.ProviderConfig
+	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
+	if len(templateIDs) > 0 && s.db != nil {
+		ptService := NewProviderTemplateService(s.db)
+		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		if err != nil {
+			logger.Warn("Failed to resolve provider config from templates: %v, using stored config", err)
+		} else if resolved != nil {
+			providerConfig = models.JSONB(resolved)
+		}
+	}
 	logger.Debug("Captured provider configuration")
 
 	// 4. 记录快照时间

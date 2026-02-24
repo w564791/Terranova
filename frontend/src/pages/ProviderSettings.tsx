@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { adminService, type ProviderTemplate } from '../services/admin';
+import { JsonEditor } from '../components/DynamicForm/JsonEditor';
 import api from '../services/api';
 import styles from './ProviderSettings.module.css';
 
@@ -53,7 +54,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
         setMode('template');
         setSelectedTemplateIds(templateIds);
         setOverrides(providerOverrides || {});
-        setExpandedTemplates(new Set(templateIds));
+        setExpandedTemplates(new Set());
       } else if (
         providerConfig &&
         typeof providerConfig === 'object' &&
@@ -126,7 +127,11 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
       const templateOverrides = { ...(prev[tidStr] || {}) };
 
       // If value matches template default, remove the override
-      if (value === String(templateValue ?? '')) {
+      const defaultStr =
+        templateValue != null && typeof templateValue === 'object'
+          ? JSON.stringify(templateValue)
+          : String(templateValue ?? '');
+      if (value === defaultStr) {
         delete templateOverrides[key];
       } else {
         // Try to parse as JSON/number/boolean for storage
@@ -373,6 +378,9 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                             <div className={styles.templateInfo}>
                               <span className={styles.templateName}>
                                 {template.name}
+                                {template.alias && (
+                                  <span className={styles.defaultBadge}>alias: {template.alias}</span>
+                                )}
                                 {template.is_default && (
                                   <span className={styles.defaultBadge}>Default</span>
                                 )}
@@ -414,9 +422,17 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                             {configKeys.map((key) => {
                               const templateValue = template.config[key];
                               const isOverridden = key in templateOverrides;
-                              const displayValue = isOverridden
-                                ? String(templateOverrides[key] ?? '')
-                                : String(templateValue ?? '');
+                              const rawValue = isOverridden
+                                ? templateOverrides[key]
+                                : templateValue;
+                              const displayValue =
+                                rawValue != null && typeof rawValue === 'object'
+                                  ? JSON.stringify(rawValue)
+                                  : String(rawValue ?? '');
+                              const placeholderValue =
+                                templateValue != null && typeof templateValue === 'object'
+                                  ? JSON.stringify(templateValue)
+                                  : String(templateValue ?? '');
 
                               return (
                                 <div key={key} className={styles.overrideField}>
@@ -437,7 +453,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                                     onChange={(e) =>
                                       handleOverrideChange(template.id, key, e.target.value)
                                     }
-                                    placeholder={String(templateValue ?? '')}
+                                    placeholder={placeholderValue}
                                   />
                                   {isOverridden && (
                                     <button
@@ -473,14 +489,13 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
               Paste or edit raw provider_config JSON. This will be used to generate provider.tf.json.
             </span>
           </div>
-          <textarea
-            className={`${styles.jsonEditor} ${jsonError ? styles.jsonEditorError : ''}`}
+          <JsonEditor
             value={customJson}
-            onChange={(e) => handleCustomJsonChange(e.target.value)}
-            placeholder='{\n  "provider": {\n    "aws": [{\n      "region": "us-east-1"\n    }]\n  }\n}'
-            spellCheck={false}
+            onChange={handleCustomJsonChange}
+            placeholder='{"provider": {"aws": [{"region": "us-east-1"}]}}'
+            minHeight={250}
+            maxHeight={600}
           />
-          {jsonError && <div className={styles.jsonErrorMessage}>{jsonError}</div>}
         </div>
       )}
 

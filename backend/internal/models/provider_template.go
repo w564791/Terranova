@@ -8,6 +8,7 @@ type ProviderTemplate struct {
 	Name         string    `json:"name" gorm:"type:varchar(100);not null;uniqueIndex"`
 	Type         string    `json:"type" gorm:"type:varchar(50);not null;index"`
 	Source       string    `json:"source" gorm:"type:varchar(200);not null"`
+	Alias        string    `json:"alias" gorm:"type:varchar(50)"`
 	Config       JSONB     `json:"config" gorm:"type:jsonb;not null;default:'{}'"`
 	Version      string    `json:"version" gorm:"type:varchar(50)"`
 	ConstraintOp string    `json:"constraint_op" gorm:"column:constraint_op;type:varchar(10)"`
@@ -28,6 +29,7 @@ type CreateProviderTemplateRequest struct {
 	Name         string                 `json:"name" binding:"required"`
 	Type         string                 `json:"type" binding:"required"`
 	Source       string                 `json:"source" binding:"required"`
+	Alias        string                 `json:"alias"`
 	Config       map[string]interface{} `json:"config" binding:"required"`
 	Version      string                 `json:"version"`
 	ConstraintOp string                 `json:"constraint_op"`
@@ -40,6 +42,7 @@ type UpdateProviderTemplateRequest struct {
 	Name         *string                `json:"name"`
 	Type         *string                `json:"type"`
 	Source       *string                `json:"source"`
+	Alias        *string                `json:"alias"`
 	Config       map[string]interface{} `json:"config"`
 	Version      *string                `json:"version"`
 	ConstraintOp *string                `json:"constraint_op"`

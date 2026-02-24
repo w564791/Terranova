@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -2504,8 +2505,18 @@ func (h *ManifestHandler) createTaskSnapshot(task *models.WorkspaceTask, workspa
 		})
 	}
 
-	// 3. Snapshot Provider config
+	// 3. Snapshot Provider config（模板模式下动态解析）
 	providerConfig := workspace.ProviderConfig
+	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
+	if len(templateIDs) > 0 {
+		ptService := services.NewProviderTemplateService(h.db)
+		resolved, resolveErr := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		if resolveErr != nil {
+			log.Printf("Failed to resolve provider templates for snapshot: %v", resolveErr)
+		} else if resolved != nil {
+			providerConfig = models.JSONB(resolved)
+		}
+	}
 
 	// 4. Serialize and save
 	resourceVersionsJSON, _ := json.Marshal(models.JSONB(resourceVersions))

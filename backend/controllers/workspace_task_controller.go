@@ -1463,8 +1463,19 @@ func createTaskSnapshot(db *gorm.DB, task *models.WorkspaceTask, workspace *mode
 		})
 	}
 
-	// 3. 快照Provider配置
+	// 3. 快照Provider配置（模板模式下动态解析，确保使用最新模板数据）
 	providerConfig := workspace.ProviderConfig
+	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
+	if len(templateIDs) > 0 {
+		ptService := services.NewProviderTemplateService(db)
+		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		if err != nil {
+			return fmt.Errorf("failed to resolve provider config from templates: %w", err)
+		}
+		if resolved != nil {
+			providerConfig = models.JSONB(resolved)
+		}
+	}
 
 	// 4. 序列化变量快照为JSON
 	variablesJSON, err := json.Marshal(variableSnapshots)

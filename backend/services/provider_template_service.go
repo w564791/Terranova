@@ -90,6 +90,7 @@ func (s *ProviderTemplateService) Create(req *models.CreateProviderTemplateReque
 		Name:         req.Name,
 		Type:         req.Type,
 		Source:       req.Source,
+		Alias:        req.Alias,
 		Config:       models.JSONB(req.Config),
 		Version:      req.Version,
 		ConstraintOp: req.ConstraintOp,
@@ -135,6 +136,10 @@ func (s *ProviderTemplateService) Update(id uint, req *models.UpdateProviderTemp
 
 	if req.Source != nil {
 		updates["source"] = *req.Source
+	}
+
+	if req.Alias != nil {
+		updates["alias"] = *req.Alias
 	}
 
 	if req.Config != nil {
@@ -262,17 +267,18 @@ func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, over
 		return nil, nil
 	}
 
-	providerBlock := make(map[string]interface{})
+	providerBlock := make(map[string][]interface{})
 	requiredProviders := make(map[string]interface{})
 
 	for _, tmpl := range templates {
 		// 深拷贝Config
 		config := deepCopyJSONB(tmpl.Config)
 
-		// 应用覆盖（按provider类型浅合并）
+		// 应用覆盖（按模板ID查找，与前端发送的 provider_overrides 结构一致）
+		tidStr := fmt.Sprintf("%d", tmpl.ID)
 		if overrides != nil {
-			if typeOverrides, ok := overrides[tmpl.Type]; ok {
-				if overrideMap, ok := typeOverrides.(map[string]interface{}); ok {
+			if tmplOverrides, ok := overrides[tidStr]; ok {
+				if overrideMap, ok := tmplOverrides.(map[string]interface{}); ok {
 					for k, v := range overrideMap {
 						config[k] = v
 					}
@@ -280,26 +286,39 @@ func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, over
 			}
 		}
 
-		// 构建provider block
-		providerBlock[tmpl.Type] = []interface{}{config}
-
-		// 构建required_providers block
-		rpEntry := make(map[string]interface{})
-		rpEntry["source"] = tmpl.Source
-		if tmpl.Version != "" {
-			if tmpl.ConstraintOp == "=" {
-				rpEntry["version"] = tmpl.Version
-			} else if tmpl.ConstraintOp != "" {
-				rpEntry["version"] = tmpl.ConstraintOp + " " + tmpl.Version
-			} else {
-				rpEntry["version"] = tmpl.Version
-			}
+		// 如果模板设置了 alias，注入到 config 中（Terraform provider alias）
+		if tmpl.Alias != "" {
+			config["alias"] = tmpl.Alias
 		}
-		requiredProviders[tmpl.Type] = rpEntry
+
+		// 追加到同类型 provider 数组（支持多个同类型 provider，如多个 aws 用 alias 区分）
+		providerBlock[tmpl.Type] = append(providerBlock[tmpl.Type], config)
+
+		// required_providers 每种类型只需一条（source + version 约束相同）
+		if _, exists := requiredProviders[tmpl.Type]; !exists {
+			rpEntry := make(map[string]interface{})
+			rpEntry["source"] = tmpl.Source
+			if tmpl.Version != "" {
+				if tmpl.ConstraintOp == "=" {
+					rpEntry["version"] = tmpl.Version
+				} else if tmpl.ConstraintOp != "" {
+					rpEntry["version"] = tmpl.ConstraintOp + " " + tmpl.Version
+				} else {
+					rpEntry["version"] = tmpl.Version
+				}
+			}
+			requiredProviders[tmpl.Type] = rpEntry
+		}
+	}
+
+	// 转换 providerBlock 为 map[string]interface{} 以匹配 JSON 输出格式
+	providerOut := make(map[string]interface{})
+	for k, v := range providerBlock {
+		providerOut[k] = v
 	}
 
 	result := map[string]interface{}{
-		"provider": providerBlock,
+		"provider": providerOut,
 		"terraform": []interface{}{
 			map[string]interface{}{
 				"required_providers": []interface{}{requiredProviders},

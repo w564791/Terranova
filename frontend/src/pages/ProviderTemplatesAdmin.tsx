@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useToast } from '../hooks/useToast';
 import { adminService } from '../services/admin';
 import type { ProviderTemplate, CreateProviderTemplateRequest, UpdateProviderTemplateRequest } from '../services/admin';
+import { JsonEditor } from '../components/DynamicForm/JsonEditor';
 import styles from './Admin.module.css';
 
 const ProviderTemplatesAdmin: React.FC = () => {
@@ -16,6 +17,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
     name: '',
     type: '',
     source: '',
+    alias: '',
     config: '{}',
     version: '',
     constraint_op: '~>',
@@ -46,6 +48,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
       name: '',
       type: '',
       source: '',
+      alias: '',
       config: '{}',
       version: '',
       constraint_op: '',
@@ -67,6 +70,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
       name: template.name,
       type: template.type,
       source: template.source,
+      alias: template.alias ?? '',
       config: JSON.stringify(template.config, null, 2),
       version: template.version,
       constraint_op: template.constraint_op ?? '',
@@ -125,6 +129,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
           name: formData.name,
           type: formData.type,
           source: formData.source,
+          alias: formData.alias,
           config: parsedConfig,
           version: formData.version,
           constraint_op: formData.constraint_op,
@@ -138,6 +143,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
           name: formData.name,
           type: formData.type,
           source: formData.source,
+          alias: formData.alias,
           config: parsedConfig,
           version: formData.version,
           constraint_op: formData.constraint_op,
@@ -263,6 +269,21 @@ const ProviderTemplatesAdmin: React.FC = () => {
                   {!formErrors.source && <span className={styles.hint}>Terraform Registry 中的 Provider 路径</span>}
                 </div>
 
+                {/* Alias */}
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Alias</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    value={formData.alias}
+                    onChange={(e) => setFormData({ ...formData, alias: e.target.value })}
+                    placeholder="例如：west, secondary"
+                  />
+                  <span className={styles.hint}>
+                    可选。同类型存在多个 Provider 时需要设置 alias 来区分（主 Provider 不需要）
+                  </span>
+                </div>
+
                 {/* 版本 + 约束 */}
                 <div className={styles.formGroup}>
                   <label className={styles.label}>版本</label>
@@ -309,15 +330,14 @@ const ProviderTemplatesAdmin: React.FC = () => {
                   <label className={styles.label}>
                     Config<span className={styles.required}>*</span>
                   </label>
-                  <textarea
-                    className={`${styles.textarea} ${formErrors.config ? styles.error : ''}`}
+                  <JsonEditor
                     value={formData.config}
-                    onChange={(e) => setFormData({ ...formData, config: e.target.value })}
-                    rows={6}
+                    onChange={(val) => setFormData({ ...formData, config: val })}
                     placeholder='{"region": "us-east-1"}'
+                    minHeight={150}
+                    maxHeight={400}
                   />
                   {formErrors.config && <span className={styles.errorText}>{formErrors.config}</span>}
-                  {!formErrors.config && <span className={styles.hint}>JSON 格式的 Provider 配置参数</span>}
                   <div className={styles.securityNotice}>
                     <strong>Security:</strong> 请勿在此存放密钥、密码等敏感数据。敏感凭据应通过 Workspace 变量（Environment Variables）注入，
                     例如 AWS_ACCESS_KEY_ID、AWS_SECRET_ACCESS_KEY 等。此处仅配置 region、endpoint 等非敏感参数。
@@ -384,6 +404,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
                 <th>名称</th>
                 <th>类型</th>
                 <th>Source</th>
+                <th>Alias</th>
                 <th>版本</th>
                 <th>状态</th>
                 <th>默认</th>
@@ -401,6 +422,13 @@ const ProviderTemplatesAdmin: React.FC = () => {
                   </td>
                   <td>
                     <span className={styles.sourceCell}>{template.source}</span>
+                  </td>
+                  <td>
+                    {template.alias ? (
+                      <span className={styles.aliasBadge}>{template.alias}</span>
+                    ) : (
+                      <span style={{ color: 'var(--color-gray-400)' }}>-</span>
+                    )}
                   </td>
                   <td>
                     {template.version ? (
