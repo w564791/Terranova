@@ -18,6 +18,8 @@ export interface Workspace {
   tags?: Record<string, any>;
   variables?: Record<string, any>;
   provider_config?: Record<string, any>;
+  provider_template_ids?: number[] | null;
+  provider_overrides?: Record<string, Record<string, any>> | null;
   notify_settings?: Record<string, any>;
   state: string;
   is_locked: boolean;

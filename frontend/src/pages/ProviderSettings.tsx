@@ -1,23 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
+import { adminService, type ProviderTemplate } from '../services/admin';
 import api from '../services/api';
-import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './ProviderSettings.module.css';
 
-interface ProviderConfig {
-  type: string;
-  alias?: string;
-  authMethod: 'iam_role' | 'aksk' | 'assume_role';
-  region: string;
-  accessKey?: string;
-  secretKey?: string;
-  roleArn?: string;
-  versionConstraint?: '~>' | '>=' | '>' | '=' | '<=' | '<';
-  version?: string;
-  advancedParams?: Record<string, any>;
-}
+type ProviderMode = 'template' | 'custom' | 'none';
 
 interface ProviderSettingsProps {
   workspaceId: string;
@@ -25,762 +13,509 @@ interface ProviderSettingsProps {
 
 const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
   const { showToast } = useToast();
-  const [providers, setProviders] = useState<ProviderConfig[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const [mode, setMode] = useState<ProviderMode>('none');
+  const [availableTemplates, setAvailableTemplates] = useState<ProviderTemplate[]>([]);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, Record<string, any>>>({});
   const [hasChanges, setHasChanges] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [providerToDelete, setProviderToDelete] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchProviderConfig();
-  }, [workspaceId]);
+  // Custom mode state
+  const [customJson, setCustomJson] = useState('');
+  const [jsonError, setJsonError] = useState('');
 
-  const fetchProviderConfig = async () => {
+  // Collapsible override sections
+  const [expandedTemplates, setExpandedTemplates] = useState<Set<number>>(new Set());
+
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/workspaces/${workspaceId}`);
-      
-      // API响应格式: { code: 200, data: { ...workspace }, timestamp: ... }
-      // api.ts的拦截器返回response.data，所以这里response就是{ code: 200, data: {...}, timestamp: ... }
-      const workspace = response.data || response;
-      
-      console.log('Fetched workspace:', workspace);
-      console.log('Fetched workspace provider_config:', workspace.provider_config);
-      
-      if (workspace.provider_config) {
-        const config = workspace.provider_config;
-        const providerList: ProviderConfig[] = [];
-        
-        if (config.provider) {
-          Object.entries(config.provider).forEach(([type, configs]: [string, any]) => {
-            if (Array.isArray(configs)) {
-              configs.forEach((cfg: any) => {
-                const parsed = parseProviderConfig(type, cfg, config.terraform);
-                console.log('Parsed provider config:', parsed);
-                providerList.push(parsed);
-              });
-            }
-          });
-        }
-        
-        console.log('Total providers loaded:', providerList.length);
-        setProviders(providerList);
+
+      // Fetch workspace data and available templates in parallel
+      const [workspaceRes, templatesRes] = await Promise.all([
+        api.get(`/workspaces/${workspaceId}`),
+        adminService.getProviderTemplates({ enabled: true }),
+      ]);
+
+      const workspace = workspaceRes.data || workspaceRes;
+      const templates = templatesRes.items || [];
+      setAvailableTemplates(templates);
+
+      // Determine initial mode
+      const templateIds = workspace.provider_template_ids;
+      const providerConfig = workspace.provider_config;
+      const providerOverrides = workspace.provider_overrides;
+
+      if (Array.isArray(templateIds) && templateIds.length > 0) {
+        // Template mode
+        setMode('template');
+        setSelectedTemplateIds(templateIds);
+        setOverrides(providerOverrides || {});
+        setExpandedTemplates(new Set(templateIds));
+      } else if (
+        providerConfig &&
+        typeof providerConfig === 'object' &&
+        Object.keys(providerConfig).length > 0
+      ) {
+        // Custom mode
+        setMode('custom');
+        setCustomJson(JSON.stringify(providerConfig, null, 2));
       } else {
-        // 如果没有provider_config，清空列表
-        console.log('No provider_config found, clearing list');
-        setProviders([]);
+        // None mode
+        setMode('none');
       }
+
+      setHasChanges(false);
     } catch (error) {
       console.error('Failed to fetch provider config:', error);
       showToast(extractErrorMessage(error), 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId, showToast]);
 
-  const parseProviderConfig = (type: string, config: any, terraformConfig: any): ProviderConfig => {
-    const provider: ProviderConfig = {
-      type,
-      alias: config.alias,
-      region: config.region,
-      authMethod: 'iam_role',
-      advancedParams: {}
-    };
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
-    // 判断认证方式
-    if (config.access_key && config.secret_key) {
-      provider.authMethod = 'aksk';
-      provider.accessKey = config.access_key;
-      provider.secretKey = config.secret_key;
-    } else if (config.assume_role) {
-      provider.authMethod = 'assume_role';
-      provider.roleArn = config.assume_role[0]?.role_arn;
-    }
-
-    // 提取版本信息
-    if (terraformConfig && Array.isArray(terraformConfig)) {
-      terraformConfig.forEach((tf: any) => {
-        if (tf.required_providers && Array.isArray(tf.required_providers)) {
-          tf.required_providers.forEach((rp: any) => {
-            if (rp[type]) {
-              const versionStr = rp[type].version || '';
-              const match = versionStr.match(/^([~><=]+)\s*(.+)$/);
-              if (match) {
-                provider.versionConstraint = match[1] as any;
-                provider.version = match[2];
-              }
-            }
-          });
-        }
-      });
-    }
-
-    // 提取高级参数
-    const standardFields = ['alias', 'region', 'access_key', 'secret_key', 'assume_role'];
-    Object.entries(config).forEach(([key, value]) => {
-      if (!standardFields.includes(key)) {
-        provider.advancedParams![key] = value;
-      }
-    });
-
-    return provider;
-  };
-
-  const handleAddProvider = () => {
-    setEditingIndex(null);
-    setShowForm(true);
-  };
-
-  const handleEdit = (index: number) => {
-    setEditingIndex(index);
-    setShowForm(true);
-  };
-
-  const handleDeleteClick = (index: number) => {
-    setProviderToDelete(index);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = () => {
-    if (providerToDelete !== null) {
-      const newProviders = providers.filter((_, i) => i !== providerToDelete);
-      setProviders(newProviders);
-      setHasChanges(true);
-      setDeleteDialogOpen(false);
-      setProviderToDelete(null);
-      showToast('Provider已删除（未保存）', 'info');
-    }
-  };
-
-  const handleSaveProvider = (provider: ProviderConfig) => {
-    if (editingIndex !== null) {
-      // 更新
-      const newProviders = [...providers];
-      newProviders[editingIndex] = provider;
-      setProviders(newProviders);
-      showToast('Provider已更新（未保存）', 'info');
-    } else {
-      // 添加
-      setProviders([...providers, provider]);
-      showToast('Provider已添加（未保存）', 'info');
-    }
-    
+  // Mode change handler
+  const handleModeChange = (newMode: ProviderMode) => {
+    if (newMode === mode) return;
+    setMode(newMode);
     setHasChanges(true);
-    setShowForm(false);
-    setEditingIndex(null);
+
+    if (newMode === 'template') {
+      // Keep existing selections if any
+    } else if (newMode === 'custom') {
+      if (!customJson) {
+        setCustomJson('{\n  \n}');
+      }
+      setJsonError('');
+    }
   };
 
-  const handleCancel = () => {
-    setShowForm(false);
-    setEditingIndex(null);
-  };
-
-  const buildSaveData = () => {
-    const providerMap: Record<string, any[]> = {};
-    const requiredProviders: any = {};
-    
-    providers.forEach(p => {
-      if (!providerMap[p.type]) {
-        providerMap[p.type] = [];
-      }
-      
-      const config: any = {
-        region: p.region,
-        ...p.advancedParams
-      };
-      
-      if (p.alias) {
-        config.alias = p.alias;
-      }
-      
-      if (p.authMethod === 'aksk') {
-        config.access_key = p.accessKey;
-        config.secret_key = p.secretKey;
-      } else if (p.authMethod === 'assume_role' && p.roleArn) {
-        config.assume_role = [{ role_arn: p.roleArn }];
-      }
-      
-      providerMap[p.type].push(config);
-      
-      // 构建版本约束
-      if (p.version) {
-        const constraint = p.versionConstraint || '~>';
-        // 如果是精确版本（=），不需要添加约束符号
-        const versionStr = constraint === '=' ? p.version : `${constraint} ${p.version}`;
-        requiredProviders[p.type] = {
-          source: `hashicorp/${p.type}`,
-          version: versionStr
-        };
+  // Template selection handler
+  const handleTemplateToggle = (templateId: number) => {
+    setSelectedTemplateIds((prev) => {
+      if (prev.includes(templateId)) {
+        // Remove the template and its overrides
+        const newOverrides = { ...overrides };
+        delete newOverrides[String(templateId)];
+        setOverrides(newOverrides);
+        return prev.filter((id) => id !== templateId);
+      } else {
+        // Add the template
+        setExpandedTemplates((exp) => new Set([...exp, templateId]));
+        return [...prev, templateId];
       }
     });
-    
-    // 只有在有版本约束时才包含terraform块
-    // 空的terraform块会导致Terraform尝试读取backend state，在首次运行时会失败
-    const result: any = {
-      provider: providerMap
-    };
-    
-    if (Object.keys(requiredProviders).length > 0) {
-      result.terraform = [{ required_providers: [requiredProviders] }];
-    }
-    
-    return result;
+    setHasChanges(true);
   };
 
+  // Override change handler
+  const handleOverrideChange = (templateId: number, key: string, value: string) => {
+    const template = availableTemplates.find((t) => t.id === templateId);
+    if (!template) return;
+
+    const templateValue = template.config[key];
+    const tidStr = String(templateId);
+
+    setOverrides((prev) => {
+      const templateOverrides = { ...(prev[tidStr] || {}) };
+
+      // If value matches template default, remove the override
+      if (value === String(templateValue ?? '')) {
+        delete templateOverrides[key];
+      } else {
+        // Try to parse as JSON/number/boolean for storage
+        templateOverrides[key] = parseValue(value);
+      }
+
+      const newOverrides = { ...prev };
+      if (Object.keys(templateOverrides).length === 0) {
+        delete newOverrides[tidStr];
+      } else {
+        newOverrides[tidStr] = templateOverrides;
+      }
+      return newOverrides;
+    });
+    setHasChanges(true);
+  };
+
+  // Reset a single override to template default
+  const handleResetOverride = (templateId: number, key: string) => {
+    const tidStr = String(templateId);
+    setOverrides((prev) => {
+      const templateOverrides = { ...(prev[tidStr] || {}) };
+      delete templateOverrides[key];
+
+      const newOverrides = { ...prev };
+      if (Object.keys(templateOverrides).length === 0) {
+        delete newOverrides[tidStr];
+      } else {
+        newOverrides[tidStr] = templateOverrides;
+      }
+      return newOverrides;
+    });
+    setHasChanges(true);
+  };
+
+  // Toggle expand/collapse for a template override section
+  const toggleExpanded = (templateId: number) => {
+    setExpandedTemplates((prev) => {
+      const next = new Set(prev);
+      if (next.has(templateId)) {
+        next.delete(templateId);
+      } else {
+        next.add(templateId);
+      }
+      return next;
+    });
+  };
+
+  // Custom JSON change handler
+  const handleCustomJsonChange = (value: string) => {
+    setCustomJson(value);
+    setHasChanges(true);
+
+    // Validate JSON
+    if (value.trim()) {
+      try {
+        JSON.parse(value);
+        setJsonError('');
+      } catch (e: any) {
+        setJsonError(e.message || 'Invalid JSON');
+      }
+    } else {
+      setJsonError('');
+    }
+  };
+
+  // Save handler
   const handleSave = async () => {
     try {
-      const providerConfig = buildSaveData();
-      
-      console.log('Saving provider config:', JSON.stringify(providerConfig, null, 2));
-      
-      // 保存时不设置loading，避免阻塞UI
-      await api.patch(`/workspaces/${workspaceId}`, {
-        provider_config: providerConfig
-      });
-      
-      showToast('Provider配置已保存', 'success');
+      setSaving(true);
+      let payload: Record<string, any> = {};
+
+      if (mode === 'template') {
+        payload = {
+          provider_template_ids: selectedTemplateIds,
+          provider_overrides: Object.keys(overrides).length > 0 ? overrides : null,
+          provider_config: null,
+        };
+      } else if (mode === 'custom') {
+        // Validate JSON before saving
+        if (customJson.trim()) {
+          try {
+            const parsed = JSON.parse(customJson);
+            payload = {
+              provider_config: parsed,
+              provider_template_ids: [],
+              provider_overrides: null,
+            };
+          } catch {
+            showToast('Invalid JSON in custom configuration', 'error');
+            return;
+          }
+        } else {
+          payload = {
+            provider_config: null,
+            provider_template_ids: [],
+            provider_overrides: null,
+          };
+        }
+      } else {
+        // None mode
+        payload = {
+          provider_template_ids: [],
+          provider_config: null,
+          provider_overrides: null,
+        };
+      }
+
+      await api.patch(`/workspaces/${workspaceId}`, payload);
+      showToast('Provider configuration saved', 'success');
       setHasChanges(false);
-      
-      // 重新加载以确认保存成功
-      await fetchProviderConfig();
+
+      // Reload to confirm
+      await fetchConfig();
     } catch (error) {
       console.error('Failed to save provider config:', error);
       showToast(extractErrorMessage(error), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading && providers.length === 0) {
-    return <div className={styles.loading}>加载中...</div>;
+  // Group templates by type
+  const templatesByType = availableTemplates.reduce<Record<string, ProviderTemplate[]>>(
+    (acc, template) => {
+      const type = template.type || 'other';
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(template);
+      return acc;
+    },
+    {}
+  );
+
+  if (loading) {
+    return <div className={styles.loading}>Loading...</div>;
   }
 
   return (
     <div className={styles.container}>
-      {/* 页面标题 */}
-      <div className={styles.pageHeader}>
-        <h2 className={styles.pageTitle}>Provider Configuration</h2>
-        <p className={styles.pageDescription}>
-          Configure Terraform providers and their authentication methods. 
-          These settings will be used to generate provider.tf.json during execution.
-        </p>
-      </div>
-
-      {/* Provider列表 */}
-      {!showForm && (
-        <>
-          <div className={styles.providerList}>
-            {providers.map((provider, index) => (
-              <ProviderCard
-                key={index}
-                provider={provider}
-                onEdit={() => handleEdit(index)}
-                onDelete={() => handleDeleteClick(index)}
-              />
-            ))}
-          </div>
-
-          {/* 添加Provider按钮 */}
-          <button onClick={handleAddProvider} className={styles.addButton}>
-            + Add Provider
-          </button>
-
-          {/* 保存按钮 */}
-          {providers.length > 0 && (
-            <div className={styles.actions}>
-              <button 
-                onClick={handleSave} 
-                className={styles.saveButton}
-                disabled={!hasChanges || loading}
-              >
-                {loading ? 'Saving...' : 'Save Settings'}
-              </button>
-              {hasChanges && (
-                <span className={styles.unsavedHint}>You have unsaved changes</span>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Provider表单 */}
-      {showForm && (
-        <ProviderForm
-          provider={editingIndex !== null ? providers[editingIndex] : undefined}
-          onSave={handleSaveProvider}
-          onCancel={handleCancel}
-        />
-      )}
-
-      {/* 删除确认对话框 */}
-      <ConfirmDialog
-        isOpen={deleteDialogOpen}
-        title={`Delete ${providerToDelete !== null ? providers[providerToDelete]?.type : ''} provider`}
-        confirmText="Yes, delete provider"
-        cancelText="Cancel"
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteDialogOpen(false)}
-        variant="danger"
-      >
-        <div style={{ marginBottom: '16px' }}>
-          <p style={{ margin: '0 0 12px 0', color: 'var(--color-gray-700)', fontSize: '14px', lineHeight: '1.5' }}>
-            Deleting this provider configuration will remove it from the workspace. 
-            {providerToDelete !== null && providers[providerToDelete]?.alias && (
-              <> The alias <strong>{providers[providerToDelete].alias}</strong> will be removed.</>
-            )}
-          </p>
-          <p style={{ margin: 0, color: 'var(--color-gray-700)', fontSize: '14px', lineHeight: '1.5' }}>
-            This operation <strong>cannot be undone</strong>. Are you sure?
-          </p>
-        </div>
-      </ConfirmDialog>
-    </div>
-  );
-};
-
-// Provider卡片组件
-const ProviderCard: React.FC<{
-  provider: ProviderConfig;
-  onEdit: () => void;
-  onDelete: () => void;
-}> = ({ provider, onEdit, onDelete }) => {
-  return (
-    <div className={styles.providerCard}>
-      <div className={styles.cardHeader}>
-        <div className={styles.cardTitle}>
-          <span className={styles.providerIcon}>☁️</span>
-          <span className={styles.providerName}>{provider.type.toUpperCase()}</span>
-          {provider.alias && (
-            <span className={styles.aliasBadge}>{provider.alias}</span>
-          )}
-        </div>
-        <div className={styles.cardActions}>
-          <button onClick={onEdit} className={styles.editButton}>
-            Edit
-          </button>
-          <button onClick={onDelete} className={styles.deleteButton}>
-            Delete
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.cardContent}>
-        <div className={styles.configRow}>
-          <span className={styles.configLabel}>Authentication:</span>
-          <span className={styles.configValue}>
-            {provider.authMethod === 'iam_role' && 'IAM Role'}
-            {provider.authMethod === 'aksk' && 'Access Key / Secret Key'}
-            {provider.authMethod === 'assume_role' && 'Assume Role'}
-          </span>
-        </div>
-
-        {provider.region && (
-          <div className={styles.configRow}>
-            <span className={styles.configLabel}>Region:</span>
-            <span className={styles.configValue}>{provider.region}</span>
-          </div>
-        )}
-
-        {provider.version && (
-          <div className={styles.configRow}>
-            <span className={styles.configLabel}>Version:</span>
-            <span className={styles.configValue}>
-              {provider.versionConstraint} {provider.version}
-            </span>
-          </div>
-        )}
-
-        {provider.advancedParams && Object.keys(provider.advancedParams).length > 0 && (
-          <div className={styles.configRow}>
-            <span className={styles.configLabel}>Advanced:</span>
-            <span className={styles.configValue}>
-              {Object.keys(provider.advancedParams).length} parameters
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Provider表单组件
-const ProviderForm: React.FC<{
-  provider?: ProviderConfig;
-  onSave: (provider: ProviderConfig) => void;
-  onCancel: () => void;
-}> = ({ provider, onSave, onCancel }) => {
-  const [formData, setFormData] = useState<ProviderConfig>({
-    type: provider?.type || 'aws',
-    alias: provider?.alias || '',
-    authMethod: provider?.authMethod || 'iam_role',
-    region: provider?.region || '',
-    accessKey: provider?.accessKey || '',
-    secretKey: provider?.secretKey || '',
-    roleArn: provider?.roleArn || '',
-    versionConstraint: provider?.versionConstraint || '~>',
-    version: provider?.version || '',
-    advancedParams: provider?.advancedParams || {}
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.region.trim()) {
-      alert('Region is required');
-      return;
-    }
-    
-    onSave(formData);
-  };
-
-  const [newParamKey, setNewParamKey] = useState('');
-  const [newParamValue, setNewParamValue] = useState('');
-  const [showAddParam, setShowAddParam] = useState(false);
-
-  const handleAddParam = () => {
-    if (!newParamKey.trim()) {
-      return;
-    }
-    
-    // 检查key是否已存在
-    if (formData.advancedParams && newParamKey.trim() in formData.advancedParams) {
-      alert('Parameter name already exists');
-      return;
-    }
-    
-    // 解析value
-    let parsedValue: any = newParamValue;
-    try {
-      parsedValue = JSON.parse(newParamValue);
-    } catch {
-      if (newParamValue === 'true') parsedValue = true;
-      else if (newParamValue === 'false') parsedValue = false;
-      else if (/^\d+$/.test(newParamValue)) parsedValue = parseInt(newParamValue, 10);
-      else if (/^\d+\.\d+$/.test(newParamValue)) parsedValue = parseFloat(newParamValue);
-    }
-    
-    setFormData({
-      ...formData,
-      advancedParams: {
-        ...formData.advancedParams,
-        [newParamKey.trim()]: parsedValue
-      }
-    });
-    
-    // 清空输入并关闭添加表单，显示"Add Parameter"按钮
-    setNewParamKey('');
-    setNewParamValue('');
-    setShowAddParam(false);
-  };
-
-  const handleCancelAddParam = () => {
-    setShowAddParam(false);
-    setNewParamKey('');
-    setNewParamValue('');
-  };
-
-  const handleRemoveParam = (key: string) => {
-    const newParams = { ...formData.advancedParams };
-    delete newParams[key];
-    setFormData({ ...formData, advancedParams: newParams });
-  };
-
-  const handleParamValueChange = (key: string, value: string) => {
-    let parsedValue: any = value;
-    
-    // 尝试解析JSON
-    try {
-      parsedValue = JSON.parse(value);
-    } catch {
-      // 尝试解析为数字或布尔值
-      if (value === 'true') parsedValue = true;
-      else if (value === 'false') parsedValue = false;
-      else if (/^\d+$/.test(value)) parsedValue = parseInt(value, 10);
-      else if (/^\d+\.\d+$/.test(value)) parsedValue = parseFloat(value);
-    }
-    
-    setFormData({
-      ...formData,
-      advancedParams: {
-        ...formData.advancedParams,
-        [key]: parsedValue
-      }
-    });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className={styles.providerForm}>
-      <h3 className={styles.formTitle}>
-        {provider ? 'Edit Provider' : 'Add Provider'}
-      </h3>
-
-      {/* Provider类型 */}
-      <div className={styles.formSection}>
-        <label className={styles.formLabel}>Provider Type</label>
-        <select
-          value={formData.type}
-          onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-          className={styles.select}
+      {/* Mode Selector */}
+      <div className={styles.modeSelector}>
+        <label
+          className={`${styles.modeOption} ${mode === 'template' ? styles.active : ''}`}
+          onClick={() => handleModeChange('template')}
         >
-          <option value="aws">AWS</option>
-          <option value="azure" disabled>Azure (Coming Soon)</option>
-          <option value="google" disabled>Google Cloud (Coming Soon)</option>
-        </select>
-      </div>
-
-      {/* Alias */}
-      <div className={styles.formSection}>
-        <label className={styles.formLabel}>Alias (Optional)</label>
-        <input
-          type="text"
-          value={formData.alias}
-          onChange={(e) => setFormData({ ...formData, alias: e.target.value })}
-          className={styles.input}
-          placeholder="e.g., us-east, production"
-        />
-        <div className={styles.hint}>
-          Use alias when configuring multiple instances of the same provider
-        </div>
-      </div>
-
-      {/* 认证方式 */}
-      <div className={styles.formSection}>
-        <label className={styles.formLabel}>Authentication Method</label>
-        <div className={styles.radioGroup}>
-          <label className={styles.radioLabel}>
-            <input
-              type="radio"
-              value="iam_role"
-              checked={formData.authMethod === 'iam_role'}
-              onChange={(e) => setFormData({ ...formData, authMethod: e.target.value as any })}
-            />
-            <div>
-              <strong>IAM Role</strong>
-              <p>Use IAM role attached to EC2 instance or ECS task (recommended)</p>
-            </div>
-          </label>
-
-          <label className={styles.radioLabel}>
-            <input
-              type="radio"
-              value="aksk"
-              checked={formData.authMethod === 'aksk'}
-              onChange={(e) => setFormData({ ...formData, authMethod: e.target.value as any })}
-            />
-            <div>
-              <strong>Access Key / Secret Key</strong>
-              <p>Use static credentials (not recommended for production)</p>
-            </div>
-          </label>
-
-          <label className={styles.radioLabel}>
-            <input
-              type="radio"
-              value="assume_role"
-              checked={formData.authMethod === 'assume_role'}
-              onChange={(e) => setFormData({ ...formData, authMethod: e.target.value as any })}
-            />
-            <div>
-              <strong>Assume Role</strong>
-              <p>Assume a role in another AWS account</p>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      {/* Region */}
-      <div className={styles.formSection}>
-        <label className={styles.formLabel}>Region *</label>
-        <input
-          type="text"
-          value={formData.region}
-          onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-          className={styles.input}
-          placeholder="e.g., us-east-1, ap-northeast-1"
-          required
-        />
-      </div>
-
-      {/* AKSK字段 */}
-      {formData.authMethod === 'aksk' && (
-        <>
-          <div className={styles.formSection}>
-            <label className={styles.formLabel}>Access Key *</label>
-            <input
-              type="text"
-              value={formData.accessKey}
-              onChange={(e) => setFormData({ ...formData, accessKey: e.target.value })}
-              className={styles.input}
-              placeholder="AKIAIOSFODNN7EXAMPLE"
-              required
-            />
-          </div>
-
-          <div className={styles.formSection}>
-            <label className={styles.formLabel}>Secret Key *</label>
-            <input
-              type="password"
-              value={formData.secretKey}
-              onChange={(e) => setFormData({ ...formData, secretKey: e.target.value })}
-              className={styles.input}
-              placeholder="wJalrXUtnFEMI/K7MDENG..."
-              required
-            />
-            <div className={styles.warning}>
-              <span className={styles.warningIcon}></span>
-              <span>Secret key will be stored in database. Consider using IAM role instead.</span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Assume Role字段 */}
-      {formData.authMethod === 'assume_role' && (
-        <div className={styles.formSection}>
-          <label className={styles.formLabel}>Role ARN *</label>
           <input
-            type="text"
-            value={formData.roleArn}
-            onChange={(e) => setFormData({ ...formData, roleArn: e.target.value })}
-            className={styles.input}
-            placeholder="arn:aws:iam::123456789012:role/TerraformRole"
-            required
+            type="radio"
+            name="providerMode"
+            value="template"
+            checked={mode === 'template'}
+            onChange={() => handleModeChange('template')}
+            className={styles.modeRadio}
           />
-        </div>
-      )}
+          <div className={styles.modeContent}>
+            <span className={styles.modeTitle}>Use Global Templates</span>
+            <span className={styles.modeDescription}>
+              Select from admin-managed provider templates with optional overrides
+            </span>
+          </div>
+        </label>
 
-      {/* 版本约束 */}
-      <div className={styles.formSection}>
-        <label className={styles.formLabel}>Version Constraint (Optional)</label>
-        <div className={styles.versionConstraint}>
-          <select
-            value={formData.versionConstraint}
-            onChange={(e) => setFormData({ ...formData, versionConstraint: e.target.value as any })}
-            className={styles.constraintSelect}
-          >
-            <option value="~>">{'~>'} (Pessimistic)</option>
-            <option value=">=">{'>='} (Greater or equal)</option>
-            <option value=">">{'>'}  (Greater than)</option>
-            <option value="=">=  (Exact)</option>
-            <option value="<=">{'<='} (Less or equal)</option>
-            <option value="<">{'<'}  (Less than)</option>
-          </select>
+        <label
+          className={`${styles.modeOption} ${mode === 'custom' ? styles.active : ''}`}
+          onClick={() => handleModeChange('custom')}
+        >
           <input
-            type="text"
-            value={formData.version}
-            onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-            className={styles.versionInput}
-            placeholder="6.0"
+            type="radio"
+            name="providerMode"
+            value="custom"
+            checked={mode === 'custom'}
+            onChange={() => handleModeChange('custom')}
+            className={styles.modeRadio}
           />
-        </div>
-        <div className={styles.hint}>
-          Example: ~{'>'}  6.0 means {'>'}= 6.0.0 and {'<'} 7.0.0
-        </div>
+          <div className={styles.modeContent}>
+            <span className={styles.modeTitle}>Custom Configuration</span>
+            <span className={styles.modeDescription}>
+              Provide raw provider JSON configuration (legacy)
+            </span>
+          </div>
+        </label>
+
+        <label
+          className={`${styles.modeOption} ${mode === 'none' ? styles.active : ''}`}
+          onClick={() => handleModeChange('none')}
+        >
+          <input
+            type="radio"
+            name="providerMode"
+            value="none"
+            checked={mode === 'none'}
+            onChange={() => handleModeChange('none')}
+            className={styles.modeRadio}
+          />
+          <div className={styles.modeContent}>
+            <span className={styles.modeTitle}>None (Module Defaults)</span>
+            <span className={styles.modeDescription}>
+              Let Terraform use providers from your module code or environment
+            </span>
+          </div>
+        </label>
       </div>
 
-      {/* 高级参数 */}
-      <div className={styles.formSection}>
-        <label className={styles.formLabel}>Advanced Parameters (Optional)</label>
-        <div className={styles.advancedParams}>
-          {/* 已有参数列表 - 只读显示，可删除 */}
-          {Object.entries(formData.advancedParams || {}).map(([key, value]) => (
-            <div key={key} className={styles.paramDisplayRow}>
-              <div className={styles.paramKeyDisplay}>{key}</div>
-              <div className={styles.paramValueDisplay}>
-                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemoveParam(key)}
-                className={styles.removeParamButton}
-                title="Delete parameter"
-              >
-                ×
-              </button>
+      {/* Template Mode UI */}
+      {mode === 'template' && (
+        <div className={styles.templateSection}>
+          {Object.keys(templatesByType).length === 0 ? (
+            <div className={styles.infoBox}>
+              No enabled provider templates available. Ask your administrator to create provider
+              templates in Global Settings.
             </div>
-          ))}
-          
-          {/* 添加新参数表单 */}
-          {showAddParam && (
-            <div className={styles.addParamForm}>
-              <input
-                type="text"
-                value={newParamKey}
-                onChange={(e) => setNewParamKey(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    // 移动到value输入框
-                    const valueInputs = document.querySelectorAll('textarea[placeholder*="value"]');
-                    if (valueInputs.length > 0) {
-                      (valueInputs[0] as HTMLTextAreaElement).focus();
-                    }
-                  }
-                }}
-                className={styles.newParamKey}
-                placeholder="parameter name"
-                autoFocus
-              />
-              <textarea
-                value={newParamValue}
-                onChange={(e) => setNewParamValue(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAddParam();
-                  }
-                }}
-                className={styles.newParamValue}
-                placeholder="value (string, number, boolean, or JSON)"
-                rows={2}
-              />
-              <div className={styles.addParamActions}>
-                <button
-                  type="button"
-                  onClick={handleAddParam}
-                  className={styles.confirmAddButton}
-                  disabled={!newParamKey.trim()}
-                >
-                  Add
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelAddParam}
-                  className={styles.cancelAddButton}
-                >
-                  Cancel
-                </button>
+          ) : (
+            Object.entries(templatesByType).map(([type, templates]) => (
+              <div key={type} className={styles.templateGroup}>
+                <h4 className={styles.templateGroupTitle}>{type.toUpperCase()}</h4>
+                <div className={styles.templateList}>
+                  {templates.map((template) => {
+                    const isSelected = selectedTemplateIds.includes(template.id);
+                    const isExpanded = expandedTemplates.has(template.id);
+                    const tidStr = String(template.id);
+                    const templateOverrides = overrides[tidStr] || {};
+                    const configKeys = Object.keys(template.config || {});
+
+                    return (
+                      <div
+                        key={template.id}
+                        className={`${styles.templateCard} ${isSelected ? styles.selected : ''}`}
+                      >
+                        <div className={styles.templateHeader}>
+                          <label className={styles.templateCheckbox}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleTemplateToggle(template.id)}
+                            />
+                            <div className={styles.templateInfo}>
+                              <span className={styles.templateName}>
+                                {template.name}
+                                {template.is_default && (
+                                  <span className={styles.defaultBadge}>Default</span>
+                                )}
+                              </span>
+                              <span className={styles.templateMeta}>
+                                {template.source}
+                                {template.version &&
+                                  ` ${template.constraint_op || '~>'} ${template.version}`}
+                              </span>
+                              {template.description && (
+                                <span className={styles.templateDescription}>
+                                  {template.description}
+                                </span>
+                              )}
+                            </div>
+                          </label>
+                          {isSelected && configKeys.length > 0 && (
+                            <button
+                              type="button"
+                              className={styles.expandButton}
+                              onClick={() => toggleExpanded(template.id)}
+                            >
+                              {isExpanded ? 'Hide Overrides' : 'Show Overrides'}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Override Section */}
+                        {isSelected && isExpanded && configKeys.length > 0 && (
+                          <div className={styles.overrideSection}>
+                            <div className={styles.overrideSectionHeader}>
+                              <span className={styles.overrideSectionTitle}>
+                                Configuration Overrides
+                              </span>
+                              <span className={styles.overrideHint}>
+                                Modify values to override template defaults
+                              </span>
+                            </div>
+                            {configKeys.map((key) => {
+                              const templateValue = template.config[key];
+                              const isOverridden = key in templateOverrides;
+                              const displayValue = isOverridden
+                                ? String(templateOverrides[key] ?? '')
+                                : String(templateValue ?? '');
+
+                              return (
+                                <div key={key} className={styles.overrideField}>
+                                  <label
+                                    className={`${styles.overrideLabel} ${isOverridden ? styles.overridden : ''}`}
+                                  >
+                                    {key}
+                                    {isOverridden && (
+                                      <span className={styles.overriddenIndicator}>
+                                        (overridden)
+                                      </span>
+                                    )}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    className={`${styles.overrideInput} ${isOverridden ? styles.overriddenInput : ''}`}
+                                    value={displayValue}
+                                    onChange={(e) =>
+                                      handleOverrideChange(template.id, key, e.target.value)
+                                    }
+                                    placeholder={String(templateValue ?? '')}
+                                  />
+                                  {isOverridden && (
+                                    <button
+                                      type="button"
+                                      className={styles.resetButton}
+                                      onClick={() => handleResetOverride(template.id, key)}
+                                      title="Reset to template default"
+                                    >
+                                      Reset
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-          
-          {/* Add Parameter按钮 - 只在未显示输入表单时显示 */}
-          {!showAddParam && (
-            <button
-              type="button"
-              onClick={() => setShowAddParam(true)}
-              className={styles.addParamButton}
-            >
-              + Add Parameter
-            </button>
+            ))
           )}
         </div>
-        <div className={styles.hint}>
-          Add any provider-specific parameters. Values can be strings, numbers, booleans, or JSON objects.
-        </div>
-      </div>
+      )}
 
-      {/* 表单操作 */}
-      <div className={styles.formActions}>
-        <button type="submit" className={styles.primaryButton}>
-          {provider ? 'Update Provider' : 'Add Provider'}
+      {/* Custom Mode UI */}
+      {mode === 'custom' && (
+        <div className={styles.customSection}>
+          <div className={styles.customHeader}>
+            <span className={styles.customTitle}>Provider Configuration JSON</span>
+            <span className={styles.customHint}>
+              Paste or edit raw provider_config JSON. This will be used to generate provider.tf.json.
+            </span>
+          </div>
+          <textarea
+            className={`${styles.jsonEditor} ${jsonError ? styles.jsonEditorError : ''}`}
+            value={customJson}
+            onChange={(e) => handleCustomJsonChange(e.target.value)}
+            placeholder='{\n  "provider": {\n    "aws": [{\n      "region": "us-east-1"\n    }]\n  }\n}'
+            spellCheck={false}
+          />
+          {jsonError && <div className={styles.jsonErrorMessage}>{jsonError}</div>}
+        </div>
+      )}
+
+      {/* None Mode UI */}
+      {mode === 'none' && (
+        <div className={styles.infoBox}>
+          <div className={styles.infoIcon}>i</div>
+          <div className={styles.infoContent}>
+            <strong>No provider configuration</strong>
+            <p>
+              Terraform will use provider settings from your module code or environment variables.
+              This is suitable when providers are configured directly in your .tf files or via
+              environment-based authentication (e.g., AWS_PROFILE, GOOGLE_CREDENTIALS).
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Save Actions */}
+      <div className={styles.actions}>
+        <button
+          onClick={handleSave}
+          className={styles.saveButton}
+          disabled={!hasChanges || saving || (mode === 'custom' && !!jsonError)}
+        >
+          {saving ? 'Saving...' : 'Save Settings'}
         </button>
-        <button type="button" onClick={onCancel} className={styles.cancelButton}>
-          Cancel
-        </button>
+        {hasChanges && <span className={styles.unsavedHint}>You have unsaved changes</span>}
       </div>
-    </form>
+    </div>
   );
 };
+
+/** Try to parse a string value into its appropriate JS type */
+function parseValue(value: string): any {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+  if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
 
 export default ProviderSettings;

@@ -12,159 +12,394 @@
   font-size: 16px;
 }
 
-/* Page Header */
-.pageHeader {
+/* ==============================
+   Mode Selector
+   ============================== */
+.modeSelector {
+  display: flex;
+  gap: 12px;
   margin-bottom: 24px;
 }
 
-.pageTitle {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-gray-900);
-  margin: 0 0 8px 0;
+.modeOption {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid var(--color-gray-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--color-white);
 }
 
-.pageDescription {
-  font-size: 14px;
-  color: var(--color-gray-600);
-  margin: 0;
-  line-height: 1.5;
+.modeOption:hover {
+  border-color: var(--color-gray-300);
+  background: var(--color-gray-50);
 }
 
-/* Provider List */
-.providerList {
+.modeOption.active {
+  border-color: var(--color-blue-500);
+  background: var(--color-blue-50);
+}
+
+.modeRadio {
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: var(--color-blue-600);
+}
+
+.modeContent {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 4px;
 }
 
-/* Provider Card */
-.providerCard {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition: all 0.2s;
-}
-
-.providerCard:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-}
-
-.cardHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-gray-100);
-}
-
-.cardTitle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.providerIcon {
-  font-size: 24px;
-}
-
-.providerName {
-  font-size: 18px;
+.modeTitle {
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-gray-900);
 }
 
-.aliasBadge {
-  background: var(--color-blue-100);
-  color: var(--color-blue-700);
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
+.modeDescription {
   font-size: 12px;
-  font-weight: 600;
+  color: var(--color-gray-500);
+  line-height: 1.4;
 }
 
-.cardActions {
+/* ==============================
+   Template Mode
+   ============================== */
+.templateSection {
   display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.templateGroup {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.editButton,
-.deleteButton {
-  padding: 6px 16px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
+.templateGroupTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 4px 0;
+}
+
+.templateList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.templateCard {
+  border: 1px solid var(--color-gray-200);
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s;
+  background: var(--color-white);
+}
+
+.templateCard:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.templateCard.selected {
+  border-color: var(--color-blue-400);
+  background: #f8faff;
+}
+
+.templateHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.templateCheckbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   cursor: pointer;
+  flex: 1;
+}
+
+.templateCheckbox input[type="checkbox"] {
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: var(--color-blue-600);
+  width: 16px;
+  height: 16px;
+}
+
+.templateInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.templateName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.defaultBadge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-blue-700);
+  background: var(--color-blue-100);
+  padding: 1px 8px;
+  border-radius: 4px;
+}
+
+.templateMeta {
+  font-size: 13px;
+  color: var(--color-gray-500);
+  font-family: var(--font-mono);
+}
+
+.templateDescription {
+  font-size: 13px;
+  color: var(--color-gray-600);
+  line-height: 1.4;
+}
+
+.expandButton {
+  background: none;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--color-gray-600);
+  cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s;
 }
 
-.editButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+.expandButton:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+/* ==============================
+   Override Section
+   ============================== */
+.overrideSection {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-gray-100);
+}
+
+.overrideSectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.overrideSectionTitle {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--color-gray-700);
 }
 
-.editButton:hover {
+.overrideHint {
+  font-size: 12px;
+  color: var(--color-gray-400);
+}
+
+.overrideField {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.overrideLabel {
+  font-size: 13px;
+  color: var(--color-gray-600);
+  min-width: 140px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overrideLabel.overridden {
+  font-weight: 600;
+  color: var(--color-blue-700);
+}
+
+.overriddenIndicator {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-blue-500);
+  font-family: inherit;
+}
+
+.overrideInput {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--color-gray-900);
+  transition: all 0.2s;
+}
+
+.overrideInput:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.overriddenInput {
+  border-color: var(--color-blue-300);
+  background: var(--color-blue-50);
+}
+
+.resetButton {
+  background: none;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--color-gray-500);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.resetButton:hover {
   background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  border-color: var(--color-gray-300);
+  color: var(--color-gray-700);
 }
 
-.deleteButton {
+/* ==============================
+   Custom Mode
+   ============================== */
+.customSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.customTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-gray-800);
+}
+
+.customHint {
+  font-size: 12px;
+  color: var(--color-gray-500);
+  line-height: 1.4;
+}
+
+.jsonEditor {
+  width: 100%;
+  min-height: 300px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px;
+  border: 1px solid var(--color-gray-300);
+  border-radius: 8px;
+  color: var(--color-gray-900);
   background: var(--color-white);
-  border: 1px solid var(--color-red-300);
-  color: var(--color-red-600);
+  resize: vertical;
+  transition: all 0.2s;
+  tab-size: 2;
 }
 
-.deleteButton:hover {
-  background: var(--color-red-50);
+.jsonEditor:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.jsonEditorError {
   border-color: var(--color-red-400);
 }
 
-.cardContent {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.jsonEditorError:focus {
+  border-color: var(--color-red-500);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
-.configRow {
+.jsonErrorMessage {
+  font-size: 12px;
+  color: var(--color-red-600);
+  padding: 4px 0;
+}
+
+/* ==============================
+   Info Box (None mode / empty templates)
+   ============================== */
+.infoBox {
   display: flex;
   gap: 12px;
+  background: var(--color-blue-50);
+  border: 1px solid var(--color-blue-200);
+  border-radius: 8px;
+  padding: 16px;
   font-size: 14px;
+  color: var(--color-blue-800);
+  line-height: 1.5;
 }
 
-.configLabel {
-  color: var(--color-gray-600);
-  font-weight: 500;
-  min-width: 120px;
-}
-
-.configValue {
-  color: var(--color-gray-900);
-}
-
-/* Add Button */
-.addButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
+.infoIcon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-blue-200);
+  color: var(--color-blue-700);
   font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  align-self: flex-start;
+  font-weight: 700;
 }
 
-.addButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+.infoContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-/* Actions */
+.infoContent strong {
+  color: var(--color-blue-900);
+}
+
+.infoContent p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-blue-700);
+}
+
+/* ==============================
+   Actions
+   ============================== */
 .actions {
   display: flex;
   align-items: center;
@@ -201,434 +436,28 @@
   font-style: italic;
 }
 
-/* Provider Form */
-.providerForm {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.formTitle {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-gray-900);
-  margin: 0 0 24px 0;
-}
-
-.formSection {
-  margin-bottom: 20px;
-}
-
-.formLabel {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-gray-700);
-  margin-bottom: 8px;
-}
-
-.select,
-.input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  color: var(--color-gray-900);
-  transition: all 0.2s;
-}
-
-.select:focus,
-.input:focus {
-  outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.hint {
-  font-size: 12px;
-  color: var(--color-gray-500);
-  margin-top: 4px;
-  line-height: 1.4;
-}
-
-.warning {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: var(--color-yellow-50);
-  border: 1px solid var(--color-yellow-200);
-  border-radius: var(--radius-md);
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--color-yellow-800);
-}
-
-.warningIcon {
-  font-size: 16px;
-}
-
-/* Radio Group */
-.radioGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.radioLabel {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  cursor: pointer;
-  padding: 12px;
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-md);
-  transition: all 0.2s;
-}
-
-.radioLabel:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-300);
-}
-
-.radioLabel input[type="radio"] {
-  margin-top: 2px;
-  cursor: pointer;
-}
-
-.radioLabel strong {
-  display: block;
-  font-size: 14px;
-  color: var(--color-gray-900);
-  margin-bottom: 4px;
-}
-
-.radioLabel p {
-  font-size: 13px;
-  color: var(--color-gray-600);
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* Version Constraint */
-.versionConstraint {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 12px;
-}
-
-.constraintSelect {
-  padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  color: var(--color-gray-900);
-  transition: all 0.2s;
-}
-
-.constraintSelect:focus {
-  outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.versionInput {
-  padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  color: var(--color-gray-900);
-  transition: all 0.2s;
-}
-
-.versionInput:focus {
-  outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Advanced Parameters */
-.advancedParams {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.paramRow {
-  display: grid;
-  grid-template-columns: 1fr 2fr auto;
-  gap: 12px;
-  align-items: start;
-}
-
-.paramKey,
-.paramValue {
-  padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.paramKey {
-  background: var(--color-gray-50);
-  color: var(--color-gray-700);
-}
-
-.paramValue {
-  font-family: var(--font-mono);
-  resize: vertical;
-  color: var(--color-gray-900);
-}
-
-.paramValue:focus {
-  outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.removeParamButton {
-  background: var(--color-red-50);
-  border: 1px solid var(--color-red-200);
-  color: var(--color-red-600);
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.removeParamButton:hover {
-  background: var(--color-red-100);
-  border-color: var(--color-red-300);
-}
-
-.addParamButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  align-self: flex-start;
-}
-
-.addParamButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
-}
-
-/* Add Parameter Form */
-.addParamForm {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--color-blue-50);
-  border: 1px solid var(--color-blue-200);
-  border-radius: var(--radius-md);
-}
-
-.newParamKey,
-.newParamValue {
-  padding: 10px 12px;
-  border: 1px solid var(--color-blue-300);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  transition: all 0.2s;
-  background: var(--color-white);
-}
-
-.newParamKey {
-  color: var(--color-gray-900);
-}
-
-.newParamKey:focus,
-.newParamValue:focus {
-  outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.newParamValue {
-  font-family: var(--font-mono);
-  resize: vertical;
-  color: var(--color-gray-900);
-}
-
-.addParamActions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.confirmAddButton {
-  background: var(--color-blue-600);
-  border: 1px solid var(--color-blue-600);
-  color: var(--color-white);
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.confirmAddButton:hover:not(:disabled) {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
-}
-
-.confirmAddButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cancelAddButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancelAddButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
-}
-
-/* Parameter Display Row (Read-only with delete button) */
-.paramDisplayRow {
-  display: grid;
-  grid-template-columns: 1fr 2fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-md);
-}
-
-.paramKeyDisplay {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-gray-900);
-  word-break: break-word;
-}
-
-.paramValueDisplay {
-  font-size: 13px;
-  font-family: var(--font-mono);
-  color: var(--color-gray-700);
-  word-break: break-all;
-  line-height: 1.5;
-}
-
-.removeParamButton {
-  background: var(--color-red-50);
-  border: 1px solid var(--color-red-200);
-  color: var(--color-red-600);
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.removeParamButton:hover {
-  background: var(--color-red-100);
-  border-color: var(--color-red-300);
-}
-
-/* Form Actions */
-.formActions {
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--color-gray-200);
-}
-
-.primaryButton {
-  background: var(--color-blue-600);
-  border: 1px solid var(--color-blue-600);
-  color: var(--color-white);
-  padding: 10px 24px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.primaryButton:hover {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
-}
-
-.cancelButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
-  padding: 10px 24px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancelButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
-}
-
-/* Responsive Design */
+/* ==============================
+   Responsive
+   ============================== */
 @media (max-width: 768px) {
-  .paramRow,
-  .paramDisplayRow {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .versionConstraint {
-    grid-template-columns: 1fr;
-  }
-
-  .cardActions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .editButton,
-  .deleteButton {
-    width: 100%;
-  }
-  
-  .addParamActions {
+  .modeSelector {
     flex-direction: column;
   }
-  
-  .confirmAddButton,
-  .cancelAddButton {
-    width: 100%;
+
+  .overrideField {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .overrideLabel {
+    min-width: unset;
+  }
+
+  .templateHeader {
+    flex-direction: column;
+  }
+
+  .expandButton {
+    align-self: flex-start;
   }
 }
