@@ -5,6 +5,17 @@
   gap: 20px;
 }
 
+/* Security notice */
+.securityNotice {
+  padding: 10px 14px;
+  background: #FFF7ED;
+  border: 1px solid #FDBA74;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #9A3412;
+  line-height: 1.5;
+}
+
 .loading {
   text-align: center;
   padding: 40px;

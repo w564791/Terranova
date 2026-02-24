@@ -329,6 +329,15 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
         </label>
       </div>
 
+      {/* Security Notice */}
+      {(mode === 'template' || mode === 'custom') && (
+        <div className={styles.securityNotice}>
+          <strong>Security:</strong> 请勿在 Provider 配置中存放密钥、密码等敏感数据。
+          敏感凭据应通过 Workspace Variables (Environment Variables) 注入，
+          例如 AWS_ACCESS_KEY_ID、AWS_SECRET_ACCESS_KEY。
+        </div>
+      )}
+
       {/* Template Mode UI */}
       {mode === 'template' && (
         <div className={styles.templateSection}>

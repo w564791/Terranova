@@ -527,6 +527,18 @@
   width: 100px;
 }
 
+/* Security notice */
+.securityNotice {
+  margin-top: var(--spacing-sm);
+  padding: 8px 12px;
+  background: #FFF7ED;
+  border: 1px solid #FDBA74;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: #9A3412;
+  line-height: 1.5;
+}
+
 /* Inline edit form (replaces dialog) */
 .inlineForm {
   background: white;

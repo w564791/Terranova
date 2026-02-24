@@ -318,6 +318,10 @@ const ProviderTemplatesAdmin: React.FC = () => {
                   />
                   {formErrors.config && <span className={styles.errorText}>{formErrors.config}</span>}
                   {!formErrors.config && <span className={styles.hint}>JSON 格式的 Provider 配置参数</span>}
+                  <div className={styles.securityNotice}>
+                    <strong>Security:</strong> 请勿在此存放密钥、密码等敏感数据。敏感凭据应通过 Workspace 变量（Environment Variables）注入，
+                    例如 AWS_ACCESS_KEY_ID、AWS_SECRET_ACCESS_KEY 等。此处仅配置 region、endpoint 等非敏感参数。
+                  </div>
                 </div>
 
                 {/* 描述 */}
