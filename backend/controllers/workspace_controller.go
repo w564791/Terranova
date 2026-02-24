@@ -456,6 +456,8 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 		ShowUnchangedResources *bool                  `json:"show_unchanged_resources"`
 		Tags                   map[string]interface{} `json:"tags"`
 		ProviderConfig         map[string]interface{} `json:"provider_config"`
+		ProviderTemplateIDs    []uint                 `json:"provider_template_ids"`
+		ProviderOverrides      map[string]interface{} `json:"provider_overrides"`
 		NotifySettings         map[string]interface{} `json:"notify_settings"`
 	}
 
@@ -533,6 +535,38 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 			updates["provider_config_hash"] = hash
 			log.Printf("Calculated provider_config_hash: %s", hash[:16]+"...")
 		}
+	}
+	// 处理provider模板引用
+	if req.ProviderTemplateIDs != nil {
+		updates["provider_template_ids"] = req.ProviderTemplateIDs
+
+		// 解析并缓存最终的provider_config
+		ptService := services.NewProviderTemplateService(wc.workspaceService.GetDB())
+		resolvedConfig, err := ptService.ResolveProviderConfig(req.ProviderTemplateIDs, req.ProviderOverrides)
+		if err != nil {
+			log.Printf("Failed to resolve provider config: %v", err)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":      400,
+				"message":   "Provider模板解析失败",
+				"error":     err.Error(),
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			return
+		}
+
+		if resolvedConfig != nil {
+			updates["provider_config"] = resolvedConfig
+			hash := calculateProviderConfigHash(resolvedConfig)
+			if hash != "" {
+				updates["provider_config_hash"] = hash
+			}
+		} else {
+			updates["provider_config"] = nil
+			updates["provider_config_hash"] = ""
+		}
+	}
+	if req.ProviderOverrides != nil {
+		updates["provider_overrides"] = req.ProviderOverrides
 	}
 	if req.NotifySettings != nil {
 		updates["notify_settings"] = req.NotifySettings
