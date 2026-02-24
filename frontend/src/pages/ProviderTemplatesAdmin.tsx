@@ -2,18 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useToast } from '../hooks/useToast';
 import { adminService } from '../services/admin';
 import type { ProviderTemplate, CreateProviderTemplateRequest, UpdateProviderTemplateRequest } from '../services/admin';
-import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './Admin.module.css';
 
 const ProviderTemplatesAdmin: React.FC = () => {
   const [templates, setTemplates] = useState<ProviderTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ProviderTemplate | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; template: ProviderTemplate | null }>({
-    show: false,
-    template: null,
-  });
+  const [deleteConfirm, setDeleteConfirm] = useState<ProviderTemplate | null>(null);
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -45,8 +41,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
     loadTemplates();
   }, []);
 
-  const handleAdd = () => {
-    setEditingTemplate(null);
+  const resetForm = () => {
     setFormData({
       name: '',
       type: '',
@@ -58,7 +53,12 @@ const ProviderTemplatesAdmin: React.FC = () => {
       description: '',
     });
     setFormErrors({});
-    setShowDialog(true);
+  };
+
+  const handleAdd = () => {
+    setEditingTemplate(null);
+    resetForm();
+    setShowForm(true);
   };
 
   const handleEdit = (template: ProviderTemplate) => {
@@ -74,7 +74,13 @@ const ProviderTemplatesAdmin: React.FC = () => {
       description: template.description,
     });
     setFormErrors({});
-    setShowDialog(true);
+    setShowForm(true);
+  };
+
+  const handleCancel = () => {
+    setShowForm(false);
+    setEditingTemplate(null);
+    resetForm();
   };
 
   const validateForm = (): boolean => {
@@ -142,7 +148,8 @@ const ProviderTemplatesAdmin: React.FC = () => {
         showToast('Provider模板创建成功', 'success');
       }
 
-      setShowDialog(false);
+      setShowForm(false);
+      setEditingTemplate(null);
       loadTemplates();
     } catch (error: any) {
       showToast(error.response?.data?.error || '操作失败', 'error');
@@ -160,16 +167,16 @@ const ProviderTemplatesAdmin: React.FC = () => {
   };
 
   const handleDelete = (template: ProviderTemplate) => {
-    setDeleteConfirm({ show: true, template });
+    setDeleteConfirm(template);
   };
 
   const confirmDelete = async () => {
-    if (!deleteConfirm.template) return;
+    if (!deleteConfirm) return;
 
     try {
-      await adminService.deleteProviderTemplate(deleteConfirm.template.id);
+      await adminService.deleteProviderTemplate(deleteConfirm.id);
       showToast('Provider模板删除成功', 'success');
-      setDeleteConfirm({ show: false, template: null });
+      setDeleteConfirm(null);
       loadTemplates();
     } catch (error: any) {
       showToast(error.response?.data?.error || '删除失败', 'error');
@@ -188,10 +195,160 @@ const ProviderTemplatesAdmin: React.FC = () => {
       {/* 操作栏 */}
       <div className={styles.actions}>
         <div></div>
-        <button className={styles.addButton} onClick={handleAdd}>
-          + 添加模板
-        </button>
+        {!showForm && (
+          <button className={styles.addButton} onClick={handleAdd}>
+            + 添加模板
+          </button>
+        )}
       </div>
+
+      {/* 内联编辑表单 */}
+      {showForm && (
+        <div className={styles.inlineForm}>
+          <div className={styles.inlineFormHeader}>
+            <h3 className={styles.inlineFormTitle}>
+              {editingTemplate ? '编辑Provider模板' : '添加Provider模板'}
+            </h3>
+            <button className={styles.inlineFormClose} onClick={handleCancel}>
+              ×
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div className={styles.inlineFormBody}>
+              <div className={styles.inlineFormGrid}>
+                {/* 名称 */}
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    名称<span className={styles.required}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className={`${styles.input} ${formErrors.name ? styles.error : ''}`}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="例如：AWS Default"
+                  />
+                  {formErrors.name && <span className={styles.errorText}>{formErrors.name}</span>}
+                </div>
+
+                {/* 类型 */}
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    类型<span className={styles.required}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className={`${styles.input} ${formErrors.type ? styles.error : ''}`}
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    placeholder="aws, kubernetes, tencentcloud, etc."
+                  />
+                  {formErrors.type && <span className={styles.errorText}>{formErrors.type}</span>}
+                </div>
+
+                {/* Source */}
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    Source<span className={styles.required}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className={`${styles.input} ${formErrors.source ? styles.error : ''}`}
+                    value={formData.source}
+                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                    placeholder="hashicorp/aws"
+                  />
+                  {formErrors.source && <span className={styles.errorText}>{formErrors.source}</span>}
+                  {!formErrors.source && <span className={styles.hint}>Terraform Registry 中的 Provider 路径</span>}
+                </div>
+
+                {/* 版本 + 约束 */}
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>版本</label>
+                  <div className={styles.inlineRow}>
+                    <select
+                      className={styles.select}
+                      value={formData.constraint_op}
+                      onChange={(e) => setFormData({ ...formData, constraint_op: e.target.value })}
+                    >
+                      <option value="~>">~&gt;</option>
+                      <option value=">=">&gt;=</option>
+                      <option value=">">&gt;</option>
+                      <option value="=">=</option>
+                      <option value="<=">&lt;=</option>
+                      <option value="<">&lt;</option>
+                    </select>
+                    <input
+                      type="text"
+                      className={styles.input}
+                      value={formData.version}
+                      onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                      placeholder="6.0"
+                    />
+                  </div>
+                  <span className={styles.hint}>版本约束，例如：~&gt; 6.0</span>
+                </div>
+
+                {/* Config */}
+                <div className={`${styles.formGroup} ${styles.inlineFormFull}`}>
+                  <label className={styles.label}>
+                    Config<span className={styles.required}>*</span>
+                  </label>
+                  <textarea
+                    className={`${styles.textarea} ${formErrors.config ? styles.error : ''}`}
+                    value={formData.config}
+                    onChange={(e) => setFormData({ ...formData, config: e.target.value })}
+                    rows={6}
+                    placeholder='{"region": "us-east-1"}'
+                  />
+                  {formErrors.config && <span className={styles.errorText}>{formErrors.config}</span>}
+                  {!formErrors.config && <span className={styles.hint}>JSON 格式的 Provider 配置参数</span>}
+                </div>
+
+                {/* 描述 */}
+                <div className={`${styles.formGroup} ${styles.inlineFormFull}`}>
+                  <label className={styles.label}>描述</label>
+                  <textarea
+                    className={styles.textarea}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={2}
+                    placeholder="模板描述（可选）"
+                  />
+                </div>
+
+                {/* 启用状态 */}
+                <div className={styles.formGroup}>
+                  <div className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      id="pt-enabled"
+                      checked={formData.enabled}
+                      onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                    />
+                    <label htmlFor="pt-enabled">启用此模板</label>
+                  </div>
+                  <div className={styles.checkboxHint}>启用后，此模板将在 Workspace 配置时可选</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.inlineFormFooter}>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.secondary}`}
+                onClick={handleCancel}
+              >
+                取消
+              </button>
+              <button type="submit" className={`${styles.button} ${styles.primary}`}>
+                {editingTemplate ? '保存' : '创建'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* 模板列表 */}
       <div className={styles.versionsList}>
@@ -271,159 +428,29 @@ const ProviderTemplatesAdmin: React.FC = () => {
         )}
       </div>
 
-      {/* 添加/编辑对话框 */}
-      {showDialog && (
-        <div className={styles.dialog} onClick={() => setShowDialog(false)}>
-          <div className={styles.dialogContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.dialogHeader}>
-              <h2 className={styles.dialogTitle}>
-                {editingTemplate ? '编辑Provider模板' : '添加Provider模板'}
-              </h2>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              <div className={styles.dialogBody}>
-                {/* 名称 */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>
-                    名称<span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className={`${styles.input} ${formErrors.name ? styles.error : ''}`}
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="例如：AWS Default"
-                  />
-                  {formErrors.name && <span className={styles.errorText}>{formErrors.name}</span>}
-                </div>
-
-                {/* 类型 */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>
-                    类型<span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className={`${styles.input} ${formErrors.type ? styles.error : ''}`}
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    placeholder="aws, kubernetes, tencentcloud, etc."
-                  />
-                  {formErrors.type && <span className={styles.errorText}>{formErrors.type}</span>}
-                </div>
-
-                {/* Source */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>
-                    Source<span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className={`${styles.input} ${formErrors.source ? styles.error : ''}`}
-                    value={formData.source}
-                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                    placeholder="hashicorp/aws"
-                  />
-                  {formErrors.source && <span className={styles.errorText}>{formErrors.source}</span>}
-                  {!formErrors.source && <span className={styles.hint}>Terraform Registry 中的 Provider 路径</span>}
-                </div>
-
-                {/* 版本 + 约束 */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>版本</label>
-                  <div className={styles.inlineRow}>
-                    <select
-                      className={styles.select}
-                      value={formData.constraint_op}
-                      onChange={(e) => setFormData({ ...formData, constraint_op: e.target.value })}
-                    >
-                      <option value="~>">~&gt;</option>
-                      <option value=">=">&gt;=</option>
-                      <option value=">">&gt;</option>
-                      <option value="=">=</option>
-                      <option value="<=">&lt;=</option>
-                      <option value="<">&lt;</option>
-                    </select>
-                    <input
-                      type="text"
-                      className={styles.input}
-                      value={formData.version}
-                      onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                      placeholder="6.0"
-                    />
-                  </div>
-                  <span className={styles.hint}>版本约束，例如：~&gt; 6.0</span>
-                </div>
-
-                {/* Config */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>
-                    Config<span className={styles.required}>*</span>
-                  </label>
-                  <textarea
-                    className={`${styles.textarea} ${formErrors.config ? styles.error : ''}`}
-                    value={formData.config}
-                    onChange={(e) => setFormData({ ...formData, config: e.target.value })}
-                    rows={6}
-                    placeholder='{"region": "us-east-1"}'
-                  />
-                  {formErrors.config && <span className={styles.errorText}>{formErrors.config}</span>}
-                  {!formErrors.config && <span className={styles.hint}>JSON 格式的 Provider 配置参数</span>}
-                </div>
-
-                {/* 描述 */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>描述</label>
-                  <textarea
-                    className={styles.textarea}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                    placeholder="模板描述（可选）"
-                  />
-                </div>
-
-                {/* 启用状态 */}
-                <div className={styles.checkbox}>
-                  <input
-                    type="checkbox"
-                    id="pt-enabled"
-                    checked={formData.enabled}
-                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                  />
-                  <label htmlFor="pt-enabled">启用此模板</label>
-                </div>
-                <div className={styles.checkboxHint}>启用后，此模板将在 Workspace 配置时可选</div>
-              </div>
-
-              <div className={styles.dialogFooter}>
-                <button
-                  type="button"
-                  className={`${styles.button} ${styles.secondary}`}
-                  onClick={() => setShowDialog(false)}
-                >
-                  取消
-                </button>
-                <button type="submit" className={`${styles.button} ${styles.primary}`}>
-                  {editingTemplate ? '保存' : '创建'}
-                </button>
-              </div>
-            </form>
+      {/* Toast风格删除确认 */}
+      {deleteConfirm && (
+        <div className={styles.toastConfirm}>
+          <span className={styles.toastConfirmIcon}>!</span>
+          <span className={styles.toastConfirmMessage}>
+            确定删除模板 "{deleteConfirm.name}" ?
+          </span>
+          <div className={styles.toastConfirmActions}>
+            <button
+              className={`${styles.toastConfirmBtn} ${styles.toastConfirmBtnCancel}`}
+              onClick={() => setDeleteConfirm(null)}
+            >
+              取消
+            </button>
+            <button
+              className={`${styles.toastConfirmBtn} ${styles.toastConfirmBtnConfirm}`}
+              onClick={confirmDelete}
+            >
+              删除
+            </button>
           </div>
         </div>
       )}
-
-      {/* 删除确认对话框 */}
-      <ConfirmDialog
-        isOpen={deleteConfirm.show}
-        title="确认删除"
-        message={`确定要删除模板 "${deleteConfirm.template?.name}" 吗？如果有workspace正在引用此模板，删除将失败。`}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteConfirm({ show: false, template: null })}
-        confirmText="删除"
-        cancelText="取消"
-      />
     </>
   );
 };

@@ -526,3 +526,157 @@
   flex: 0 0 auto;
   width: 100px;
 }
+
+/* Inline edit form (replaces dialog) */
+.inlineForm {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-gray-200);
+  margin-bottom: var(--spacing-lg);
+  overflow: hidden;
+}
+
+.inlineFormHeader {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--color-gray-50);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inlineFormTitle {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.inlineFormClose {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--color-gray-400);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
+.inlineFormClose:hover {
+  color: var(--color-gray-600);
+  background: var(--color-gray-100);
+}
+
+.inlineFormBody {
+  padding: var(--spacing-lg);
+}
+
+.inlineFormGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+.inlineFormFull {
+  grid-column: 1 / -1;
+}
+
+.inlineFormFooter {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  background: var(--color-gray-50);
+}
+
+/* Toast-style confirm bar */
+.toastConfirm {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  min-width: 320px;
+  max-width: 520px;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: slideInLeft 0.3s ease-out;
+  border-left: 4px solid #EF4444;
+  background: #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toastConfirmIcon {
+  font-size: 16px;
+  font-weight: bold;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: white;
+  background: #EF4444;
+}
+
+.toastConfirmMessage {
+  font-size: 14px;
+  line-height: 1.5;
+  flex: 1;
+  color: #374151;
+  font-weight: 500;
+}
+
+.toastConfirmActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.toastConfirmBtn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.toastConfirmBtnCancel {
+  background: white;
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
+}
+
+.toastConfirmBtnCancel:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+}
+
+.toastConfirmBtnConfirm {
+  background: #EF4444;
+  color: white;
+}
+
+.toastConfirmBtnConfirm:hover {
+  background: #DC2626;
+}
