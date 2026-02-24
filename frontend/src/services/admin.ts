@@ -55,6 +55,50 @@ export interface TerraformVersionsResponse {
   total: number;
 }
 
+// Provider模板
+export interface ProviderTemplate {
+  id: number;
+  name: string;
+  type: string;
+  source: string;
+  config: Record<string, any>;
+  version: string;
+  constraint_op: string;
+  is_default: boolean;
+  enabled: boolean;
+  description: string;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateProviderTemplateRequest {
+  name: string;
+  type: string;
+  source: string;
+  config: Record<string, any>;
+  version?: string;
+  constraint_op?: string;
+  enabled?: boolean;
+  description?: string;
+}
+
+export interface UpdateProviderTemplateRequest {
+  name?: string;
+  type?: string;
+  source?: string;
+  config?: Record<string, any>;
+  version?: string;
+  constraint_op?: string;
+  enabled?: boolean;
+  description?: string;
+}
+
+export interface ProviderTemplatesResponse {
+  items: ProviderTemplate[];
+  total: number;
+}
+
 export const adminService = {
   // 获取所有版本
   getTerraformVersions: async (params?: {
@@ -103,6 +147,44 @@ export const adminService = {
   // 设置默认版本 ⭐ 新增
   setDefaultVersion: async (id: number): Promise<TerraformVersion> => {
     const response = await api.post(`/global/settings/terraform-versions/${id}/set-default`);
+    return response.data;
+  },
+
+  // Provider模板 CRUD
+  getProviderTemplates: async (params?: {
+    enabled?: boolean;
+    type?: string;
+  }): Promise<ProviderTemplatesResponse> => {
+    const response = await api.get('/global/settings/provider-templates', { params });
+    return response.data || response;
+  },
+
+  getProviderTemplate: async (id: number): Promise<ProviderTemplate> => {
+    const response = await api.get(`/global/settings/provider-templates/${id}`);
+    return response.data;
+  },
+
+  createProviderTemplate: async (
+    data: CreateProviderTemplateRequest
+  ): Promise<ProviderTemplate> => {
+    const response = await api.post('/global/settings/provider-templates', data);
+    return response.data;
+  },
+
+  updateProviderTemplate: async (
+    id: number,
+    data: UpdateProviderTemplateRequest
+  ): Promise<ProviderTemplate> => {
+    const response = await api.put(`/global/settings/provider-templates/${id}`, data);
+    return response.data;
+  },
+
+  deleteProviderTemplate: async (id: number): Promise<void> => {
+    await api.delete(`/global/settings/provider-templates/${id}`);
+  },
+
+  setDefaultProviderTemplate: async (id: number): Promise<ProviderTemplate> => {
+    const response = await api.post(`/global/settings/provider-templates/${id}/set-default`);
     return response.data;
   },
 };
