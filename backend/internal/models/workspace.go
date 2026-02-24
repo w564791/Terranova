@@ -59,6 +59,12 @@ func (j *JSONB) Scan(value interface{}) error {
 		return fmt.Errorf("failed to unmarshal JSONB: %w", err)
 	}
 
+	// JSON null（区别于SQL NULL）也视为空
+	if data == nil {
+		*j = make(map[string]interface{})
+		return nil
+	}
+
 	// 如果是map，直接使用
 	if mapData, ok := data.(map[string]interface{}); ok {
 		*j = mapData
