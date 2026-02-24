@@ -73,7 +73,10 @@ func (j *JSONB) Scan(value interface{}) error {
 		return nil
 	}
 
-	return fmt.Errorf("JSONB data is neither map nor array")
+	// 对于其他JSON标量值（string, number, bool），初始化为空map
+	// 这兼容了snapshot_provider_config等字段可能存储了非对象值的情况
+	*j = make(map[string]interface{})
+	return nil
 }
 
 // UnwrapArray 从 JSONB 中提取被 Scan 包装的数组数据。
