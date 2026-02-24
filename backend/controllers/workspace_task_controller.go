@@ -132,12 +132,9 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		return
 	}
 
-	// 检查workspace是否配置了provider
+	// Provider配置可选 - 如果没有配置provider，terraform将使用module自带配置或环境变量
 	if workspace.ProviderConfig == nil || len(workspace.ProviderConfig) == 0 {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Workspace has no provider configuration. Please configure a provider before creating tasks.",
-		})
-		return
+		log.Printf("Workspace %s has no provider config, tasks will run without provider.tf.json", workspace.WorkspaceID)
 	}
 
 	// 根据run_type确定任务类型

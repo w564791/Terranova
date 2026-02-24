@@ -196,9 +196,11 @@ func (s *TerraformExecutor) GenerateConfigFiles(
 
 	// 2. 生成 provider.tf.json
 	// 清理空的terraform块，避免Terraform尝试读取不存在的backend state
-	cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
-	if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
-		return fmt.Errorf("failed to write provider.tf.json: %w", err)
+	if workspace.ProviderConfig != nil && len(workspace.ProviderConfig) > 0 {
+		cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
+		if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
+			return fmt.Errorf("failed to write provider.tf.json: %w", err)
+		}
 	}
 
 	// 3. 生成 variables.tf.json
@@ -3354,17 +3356,21 @@ func (s *TerraformExecutor) GenerateConfigFilesWithLogging(
 
 	// 2. 生成 provider.tf.json
 	// 清理空的terraform块，避免Terraform尝试读取不存在的backend state
-	cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
-	if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
-		return fmt.Errorf("failed to write provider.tf.json: %w", err)
-	}
-	providerData, _ := json.MarshalIndent(cleanedProviderConfig, "", "  ")
-	logger.Info("✓ Generated provider.tf.json")
+	if workspace.ProviderConfig != nil && len(workspace.ProviderConfig) > 0 {
+		cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
+		if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
+			return fmt.Errorf("failed to write provider.tf.json: %w", err)
+		}
+		providerData, _ := json.MarshalIndent(cleanedProviderConfig, "", "  ")
+		logger.Info("✓ Generated provider.tf.json")
 
-	// 只在TRACE级别打印完整内容
-	logger.Trace("========== provider.tf.json Content ==========")
-	logger.Trace("%s", string(providerData))
-	logger.Trace("==============================================")
+		// 只在TRACE级别打印完整内容
+		logger.Trace("========== provider.tf.json Content ==========")
+		logger.Trace("%s", string(providerData))
+		logger.Trace("==============================================")
+	} else {
+		logger.Info("⏭ Skipping provider.tf.json (no provider config)")
+	}
 
 	// 3. 生成 variables.tf.json
 	if err := s.generateVariablesTFJSON(workspace, workDir); err != nil {
@@ -4224,7 +4230,7 @@ func (s *TerraformExecutor) ValidateResourceVersionSnapshot(
 	}
 
 	if planTask.SnapshotProviderConfig == nil {
-		return fmt.Errorf("snapshot provider config missing")
+		logger.Info("No snapshot provider config (provider.tf.json will not be generated)")
 	}
 
 	logger.Debug("Snapshot validation:")
@@ -4946,11 +4952,15 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 
 	// 2. 生成 provider.tf.json（从快照）
 	// 清理空的terraform块，避免Terraform尝试读取不存在的backend state
-	cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
-	if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
-		return fmt.Errorf("failed to write provider.tf.json: %w", err)
+	if workspace.ProviderConfig != nil && len(workspace.ProviderConfig) > 0 {
+		cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
+		if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
+			return fmt.Errorf("failed to write provider.tf.json: %w", err)
+		}
+		logger.Info("✓ Generated provider.tf.json from snapshot")
+	} else {
+		logger.Info("⏭ Skipping provider.tf.json from snapshot (no provider config)")
 	}
-	logger.Info("✓ Generated provider.tf.json from snapshot")
 
 	// 3. 生成 variables.tf.json（从快照的变量）
 	variablesDef := make(map[string]interface{})
