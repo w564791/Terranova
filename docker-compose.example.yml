@@ -27,7 +27,7 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
-      # - ./manifests/db/init_seed_data.sql:/docker-entrypoint-initdb.d/01-seed-data.sql:ro
+      - ./manifests/db/init_seed_data.sql:/docker-entrypoint-initdb.d/01-seed-data.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-iac_platform}"]
       interval: 10s
