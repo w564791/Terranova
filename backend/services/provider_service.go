@@ -64,16 +64,14 @@ func (s *ProviderService) ValidateProviderConfig(config map[string]interface{}) 
 	return nil
 }
 
-// validateProviderFields 验证Provider必需字段
+// validateProviderFields 验证Provider字段（通用验证，支持任意类型）
 func (s *ProviderService) validateProviderFields(providerType string, config map[string]interface{}) error {
-	switch providerType {
-	case "aws":
-		// AWS Provider必需region
+	// AWS-specific validation (保留已有逻辑)
+	if providerType == "aws" {
 		if _, ok := config["region"]; !ok {
 			return fmt.Errorf("region is required for AWS provider")
 		}
 
-		// 如果使用AKSK方式，检查access_key和secret_key
 		if accessKey, hasAccessKey := config["access_key"]; hasAccessKey {
 			if accessKey == "" {
 				return fmt.Errorf("access_key cannot be empty")
@@ -83,7 +81,6 @@ func (s *ProviderService) validateProviderFields(providerType string, config map
 			}
 		}
 
-		// 如果使用assume_role方式，检查role_arn
 		if assumeRole, hasAssumeRole := config["assume_role"]; hasAssumeRole {
 			if roleList, ok := assumeRole.([]interface{}); ok && len(roleList) > 0 {
 				if role, ok := roleList[0].(map[string]interface{}); ok {
@@ -93,20 +90,9 @@ func (s *ProviderService) validateProviderFields(providerType string, config map
 				}
 			}
 		}
-
-	case "azure":
-		// Azure Provider验证（未来实现）
-		return fmt.Errorf("azure provider is not yet supported")
-
-	case "google":
-		// Google Cloud Provider验证（未来实现）
-		return fmt.Errorf("google provider is not yet supported")
-
-	case "alicloud":
-		// Alibaba Cloud Provider验证（未来实现）
-		return fmt.Errorf("alicloud provider is not yet supported")
 	}
 
+	// 其他类型不做强制字段验证（任意provider均可通过）
 	return nil
 }
 
@@ -171,8 +157,8 @@ func (s *ProviderService) deepCopy(src map[string]interface{}) map[string]interf
 
 // BuildProviderTFJSON 构建provider.tf.json内容
 func (s *ProviderService) BuildProviderTFJSON(workspace *models.Workspace) (map[string]interface{}, error) {
-	if workspace.ProviderConfig == nil {
-		return nil, fmt.Errorf("provider_config is required")
+	if workspace.ProviderConfig == nil || len(workspace.ProviderConfig) == 0 {
+		return nil, nil // No provider config is valid
 	}
 
 	// 验证配置
