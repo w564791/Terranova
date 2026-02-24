@@ -3,6 +3,7 @@ import { useToast } from '../hooks/useToast';
 import { adminService, getEngineDisplayName, detectEngineTypeFromURL } from '../services/admin';
 import type { TerraformVersion, CreateTerraformVersionRequest, UpdateTerraformVersionRequest, IaCEngineType } from '../services/admin';
 import ConfirmDialog from '../components/ConfirmDialog';
+import ProviderTemplatesAdmin from './ProviderTemplatesAdmin';
 import styles from './Admin.module.css';
 
 const Admin: React.FC = () => {
@@ -401,6 +402,16 @@ const Admin: React.FC = () => {
         confirmText="删除"
         cancelText="取消"
       />
+
+      {/* Provider 模板管理 */}
+      <div className={styles.header} style={{ marginTop: '48px' }}>
+        <h1 className={styles.title}>Provider Templates</h1>
+        <p className={styles.description}>
+          管理全局 Provider 配置模板，Workspace 可以引用这些模板并选择性地覆盖部分配置。
+          支持任意 Terraform Provider 类型。
+        </p>
+      </div>
+      <ProviderTemplatesAdmin />
     </div>
   );
 };

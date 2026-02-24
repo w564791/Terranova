@@ -444,3 +444,85 @@
   background: linear-gradient(135deg, #ffda18 0%, #f5a623 100%);
   color: #1a1a1a;
 }
+
+/* Textarea for JSON config */
+.textarea {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  transition: all 0.15s;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.textarea.error {
+  border-color: var(--color-red-500);
+}
+
+/* Provider type badge */
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-200);
+}
+
+/* Select input */
+.select {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: white;
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+}
+
+/* Source cell */
+.sourceCell {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-gray-600);
+}
+
+/* Version constraint display */
+.versionConstraint {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-700);
+}
+
+/* Inline form row for version + constraint */
+.inlineRow {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+}
+
+.inlineRow > * {
+  flex: 1;
+}
+
+.inlineRow > select {
+  flex: 0 0 auto;
+  width: 100px;
+}
