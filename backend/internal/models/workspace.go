@@ -186,6 +186,10 @@ type Workspace struct {
 	// Provider配置
 	ProviderConfig JSONB `json:"provider_config" gorm:"type:jsonb"`
 
+	// Provider模板引用
+	ProviderTemplateIDs JSONB `json:"provider_template_ids" gorm:"type:jsonb"` // 引用的全局模板ID列表
+	ProviderOverrides   JSONB `json:"provider_overrides" gorm:"type:jsonb"`    // 按provider类型的字段覆盖
+
 	// Provider配置变更跟踪（用于优化 terraform init -upgrade）
 	ProviderConfigHash       string `json:"provider_config_hash" gorm:"type:varchar(64)"`        // provider_config 的 SHA256 hash
 	LastInitHash             string `json:"last_init_hash" gorm:"type:varchar(64)"`              // 上次成功 init 时的 hash
