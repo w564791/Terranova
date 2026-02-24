@@ -222,6 +222,8 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		"tags":                     workspace.Tags,
 		"variables":                workspace.SystemVariables,
 		"provider_config":          workspace.ProviderConfig,
+		"provider_template_ids":    workspace.ProviderTemplateIDs,
+		"provider_overrides":       workspace.ProviderOverrides,
 		"notify_settings":          workspace.NotifySettings,
 		"state":                    workspace.State,
 		"is_locked":                workspace.IsLocked,
