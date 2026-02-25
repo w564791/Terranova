@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"iac-platform/internal/application/service"
+	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
@@ -469,6 +470,18 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 		) latest ON wv.variable_id = latest.variable_id AND wv.version = latest.max_version
 		WHERE wv.workspace_id = ? AND wv.is_deleted = false
 	`, workspace.WorkspaceID, workspace.WorkspaceID).Scan(&variables)
+
+	// Raw SQL bypasses GORM AfterFind hook, manually decrypt sensitive variables
+	for i := range variables {
+		if variables[i].Sensitive && variables[i].Value != "" && crypto.IsEncrypted(variables[i].Value) {
+			decrypted, err := crypto.DecryptValue(variables[i].Value)
+			if err != nil {
+				log.Printf("[Agent] Failed to decrypt variable %s: %v", variables[i].Key, err)
+				continue
+			}
+			variables[i].Value = decrypted
+		}
+	}
 
 	// Get workspace outputs
 	var outputs []models.WorkspaceOutput

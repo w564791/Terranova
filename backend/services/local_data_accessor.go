@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
 	"log"
 	"time"
@@ -82,6 +83,17 @@ func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType mo
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace variables: %w", err)
+	}
+
+	// Raw SQL bypasses GORM AfterFind hook, manually decrypt sensitive variables
+	for i := range variables {
+		if variables[i].Sensitive && variables[i].Value != "" && crypto.IsEncrypted(variables[i].Value) {
+			decrypted, err := crypto.DecryptValue(variables[i].Value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decrypt variable %s: %w", variables[i].Key, err)
+			}
+			variables[i].Value = decrypted
+		}
 	}
 
 	return variables, nil

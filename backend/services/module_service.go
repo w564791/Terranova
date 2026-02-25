@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"log"
 
 	"gorm.io/gorm"
 )
@@ -71,7 +72,40 @@ func (ms *ModuleService) GetModuleByID(id uint) (*models.Module, error) {
 }
 
 func (ms *ModuleService) CreateModule(module *models.Module) error {
-	return ms.db.Create(module).Error
+	return ms.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(module).Error; err != nil {
+			return err
+		}
+
+		// Auto-create initial ModuleVersion so the module is immediately usable
+		versionID := generateModuleVersionID()
+		version := module.Version
+		if version == "" {
+			version = "1.0.0"
+		}
+		newVersion := &models.ModuleVersion{
+			ID:           versionID,
+			ModuleID:     module.ID,
+			Version:      version,
+			Source:       module.Source,
+			ModuleSource: module.ModuleSource,
+			IsDefault:    true,
+			Status:       models.ModuleVersionStatusActive,
+			CreatedBy:    module.CreatedBy,
+		}
+		if err := tx.Create(newVersion).Error; err != nil {
+			return fmt.Errorf("failed to create initial version: %w", err)
+		}
+
+		// Set as module's default version
+		if err := tx.Model(module).Update("default_version_id", versionID).Error; err != nil {
+			return fmt.Errorf("failed to set default version: %w", err)
+		}
+		module.DefaultVersionID = &versionID
+
+		log.Printf("[Module] Created module %d with initial version %s (v%s)", module.ID, versionID, version)
+		return nil
+	})
 }
 
 func (ms *ModuleService) UpdateModule(id uint, description, version, branch, status string) error {
