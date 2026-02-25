@@ -68,11 +68,22 @@ type ModuleVersionListResponse struct {
 
 // ListVersions 获取模块的所有版本
 func (s *ModuleVersionService) ListVersions(moduleID uint, page, pageSize int) (*ModuleVersionListResponse, error) {
-	var versions []models.ModuleVersion
 	var total int64
 
-	query := s.db.Model(&models.ModuleVersion{}).Where("module_id = ?", moduleID)
-	query.Count(&total)
+	s.db.Model(&models.ModuleVersion{}).Where("module_id = ?", moduleID).Count(&total)
+	log.Printf("[ModuleVersion] ListVersions: module_id=%d, initial count=%d", moduleID, total)
+
+	// 如果没有版本记录，自动为该模块创建一个默认版本
+	if total == 0 {
+		log.Printf("[ModuleVersion] No versions found for module %d, auto-creating default version", moduleID)
+		if err := s.ensureDefaultVersion(moduleID); err != nil {
+			log.Printf("[ModuleVersion] Failed to auto-create default version for module %d: %v", moduleID, err)
+		} else {
+			// 重新计数
+			s.db.Model(&models.ModuleVersion{}).Where("module_id = ?", moduleID).Count(&total)
+			log.Printf("[ModuleVersion] After auto-create, count=%d", total)
+		}
+	}
 
 	if page < 1 {
 		page = 1
@@ -82,9 +93,16 @@ func (s *ModuleVersionService) ListVersions(moduleID uint, page, pageSize int) (
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order("is_default DESC, created_at DESC").Offset(offset).Limit(pageSize).Find(&versions).Error; err != nil {
+	var versions []models.ModuleVersion
+	if err := s.db.Model(&models.ModuleVersion{}).
+		Where("module_id = ?", moduleID).
+		Order("is_default DESC, created_at DESC").
+		Offset(offset).Limit(pageSize).
+		Find(&versions).Error; err != nil {
 		return nil, err
 	}
+
+	log.Printf("[ModuleVersion] ListVersions: found %d versions for module %d", len(versions), moduleID)
 
 	// 填充额外信息
 	for i := range versions {
@@ -103,6 +121,82 @@ func (s *ModuleVersionService) ListVersions(moduleID uint, page, pageSize int) (
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	}, nil
+}
+
+// ensureDefaultVersion 确保模块至少有一个默认版本
+// 用于处理在多版本功能上线前创建的旧模块
+func (s *ModuleVersionService) ensureDefaultVersion(moduleID uint) error {
+	var module models.Module
+	if err := s.db.First(&module, moduleID).Error; err != nil {
+		return fmt.Errorf("module not found: %w", err)
+	}
+
+	versionID := generateModuleVersionID()
+	version := module.Version
+	if version == "" {
+		version = "1.0.0"
+	}
+
+	// 核心事务：只创建版本和更新 default_version_id
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 双重检查：在事务内再次确认没有版本
+		var count int64
+		tx.Model(&models.ModuleVersion{}).Where("module_id = ?", moduleID).Count(&count)
+		if count > 0 {
+			log.Printf("[ModuleVersion] ensureDefaultVersion: module %d already has %d versions (race), skipping", moduleID, count)
+			return nil
+		}
+
+		newVersion := &models.ModuleVersion{
+			ID:           versionID,
+			ModuleID:     moduleID,
+			Version:      version,
+			Source:       module.Source,
+			ModuleSource: module.ModuleSource,
+			IsDefault:    true,
+			Status:       models.ModuleVersionStatusActive,
+			CreatedBy:    module.CreatedBy,
+		}
+
+		if err := tx.Create(newVersion).Error; err != nil {
+			return fmt.Errorf("failed to create default version: %w", err)
+		}
+
+		// 更新模块的 default_version_id
+		if err := tx.Model(&models.Module{}).Where("id = ?", moduleID).Update("default_version_id", versionID).Error; err != nil {
+			return fmt.Errorf("failed to set default version: %w", err)
+		}
+
+		log.Printf("[ModuleVersion] Auto-created default version %s (v%s) for module %d", versionID, version, moduleID)
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// 非关键操作：关联现有无版本的 Schema 和 Demo（失败不影响主流程）
+	if err := s.db.Model(&models.Schema{}).
+		Where("module_id = ? AND (module_version_id IS NULL OR module_version_id = '')", moduleID).
+		Update("module_version_id", versionID).Error; err != nil {
+		log.Printf("[ModuleVersion] Warning: failed to associate existing schemas for module %d: %v", moduleID, err)
+	}
+
+	if err := s.db.Model(&models.ModuleDemo{}).
+		Where("module_id = ? AND (module_version_id IS NULL OR module_version_id = '')", moduleID).
+		Update("module_version_id", versionID).Error; err != nil {
+		log.Printf("[ModuleVersion] Warning: failed to associate existing demos for module %d: %v", moduleID, err)
+	}
+
+	// 如果有 active 的 Schema，设置为版本的 active_schema_id
+	var activeSchema models.Schema
+	if err := s.db.Where("module_id = ? AND module_version_id = ? AND status = ?", moduleID, versionID, "active").
+		Order("created_at DESC").First(&activeSchema).Error; err == nil {
+		s.db.Model(&models.ModuleVersion{}).Where("id = ?", versionID).Update("active_schema_id", activeSchema.ID)
+		log.Printf("[ModuleVersion] Set active_schema_id=%d for version %s", activeSchema.ID, versionID)
+	}
+
+	return nil
 }
 
 // GetVersion 获取版本详情

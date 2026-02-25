@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useEffect, useState } from 'react';
-import { Form, Card, Button, Space, Tag, Tooltip, Empty, Collapse, Tabs } from 'antd';
+import { Form, Card, Button, Space, Tag, Tooltip, Empty, Collapse, Tabs, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, CopyOutlined, LinkOutlined, SettingOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { getWidget } from './index';
@@ -332,12 +332,52 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
     );
   };
 
-  // 渲染分组内的字段
-  const renderGroupFields = (itemIndex: number, fields: Array<[string, ExtendedPropertySchema]>) => (
-    <Space direction="vertical" style={{ width: '100%' }}>
-      {fields.map(([propName, prop]) => renderItemProperty(itemIndex, propName, prop))}
-    </Space>
-  );
+  // 按 x-colSpan 分行渲染字段列表
+  const renderGroupFields = (itemIndex: number, fields: Array<[string, ExtendedPropertySchema]>) => {
+    const hasColSpan = fields.some(([, prop]) => prop['x-colSpan'] && (prop['x-colSpan'] as number) < 24);
+    if (!hasColSpan) {
+      return (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {fields.map(([propName, prop]) => renderItemProperty(itemIndex, propName, prop))}
+        </Space>
+      );
+    }
+
+    // Build rows based on x-colSpan
+    const rows: Array<Array<[string, ExtendedPropertySchema]>> = [];
+    let currentRow: Array<[string, ExtendedPropertySchema]> = [];
+    let currentSpan = 0;
+    for (const entry of fields) {
+      const span = (entry[1]['x-colSpan'] as number) || 24;
+      if (currentSpan + span > 24 && currentRow.length > 0) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+      currentRow.push(entry);
+      currentSpan += span;
+      if (currentSpan >= 24) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+
+    return (
+      <div style={{ width: '100%' }}>
+        {rows.map((rowFields, rowIdx) => (
+          <Row gutter={[16, 0]} key={rowIdx}>
+            {rowFields.map(([propName, prop]) => (
+              <Col span={(prop['x-colSpan'] as number) || 24} key={propName}>
+                {renderItemProperty(itemIndex, propName, prop)}
+              </Col>
+            ))}
+          </Row>
+        ))}
+      </div>
+    );
+  };
 
   // 获取项目的简要描述（用于折叠时显示）
   const getItemSummary = useCallback((item: unknown): string => {

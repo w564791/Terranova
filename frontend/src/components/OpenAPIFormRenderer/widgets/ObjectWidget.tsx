@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Form, Card, Collapse, Space, Tag, Tooltip, Button } from 'antd';
+import { Form, Card, Collapse, Space, Tag, Tooltip, Button, Row, Col } from 'antd';
 import { LinkOutlined, SettingOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { getWidget } from './index';
@@ -20,6 +20,7 @@ interface ExtendedPropertySchema {
   required?: string[] | boolean;
   'x-widget'?: string;
   'x-placeholder'?: string;
+  'x-colSpan'?: number;
   [key: string]: unknown;
 }
 
@@ -146,6 +147,54 @@ const ObjectWidget: React.FC<WidgetProps> = ({
     );
   };
 
+  // 按 x-colSpan 分行渲染字段列表
+  const renderFieldRows = (fields: Array<[string, ExtendedPropertySchema]>) => {
+    const rows: Array<Array<[string, ExtendedPropertySchema]>> = [];
+    let currentRow: Array<[string, ExtendedPropertySchema]> = [];
+    let currentSpan = 0;
+
+    for (const entry of fields) {
+      const span = entry[1]['x-colSpan'] || 24;
+      if (currentSpan + span > 24 && currentRow.length > 0) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+      currentRow.push(entry);
+      currentSpan += span;
+      if (currentSpan >= 24) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+
+    // If no field has x-colSpan (all default 24), use simple vertical layout
+    const hasColSpan = fields.some(([, prop]) => prop['x-colSpan'] && prop['x-colSpan'] < 24);
+    if (!hasColSpan) {
+      return (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {fields.map(([propName, prop]) => renderProperty(propName, prop))}
+        </Space>
+      );
+    }
+
+    return (
+      <div style={{ width: '100%' }}>
+        {rows.map((rowFields, rowIdx) => (
+          <Row gutter={[16, 0]} key={rowIdx}>
+            {rowFields.map(([propName, prop]) => (
+              <Col span={prop['x-colSpan'] || 24} key={propName}>
+                {renderProperty(propName, prop)}
+              </Col>
+            ))}
+          </Row>
+        ))}
+      </div>
+    );
+  };
+
   // 渲染引用标签
   const renderReferenceTag = () => {
     if (!hasModuleReference) return null;
@@ -219,13 +268,7 @@ const ObjectWidget: React.FC<WidgetProps> = ({
         }
       >
         {/* 基础属性 - 始终显示 */}
-        {basicFields.length > 0 && (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            {basicFields.map(([propName, prop]) => 
-              renderProperty(propName, prop)
-            )}
-          </Space>
-        )}
+        {basicFields.length > 0 && renderFieldRows(basicFields)}
         
         {/* 高级属性 - 可折叠 */}
         {advancedFields.length > 0 && showAdvanced && (
@@ -243,11 +286,7 @@ const ObjectWidget: React.FC<WidgetProps> = ({
               key="advanced"
               style={{ border: 'none' }}
             >
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {advancedFields.map(([propName, prop]) => 
-                  renderProperty(propName, prop)
-                )}
-              </Space>
+              {renderFieldRows(advancedFields)}
             </Panel>
           </Collapse>
         )}

@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
-import { Form, Card, Button, Space, Tag, Tooltip, Empty, Collapse } from 'antd';
+import { Form, Card, Button, Space, Tag, Tooltip, Empty, Collapse, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, CopyOutlined, LinkOutlined, KeyOutlined, DownOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { getWidget } from './index';
@@ -452,6 +452,52 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
     );
   };
 
+  // 按 x-colSpan 分行渲染属性列表
+  const renderValuePropertyFields = (itemKey: string, fields: Array<[string, ExtendedPropertySchema]>) => {
+    const hasColSpan = fields.some(([, prop]) => prop['x-colSpan'] && (prop['x-colSpan'] as number) < 24);
+    if (!hasColSpan) {
+      return (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {fields.map(([propName, prop]) => renderItemProperty(itemKey, propName, prop))}
+        </Space>
+      );
+    }
+
+    const rows: Array<Array<[string, ExtendedPropertySchema]>> = [];
+    let currentRow: Array<[string, ExtendedPropertySchema]> = [];
+    let currentSpan = 0;
+    for (const entry of fields) {
+      const span = (entry[1]['x-colSpan'] as number) || 24;
+      if (currentSpan + span > 24 && currentRow.length > 0) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+      currentRow.push(entry);
+      currentSpan += span;
+      if (currentSpan >= 24) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+
+    return (
+      <div style={{ width: '100%' }}>
+        {rows.map((rowFields, rowIdx) => (
+          <Row gutter={[16, 0]} key={rowIdx}>
+            {rowFields.map(([propName, prop]) => (
+              <Col span={(prop['x-colSpan'] as number) || 24} key={propName}>
+                {renderItemProperty(itemKey, propName, prop)}
+              </Col>
+            ))}
+          </Row>
+        ))}
+      </div>
+    );
+  };
+
   // 渲染单个项目
   const renderItem = (key: string, _index: number) => {
     const canDelete = !readOnly && !disabled;
@@ -513,11 +559,7 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
       >
         <Collapse defaultActiveKey={['props']} ghost>
           <Panel header="属性" key="props" style={{ border: 'none' }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {Object.entries(valueProperties).map(([propName, prop]) =>
-                renderItemProperty(key, propName, prop)
-              )}
-            </Space>
+            {renderValuePropertyFields(key, Object.entries(valueProperties))}
           </Panel>
         </Collapse>
       </Card>

@@ -680,7 +680,7 @@ const SchemaManagement: React.FC = () => {
           <div className={styles.emptyActions}>
             <input
               type="file"
-              accept=".tf"
+              accept=".tf,.hcl,text/plain"
               multiple
               onChange={handleTfFileUpload}
               ref={fileInputRef}
@@ -722,7 +722,7 @@ const SchemaManagement: React.FC = () => {
         <div className={styles.headerActions}>
           <input
             type="file"
-            accept=".tf"
+            accept=".tf,.hcl,text/plain"
             multiple
             onChange={handleTfFileUpload}
             ref={fileInputRef}

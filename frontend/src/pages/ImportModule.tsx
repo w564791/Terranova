@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MonacoJsonEditor } from '../components/DynamicForm/MonacoJsonEditor';
 import { OpenAPISchemaEditor } from '../components/OpenAPISchemaEditor';
 import { moduleService } from '../services/modules';
+import api from '../services/api';
 import { schemaV2Service, type OpenAPISchema } from '../services/schemaV2';
 import { useToast } from '../contexts/ToastContext';
 import styles from './ImportModule.module.css';
@@ -81,25 +82,13 @@ const ImportModule: React.FC = () => {
       if (config.schema || config.openapi) {
         // 判断是 OpenAPI Schema 还是旧格式
         const schemaData = config.openapi ? config : { schema_data: config.schema };
-        
-        const schemaResponse = await fetch(`http://localhost:8080/api/v1/modules/${moduleId}/schemas`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({
-            ...schemaData,
-            version: config.schema_version || config.info?.version || '1.0.0',
-            status: 'active',
-            source_type: config.openapi ? 'openapi' : 'manual'
-          })
-        });
 
-        if (!schemaResponse.ok) {
-          const errorData = await schemaResponse.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Schema创建失败');
-        }
+        await api.post(`/modules/${moduleId}/schemas`, {
+          ...schemaData,
+          version: config.schema_version || config.info?.version || '1.0.0',
+          status: 'active',
+          source_type: config.openapi ? 'openapi' : 'manual'
+        });
 
         success('模块和Schema导入成功！');
         navigate(`/modules/${moduleId}/schemas`);
@@ -108,7 +97,7 @@ const ImportModule: React.FC = () => {
         navigate(`/modules/${moduleId}/schemas`);
       }
     } catch (err: any) {
-      const errorMessage = err.message || '未知错误';
+      const errorMessage = typeof err === 'string' ? err : (err.message || '未知错误');
       if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
         error('模块名称已存在！请使用不同的模块名称或删除已存在的模块。');
       } else {
@@ -207,12 +196,14 @@ const ImportModule: React.FC = () => {
         const moduleResponse = await moduleService.createModule(moduleData);
         moduleId = moduleResponse.data.id;
       } catch (moduleErr: any) {
-        const errMsg = moduleErr.message || '';
+        // API interceptor rejects with a string message, not an Error object
+        const errMsg = typeof moduleErr === 'string' ? moduleErr : (moduleErr.message || '');
         if (errMsg.includes('duplicate key') || errMsg.includes('unique constraint') || errMsg.includes('已存在')) {
           // 模块已存在，尝试查找已存在的模块
           try {
             const modulesResponse = await moduleService.getModules();
-            const existingModule = modulesResponse.data?.find((m: any) => m.name === moduleName && m.provider === provider);
+            const allModules = (modulesResponse as any).data?.items || (modulesResponse as any).data || [];
+            const existingModule = (Array.isArray(allModules) ? allModules : []).find((m: any) => m.name === moduleName && m.provider === provider);
             if (existingModule) {
               moduleId = existingModule.id;
               isExistingModule = true;
@@ -230,24 +221,12 @@ const ImportModule: React.FC = () => {
       }
 
       // 直接保存 OpenAPI Schema
-      const schemaResponse = await fetch(`http://localhost:8080/api/v1/modules/${moduleId}/schemas/v2`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          openapi_schema: openAPISchema,
-          version: '1.0.0',
-          status: 'active',
-          source_type: 'tf_parse'
-        })
+      await api.post(`/modules/${moduleId}/schemas/v2`, {
+        openapi_schema: openAPISchema,
+        version: '1.0.0',
+        status: 'active',
+        source_type: 'tf_parse'
       });
-
-      if (!schemaResponse.ok) {
-        const errorData = await schemaResponse.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Schema创建失败');
-      }
 
       if (isExistingModule) {
         success(`Schema 已添加到已存在的模块 "${moduleName}"！`);
@@ -257,7 +236,7 @@ const ImportModule: React.FC = () => {
       navigate(`/modules/${moduleId}/schemas`);
       
     } catch (err: any) {
-      const errMsg = err.message || '未知错误';
+      const errMsg = typeof err === 'string' ? err : (err.message || '未知错误');
       if (errMsg.includes('duplicate key') || errMsg.includes('unique constraint')) {
         error(`模块 "${moduleName}" 已存在！请使用不同的模块名称。`);
       } else {
@@ -461,7 +440,7 @@ const ImportModule: React.FC = () => {
           <div className={styles.fileUpload}>
             <input
               type="file"
-              accept=".tf"
+              accept=".tf,.hcl,text/plain"
               multiple
               onChange={(e) => {
                 const files = e.target.files;

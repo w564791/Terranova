@@ -72,10 +72,14 @@ func (ms *ModuleService) GetModuleByID(id uint) (*models.Module, error) {
 }
 
 func (ms *ModuleService) CreateModule(module *models.Module) error {
+	log.Printf("[Module] CreateModule called: name=%s, provider=%s, version=%s", module.Name, module.Provider, module.Version)
+
 	return ms.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(module).Error; err != nil {
+			log.Printf("[Module] ERROR: Failed to create module: %v", err)
 			return err
 		}
+		log.Printf("[Module] Module created with ID=%d", module.ID)
 
 		// Auto-create initial ModuleVersion so the module is immediately usable
 		versionID := generateModuleVersionID()
@@ -94,16 +98,19 @@ func (ms *ModuleService) CreateModule(module *models.Module) error {
 			CreatedBy:    module.CreatedBy,
 		}
 		if err := tx.Create(newVersion).Error; err != nil {
+			log.Printf("[Module] ERROR: Failed to create initial version for module %d: %v", module.ID, err)
 			return fmt.Errorf("failed to create initial version: %w", err)
 		}
+		log.Printf("[Module] Initial version created: id=%s, version=%s, module_id=%d", versionID, version, module.ID)
 
 		// Set as module's default version
-		if err := tx.Model(module).Update("default_version_id", versionID).Error; err != nil {
+		if err := tx.Model(&models.Module{}).Where("id = ?", module.ID).Update("default_version_id", versionID).Error; err != nil {
+			log.Printf("[Module] ERROR: Failed to set default version: %v", err)
 			return fmt.Errorf("failed to set default version: %w", err)
 		}
 		module.DefaultVersionID = &versionID
 
-		log.Printf("[Module] Created module %d with initial version %s (v%s)", module.ID, versionID, version)
+		log.Printf("[Module] ✅ Created module %d with initial version %s (v%s), default_version_id=%s", module.ID, versionID, version, versionID)
 		return nil
 	})
 }
@@ -146,13 +153,33 @@ func (ms *ModuleService) DeleteModule(id uint) error {
 	// 开启事务
 	tx := ms.db.Begin()
 
-	// 先删除关联的schemas
+	// 1. 清除 module_versions 的 active_schema_id 引用（避免外键冲突）
+	if err := tx.Model(&models.ModuleVersion{}).Where("module_id = ?", id).
+		Update("active_schema_id", nil).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 2. 清除 module 的 default_version_id 引用
+	if err := tx.Model(&models.Module{}).Where("id = ?", id).
+		Update("default_version_id", nil).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 3. 删除关联的 schemas
 	if err := tx.Where("module_id = ?", id).Delete(&models.Schema{}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	// 再删除module
+	// 4. 删除关联的 module_versions
+	if err := tx.Where("module_id = ?", id).Delete(&models.ModuleVersion{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 5. 删除 module
 	if err := tx.Delete(&models.Module{}, id).Error; err != nil {
 		tx.Rollback()
 		return err

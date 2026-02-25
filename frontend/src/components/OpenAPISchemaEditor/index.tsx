@@ -2,18 +2,23 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   DndContext,
   closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
+  useDraggable,
+  DragOverlay,
 } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent, CollisionDetection } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
+  rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MonacoJsonEditor } from '../DynamicForm/MonacoJsonEditor';
@@ -21,6 +26,28 @@ import ConfirmDialog from '../ConfirmDialog';
 import type { OpenAPISchema } from '../../services/schemaV2';
 import api from '../../services/api';
 import styles from './OpenAPISchemaEditor.module.css';
+
+// ============ 自定义碰撞检测：分隔区优先 ============
+// 当拖拽时，优先检测分隔区（separator），再检测行（row）
+// 解决 pointerWithin 对薄分隔区不可靠的问题
+const createSeparatorFirstCollision = (separatorPrefix: string, rowPrefix: string): CollisionDetection => {
+  return (args) => {
+    const separators = args.droppableContainers.filter(
+      c => String(c.id).startsWith(separatorPrefix)
+    );
+    const rows = args.droppableContainers.filter(
+      c => String(c.id).startsWith(rowPrefix)
+    );
+
+    // First check separators with pointerWithin
+    const sepCollisions = pointerWithin({ ...args, droppableContainers: separators });
+    if (sepCollisions.length > 0) return sepCollisions;
+
+    // Then check rows
+    const rowCollisions = pointerWithin({ ...args, droppableContainers: rows });
+    return rowCollisions;
+  };
+};
 
 // ============ 类型定义 ============
 
@@ -932,7 +959,18 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
             </div>
           )}
           <div className={styles.inlineEditorFormRow}>
-            <div className={styles.inlineEditorFieldFull}>
+            <div className={styles.inlineEditorField}>
+              <label>列宽</label>
+              <select value={editedUiConfig.colSpan || 24} onChange={(e) => handleUiConfigChange('colSpan', Number(e.target.value))} className={styles.fieldInput}>
+                <option value={24}>24 - 整行</option>
+                <option value={12}>12 - 半行</option>
+                <option value={8}>8 - 三分之一</option>
+                <option value={6}>6 - 四分之一</option>
+                <option value={16}>16 - 三分之二</option>
+                <option value={18}>18 - 四分之三</option>
+              </select>
+            </div>
+            <div className={styles.inlineEditorField}>
               <label>帮助文本</label>
               <input type="text" value={editedUiConfig.help || ''} onChange={(e) => handleUiConfigChange('help', e.target.value)} className={styles.fieldInput} placeholder="字段帮助说明" />
             </div>
@@ -1351,10 +1389,50 @@ interface NestedFieldsEditorProps {
   groups?: UIGroup[];  // 新增：自定义分组列表
 }
 
+// ---- 嵌套布局：可拖拽卡片 ----
+const NestedDraggableCard: React.FC<{ fieldName: string; property: any; fieldsInRow: number }> = ({ fieldName, property, fieldsInRow }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: fieldName });
+  return (
+    <div ref={setNodeRef} className={styles.layoutCard} style={{ opacity: isDragging ? 0.3 : 1, flex: `1 1 ${100 / fieldsInRow}%` }} {...attributes} {...listeners}>
+      <div className={styles.layoutCardHeader}>
+        <span className={styles.layoutCardDrag}>⋮⋮</span>
+        <span className={styles.layoutCardName}>{fieldName}</span>
+      </div>
+      <div className={styles.layoutCardMeta}>
+        {property?.title && <span className={styles.layoutCardLabel}>{property.title}</span>}
+        <span className={styles.layoutCardType}>{property?.type || 'string'}</span>
+        <span className={styles.layoutCardSpan}>span {property?.['x-colSpan'] || 24}</span>
+      </div>
+    </div>
+  );
+};
+
+// ---- 嵌套布局：可放置的行区域 ----
+const NestedDroppableRow: React.FC<{ id: string; rowIdx: number; children: React.ReactNode; spanLabel: string }> = ({ id, rowIdx, children, spanLabel }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className={`${styles.layoutRow} ${isOver ? styles.layoutRowDragOver : ''}`}>
+      <div className={styles.layoutRowLabel}>行 {rowIdx + 1} · {spanLabel}</div>
+      <div className={styles.layoutRowContent}>{children}</div>
+    </div>
+  );
+};
+
+// ---- 嵌套布局：行间分隔放置区（拖到此处创建新行） ----
+const NestedRowSeparator: React.FC<{ id: string; isDragging?: boolean }> = ({ id, isDragging }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className={`${styles.nestedRowSeparator} ${isOver ? styles.nestedRowSeparatorActive : ''} ${isDragging && !isOver ? styles.nestedRowSeparatorDragging : ''}`}>
+      {isOver ? <span className={styles.nestedRowSeparatorLabel}>释放以创建新行</span> : isDragging ? <span className={styles.nestedRowSeparatorLabel}>拖到此处新建一行</span> : null}
+    </div>
+  );
+};
+
 const NestedFieldsEditor: React.FC<NestedFieldsEditorProps> = ({ property, valueType, onChange, depth = 1, groups }) => {
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [newFieldName, setNewFieldName] = useState('');
   const [showAddField, setShowAddField] = useState(false);
+  const [layoutMode, setLayoutMode] = useState(false);
 
   const getNestedProperties = (): Record<string, any> => {
     if (valueType === 'object-list') return property.items?.properties || {};
@@ -1412,10 +1490,146 @@ const NestedFieldsEditor: React.FC<NestedFieldsEditorProps> = ({ property, value
     };
   };
 
+  // --- Layout mode: build rows from x-colSpan ---
+  const nestedLayoutRows = useMemo(() => {
+    const rows: LayoutRow[] = [];
+    let currentRow: string[] = [];
+    let currentSpan = 0;
+    for (const name of nestedFieldNames) {
+      const span = nestedProperties[name]?.['x-colSpan'] || 24;
+      if (currentSpan + span > 24 && currentRow.length > 0) {
+        rows.push({ fields: currentRow });
+        currentRow = [];
+        currentSpan = 0;
+      }
+      currentRow.push(name);
+      currentSpan += span;
+      if (currentSpan >= 24) {
+        rows.push({ fields: currentRow });
+        currentRow = [];
+        currentSpan = 0;
+      }
+    }
+    if (currentRow.length > 0) rows.push({ fields: currentRow });
+    return rows;
+  }, [nestedFieldNames, nestedProperties]);
+
+  const nestedSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const nestedCollisionDetection = useMemo(
+    () => createSeparatorFirstCollision('nested-sep-', 'nested-row-'),
+    []
+  );
+
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const handleNestedDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
+  }, []);
+
+  const handleNestedDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const mutableRows = nestedLayoutRows.map(r => ({ fields: [...r.fields] }));
+
+    // Find source row
+    let sourceRowIdx = -1;
+    for (let i = 0; i < mutableRows.length; i++) {
+      if (mutableRows[i].fields.includes(activeId)) { sourceRowIdx = i; break; }
+    }
+    if (sourceRowIdx === -1) return;
+
+    // Drop on same row → no-op
+    if (overId === `nested-row-${sourceRowIdx}`) return;
+
+    // Remove from source row
+    mutableRows[sourceRowIdx].fields = mutableRows[sourceRowIdx].fields.filter(f => f !== activeId);
+
+    if (overId.startsWith('nested-row-')) {
+      // Drop onto existing row → merge into that row
+      const targetRowIdx = parseInt(overId.replace('nested-row-', ''), 10);
+      mutableRows[targetRowIdx].fields.push(activeId);
+    } else if (overId.startsWith('nested-sep-')) {
+      // Drop onto separator → create new row at that position
+      const sepIdx = parseInt(overId.replace('nested-sep-', ''), 10);
+      mutableRows.splice(sepIdx, 0, { fields: [activeId] });
+    } else {
+      return;
+    }
+
+    // Remove empty rows
+    const finalRows = mutableRows.filter(r => r.fields.length > 0);
+
+    // Rebuild properties with updated order and x-colSpan
+    const newProperties: Record<string, any> = {};
+    for (const row of finalRows) {
+      const colSpan = Math.floor(24 / row.fields.length);
+      for (const name of row.fields) {
+        newProperties[name] = { ...nestedProperties[name], 'x-colSpan': colSpan };
+      }
+    }
+    setNestedProperties(newProperties);
+  }, [nestedLayoutRows, nestedProperties, setNestedProperties]);
+
   return (
     <div className={styles.nestedFieldsContainer}>
+      {nestedFieldNames.length > 1 && (
+        <div className={styles.nestedLayoutToggle}>
+          <button type="button" className={`${styles.nestedLayoutToggleBtn} ${layoutMode ? styles.active : ''}`} onClick={() => setLayoutMode(!layoutMode)}>
+            {layoutMode ? '← 列表' : '⊞ 布局'}
+          </button>
+        </div>
+      )}
       {nestedFieldNames.length === 0 ? (
         <div className={styles.emptyNestedFields}>暂无嵌套字段。点击下方按钮添加。</div>
+      ) : layoutMode ? (
+        <div className={styles.layoutView}>
+          <div className={styles.layoutHint}>
+            拖拽字段到虚线行可合并，拖到行间蓝色区域可拆分为新行。
+          </div>
+          <DndContext sensors={nestedSensors} collisionDetection={nestedCollisionDetection} onDragStart={handleNestedDragStart} onDragEnd={handleNestedDragEnd}>
+            <div className={styles.layoutRows}>
+              <NestedRowSeparator id="nested-sep-0" isDragging={!!activeDragId} />
+              {nestedLayoutRows.map((row, rowIdx) => (
+                <React.Fragment key={rowIdx}>
+                  <NestedDroppableRow id={`nested-row-${rowIdx}`} rowIdx={rowIdx} spanLabel={`${row.fields.length} 个字段 · span ${row.fields.map(f => nestedProperties[f]?.['x-colSpan'] || 24).join('+')}`}>
+                    {row.fields.map((fieldName) => (
+                      <NestedDraggableCard
+                        key={fieldName}
+                        fieldName={fieldName}
+                        property={nestedProperties[fieldName]}
+                        fieldsInRow={row.fields.length}
+                      />
+                    ))}
+                  </NestedDroppableRow>
+                  <NestedRowSeparator id={`nested-sep-${rowIdx + 1}`} isDragging={!!activeDragId} />
+                </React.Fragment>
+              ))}
+            </div>
+            <DragOverlay>
+              {activeDragId ? (
+                <div className={styles.layoutCard} style={{ width: 180, opacity: 0.9 }}>
+                  <div className={styles.layoutCardHeader}>
+                    <span className={styles.layoutCardDrag}>⋮⋮</span>
+                    <span className={styles.layoutCardName}>{activeDragId}</span>
+                  </div>
+                  <div className={styles.layoutCardMeta}>
+                    <span className={styles.layoutCardType}>{nestedProperties[activeDragId]?.type || 'string'}</span>
+                    <span className={styles.layoutCardSpan}>span {nestedProperties[activeDragId]?.['x-colSpan'] || 24}</span>
+                  </div>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </div>
       ) : (
         <div className={styles.nestedFieldsList}>
           {nestedFieldNames.map((fieldName) => {
@@ -1596,9 +1810,22 @@ const NestedFieldInlineEditor: React.FC<NestedFieldInlineEditorProps> = ({ field
           </div>
           <div className={styles.inlineEditorFormRow}>
             <div className={styles.inlineEditorField}>
+              <label>列宽</label>
+              <select value={editedField['x-colSpan'] || 24} onChange={(e) => handleFieldChange('x-colSpan', Number(e.target.value))} className={styles.fieldSelect}>
+                <option value={24}>24 - 整行</option>
+                <option value={12}>12 - 半行</option>
+                <option value={8}>8 - 三分之一</option>
+                <option value={6}>6 - 四分之一</option>
+                <option value={16}>16 - 三分之二</option>
+                <option value={18}>18 - 四分之三</option>
+              </select>
+            </div>
+            <div className={styles.inlineEditorField}>
               <label>帮助文本</label>
               <input type="text" value={editedField['x-help'] || ''} onChange={(e) => handleFieldChange('x-help', e.target.value || undefined)} className={styles.fieldInput} placeholder="字段帮助说明" />
             </div>
+          </div>
+          <div className={styles.inlineEditorFormRow}>
             <div className={styles.inlineEditorField}>
               <label>外部数据源</label>
               <input type="text" value={editedField['x-source'] || ''} onChange={(e) => handleFieldChange('x-source', e.target.value || undefined)} className={styles.fieldInput} placeholder="例如：ami_list" />
@@ -1899,6 +2126,226 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, onChange }) => {
   );
 };
 
+// ============ 布局视图：拖拽行分组 ============
+interface LayoutRow {
+  fields: string[];
+}
+
+interface LayoutViewProps {
+  fieldNames: string[];
+  properties: Record<string, any>;
+  uiFields: Record<string, any>;
+  groups: UIGroup[];
+  onFieldsChange: (updatedFields: Record<string, { order: number; colSpan: number }>) => void;
+}
+
+const buildLayoutRows = (fieldNames: string[], uiFields: Record<string, any>): LayoutRow[] => {
+  const rows: LayoutRow[] = [];
+  let currentRow: string[] = [];
+  let currentSpan = 0;
+
+  for (const name of fieldNames) {
+    const span = uiFields[name]?.colSpan || 24;
+    if (currentSpan + span > 24 && currentRow.length > 0) {
+      rows.push({ fields: currentRow });
+      currentRow = [];
+      currentSpan = 0;
+    }
+    currentRow.push(name);
+    currentSpan += span;
+    if (currentSpan >= 24) {
+      rows.push({ fields: currentRow });
+      currentRow = [];
+      currentSpan = 0;
+    }
+  }
+  if (currentRow.length > 0) {
+    rows.push({ fields: currentRow });
+  }
+  return rows;
+};
+
+// ============ 布局拖拽卡片 (useDraggable) ============
+const LayoutDraggableCard: React.FC<{ fieldName: string; property: any; uiConfig: any; fieldsInRow: number }> = ({ fieldName, property, uiConfig, fieldsInRow }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `layout-card-${fieldName}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={styles.layoutCard}
+      style={{ opacity: isDragging ? 0.3 : 1, flex: `1 1 ${100 / fieldsInRow}%` }}
+      {...attributes}
+      {...listeners}
+    >
+      <div className={styles.layoutCardHeader}>
+        <span className={styles.layoutCardDrag}>⋮⋮</span>
+        <span className={styles.layoutCardName}>{fieldName}</span>
+      </div>
+      <div className={styles.layoutCardMeta}>
+        {uiConfig?.label && <span className={styles.layoutCardLabel}>{uiConfig.label}</span>}
+        <span className={styles.layoutCardType}>{property?.type || 'string'}</span>
+        <span className={styles.layoutCardSpan}>span {uiConfig?.colSpan || 24}</span>
+      </div>
+    </div>
+  );
+};
+
+// ============ 布局可放置行 (useDroppable) ============
+const LayoutDroppableRow: React.FC<{ id: string; rowIdx: number; children: React.ReactNode; spanLabel: string }> = ({ id, rowIdx, children, spanLabel }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className={`${styles.layoutRow} ${isOver ? styles.layoutRowDragOver : ''}`}>
+      <div className={styles.layoutRowLabel}>
+        行 {rowIdx + 1} · {spanLabel}
+      </div>
+      <div className={styles.layoutRowContent}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// ============ 布局行分隔区 (useDroppable) ============
+const LayoutRowSeparator: React.FC<{ id: string; isDragging?: boolean }> = ({ id, isDragging }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${styles.nestedRowSeparator} ${isOver ? styles.nestedRowSeparatorActive : ''} ${isDragging && !isOver ? styles.nestedRowSeparatorDragging : ''}`}
+    >
+      {isOver
+        ? <span className={styles.nestedRowSeparatorLabel}>释放以创建新行</span>
+        : isDragging
+          ? <span className={styles.nestedRowSeparatorLabel}>拖到此处新建一行</span>
+          : null}
+    </div>
+  );
+};
+
+const LayoutView: React.FC<LayoutViewProps> = ({ fieldNames, properties, uiFields, groups, onFieldsChange }) => {
+  const rows = useMemo(() => buildLayoutRows(fieldNames, uiFields), [fieldNames, uiFields]);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const layoutCollisionDetection = useMemo(
+    () => createSeparatorFirstCollision('layout-sep-', 'layout-row-'),
+    []
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    // Strip prefix to get field name
+    setActiveDragId(String(event.active.id).replace('layout-card-', ''));
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeField = String(active.id).replace('layout-card-', '');
+    const overId = String(over.id);
+
+    const mutableRows = rows.map(r => ({ fields: [...r.fields] }));
+
+    // Find source row
+    let sourceRowIdx = -1;
+    for (let i = 0; i < mutableRows.length; i++) {
+      if (mutableRows[i].fields.includes(activeField)) { sourceRowIdx = i; break; }
+    }
+    if (sourceRowIdx === -1) return;
+
+    // Remove from source
+    mutableRows[sourceRowIdx].fields = mutableRows[sourceRowIdx].fields.filter(f => f !== activeField);
+
+    if (overId.startsWith('layout-sep-')) {
+      // Dropped on separator → create new row
+      const sepIdx = parseInt(overId.replace('layout-sep-', ''), 10);
+      mutableRows.splice(sepIdx, 0, { fields: [activeField] });
+    } else if (overId.startsWith('layout-row-')) {
+      // Dropped on an existing row → merge into that row
+      const rowIdx = parseInt(overId.replace('layout-row-', ''), 10);
+      if (rowIdx >= 0 && rowIdx < mutableRows.length) {
+        mutableRows[rowIdx].fields.push(activeField);
+      }
+    } else {
+      // Shouldn't happen; restore
+      return;
+    }
+
+    // Remove empty rows
+    const finalRows = mutableRows.filter(r => r.fields.length > 0);
+
+    // Recalculate order and colSpan
+    const updatedFields: Record<string, { order: number; colSpan: number }> = {};
+    let orderCounter = 1;
+    for (const row of finalRows) {
+      const colSpan = Math.floor(24 / row.fields.length);
+      for (const name of row.fields) {
+        updatedFields[name] = { order: orderCounter++, colSpan };
+      }
+    }
+
+    onFieldsChange(updatedFields);
+  }, [rows, onFieldsChange]);
+
+  // Find the active field's info for overlay
+  const activeFieldName = activeDragId;
+  const activeProperty = activeFieldName ? properties[activeFieldName] : null;
+  const activeUiConfig = activeFieldName ? (uiFields[activeFieldName] || {}) : {};
+
+  return (
+    <div className={styles.layoutView}>
+      <div className={styles.layoutHint}>
+        拖拽字段卡片到同一行可并排显示，字段宽度将自动等分。拖到行间分隔区可创建新行。
+      </div>
+      <DndContext sensors={sensors} collisionDetection={layoutCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className={styles.layoutRows}>
+          {/* Top separator */}
+          <LayoutRowSeparator id="layout-sep-0" isDragging={!!activeDragId} />
+          {rows.map((row, rowIdx) => (
+            <React.Fragment key={rowIdx}>
+              <LayoutDroppableRow
+                id={`layout-row-${rowIdx}`}
+                rowIdx={rowIdx}
+                spanLabel={`${row.fields.length} 个字段 · span ${row.fields.map(f => uiFields[f]?.colSpan || 24).join('+')}`}
+              >
+                {row.fields.map((fieldName) => (
+                  <LayoutDraggableCard
+                    key={fieldName}
+                    fieldName={fieldName}
+                    property={properties[fieldName]}
+                    uiConfig={uiFields[fieldName] || {}}
+                    fieldsInRow={row.fields.length}
+                  />
+                ))}
+              </LayoutDroppableRow>
+              <LayoutRowSeparator id={`layout-sep-${rowIdx + 1}`} isDragging={!!activeDragId} />
+            </React.Fragment>
+          ))}
+        </div>
+        <DragOverlay>
+          {activeFieldName ? (
+            <div className={styles.layoutCard} style={{ opacity: 0.9, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+              <div className={styles.layoutCardHeader}>
+                <span className={styles.layoutCardDrag}>⋮⋮</span>
+                <span className={styles.layoutCardName}>{activeFieldName}</span>
+              </div>
+              <div className={styles.layoutCardMeta}>
+                {activeUiConfig.label && <span className={styles.layoutCardLabel}>{activeUiConfig.label}</span>}
+                <span className={styles.layoutCardType}>{activeProperty?.type || 'string'}</span>
+                <span className={styles.layoutCardSpan}>span {activeUiConfig.colSpan || 24}</span>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  );
+};
+
 // ============ 可展开的表格行组件 ============
 interface ExpandableRowProps {
   fieldName: string;
@@ -2051,7 +2498,7 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
   const [originalSchema] = useState<OpenAPISchema>(JSON.parse(JSON.stringify(schema))); // 保存原始 Schema 用于对比
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'json' | 'groups'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'json' | 'groups' | 'layout'>('table');
   const [activeTab, setActiveTab] = useState<'variables' | 'outputs'>('variables');
   const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge');
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -2107,6 +2554,22 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
     if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {}, groups: [] } };
     if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {}, groups: [] };
     newSchema['x-iac-platform'].ui.groups = newGroups;
+    setEditedSchema(newSchema);
+  };
+
+  // 布局视图回调：批量更新字段的 order 和 colSpan
+  const handleLayoutFieldsChange = (updatedFields: Record<string, { order: number; colSpan: number }>) => {
+    const newSchema = JSON.parse(JSON.stringify(editedSchema));
+    if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {}, groups: [] } };
+    if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {}, groups: [] };
+    if (!newSchema['x-iac-platform'].ui.fields) newSchema['x-iac-platform'].ui.fields = {};
+    Object.entries(updatedFields).forEach(([name, { order, colSpan }]) => {
+      if (!newSchema['x-iac-platform'].ui.fields[name]) {
+        newSchema['x-iac-platform'].ui.fields[name] = {};
+      }
+      newSchema['x-iac-platform'].ui.fields[name].order = order;
+      newSchema['x-iac-platform'].ui.fields[name].colSpan = colSpan;
+    });
     setEditedSchema(newSchema);
   };
 
@@ -2297,13 +2760,14 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
         </div>
         <div className={styles.schemaEditorActions}>
           <div className={styles.importSection}>
-            <input type="file" ref={tfFileInputRef} onChange={handleTfFileImport} accept=".tf" multiple style={{ display: 'none' }} />
+            <input type="file" ref={tfFileInputRef} onChange={handleTfFileImport} accept=".tf,.hcl,text/plain" multiple style={{ display: 'none' }} />
             <button type="button" onClick={() => tfFileInputRef.current?.click()} className={styles.importTfButton} disabled={importing}>{importing ? '导入中...' : '导入 TF 文件'}</button>
           </div>
           <div className={styles.viewModeButtons}>
             <button type="button" className={`${styles.viewModeButton} ${viewMode === 'table' ? styles.active : ''}`} onClick={() => setViewMode('table')}>表格</button>
             <button type="button" className={`${styles.viewModeButton} ${viewMode === 'groups' ? styles.active : ''}`} onClick={() => setViewMode('groups')}>分组</button>
             <button type="button" className={`${styles.viewModeButton} ${viewMode === 'json' ? styles.active : ''}`} onClick={() => setViewMode('json')}>JSON</button>
+            <button type="button" className={`${styles.viewModeButton} ${viewMode === 'layout' ? styles.active : ''}`} onClick={() => setViewMode('layout')}>布局</button>
           </div>
         </div>
       </div>
@@ -2331,12 +2795,20 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
             <GroupManager groups={groups} onChange={handleGroupsChange} />
           ) : viewMode === 'json' ? (
             <div className={styles.jsonEditorContainer} style={{ height: '500px' }}>
-              <MonacoJsonEditor 
-                value={editedSchema} 
-                onChange={(val) => val && typeof val === 'object' && setEditedSchema(val as OpenAPISchema)} 
+              <MonacoJsonEditor
+                value={editedSchema}
+                onChange={(val) => val && typeof val === 'object' && setEditedSchema(val as OpenAPISchema)}
                 returnObject={true}
               />
             </div>
+          ) : viewMode === 'layout' ? (
+            <LayoutView
+              fieldNames={sortedFieldNames}
+              properties={properties}
+              uiFields={uiFields}
+              groups={groups}
+              onFieldsChange={handleLayoutFieldsChange}
+            />
           ) : (
             <>
               <div className={styles.searchBox}>

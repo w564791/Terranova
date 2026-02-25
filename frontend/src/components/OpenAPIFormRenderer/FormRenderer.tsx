@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
-import { Form, Collapse, Empty, Tooltip, Tabs } from 'antd';
+import { Form, Collapse, Empty, Tooltip, Tabs, Row, Col } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import type { FormRendererProps, FieldRenderConfig, WidgetType, GroupConfig, OpenAPIFormSchema, CascadeRule } from './types';
 import { getWidget } from './widgets';
@@ -523,12 +523,50 @@ const FormRenderer: React.FC<FormRendererProps> = ({
     return fieldElement;
   };
 
+  // 将字段按 colSpan 分行：累加 colSpan 到 24 则换行
+  const splitFieldsIntoRows = (fields: FieldRenderConfig[]): FieldRenderConfig[][] => {
+    const rows: FieldRenderConfig[][] = [];
+    let currentRow: FieldRenderConfig[] = [];
+    let currentSpan = 0;
+
+    for (const field of fields) {
+      const span = field.uiConfig.colSpan || 24;
+      if (currentSpan + span > 24 && currentRow.length > 0) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+      currentRow.push(field);
+      currentSpan += span;
+      if (currentSpan >= 24) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentSpan = 0;
+      }
+    }
+    if (currentRow.length > 0) {
+      rows.push(currentRow);
+    }
+    return rows;
+  };
+
   // 渲染分组内容
-  const renderGroupContent = (group: GroupConfig & { fields: FieldRenderConfig[] }) => (
-    <div className={styles.fieldGroup}>
-      {group.fields.map(renderField)}
-    </div>
-  );
+  const renderGroupContent = (group: GroupConfig & { fields: FieldRenderConfig[] }) => {
+    const rows = splitFieldsIntoRows(group.fields);
+    return (
+      <div className={styles.fieldGroup}>
+        {rows.map((rowFields, rowIdx) => (
+          <Row gutter={[16, 0]} key={rowIdx}>
+            {rowFields.map((field) => (
+              <Col span={field.uiConfig.colSpan || 24} key={field.name}>
+                {renderField(field)}
+              </Col>
+            ))}
+          </Row>
+        ))}
+      </div>
+    );
+  };
 
   // 判断是否为受控模式
   const isControlled = activeGroupId !== undefined || onGroupChange !== undefined;

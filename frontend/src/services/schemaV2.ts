@@ -48,6 +48,13 @@ export interface PropertySchema {
   'x-sensitive'?: boolean;
   'x-deprecated-message'?: string;
   'x-validation'?: ValidationRule[];
+  'x-colSpan'?: number;
+  'x-widget'?: string;
+  'x-group'?: string;
+  'x-placeholder'?: string;
+  'x-help'?: string;
+  'x-hidden'?: boolean;
+  'x-source'?: string;
 }
 
 export interface ValidationRule {
@@ -71,6 +78,7 @@ export interface FieldUIConfig {
   widget?: string;
   help?: string;
   order?: number;
+  colSpan?: number;
   source?: string;
   placeholder?: string;
   searchable?: boolean;
