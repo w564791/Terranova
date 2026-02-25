@@ -314,11 +314,15 @@ interface ExtendedDefaultValueInputProps {
   property: any;
   value: unknown;
   onChange: (value: unknown) => void;
+  widget?: string;
 }
 
-const ExtendedDefaultValueInput: React.FC<ExtendedDefaultValueInputProps> = ({ valueType, property, value, onChange }) => {
+const ExtendedDefaultValueInput: React.FC<ExtendedDefaultValueInputProps> = ({ valueType, property, value, onChange, widget }) => {
+  const useJsonForCollection = widget === 'json-editor';
+
   const [inputValue, setInputValue] = useState<string>(() => {
     if (value === undefined || value === null) return '';
+    if (useJsonForCollection && (Array.isArray(value) || typeof value === 'object')) return JSON.stringify(value, null, 2);
     if (Array.isArray(value)) return value.join('\n');
     if (typeof value === 'object') return JSON.stringify(value, null, 2);
     return String(value);
@@ -326,10 +330,11 @@ const ExtendedDefaultValueInput: React.FC<ExtendedDefaultValueInputProps> = ({ v
 
   React.useEffect(() => {
     if (value === undefined || value === null) setInputValue('');
+    else if (useJsonForCollection && (Array.isArray(value) || typeof value === 'object')) setInputValue(JSON.stringify(value, null, 2));
     else if (Array.isArray(value)) setInputValue(value.join('\n'));
     else if (typeof value === 'object') setInputValue(JSON.stringify(value, null, 2));
     else setInputValue(String(value));
-  }, [value]);
+  }, [value, widget, useJsonForCollection]);
 
   const typeInfo = VALUE_TYPE_OPTIONS.find(opt => opt.value === valueType);
 
@@ -370,6 +375,19 @@ const ExtendedDefaultValueInput: React.FC<ExtendedDefaultValueInputProps> = ({ v
   }
 
   if (valueType === 'array' || valueType === 'set') {
+    if (useJsonForCollection) {
+      return (
+        <div className={styles.defaultValueContainer}>
+          <textarea value={inputValue} onChange={(e) => {
+            setInputValue(e.target.value);
+            try {
+              const parsed = JSON.parse(e.target.value);
+              if (Array.isArray(parsed)) onChange(parsed.length > 0 ? parsed : undefined);
+            } catch { /* 用户编辑中 */ }
+          }} className={styles.fieldTextarea} rows={4} placeholder='例如：["item1", "item2"]' style={{ fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace', fontSize: 13 }} />
+        </div>
+      );
+    }
     return (
       <div className={styles.defaultValueContainer}>
         <textarea value={inputValue} onChange={(e) => { setInputValue(e.target.value); const lines = valueType === 'set' ? [...new Set(e.target.value.split('\n').filter(l => l.trim()))] : e.target.value.split('\n').filter(l => l.trim()); onChange(lines.length > 0 ? lines : undefined); }} className={styles.fieldTextarea} rows={3} placeholder={valueType === 'set' ? '每行一个值（自动去重）' : '每行一个值'} />
@@ -378,6 +396,19 @@ const ExtendedDefaultValueInput: React.FC<ExtendedDefaultValueInputProps> = ({ v
   }
 
   if (valueType === 'map') {
+    if (useJsonForCollection) {
+      return (
+        <div className={styles.defaultValueContainer}>
+          <textarea value={inputValue} onChange={(e) => {
+            setInputValue(e.target.value);
+            try {
+              const parsed = JSON.parse(e.target.value);
+              if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) onChange(Object.keys(parsed).length > 0 ? parsed : undefined);
+            } catch { /* 用户编辑中 */ }
+          }} className={styles.fieldTextarea} rows={4} placeholder='例如：{"key": "value"}' style={{ fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace', fontSize: 13 }} />
+        </div>
+      );
+    }
     return (
       <div className={styles.defaultValueContainer}>
         <KeyValueEditor value={value as Record<string, string> || {}} onChange={onChange} />
@@ -632,9 +663,31 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
       newUi.order = uiConfig.order;
     }
     setEditedUiConfig(newUi);
+
+    // Widget 切换时检查默认值兼容性
+    let updatedProperty = editedProperty;
+    if (key === 'widget' && editedProperty.default !== undefined) {
+      const currentDefault = editedProperty.default;
+      if (value === 'switch') {
+        // 切换到 switch：非 boolean 默认值 → clear
+        if (typeof currentDefault !== 'boolean') {
+          updatedProperty = { ...editedProperty, default: undefined };
+          setEditedProperty(updatedProperty);
+        }
+      } else if (value === 'number') {
+        // 切换到 number：非 number 默认值 → 尝试转换，失败则 clear
+        if (typeof currentDefault !== 'number') {
+          const num = Number(currentDefault);
+          updatedProperty = { ...editedProperty, default: isNaN(num) ? undefined : num };
+          setEditedProperty(updatedProperty);
+        }
+      }
+      // 同类型 Widget 切换（key-value↔json-editor、text↔textarea 等）：默认值不变
+    }
+
     // 使用 setTimeout 延迟触发 onChange，避免立即重新渲染导致编辑框折叠
     setTimeout(() => {
-      onChange(editedProperty, newUi);
+      onChange(updatedProperty, newUi);
     }, 0);
   };
 
@@ -680,7 +733,7 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
           <div className={styles.inlineEditorFormRow}>
             <div className={styles.inlineEditorFieldFull}>
               <label>默认值</label>
-              <ExtendedDefaultValueInput valueType={selectedValueType} property={editedProperty} value={editedProperty.default} onChange={(val) => handlePropertyChange('default', val)} />
+              <ExtendedDefaultValueInput valueType={selectedValueType} property={editedProperty} value={editedProperty.default} onChange={(val) => handlePropertyChange('default', val)} widget={editedUiConfig.widget} />
             </div>
           </div>
         </div>
@@ -1509,7 +1562,7 @@ const NestedFieldInlineEditor: React.FC<NestedFieldInlineEditorProps> = ({ field
           <div className={styles.inlineEditorFormRow}>
             <div className={styles.inlineEditorFieldFull}>
               <label>默认值</label>
-              <ExtendedDefaultValueInput valueType={selectedType} property={editedField} value={editedField.default} onChange={(val) => handleFieldChange('default', val)} />
+              <ExtendedDefaultValueInput valueType={selectedType} property={editedField} value={editedField.default} onChange={(val) => handleFieldChange('default', val)} widget={editedField['x-widget']} />
             </div>
           </div>
         </div>

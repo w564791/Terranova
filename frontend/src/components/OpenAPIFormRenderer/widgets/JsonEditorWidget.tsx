@@ -5,6 +5,37 @@ import type { WidgetProps } from '../types';
 
 const { TextArea } = Input;
 
+/** 当 schema.type 为 object/array 时，值应存储为 parsed object/array 而非 string */
+const shouldStoreAsParsedObject = (schema: any): boolean => {
+  const t = schema?.type;
+  return t === 'object' || t === 'array';
+};
+
+/** 检测引用表达式：module.xxx、${module.xxx}、var.xxx、${var.xxx}、local.xxx、${local.xxx} 等 */
+const isReferenceExpression = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  const s = value.trim();
+  return /^(module\.|var\.|local\.|data\.)/.test(s) || /^\$\{.+\}$/.test(s);
+};
+
+/**
+ * 根据 schema.type 决定存储格式：
+ * - 引用表达式始终存为 string
+ * - object/array 类型尝试 parse 为对象，parse 失败暂存 string（用户编辑中）
+ * - 其他类型存为 string
+ */
+const resolveFormValue = (rawString: string, schema: any): unknown => {
+  if (isReferenceExpression(rawString)) return rawString;
+  if (!shouldStoreAsParsedObject(schema)) return rawString;
+  try {
+    const parsed = JSON.parse(rawString);
+    if (typeof parsed === 'object' && parsed !== null) return parsed;
+    return rawString;
+  } catch {
+    return rawString; // 用户编辑中，暂存 string
+  }
+};
+
 /**
  * JsonEditorWidget - JSON 编辑器组件
  * 
@@ -45,8 +76,8 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
     return '';
   }, [formValue]);
 
-  // 检查是否是 module 引用值
-  const isModuleReference = typeof formValue === 'string' && formValue.startsWith('module.');
+  // 检查是否是引用表达式
+  const isModuleReference = isReferenceExpression(formValue);
 
   // 获取 Manifest 上下文
   const manifestContext = context?.manifest;
@@ -59,8 +90,8 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
       return true;
     }
     
-    // 如果是模块引用，不验证 JSON
-    if (value.startsWith('module.') || value.startsWith('${')) {
+    // 如果是引用表达式，不验证 JSON
+    if (isReferenceExpression(value)) {
       setJsonError(null);
       return true;
     }
@@ -79,36 +110,36 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     validateJson(newValue);
-    form.setFieldValue(name, newValue);
-  }, [form, name, validateJson]);
+    form.setFieldValue(name, resolveFormValue(newValue, schema));
+  }, [form, name, validateJson, schema]);
 
   // 格式化 JSON
   const handleFormat = useCallback(() => {
     if (!currentValue || isModuleReference) return;
-    
+
     try {
       const parsed = JSON.parse(currentValue);
       const formatted = JSON.stringify(parsed, null, 2);
-      form.setFieldValue(name, formatted);
+      form.setFieldValue(name, shouldStoreAsParsedObject(schema) ? parsed : formatted);
       setJsonError(null);
     } catch (e) {
       setJsonError((e as Error).message);
     }
-  }, [currentValue, isModuleReference, form, name]);
+  }, [currentValue, isModuleReference, form, name, schema]);
 
   // 压缩 JSON
   const handleMinify = useCallback(() => {
     if (!currentValue || isModuleReference) return;
-    
+
     try {
       const parsed = JSON.parse(currentValue);
       const minified = JSON.stringify(parsed);
-      form.setFieldValue(name, minified);
+      form.setFieldValue(name, shouldStoreAsParsedObject(schema) ? parsed : minified);
       setJsonError(null);
     } catch (e) {
       setJsonError((e as Error).message);
     }
-  }, [currentValue, isModuleReference, form, name]);
+  }, [currentValue, isModuleReference, form, name, schema]);
 
   // 渲染引用标签
   const renderReferenceTag = () => {
@@ -178,13 +209,15 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
         ...(schema.required ? [{ required: true, message: `${label}是必填项` }] : []),
         {
           validator: async (_, value) => {
-            if (!value || value.startsWith('module.') || value.startsWith('${')) {
-              return Promise.resolve();
-            }
+            if (!value) return Promise.resolve();
+            // 已成功 parse 为 object/array 的值，直接通过
+            if (typeof value === 'object') return Promise.resolve();
+            // 引用表达式不验证 JSON
+            if (isReferenceExpression(value)) return Promise.resolve();
             try {
               JSON.parse(value);
               return Promise.resolve();
-            } catch (e) {
+            } catch {
               return Promise.reject(new Error('请输入有效的 JSON 格式'));
             }
           },
