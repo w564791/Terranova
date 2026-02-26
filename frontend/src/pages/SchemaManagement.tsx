@@ -133,7 +133,7 @@ const SchemaManagement: React.FC = () => {
         });
         setSchemas(sortedSchemas);
 
-        const activeSchemaData = sortedSchemas.find((s: Schema) => s.status === 'active') || sortedSchemas[0];
+        const activeSchemaData = sortedSchemas[0];
         if (activeSchemaData) {
           if (activeSchemaData.schema_version === 'v2' && activeSchemaData.openapi_schema) {
             setActiveSchema(activeSchemaData);
@@ -261,7 +261,7 @@ const SchemaManagement: React.FC = () => {
   const handleSchemaEditorSave = async (editedSchema: OpenAPISchema) => {
     try {
       setUploading(true);
-      
+
       const versionId = searchParams.get('version_id');
       const createResponse = await api.post(`/modules/${moduleId}/schemas/v2`, {
         openapi_schema: editedSchema,
@@ -536,26 +536,6 @@ const SchemaManagement: React.FC = () => {
     showToast(`已切换到版本 ${schema.version}（预览模式）`, 'success');
   };
 
-  // 设置活跃版本（调用后端 API）
-  const setActiveVersion = async (schema: Schema) => {
-    try {
-      await api.post(`/modules/${moduleId}/schemas/${schema.id}/activate`);
-      
-      // 更新本地状态
-      setSchemas(prev => prev.map(s => ({
-        ...s,
-        status: s.id === schema.id ? 'active' : 'inactive'
-      })));
-      
-      // 切换到该版本
-      switchToVersion(schema);
-      showToast(`已将版本 ${schema.version} 设置为活跃版本`, 'success');
-    } catch (error) {
-      const message = extractErrorMessage(error);
-      showToast(`设置活跃版本失败: ${message}`, 'error');
-    }
-  };
-
   const renderForm = () => {
     if (!activeSchema) return null;
 
@@ -607,7 +587,7 @@ const SchemaManagement: React.FC = () => {
                 <div className={styles.versionInfo}>
                   <div className={styles.versionMain}>
                     <span className={styles.versionNumber}>v{schema.version}</span>
-                    {schema.status === 'active' && (
+                    {index === 0 && (
                       <span className={styles.activeTag}>当前</span>
                     )}
                   </div>

@@ -281,12 +281,7 @@ const CreateDemo: React.FC = () => {
           const version = await getVersion(parseInt(moduleId!), versionId);
           setCurrentVersion(version);
           
-          // 如果该版本没有 Schema，显示提示
-          if (!version.active_schema_id) {
-            setNoSchema(true);
-            setViewMode('json');
-            return;
-          }
+          // schema 不存在的情况由后续 schemaV2Service.getSchemaV2() 的 catch 处理
         } catch (error) {
           console.warn('Failed to load version:', error);
         }

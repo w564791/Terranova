@@ -89,66 +89,47 @@ func (h *ModuleSchemaV2Handler) GetSchemaV2(c *gin.Context) {
 		return
 	}
 
-	// 支持按 version_id 查询
 	versionID := c.Query("version_id")
 
-	var schema models.Schema
-
-	if versionID != "" {
-		// 按指定版本查询：优先使用该版本的 active_schema_id
-		var version models.ModuleVersion
-		if err := h.db.Where("id = ? AND module_id = ?", versionID, moduleID).First(&version).Error; err == nil {
-			if version.ActiveSchemaID != nil {
-				if err := h.db.First(&schema, *version.ActiveSchemaID).Error; err == nil {
-					c.JSON(http.StatusOK, schema)
-					return
-				}
-			}
-		}
-		// 兼容旧数据：按 module_version_id 查询
-		query := h.db.Where("module_id = ? AND schema_version = ? AND module_version_id = ?", moduleID, "v2", versionID)
-		if err := query.Where("status = ?", "active").Order("created_at DESC").First(&schema).Error; err == nil {
-			c.JSON(http.StatusOK, schema)
-			return
-		}
-		if err := query.Order("created_at DESC").First(&schema).Error; err == nil {
-			c.JSON(http.StatusOK, schema)
-			return
-		}
-	} else {
-		// 不传 version_id：获取默认版本的 active Schema
+	// 如果没指定 version_id，使用默认版本
+	if versionID == "" {
 		var module models.Module
 		if err := h.db.First(&module, moduleID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "模块不存在"})
 			return
 		}
-
-		// 优先使用默认版本的 active_schema_id
 		if module.DefaultVersionID != nil {
-			var defaultVersion models.ModuleVersion
-			if err := h.db.Where("id = ?", *module.DefaultVersionID).First(&defaultVersion).Error; err == nil {
-				if defaultVersion.ActiveSchemaID != nil {
-					if err := h.db.First(&schema, *defaultVersion.ActiveSchemaID).Error; err == nil {
-						c.JSON(http.StatusOK, schema)
-						return
-					}
-				}
-			}
+			versionID = *module.DefaultVersionID
 		}
+	}
 
-		// 兼容旧数据：获取模块级别的 active Schema
-		query := h.db.Where("module_id = ? AND schema_version = ?", moduleID, "v2")
-		if err := query.Where("status = ?", "active").Order("created_at DESC").First(&schema).Error; err == nil {
-			c.JSON(http.StatusOK, schema)
-			return
-		}
-		if err := query.Order("created_at DESC").First(&schema).Error; err == nil {
-			c.JSON(http.StatusOK, schema)
+	if versionID == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "未找到默认版本"})
+		return
+	}
+
+	// 验证版本属于该模块
+	var version models.ModuleVersion
+	if err := h.db.Where("id = ? AND module_id = ?", versionID, moduleID).First(&version).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "版本不存在"})
+		return
+	}
+
+	schema, err := services.GetLatestSchemaV2(h.db, versionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询 Schema 失败"})
+		return
+	}
+	if schema == nil {
+		// 兼容回退：如果该版本没有 v2 schema，尝试获取任意最新 schema
+		schema, err = services.GetLatestSchema(h.db, versionID)
+		if err != nil || schema == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "未找到 V2 Schema"})
 			return
 		}
 	}
 
-	c.JSON(http.StatusNotFound, gin.H{"error": "未找到 V2 Schema"})
+	c.JSON(http.StatusOK, schema)
 }
 
 // CreateSchemaV2 创建 V2 Schema
@@ -244,9 +225,11 @@ func (h *ModuleSchemaV2Handler) CreateSchemaV2(c *gin.Context) {
 		sourceType = "tf_parse"
 	}
 
-	// 如果新 Schema 状态为 active，先将该模块的所有现有 Schema 设为 inactive
-	if status == "active" {
-		if err := h.db.Model(&models.Schema{}).Where("module_id = ?", moduleID).Update("status", "inactive").Error; err != nil {
+	// 如果新 Schema 状态为 active，先将该版本的所有现有 Schema 设为 inactive
+	if status == "active" && versionID != "" {
+		if err := h.db.Model(&models.Schema{}).
+			Where("module_id = ? AND module_version_id = ?", moduleID, versionID).
+			Update("status", "inactive").Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新旧版本状态失败: " + err.Error()})
 			return
 		}
@@ -273,20 +256,6 @@ func (h *ModuleSchemaV2Handler) CreateSchemaV2(c *gin.Context) {
 	if err := h.db.Create(&schema).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建 Schema 失败: " + err.Error()})
 		return
-	}
-
-	// 如果是 active 状态且关联了版本，更新版本的 active_schema_id
-	if status == "active" && versionID != "" {
-		if err := h.db.Model(&models.ModuleVersion{}).
-			Where("id = ?", versionID).
-			Update("active_schema_id", schema.ID).Error; err != nil {
-			// 记录错误但不影响响应
-			c.JSON(http.StatusCreated, gin.H{
-				"data":    schema,
-				"warning": "Schema 创建成功，但更新版本的 active_schema_id 失败: " + err.Error(),
-			})
-			return
-		}
 	}
 
 	c.JSON(http.StatusCreated, schema)
@@ -955,18 +924,21 @@ func (h *ModuleSchemaV2Handler) ValidateModuleInput(c *gin.Context) {
 		return
 	}
 
-	// 获取活跃的 v2 Schema
-	var schema models.Schema
-	result := h.db.Where("module_id = ? AND schema_version = ? AND status = ?", moduleID, "v2", "active").
-		Order("created_at DESC").
-		First(&schema)
-
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "未找到活跃的 V2 Schema"})
-			return
+	// 获取活跃的 v2 Schema（按版本解析）
+	versionID := c.Query("version_id")
+	if versionID == "" {
+		var module models.Module
+		if err := h.db.First(&module, moduleID).Error; err == nil && module.DefaultVersionID != nil {
+			versionID = *module.DefaultVersionID
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败: " + result.Error.Error()})
+	}
+
+	var schema *models.Schema
+	if versionID != "" {
+		schema, _ = services.GetLatestSchemaV2(h.db, versionID)
+	}
+	if schema == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "未找到活跃的 V2 Schema"})
 		return
 	}
 
@@ -1390,61 +1362,7 @@ func (h *ModuleSchemaV2Handler) valuesEqual(a, b interface{}) bool {
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/{schemaId}/activate [post]
 func (h *ModuleSchemaV2Handler) SetActiveSchema(c *gin.Context) {
-	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的模块ID"})
-		return
-	}
-
-	schemaID, err := strconv.ParseUint(c.Param("schemaId"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 Schema ID"})
-		return
-	}
-
-	// 查找 Schema
-	var schema models.Schema
-	if err := h.db.Where("id = ? AND module_id = ?", schemaID, moduleID).First(&schema).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Schema 不存在"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
-		return
-	}
-
-	// 开启事务
-	tx := h.db.Begin()
-
-	// 将该模块的所有 Schema 设置为非活跃
-	if err := tx.Model(&models.Schema{}).Where("module_id = ?", moduleID).Update("status", "inactive").Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新状态失败"})
-		return
-	}
-
-	// 将指定 Schema 设置为活跃
-	if err := tx.Model(&schema).Update("status", "active").Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "设置活跃状态失败"})
-		return
-	}
-
-	// 如果 Schema 关联了版本，更新版本的 active_schema_id
-	if schema.ModuleVersionID != nil {
-		if err := tx.Model(&models.ModuleVersion{}).
-			Where("id = ?", *schema.ModuleVersionID).
-			Update("active_schema_id", schema.ID).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新版本的活跃 Schema 失败"})
-			return
-		}
-	}
-
-	tx.Commit()
-
-	// 重新加载
-	h.db.First(&schema, schema.ID)
-
-	c.JSON(http.StatusOK, schema)
+	c.JSON(http.StatusGone, gin.H{
+		"error": "此接口已废弃。系统现在自动使用最新的 Schema 版本。",
+	})
 }

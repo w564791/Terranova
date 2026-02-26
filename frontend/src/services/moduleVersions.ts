@@ -9,7 +9,8 @@ export interface ModuleVersion {
   module_source?: string;
   is_default: boolean;
   status: string;                // active, deprecated, archived
-  active_schema_id?: number;     // 当前使用的 Schema ID
+  /** @deprecated 不再使用，Schema 解析改为 latest by created_at */
+  active_schema_id?: number;
   inherited_from_version_id?: string;
   schema_count?: number;
   active_schema_version?: string; // Schema 版本号（如 "45"）

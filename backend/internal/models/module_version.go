@@ -13,7 +13,9 @@ type ModuleVersion struct {
 	ModuleSource           string    `json:"module_source" gorm:"type:varchar(500)"`   // 完整 source URL
 	IsDefault              bool      `json:"is_default" gorm:"default:false;index:idx_module_versions_default"`
 	Status                 string    `json:"status" gorm:"type:varchar(20);default:active"`                             // active, deprecated, archived
-	ActiveSchemaID         *uint     `json:"active_schema_id,omitempty" gorm:"index:idx_module_versions_active_schema"` // 当前使用的 Schema ID
+	// Deprecated: 不再用于 Schema 解析。系统自动使用最新 Schema (created_at DESC)。
+	// 保留字段以避免迁移，但不应再读写此字段。
+	ActiveSchemaID *uint `json:"active_schema_id,omitempty" gorm:"index:idx_module_versions_active_schema"`
 	InheritedFromVersionID *string   `json:"inherited_from_version_id,omitempty" gorm:"type:varchar(30)"`
 	CreatedBy              *string   `json:"created_by,omitempty" gorm:"type:varchar(20)"`
 	CreatedAt              time.Time `json:"created_at" gorm:"autoCreateTime"`

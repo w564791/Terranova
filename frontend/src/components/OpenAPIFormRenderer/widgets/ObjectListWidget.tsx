@@ -267,16 +267,23 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
     return 'text';
   };
 
-  // 按分组分类属性
+  // 按分组分类属性（按 x-order 排序以保持用户定义的字段顺序）
   const groupedFields = useMemo((): Array<[string, Array<[string, ExtendedPropertySchema]>]> => {
     const groups: Record<string, Array<[string, ExtendedPropertySchema]>> = {};
-    
-    Object.entries(itemProperties).forEach(([propName, prop]) => {
+
+    // 先按 x-order 排序，确保字段顺序在 JSON 键排序变化后仍然正确
+    const sortedEntries = Object.entries(itemProperties).sort(([, a], [, b]) => {
+      const orderA = (a['x-order'] as number) ?? 999;
+      const orderB = (b['x-order'] as number) ?? 999;
+      return orderA - orderB;
+    });
+
+    sortedEntries.forEach(([propName, prop]) => {
       const group = (prop['x-group'] as string) || 'default';
       if (!groups[group]) groups[group] = [];
       groups[group].push([propName, prop]);
     });
-    
+
     // 按分组名称排序：default/basic 优先
     return Object.entries(groups).sort(([a], [b]) => {
       if (a === 'default' || a === 'basic') return -1;

@@ -559,7 +559,11 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
       >
         <Collapse defaultActiveKey={['props']} ghost>
           <Panel header="属性" key="props" style={{ border: 'none' }}>
-            {renderValuePropertyFields(key, Object.entries(valueProperties))}
+            {renderValuePropertyFields(key, Object.entries(valueProperties).sort(([, a], [, b]) => {
+              const orderA = (a as any)['x-order'] ?? 999;
+              const orderB = (b as any)['x-order'] ?? 999;
+              return orderA - orderB;
+            }))}
           </Panel>
         </Collapse>
       </Card>

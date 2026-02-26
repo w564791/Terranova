@@ -660,7 +660,7 @@ const AddResources: React.FC = () => {
       
       if (schemasData.length > 0) {
         // 选择第一个active状态的schema或第一个schema
-        let activeSchema = schemasData.find((s: any) => s.status === 'active') || schemasData[0];
+        let activeSchema = schemasData[0];
         
         console.log('📊 Active Schema:', activeSchema);
         console.log('📊 Schema Version:', activeSchema.schema_version);

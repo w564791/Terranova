@@ -153,6 +153,7 @@ func (ms *ModuleService) DeleteModule(id uint) error {
 	// 开启事务
 	tx := ms.db.Begin()
 
+	// TODO: active_schema_id 列废弃后可删除此行
 	// 1. 清除 module_versions 的 active_schema_id 引用（避免外键冲突）
 	if err := tx.Model(&models.ModuleVersion{}).Where("module_id = ?", id).
 		Update("active_schema_id", nil).Error; err != nil {

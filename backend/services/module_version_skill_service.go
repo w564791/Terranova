@@ -94,15 +94,15 @@ func (s *ModuleVersionSkillService) GenerateFromSchema(versionID string, userID 
 		return nil, err
 	}
 
-	// 获取当前版本的 Schema
-	var schema models.Schema
-	if version.ActiveSchemaID != nil {
-		if err := s.db.First(&schema, "id = ?", *version.ActiveSchemaID).Error; err != nil {
-			return nil, fmt.Errorf("Schema 不存在: %w", err)
-		}
-	} else {
+	// 获取当前版本的最新 Schema
+	latestSchema, err := GetLatestSchema(s.db, versionID)
+	if err != nil {
+		return nil, fmt.Errorf("查询 Schema 失败: %w", err)
+	}
+	if latestSchema == nil {
 		return nil, fmt.Errorf("该版本没有关联的 Schema，无法生成 Skill")
 	}
+	schema := *latestSchema
 
 	// 获取 Module 信息
 	var module models.Module

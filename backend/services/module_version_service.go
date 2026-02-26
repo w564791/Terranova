@@ -188,14 +188,6 @@ func (s *ModuleVersionService) ensureDefaultVersion(moduleID uint) error {
 		log.Printf("[ModuleVersion] Warning: failed to associate existing demos for module %d: %v", moduleID, err)
 	}
 
-	// 如果有 active 的 Schema，设置为版本的 active_schema_id
-	var activeSchema models.Schema
-	if err := s.db.Where("module_id = ? AND module_version_id = ? AND status = ?", moduleID, versionID, "active").
-		Order("created_at DESC").First(&activeSchema).Error; err == nil {
-		s.db.Model(&models.ModuleVersion{}).Where("id = ?", versionID).Update("active_schema_id", activeSchema.ID)
-		log.Printf("[ModuleVersion] Set active_schema_id=%d for version %s", activeSchema.ID, versionID)
-	}
-
 	return nil
 }
 
@@ -282,12 +274,9 @@ func (s *ModuleVersionService) CreateVersion(moduleID uint, req *CreateModuleVer
 				return err
 			}
 			newVersion.InheritedFromVersionID = &req.InheritSchemaFrom
-			// 只更新 inherited_from_version_id 字段，避免覆盖 inheritSchema 设置的 active_schema_id
 			if err := tx.Model(newVersion).Update("inherited_from_version_id", req.InheritSchemaFrom).Error; err != nil {
 				return err
 			}
-			// 同步内存对象的 active_schema_id
-			tx.First(newVersion, "id = ?", newVersion.ID)
 		}
 
 		// 如果设为默认版本
@@ -356,7 +345,8 @@ func (s *ModuleVersionService) DeleteVersion(moduleID uint, versionID string) er
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		// 先清除 active_schema_id 外键引用
+		// TODO: active_schema_id 列废弃后可删除此行
+		// 清除 active_schema_id 外键引用（列还在 DB 中，避免 FK 约束错误）
 		if err := tx.Model(&models.ModuleVersion{}).
 			Where("id = ?", versionID).
 			Update("active_schema_id", nil).Error; err != nil {
@@ -523,24 +513,7 @@ func (s *ModuleVersionService) InheritDemos(moduleID uint, targetVersionID strin
 	return inheritedCount, nil
 }
 
-// getNextSchemaVersion 获取模块的下一个全局 Schema 版本号
-func (s *ModuleVersionService) getNextSchemaVersion(tx *gorm.DB, moduleID uint) string {
-	var maxVersion int
-	// 查询该模块所有 Schema 的最大版本号（只考虑纯数字版本号，忽略非数字的）
-	if err := tx.Model(&models.Schema{}).
-		Where("module_id = ? AND version ~ '^[0-9]+$'", moduleID).
-		Select("COALESCE(MAX(CAST(version AS INTEGER)), 0)").
-		Scan(&maxVersion).Error; err != nil {
-		log.Printf("[ModuleVersion] Warning: failed to get max schema version for module %d: %v, defaulting to 1", moduleID, err)
-		// 回退：直接 COUNT 作为版本号
-		var count int64
-		tx.Model(&models.Schema{}).Where("module_id = ?", moduleID).Count(&count)
-		return fmt.Sprintf("%d", count+1)
-	}
-	return fmt.Sprintf("%d", maxVersion+1)
-}
-
-// inheritSchema 继承 Schema（创建新的全局版本号）
+// inheritSchema 继承 Schema（创建新的 per-ModuleVersion 版本号）
 func (s *ModuleVersionService) inheritSchema(tx *gorm.DB, moduleID uint, targetVersionID, sourceVersionID, userID string) error {
 	// 获取源版本
 	var sourceVersion models.ModuleVersion
@@ -548,33 +521,24 @@ func (s *ModuleVersionService) inheritSchema(tx *gorm.DB, moduleID uint, targetV
 		return fmt.Errorf("source version not found: %w", err)
 	}
 
-	// 获取源版本的 active Schema（优先使用 active_schema_id）
-	var sourceSchema models.Schema
-	if sourceVersion.ActiveSchemaID != nil {
-		if err := tx.First(&sourceSchema, *sourceVersion.ActiveSchemaID).Error; err != nil {
-			return fmt.Errorf("source schema not found: %w", err)
-		}
-	} else {
-		// 兼容旧数据：查找 active 状态的 Schema
-		if err := tx.Where("module_id = ? AND module_version_id = ? AND status = ?", moduleID, sourceVersionID, "active").
-			Order("created_at DESC").First(&sourceSchema).Error; err != nil {
-			// 如果没有 active 的，尝试获取任意最新的
-			if err := tx.Where("module_id = ? AND module_version_id = ?", moduleID, sourceVersionID).
-				Order("created_at DESC").First(&sourceSchema).Error; err != nil {
-				log.Printf("[ModuleVersion] No schema found for source version %s, skipping inheritance", sourceVersionID)
-				return nil // 没有 Schema 可继承，不是错误
-			}
-		}
+	// 获取源版本的最新 Schema
+	sourceSchema, err := GetLatestSchema(tx, sourceVersionID)
+	if err != nil {
+		return fmt.Errorf("failed to find source schema: %w", err)
+	}
+	if sourceSchema == nil {
+		log.Printf("[ModuleVersion] No schema found for source version %s, skipping", sourceVersionID)
+		return nil
 	}
 
-	// 获取下一个全局版本号
-	nextVersion := s.getNextSchemaVersion(tx, moduleID)
+	// 获取下一个 per-ModuleVersion 版本号
+	nextVersion := GetNextSchemaVersionForModuleVersion(tx, targetVersionID)
 
-	// 复制 Schema 数据（使用全局递增版本号）
+	// 复制 Schema 数据（使用 per-ModuleVersion 递增版本号）
 	newSchema := models.Schema{
 		ModuleID:              moduleID,
 		ModuleVersionID:       &targetVersionID,
-		Version:               nextVersion, // 全局递增版本号
+		Version:               nextVersion, // per-ModuleVersion 版本号
 		Status:                "active",    // 新继承的 Schema 直接设为 active
 		SchemaData:            sourceSchema.SchemaData,
 		AIGenerated:           sourceSchema.AIGenerated,
@@ -591,13 +555,6 @@ func (s *ModuleVersionService) inheritSchema(tx *gorm.DB, moduleID uint, targetV
 		return err
 	}
 
-	// 更新目标版本的 active_schema_id
-	if err := tx.Model(&models.ModuleVersion{}).
-		Where("id = ?", targetVersionID).
-		Update("active_schema_id", newSchema.ID).Error; err != nil {
-		return fmt.Errorf("failed to update active_schema_id: %w", err)
-	}
-
 	log.Printf("[ModuleVersion] Inherited schema %d (v%s) to version %s as schema %d (v%s)",
 		sourceSchema.ID, sourceSchema.Version, targetVersionID, newSchema.ID, nextVersion)
 	return nil
@@ -610,19 +567,10 @@ func (s *ModuleVersionService) fillVersionDetails(version *models.ModuleVersion)
 	s.db.Model(&models.Schema{}).Where("module_version_id = ?", version.ID).Count(&schemaCount)
 	version.SchemaCount = int(schemaCount)
 
-	// Active Schema 版本（优先使用 active_schema_id）
-	if version.ActiveSchemaID != nil {
-		var activeSchema models.Schema
-		if err := s.db.First(&activeSchema, *version.ActiveSchemaID).Error; err == nil {
-			version.ActiveSchemaVersion = activeSchema.Version
-		}
-	} else {
-		// 兼容旧数据：查找 active 状态的 Schema
-		var activeSchema models.Schema
-		if err := s.db.Where("module_version_id = ? AND status = ?", version.ID, "active").
-			Order("created_at DESC").First(&activeSchema).Error; err == nil {
-			version.ActiveSchemaVersion = activeSchema.Version
-		}
+	// Active Schema 版本（最新的 Schema 即活跃的）
+	latestSchema, err := GetLatestSchema(s.db, version.ID)
+	if err == nil && latestSchema != nil {
+		version.ActiveSchemaVersion = latestSchema.Version
 	}
 
 	// Demo 数量
@@ -731,18 +679,17 @@ func (s *ModuleVersionService) GetVersionDemos(moduleID uint, versionID string) 
 
 // CompareVersions 比较两个版本的 Schema 差异
 func (s *ModuleVersionService) CompareVersions(moduleID uint, fromVersionID, toVersionID string) (map[string]interface{}, error) {
-	// 获取两个版本的 active Schema
-	var fromSchema, toSchema models.Schema
-
-	if err := s.db.Where("module_id = ? AND module_version_id = ? AND status = ?", moduleID, fromVersionID, "active").
-		Order("created_at DESC").First(&fromSchema).Error; err != nil {
-		return nil, fmt.Errorf("no active schema found for version %s", fromVersionID)
+	// 获取两个版本的最新 Schema
+	fromSchemaPtr, err := GetLatestSchema(s.db, fromVersionID)
+	if err != nil || fromSchemaPtr == nil {
+		return nil, fmt.Errorf("no schema found for version %s", fromVersionID)
 	}
-
-	if err := s.db.Where("module_id = ? AND module_version_id = ? AND status = ?", moduleID, toVersionID, "active").
-		Order("created_at DESC").First(&toSchema).Error; err != nil {
-		return nil, fmt.Errorf("no active schema found for version %s", toVersionID)
+	toSchemaPtr, err := GetLatestSchema(s.db, toVersionID)
+	if err != nil || toSchemaPtr == nil {
+		return nil, fmt.Errorf("no schema found for version %s", toVersionID)
 	}
+	fromSchema := *fromSchemaPtr
+	toSchema := *toSchemaPtr
 
 	// 解析 OpenAPI Schema
 	var fromOpenAPI, toOpenAPI map[string]interface{}

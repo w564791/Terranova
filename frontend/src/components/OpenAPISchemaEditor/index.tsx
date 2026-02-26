@@ -1465,7 +1465,11 @@ const NestedFieldsEditor: React.FC<NestedFieldsEditorProps> = ({ property, value
   };
 
   const nestedProperties = getNestedProperties();
-  const nestedFieldNames = Object.keys(nestedProperties);
+  const nestedFieldNames = Object.keys(nestedProperties).sort((a, b) => {
+    const orderA = nestedProperties[a]?.['x-order'] ?? 999;
+    const orderB = nestedProperties[b]?.['x-order'] ?? 999;
+    return orderA - orderB;
+  });
 
   const handleAddNestedField = () => {
     if (!newFieldName.trim()) return;
@@ -1582,12 +1586,13 @@ const NestedFieldsEditor: React.FC<NestedFieldsEditorProps> = ({ property, value
     // Remove empty rows
     const finalRows = mutableRows.filter(r => r.fields.length > 0);
 
-    // Rebuild properties with updated order and x-colSpan
+    // Rebuild properties with updated order, x-colSpan, and x-order
     const newProperties: Record<string, any> = {};
+    let orderIndex = 0;
     for (const row of finalRows) {
       const colSpan = Math.floor(24 / row.fields.length);
       for (const name of row.fields) {
-        newProperties[name] = { ...nestedProperties[name], 'x-colSpan': colSpan };
+        newProperties[name] = { ...nestedProperties[name], 'x-colSpan': colSpan, 'x-order': orderIndex++ };
       }
     }
     setNestedProperties(newProperties);

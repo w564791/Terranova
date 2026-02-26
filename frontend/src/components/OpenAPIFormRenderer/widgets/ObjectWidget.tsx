@@ -54,12 +54,19 @@ const ObjectWidget: React.FC<WidgetProps> = ({
   const properties = extSchema.properties || {};
   const requiredFields = Array.isArray(extSchema.required) ? extSchema.required : [];
   
-  // 按分组分类属性
+  // 按分组分类属性（按 x-order 排序以保持用户定义的字段顺序）
   const { basicFields, advancedFields } = useMemo(() => {
     const basic: Array<[string, ExtendedPropertySchema]> = [];
     const advanced: Array<[string, ExtendedPropertySchema]> = [];
-    
-    Object.entries(properties).forEach(([propName, prop]) => {
+
+    // 先按 x-order 排序
+    const sortedEntries = Object.entries(properties).sort(([, a], [, b]) => {
+      const orderA = (a['x-order'] as number) ?? 999;
+      const orderB = (b['x-order'] as number) ?? 999;
+      return orderA - orderB;
+    });
+
+    sortedEntries.forEach(([propName, prop]) => {
       const group = prop['x-group'] || 'basic';
       if (group === 'advanced') {
         advanced.push([propName, prop]);
@@ -67,7 +74,7 @@ const ObjectWidget: React.FC<WidgetProps> = ({
         basic.push([propName, prop]);
       }
     });
-    
+
     return { basicFields: basic, advancedFields: advanced };
   }, [properties]);
   
