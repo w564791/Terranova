@@ -282,9 +282,12 @@ func (s *ModuleVersionService) CreateVersion(moduleID uint, req *CreateModuleVer
 				return err
 			}
 			newVersion.InheritedFromVersionID = &req.InheritSchemaFrom
-			if err := tx.Save(newVersion).Error; err != nil {
+			// 只更新 inherited_from_version_id 字段，避免覆盖 inheritSchema 设置的 active_schema_id
+			if err := tx.Model(newVersion).Update("inherited_from_version_id", req.InheritSchemaFrom).Error; err != nil {
 				return err
 			}
+			// 同步内存对象的 active_schema_id
+			tx.First(newVersion, "id = ?", newVersion.ID)
 		}
 
 		// 如果设为默认版本
@@ -523,11 +526,17 @@ func (s *ModuleVersionService) InheritDemos(moduleID uint, targetVersionID strin
 // getNextSchemaVersion 获取模块的下一个全局 Schema 版本号
 func (s *ModuleVersionService) getNextSchemaVersion(tx *gorm.DB, moduleID uint) string {
 	var maxVersion int
-	// 查询该模块所有 Schema 的最大版本号
-	tx.Model(&models.Schema{}).
-		Where("module_id = ?", moduleID).
+	// 查询该模块所有 Schema 的最大版本号（只考虑纯数字版本号，忽略非数字的）
+	if err := tx.Model(&models.Schema{}).
+		Where("module_id = ? AND version ~ '^[0-9]+$'", moduleID).
 		Select("COALESCE(MAX(CAST(version AS INTEGER)), 0)").
-		Scan(&maxVersion)
+		Scan(&maxVersion).Error; err != nil {
+		log.Printf("[ModuleVersion] Warning: failed to get max schema version for module %d: %v, defaulting to 1", moduleID, err)
+		// 回退：直接 COUNT 作为版本号
+		var count int64
+		tx.Model(&models.Schema{}).Where("module_id = ?", moduleID).Count(&count)
+		return fmt.Sprintf("%d", count+1)
+	}
 	return fmt.Sprintf("%d", maxVersion+1)
 }
 

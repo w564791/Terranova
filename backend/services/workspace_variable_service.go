@@ -32,91 +32,34 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 		return fmt.Errorf("workspace不存在: %w", err)
 	}
 
-	// 第一步：查找该 key 的任何历史版本（包括已删除的）
-	var latestVersion models.WorkspaceVariable
-	err := s.db.Where("workspace_id = ? AND key = ? AND variable_type = ?",
-		variable.WorkspaceID, variable.Key, variable.VariableType).
-		Order("version DESC").
-		First(&latestVersion).Error
-	
+	// 检查是否存在同名的活跃变量
+	var existing models.WorkspaceVariable
+	err := s.db.Where("workspace_id = ? AND key = ? AND variable_type = ? AND is_deleted = ?",
+		variable.WorkspaceID, variable.Key, variable.VariableType, false).
+		First(&existing).Error
+
 	if err == nil {
-		// 找到了历史版本
-		if !latestVersion.IsDeleted {
-			// 最新版本未删除，报错
-			return fmt.Errorf("变量 %s 已存在", variable.Key)
-		}
-		
-		// 最新版本已删除，复用 variable_id，创建新版本
-		newVersion := models.WorkspaceVariable{
-			VariableID:   latestVersion.VariableID,  // 复用原来的 variable_id
-			WorkspaceID:  variable.WorkspaceID,
-			Key:          variable.Key,
-			Version:      latestVersion.Version + 1,  // 版本号+1
-			Value:        variable.Value,
-			VariableType: variable.VariableType,
-			ValueFormat:  variable.ValueFormat,
-			Sensitive:    variable.Sensitive,
-			Description:  variable.Description,
-			IsDeleted:    false,  // 恢复
-			CreatedBy:    variable.CreatedBy,
-		}
-		
-		// 手动处理加密
-		if newVersion.Sensitive && newVersion.Value != "" && !crypto.IsEncrypted(newVersion.Value) {
-			encrypted, err := crypto.EncryptValue(newVersion.Value)
-			if err != nil {
-				return fmt.Errorf("加密失败: %w", err)
-			}
-			newVersion.Value = encrypted
-		}
-		
-		// 使用原生 SQL 插入恢复版本
-		sql := `
-			INSERT INTO workspace_variables (
-				variable_id, workspace_id, key, version, value,
-				variable_type, value_format, sensitive, description,
-				is_deleted, created_at, updated_at, created_by
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11)
-			RETURNING id
-		`
-		
-		var newID uint
-		if err := s.db.Raw(sql,
-			newVersion.VariableID,
-			newVersion.WorkspaceID,
-			newVersion.Key,
-			newVersion.Version,
-			newVersion.Value,
-			newVersion.VariableType,
-			newVersion.ValueFormat,
-			newVersion.Sensitive,
-			newVersion.Description,
-			newVersion.IsDeleted,
-			newVersion.CreatedBy,
-		).Scan(&newID).Error; err != nil {
-			return fmt.Errorf("恢复变量失败: %w", err)
-		}
-		
-		// 更新传入的 variable 对象
-		variable.ID = newID
-		variable.VariableID = newVersion.VariableID
-		variable.Version = newVersion.Version
-		
-		return nil
+		return fmt.Errorf("变量 %s 已存在", variable.Key)
 	} else if err != gorm.ErrRecordNotFound {
-		// 数据库查询错误（非记录不存在）
 		return fmt.Errorf("查询变量失败: %w", err)
 	}
 
-	// 真正的新变量，创建第一个版本
-	// 生成新的 variable_id
+	// 查询该 key 的历史最大版本号（包括已删除的），避免版本号冲突
+	var maxVersion int
+	s.db.Model(&models.WorkspaceVariable{}).
+		Where("workspace_id = ? AND key = ? AND variable_type = ?",
+			variable.WorkspaceID, variable.Key, variable.VariableType).
+		Select("COALESCE(MAX(version), 0)").
+		Scan(&maxVersion)
+
+	// 始终生成全新的 variable_id
 	varID, err := infrastructure.GenerateVariableID()
 	if err != nil {
 		return fmt.Errorf("生成variable_id失败: %w", err)
 	}
-	
+
 	variable.VariableID = varID
-	variable.Version = 1
+	variable.Version = maxVersion + 1
 	variable.IsDeleted = false
 
 	// 手动处理加密
@@ -137,7 +80,7 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11)
 		RETURNING id
 	`
-	
+
 	var newID uint
 	if err := s.db.Raw(sql,
 		variable.VariableID,
@@ -154,7 +97,7 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 	).Scan(&newID).Error; err != nil {
 		return fmt.Errorf("创建变量失败: %w", err)
 	}
-	
+
 	variable.ID = newID
 
 	return nil
@@ -254,7 +197,6 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 		VariableID:   current.VariableID,  // 保持不变
 		WorkspaceID:  current.WorkspaceID,
 		Key:          current.Key,
-		Version:      current.Version + 1,  // 版本号+1
 		Value:        current.Value,
 		VariableType: current.VariableType,
 		ValueFormat:  current.ValueFormat,
@@ -283,6 +225,17 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 	if description, ok := updates["description"].(string); ok {
 		newVersion.Description = description
 	}
+
+	// 查询所有可能冲突的最大版本号，避免唯一约束冲突
+	// idx_variable_id_version: (variable_id, version)
+	// idx_workspace_key_type_version: (workspace_id, key, variable_type, version)
+	var maxVersion int
+	s.db.Model(&models.WorkspaceVariable{}).
+		Where("variable_id = ? OR (workspace_id = ? AND key = ? AND variable_type = ?)",
+			current.VariableID, newVersion.WorkspaceID, newVersion.Key, newVersion.VariableType).
+		Select("COALESCE(MAX(version), 0)").
+		Scan(&maxVersion)
+	newVersion.Version = maxVersion + 1
 
 	// 手动处理加密（因为要使用原生 SQL）
 	if newVersion.Sensitive && newVersion.Value != "" && !crypto.IsEncrypted(newVersion.Value) {
@@ -360,12 +313,20 @@ func (s *WorkspaceVariableService) DeleteVariable(id uint) error {
 		return fmt.Errorf("标记历史版本失败: %w", err)
 	}
 
-	// 第二步：创建新的删除版本
+	// 第二步：查询最大版本号，避免唯一约束冲突
+	var maxVersion int
+	s.db.Model(&models.WorkspaceVariable{}).
+		Where("variable_id = ? OR (workspace_id = ? AND key = ? AND variable_type = ?)",
+			current.VariableID, current.WorkspaceID, current.Key, current.VariableType).
+		Select("COALESCE(MAX(version), 0)").
+		Scan(&maxVersion)
+
+	// 创建新的删除版本
 	deleteVersion := models.WorkspaceVariable{
 		VariableID:   current.VariableID,
 		WorkspaceID:  current.WorkspaceID,
 		Key:          current.Key,
-		Version:      current.Version + 1,
+		Version:      maxVersion + 1,
 		Value:        current.Value,
 		VariableType: current.VariableType,
 		ValueFormat:  current.ValueFormat,

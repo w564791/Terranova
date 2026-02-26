@@ -121,20 +121,23 @@ const SchemaManagement: React.FC = () => {
         const moduleResponse = await api.get(`/modules/${moduleId}`);
         setModule(moduleResponse.data);
 
-        const response = await api.get(`/modules/${moduleId}/schemas`);
+        const versionId = searchParams.get('version_id');
+        const response = await api.get(`/modules/${moduleId}/schemas`, {
+          params: versionId ? { version_id: versionId } : undefined,
+        });
         const schemasData = Array.isArray(response.data) ? response.data : [];
-        
+
         // 按版本排序（最新的在前）
         const sortedSchemas = schemasData.sort((a: Schema, b: Schema) => {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
         setSchemas(sortedSchemas);
-        
+
         const activeSchemaData = sortedSchemas.find((s: Schema) => s.status === 'active') || sortedSchemas[0];
         if (activeSchemaData) {
           if (activeSchemaData.schema_version === 'v2' && activeSchemaData.openapi_schema) {
             setActiveSchema(activeSchemaData);
-            
+
             // 如果 URL 参数指示编辑模式，自动进入编辑状态
             if (getInitialEditMode()) {
               setPendingOpenAPISchema(activeSchemaData.openapi_schema);
@@ -168,7 +171,7 @@ const SchemaManagement: React.FC = () => {
     if (moduleId) {
       fetchModuleAndSchemas();
     }
-  }, [moduleId, showToast]);
+  }, [moduleId, searchParams, showToast]);
 
   // 处理 TF 文件上传（支持多文件：variables.tf + outputs.tf）
   const handleTfFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -259,11 +262,14 @@ const SchemaManagement: React.FC = () => {
     try {
       setUploading(true);
       
+      const versionId = searchParams.get('version_id');
       const createResponse = await api.post(`/modules/${moduleId}/schemas/v2`, {
         openapi_schema: editedSchema,
         variables_tf: pendingVariablesTf,
         version: generateNextVersion(),
         status: 'active'
+      }, {
+        params: versionId ? { version_id: versionId } : undefined,
       });
 
       const createdSchema = createResponse as any;
