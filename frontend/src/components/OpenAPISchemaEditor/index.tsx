@@ -763,6 +763,20 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
               <ExtendedDefaultValueInput valueType={selectedValueType} property={editedProperty} value={editedProperty.default} onChange={(val) => handlePropertyChange('default', val)} widget={editedUiConfig.widget} />
             </div>
           </div>
+          {Object.prototype.hasOwnProperty.call(editedProperty, 'default') && editedProperty.default !== undefined && (
+            <div className={styles.inlineEditorFormRow}>
+              <div className={styles.inlineEditorFieldFull}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={editedProperty['x-renderDefault'] === true}
+                    onChange={(e) => handlePropertyChange('x-renderDefault', e.target.checked || undefined)}
+                  />
+                  输出默认值（创建资源时自动将默认值填入 JSON）
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

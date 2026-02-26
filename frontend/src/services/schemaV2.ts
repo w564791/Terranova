@@ -55,6 +55,7 @@ export interface PropertySchema {
   'x-help'?: string;
   'x-hidden'?: boolean;
   'x-source'?: string;
+  'x-renderDefault'?: boolean;
 }
 
 export interface ValidationRule {

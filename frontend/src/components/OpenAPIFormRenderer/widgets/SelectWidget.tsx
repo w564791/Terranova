@@ -290,9 +290,12 @@ const SelectWidget: React.FC<SelectWidgetProps> = ({
           onSearch={handleSearch}
           loading={loading}
           allowClear
-          filterOption={searchable ? (input, option) => 
-            (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
-          : undefined}
+          filterOption={searchable ? (input, option) => {
+            const val = String(option?.value ?? '');
+            const label = String(option?.label ?? option?.children ?? '');
+            const q = input.toLowerCase();
+            return val.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+          } : undefined}
           notFoundContent={loading ? <Spin size="small" /> : '暂无数据'}
           style={isModuleReference ? { 
             fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',

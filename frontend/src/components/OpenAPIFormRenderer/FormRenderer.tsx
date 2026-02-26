@@ -129,10 +129,14 @@ const FormRenderer: React.FC<FormRendererProps> = ({
 
   // 保存原始 initialValues 的引用，用于在 onChange 时合并
   const originalInitialValuesRef = useRef<Record<string, unknown>>(initialValues);
-  
+
+  // 追踪用户主动操作过的字段（编辑、cascade setValue 等）
+  const touchedFieldsRef = useRef<Set<string>>(new Set(Object.keys(initialValues)));
+
   // 更新原始值引用（仅在 initialValues 变化时）
   useEffect(() => {
     originalInitialValuesRef.current = initialValues;
+    touchedFieldsRef.current = new Set(Object.keys(initialValues));
   }, [initialValues]);
 
   // 从 Schema 中提取默认值，并与 initialValues 合并
@@ -142,6 +146,21 @@ const FormRenderer: React.FC<FormRendererProps> = ({
     const merged = { ...schemaDefaults, ...initialValues };
     return merged;
   }, [schema, initialValues]);
+
+  // 提取标记了 x-renderDefault 的字段名
+  const renderDefaultFieldsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const properties = schema.components?.schemas?.ModuleInput?.properties || {};
+    const fields = new Set<string>();
+    Object.entries(properties).forEach(([name, prop]) => {
+      const p = prop as PropertySchema;
+      if (p['x-renderDefault'] === true && Object.prototype.hasOwnProperty.call(p, 'default')) {
+        fields.add(name);
+      }
+    });
+    renderDefaultFieldsRef.current = fields;
+  }, [schema]);
 
   // 获取级联规则（合并全局规则和字段级配置）
   const cascadeRules = useMemo((): CascadeRule[] => {
@@ -394,6 +413,11 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       }
     }
     
+    // 记录用户主动触碰的字段
+    Object.keys(_changedValues).forEach(key => {
+      touchedFieldsRef.current.add(key);
+    });
+
     // 关键修复：合并原始数据和表单数据
     // 原始数据中可能包含不在 schema 中定义的字段，这些字段不会被表单渲染
     // 但在提交时需要保留这些字段，否则会导致数据丢失
@@ -402,22 +426,25 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       ...originalInitialValuesRef.current,  // 原始数据（包含不在 schema 中的字段）
       ...formValues,                         // 表单数据（覆盖原始数据中的同名字段）
     };
-    
+
     // 过滤掉值为 undefined 的字段（用户明确清空的字段）
     // 同时过滤掉被级联规则**明确**隐藏的字段
+    // 只输出：原始数据字段 + 用户触碰的字段 + 标记了 x-renderDefault 的字段
     const filteredValues: Record<string, unknown> = {};
     Object.entries(mergedValues).forEach(([key, value]) => {
       if (value !== undefined) {
-        // 只有当字段被明确设置为隐藏时才过滤
-        // visibility[key] === false 表示被级联规则隐藏
-        // visibility[key] === true 或 undefined 表示可见（没有级联规则或被显示）
         const isExplicitlyHidden = currentCascadeState.visibility[key] === false;
         if (!isExplicitlyHidden) {
-          filteredValues[key] = value;
+          const isOriginalData = key in originalInitialValuesRef.current;
+          const isTouched = touchedFieldsRef.current.has(key);
+          const isRenderDefault = renderDefaultFieldsRef.current.has(key);
+          if (isOriginalData || isTouched || isRenderDefault) {
+            filteredValues[key] = value;
+          }
         }
       }
     });
-    
+
     onChange?.(filteredValues);
   }, [onChange, form]);
 
@@ -439,24 +466,30 @@ const FormRenderer: React.FC<FormRendererProps> = ({
   const triggerValuesUpdate = useCallback(() => {
     const formValues = form.getFieldsValue(true);
     console.log('[FormRenderer] triggerValuesUpdate called, formValues:', formValues);
-    
+
     // 合并原始数据和表单数据
     const mergedValues = {
       ...originalInitialValuesRef.current,
       ...formValues,
     };
-    
+
     // 过滤掉值为 undefined 的字段
+    // 只输出：原始数据字段 + 用户触碰的字段 + 标记了 x-renderDefault 的字段
     const filteredValues: Record<string, unknown> = {};
     Object.entries(mergedValues).forEach(([key, value]) => {
       if (value !== undefined) {
         const isExplicitlyHidden = cascadeStateRef.current.visibility[key] === false;
         if (!isExplicitlyHidden) {
-          filteredValues[key] = value;
+          const isOriginalData = key in originalInitialValuesRef.current;
+          const isTouched = touchedFieldsRef.current.has(key);
+          const isRenderDefault = renderDefaultFieldsRef.current.has(key);
+          if (isOriginalData || isTouched || isRenderDefault) {
+            filteredValues[key] = value;
+          }
         }
       }
     });
-    
+
     onChange?.(filteredValues);
   }, [onChange, form]);
 

@@ -1330,6 +1330,20 @@
   font-size: 13px;
 }
 
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
 /* 内联编辑器标签页样式 */
 .inlineEditorTabs {
   display: flex;
