@@ -319,19 +319,21 @@ const TaskDetail: React.FC = () => {
       // For override action, the backend already creates a comment, so skip the separate comment API call
       if (commentAction === 'override') {
         await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/override-run-tasks`, {
-          comment: comment
+          comment: comment || undefined
         });
       } else {
-        // For other actions, first add the comment
-        await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/comments`, {
-          comment,
-          action_type: commentAction
-        });
+        // Add the comment only if non-empty
+        if (comment) {
+          await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/comments`, {
+            comment,
+            action_type: commentAction
+          });
+        }
 
         // Then perform the action
         if (commentAction === 'confirm_apply') {
           await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/confirm-apply`, {
-            apply_description: comment
+            apply_description: comment || undefined
           });
         } else if (commentAction === 'cancel') {
           await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/cancel`);

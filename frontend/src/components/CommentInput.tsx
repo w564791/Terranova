@@ -22,11 +22,6 @@ const CommentInput: React.FC<CommentInputProps> = ({
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
-    if (!comment.trim()) {
-      setError('Comment cannot be empty');
-      return;
-    }
-
     if (comment.length > maxLength) {
       setError(`Comment must be less than ${maxLength} characters`);
       return;
@@ -81,7 +76,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
           type="button"
           className={styles.submitButton}
           onClick={handleSubmit}
-          disabled={isSubmitting || !comment.trim()}
+          disabled={isSubmitting}
         >
           {isSubmitting ? 'Submitting...' : submitLabel}
         </button>
