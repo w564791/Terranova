@@ -129,7 +129,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
           name: formData.name,
           type: formData.type,
           source: formData.source,
-          alias: formData.alias,
+          alias: '',
           config: parsedConfig,
           version: formData.version,
           constraint_op: formData.constraint_op,
@@ -143,7 +143,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
           name: formData.name,
           type: formData.type,
           source: formData.source,
-          alias: formData.alias,
+          alias: '',
           config: parsedConfig,
           version: formData.version,
           constraint_op: formData.constraint_op,
@@ -278,9 +278,11 @@ const ProviderTemplatesAdmin: React.FC = () => {
                     value={formData.alias}
                     onChange={(e) => setFormData({ ...formData, alias: e.target.value })}
                     placeholder="例如：west, secondary"
+                    disabled
+                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
                   />
                   <span className={styles.hint}>
-                    可选。同类型存在多个 Provider 时需要设置 alias 来区分（主 Provider 不需要）
+                    Alias 只能在 Workspace Provider 设置中配置，不同 Workspace 可为同一模板分配不同的 alias
                   </span>
                 </div>
 

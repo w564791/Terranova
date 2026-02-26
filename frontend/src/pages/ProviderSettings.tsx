@@ -120,22 +120,28 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
     const template = availableTemplates.find((t) => t.id === templateId);
     if (!template) return;
 
-    const templateValue = template.config[key];
     const tidStr = String(templateId);
 
     setOverrides((prev) => {
       const templateOverrides = { ...(prev[tidStr] || {}) };
 
-      // If value matches template default, remove the override
-      const defaultStr =
-        templateValue != null && typeof templateValue === 'object'
-          ? JSON.stringify(templateValue)
-          : String(templateValue ?? '');
-      if (value === defaultStr) {
-        delete templateOverrides[key];
+      // Alias is always stored as a string and kept in overrides even when empty
+      // (empty string tells backend to clear any legacy template-level alias)
+      if (key === 'alias') {
+        templateOverrides[key] = value;
       } else {
-        // Try to parse as JSON/number/boolean for storage
-        templateOverrides[key] = parseValue(value);
+        const templateValue = template.config[key];
+        // If value matches template default, remove the override
+        const defaultStr =
+          templateValue != null && typeof templateValue === 'object'
+            ? JSON.stringify(templateValue)
+            : String(templateValue ?? '');
+        if (value === defaultStr) {
+          delete templateOverrides[key];
+        } else {
+          // Try to parse as JSON/number/boolean for storage
+          templateOverrides[key] = parseValue(value);
+        }
       }
 
       const newOverrides = { ...prev };
@@ -205,6 +211,35 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
       let payload: Record<string, any> = {};
 
       if (mode === 'template') {
+        // Validate alias uniqueness per provider type
+        const aliasErrors: string[] = [];
+        const typeAliasMap: Record<string, { aliases: string[]; defaultCount: number }> = {};
+
+        selectedTemplateIds.forEach(id => {
+          const tmpl = availableTemplates.find(t => t.id === id);
+          if (!tmpl) return;
+          if (!typeAliasMap[tmpl.type]) {
+            typeAliasMap[tmpl.type] = { aliases: [], defaultCount: 0 };
+          }
+          const alias = overrides[String(id)]?.alias ?? '';
+          if (alias) {
+            if (typeAliasMap[tmpl.type].aliases.includes(alias)) {
+              aliasErrors.push(`${tmpl.type}: alias "${alias}" 重复`);
+            }
+            typeAliasMap[tmpl.type].aliases.push(alias);
+          } else {
+            typeAliasMap[tmpl.type].defaultCount++;
+            if (typeAliasMap[tmpl.type].defaultCount > 1) {
+              aliasErrors.push(`${tmpl.type}: 只允许一个默认 Provider（无 alias），其余必须设置 alias`);
+            }
+          }
+        });
+
+        if (aliasErrors.length > 0) {
+          showToast(aliasErrors.join('; '), 'error');
+          return;
+        }
+
         payload = {
           provider_template_ids: selectedTemplateIds,
           provider_overrides: Object.keys(overrides).length > 0 ? overrides : null,
@@ -378,8 +413,8 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                             <div className={styles.templateInfo}>
                               <span className={styles.templateName}>
                                 {template.name}
-                                {template.alias && (
-                                  <span className={styles.defaultBadge}>alias: {template.alias}</span>
+                                {isSelected && templateOverrides.alias && (
+                                  <span className={styles.defaultBadge}>alias: {templateOverrides.alias}</span>
                                 )}
                                 {template.is_default && (
                                   <span className={styles.defaultBadge}>Default</span>
@@ -397,6 +432,18 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                               )}
                             </div>
                           </label>
+                          {isSelected && (
+                            <div className={styles.aliasField}>
+                              <label className={styles.aliasLabel}>alias:</label>
+                              <input
+                                type="text"
+                                className={styles.aliasInput}
+                                value={templateOverrides.alias ?? ''}
+                                onChange={(e) => handleOverrideChange(template.id, 'alias', e.target.value)}
+                                placeholder="默认 Provider（无需 alias）"
+                              />
+                            </div>
+                          )}
                           {isSelected && configKeys.length > 0 && (
                             <button
                               type="button"
@@ -419,7 +466,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                                 Modify values to override template defaults
                               </span>
                             </div>
-                            {configKeys.map((key) => {
+                            {configKeys.filter(key => key !== 'alias').map((key) => {
                               const templateValue = template.config[key];
                               const isOverridden = key in templateOverrides;
                               const rawValue = isOverridden

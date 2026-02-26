@@ -274,7 +274,12 @@ func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, over
 		// 深拷贝Config
 		config := deepCopyJSONB(tmpl.Config)
 
-		// 应用覆盖（按模板ID查找，与前端发送的 provider_overrides 结构一致）
+		// 如果模板设置了 alias，先注入（作为基础值）
+		if tmpl.Alias != "" {
+			config["alias"] = tmpl.Alias
+		}
+
+		// 应用覆盖（workspace 级别，优先级高于模板）
 		tidStr := fmt.Sprintf("%d", tmpl.ID)
 		if overrides != nil {
 			if tmplOverrides, ok := overrides[tidStr]; ok {
@@ -286,9 +291,11 @@ func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, over
 			}
 		}
 
-		// 如果模板设置了 alias，注入到 config 中（Terraform provider alias）
-		if tmpl.Alias != "" {
-			config["alias"] = tmpl.Alias
+		// 清理空 alias（workspace 显式清除或未设置时不输出 alias 字段）
+		if alias, ok := config["alias"]; ok {
+			if alias == "" || alias == nil {
+				delete(config, "alias")
+			}
 		}
 
 		// 追加到同类型 provider 数组（支持多个同类型 provider，如多个 aws 用 alias 区分）
