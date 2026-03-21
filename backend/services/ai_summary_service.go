@@ -278,21 +278,30 @@ func (s *AISummaryService) RetryApplySummary(taskID uint) error {
 // ========== internal helpers ==========
 
 func (s *AISummaryService) buildSystemPrompt(cfg *models.AIConfig, stage string) string {
-	// 检查 capability prompt
-	capKey := "summary"
-	if prompt, ok := cfg.CapabilityPrompts[capKey]; ok && prompt != "" {
-		return prompt
-	}
-
-	// skill 模式
+	// skill 模式优先
 	if cfg.Mode == "skill" && s.skillAssembler != nil {
 		composition := &cfg.SkillComposition
+		// 如果没有配置 task skill，使用默认的 execute_summary_workflow
+		if composition.TaskSkill == "" && len(composition.FoundationSkills) == 0 {
+			composition = s.getDefaultSummarySkillComposition()
+		}
 		if len(composition.FoundationSkills) > 0 || composition.TaskSkill != "" {
-			result, err := s.skillAssembler.AssemblePrompt(composition, 0, &DynamicContext{})
+			result, err := s.skillAssembler.AssemblePrompt(composition, 0, &DynamicContext{
+				ExtraContext: map[string]interface{}{
+					"stage": stage,
+				},
+			})
 			if err == nil && result.Prompt != "" {
+				log.Printf("[AISummaryService] Using skill mode prompt (skills: %v, stage: %s)", result.UsedSkillNames, stage)
 				return result.Prompt
 			}
+			log.Printf("[AISummaryService] Skill assembly failed, falling back to prompt mode: %v", err)
 		}
+	}
+
+	// prompt 模式：检查 capability prompt
+	if prompt, ok := cfg.CapabilityPrompts["summary"]; ok && prompt != "" {
+		return prompt
 	}
 
 	// 默认 prompt
@@ -300,6 +309,14 @@ func (s *AISummaryService) buildSystemPrompt(cfg *models.AIConfig, stage string)
 		return defaultApplySummaryPrompt
 	}
 	return defaultPlanSummaryPrompt
+}
+
+// getDefaultSummarySkillComposition 获取默认的 Summary Skill 组合配置
+func (s *AISummaryService) getDefaultSummarySkillComposition() *models.SkillComposition {
+	return &models.SkillComposition{
+		FoundationSkills: []string{},
+		TaskSkill:        "execute_summary_workflow",
+	}
 }
 
 func (s *AISummaryService) extractPlanChanges(planJSON models.JSONB) interface{} {
