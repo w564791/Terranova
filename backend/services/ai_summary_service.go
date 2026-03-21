@@ -348,9 +348,10 @@ func (s *AISummaryService) buildSystemPrompt(cfg *models.AIConfig, stage string)
 }
 
 // getDefaultSummarySkillComposition 获取默认的 Summary Skill 组合配置
+// 注意：foundation_skills 由用户在 AI Config UI 上配置，这里只提供 task skill 默认值
 func (s *AISummaryService) getDefaultSummarySkillComposition() *models.SkillComposition {
 	return &models.SkillComposition{
-		FoundationSkills: []string{"infrastructure_risk_baseline"},
+		FoundationSkills: []string{},
 		TaskSkill:        "execute_summary_workflow",
 	}
 }
