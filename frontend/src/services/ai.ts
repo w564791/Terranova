@@ -120,6 +120,77 @@ export const getTaskAnalysis = async (
   return response.data;
 };
 
+// ========== Execute Summary ==========
+
+export interface PlanSummary {
+  id: string;
+  task_id: number;
+  workspace_id: string;
+  changes_overview: string;
+  impact_analysis: any;
+  affected_resources: any[];
+  risk_level: string;
+  module_context: any;
+  plan_changes: any;
+  cmdb_lookups: any;
+  tool_calls: any;
+  status: string;
+  error_message?: string;
+  duration: number;
+  created_at: string;
+}
+
+export interface ApplySummary {
+  id: string;
+  task_id: number;
+  workspace_id: string;
+  execution_summary: string;
+  resource_results: any[];
+  impact_confirmation: any;
+  affected_resources: any[];
+  apply_changes: any;
+  cmdb_lookups: any;
+  tool_calls: any;
+  status: string;
+  error_message?: string;
+  duration: number;
+  created_at: string;
+}
+
+// 获取 Plan Summary
+export const getPlanSummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<PlanSummary> => {
+  const response = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary`);
+  return response.data;
+};
+
+// 获取 Apply Summary
+export const getApplySummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<ApplySummary> => {
+  const response = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/apply-summary`);
+  return response.data;
+};
+
+// 重试 Plan Summary
+export const retryPlanSummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<void> => {
+  await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/retry`);
+};
+
+// 重试 Apply Summary
+export const retryApplySummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<void> => {
+  await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/apply-summary/retry`);
+};
+
 // 优先级更新接口
 export interface PriorityUpdate {
   id: number;

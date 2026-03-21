@@ -1,0 +1,390 @@
+.container {
+  margin-top: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #f0f9ff;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  user-select: none;
+}
+
+.header:hover {
+  background-color: #e0f2fe;
+}
+
+.headerIcon {
+  font-size: 16px;
+}
+
+.headerTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.expandToggle {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.loadingInline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.content {
+  padding: 16px;
+  background-color: #f9fafb;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.errorBlock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: #fee2e2;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+}
+
+.errorMessage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: #991b1b;
+  font-size: 14px;
+}
+
+.errorIcon {
+  font-size: 18px;
+  color: #991b1b;
+}
+
+.retryButton {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  background-color: #10b981;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.retryButton:hover {
+  background-color: #059669;
+}
+
+.retryButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Result sections - consistent with AIErrorAnalysis */
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.sectionContent {
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.6;
+}
+
+.sectionContent p {
+  margin: 0 0 8px 0;
+}
+
+.sectionContent p:last-child {
+  margin-bottom: 0;
+}
+
+/* Risk badges - same palette as severity in AIErrorAnalysis */
+
+.riskBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.riskCritical {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.riskHigh {
+  background-color: #fed7aa;
+  color: #9a3412;
+}
+
+.riskMedium {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.riskLow {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.failedBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* Impact analysis details */
+
+.detailsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.detailItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.detailResource {
+  font-family: monospace;
+  font-size: 12px;
+  color: #1e40af;
+  background-color: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.detailAction {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.detailImpact {
+  color: #374151;
+  flex: 1;
+}
+
+.detailDeps {
+  font-size: 12px;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* Affected resources list */
+
+.affectedList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.affectedItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.affectedAddress {
+  font-family: monospace;
+  font-size: 12px;
+  color: #9a3412;
+}
+
+.affectedType {
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.affectedImpact {
+  color: #374151;
+  flex: 1;
+}
+
+/* Resource results (apply) */
+
+.resourceResultsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.resourceResultItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.resourceAddress {
+  font-family: monospace;
+  font-size: 12px;
+  color: #1f2937;
+  flex: 1;
+}
+
+.resourceAction {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.actioncreate {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.actionupdate {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.actiondelete {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.statusSuccess {
+  color: #059669;
+  font-weight: 500;
+}
+
+.statusFailed {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* Unexpected changes */
+
+.unexpectedChanges {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background-color: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+}
+
+.unexpectedTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #9a3412;
+  margin-bottom: 4px;
+}
+
+.unexpectedChanges ul {
+  margin: 4px 0 0 0;
+  padding-left: 20px;
+}
+
+.unexpectedChanges li {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.duration {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: right;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .detailItem,
+  .affectedItem,
+  .resourceResultItem {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .content {
+    padding: 12px;
+  }
+}

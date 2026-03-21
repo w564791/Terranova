@@ -4,6 +4,7 @@ import RunTaskResults from './RunTaskResults';
 import StructuredRunOutput from './StructuredRunOutput';
 import SmartLogViewer from './SmartLogViewer';
 import AIErrorAnalysis from './AIErrorAnalysis';
+import ExecuteSummary from './ExecuteSummary';
 import { parseBackendTime } from '../utils/time';
 
 interface Task {
@@ -342,6 +343,15 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
               workspace={workspace}
               mode="plan"
             />
+            {/* Plan Summary - plan 完成后自动展示 */}
+            {(planStatus === 'passed' || planStatus === 'failed') && (
+              <ExecuteSummary
+                workspaceId={workspaceId}
+                taskId={task.id}
+                stage="plan"
+                defaultExpanded={true}
+              />
+            )}
           </div>
         )}
       </div>
@@ -440,6 +450,15 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
                 workspace={workspace}
                 mode="apply"
               />
+              {/* Apply Summary - apply 完成后自动展示 */}
+              {(applyStatus === 'passed' || applyStatus === 'failed') && (
+                <ExecuteSummary
+                  workspaceId={workspaceId}
+                  taskId={task.id}
+                  stage="apply"
+                  defaultExpanded={true}
+                />
+              )}
             </div>
           )}
         </div>
