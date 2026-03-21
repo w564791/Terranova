@@ -1,6 +1,6 @@
 # IaC平台开发工具
 
-.PHONY: help dev-up dev-down db-init db-reset logs test vet check \
+.PHONY: help dev-up dev-down dev-down-all db-init db-reset logs test vet check \
 	build-server build-agent build-all \
 	docker-build docker-build-frontend docker-build-agent docker-build-db-init docker-build-all \
 	docker-push docker-push-frontend docker-push-agent docker-push-db-init docker-push-all \
@@ -64,11 +64,18 @@ dev-up: ## 启动开发环境（仅数据库容器 + 本地后端 + 本地前端
 	@echo "  数据库: localhost:$(DB_PORT)"
 	@echo "=========================================="
 
-dev-down: ## 停止开发环境（停止数据库容器 + 杀掉本地进程）
-	@echo "停止开发环境..."
+dev-down: ## 停止本地前后端进程（保留数据库容器）
+	@echo "停止本地进程..."
+	-@pkill -f "go run main.go" 2>/dev/null || true
+	-@pkill -f "vite" 2>/dev/null || true
+	@echo "  [OK] 本地进程已停止（数据库容器保留运行）"
+
+dev-down-all: ## 停止所有（本地进程 + 数据库容器）
+	@echo "停止所有服务..."
 	-@pkill -f "go run main.go" 2>/dev/null || true
 	-@pkill -f "vite" 2>/dev/null || true
 	docker compose down
+	@echo "  [OK] 全部停止"
 
 db-init: ## 初始化数据库
 	@echo "初始化数据库..."
