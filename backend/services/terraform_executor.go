@@ -1172,19 +1172,6 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	logger.StageEnd("saving_plan")
 
-	// 异步触发 Plan Summary（不阻塞主流程）
-	if s.db != nil && (task.ChangesAdd+task.ChangesChange+task.ChangesDestroy) > 0 {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("[PANIC] Plan summary generation panicked for task %d: %v", task.ID, r)
-				}
-			}()
-			summaryService := NewAISummaryService(s.db)
-			summaryService.GeneratePlanSummary(task.ID)
-		}()
-	}
-
 	// ========== 阶段4.5: Post-Plan Run Tasks ==========
 	// 在 Plan 数据保存后执行 post_plan 阶段的 Run Tasks
 	// Run Task 需要访问 plan_json 来分析变更，所以必须在保存后执行
@@ -1384,6 +1371,20 @@ func (s *TerraformExecutor) ExecutePlan(
 	s.saveTaskLog(task.ID, "plan", planOutput, "info")
 
 	log.Printf("Task %d plan output saved (%d bytes)", task.ID, len(planOutput))
+
+	// 异步触发 Plan Summary（不阻塞主流程）
+	// 注意：必须在 task changes 字段保存到 DB 之后触发，否则 summary 服务查到的 changes 为 0
+	if s.db != nil && (task.ChangesAdd+task.ChangesChange+task.ChangesDestroy) > 0 {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[PANIC] Plan summary generation panicked for task %d: %v", task.ID, r)
+				}
+			}()
+			summaryService := NewAISummaryService(s.db)
+			summaryService.GeneratePlanSummary(task.ID)
+		}()
+	}
 
 	// 【Phase 1优化】Plan完成后不清理工作目录，保留给Apply使用
 	logger.Info("Preserving work directory for potential apply: %s", workDir)
