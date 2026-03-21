@@ -805,13 +805,14 @@ const AIConfigForm = () => {
             </div>
           )}
 
-          {/* Skill 模式配置（form_generation、module_skill_generation、cmdb_query_plan、cmdb_need_assessment、intent_assertion 能力显示） */}
-          {(formData.capabilities.includes('*') || 
+          {/* Skill 模式配置 */}
+          {(formData.capabilities.includes('*') ||
             formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) ||
             formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) ||
             formData.capabilities.includes(CAPABILITIES.CMDB_QUERY_PLAN) ||
             formData.capabilities.includes(CAPABILITIES.CMDB_NEED_ASSESSMENT) ||
-            formData.capabilities.includes(CAPABILITIES.INTENT_ASSERTION)) && (
+            formData.capabilities.includes(CAPABILITIES.INTENT_ASSERTION) ||
+            formData.capabilities.includes(CAPABILITIES.SUMMARY)) && (
             <div style={{ 
               border: '1px solid #722ed1', 
               borderRadius: '8px', 
