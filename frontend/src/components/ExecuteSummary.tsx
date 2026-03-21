@@ -351,7 +351,7 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
                     <span className={styles.resourceAddress}>{r.address}</span>
                     <span className={`${styles.resourceAction} ${styles[`action${r.action}`]}`}>{r.action}</span>
                     <span className={`${styles.resourceStatus} ${r.status === 'success' ? styles.statusSuccess : styles.statusFailed}`}>
-                      {r.status === 'success' ? '✓' : '✗'} {r.status}
+                      {r.status}
                     </span>
                   </div>
                 </div>
