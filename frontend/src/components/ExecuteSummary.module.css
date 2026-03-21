@@ -1,23 +1,20 @@
 .container {
-  margin-top: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  background-color: #f0f9ff;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 4px 0;
   cursor: pointer;
   user-select: none;
 }
 
-.header:hover {
-  background-color: #e0f2fe;
+.header:hover .headerTitle {
+  color: #1d4ed8;
 }
 
 .headerTitle {
@@ -41,8 +38,7 @@
 }
 
 .content {
-  padding: 16px;
-  background-color: #f9fafb;
+  padding: 8px 0 0 0;
 }
 
 .loading {
@@ -412,6 +408,6 @@
   }
 
   .content {
-    padding: 12px;
+    padding: 8px 0 0 0;
   }
 }

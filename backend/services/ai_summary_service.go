@@ -348,8 +348,14 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		RiskLevel         string      `json:"risk_level"`
 	}
 
+	log.Printf("[AISummaryService] AI raw output for task %d (len=%d): %.500s", summary.TaskID, len(result.FinalOutput), result.FinalOutput)
+
 	outputText := extractJSON(result.FinalOutput)
-	json.Unmarshal([]byte(outputText), &aiOutput)
+	if err := json.Unmarshal([]byte(outputText), &aiOutput); err != nil {
+		log.Printf("[AISummaryService] Failed to parse AI output as JSON for task %d: %v, extracted text (len=%d): %.300s", summary.TaskID, err, len(outputText), outputText)
+		// AI 输出不是标准 JSON，直接把原文作为 changes_overview
+		aiOutput.ChangesOverview = result.FinalOutput
+	}
 
 	summary.ChangesOverview = aiOutput.ChangesOverview
 	if aiOutput.ImpactAnalysis != nil {
@@ -380,8 +386,13 @@ func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, 
 		AffectedResources   interface{} `json:"affected_resources"`
 	}
 
+	log.Printf("[AISummaryService] AI raw output for apply task %d (len=%d): %.500s", summary.TaskID, len(result.FinalOutput), result.FinalOutput)
+
 	outputText := extractJSON(result.FinalOutput)
-	json.Unmarshal([]byte(outputText), &aiOutput)
+	if err := json.Unmarshal([]byte(outputText), &aiOutput); err != nil {
+		log.Printf("[AISummaryService] Failed to parse AI output as JSON for apply task %d: %v", summary.TaskID, err)
+		aiOutput.ExecutionSummary = result.FinalOutput
+	}
 
 	summary.ExecutionSummary = aiOutput.ExecutionSummary
 	if aiOutput.ResourceResults != nil {
