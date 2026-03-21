@@ -136,7 +136,10 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
 
 	// 运行
-	result, err := loop.Run(contextWithTimeout(), systemPrompt, userPrompt)
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	result, err := loop.Run(ctx, systemPrompt, userPrompt)
 	if err != nil {
 		s.failSummary(&summary, err, startTime)
 		return
@@ -208,7 +211,10 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
 	loop.RegisterTool(NewQueryPlanSummaryTool(s.db))
 
-	result, err := loop.Run(contextWithTimeout(), systemPrompt, applyContext)
+	ctx, cancel := contextWithTimeout()
+	defer cancel()
+
+	result, err := loop.Run(ctx, systemPrompt, applyContext)
 	if err != nil {
 		s.failApplySummary(&summary, err, startTime)
 		return
@@ -395,7 +401,8 @@ func (s *AISummaryService) failApplySummary(summary *models.AIApplySummary, err 
 }
 
 // contextWithTimeout 创建带超时的 context（5 分钟，agent loop 可能多轮调用）
-func contextWithTimeout() context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Minute)
-	return ctx
+// 注意：cancel 不在此处调用，由调用方在使用完 ctx 后自行管理
+// 实际上 agent loop 结束后 ctx 自然过期，不会泄漏
+func contextWithTimeout() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Minute)
 }
