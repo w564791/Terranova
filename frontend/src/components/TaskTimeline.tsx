@@ -338,14 +338,13 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
               </>
             )}
             {/* Plan Summary - plan 完成后自动展示，放在资源详情上方 */}
-            {(planStatus === 'passed' || planStatus === 'failed') && (
-              <ExecuteSummary
-                workspaceId={workspaceId}
-                taskId={task.id}
-                stage="plan"
-                defaultExpanded={true}
-              />
-            )}
+            {/* Plan Summary - 任何状态都尝试展示，组件内部处理 404 */}
+            <ExecuteSummary
+              workspaceId={workspaceId}
+              taskId={task.id}
+              stage="plan"
+              defaultExpanded={true}
+            />
             <StructuredRunOutput
               task={task}
               workspaceId={workspaceId}
@@ -450,15 +449,13 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
                 workspace={workspace}
                 mode="apply"
               />
-              {/* Apply Summary - apply 完成后自动展示，放在资源详情下方 */}
-              {(applyStatus === 'passed' || applyStatus === 'failed') && (
-                <ExecuteSummary
-                  workspaceId={workspaceId}
-                  taskId={task.id}
-                  stage="apply"
-                  defaultExpanded={true}
-                />
-              )}
+              {/* Apply Summary - 任何状态都尝试展示，组件内部处理 404 */}
+              <ExecuteSummary
+                workspaceId={workspaceId}
+                taskId={task.id}
+                stage="apply"
+                defaultExpanded={true}
+              />
             </div>
           )}
         </div>
