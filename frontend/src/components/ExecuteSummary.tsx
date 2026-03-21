@@ -333,12 +333,12 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
             {showResults ? '∧' : '∨'} 资源执行结果（{resultsCount} 项）
           </div>
           {showResults && (
-            <div className={styles.resourceResultsList}>
+            <div className={styles.detailsList}>
               {summary.resource_results.map((r: any, i: number) => (
-                <div key={i} className={styles.resourceResultItem}>
+                <div key={i} className={styles.detailItem}>
                   <div className={styles.detailHeader}>
-                    <span className={styles.resourceAddress}>{r.address}</span>
-                    <span className={`${styles.resourceAction} ${styles[`action${r.action}`]}`}>{r.action}</span>
+                    <span className={styles.detailResource}>{r.address}</span>
+                    <span className={styles.detailAction}>{r.action}</span>
                     <span className={`${styles.resourceStatus} ${r.status === 'success' ? styles.statusSuccess : styles.statusFailed}`}>
                       {r.status}
                     </span>
