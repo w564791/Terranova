@@ -1172,6 +1172,19 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	logger.StageEnd("saving_plan")
 
+	// 异步触发 Plan Summary（不阻塞主流程）
+	if s.db != nil && (task.ChangesAdd+task.ChangesChange+task.ChangesDestroy) > 0 {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[PANIC] Plan summary generation panicked for task %d: %v", task.ID, r)
+				}
+			}()
+			summaryService := NewAISummaryService(s.db)
+			summaryService.GeneratePlanSummary(task.ID)
+		}()
+	}
+
 	// ========== 阶段4.5: Post-Plan Run Tasks ==========
 	// 在 Plan 数据保存后执行 post_plan 阶段的 Run Tasks
 	// Run Task 需要访问 plan_json 来分析变更，所以必须在保存后执行
@@ -2575,6 +2588,20 @@ func (s *TerraformExecutor) ExecuteApply(
 	// 这样可以确保 Local、Agent、K8s Agent 三种模式都能正确同步
 
 	log.Printf("Task %d applied successfully", task.ID)
+
+	// 异步触发 Apply Summary（不阻塞主流程）
+	// 注意：仅在成功路径触发，saving_state 错误路径不触发
+	if s.db != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[PANIC] Apply summary generation panicked for task %d: %v", task.ID, r)
+				}
+			}()
+			summaryService := NewAISummaryService(s.db)
+			summaryService.GenerateApplySummary(task.ID)
+		}()
+	}
 
 	// ========== Post-Apply Run Tasks ==========
 	// 注意：post_apply 阶段 apply 已经完成，mandatory 失败不应回滚 apply 状态，仅记录警告
