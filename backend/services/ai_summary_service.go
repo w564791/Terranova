@@ -134,6 +134,7 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db))
 	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
 	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
+	loop.SetOutputValidator(planSummaryValidator)
 
 	// 运行
 	ctx, cancel := contextWithTimeout()
@@ -210,6 +211,7 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
 	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
 	loop.RegisterTool(NewQueryPlanSummaryTool(s.db))
+	loop.SetOutputValidator(applySummaryValidator)
 
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
@@ -276,6 +278,40 @@ func (s *AISummaryService) RetryApplySummary(taskID uint) error {
 }
 
 // ========== internal helpers ==========
+
+// planSummaryValidator 验证 Plan Summary 的 AI 输出
+var planSummaryValidator OutputValidator = func(output string) error {
+	text := extractJSON(output)
+	var parsed struct {
+		ChangesOverview string `json:"changes_overview"`
+		RiskLevel       string `json:"risk_level"`
+	}
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		return fmt.Errorf("输出不是有效的 JSON 格式，请确保输出纯 JSON（不要包含 markdown 代码块标记）")
+	}
+	if parsed.ChangesOverview == "" {
+		return fmt.Errorf("缺少 changes_overview 字段，请确保包含变更概述")
+	}
+	if parsed.RiskLevel == "" {
+		return fmt.Errorf("缺少 risk_level 字段，请确保包含风险等级（low/medium/high/critical）")
+	}
+	return nil
+}
+
+// applySummaryValidator 验证 Apply Summary 的 AI 输出
+var applySummaryValidator OutputValidator = func(output string) error {
+	text := extractJSON(output)
+	var parsed struct {
+		ExecutionSummary string `json:"execution_summary"`
+	}
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		return fmt.Errorf("输出不是有效的 JSON 格式，请确保输出纯 JSON（不要包含 markdown 代码块标记）")
+	}
+	if parsed.ExecutionSummary == "" {
+		return fmt.Errorf("缺少 execution_summary 字段，请确保包含执行总结")
+	}
+	return nil
+}
 
 func (s *AISummaryService) buildSystemPrompt(cfg *models.AIConfig, stage string) string {
 	// skill 模式优先

@@ -72,10 +72,17 @@ type AgentLoopResult struct {
 }
 
 // AIAgentLoop 通用 AI Agent 循环
+// OutputValidator 输出验证器 — 验证 AI 最终输出是否符合预期
+// 返回 nil 表示通过，返回 error 表示需要 AI 重试（error message 会反馈给 AI）
+type OutputValidator func(output string) error
+
+// AIAgentLoop 通用 AI Agent 循环
 type AIAgentLoop struct {
-	aiCaller      AICaller
-	tools         map[string]AgentTool
-	maxIterations int
+	aiCaller        AICaller
+	tools           map[string]AgentTool
+	maxIterations   int
+	outputValidator OutputValidator
+	maxRetries      int // 输出验证失败时的最大重试次数
 }
 
 // NewAIAgentLoop 创建 Agent Loop
@@ -87,6 +94,19 @@ func NewAIAgentLoop(caller AICaller, maxIterations int) *AIAgentLoop {
 		aiCaller:      caller,
 		tools:         make(map[string]AgentTool),
 		maxIterations: maxIterations,
+		maxRetries:    2, // 默认最多重试 2 次
+	}
+}
+
+// SetOutputValidator 设置输出验证器
+func (loop *AIAgentLoop) SetOutputValidator(validator OutputValidator) {
+	loop.outputValidator = validator
+}
+
+// SetMaxRetries 设置输出验证失败时的最大重试次数
+func (loop *AIAgentLoop) SetMaxRetries(n int) {
+	if n > 0 && n <= 5 {
+		loop.maxRetries = n
 	}
 }
 
@@ -104,6 +124,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 	toolDefs := loop.buildToolDefs()
 	var allToolCalls []AgentToolCallRecord
+	retryCount := 0
 
 	for i := 0; i < loop.maxIterations; i++ {
 		if ctx.Err() != nil {
@@ -117,6 +138,27 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 		// AI 返回纯文本 = 决定结束
 		if len(response.ToolCalls) == 0 {
+			// 如果设置了输出验证器，验证输出格式
+			if loop.outputValidator != nil {
+				if validationErr := loop.outputValidator(response.Content); validationErr != nil {
+					retryCount++
+					if retryCount <= loop.maxRetries {
+						log.Printf("[AIAgentLoop] Output validation failed (retry %d/%d): %v", retryCount, loop.maxRetries, validationErr)
+						// 把验证错误反馈给 AI，让它修正
+						messages = append(messages, AgentMessage{
+							Role:    "assistant",
+							Content: response.Content,
+						})
+						messages = append(messages, AgentMessage{
+							Role:    "user",
+							Content: fmt.Sprintf("你的输出格式不正确: %s\n请严格按照要求的 JSON 格式重新输出。", validationErr.Error()),
+						})
+						continue
+					}
+					log.Printf("[AIAgentLoop] Output validation still failing after %d retries, accepting as-is", loop.maxRetries)
+				}
+			}
+
 			return &AgentLoopResult{
 				FinalOutput: response.Content,
 				ToolCalls:   allToolCalls,
