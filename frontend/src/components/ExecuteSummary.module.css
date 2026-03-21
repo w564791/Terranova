@@ -216,13 +216,19 @@
 
 .detailItem {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   padding: 8px 12px;
   background-color: white;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   font-size: 13px;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -242,8 +248,9 @@
 }
 
 .detailImpact {
+  font-size: 13px;
   color: #374151;
-  flex: 1;
+  line-height: 1.5;
 }
 
 .detailDeps {
@@ -263,13 +270,19 @@
 
 .affectedItem {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
   background-color: #fff7ed;
   border: 1px solid #fed7aa;
   border-radius: 6px;
   font-size: 13px;
+}
+
+.affectedHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -288,8 +301,9 @@
 }
 
 .affectedImpact {
+  font-size: 13px;
   color: #374151;
-  flex: 1;
+  line-height: 1.5;
 }
 
 /* Resource results (apply) */

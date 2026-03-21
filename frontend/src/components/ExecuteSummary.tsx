@@ -239,12 +239,14 @@ const PlanSummaryResult: React.FC<{
                   <div className={styles.detailsList}>
                     {summary.impact_analysis.details.map((d: any, i: number) => (
                       <div key={i} className={styles.detailItem}>
-                        <span className={styles.detailResource}>{d.resource}</span>
-                        <span className={styles.detailAction}>{d.action}</span>
-                        <span className={styles.detailImpact}>{d.impact}</span>
-                        {d.dependencies_affected > 0 && (
-                          <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
-                        )}
+                        <div className={styles.detailHeader}>
+                          <span className={styles.detailResource}>{d.resource}</span>
+                          <span className={styles.detailAction}>{d.action}</span>
+                          {d.dependencies_affected > 0 && (
+                            <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
+                          )}
+                        </div>
+                        {d.impact && <div className={styles.detailImpact}>{d.impact}</div>}
                       </div>
                     ))}
                   </div>
@@ -265,9 +267,11 @@ const PlanSummaryResult: React.FC<{
             <div className={styles.affectedList}>
               {summary.affected_resources.map((r: any, i: number) => (
                 <div key={i} className={styles.affectedItem}>
-                  <span className={styles.affectedAddress}>{r.address}</span>
-                  <span className={styles.affectedType}>{r.type}</span>
-                  <span className={styles.affectedImpact}>{r.impact}</span>
+                  <div className={styles.affectedHeader}>
+                    <span className={styles.affectedAddress}>{r.address}</span>
+                    <span className={styles.affectedType}>{r.type}</span>
+                  </div>
+                  {r.impact && <div className={styles.affectedImpact}>{r.impact}</div>}
                 </div>
               ))}
             </div>
