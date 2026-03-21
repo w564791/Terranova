@@ -444,7 +444,13 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
                   )}
                 </>
               )}
-              {/* Apply Summary - apply 完成后自动展示，放在资源详情上方 */}
+              <StructuredRunOutput
+                task={task}
+                workspaceId={workspaceId}
+                workspace={workspace}
+                mode="apply"
+              />
+              {/* Apply Summary - apply 完成后自动展示，放在资源详情下方 */}
               {(applyStatus === 'passed' || applyStatus === 'failed') && (
                 <ExecuteSummary
                   workspaceId={workspaceId}
@@ -453,12 +459,6 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
                   defaultExpanded={true}
                 />
               )}
-              <StructuredRunOutput
-                task={task}
-                workspaceId={workspaceId}
-                workspace={workspace}
-                mode="apply"
-              />
             </div>
           )}
         </div>
