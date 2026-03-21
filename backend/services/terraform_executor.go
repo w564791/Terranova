@@ -1372,6 +1372,20 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	log.Printf("Task %d plan output saved (%d bytes)", task.ID, len(planOutput))
 
+	// 异步触发 Plan Summary（不阻塞主流程）
+	// 注意：必须在 task changes 字段保存到 DB 之后触发，否则 summary 服务查到的 changes 为 0
+	if s.db != nil && (task.ChangesAdd+task.ChangesChange+task.ChangesDestroy) > 0 {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[PANIC] Plan summary generation panicked for task %d: %v", task.ID, r)
+				}
+			}()
+			summaryService := NewAISummaryService(s.db)
+			summaryService.GeneratePlanSummary(task.ID)
+		}()
+	}
+
 	// 【Phase 1优化】Plan完成后不清理工作目录，保留给Apply使用
 	logger.Info("Preserving work directory for potential apply: %s", workDir)
 	log.Printf("Task %d: Work directory preserved at %s (plan_hash: %s)", task.ID, workDir, task.PlanHash[:16]+"...")
@@ -2575,6 +2589,20 @@ func (s *TerraformExecutor) ExecuteApply(
 	// 这样可以确保 Local、Agent、K8s Agent 三种模式都能正确同步
 
 	log.Printf("Task %d applied successfully", task.ID)
+
+	// 异步触发 Apply Summary（不阻塞主流程）
+	// 注意：仅在成功路径触发，saving_state 错误路径不触发
+	if s.db != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[PANIC] Apply summary generation panicked for task %d: %v", task.ID, r)
+				}
+			}()
+			summaryService := NewAISummaryService(s.db)
+			summaryService.GenerateApplySummary(task.ID)
+		}()
+	}
 
 	// ========== Post-Apply Run Tasks ==========
 	// 注意：post_apply 阶段 apply 已经完成，mandatory 失败不应回滚 apply 状态，仅记录警告

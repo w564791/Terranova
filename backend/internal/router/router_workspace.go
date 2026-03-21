@@ -206,6 +206,43 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			aiController.GetTaskAnalysis,
 		)
 
+		// AI Summary endpoints
+		summaryController := controllers.NewAISummaryController(db)
+		workspaces.GET("/:id/tasks/:task_id/plan-summary",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+			}),
+			summaryController.GetPlanSummary,
+		)
+		workspaces.GET("/:id/tasks/:task_id/apply-summary",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+				{ResourceType: "TASK_DATA_ACCESS", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+			}),
+			summaryController.GetApplySummary,
+		)
+		workspaces.POST("/:id/tasks/:task_id/plan-summary/retry",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			summaryController.RetryPlanSummary,
+		)
+		workspaces.POST("/:id/tasks/:task_id/apply-summary/retry",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			summaryController.RetryApplySummary,
+		)
+
 		workspaces.GET("/:id/tasks/:task_id/state-backup",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},

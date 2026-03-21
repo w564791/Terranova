@@ -169,12 +169,12 @@ const TextWidget: React.FC<WidgetProps> = ({
   // 处理输入变化 - 检测 / 触发引用选择器
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
-    
+
     // 检测 "/" 触发引用选择器（支持 Manifest 和 Workspace 资源引用）
     if (hasReferenceContext && newValue.endsWith('/')) {
-      // 保存 / 之前的值
+      // 保存 / 之前的值（不含 /）
       valueBeforeSlashRef.current = newValue.slice(0, -1);
-      
+
       // 获取输入框位置
       const inputElement = inputRef.current?.input;
       if (inputElement) {
@@ -185,22 +185,22 @@ const TextWidget: React.FC<WidgetProps> = ({
         });
       }
       setReferencePopoverOpen(true);
-      setPendingSlashRemoval(true);
+      // 不再立即移除 /，让用户继续输入（如 CIDR 10.0.0.0/8）
+      // / 只在用户选择引用时才被替换
     }
-    
-    // 让 Form.Item 自动处理值更新
-  }, [hasReferenceContext]);
 
-  // 使用 getValueFromEvent 来处理值转换，移除末尾的 /
-  const getValueFromEvent = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // 如果正在等待移除 /，返回移除 / 后的值
-    if (pendingSlashRemoval && value.endsWith('/')) {
-      setPendingSlashRemoval(false);
-      return value.slice(0, -1);
+    // 用户继续输入（如空格或数字）= 不是想选引用，关闭菜单
+    if (referencePopoverOpen && !newValue.endsWith('/')) {
+      setReferencePopoverOpen(false);
     }
-    return value;
-  }, [pendingSlashRemoval]);
+
+    // 让 Form.Item 自动处理值更新
+  }, [hasReferenceContext, referencePopoverOpen]);
+
+  // getValueFromEvent 直接返回值，不再自动移除 /
+  const getValueFromEvent = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    return e.target.value;
+  }, []);
 
   // 处理引用选择
   const handleReferenceSelect = useCallback((reference: string, sourceNodeId: string, outputName: string) => {

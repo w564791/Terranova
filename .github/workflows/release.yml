@@ -239,7 +239,7 @@ jobs:
       - name: Load changelog
         id: changelog
         run: |
-          CHANGELOG_FILE="release/changelog-${{ steps.version.outputs.VERSION }}.md"
+          CHANGELOG_FILE="changelog/changelog-${{ steps.version.outputs.VERSION }}.md"
           if [ -f "$CHANGELOG_FILE" ]; then
             # Write to GITHUB_OUTPUT using heredoc delimiter
             {

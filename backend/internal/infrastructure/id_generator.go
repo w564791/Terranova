@@ -128,6 +128,18 @@ func GenerateVariableID() (string, error) {
 	return generateRandomID("var", 16)
 }
 
+// GeneratePlanSummaryID 生成Plan Summary ID
+// 格式: plsm-{16位随机小写字母+数字}
+func GeneratePlanSummaryID() (string, error) {
+	return generateRandomID("plsm", 16)
+}
+
+// GenerateApplySummaryID 生成Apply Summary ID
+// 格式: apsm-{16位随机小写字母+数字}
+func GenerateApplySummaryID() (string, error) {
+	return generateRandomID("apsm", 16)
+}
+
 // generateRandomID 生成指定前缀和长度的随机ID
 func generateRandomID(prefix string, length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
