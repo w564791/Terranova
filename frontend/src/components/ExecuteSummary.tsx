@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
@@ -101,7 +101,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-          <span className={styles.headerIcon}>📊</span>
+          <span className={styles.headerIcon}>|</span>
           <span className={styles.headerTitle}>{stageLabel}</span>
           <div className={styles.loadingInline}>
             <div className={styles.spinner} />
@@ -120,7 +120,6 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
   return (
     <div className={styles.container}>
       <div className={styles.header} onClick={() => setExpanded(prev => !prev)}>
-        <span className={styles.headerIcon}>📊</span>
         <span className={styles.headerTitle}>{stageLabel}</span>
 
         {summary?.status === 'completed' && 'risk_level' in summary && (summary as PlanSummary).risk_level && (
@@ -206,71 +205,90 @@ const PlanSummaryResult: React.FC<{
   summary: PlanSummary;
   getRiskColor: (level: string) => string;
   getRiskLabel: (level: string) => string;
-}> = ({ summary, getRiskColor, getRiskLabel }) => (
-  <div className={styles.result}>
-    {/* 变更概述 */}
-    {summary.changes_overview && (
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>变更概述</div>
-        <div className={styles.sectionContent}>{summary.changes_overview}</div>
-      </div>
-    )}
+}> = ({ summary, getRiskColor, getRiskLabel }) => {
+  const [showDetails, setShowDetails] = useState(false);
+  const [showAffected, setShowAffected] = useState(false);
 
-    {/* 影响分析 */}
-    {summary.impact_analysis && (
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>影响分析</div>
-        <div className={styles.sectionContent}>
-          {typeof summary.impact_analysis === 'object' && summary.impact_analysis.summary && (
-            <p>{summary.impact_analysis.summary}</p>
-          )}
-          {summary.impact_analysis.details && Array.isArray(summary.impact_analysis.details) && (
-            <div className={styles.detailsList}>
-              {summary.impact_analysis.details.map((d: any, i: number) => (
-                <div key={i} className={styles.detailItem}>
-                  <span className={styles.detailResource}>{d.resource}</span>
-                  <span className={styles.detailAction}>{d.action}</span>
-                  <span className={styles.detailImpact}>{d.impact}</span>
-                  {d.dependencies_affected > 0 && (
-                    <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
-                  )}
+  const detailsCount = summary.impact_analysis?.details?.length || 0;
+  const affectedCount = summary.affected_resources?.length || 0;
+
+  return (
+    <div className={styles.result}>
+      {/* 变更概述 — 始终展示 */}
+      {summary.changes_overview && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>变更概述</div>
+          <div className={styles.sectionContent}>{summary.changes_overview}</div>
+        </div>
+      )}
+
+      {/* 影响分析 — 摘要始终展示，详情默认折叠 */}
+      {summary.impact_analysis && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>影响分析</div>
+          <div className={styles.sectionContent}>
+            {typeof summary.impact_analysis === 'object' && summary.impact_analysis.summary && (
+              <p>{summary.impact_analysis.summary}</p>
+            )}
+            {summary.impact_analysis.details && Array.isArray(summary.impact_analysis.details) && detailsCount > 0 && (
+              <>
+                <div className={styles.collapseToggle} onClick={() => setShowDetails(!showDetails)}>
+                  {showDetails ? '∧' : '∨'} 资源变更详情（{detailsCount} 项）
+                </div>
+                {showDetails && (
+                  <div className={styles.detailsList}>
+                    {summary.impact_analysis.details.map((d: any, i: number) => (
+                      <div key={i} className={styles.detailItem}>
+                        <span className={styles.detailResource}>{d.resource}</span>
+                        <span className={styles.detailAction}>{d.action}</span>
+                        <span className={styles.detailImpact}>{d.impact}</span>
+                        {d.dependencies_affected > 0 && (
+                          <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 受影响资源 — 默认折叠 */}
+      {summary.affected_resources && Array.isArray(summary.affected_resources) && affectedCount > 0 && (
+        <div className={styles.section}>
+          <div className={styles.collapseToggle} onClick={() => setShowAffected(!showAffected)}>
+            {showAffected ? '∧' : '∨'} 受影响的依赖资源（{affectedCount} 项）
+          </div>
+          {showAffected && (
+            <div className={styles.affectedList}>
+              {summary.affected_resources.map((r: any, i: number) => (
+                <div key={i} className={styles.affectedItem}>
+                  <span className={styles.affectedAddress}>{r.address}</span>
+                  <span className={styles.affectedType}>{r.type}</span>
+                  <span className={styles.affectedImpact}>{r.impact}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </div>
-    )}
+      )}
 
-    {/* 受影响资源 */}
-    {summary.affected_resources && Array.isArray(summary.affected_resources) && summary.affected_resources.length > 0 && (
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>受影响的依赖资源</div>
-        <div className={styles.affectedList}>
-          {summary.affected_resources.map((r: any, i: number) => (
-            <div key={i} className={styles.affectedItem}>
-              <span className={styles.affectedAddress}>{r.address}</span>
-              <span className={styles.affectedType}>{r.type}</span>
-              <span className={styles.affectedImpact}>{r.impact}</span>
-            </div>
-          ))}
+      {/* 风险等级 — 始终展示 */}
+      {summary.risk_level && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>风险等级</div>
+          <div className={styles.sectionContent}>
+            <span className={`${styles.riskBadge} ${getRiskColor(summary.risk_level)}`}>
+              {getRiskLabel(summary.risk_level)}
+            </span>
+          </div>
         </div>
-      </div>
-    )}
-
-    {/* 风险等级 */}
-    {summary.risk_level && (
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>风险等级</div>
-        <div className={styles.sectionContent}>
-          <span className={`${styles.riskBadge} ${getRiskColor(summary.risk_level)}`}>
-            {getRiskLabel(summary.risk_level)}
-          </span>
-        </div>
-      </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
+};
 
 // ========== Apply Summary 子组件 ==========
 
