@@ -211,8 +211,6 @@ export const setAsDefault = async (id: number): Promise<void> => {
 // 能力场景常量
 export const CAPABILITIES = {
   ERROR_ANALYSIS: 'error_analysis',
-  CHANGE_ANALYSIS: 'change_analysis',
-  RESULT_ANALYSIS: 'result_analysis',
   RESOURCE_GENERATION: 'resource_generation',
   FORM_GENERATION: 'form_generation',
   INTENT_ASSERTION: 'intent_assertion',
@@ -227,8 +225,6 @@ export const CAPABILITIES = {
 // 能力场景标签映射
 export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.ERROR_ANALYSIS]: '错误分析',
-  [CAPABILITIES.CHANGE_ANALYSIS]: '变更分析',
-  [CAPABILITIES.RESULT_ANALYSIS]: '结果分析',
   [CAPABILITIES.RESOURCE_GENERATION]: '资源生成',
   [CAPABILITIES.FORM_GENERATION]: '表单生成',
   [CAPABILITIES.INTENT_ASSERTION]: '意图断言',
@@ -243,8 +239,6 @@ export const CAPABILITY_LABELS: Record<string, string> = {
 // 能力场景描述映射
 export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.ERROR_ANALYSIS]: '分析 Terraform 执行错误并提供解决方案',
-  [CAPABILITIES.CHANGE_ANALYSIS]: '分析 Plan 变更内容和影响',
-  [CAPABILITIES.RESULT_ANALYSIS]: '分析 Apply 执行结果',
   [CAPABILITIES.RESOURCE_GENERATION]: '基于需求生成 Terraform 资源代码',
   [CAPABILITIES.FORM_GENERATION]: 'AI 辅助填写 Module 表单配置',
   [CAPABILITIES.INTENT_ASSERTION]: '安全守卫：检测并拦截闲聊、越狱等非法意图',
@@ -291,38 +285,6 @@ export const DEFAULT_CAPABILITY_PROMPTS: Record<string, string> = {
 }
 
 请立即分析并返回纯 JSON 结果，不要有任何额外的解释、说明或 markdown 标记。`,
-
-  [CAPABILITIES.CHANGE_ANALYSIS]: `你是一个专业的 Terraform 和云基础设施专家。
-
-【任务】
-分析 Terraform Plan 的变更内容，帮助用户理解即将发生的变化。
-
-【变更信息】
-{plan_output}
-
-【输出要求】
-1. 总结变更概览（新增、修改、删除的资源数量）
-2. 列出关键变更及其影响
-3. 标注潜在风险点
-4. 给出执行建议
-
-请用简洁清晰的中文回复。`,
-
-  [CAPABILITIES.RESULT_ANALYSIS]: `你是一个专业的 Terraform 和云基础设施专家。
-
-【任务】
-分析 Terraform Apply 的执行结果，帮助用户理解已完成的变更。
-
-【执行结果】
-{apply_output}
-
-【输出要求】
-1. 总结执行结果（成功/失败的资源数量）
-2. 列出已创建/修改/删除的关键资源
-3. 如有错误，分析原因并给出建议
-4. 后续操作建议
-
-请用简洁清晰的中文回复。`,
 
   [CAPABILITIES.RESOURCE_GENERATION]: `你是一个专业的 Terraform 代码生成专家。
 
