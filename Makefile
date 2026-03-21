@@ -4,7 +4,7 @@
 	build-server build-agent build-all \
 	docker-build docker-build-frontend docker-build-agent docker-build-db-init docker-build-all \
 	docker-push docker-push-frontend docker-push-agent docker-push-db-init docker-push-all \
-	run-server run-agent local-server local-agent \
+	run-server run-agent local-server local-frontend local-agent \
 	generate-secret deploy-local export-seed-data clean
 
 # 默认变量（可通过 .env 文件或环境变量覆盖）
@@ -34,21 +34,41 @@ help: ## 显示帮助信息
 # 开发环境
 # =============================================================================
 
-dev-up: ## 启动开发环境
-	@echo "启动PostgreSQL数据库..."
-	docker-compose up -d postgres
-	@echo "等待数据库启动..."
-	@sleep 5
-	@echo "数据库已启动，连接信息:"
-	@echo "  Host: localhost"
-	@echo "  Port: 5432"
-	@echo "  Database: iac_platform"
-	@echo "  Username: postgres"
-	@echo "  Password: postgres123"
+dev-up: ## 启动开发环境（仅数据库容器 + 本地后端 + 本地前端）
+	@echo "=========================================="
+	@echo "IaC Platform 本地开发环境"
+	@echo "=========================================="
+	@echo ""
+	@echo "1. 启动 PostgreSQL..."
+	docker compose up -d postgres
+	@echo "等待数据库就绪..."
+	@until docker exec iac-platform-postgres pg_isready -U postgres -d iac_platform -q 2>/dev/null; do sleep 1; done
+	@echo "  [OK] 数据库就绪"
+	@echo ""
+	@echo "2. 启动后端..."
+	@cd backend && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) \
+		DB_SSLMODE=disable SERVER_PORT=$(SERVER_PORT) CC_SERVER_PORT=$(CC_SERVER_PORT) SERVER_HOST=0.0.0.0 \
+		JWT_SECRET=$${JWT_SECRET:-dev-secret-key-change-in-production} ENV=development \
+		go run main.go &
+	@sleep 2
+	@echo "  [OK] 后端启动: http://localhost:$(SERVER_PORT)"
+	@echo ""
+	@echo "3. 启动前端..."
+	@cd frontend && npm run dev &
+	@echo "  [OK] 前端启动: http://localhost:5173"
+	@echo ""
+	@echo "=========================================="
+	@echo "本地开发环境已就绪"
+	@echo "  前端: http://localhost:5173"
+	@echo "  后端: http://localhost:$(SERVER_PORT)"
+	@echo "  数据库: localhost:$(DB_PORT)"
+	@echo "=========================================="
 
-dev-down: ## 停止开发环境
+dev-down: ## 停止开发环境（停止数据库容器 + 杀掉本地进程）
 	@echo "停止开发环境..."
-	docker-compose down
+	-@pkill -f "go run main.go" 2>/dev/null || true
+	-@pkill -f "vite" 2>/dev/null || true
+	docker compose down
 
 db-init: ## 初始化数据库
 	@echo "初始化数据库..."
@@ -214,9 +234,16 @@ run-agent: build-agent ## 在Docker容器中运行Agent（需要设置环境变�
 # 本地运行
 # =============================================================================
 
-local-server: ## 本地运行服务器
-	@echo "启动服务器..."
-	cd backend && go run main.go
+local-server: ## 本地运行后端（自动加载数据库配置）
+	@echo "启动后端服务器..."
+	cd backend && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) \
+		DB_SSLMODE=disable SERVER_PORT=$(SERVER_PORT) CC_SERVER_PORT=$(CC_SERVER_PORT) SERVER_HOST=0.0.0.0 \
+		JWT_SECRET=$${JWT_SECRET:-dev-secret-key-change-in-production} ENV=development \
+		go run main.go
+
+local-frontend: ## 本地运行前端（Vite dev server）
+	@echo "启动前端..."
+	cd frontend && npm run dev
 
 local-agent: ## 本地运行Agent
 	@echo "启动Agent..."
@@ -240,7 +267,7 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "" >> .env; \
 		echo "# 数据库配置" >> .env; \
 		echo "DB_HOST=localhost" >> .env; \
-		echo "DB_PORT=15433" >> .env; \
+		echo "DB_PORT=5432" >> .env; \
 		echo "DB_NAME=iac_platform" >> .env; \
 		echo "DB_USER=postgres" >> .env; \
 		echo "DB_PASSWORD=postgres123" >> .env; \
@@ -263,33 +290,9 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 # 部署
 # =============================================================================
 
-deploy-local: generate-secret ## 本地部署（初始化数据库 + 启动服务，首次访问引导创建管理员）
-	@echo "=========================================="
-	@echo "IaC Platform 本地部署"
-	@echo "=========================================="
+deploy-local: generate-secret dev-up ## 本地部署（生成密钥 + 启动开发环境，首次访问引导创建管理员）
 	@echo ""
-	@echo "1. 加载环境变量..."
-	@if [ -f .env ]; then echo "  从 .env 文件加载配置"; fi
-	@echo ""
-	@echo "2. 启动数据库（首次启动自动初始化表结构和种子数据）..."
-	docker-compose up -d
-	@echo "等待数据库启动..."
-	@sleep 5
-	@echo ""
-	@echo "4. 启动后端服务..."
-	@set -a && [ -f .env ] && . ./.env; set +a && cd backend && go run main.go &
-	@sleep 3
-	@echo ""
-	@echo "5. 启动前端..."
-	cd frontend && npm run dev &
-	@echo ""
-	@echo "=========================================="
-	@echo "部署完成！"
-	@echo "前端: http://localhost:5173"
-	@echo "后端: http://localhost:8080"
-	@echo ""
-	@echo "首次使用请访问前端页面完成管理员初始化"
-	@echo "=========================================="
+	@echo "首次使用请访问 http://localhost:5173 完成管理员初始化"
 
 export-seed-data: ## 从当前数据库导出种子数据
 	@echo "导出种子数据..."
