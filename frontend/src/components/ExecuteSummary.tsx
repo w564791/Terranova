@@ -38,13 +38,11 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
         setTimeout(fetchSummary, 3000);
       }
     } catch (err: any) {
-      if (err.response?.status === 404) {
-        // 还没生成，继续轮询
+      // 注意：api 拦截器的 error 已被转为字符串（errorMessage），不是原始 error 对象
+      // 404 = summary 还没生成，继续轮询
+      const errStr = typeof err === 'string' ? err : (err?.message || '');
+      if (errStr.includes('not found') || errStr.includes('404')) {
         setTimeout(fetchSummary, 5000);
-      } else if (err.response?.status === 202) {
-        // 正在生成中
-        setSummary(err.response.data);
-        setTimeout(fetchSummary, 3000);
       } else {
         setError('获取摘要失败');
       }
@@ -70,7 +68,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
       setLoading(true);
       setTimeout(fetchSummary, 2000);
     } catch (err: any) {
-      setError(err.response?.data?.error || '重试失败');
+      setError(typeof err === 'string' ? err : '重试失败');
     } finally {
       setRetrying(false);
     }

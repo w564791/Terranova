@@ -158,12 +158,13 @@ export interface ApplySummary {
 }
 
 // 获取 Plan Summary
+// 注意：api 拦截器已返回 response.data，所以这里的 response 就是后端的响应体
 export const getPlanSummary = async (
   workspaceId: string,
   taskId: number
 ): Promise<PlanSummary> => {
   const response = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary`);
-  return response.data;
+  return response as unknown as PlanSummary;
 };
 
 // 获取 Apply Summary
@@ -172,7 +173,7 @@ export const getApplySummary = async (
   taskId: number
 ): Promise<ApplySummary> => {
   const response = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/apply-summary`);
-  return response.data;
+  return response as unknown as ApplySummary;
 };
 
 // 重试 Plan Summary
