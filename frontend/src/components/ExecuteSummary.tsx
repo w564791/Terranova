@@ -156,7 +156,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
           {summary?.status === 'failed' && (
             <div className={styles.errorBlock}>
               <div className={styles.errorMessage}>
-                <span className={styles.errorIcon}>⚠</span>
+                <span className={styles.errorIcon}>!</span>
                 <span>{summary.error_message || '分析失败'}</span>
               </div>
               <button
@@ -172,7 +172,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
           {/* Error from fetch */}
           {error && !summary && (
             <div className={styles.errorBlock}>
-              <span className={styles.errorIcon}>⚠</span>
+              <span className={styles.errorIcon}>!</span>
               <span>{error}</span>
             </div>
           )}
