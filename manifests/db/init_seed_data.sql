@@ -1181,6 +1181,51 @@ ALTER SEQUENCE public.ai_parse_tasks_id_seq OWNED BY public.ai_parse_tasks.id;
 
 
 --
+-- Name: ai_plan_summaries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_plan_summaries (
+    id character varying(30) NOT NULL,
+    task_id bigint NOT NULL,
+    workspace_id character varying(50) NOT NULL,
+    changes_overview text,
+    impact_analysis jsonb,
+    affected_resources jsonb,
+    risk_level character varying(20),
+    module_context jsonb,
+    plan_changes jsonb,
+    cmdb_lookups jsonb,
+    tool_calls jsonb,
+    status character varying(20) NOT NULL DEFAULT 'pending'::character varying,
+    error_message text,
+    duration bigint DEFAULT 0,
+    created_at timestamp without time zone
+);
+
+
+--
+-- Name: ai_apply_summaries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_apply_summaries (
+    id character varying(30) NOT NULL,
+    task_id bigint NOT NULL,
+    workspace_id character varying(50) NOT NULL,
+    execution_summary text,
+    resource_results jsonb,
+    impact_confirmation jsonb,
+    affected_resources jsonb,
+    apply_changes jsonb,
+    cmdb_lookups jsonb,
+    tool_calls jsonb,
+    status character varying(20) NOT NULL DEFAULT 'pending'::character varying,
+    error_message text,
+    duration bigint DEFAULT 0,
+    created_at timestamp without time zone
+);
+
+
+--
 -- Name: applications; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10224,6 +10269,22 @@ ALTER TABLE ONLY public.ai_parse_tasks
 
 
 --
+-- Name: ai_plan_summaries ai_plan_summaries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_plan_summaries
+    ADD CONSTRAINT ai_plan_summaries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_apply_summaries ai_apply_summaries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_apply_summaries
+    ADD CONSTRAINT ai_apply_summaries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: applications applications_app_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11518,6 +11579,34 @@ CREATE INDEX idx_ai_configs_capabilities ON public.ai_configs USING gin (capabil
 --
 
 CREATE INDEX idx_ai_configs_priority ON public.ai_configs USING btree (priority DESC);
+
+
+--
+-- Name: idx_ai_plan_summaries_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_ai_plan_summaries_task_id ON public.ai_plan_summaries USING btree (task_id);
+
+
+--
+-- Name: idx_ai_plan_summaries_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_plan_summaries_workspace_id ON public.ai_plan_summaries USING btree (workspace_id);
+
+
+--
+-- Name: idx_ai_apply_summaries_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_ai_apply_summaries_task_id ON public.ai_apply_summaries USING btree (task_id);
+
+
+--
+-- Name: idx_ai_apply_summaries_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_apply_summaries_workspace_id ON public.ai_apply_summaries USING btree (workspace_id);
 
 
 --
