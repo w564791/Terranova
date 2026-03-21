@@ -50,8 +50,8 @@ priority: 100
 - NAT Gateway 或 Internet Gateway 变更
 
 ### 资源删除
-- 删除安全组且有依赖方
-- 删除 IAM Role/Policy 且被其他资源引用
+- 删除安全组（无论是否有依赖方 — CMDB 可能不完整，删除安全组本身就是高风险操作）
+- 删除 IAM Role/Policy（无论是否被引用）
 - 删除 ELB/ALB/NLB（可能影响服务可用性）
 - 删除超过 5 个资源
 
