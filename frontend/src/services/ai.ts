@@ -220,6 +220,7 @@ export const CAPABILITIES = {
   EMBEDDING: 'embedding',
   MODULE_SKILL_GENERATION: 'module_skill_generation',
   DOMAIN_SKILL_SELECTION: 'domain_skill_selection',
+  SUMMARY: 'summary',
 } as const;
 
 // 能力场景标签映射
@@ -235,6 +236,7 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.EMBEDDING]: '向量生成 (Embedding)',
   [CAPABILITIES.MODULE_SKILL_GENERATION]: 'Module Skill 生成',
   [CAPABILITIES.DOMAIN_SKILL_SELECTION]: 'Domain Skill 智能选择',
+  [CAPABILITIES.SUMMARY]: '执行摘要',
 };
 
 // 能力场景描述映射
@@ -250,6 +252,7 @@ export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.EMBEDDING]: '生成资源的语义向量，用于 CMDB 向量搜索（支持 OpenAI、Bedrock Titan）',
   [CAPABILITIES.MODULE_SKILL_GENERATION]: '根据 Module 的 Schema 自动生成 AI Skill 文档',
   [CAPABILITIES.DOMAIN_SKILL_SELECTION]: '根据用户需求智能选择需要的 Domain Skills（优化 Prompt 长度）',
+  [CAPABILITIES.SUMMARY]: 'Plan/Apply 完成后自动生成变更影响分析和执行结果摘要',
 };
 
 // 每个能力场景的默认 Prompt 模板

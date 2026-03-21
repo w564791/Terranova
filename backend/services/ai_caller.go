@@ -233,7 +233,9 @@ func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, err
 		case "tool_use":
 			var params map[string]interface{}
 			if len(block.Input) > 0 {
-				json.Unmarshal(block.Input, &params)
+				if err := json.Unmarshal(block.Input, &params); err != nil {
+					log.Printf("[AICaller/Bedrock] failed to parse tool input for %s: %v", block.Name, err)
+				}
 			}
 			result.ToolCalls = append(result.ToolCalls, AgentToolCall{
 				ID:     block.ID,
@@ -422,7 +424,9 @@ func (c *OpenAICaller) parseOpenAIResponse(body []byte) (*AgentAIResponse, error
 	for _, tc := range msg.ToolCalls {
 		var params map[string]interface{}
 		if tc.Function.Arguments != "" {
-			json.Unmarshal([]byte(tc.Function.Arguments), &params)
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
+				log.Printf("[AICaller/OpenAI] failed to parse tool arguments for %s: %v", tc.Function.Name, err)
+			}
 		}
 		result.ToolCalls = append(result.ToolCalls, AgentToolCall{
 			ID:     tc.ID,

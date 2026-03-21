@@ -251,7 +251,9 @@ func (s *AISummaryService) RetryPlanSummary(taskID uint) error {
 		return fmt.Errorf("can only retry failed summaries, current status: %s", existing.Status)
 	}
 
-	s.db.Delete(&existing)
+	if err := s.db.Delete(&existing).Error; err != nil {
+		return fmt.Errorf("failed to delete old plan summary: %w", err)
+	}
 	go s.GeneratePlanSummary(taskID)
 	return nil
 }
@@ -266,7 +268,9 @@ func (s *AISummaryService) RetryApplySummary(taskID uint) error {
 		return fmt.Errorf("can only retry failed summaries, current status: %s", existing.Status)
 	}
 
-	s.db.Delete(&existing)
+	if err := s.db.Delete(&existing).Error; err != nil {
+		return fmt.Errorf("failed to delete old apply summary: %w", err)
+	}
 	go s.GenerateApplySummary(taskID)
 	return nil
 }

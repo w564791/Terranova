@@ -25,6 +25,7 @@ func NewAISummaryController(db *gorm.DB) *AISummaryController {
 
 // GetPlanSummary 获取 Plan 阶段摘要
 func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
+	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
@@ -34,6 +35,12 @@ func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
 	summary := c.service.GetPlanSummary(uint(taskID))
 	if summary == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "plan summary not found"})
+		return
+	}
+
+	// 校验 workspace 归属，防止越权访问
+	if summary.WorkspaceID != workspaceID {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
 		return
 	}
 
@@ -47,6 +54,7 @@ func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
 
 // GetApplySummary 获取 Apply 阶段摘要
 func (c *AISummaryController) GetApplySummary(ctx *gin.Context) {
+	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
@@ -56,6 +64,12 @@ func (c *AISummaryController) GetApplySummary(ctx *gin.Context) {
 	summary := c.service.GetApplySummary(uint(taskID))
 	if summary == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "apply summary not found"})
+		return
+	}
+
+	// 校验 workspace 归属，防止越权访问
+	if summary.WorkspaceID != workspaceID {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
 		return
 	}
 
