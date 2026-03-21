@@ -101,7 +101,6 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-          <span className={styles.headerIcon}>|</span>
           <span className={styles.headerTitle}>{stageLabel}</span>
           <div className={styles.loadingInline}>
             <div className={styles.spinner} />
@@ -279,17 +278,7 @@ const PlanSummaryResult: React.FC<{
         </div>
       )}
 
-      {/* 风险等级 — 始终展示 */}
-      {summary.risk_level && (
-        <div className={styles.section}>
-          <div className={styles.sectionTitle}>风险等级</div>
-          <div className={styles.sectionContent}>
-            <span className={`${styles.riskBadge} ${getRiskColor(summary.risk_level)}`}>
-              {getRiskLabel(summary.risk_level)}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* 风险等级已在 header badge 中展示，不再重复 */}
     </div>
   );
 };
