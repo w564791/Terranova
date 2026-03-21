@@ -1,70 +1,75 @@
-version: '3.8'
+# IAC Platform - Docker Compose Quick Deploy (Minimal)
+#
+# Usage:
+#   1. cp docker-compose.example.yml docker-compose.yml
+#   2. (Optional) Create .env file to override variables below
+#   3. docker compose up -d
+#   4. Access: http://localhost
+
+x-common-env: &common-env
+  TZ: ${TZ:-Asia/Singapore}
+
+x-db-env: &db-env
+  DB_NAME: ${DB_NAME:-iac_platform}
+  DB_USER: ${DB_USER:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:-postgres123}
 
 services:
-#   postgres:
-#     image: postgres:15
-#     container_name: iac-platform-postgres
-#     environment:
-#       POSTGRES_DB: iac_platform
-#       POSTGRES_USER: postgres
-#       POSTGRES_PASSWORD: postgres123
-#     ports:
-#       - "5432:5432"
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data
-#  #     - ./docs/database-schema-fixed.sql:/docker-entrypoint-initdb.d/init.sql
-#     healthcheck:
-#       test: ["CMD-SHELL", "pg_isready -U postgres -d iac_platform"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-
-  # PostgreSQL with pgvector extension for vector similarity search
-  # This is the OLD database (PG15) - port 15432
-  postgres-pgvector:
-    image: pgvector/pgvector:pg15
-    container_name: iac-platform-postgres-pgvector
-    environment:
-      POSTGRES_DB: iac_platform
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
-    ports:
-      - "15432:5432"
-    volumes:
-      - postgres_pgvector_data:/var/lib/postgresql/data
-      # Note: init-pgvector.sql is only needed for fresh installations
-      # Data has been migrated from the original postgres container
-      # - ./scripts/init-pgvector.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d iac_platform"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # NEW PostgreSQL 18 with pgvector 0.8.1 - port 15433
-  # This will be the PRIMARY database after migration
-  # Note: PG18+ requires mounting at /var/lib/postgresql (not /data subdirectory)
-  postgres-pg18:
+  postgres:
     image: pgvector/pgvector:0.8.1-pg18-trixie
-    container_name: iac-platform-postgres-pg18
+    container_name: iac-platform-postgres
     environment:
-      POSTGRES_DB: iac_platform
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
+      <<: *common-env
+      POSTGRES_DB: ${DB_NAME:-iac_platform}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
     ports:
-      - "15433:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_pgvector18_data:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql
+      - ./manifests/db/init_seed_data.sql:/docker-entrypoint-initdb.d/01-seed-data.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d iac_platform"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-iac_platform}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  backend:
+    image: w564791/iac-platform:${VERSION:-latest}
+    pull_policy: always
+    container_name: iac-platform-backend
     depends_on:
-      postgres-pgvector:
+      postgres:
         condition: service_healthy
+    environment:
+      <<: [*common-env, *db-env]
+      SERVER_PORT: "8080"
+      CC_SERVER_PORT: "8090"
+      SERVER_HOST: "0.0.0.0"
+      ENV: ${ENV:-production}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret-key}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE} 
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY} ## value form https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+      - "${CC_SERVER_PORT:-8090}:8090"
+    restart: unless-stopped
+
+  frontend:
+    image: w564791/iac-frontend:${VERSION:-latest}
+    pull_policy: always
+    container_name: iac-platform-frontend
+    depends_on:
+      - backend
+    volumes:
+      - ./docker-compose.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    restart: unless-stopped
 
 volumes:
-  # postgres_data:
-  postgres_pgvector_data:
-  postgres_pgvector18_data:
+  postgres_data:
