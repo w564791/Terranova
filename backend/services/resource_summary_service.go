@@ -79,6 +79,12 @@ func (s *ResourceSummaryService) GenerateSummariesForExternalSource(ctx context.
 	return s.generateSummariesForResources(ctx, sourceID, "external_source_id = ? AND resource_mode = 'managed'", sourceID)
 }
 
+// CompensateMissingSummaries 补偿启动时检查：找到 attributes 有值但 summary 缺失或 hash 不匹配的资源
+func (s *ResourceSummaryService) CompensateMissingSummaries(ctx context.Context) error {
+	return s.generateSummariesForResources(ctx, "compensation",
+		"resource_mode = 'managed' AND attributes IS NOT NULL AND (resource_summary IS NULL OR resource_summary = '' OR summary_hash IS NULL OR summary_hash = '')")
+}
+
 func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Context, logID string, where string, args ...interface{}) error {
 	// 检查 AI 配置
 	cfg, err := s.configService.GetConfigForCapability("cmdb_resource_summary")
