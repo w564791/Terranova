@@ -325,6 +325,7 @@ const ExternalSourcesTreeView: React.FC = () => {
   const [sources, setSources] = useState<ExternalSourceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
   const toast = useToast();
 
   // 组件挂载时立即加载（不等 expand）
@@ -371,6 +372,26 @@ const ExternalSourcesTreeView: React.FC = () => {
         <span className={styles.lastSyncedBadge} style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
           External Data
         </span>
+        <div className={styles.workspaceActions} onClick={(e) => e.stopPropagation()}>
+          <button
+            className={styles.rebuildWorkspaceButton}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                setRebuilding(true);
+                await rebuildWorkspaceEmbedding('__external__');
+                toast.success('External embedding rebuild started');
+              } catch (err) {
+                toast.error('Rebuild failed');
+              } finally {
+                setRebuilding(false);
+              }
+            }}
+            disabled={rebuilding}
+          >
+            {rebuilding ? 'Rebuilding...' : 'Rebuild'}
+          </button>
+        </div>
       </div>
       
       {expanded && (
