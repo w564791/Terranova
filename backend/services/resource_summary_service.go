@@ -133,11 +133,13 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 		attributesStr := truncateAttributes(resource.Attributes)
 		userPrompt := fmt.Sprintf(prompt, resource.ResourceType, attributesStr)
 
-		// 调 AI
+		// 调 AI（单个资源 30 秒超时）
+		callCtx, callCancel := context.WithTimeout(ctx, 30*time.Second)
 		messages := []AgentMessage{
 			{Role: "user", Content: userPrompt},
 		}
-		response, err := caller.ChatWithTools(ctx, messages, nil)
+		response, err := caller.ChatWithTools(callCtx, messages, nil)
+		callCancel()
 		if err != nil {
 			log.Printf("[ResourceSummary] AI call failed for resource %d (%s): %v", resource.ID, resource.TerraformAddress, err)
 			failed++

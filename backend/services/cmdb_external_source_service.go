@@ -577,11 +577,11 @@ func (s *CMDBExternalSourceService) SyncExternalSource(ctx context.Context, sour
 
 		// 6. 同步成功后，先生成资源摘要，再创建 embedding 任务
 		summaryCtx, summaryCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer summaryCancel()
 		summaryService := NewResourceSummaryService(s.db)
 		if err := summaryService.GenerateSummariesForExternalSource(summaryCtx, sourceID); err != nil {
 			log.Printf("[CMDBExternalSource] Resource summary failed for source %s: %v", sourceID, err)
 		}
-		summaryCancel()
 		s.createEmbeddingTasksForExternalSource(sourceID)
 	}
 
