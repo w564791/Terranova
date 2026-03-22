@@ -179,11 +179,19 @@ const MFASetup: React.FC = () => {
   const handleCodeInput = (value: string, index: number) => {
     const newCode = verifyCode.split('');
     newCode[index] = value;
-    setVerifyCode(newCode.join(''));
-    
+    const newCodeStr = newCode.join('');
+    setVerifyCode(newCodeStr);
+
     // 自动跳转到下一个输入框
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
+    }
+
+    // 输入完6位后自动提交
+    if (newCodeStr.length === 6 && value) {
+      setTimeout(() => {
+        handleVerify();
+      }, 100);
     }
   };
 
@@ -471,8 +479,20 @@ const MFASetup: React.FC = () => {
                     value={verifyCode[index] || ''}
                     onChange={(e) => handleCodeInput(e.target.value.replace(/\D/g, ''), index)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Backspace' && !verifyCode[index] && index > 0) {
-                        inputRefs.current[index - 1]?.focus();
+                      if (e.key === 'Backspace') {
+                        e.preventDefault();
+                        if (verifyCode[index]) {
+                          // 当前框有数字：清空当前框
+                          const newCode = verifyCode.split('');
+                          newCode[index] = '';
+                          setVerifyCode(newCode.join(''));
+                        } else if (index > 0) {
+                          // 当前框为空：清空前一个框并移动焦点
+                          const newCode = verifyCode.split('');
+                          newCode[index - 1] = '';
+                          setVerifyCode(newCode.join(''));
+                          inputRefs.current[index - 1]?.focus();
+                        }
                       }
                     }}
                   />

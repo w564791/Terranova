@@ -207,8 +207,20 @@ const MFAVerify: React.FC = () => {
                   value={verifyCode[index] || ''}
                   onChange={(e) => handleCodeInput(e.target.value.replace(/\D/g, ''), index)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Backspace' && !verifyCode[index] && index > 0) {
-                      inputRefs.current[index - 1]?.focus();
+                    if (e.key === 'Backspace') {
+                      e.preventDefault();
+                      if (verifyCode[index]) {
+                        const newCode = verifyCode.split('');
+                        newCode[index] = '';
+                        setVerifyCode(newCode.join(''));
+                        setErrorMessage('');
+                      } else if (index > 0) {
+                        const newCode = verifyCode.split('');
+                        newCode[index - 1] = '';
+                        setVerifyCode(newCode.join(''));
+                        setErrorMessage('');
+                        inputRefs.current[index - 1]?.focus();
+                      }
                     }
                   }}
                   autoFocus={index === 0}
