@@ -679,7 +679,7 @@ const ViewResource: React.FC = () => {
 
       {/* 右侧主内容区 */}
       <div style={{ marginLeft: '256px', flex: 1, maxWidth: 'calc(100% - 256px)' }}>
-        <TopBar title="工作空间" />
+        <TopBar />
         <div className={styles.container} style={{ padding: '24px' }}>
           <div className={styles.header}>
             <div className={styles.headerLeft}>

@@ -567,7 +567,7 @@ const WorkspaceDetail: React.FC = () => {
 
       {/* 右侧内容区 */}
       <main className={styles.workspaceMain}>
-        <TopBar title="工作空间" />
+        <TopBar />
         
         {/* 全局头部 - 显示workspace信息和操作按钮（Settings页面除外） */}
         {activeTab !== 'settings' && workspace && (

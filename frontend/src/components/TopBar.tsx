@@ -7,11 +7,7 @@ import { authService } from '../services/auth';
 import MotivationalQuote from './MotivationalQuote';
 import styles from './TopBar.module.css';
 
-interface TopBarProps {
-  title?: string;
-}
-
-const TopBar: React.FC<TopBarProps> = ({ title = 'IaC 平台' }) => {
+const TopBar: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
@@ -31,37 +27,33 @@ const TopBar: React.FC<TopBarProps> = ({ title = 'IaC 平台' }) => {
 
   return (
     <header className={styles.header}>
-      <h2 className={styles.headerTitle}>{title}</h2>
-      
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <MotivationalQuote username={user?.username} />
-        
-        <div className={styles.userMenu} onClick={() => setShowUserMenu(!showUserMenu)}>
-          <div className={styles.avatar}>
-            {user?.username?.charAt(0).toUpperCase()}
-          </div>
-          <span className={styles.username}>{user?.username}</span>
-          
-          {showUserMenu && (
-            <div className={styles.dropdown}>
-              <button
-                className={styles.dropdownItem}
-                onClick={() => {
-                  setShowUserMenu(false);
-                  navigate('/settings');
-                }}
-              >
-                个人设置
-              </button>
-              <button
-                className={styles.dropdownItem}
-                onClick={handleLogout}
-              >
-                退出登录
-              </button>
-            </div>
-          )}
+      <MotivationalQuote username={user?.username} />
+
+      <div className={styles.userMenu} onClick={() => setShowUserMenu(!showUserMenu)}>
+        <div className={styles.avatar}>
+          {user?.username?.charAt(0).toUpperCase()}
         </div>
+        <span className={styles.username}>{user?.username}</span>
+
+        {showUserMenu && (
+          <div className={styles.dropdown}>
+            <button
+              className={styles.dropdownItem}
+              onClick={() => {
+                setShowUserMenu(false);
+                navigate('/settings');
+              }}
+            >
+              Settings
+            </button>
+            <button
+              className={styles.dropdownItem}
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

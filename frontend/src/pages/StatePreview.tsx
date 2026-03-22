@@ -427,7 +427,7 @@ const StatePreview: React.FC = () => {
 
       {/* 右侧主内容区 */}
       <main className={styles.mainContent}>
-        <TopBar title={`State Version ${version}`} />
+        <TopBar />
 
         {/* State预览内容 */}
         <div className={styles.stateContent}>

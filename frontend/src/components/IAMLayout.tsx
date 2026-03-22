@@ -85,7 +85,7 @@ const IAMLayout: React.FC = () => {
 
       {/* 右侧内容区 */}
       <main className={styles.iamMain}>
-        <TopBar title="IAM" />
+        <TopBar />
         
         <div className={styles.iamContent}>
           <Outlet />

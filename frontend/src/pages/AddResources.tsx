@@ -1492,7 +1492,7 @@ const AddResources: React.FC = () => {
 
       {/* 右侧主内容区 */}
       <main className={styles.workspaceMain}>
-        <TopBar title="添加资源" />
+        <TopBar />
         
         <div className={styles.container}>
           <div className={styles.header}>

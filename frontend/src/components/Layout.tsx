@@ -316,11 +316,9 @@ const Layout: React.FC = () => {
       
       <main className={styles.main}>
         <header className={styles.header}>
-          <h2 className={styles.headerTitle}>{getPageTitle()}</h2>
-          
+          <MotivationalQuote username={user?.username} />
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <MotivationalQuote username={user?.username} />
-            
             <div className={styles.userMenu} onClick={() => setShowUserMenu(!showUserMenu)}>
               <div className={styles.avatar}>
                 {user?.username?.charAt(0).toUpperCase()}
