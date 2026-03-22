@@ -432,49 +432,42 @@ const StatePreview: React.FC = () => {
         {/* State预览内容 */}
         <div className={styles.stateContent}>
           {/* 返回按钮和操作栏 */}
-          <div className={styles.stateHeader}>
-            <button 
-              onClick={() => navigate(`/workspaces/${workspaceId}?tab=states`)}
-              className={styles.backToListButton}
-            >
-              ← Back to States
-            </button>
-            <div className={styles.stateActions}>
-              {stateMetadata?.task_id && (
-                <button
-                  onClick={() => navigate(`/workspaces/${workspaceId}/tasks/${stateMetadata.task_id}`)}
-                  className={styles.viewTaskButton}
-                >
-                  View Task #{stateMetadata.task_id} →
-                </button>
-              )}
-              <button onClick={handleDownload} className={styles.downloadButton}>
-                Download
-              </button>
-              {parseInt(version!) !== currentVersion && (
-                <button onClick={handleOpenRollback} className={styles.rollbackButton}>
-                  Rollback to this version
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* State信息卡片 */}
           <div className={styles.stateInfoCard}>
-            <h2 className={styles.stateTitle}>
-              State Version {version}
-              {parseInt(version!) === currentVersion && (
-                <Tag color="green" style={{ marginLeft: 12 }}>Current</Tag>
-              )}
-              {stateMetadata?.is_imported && (
-                <Tag color="blue" style={{ marginLeft: 8 }}>Imported</Tag>
-              )}
-              {stateMetadata?.is_rollback && (
-                <Tag color="orange" style={{ marginLeft: 8 }}>
-                  Rollback from #{stateMetadata.rollback_from_version}
-                </Tag>
-              )}
-            </h2>
+            <div className={styles.stateTitleRow}>
+              <h2 className={styles.stateTitle}>
+                State Version {version}
+                {parseInt(version!) === currentVersion && (
+                  <Tag color="green" style={{ marginLeft: 12 }}>Current</Tag>
+                )}
+                {stateMetadata?.is_imported && (
+                  <Tag color="blue" style={{ marginLeft: 8 }}>Imported</Tag>
+                )}
+                {stateMetadata?.is_rollback && (
+                  <Tag color="orange" style={{ marginLeft: 8 }}>
+                    Rollback from #{stateMetadata.rollback_from_version}
+                  </Tag>
+                )}
+              </h2>
+              <div className={styles.stateActions}>
+                {stateMetadata?.task_id && (
+                  <button
+                    onClick={() => navigate(`/workspaces/${workspaceId}/tasks/${stateMetadata.task_id}`)}
+                    className={styles.viewTaskButton}
+                  >
+                    View Task #{stateMetadata.task_id}
+                  </button>
+                )}
+                <button onClick={handleDownload} className={styles.downloadButton}>
+                  Download
+                </button>
+                {parseInt(version!) !== currentVersion && (
+                  <button onClick={handleOpenRollback} className={styles.rollbackButton}>
+                    Rollback
+                  </button>
+                )}
+              </div>
+            </div>
             <div className={styles.stateMetadata}>
               <div className={styles.metadataItem}>
                 <span className={styles.metadataLabel}>Terraform Version:</span>
