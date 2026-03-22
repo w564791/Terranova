@@ -318,29 +318,17 @@ const ExternalSourceNode: React.FC<{
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Load resources using resource tree API (returns full data including summary/attributes)
+  // Load resources using search API (detail fetched on expand per resource)
   const loadResources = useCallback(async () => {
     if (loaded) return;
 
     try {
       setLoading(true);
-      const tree = await cmdbService.getWorkspaceResourceTree('__external__');
-      // 从 tree 中提取属于这个数据源的资源节点
-      const flatResources: any[] = [];
-      const extractResources = (nodes: any[]) => {
-        for (const node of nodes) {
-          if (node.type === 'resource' && node.terraform_address?.includes(source.source_id)) {
-            flatResources.push(node);
-          }
-          if (node.children) {
-            extractResources(node.children);
-          }
-        }
-      };
-      if (tree?.tree) {
-        extractResources(tree.tree);
-      }
-      setResources(flatResources);
+      const response = await cmdbService.searchResources(source.source_id, { limit: 100 });
+      const filtered = (response.results || []).filter((r: any) =>
+        r.terraform_address?.startsWith(`external.${source.source_id}.`)
+      );
+      setResources(filtered);
       setLoaded(true);
     } catch (error) {
       console.error('Failed to load resources:', error);
