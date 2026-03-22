@@ -127,6 +127,7 @@ const FieldMappingEditor: React.FC<{
     { key: 'cloud_resource_arn', label: 'ARN', placeholder: '$.arn' },
     { key: 'description', label: '描述', placeholder: '$.description' },
     { key: 'tags', label: '标签', placeholder: '$.tags' },
+    { key: 'attributes', label: '属性', placeholder: '$.attributes' },
   ];
 
   const updateField = (key: string, value: string) => {
@@ -246,7 +247,18 @@ const SourceForm: React.FC<{
     request_body: source?.request_body || '',
     auth_headers: source?.auth_headers?.map(h => ({ key: h.key, value: '' })) || [],
     response_path: source?.response_path || '',
-    field_mapping: source?.field_mapping || {},
+    field_mapping: source?.field_mapping && Object.keys(source.field_mapping).length > 0
+      ? source.field_mapping
+      : {
+          resource_type: '$.type',
+          resource_name: '$.name',
+          cloud_resource_id: '$.id',
+          cloud_resource_name: '$.displayName',
+          cloud_resource_arn: '$.arn',
+          description: '$.description',
+          tags: '$.tags',
+          attributes: '$.attributes',
+        },
     primary_key_field: source?.primary_key_field || '',
     cloud_provider: source?.cloud_provider || '',
     account_id: source?.account_id || '',
