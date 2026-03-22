@@ -50,6 +50,10 @@ type ResourceIndex struct {
 	CloudRegion      string `gorm:"column:cloud_region;type:varchar(50)" json:"cloud_region,omitempty"`                                                      // 云区域
 	PrimaryKeyValue  string `gorm:"column:primary_key_value;type:varchar(500);index:idx_resource_index_primary_key" json:"primary_key_value,omitempty"`      // 主键值（用于唯一标识外部资源）
 
+	// AI 资源摘要
+	ResourceSummary string `gorm:"column:resource_summary;type:text" json:"resource_summary,omitempty"`     // AI 生成的配置摘要
+	SummaryHash     string `gorm:"column:summary_hash;type:varchar(32)" json:"summary_hash,omitempty"`      // attributes 的 MD5 hash，用于变更检测
+
 	// 向量搜索相关字段（CMDB 向量化搜索）
 	// 注意：Embedding 字段使用 gorm:"-" 忽略自动映射，因为 GORM 不支持 pgvector 类型的自动序列化/反序列化
 	// embedding 的读写使用原生 SQL 操作（如 UPDATE ... SET embedding = ?::vector）
@@ -134,6 +138,7 @@ type ResourceTreeNode struct {
 	Children           []*ResourceTreeNode `json:"children,omitempty"`
 	PlatformResourceID *uint               `json:"platform_resource_id,omitempty"`
 	JumpURL            string              `json:"jump_url,omitempty"`
+	ResourceSummary    string              `json:"resource_summary,omitempty"`
 }
 
 // WorkspaceResourceTree Workspace资源树响应

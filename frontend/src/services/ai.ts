@@ -220,6 +220,7 @@ export const CAPABILITIES = {
   MODULE_SKILL_GENERATION: 'module_skill_generation',
   DOMAIN_SKILL_SELECTION: 'domain_skill_selection',
   SUMMARY: 'summary',
+  CMDB_RESOURCE_SUMMARY: 'cmdb_resource_summary',
 } as const;
 
 // 能力场景标签映射
@@ -234,6 +235,7 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.MODULE_SKILL_GENERATION]: 'Module Skill 生成',
   [CAPABILITIES.DOMAIN_SKILL_SELECTION]: 'Domain Skill 智能选择',
   [CAPABILITIES.SUMMARY]: '执行摘要',
+  [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 资源摘要',
 };
 
 // 能力场景描述映射
@@ -248,6 +250,7 @@ export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.MODULE_SKILL_GENERATION]: '根据 Module 的 Schema 自动生成 AI Skill 文档',
   [CAPABILITIES.DOMAIN_SKILL_SELECTION]: '根据用户需求智能选择需要的 Domain Skills（优化 Prompt 长度）',
   [CAPABILITIES.SUMMARY]: 'Plan/Apply 完成后自动生成变更影响分析和执行结果摘要',
+  [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 同步时为资源生成配置摘要，增强向量搜索和变更影响分析',
 };
 
 // 每个能力场景的默认 Prompt 模板

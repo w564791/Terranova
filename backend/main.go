@@ -362,7 +362,20 @@ func main() {
 				log.Println("[Leader] Embedding worker started for CMDB vector search")
 			}
 
-			// 8. Background cleanup goroutine (lock/draft cleanup)
+			// 8. Resource Summary 补偿（启动时检查未完成的摘要）
+			go func() {
+				log.Println("[Leader] Starting resource summary compensation check...")
+				summaryService := services.NewResourceSummaryService(db)
+				compensateCtx, compensateCancel := context.WithTimeout(leaderCtx, 10*time.Minute)
+				defer compensateCancel()
+				if err := summaryService.CompensateMissingSummaries(compensateCtx); err != nil {
+					log.Printf("[Leader] Resource summary compensation failed: %v", err)
+				} else {
+					log.Println("[Leader] Resource summary compensation completed")
+				}
+			}()
+
+			// 9. Background cleanup goroutine (lock/draft cleanup)
 			go func() {
 				ticker := time.NewTicker(1 * time.Minute)
 				defer ticker.Stop()
