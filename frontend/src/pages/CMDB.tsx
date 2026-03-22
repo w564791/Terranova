@@ -751,6 +751,7 @@ const CMDB: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<{ workspace_id: string; name: string }[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [workspaceResourceData, setWorkspaceResourceData] = useState<Map<string, WorkspaceResourceCount>>(new Map());
+  const [hasExternalSources, setHasExternalSources] = useState(false);
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
@@ -790,11 +791,16 @@ const CMDB: React.FC = () => {
     try {
       setWorkspacesLoading(true);
       
-      // 并行加载workspace列表和资源数量
-      const [wsResponse, countsResponse] = await Promise.all([
+      // 并行加载workspace列表、资源数量、外部数据源
+      const [wsResponse, countsResponse, extResponse] = await Promise.all([
         api.get('/workspaces'),
-        cmdbService.getWorkspaceResourceCounts().catch(() => ({ counts: [] }))
+        cmdbService.getWorkspaceResourceCounts().catch(() => ({ counts: [] })),
+        externalSourceService.listExternalSources().catch(() => ({ sources: null, total: 0 }))
       ]);
+
+      // 检查是否有外部数据源
+      const extSources = (extResponse as any).sources || [];
+      setHasExternalSources(extSources.length > 0);
       
       // 解析workspace列表
       let wsList: any[] = [];
@@ -1254,7 +1260,7 @@ const CMDB: React.FC = () => {
         >
           Search
         </button>
-        {isAdmin && (
+        {isAdmin && hasExternalSources && (
           <button
             className={`${styles.tab} ${activeTab === 'external' ? styles.tabActive : ''}`}
             onClick={() => handleTabChange('external')}
