@@ -8,6 +8,7 @@ import api from '../services/api';
 import { stateAPI } from '../services/state';
 import StateResourceViewer from '../components/StateResourceViewer';
 import WorkspaceSidebar from '../components/WorkspaceSidebar';
+import TopBar from '../components/TopBar';
 import type { StateContent } from '../utils/stateParser';
 import styles from './StatePreview.module.css';
 
@@ -43,12 +44,10 @@ const StatePreview: React.FC = () => {
   // State 内容获取状态
   const [retrieveStatus, setRetrieveStatus] = useState<RetrieveStatus>('idle');
   const [retrieveError, setRetrieveError] = useState<string>('');
-  const [overviewResourceCount, setOverviewResourceCount] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [showNewRunDialog, setShowNewRunDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('resources');
   
   // 回滚相关状态
@@ -144,10 +143,7 @@ const StatePreview: React.FC = () => {
       const data: any = await api.get(`/workspaces/${workspaceId}`);
       setWorkspace(data.data || data);
       
-      // 获取overview数据中的resource_count（与WorkspaceDetail.tsx保持一致）
-      const overviewResponse = await api.get(`/workspaces/${workspaceId}/overview`);
-      const overviewData = overviewResponse.data || overviewResponse;
-      setOverviewResourceCount(overviewData.resource_count || 0);
+      // overview 数据不再需要（globalHeader 已移除）
     } catch (err: any) {
       console.error('Failed to fetch workspace:', err);
     }
@@ -255,46 +251,6 @@ const StatePreview: React.FC = () => {
     if (matches.length === 0) return;
     const newIndex = currentMatchIndex < matches.length - 1 ? currentMatchIndex + 1 : 0;
     setCurrentMatchIndex(newIndex);
-  };
-
-  const formatRelativeTime = (dateString: string | null) => {
-    if (!dateString) return '从未';
-    
-    // 处理无效日期
-    if (dateString.startsWith('0001-01-01')) return '从未';
-    
-    // WORKAROUND: 后端存储的是本地时间但添加了Z后缀
-    // 移除Z后缀，将其作为本地时间解析
-    let normalizedDateString = dateString;
-    if (dateString.endsWith('Z')) {
-      normalizedDateString = dateString.slice(0, -1);
-    }
-    
-    const date = new Date(normalizedDateString);
-    const now = new Date();
-    
-    // 验证日期是否有效
-    if (isNaN(date.getTime())) return '无效日期';
-    
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    // 5分钟以内显示"刚刚"
-    if (diffMins < 5) return '刚刚';
-    // 1小时以内显示"X分钟前"
-    if (diffMins < 60) return `${diffMins}分钟前`;
-    // 24小时以内显示"X小时前"
-    if (diffHours < 24) return `${diffHours}小时前`;
-    // 超过1天显示具体日期时间（精确到分钟）
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   // Syntax highlighting function
@@ -471,43 +427,7 @@ const StatePreview: React.FC = () => {
 
       {/* 右侧主内容区 */}
       <main className={styles.mainContent}>
-        {/* 全局头部 */}
-        {workspace && (
-          <div className={styles.globalHeader}>
-            <div className={styles.globalHeaderLeft}>
-              <h1 className={styles.globalTitle}>{workspace.name}</h1>
-              <div className={styles.globalMeta}>
-                <span className={styles.metaItem}>ID: {workspace.workspace_id}</span>
-                <span className={styles.metaItem}>
-                  {workspace.is_locked ? 'Locked' : 'Unlocked'}
-                </span>
-                <span className={styles.metaItem}>
-                  Resources {overviewResourceCount}
-                </span>
-                <span className={styles.metaItem}>
-                  Terraform {workspace.terraform_version || 'latest'}
-                </span>
-                <span className={styles.metaItem}>
-                  Updated {formatRelativeTime(workspace.updated_at)}
-                </span>
-              </div>
-            </div>
-            <div className={styles.globalHeaderRight}>
-              <button 
-                className={styles.lockButton}
-                onClick={() => navigate(`/workspaces/${workspaceId}`)}
-              >
-                {workspace.is_locked ? 'Unlock' : 'Lock'}
-              </button>
-              <button 
-                className={styles.newRunButton}
-                onClick={() => setShowNewRunDialog(true)}
-              >
-                + New run
-              </button>
-            </div>
-          </div>
-        )}
+        <TopBar title={`State Version ${version}`} />
 
         {/* State预览内容 */}
         <div className={styles.stateContent}>
