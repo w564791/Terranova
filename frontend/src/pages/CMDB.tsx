@@ -76,6 +76,7 @@ const ResourceDetails: React.FC<{ node: ResourceTreeNode }> = ({ node }) => {
     { label: 'Description', value: node.description, key: 'desc' },
     { label: 'Mode', value: node.mode, key: 'mode' },
     { label: 'Address', value: node.terraform_address, key: 'address' },
+    { label: 'AI Summary', value: node.resource_summary, key: 'summary' },
   ];
 
   return (

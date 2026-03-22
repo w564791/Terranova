@@ -58,6 +58,7 @@ export interface ResourceTreeNode {
   children?: ResourceTreeNode[];
   platform_resource_id?: number;
   jump_url?: string;
+  resource_summary?: string;
 }
 
 // Workspace资源树

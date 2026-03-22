@@ -138,6 +138,7 @@ type ResourceTreeNode struct {
 	Children           []*ResourceTreeNode `json:"children,omitempty"`
 	PlatformResourceID *uint               `json:"platform_resource_id,omitempty"`
 	JumpURL            string              `json:"jump_url,omitempty"`
+	ResourceSummary    string              `json:"resource_summary,omitempty"`
 }
 
 // WorkspaceResourceTree Workspace资源树响应

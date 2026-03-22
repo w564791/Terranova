@@ -697,6 +697,7 @@ func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resour
 			CloudARN:         r.CloudResourceARN,
 			Description:      r.Description,
 			Mode:             r.ResourceMode,
+			ResourceSummary:  r.ResourceSummary,
 		}
 
 		// 添加平台资源跳转链接（使用模糊匹配）
@@ -736,6 +737,7 @@ func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resour
 				CloudARN:         r.CloudResourceARN,
 				Description:      r.Description,
 				Mode:             r.ResourceMode,
+				ResourceSummary:  r.ResourceSummary,
 			}
 			rootNodes = append(rootNodes, resourceNode)
 		}
