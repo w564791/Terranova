@@ -1,0 +1,252 @@
+package services
+
+import (
+	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"iac-platform/internal/models"
+	"log"
+	"strings"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// ResourceSummaryService CMDB 资源摘要服务
+type ResourceSummaryService struct {
+	db            *gorm.DB
+	configService *AIConfigService
+}
+
+// NewResourceSummaryService 创建资源摘要服务
+func NewResourceSummaryService(db *gorm.DB) *ResourceSummaryService {
+	return &ResourceSummaryService{
+		db:            db,
+		configService: NewAIConfigService(db),
+	}
+}
+
+const defaultResourceSummaryPrompt = `你是基础设施配置分析专家。根据 Terraform 资源的 attributes JSON 生成配置摘要。
+
+摘要第一行格式：资源类型 + 名称/ID（如 "安全组 sg-789 (ken-ai-test)"）
+
+然后按以下维度提取（仅输出适用的维度）：
+
+【网络与访问】
+- 入站/出站规则：协议 + 端口范围 + 来源/目标 CIDR，0.0.0.0/0 或 ::/0 标注"[公网暴露]"
+- 是否对外可达：公网 IP、publicly_accessible、ELB scheme（internal/internet-facing）
+- 所在 VPC ID、子网 ID、可用区
+
+【安全与合规】
+- 加密：静态加密方式（AES256/KMS）、传输加密（SSL/TLS）、KMS Key ID
+- 删除保护：deletion_protection / skip_final_snapshot / force_destroy
+- 公开访问阻止：block_public_acls 等四项设置
+- 版本控制 / 日志记录 / CloudTrail
+- IAM 权限：解析 policy document JSON 字符串，提取 Action 和 Principal，标注 * 为"[宽泛权限]"
+
+【备份与数据保护】
+- 备份保留期（backup_retention_period），0 标注"[无备份]"
+- 多可用区 / 高可用 / 副本配置
+- 生命周期规则（过期天数、存储类型转换）
+- 版本控制状态（Enabled/Suspended）
+
+【资源规格】
+- 实例类型 / 引擎版本 / 存储大小
+- Auto Scaling 范围（min/max/desired）
+
+【环境与标签】
+- Environment/env 标签值（prod/staging/dev）
+- 业务标签（team、business-line、owner）
+
+注意：attributes 中可能包含 JSON 编码的字符串（如 IAM policy document、S3 bucket policy），需要解析其内容而不是跳过。
+
+资源类型: %s
+属性:
+%s
+
+输出一段中文摘要，不超过 300 字。`
+
+// GenerateSummaries 为指定工作空间的资源生成摘要
+// 同步执行，在调用方的 goroutine 内运行
+func (s *ResourceSummaryService) GenerateSummaries(ctx context.Context, workspaceID string) error {
+	return s.generateSummariesForResources(ctx, workspaceID, "workspace_id = ? AND resource_mode = 'managed'", workspaceID)
+}
+
+// GenerateSummariesForExternalSource 为外置 CMDB 数据源的资源生成摘要
+func (s *ResourceSummaryService) GenerateSummariesForExternalSource(ctx context.Context, sourceID string) error {
+	return s.generateSummariesForResources(ctx, sourceID, "external_source_id = ? AND resource_mode = 'managed'", sourceID)
+}
+
+func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Context, logID string, where string, args ...interface{}) error {
+	// 检查 AI 配置
+	cfg, err := s.configService.GetConfigForCapability("cmdb_resource_summary")
+	if err != nil || cfg == nil {
+		log.Printf("[ResourceSummary] No AI config for 'cmdb_resource_summary', skipping for %s", logID)
+		return nil
+	}
+
+	// 获取 prompt
+	prompt := defaultResourceSummaryPrompt
+	if customPrompt, ok := cfg.CapabilityPrompts["cmdb_resource_summary"]; ok && customPrompt != "" {
+		prompt = customPrompt
+	}
+
+	// 查询资源
+	var resources []models.ResourceIndex
+	if err := s.db.Where(where, args...).Find(&resources).Error; err != nil {
+		return fmt.Errorf("failed to query resources: %w", err)
+	}
+
+	if len(resources) == 0 {
+		return nil
+	}
+
+	// 创建 AI caller
+	caller := NewAICallerFromConfig(cfg)
+	rateLimitSleep := time.Duration(cfg.RateLimitSeconds) * time.Second
+	if rateLimitSleep < time.Second {
+		rateLimitSleep = time.Second
+	}
+
+	generated := 0
+	skipped := 0
+	failed := 0
+
+	for _, resource := range resources {
+		if ctx.Err() != nil {
+			log.Printf("[ResourceSummary] Context cancelled for %s, processed %d/%d", logID, generated+skipped+failed, len(resources))
+			break
+		}
+
+		// 计算 attributes hash（从 DB 返回的 JSONB，规范化排序）
+		hash := computeAttributesHash(resource.Attributes)
+
+		// 对比 hash，跳过未变更的资源
+		if hash == resource.SummaryHash && resource.ResourceSummary != "" {
+			skipped++
+			continue
+		}
+
+		// 构建 prompt
+		attributesStr := truncateAttributes(resource.Attributes)
+		userPrompt := fmt.Sprintf(prompt, resource.ResourceType, attributesStr)
+
+		// 调 AI
+		messages := []AgentMessage{
+			{Role: "user", Content: userPrompt},
+		}
+		response, err := caller.ChatWithTools(ctx, messages, nil)
+		if err != nil {
+			log.Printf("[ResourceSummary] AI call failed for resource %d (%s): %v", resource.ID, resource.TerraformAddress, err)
+			failed++
+			continue
+		}
+
+		summary := strings.TrimSpace(response.Content)
+		if summary == "" {
+			log.Printf("[ResourceSummary] AI returned empty summary for resource %d (%s)", resource.ID, resource.TerraformAddress)
+			failed++
+			continue
+		}
+
+		// 写入 resource_summary + summary_hash（GORM）
+		if err := s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).Updates(map[string]interface{}{
+			"resource_summary": summary,
+			"summary_hash":     hash,
+		}).Error; err != nil {
+			log.Printf("[ResourceSummary] Failed to save summary for resource %d: %v", resource.ID, err)
+			failed++
+			continue
+		}
+
+		// 清空 embedding（raw SQL，因为 Embedding 字段标记了 gorm:"-"）
+		if err := s.db.Exec("UPDATE resource_index SET embedding = NULL, embedding_text = '' WHERE id = ?", resource.ID).Error; err != nil {
+			log.Printf("[ResourceSummary] Failed to clear embedding for resource %d: %v", resource.ID, err)
+		}
+
+		generated++
+
+		// Rate limiting
+		if rateLimitSleep > 0 {
+			time.Sleep(rateLimitSleep)
+		}
+	}
+
+	log.Printf("[ResourceSummary] Completed for %s: generated=%d, skipped=%d, failed=%d, total=%d",
+		logID, generated, skipped, failed, len(resources))
+
+	return nil
+}
+
+// computeAttributesHash 计算 attributes 的 MD5 hash
+// 输入是从 DB 读回的 json.RawMessage（PostgreSQL JSONB 规范化排序）
+func computeAttributesHash(attributes json.RawMessage) string {
+	if len(attributes) == 0 {
+		return ""
+	}
+	hash := md5.Sum(attributes)
+	return hex.EncodeToString(hash[:])
+}
+
+// truncateAttributes 智能截断 attributes，保留安全相关 key
+func truncateAttributes(attributes json.RawMessage) string {
+	const maxLen = 8000
+
+	if len(attributes) <= maxLen {
+		return string(attributes)
+	}
+
+	// 解析 JSON
+	var attrs map[string]interface{}
+	if err := json.Unmarshal(attributes, &attrs); err != nil {
+		// 无法解析，直接截断
+		return string(attributes[:maxLen]) + "..."
+	}
+
+	// 低价值的大字段，优先移除
+	lowValueKeys := []string{
+		"after_unknown", "after_sensitive", "before_sensitive",
+		"after_identity", "timeouts",
+	}
+	for _, key := range lowValueKeys {
+		delete(attrs, key)
+	}
+
+	result, _ := json.Marshal(attrs)
+	if len(result) <= maxLen {
+		return string(result)
+	}
+
+	// 仍然超限，保留高价值 key
+	highValueKeys := map[string]bool{
+		"id": true, "arn": true, "name": true, "tags": true, "tags_all": true,
+		"ingress": true, "egress": true, "policy": true, "assume_role_policy": true,
+		"encryption": true, "server_side_encryption_configuration": true,
+		"public_access": true, "block_public_acls": true, "block_public_policy": true,
+		"deletion_protection": true, "skip_final_snapshot": true, "force_destroy": true,
+		"backup_retention_period": true, "multi_az": true,
+		"versioning": true, "lifecycle_rule": true, "lifecycle_configuration": true,
+		"instance_type": true, "engine": true, "engine_version": true,
+		"vpc_id": true, "subnet_id": true, "subnet_ids": true,
+		"security_group_ids": true, "vpc_security_group_ids": true,
+		"publicly_accessible": true, "associate_public_ip_address": true,
+		"cidr_block": true, "cidr_blocks": true,
+		"rule": true, "inbound_rule": true, "outbound_rule": true,
+		"bucket": true, "region": true, "status": true,
+	}
+
+	filtered := make(map[string]interface{})
+	for key, val := range attrs {
+		if highValueKeys[key] {
+			filtered[key] = val
+		}
+	}
+
+	result, _ = json.Marshal(filtered)
+	if len(result) > maxLen {
+		return string(result[:maxLen]) + "..."
+	}
+	return string(result)
+}
