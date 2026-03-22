@@ -28,45 +28,27 @@ func NewResourceSummaryService(db *gorm.DB) *ResourceSummaryService {
 	}
 }
 
-const defaultResourceSummaryPrompt = `你是基础设施配置分析专家。根据 Terraform 资源的 attributes JSON 生成配置摘要。
+const defaultResourceSummaryPrompt = `根据资源属性生成配置摘要。
 
-摘要第一行格式：资源类型 + 名称/ID（如 "安全组 sg-789 (ken-ai-test)"）
+严格规则：
+- 纯文本输出，禁止使用 markdown 标题（#）、代码块、列表符号
+- 第一行：资源类型中文名 + 属性中的实际名称或 ID（从 name/id/bucket 等字段取，不要用占位符）
+- 只描述属性中实际存在的配置，不要推测、不要给建议、不要列出缺失项
+- 0.0.0.0/0 或 ::/0 标注[公网暴露]
+- deletion_protection=false 标注[删除保护未启用]
+- backup_retention_period=0 标注[无备份]
+- 不超过 200 字
 
-然后按以下维度提取（仅输出适用的维度）：
-
-【网络与访问】
-- 入站/出站规则：协议 + 端口范围 + 来源/目标 CIDR，0.0.0.0/0 或 ::/0 标注"[公网暴露]"
-- 是否对外可达：公网 IP、publicly_accessible、ELB scheme（internal/internet-facing）
-- 所在 VPC ID、子网 ID、可用区
-
-【安全与合规】
-- 加密：静态加密方式（AES256/KMS）、传输加密（SSL/TLS）、KMS Key ID
-- 删除保护：deletion_protection / skip_final_snapshot / force_destroy
-- 公开访问阻止：block_public_acls 等四项设置
-- 版本控制 / 日志记录 / CloudTrail
-- IAM 权限：解析 policy document JSON 字符串，提取 Action 和 Principal，标注 * 为"[宽泛权限]"
-
-【备份与数据保护】
-- 备份保留期（backup_retention_period），0 标注"[无备份]"
-- 多可用区 / 高可用 / 副本配置
-- 生命周期规则（过期天数、存储类型转换）
-- 版本控制状态（Enabled/Suspended）
-
-【资源规格】
-- 实例类型 / 引擎版本 / 存储大小
-- Auto Scaling 范围（min/max/desired）
-
-【环境与标签】
-- Environment/env 标签值（prod/staging/dev）
-- 业务标签（team、business-line、owner）
-
-注意：attributes 中可能包含 JSON 编码的字符串（如 IAM policy document、S3 bucket policy），需要解析其内容而不是跳过。
+提取维度（仅输出有数据的）：
+网络：入站/出站规则（协议+端口+CIDR）、公网IP、VPC/子网/可用区
+安全：加密方式、删除保护、公开访问阻止、IAM权限
+备份：备份保留期、多可用区、版本控制
+规格：实例类型、引擎版本、存储大小
+标签：Environment、team 等业务标签
 
 资源类型: %s
 属性:
-%s
-
-输出一段中文摘要，不超过 300 字。`
+%s`
 
 // GenerateSummaries 为指定工作空间的资源生成摘要
 // 同步执行，在调用方的 goroutine 内运行
