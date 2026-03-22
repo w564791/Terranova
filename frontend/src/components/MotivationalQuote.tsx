@@ -39,38 +39,34 @@ const getQuoteByTime = () => {
   
   // console.log('[MotivationalQuote] 当前时间:', now.toLocaleString('zh-CN'), '小时:', hour);
   
-  // 早安激励（5:00 - 11:59）- 日出渐变
   if (hour >= 5 && hour < 12) {
     return {
       icon: '🌅',
-      text: '新的一天，新的起点！每一点努力，都是未来闪光的伏笔。去迎接今天的挑战吧！',
-      background: 'linear-gradient(135deg, #ff9a56 0%, #ff6a88 50%, #ffd3a5 100%)' // 日出橙粉色
+      text: '新的一天，迎接挑战',
+      background: 'linear-gradient(135deg, #ff9a56 0%, #ff6a88 50%, #ffd3a5 100%)'
     };
   }
-  
-  // 午间激励（12:00 - 17:59）- 蓝天白云
+
   if (hour >= 12 && hour < 18) {
     return {
       icon: '🌞',
-      text: '忙碌的上午辛苦了！稍作休息，补充能量，下午继续为梦想加速前行 💪',
-      background: 'linear-gradient(135deg, #56ccf2 0%, #2f80ed 100%)' // 更深的蓝天渐变
+      text: '保持节奏，稳步前行',
+      background: 'linear-gradient(135deg, #56ccf2 0%, #2f80ed 100%)'
     };
   }
-  
-  // 晚安激励（18:00 - 22:59）- 城市夜景
+
   if (hour >= 18 && hour < 23) {
     return {
       icon: '🌇',
-      text: '今天也在认真生活，辛苦了！别忘了肯定自己——每一点进步，都是值得庆祝的事 ✨',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' // 紫色夜景
+      text: '辛苦了，今天也在进步',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     };
   }
-  
-  // 凌晨激励（23:00 - 4:59）- 星空
+
   return {
     icon: '🌙',
-    text: '夜深人静，属于思考与积蓄力量的时刻。别急，所有坚持都会在黎明前发光 🌌',
-    background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%)' // 深蓝紫星空
+    text: '夜深了，注意休息',
+    background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%)'
   };
 };
 
