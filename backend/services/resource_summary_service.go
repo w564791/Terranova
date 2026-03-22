@@ -117,6 +117,12 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 			continue
 		}
 
+		// 跳过 attributes 为空的资源
+		if len(resource.Attributes) == 0 || string(resource.Attributes) == "null" || string(resource.Attributes) == "{}" {
+			skipped++
+			continue
+		}
+
 		// 构建 prompt
 		attributesStr := truncateAttributes(resource.Attributes)
 		userPrompt := fmt.Sprintf(prompt, resource.ResourceType, attributesStr)
