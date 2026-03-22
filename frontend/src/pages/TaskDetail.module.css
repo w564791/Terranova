@@ -13,7 +13,7 @@
 /* 右侧主内容区 */
 .mainContent {
   flex: 1;
-  margin-left: 256px;
+  margin-left: 260px;
   display: flex;
   flex-direction: column;
   background: var(--color-gray-50);

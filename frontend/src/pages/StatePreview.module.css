@@ -5,11 +5,11 @@
   background: var(--color-gray-50);
 }
 
-/* 左侧导航栏 - 黑色主题（与WorkspaceDetail一致） */
+/* 左侧导航栏 - 深色主题（与 Layout sidebar 一致） */
 .sidebar {
-  width: 256px;
-  background: #1E1E1E;
-  border-right: 1px solid #2D2D2D;
+  width: 260px;
+  background: linear-gradient(180deg, #1a1a1a 0%, #1e1e1e 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -94,7 +94,7 @@
 /* 右侧主内容区 */
 .mainContent {
   flex: 1;
-  margin-left: 256px;
+  margin-left: 260px;
   display: flex;
   flex-direction: column;
   background: var(--color-gray-50);
