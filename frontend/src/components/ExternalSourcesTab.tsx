@@ -270,10 +270,12 @@ const SourceForm: React.FC<{
       return;
     }
 
-    // 过滤掉空的headers
+    // 过滤掉空的headers，空 value 不传（后端保留现有 secret）
     const filteredData = {
       ...formData,
-      auth_headers: formData.auth_headers?.filter(h => h.key.trim()) || [],
+      auth_headers: formData.auth_headers
+        ?.filter(h => h.key.trim())
+        .map(h => h.value ? { key: h.key, value: h.value } : { key: h.key }) || [],
     };
 
     await onSave(filteredData);
