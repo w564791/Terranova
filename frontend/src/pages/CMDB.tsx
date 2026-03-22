@@ -334,7 +334,7 @@ const ExternalSourcesTreeView: React.FC = () => {
     try {
       setLoading(true);
       const response = await externalSourceService.listExternalSources();
-      setSources(response.sources.filter(s => s.is_enabled && s.last_sync_count > 0));
+      setSources((response.sources || []).filter(s => s.is_enabled && s.last_sync_count > 0));
       setLoaded(true);
     } catch (error) {
       console.error('Failed to load external sources:', error);
