@@ -88,6 +88,7 @@ export interface ResourceDetail {
   root_module_name?: string;
   attributes?: Record<string, unknown>;
   tags?: Record<string, string>;
+  resource_summary?: string;
   provider?: string;
   state_version_id?: number;
   last_synced_at: string;

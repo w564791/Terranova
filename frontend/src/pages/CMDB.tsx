@@ -207,31 +207,52 @@ const formatRelativeTime = (dateString?: string): string => {
 const ExternalResourceNode: React.FC<{
   resource: any;
 }> = ({ resource }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [detail, setDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [showAttributes, setShowAttributes] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleCopyCloudId = async (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent, value: string) => {
     e.stopPropagation();
-    if (resource.cloud_resource_id) {
-      const success = await copyToClipboard(resource.cloud_resource_id);
-      if (success) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const success = await copyToClipboard(value);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleExpand = async () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !detail) {
+      try {
+        setDetailLoading(true);
+        const addr = resource.terraform_address || `external.__external__.${resource.cloud_resource_id}`;
+        const res = await cmdbService.getResourceDetail('__external__', addr);
+        setDetail(res);
+      } catch (err) {
+        console.error('Failed to load resource detail:', err);
+      } finally {
+        setDetailLoading(false);
       }
     }
   };
 
+  const data = detail || resource;
+
   return (
     <div className={styles.treeNode}>
-      <div className={styles.treeNodeHeader}>
-        <span className={styles.expandIcon}>•</span>
+      <div className={styles.treeNodeHeader} onClick={handleExpand} style={{ cursor: 'pointer' }}>
+        <span className={styles.expandIcon}>{expanded ? '▼' : '▶'}</span>
         <span className={`${styles.nodeIcon} ${styles.resourceIcon}`}>[R]</span>
         <span className={styles.nodeName}>
-          {resource.resource_type}.{resource.resource_name}
+          {resource.resource_type ? `${resource.resource_type}.${resource.resource_name}` : resource.resource_name || resource.cloud_resource_id}
         </span>
         {resource.cloud_resource_id && (
-          <span 
+          <span
             className={`${styles.nodeCloudId} ${styles.copyable}`}
-            onClick={handleCopyCloudId}
+            onClick={(e) => handleCopy(e, resource.cloud_resource_id)}
             title="Click to copy"
           >
             {resource.cloud_resource_id}
@@ -239,6 +260,51 @@ const ExternalResourceNode: React.FC<{
           </span>
         )}
       </div>
+      {expanded && (
+        <div className={styles.resourceDetails} style={{ marginLeft: '32px', padding: '8px 0' }}>
+          {detailLoading ? (
+            <div style={{ fontSize: '12px', color: '#6b7280' }}>Loading...</div>
+          ) : (
+            <>
+              {data.cloud_resource_name && (
+                <CopyableValue label="Cloud Name" value={data.cloud_resource_name} fieldKey="name" copiedField={null} onCopy={() => {}} />
+              )}
+              {data.cloud_resource_arn && (
+                <CopyableValue label="ARN" value={data.cloud_resource_arn} fieldKey="arn" copiedField={null} onCopy={() => {}} />
+              )}
+              {data.description && (
+                <CopyableValue label="Description" value={data.description} fieldKey="desc" copiedField={null} onCopy={() => {}} />
+              )}
+              {data.terraform_address && (
+                <CopyableValue label="Address" value={data.terraform_address} fieldKey="addr" copiedField={null} onCopy={() => {}} />
+              )}
+              {data.resource_summary && (
+                <div style={{ marginTop: '4px' }}>
+                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>AI Summary:</span>
+                  <div style={{ fontSize: '13px', color: '#374151', lineHeight: '1.5', marginTop: '2px', whiteSpace: 'pre-wrap' }}>
+                    {data.resource_summary}
+                  </div>
+                </div>
+              )}
+              {data.attributes && typeof data.attributes === 'object' && Object.keys(data.attributes).length > 0 && (
+                <div style={{ marginTop: '4px' }}>
+                  <span
+                    style={{ fontSize: '12px', color: '#3b82f6', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setShowAttributes(!showAttributes)}
+                  >
+                    {showAttributes ? '∧' : '∨'} Attributes ({Object.keys(data.attributes).length} keys)
+                  </span>
+                  {showAttributes && (
+                    <pre style={{ fontSize: '11px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', marginTop: '4px', overflow: 'auto', maxHeight: '300px' }}>
+                      {JSON.stringify(data.attributes, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -252,19 +318,29 @@ const ExternalSourceNode: React.FC<{
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Load resources for this source
+  // Load resources using resource tree API (returns full data including summary/attributes)
   const loadResources = useCallback(async () => {
     if (loaded) return;
-    
+
     try {
       setLoading(true);
-      // 使用cmdbService搜索
-      const response = await cmdbService.searchResources(source.source_id, { limit: 100 });
-      // 过滤出属于这个数据源的资源
-      const filtered = response.results?.filter((r: any) => 
-        r.terraform_address?.startsWith(`external.${source.source_id}.`)
-      ) || [];
-      setResources(filtered);
+      const tree = await cmdbService.getWorkspaceResourceTree('__external__');
+      // 从 tree 中提取属于这个数据源的资源节点
+      const flatResources: any[] = [];
+      const extractResources = (nodes: any[]) => {
+        for (const node of nodes) {
+          if (node.type === 'resource' && node.terraform_address?.includes(source.source_id)) {
+            flatResources.push(node);
+          }
+          if (node.children) {
+            extractResources(node.children);
+          }
+        }
+      };
+      if (tree?.tree) {
+        extractResources(tree.tree);
+      }
+      setResources(flatResources);
       setLoaded(true);
     } catch (error) {
       console.error('Failed to load resources:', error);
@@ -1317,7 +1393,7 @@ const CMDB: React.FC = () => {
                   workspace={ws}
                   initialResourceCount={workspaceResourceData.get(ws.workspace_id)?.resource_count}
                   lastSyncedAt={workspaceResourceData.get(ws.workspace_id)?.last_synced_at}
-                  isAdmin={isAdmin}
+                  isAdmin={isAdmin || false}
                   onSyncSuccess={handleWorkspaceSyncSuccess}
                   onSyncError={handleWorkspaceSyncError}
                 />
