@@ -323,14 +323,14 @@ const ExternalSourceNode: React.FC<{
 const ExternalSourcesTreeView: React.FC = () => {
   const [expanded, setExpanded] = useState(false);
   const [sources, setSources] = useState<ExternalSourceResponse[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const toast = useToast();
 
-  // Load external sources
+  // 组件挂载时立即加载（不等 expand）
   const loadSources = useCallback(async () => {
     if (loaded) return;
-    
+
     try {
       setLoading(true);
       const response = await externalSourceService.listExternalSources();
@@ -345,15 +345,14 @@ const ExternalSourcesTreeView: React.FC = () => {
   }, [loaded, toast]);
 
   useEffect(() => {
-    if (expanded && !loaded) {
-      loadSources();
-    }
-  }, [expanded, loaded, loadSources]);
+    loadSources();
+  }, [loadSources]);
 
   const totalResources = sources.reduce((sum, s) => sum + s.last_sync_count, 0);
 
-  if (sources.length === 0 && loaded) {
-    return null; // 没有外部数据源时不显示
+  // 加载中或没有数据时不渲染
+  if (loading || (sources.length === 0 && loaded)) {
+    return null;
   }
 
   return (
