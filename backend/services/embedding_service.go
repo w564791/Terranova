@@ -617,6 +617,11 @@ func (s *EmbeddingService) BuildEmbeddingText(r *models.ResourceIndex) string {
 		parts = append(parts, r.CloudProvider)
 	}
 
+	// AI 生成的资源摘要（包含安全配置、网络暴露等语义信息）
+	if r.ResourceSummary != "" {
+		parts = append(parts, r.ResourceSummary)
+	}
+
 	return strings.Join(parts, " ")
 }
 

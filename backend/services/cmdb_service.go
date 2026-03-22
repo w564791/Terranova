@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
@@ -152,8 +153,18 @@ func (s *CMDBService) SyncWorkspaceResources(workspaceID string) error {
 		return err
 	}
 
-	// 4. 触发 embedding 生成（异步，不阻塞主流程）
+	// 4. 异步生成资源摘要 → 完成后触发 embedding
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		// 4a. 资源摘要（同步执行，在此 goroutine 内阻塞）
+		summaryService := NewResourceSummaryService(s.db)
+		if err := summaryService.GenerateSummaries(ctx, workspaceID); err != nil {
+			log.Printf("[CMDB] Resource summary failed for workspace %s: %v", workspaceID, err)
+		}
+
+		// 4b. 摘要完成后触发 embedding（包含 resource_summary 的增强内容）
 		log.Printf("[CMDB] Starting embedding sync for workspace %s", workspaceID)
 		embeddingWorker := NewEmbeddingWorker(s.db)
 		if err := embeddingWorker.SyncWorkspace(workspaceID); err != nil {
