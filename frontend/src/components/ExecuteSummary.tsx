@@ -7,6 +7,20 @@ import {
 } from '../services/ai';
 import styles from './ExecuteSummary.module.css';
 
+// 安全渲染：防止 AI 返回的对象被直接当 React child
+const safeRender = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    // 尝试常见字段
+    return value.description || value.text || value.message || value.summary ||
+           value.label || value.name || value.field || value.impact ||
+           JSON.stringify(value);
+  }
+  return String(value);
+};
+
 interface ExecuteSummaryProps {
   workspaceId: string;
   taskId: number;
@@ -238,7 +252,7 @@ const PlanSummaryResult: React.FC<{
           <div className={styles.sectionTitle}>影响分析</div>
           <div className={styles.sectionContent}>
             {typeof summary.impact_analysis === 'object' && summary.impact_analysis.summary && (
-              <p>{summary.impact_analysis.summary}</p>
+              <p>{safeRender(summary.impact_analysis.summary)}</p>
             )}
             {summary.impact_analysis.details && Array.isArray(summary.impact_analysis.details) && detailsCount > 0 && (
               <>
@@ -256,7 +270,7 @@ const PlanSummaryResult: React.FC<{
                             <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
                           )}
                         </div>
-                        {d.impact && <div className={styles.detailImpact}>{d.impact}</div>}
+                        {d.impact && <div className={styles.detailImpact}>{safeRender(d.impact)}</div>}
                       </div>
                     ))}
                   </div>
@@ -281,7 +295,7 @@ const PlanSummaryResult: React.FC<{
                     <span className={styles.affectedAddress}>{r.address}</span>
                     <span className={styles.affectedType}>{r.type}</span>
                   </div>
-                  {r.impact && <div className={styles.affectedImpact}>{r.impact}</div>}
+                  {r.impact && <div className={styles.affectedImpact}>{safeRender(r.impact)}</div>}
                 </div>
               ))}
             </div>
@@ -319,7 +333,7 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
           <div className={styles.sectionTitle}>预测对比</div>
           <div className={styles.sectionContent}>
             {summary.impact_confirmation.predicted_vs_actual && (
-              <p>{summary.impact_confirmation.predicted_vs_actual}</p>
+              <p>{safeRender(summary.impact_confirmation.predicted_vs_actual)}</p>
             )}
             {summary.impact_confirmation.unexpected_changes &&
               Array.isArray(summary.impact_confirmation.unexpected_changes) &&
@@ -327,8 +341,8 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
               <div className={styles.unexpectedChanges}>
                 <div className={styles.unexpectedTitle}>意外变更:</div>
                 <ul>
-                  {summary.impact_confirmation.unexpected_changes.map((c: string, i: number) => (
-                    <li key={i}>{c}</li>
+                  {summary.impact_confirmation.unexpected_changes.map((c: any, i: number) => (
+                    <li key={i}>{typeof c === 'string' ? c : (c.description || c.field || JSON.stringify(c))}</li>
                   ))}
                 </ul>
               </div>
@@ -375,7 +389,7 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
                     <span className={styles.affectedAddress}>{r.address}</span>
                     <span className={styles.affectedType}>{r.type}</span>
                   </div>
-                  {r.impact && <div className={styles.affectedImpact}>{r.impact}</div>}
+                  {r.impact && <div className={styles.affectedImpact}>{safeRender(r.impact)}</div>}
                 </div>
               ))}
             </div>
