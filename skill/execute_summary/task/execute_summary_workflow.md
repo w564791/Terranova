@@ -323,46 +323,14 @@ affected_resources_schema:
 
 ### Apply 阶段
 
-> Plan 和 Apply 为独立上下文，Apply AI 无法感知 Plan 阶段的分析过程，所有 Plan 信息必须通过工具获取。
+> Apply 阶段只做执行结果分析，不做决策回顾。
 
 ```
-前提验证：
-  1. 确认 stage == "apply"，否则返回 INVALID_STAGE_CONTEXT
-  2. 确认平台已注入 plan_decision_code（用户 Plan 阶段选择的 action code）
-     缺失时返回 { "error": "MISSING_PLAN_DECISION" }
-
-执行流程：
-  3. 调用 query_plan_summary 获取 Plan 阶段分析结果
-  4. 校验返回结构必须包含以下字段，缺失时返回 { "error": "PLAN_SUMMARY_INCOMPLETE" }：
-       - impact_analysis.details（非空数组）
-       - risk_evaluation.risk_level
-       - risk_evaluation.requires_human_confirmation
-  5. 对比 Plan 预测 vs 实际执行结果，标记 unexpected_changes
-  6. 判定 actual_outcome（no_incident / incident / unknown）
-  7. 按第十二节规则判定 consistency_check
-  8. 汇总 affected_resources（实际影响范围）
-```
-
------
-
-## 十二、Apply 阶段 consistency_check 判定规则
-
-```yaml
-match:
-  - plan_decision_code in [DECOMMISSIONED, REPLACED, MIGRATED]
-    AND actual_outcome == no_incident
-  - plan_decision_code in [TEMP_CHANGE, RISK_ACCEPTED, MISCONFIG_FIX]
-    AND actual_outcome == no_incident
-  - plan_decision_code == ARCH_CHANGE_APPROVED
-    AND actual_outcome == no_incident AND unexpected_changes 为空
-
-mismatch:
-  - actual_outcome == incident（无论 plan_decision_code 为何）
-  - unexpected_changes 非空 AND plan_decision_code 与变更性质明显不符
-  - plan_decision_code == ABORT 但变更实际已执行
-
-unknown:
-  - actual_outcome == unknown
+1. 确认 stage == "apply"，否则返回 INVALID_STAGE_CONTEXT
+2. 调用 query_plan_summary 获取 Plan 阶段分析结果（可选，用于对比预测）
+3. 对比 Plan 预测 vs 实际执行结果，标记 unexpected_changes
+4. 汇总 resource_results（每个资源的执行状态）
+5. 汇总 affected_resources（实际影响范围）
 ```
 
 -----
@@ -445,17 +413,6 @@ unknown:
   "impact_confirmation": {
     "predicted_vs_actual": "一致|存在偏差",
     "unexpected_changes": []
-  },
-
-  "risk_validation": {
-    "plan_risk_level": "low|medium|high|critical",
-    "actual_outcome": "no_incident|incident|unknown",
-    "deviation": []
-  },
-
-  "human_decision_review": {
-    "user_reason": "plan_decision_code 原值",
-    "consistency_check": "match|mismatch|unknown"
   },
 
   "affected_resources": [
