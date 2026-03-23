@@ -176,31 +176,29 @@ func (m *TaskQueueManager) GetNextExecutableTask(workspaceID string) (*models.Wo
 			First(&planAndApplyTask).Error
 
 		if err == nil {
-			// 找到plan_and_apply pending任务,检查是否有running/pending/apply_pending的plan_and_apply任务阻塞它
-		var otherBlockingCount int64
-		m.db.Model(&models.WorkspaceTask{}).
-			Where("workspace_id = ? AND task_type = ? AND id < ? AND status IN (?)",
-				workspaceID,
-				models.TaskTypePlanAndApply,
-				planAndApplyTask.ID,
-				[]models.TaskStatus{models.TaskStatusPending, models.TaskStatusRunning, models.TaskStatusApplyPending}).
-			Count(&otherBlockingCount)
+			// 找到plan_and_apply pending任务,检查是否有running/pending/apply_pending/decision_required的plan_and_apply任务阻塞它
+			var otherBlockingCount int64
+			m.db.Model(&models.WorkspaceTask{}).
+				Where("workspace_id = ? AND task_type = ? AND id < ? AND status IN (?)",
+					workspaceID,
+					models.TaskTypePlanAndApply,
+					planAndApplyTask.ID,
+					[]models.TaskStatus{models.TaskStatusPending, models.TaskStatusRunning, models.TaskStatusApplyPending, models.TaskStatusDecisionRequired}).
+				Count(&otherBlockingCount)
 
-		if otherBlockingCount > 0 {
-			log.Printf("[TaskQueue] Plan_and_apply task %d is blocked by %d earlier plan_and_apply tasks",
-				planAndApplyTask.ID, otherBlockingCount)
-			// plan_and_apply被阻塞,但plan任务可以执行
-			// 继续检查plan任务
-		} else {
-			log.Printf("[TaskQueue] Found plan_and_apply pending task %d for workspace %s (no blocking tasks)",
-				planAndApplyTask.ID, workspaceID)
-			return &planAndApplyTask, nil
+			if otherBlockingCount > 0 {
+				log.Printf("[TaskQueue] Plan_and_apply task %d is blocked by %d earlier plan_and_apply tasks",
+					planAndApplyTask.ID, otherBlockingCount)
+			} else {
+				log.Printf("[TaskQueue] Found plan_and_apply pending task %d for workspace %s (no blocking tasks)",
+					planAndApplyTask.ID, workspaceID)
+				return &planAndApplyTask, nil
+			}
+		} else if err != gorm.ErrRecordNotFound {
+			log.Printf("[TaskQueue] Error checking plan_and_apply tasks: %v", err)
+			return nil, err
 		}
-	} else if err != gorm.ErrRecordNotFound {
-		log.Printf("[TaskQueue] Error checking plan_and_apply tasks: %v", err)
-		return nil, err
 	}
-	} // end if !isLocked
 
 	// 2. 获取plan任务（完全独立,可以并发执行,不受lock和plan_and_apply任务阻塞）
 	var planTask models.WorkspaceTask
