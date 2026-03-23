@@ -213,6 +213,17 @@ export const retryApplySummary = async (
   await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/apply-summary/retry`);
 };
 
+// ========== AI Feature Toggles ==========
+
+export const getAIFeatures = async (): Promise<Record<string, boolean>> => {
+  const response: any = await api.get('/global/settings/ai-features');
+  return response?.data || response;
+};
+
+export const updateAIFeatures = async (features: Record<string, boolean>): Promise<void> => {
+  await api.put('/global/settings/ai-features', features);
+};
+
 // 优先级更新接口
 export interface PriorityUpdate {
   id: number;
