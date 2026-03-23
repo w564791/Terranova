@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Tooltip, Tag } from 'antd';
+import { Tooltip, Tag, Modal } from 'antd';
 import { ThunderboltOutlined, WarningOutlined } from '@ant-design/icons';
 import NewRunDialog from '../components/NewRunDialog';
 import TaskComments from '../components/TaskComments';
@@ -300,6 +300,14 @@ const TaskDetail: React.FC = () => {
     return date.toLocaleString();
   };
 
+  const proceedWithAction = (action: string) => {
+    setCommentAction(action as any);
+    setShowCommentInput(true);
+    setTimeout(() => {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+    }, 100);
+  };
+
   const handleActionWithComment = async (action: 'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override') => {
     // Confirm Apply 时检查 plan summary 状态
     if (action === 'confirm_apply' && task && workspaceId) {
@@ -308,13 +316,25 @@ const TaskDetail: React.FC = () => {
         const data = summary?.data || summary;
         if (data) {
           if (data.status === 'running' || data.status === 'pending') {
-            if (!window.confirm('AI 变更影响分析尚未完成，是否仍要继续 Apply？')) {
-              return;
-            }
+            Modal.confirm({
+              title: 'AI 分析尚未完成',
+              content: 'AI 变更影响分析正在进行中，建议等待分析完成后再确认 Apply。是否仍要继续？',
+              okText: '继续 Apply',
+              cancelText: '等待分析',
+              okButtonProps: { danger: true },
+              onOk: () => proceedWithAction(action),
+            });
+            return;
           } else if (data.requires_confirmation && !data.user_decision_code) {
-            if (!window.confirm('AI 判断本次变更存在风险，但尚未提交风险决策确认。是否仍要继续 Apply？')) {
-              return;
-            }
+            Modal.confirm({
+              title: 'AI 风险决策未确认',
+              content: 'AI 判断本次变更存在风险，建议先在 Plan Summary 中提交风险决策确认。是否仍要继续 Apply？',
+              okText: '继续 Apply',
+              cancelText: '返回确认',
+              okButtonProps: { danger: true },
+              onOk: () => proceedWithAction(action),
+            });
+            return;
           }
         }
       } catch {
@@ -322,15 +342,7 @@ const TaskDetail: React.FC = () => {
       }
     }
 
-    setCommentAction(action);
-    setShowCommentInput(true);
-
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth'
-      });
-    }, 100);
+    proceedWithAction(action);
   };
 
   const handleCommentSubmit = async (comment: string) => {
