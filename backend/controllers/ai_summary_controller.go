@@ -195,12 +195,18 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		}
 	}
 
+	// 解析用户名
+	usernameStr := "unknown"
+	if u, ok := username.(string); ok && u != "" {
+		usernameStr = u
+	}
+
 	// 写入决策（一次性写入）
 	now := time.Now()
 	c.db.Model(&models.AIPlanSummary{}).Where("id = ?", summary.ID).Updates(map[string]interface{}{
 		"user_decision_code": req.DecisionCode,
 		"user_decision_note": req.Note,
-		"user_decision_by":   userIDStr,
+		"user_decision_by":   usernameStr,
 		"user_decision_at":   now,
 	})
 
@@ -228,10 +234,6 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		}
 	}
 
-	usernameStr := "unknown"
-	if u, ok := username.(string); ok && u != "" {
-		usernameStr = u
-	}
 	commentContent := fmt.Sprintf("[AI 风险决策] %s 确认：%s", usernameStr, decisionLabel)
 	if req.Note != "" {
 		commentContent += fmt.Sprintf("\n补充说明：%s", req.Note)
