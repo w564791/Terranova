@@ -1628,7 +1628,7 @@ definitions:
     - ScopeTypeOrganization
     - ScopeTypeProject
     - ScopeTypeWorkspace
-host: localhost:8080
+swagger: "2.0"
 info:
   contact:
     email: support@iac-platform.com

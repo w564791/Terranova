@@ -42,6 +42,11 @@ export default defineConfig({
         secure: false, // 后端是 https 自签名时不炸
         // 注意：不要 rewrite，后端路由已包含 /api/v1 前缀
       },
+      '/swagger': {
+        target: useHttps ? 'https://localhost:8080' : 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

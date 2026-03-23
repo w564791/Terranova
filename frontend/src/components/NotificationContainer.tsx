@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import type { Notification } from '../hooks/useNotification';
 import styles from './NotificationContainer.module.css';
 
@@ -8,45 +8,17 @@ interface NotificationItemProps {
 }
 
 const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onRemove }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const [, setTimeLeft] = useState(5);
-
   useEffect(() => {
-    if (isHovered) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          onRemove(notification.id);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isHovered, notification.id, onRemove]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(notification.message);
-    } catch (err) {
-      console.error('复制失败:', err);
-    }
-  };
+    const timer = setTimeout(() => {
+      onRemove(notification.id);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [notification.id, onRemove]);
 
   return (
-    <div
-      className={`${styles.notification} ${styles[notification.type]}`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleCopy}
-      title="点击复制"
-    >
-      <div className={styles.message}>{notification.message}</div>
-      {isHovered && (
-        <div className={styles.copyHint}>点击复制</div>
-      )}
+    <div className={`${styles.notification} ${styles[notification.type]}`}>
+      <span className={styles.message}>{notification.message}</span>
+      <button className={styles.closeButton} onClick={() => onRemove(notification.id)}>×</button>
     </div>
   );
 };
@@ -56,10 +28,12 @@ interface NotificationContainerProps {
   onRemove: (id: string) => void;
 }
 
-const NotificationContainer: React.FC<NotificationContainerProps> = ({ 
-  notifications, 
-  onRemove 
+const NotificationContainer: React.FC<NotificationContainerProps> = ({
+  notifications,
+  onRemove
 }) => {
+  if (notifications.length === 0) return null;
+
   return (
     <div className={styles.container}>
       {notifications.map(notification => (

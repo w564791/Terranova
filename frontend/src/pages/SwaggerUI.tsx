@@ -86,7 +86,7 @@ const SwaggerUI: React.FC = () => {
 
       // @ts-ignore
       const ui = window.SwaggerUIBundle({
-        url: 'http://localhost:8080/swagger/doc.json',
+        url: '/swagger/doc.json',
         dom_id: '#swagger-ui',
         deepLinking: true,
         filter: true, // 启用API搜索过滤功能

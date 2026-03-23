@@ -869,11 +869,11 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 	}
 
 	// 查找所有在当前任务之前创建的需要取消的任务
-	// 包括：pending, apply_pending, plan_completed（等待Apply确认）
-	// 不包括：running（正在执行）, requires_approval（需要人工确认）
+	// 包括：pending, apply_pending, plan_completed（遗留兼容）, decision_required, waiting（各种等待状态）
+	// 不包括：running（正在执行）
 	var previousTasks []models.WorkspaceTask
 	if err := c.db.Where("workspace_id = ? AND id < ? AND status IN ?",
-		workspace.WorkspaceID, taskID, []string{"pending", "apply_pending", "plan_completed"}).
+		workspace.WorkspaceID, taskID, []string{"pending", "apply_pending", "plan_completed", "decision_required", "waiting"}).
 		Find(&previousTasks).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find previous tasks"})
 		return
@@ -916,6 +916,15 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 				}
 			}
 		}
+	}
+
+	// 没有任务被取消时返回错误
+	if cancelledCount == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":           "No cancellable previous tasks found",
+			"cancelled_count": 0,
+		})
+		return
 	}
 
 	// 取消之前的任务后，尝试执行当前任务

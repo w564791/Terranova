@@ -730,7 +730,9 @@ const OverviewTab: React.FC<{
   
   // 获取任务的最终状态显示（与Runs页面一致）
   const getFinalStatus = (run: any): string => {
-    if (run.status === 'apply_pending') {
+    if (run.status === 'decision_required') {
+      return 'Decision Required';
+    } else if (run.status === 'apply_pending') {
       return 'Apply Pending';
     } else if (run.status === 'success' || run.status === 'applied') {
       if (run.task_type === 'plan' || (run.task_type === 'plan_and_apply' && run.status === 'success')) {
@@ -757,7 +759,7 @@ const OverviewTab: React.FC<{
       return 'success';
     }
     if (status === 'decision_required') {
-      return 'warning';
+      return 'attention';
     }
     if (status === 'requires_approval' || status === 'apply_pending') {
       return 'attention';
@@ -1331,6 +1333,9 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
   
   // 获取任务的最终状态显示
   const getFinalStatus = (run: Run): string => {
+    if (run.status === 'decision_required') {
+      return 'Decision Required';
+    }
     // apply_pending状态表示plan完成，等待apply确认
     if (run.status === 'apply_pending') {
       return 'Apply Pending';
@@ -1365,7 +1370,7 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
     }
     // Needs Attention状态 - 黄色
     if (status === 'decision_required') {
-      return 'warning';
+      return 'attention';
     }
     if (status === 'requires_approval' || status === 'apply_pending') {
       return 'attention';

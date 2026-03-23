@@ -10,7 +10,7 @@ import AIErrorAnalysis from '../components/AIErrorAnalysis';
 import TaskTimeline from '../components/TaskTimeline';
 import SmartLogViewer from '../components/SmartLogViewer';
 import WorkspaceSidebar from '../components/WorkspaceSidebar';
-import { useToast } from '../hooks/useToast';
+import { useNotificationContext } from '../contexts/NotificationContext';
 import api from '../services/api';
 import styles from './TaskDetail.module.css';
 
@@ -46,7 +46,7 @@ interface Task {
 const TaskDetail: React.FC = () => {
   const { workspaceId, taskId } = useParams<{ workspaceId: string; taskId: string }>();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { showSuccess, showError } = useNotificationContext();
   const [task, setTask] = useState<Task | null>(null);
   const [workspace, setWorkspace] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -112,10 +112,10 @@ const TaskDetail: React.FC = () => {
       await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/trigger-executions/${executionId}/toggle`, {
         disabled
       });
-      showToast(`Trigger ${disabled ? 'disabled' : 'enabled'}`, 'success');
+      showSuccess(`Trigger ${disabled ? 'disabled' : 'enabled'}`);
       fetchTriggerExecutions();
     } catch (err: any) {
-      showToast('Failed to toggle trigger', 'error');
+      showError('Failed to toggle trigger');
     }
   };
 
@@ -160,11 +160,11 @@ const TaskDetail: React.FC = () => {
 
     try {
       await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/retry-state-save`);
-      showToast('State保存成功，workspace已解锁', 'success');
+      showSuccess('State保存成功，workspace已解锁');
       fetchTask();
     } catch (err: any) {
       const message = err.response?.data?.error || err.message || 'Failed to retry';
-      showToast(`重试失败: ${message}`, 'error');
+      showError(`重试失败: ${message}`);
     }
   };
 
@@ -375,8 +375,18 @@ const TaskDetail: React.FC = () => {
         } else if (commentAction === 'cancel') {
           await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/cancel`);
         } else if (commentAction === 'cancel_previous') {
-          await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/cancel-previous`);
+          const res: any = await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/cancel-previous`);
+          const cancelled = res?.cancelled_count ?? 0;
+          showSuccess(`已取消 ${cancelled} 个之前的任务`);
         }
+      }
+
+      if (commentAction === 'confirm_apply') {
+        showSuccess('Apply 已确认，任务开始执行');
+      } else if (commentAction === 'cancel') {
+        showSuccess('任务已取消');
+      } else if (commentAction === 'override') {
+        showSuccess('已覆盖失败的 Run Tasks');
       }
 
       setShowCommentInput(false);
@@ -392,7 +402,7 @@ const TaskDetail: React.FC = () => {
       }, 300);
     } catch (err: any) {
       const message = err.response?.data?.error || err.message || 'Failed to perform action';
-      showToast(`操作失败: ${message}`, 'error');
+      showError(`操作失败: ${message}`);
     } finally {
       setSubmittingAction(false);
     }
@@ -467,7 +477,7 @@ const TaskDetail: React.FC = () => {
                   style={{ cursor: 'pointer' }}
                   onClick={() => {
                     navigator.clipboard.writeText(workspace.workspace_id);
-                    showToast('Workspace ID copied to clipboard', 'success');
+                    showSuccess('Workspace ID copied to clipboard');
                   }}
                   title="Click to copy workspace ID"
                 >
@@ -519,6 +529,9 @@ const TaskDetail: React.FC = () => {
               )}
               {(task.status === 'plan_completed' || task.status === 'apply_pending') && (
                 <span className={styles.statusTagWarning}>Awaiting Confirmation</span>
+              )}
+              {task.status === 'decision_required' && (
+                <span className={styles.statusTagWarning}>Decision Required</span>
               )}
               {task.status === 'planned_and_finished' && (
                 <span className={styles.statusTagSuccess}>Planned and Finished</span>

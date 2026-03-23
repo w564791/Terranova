@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import { ToastProvider } from './contexts/ToastContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import AuthProvider from './components/AuthProvider';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -82,6 +83,7 @@ const App: FC = () => {
     return (
       <Provider store={store}>
         <ToastProvider>
+          <NotificationProvider>
           <AuthProvider>
             <Router>
             <Routes>
@@ -227,6 +229,7 @@ const App: FC = () => {
             </Routes>
             </Router>
           </AuthProvider>
+          </NotificationProvider>
         </ToastProvider>
       </Provider>
     );

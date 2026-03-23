@@ -441,7 +441,7 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		summary.RiskLevel = aiOutput.RiskLevel
 	}
 
-	// 提取决策字段（V3）
+	// 提取决策字段（V3 优先，V2 兜底）
 	if aiOutput.RiskEvaluation != nil {
 		summary.RequiresConfirmation = aiOutput.RiskEvaluation.RequiresHumanConfirmation
 		if len(aiOutput.RiskEvaluation.DecisionHints) > 0 {
@@ -451,6 +451,13 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 				summary.DecisionActions, _ = json.Marshal(hint.RecommendedActions)
 			}
 		}
+	}
+
+	// V2 兜底：如果 AI 没有返回 risk_evaluation 结构（V2 格式），
+	// 根据 risk_level 自动判断是否需要人工确认
+	if aiOutput.RiskEvaluation == nil && (summary.RiskLevel == "high" || summary.RiskLevel == "critical") {
+		summary.RequiresConfirmation = true
+		log.Printf("[AISummaryService] V2 fallback: risk_level=%s, auto-setting requires_confirmation=true for task %d", summary.RiskLevel, summary.TaskID)
 	}
 
 	summary.PlanChanges = planChangesJSON
