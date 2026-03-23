@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Tooltip, Tag } from 'antd';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { ThunderboltOutlined, WarningOutlined } from '@ant-design/icons';
 import NewRunDialog from '../components/NewRunDialog';
 import TaskComments from '../components/TaskComments';
@@ -69,6 +70,15 @@ const TaskDetail: React.FC = () => {
   });
   const [logViewMode, setLogViewMode] = useState<'plan' | 'apply'>('plan');
 
+  // taskId 变化时重置状态（如从 new run 导航到新任务）
+  useEffect(() => {
+    setTask(null);
+    setLoading(true);
+    setError(null);
+    setShowCommentInput(false);
+    setConfirmModalVisible(false);
+  }, [taskId]);
+
   useEffect(() => {
     fetchTask();
     fetchWorkspace();
@@ -78,7 +88,7 @@ const TaskDetail: React.FC = () => {
     fetchTriggerExecutions();
     
     const interval = setInterval(() => {
-      if (task && (task.status === 'running' || task.status === 'pending' || task.status === 'plan_completed' || task.status === 'apply_pending')) {
+      if (task && (task.status === 'running' || task.status === 'pending' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required')) {
         fetchTask();
         fetchRunTaskResults();
         fetchTriggerExecutions();
@@ -300,16 +310,43 @@ const TaskDetail: React.FC = () => {
     return date.toLocaleString();
   };
 
-  const handleActionWithComment = (action: 'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override') => {
-    setCommentAction(action);
+  const proceedWithAction = (action: string) => {
+    setCommentAction(action as any);
     setShowCommentInput(true);
-    
     setTimeout(() => {
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth'
-      });
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
     }, 100);
+  };
+
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [confirmModalTitle, setConfirmModalTitle] = useState('');
+  const [confirmModalContent, setConfirmModalContent] = useState('');
+
+  const handleActionWithComment = async (action: 'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override') => {
+    // Confirm Apply 时检查 plan summary 状态
+    if (action === 'confirm_apply' && task && workspaceId && !confirmModalVisible) {
+      try {
+        const summary: any = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary`);
+        const data = summary?.data || summary;
+        if (data) {
+          if (data.status === 'running' || data.status === 'pending') {
+            setConfirmModalTitle('AI 分析尚未完成');
+            setConfirmModalContent('AI 变更影响分析正在进行中，建议等待分析完成后再确认 Apply。是否仍要继续？');
+            setConfirmModalVisible(true);
+            return;
+          } else if (data.requires_confirmation && !data.user_decision_code) {
+            setConfirmModalTitle('AI 风险决策未确认');
+            setConfirmModalContent('AI 判断本次变更存在风险，建议先在 Plan Summary 中提交风险决策确认。是否仍要继续 Apply？');
+            setConfirmModalVisible(true);
+            return;
+          }
+        }
+      } catch {
+        // summary 不存在（404）或请求失败，不阻塞
+      }
+    }
+
+    proceedWithAction(action);
   };
 
   const handleCommentSubmit = async (comment: string) => {
@@ -765,8 +802,22 @@ const TaskDetail: React.FC = () => {
         workspaceId={workspaceId!}
         onClose={() => setShowNewRunDialog(false)}
         onSuccess={() => {
-          console.log('New run created successfully');
+          setShowNewRunDialog(false);
         }}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmModalVisible}
+        title={confirmModalTitle}
+        message={confirmModalContent}
+        confirmText="继续 Apply"
+        cancelText="返回"
+        type="warning"
+        onConfirm={() => {
+          setConfirmModalVisible(false);
+          proceedWithAction('confirm_apply');
+        }}
+        onCancel={() => setConfirmModalVisible(false)}
       />
     </div>
   );

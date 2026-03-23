@@ -153,27 +153,30 @@ func (m *TaskQueueManager) GetNextExecutableTask(workspaceID string) (*models.Wo
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	if workspace.IsLocked {
+	isLocked := workspace.IsLocked
+
+	if isLocked {
 		lockedBy := "unknown"
 		if workspace.LockedBy != nil {
 			lockedBy = *workspace.LockedBy
 		}
-		log.Printf("[TaskQueue] Workspace %s is locked by %s, all tasks must wait", workspaceID, lockedBy)
-		return nil, nil
+		log.Printf("[TaskQueue] Workspace %s is locked by %s, plan_and_apply tasks must wait (plan-only can proceed)", workspaceID, lockedBy)
+		// 不 return — plan-only 任务可以继续，下面会跳过 plan_and_apply 检查
 	}
 
 	// 1. 检查plan_and_apply pending任务（排除apply_pending）
+	// workspace lock 时跳过 plan_and_apply，只执行 plan-only
 	// 注意: apply_pending任务需要用户通过ConfirmApply API显式确认,不会被自动返回
-	// 只有pending状态的plan_and_apply任务才会被自动调度
-	var planAndApplyTask models.WorkspaceTask
-	err := m.db.Where("workspace_id = ? AND task_type = ? AND status = ?",
-		workspaceID, models.TaskTypePlanAndApply,
-		models.TaskStatusPending).
-		Order("created_at ASC").
-		First(&planAndApplyTask).Error
+	if !isLocked {
+		var planAndApplyTask models.WorkspaceTask
+		err := m.db.Where("workspace_id = ? AND task_type = ? AND status = ?",
+			workspaceID, models.TaskTypePlanAndApply,
+			models.TaskStatusPending).
+			Order("created_at ASC").
+			First(&planAndApplyTask).Error
 
-	if err == nil {
-		// 找到plan_and_apply pending任务,检查是否有running/pending/apply_pending的plan_and_apply任务阻塞它
+		if err == nil {
+			// 找到plan_and_apply pending任务,检查是否有running/pending/apply_pending的plan_and_apply任务阻塞它
 		var otherBlockingCount int64
 		m.db.Model(&models.WorkspaceTask{}).
 			Where("workspace_id = ? AND task_type = ? AND id < ? AND status IN (?)",
@@ -197,10 +200,11 @@ func (m *TaskQueueManager) GetNextExecutableTask(workspaceID string) (*models.Wo
 		log.Printf("[TaskQueue] Error checking plan_and_apply tasks: %v", err)
 		return nil, err
 	}
+	} // end if !isLocked
 
-	// 2. 获取plan任务（完全独立,可以并发执行,不受任何plan_and_apply任务阻塞）
+	// 2. 获取plan任务（完全独立,可以并发执行,不受lock和plan_and_apply任务阻塞）
 	var planTask models.WorkspaceTask
-	err = m.db.Where("workspace_id = ? AND task_type = ? AND status = ?",
+	err := m.db.Where("workspace_id = ? AND task_type = ? AND status = ?",
 		workspaceID, models.TaskTypePlan, models.TaskStatusPending).
 		Order("created_at ASC").
 		First(&planTask).Error

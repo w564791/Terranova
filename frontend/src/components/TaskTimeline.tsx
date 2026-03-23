@@ -161,7 +161,7 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
       return 'failed';
     }
     
-    if (['success', 'plan_completed', 'apply_pending', 'applied', 'planned_and_finished'].includes(task.status)) return 'passed';
+    if (['success', 'plan_completed', 'apply_pending', 'applied', 'planned_and_finished', 'decision_required'].includes(task.status)) return 'passed';
     
     return 'pending';
   };
@@ -196,7 +196,7 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
       return null;
     }
     
-    if (task.status === 'apply_pending' || task.status === 'plan_completed') return 'pending';
+    if (task.status === 'apply_pending' || task.status === 'plan_completed' || task.status === 'decision_required') return 'pending';
     if (task.status === 'cancelled') {
       // Only show cancelled apply if we were in apply phase
       if (isApplyStage() || isApplyConfirmed()) return 'cancelled';

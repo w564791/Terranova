@@ -123,13 +123,11 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 	}
 
 	// 检查workspace是否被锁定
-	if workspace.IsLocked {
-		ctx.JSON(http.StatusLocked, gin.H{
-			"error":       "Workspace is locked",
-			"locked_by":   workspace.LockedBy,
-			"lock_reason": workspace.LockReason,
-		})
-		return
+	// plan-only 任务不受锁影响（不修改 state）
+	// plan_and_apply 任务在锁定时排队（不拒绝）
+	if workspace.IsLocked && req.RunType != "plan" {
+		// plan_and_apply 任务：排队而非拒绝
+		log.Printf("[TaskCreate] Workspace %s is locked, plan_and_apply task will be queued", workspace.WorkspaceID)
 	}
 
 	// Provider配置可选 - 如果没有配置provider，terraform将使用module自带配置或环境变量

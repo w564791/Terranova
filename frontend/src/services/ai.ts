@@ -138,6 +138,14 @@ export interface PlanSummary {
   error_message?: string;
   duration: number;
   created_at: string;
+  // 人机协同决策字段
+  requires_confirmation: boolean;
+  decision_scenario?: string;
+  decision_actions?: { code: string; label: string }[];
+  user_decision_code?: string;
+  user_decision_note?: string;
+  user_decision_by?: string;
+  user_decision_at?: string;
 }
 
 export interface ApplySummary {
@@ -182,6 +190,19 @@ export const retryPlanSummary = async (
   taskId: number
 ): Promise<void> => {
   await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/retry`);
+};
+
+// 提交 Plan Summary 风险决策
+export const confirmPlanSummary = async (
+  workspaceId: string,
+  taskId: number,
+  decisionCode: string,
+  note?: string
+): Promise<void> => {
+  await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/confirm`, {
+    decision_code: decisionCode,
+    note: note || '',
+  });
 };
 
 // 重试 Apply Summary

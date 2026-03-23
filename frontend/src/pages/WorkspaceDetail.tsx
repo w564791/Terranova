@@ -756,6 +756,9 @@ const OverviewTab: React.FC<{
     if (status === 'success' || status === 'applied' || status === 'planned_and_finished') {
       return 'success';
     }
+    if (status === 'decision_required') {
+      return 'warning';
+    }
     if (status === 'requires_approval' || status === 'apply_pending') {
       return 'attention';
     }
@@ -1361,6 +1364,9 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
       return 'success';
     }
     // Needs Attention状态 - 黄色
+    if (status === 'decision_required') {
+      return 'warning';
+    }
     if (status === 'requires_approval' || status === 'apply_pending') {
       return 'attention';
     }

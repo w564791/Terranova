@@ -2,9 +2,24 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
+  confirmPlanSummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
 import styles from './ExecuteSummary.module.css';
+
+// 安全渲染：防止 AI 返回的对象被直接当 React child
+const safeRender = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    // 尝试常见字段
+    return value.description || value.text || value.message || value.summary ||
+           value.label || value.name || value.field || value.impact ||
+           JSON.stringify(value);
+  }
+  return String(value);
+};
 
 interface ExecuteSummaryProps {
   workspaceId: string;
@@ -181,6 +196,16 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
             <PlanSummaryResult summary={summary as PlanSummary} getRiskColor={getRiskColor} getRiskLabel={getRiskLabel} />
           )}
 
+          {/* Decision Confirmation */}
+          {summary?.status === 'completed' && stage === 'plan' && (summary as PlanSummary).requires_confirmation && (
+            <DecisionConfirmation
+              summary={summary as PlanSummary}
+              workspaceId={workspaceId}
+              taskId={taskId}
+              onConfirmed={fetchSummary}
+            />
+          )}
+
           {/* Apply Summary Result */}
           {summary?.status === 'completed' && stage === 'apply' && (
             <ApplySummaryResult summary={summary as ApplySummary} />
@@ -227,7 +252,7 @@ const PlanSummaryResult: React.FC<{
           <div className={styles.sectionTitle}>影响分析</div>
           <div className={styles.sectionContent}>
             {typeof summary.impact_analysis === 'object' && summary.impact_analysis.summary && (
-              <p>{summary.impact_analysis.summary}</p>
+              <p>{safeRender(summary.impact_analysis.summary)}</p>
             )}
             {summary.impact_analysis.details && Array.isArray(summary.impact_analysis.details) && detailsCount > 0 && (
               <>
@@ -245,7 +270,7 @@ const PlanSummaryResult: React.FC<{
                             <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
                           )}
                         </div>
-                        {d.impact && <div className={styles.detailImpact}>{d.impact}</div>}
+                        {d.impact && <div className={styles.detailImpact}>{safeRender(d.impact)}</div>}
                       </div>
                     ))}
                   </div>
@@ -270,7 +295,7 @@ const PlanSummaryResult: React.FC<{
                     <span className={styles.affectedAddress}>{r.address}</span>
                     <span className={styles.affectedType}>{r.type}</span>
                   </div>
-                  {r.impact && <div className={styles.affectedImpact}>{r.impact}</div>}
+                  {r.impact && <div className={styles.affectedImpact}>{safeRender(r.impact)}</div>}
                 </div>
               ))}
             </div>
@@ -308,7 +333,7 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
           <div className={styles.sectionTitle}>预测对比</div>
           <div className={styles.sectionContent}>
             {summary.impact_confirmation.predicted_vs_actual && (
-              <p>{summary.impact_confirmation.predicted_vs_actual}</p>
+              <p>{safeRender(summary.impact_confirmation.predicted_vs_actual)}</p>
             )}
             {summary.impact_confirmation.unexpected_changes &&
               Array.isArray(summary.impact_confirmation.unexpected_changes) &&
@@ -316,8 +341,8 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
               <div className={styles.unexpectedChanges}>
                 <div className={styles.unexpectedTitle}>意外变更:</div>
                 <ul>
-                  {summary.impact_confirmation.unexpected_changes.map((c: string, i: number) => (
-                    <li key={i}>{c}</li>
+                  {summary.impact_confirmation.unexpected_changes.map((c: any, i: number) => (
+                    <li key={i}>{typeof c === 'string' ? c : (c.description || c.field || JSON.stringify(c))}</li>
                   ))}
                 </ul>
               </div>
@@ -364,13 +389,116 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
                     <span className={styles.affectedAddress}>{r.address}</span>
                     <span className={styles.affectedType}>{r.type}</span>
                   </div>
-                  {r.impact && <div className={styles.affectedImpact}>{r.impact}</div>}
+                  {r.impact && <div className={styles.affectedImpact}>{safeRender(r.impact)}</div>}
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+// ========== Decision Confirmation 子组件 ==========
+
+const DecisionConfirmation: React.FC<{
+  summary: PlanSummary;
+  workspaceId: string;
+  taskId: number;
+  onConfirmed: () => void;
+}> = ({ summary, workspaceId, taskId, onConfirmed }) => {
+  const [selectedCode, setSelectedCode] = useState('');
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  // 已确认状态
+  if (summary.user_decision_code) {
+    const label = summary.decision_actions?.find(a => a.code === summary.user_decision_code)?.label || summary.user_decision_code;
+    return (
+      <div className={styles.decisionBox} style={{ borderColor: '#10b981' }}>
+        <div className={styles.decisionHeader}>
+          <span className={styles.decisionTitle}>{summary.decision_scenario || 'Risk Decision'}</span>
+          <span className={styles.decisionConfirmed}>Confirmed</span>
+        </div>
+        <div className={styles.decisionResult}>
+          <div>Decision: {label}</div>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+            By: {summary.user_decision_by} at {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''}
+          </div>
+          {summary.user_decision_note && (
+            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>Note: {summary.user_decision_note}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedCode) {
+      setError('Please select a decision');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      setError('');
+      await confirmPlanSummary(workspaceId, taskId, selectedCode, note);
+      onConfirmed();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : 'Failed to submit decision');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const scenarioTitles: Record<string, string> = {
+    SECURITY_GROUP_CHANGE: 'Security Group Change Confirmation',
+    RESOURCE_DELETION: 'Resource Deletion Confirmation',
+    IAM_PERMISSION_CHANGE: 'IAM Permission Change Confirmation',
+    NETWORK_CORE_CHANGE: 'Core Network Change Confirmation',
+  };
+
+  const title = scenarioTitles[summary.decision_scenario || ''] || 'Risk Decision Confirmation';
+
+  return (
+    <div className={styles.decisionBox}>
+      <div className={styles.decisionHeader}>
+        <span className={styles.decisionTitle}>{title}</span>
+        <span className={styles.decisionRequired}>Action Required</span>
+      </div>
+      <div className={styles.decisionBody}>
+        <p className={styles.decisionPrompt}>AI has determined this change requires confirmation before apply:</p>
+        <div className={styles.decisionOptions}>
+          {(summary.decision_actions || []).map((action) => (
+            <label key={action.code} className={styles.decisionOption}>
+              <input
+                type="radio"
+                name="decision"
+                value={action.code}
+                checked={selectedCode === action.code}
+                onChange={() => { setSelectedCode(action.code); setError(''); }}
+              />
+              <span>{action.label}</span>
+            </label>
+          ))}
+        </div>
+        <textarea
+          className={styles.decisionNote}
+          placeholder="Additional notes (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+        />
+        {error && <div style={{ color: '#dc2626', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
+        <button
+          className={styles.decisionSubmit}
+          onClick={handleSubmit}
+          disabled={submitting || !selectedCode}
+        >
+          {submitting ? 'Submitting...' : 'Confirm Decision'}
+        </button>
+      </div>
     </div>
   );
 };

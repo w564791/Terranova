@@ -22,6 +22,14 @@ type AIPlanSummary struct {
 	ErrorMessage      string          `gorm:"type:text" json:"error_message,omitempty"`                     // 失败原因
 	Duration          int             `json:"duration"`                                                      // 分析耗时（毫秒）
 	CreatedAt         time.Time       `json:"created_at"`                                                    // 创建时间（本地时间）
+	// 人机协同决策字段
+	RequiresConfirmation bool            `gorm:"default:false" json:"requires_confirmation"`                    // AI 判断是否需要人工确认
+	DecisionScenario     string          `gorm:"type:varchar(50)" json:"decision_scenario,omitempty"`           // 决策场景码
+	DecisionActions      json.RawMessage `gorm:"type:jsonb" json:"decision_actions,omitempty"`                  // 可选决策项 [{code, label}]
+	UserDecisionCode     string          `gorm:"type:varchar(50)" json:"user_decision_code,omitempty"`          // 用户选择的决策码
+	UserDecisionNote     string          `gorm:"type:text" json:"user_decision_note,omitempty"`                 // 用户补充说明
+	UserDecisionBy       string          `gorm:"type:varchar(20)" json:"user_decision_by,omitempty"`            // 确认人 user_id
+	UserDecisionAt       *time.Time      `json:"user_decision_at,omitempty"`                                    // 确认时间
 }
 
 // TableName 指定表名

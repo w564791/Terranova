@@ -242,6 +242,14 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			}),
 			summaryController.RetryApplySummary,
 		)
+		workspaces.POST("/:id/tasks/:task_id/plan-summary/confirm",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			summaryController.ConfirmPlanSummary,
+		)
 
 		workspaces.GET("/:id/tasks/:task_id/state-backup",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
