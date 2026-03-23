@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Tooltip, Tag, Modal } from 'antd';
+import { Tooltip, Tag } from 'antd';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { ThunderboltOutlined, WarningOutlined } from '@ant-design/icons';
 import NewRunDialog from '../components/NewRunDialog';
 import TaskComments from '../components/TaskComments';
@@ -68,6 +69,15 @@ const TaskDetail: React.FC = () => {
     return (params.get('view') as 'structured' | 'classic') || 'structured';
   });
   const [logViewMode, setLogViewMode] = useState<'plan' | 'apply'>('plan');
+
+  // taskId 变化时重置状态（如从 new run 导航到新任务）
+  useEffect(() => {
+    setTask(null);
+    setLoading(true);
+    setError(null);
+    setShowCommentInput(false);
+    setConfirmModalVisible(false);
+  }, [taskId]);
 
   useEffect(() => {
     fetchTask();
@@ -792,24 +802,23 @@ const TaskDetail: React.FC = () => {
         workspaceId={workspaceId!}
         onClose={() => setShowNewRunDialog(false)}
         onSuccess={() => {
-          console.log('New run created successfully');
+          setShowNewRunDialog(false);
         }}
       />
 
-      <Modal
+      <ConfirmDialog
+        isOpen={confirmModalVisible}
         title={confirmModalTitle}
-        open={confirmModalVisible}
-        okText="继续 Apply"
+        message={confirmModalContent}
+        confirmText="继续 Apply"
         cancelText="返回"
-        okButtonProps={{ danger: true }}
-        onOk={() => {
+        type="warning"
+        onConfirm={() => {
           setConfirmModalVisible(false);
           proceedWithAction('confirm_apply');
         }}
         onCancel={() => setConfirmModalVisible(false)}
-      >
-        <p>{confirmModalContent}</p>
-      </Modal>
+      />
     </div>
   );
 };
