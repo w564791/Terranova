@@ -979,6 +979,10 @@ a.stateRow {
   background-color: #F59E0B;
 }
 
+.indicator-warning {
+  background-color: #EA580C;
+}
+
 .indicator-error {
   background-color: #EF4444;
 }
@@ -1422,6 +1426,11 @@ a.stateRow {
 .statusBadge-attention {
   background: #fef3c7;
   color: #92400e;
+}
+
+.statusBadge-warning {
+  background: #fed7aa;
+  color: #9a3412;
 }
 
 .statusBadge-error {

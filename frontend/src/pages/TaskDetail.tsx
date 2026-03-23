@@ -78,7 +78,7 @@ const TaskDetail: React.FC = () => {
     fetchTriggerExecutions();
     
     const interval = setInterval(() => {
-      if (task && (task.status === 'running' || task.status === 'pending' || task.status === 'plan_completed' || task.status === 'apply_pending')) {
+      if (task && (task.status === 'running' || task.status === 'pending' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required')) {
         fetchTask();
         fetchRunTaskResults();
         fetchTriggerExecutions();

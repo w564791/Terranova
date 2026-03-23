@@ -411,3 +411,126 @@
     padding: 8px 0 0 0;
   }
 }
+
+/* Decision Confirmation */
+
+.decisionBox {
+  margin-top: 12px;
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.decisionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background-color: #fffbeb;
+}
+
+.decisionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.decisionRequired {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.decisionConfirmed {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.decisionBody {
+  padding: 12px 16px;
+}
+
+.decisionPrompt {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 10px 0;
+}
+
+.decisionOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.decisionOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  transition: background 0.15s;
+}
+
+.decisionOption:hover {
+  background-color: #f9fafb;
+}
+
+.decisionOption input[type="radio"] {
+  accent-color: #f59e0b;
+}
+
+.decisionNote {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.decisionNote:focus {
+  outline: none;
+  border-color: #f59e0b;
+}
+
+.decisionSubmit {
+  margin-top: 10px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background-color: #f59e0b;
+  color: white;
+  cursor: pointer;
+}
+
+.decisionSubmit:hover {
+  background-color: #d97706;
+}
+
+.decisionSubmit:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.decisionResult {
+  padding: 8px 16px 12px;
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.6;
+}

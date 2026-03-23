@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
+  confirmPlanSummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
 import styles from './ExecuteSummary.module.css';
@@ -179,6 +180,16 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
           {/* Plan Summary Result */}
           {summary?.status === 'completed' && stage === 'plan' && (
             <PlanSummaryResult summary={summary as PlanSummary} getRiskColor={getRiskColor} getRiskLabel={getRiskLabel} />
+          )}
+
+          {/* Decision Confirmation */}
+          {summary?.status === 'completed' && stage === 'plan' && (summary as PlanSummary).requires_confirmation && (
+            <DecisionConfirmation
+              summary={summary as PlanSummary}
+              workspaceId={workspaceId}
+              taskId={taskId}
+              onConfirmed={fetchSummary}
+            />
           )}
 
           {/* Apply Summary Result */}
@@ -371,6 +382,109 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+// ========== Decision Confirmation 子组件 ==========
+
+const DecisionConfirmation: React.FC<{
+  summary: PlanSummary;
+  workspaceId: string;
+  taskId: number;
+  onConfirmed: () => void;
+}> = ({ summary, workspaceId, taskId, onConfirmed }) => {
+  const [selectedCode, setSelectedCode] = useState('');
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  // 已确认状态
+  if (summary.user_decision_code) {
+    const label = summary.decision_actions?.find(a => a.code === summary.user_decision_code)?.label || summary.user_decision_code;
+    return (
+      <div className={styles.decisionBox} style={{ borderColor: '#10b981' }}>
+        <div className={styles.decisionHeader}>
+          <span className={styles.decisionTitle}>{summary.decision_scenario || 'Risk Decision'}</span>
+          <span className={styles.decisionConfirmed}>Confirmed</span>
+        </div>
+        <div className={styles.decisionResult}>
+          <div>Decision: {label}</div>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+            By: {summary.user_decision_by} at {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''}
+          </div>
+          {summary.user_decision_note && (
+            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>Note: {summary.user_decision_note}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedCode) {
+      setError('Please select a decision');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      setError('');
+      await confirmPlanSummary(workspaceId, taskId, selectedCode, note);
+      onConfirmed();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : 'Failed to submit decision');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const scenarioTitles: Record<string, string> = {
+    SECURITY_GROUP_CHANGE: 'Security Group Change Confirmation',
+    RESOURCE_DELETION: 'Resource Deletion Confirmation',
+    IAM_PERMISSION_CHANGE: 'IAM Permission Change Confirmation',
+    NETWORK_CORE_CHANGE: 'Core Network Change Confirmation',
+  };
+
+  const title = scenarioTitles[summary.decision_scenario || ''] || 'Risk Decision Confirmation';
+
+  return (
+    <div className={styles.decisionBox}>
+      <div className={styles.decisionHeader}>
+        <span className={styles.decisionTitle}>{title}</span>
+        <span className={styles.decisionRequired}>Action Required</span>
+      </div>
+      <div className={styles.decisionBody}>
+        <p className={styles.decisionPrompt}>AI has determined this change requires confirmation before apply:</p>
+        <div className={styles.decisionOptions}>
+          {(summary.decision_actions || []).map((action) => (
+            <label key={action.code} className={styles.decisionOption}>
+              <input
+                type="radio"
+                name="decision"
+                value={action.code}
+                checked={selectedCode === action.code}
+                onChange={() => { setSelectedCode(action.code); setError(''); }}
+              />
+              <span>{action.label}</span>
+            </label>
+          ))}
+        </div>
+        <textarea
+          className={styles.decisionNote}
+          placeholder="Additional notes (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+        />
+        {error && <div style={{ color: '#dc2626', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
+        <button
+          className={styles.decisionSubmit}
+          onClick={handleSubmit}
+          disabled={submitting || !selectedCode}
+        >
+          {submitting ? 'Submitting...' : 'Confirm Decision'}
+        </button>
+      </div>
     </div>
   );
 };
