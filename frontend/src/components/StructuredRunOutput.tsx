@@ -154,7 +154,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
 
   // 加载资源变更数据
   useEffect(() => {
-    if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'applied' || task.status === 'cancelled' || task.status === 'running' || task.status === 'failed') {
+    if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required' || task.status === 'applied' || task.status === 'cancelled' || task.status === 'running' || task.status === 'failed') {
       // 取消/失败的任务也可能有Plan数据，running状态也需要加载（Apply阶段）
       console.log('Triggering loadResourceChanges for task:', task.id, 'status:', task.status);
       loadResourceChanges();
@@ -355,7 +355,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
     if (task.status === 'running') {
       if (task.stage === 'pre_apply' || task.stage === 'restoring_plan' || 
           task.stage === 'applying' || task.stage === 'post_apply' || task.stage === 'saving_state' ||
-          task.stage === 'apply_pending') {
+          task.stage === 'apply_pending' || task.stage === 'decision_required') {
         return 'applying';
       }
     }
@@ -390,7 +390,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
 
     // Planning阶段
     if (stageKey === 'planning') {
-      if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'applied') {
+      if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required' || task.status === 'applied') {
         return 'completed';
       }
       if (task.status === 'running' && currentStage === 'planning') {
@@ -407,7 +407,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
       if (task.status === 'running' && currentStage === 'applying') {
         return 'active';
       }
-      if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending') {
+      if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required') {
         return 'pending';
       }
       return 'pending';
@@ -501,7 +501,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
 
   // 动态生成标签文字
   const getPlanningLabel = () => {
-    if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'applied') {
+    if (task.status === 'success' || task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required' || task.status === 'applied') {
       return 'Planned';
     }
     if (task.status === 'running' && (task.stage === 'post_plan' || task.stage === 'saving_plan')) {
@@ -528,7 +528,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
         return 'Post Apply';
       }
     }
-    if (task.status === 'plan_completed' || task.status === 'apply_pending') {
+    if (task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required') {
       return 'Apply Pending';
     }
     return 'Applying';
@@ -548,7 +548,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
     visibleStages.push(allStages[0]);
 
     // Applying阶段：只有在Plan完成后才显示
-    if (task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'applied' || 
+    if (task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required' || task.status === 'applied' || 
         (task.status === 'running' && (task.stage === 'pre_apply' || task.stage === 'restoring_plan' || 
          task.stage === 'applying' || task.stage === 'post_apply' || task.stage === 'saving_state'))) {
       visibleStages.push(allStages[1]);
@@ -565,7 +565,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
     // 1. Apply has been confirmed
     if (task.apply_confirmed_by || task.apply_confirmed_at) return true;
     // 2. Status indicates plan is done
-    if (['success', 'plan_completed', 'apply_pending', 'applied', 'cancelled', 'failed'].includes(task.status)) return true;
+    if (['success', 'plan_completed', 'apply_pending', 'decision_required', 'applied', 'cancelled', 'failed'].includes(task.status)) return true;
     // 3. Task is running but in apply stage
     if (task.status === 'running') {
       const applyStages = ['apply', 'applying', 'pre_apply', 'restoring_plan', 'post_apply', 'saving_state', 'apply_pending'];
@@ -753,7 +753,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
             ) : (
               <ApplyingView resources={resourceChanges} summary={summary} actionInvocations={actionInvocations} actions={actions} />
             )
-          ) : (task.status === 'plan_completed' || task.status === 'apply_pending') ? (
+          ) : (task.status === 'plan_completed' || task.status === 'apply_pending' || task.status === 'decision_required') ? (
             loading ? (
               <div className={styles.loading}>
                 <div className={styles.loadingSpinner}></div>
