@@ -1,9 +1,13 @@
 package controllers
 
 import (
+	"encoding/json"
+	"fmt"
+	"iac-platform/internal/models"
 	"iac-platform/services"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -111,4 +115,135 @@ func (c *AISummaryController) RetryApplySummary(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusAccepted, gin.H{"message": "重试已触发"})
+}
+
+// ConfirmPlanSummary 提交 Plan Summary 风险决策
+func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
+	workspaceID := ctx.Param("id")
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+
+	var req struct {
+		DecisionCode string `json:"decision_code" binding:"required"`
+		Note         string `json:"note"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "decision_code is required"})
+		return
+	}
+
+	userID, _ := ctx.Get("user_id")
+	username, _ := ctx.Get("username")
+	isAdmin, _ := ctx.Get("is_system_admin")
+
+	// 获取 plan summary + 校验
+	summary := c.service.GetPlanSummary(uint(taskID))
+	if summary == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "plan summary not found"})
+		return
+	}
+	if summary.WorkspaceID != workspaceID {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
+		return
+	}
+	if !summary.RequiresConfirmation {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "this plan summary does not require confirmation"})
+		return
+	}
+	if summary.UserDecisionCode != "" {
+		ctx.JSON(http.StatusConflict, gin.H{"error": "decision already submitted"})
+		return
+	}
+
+	// 权限检查
+	var task models.WorkspaceTask
+	if err := c.db.First(&task, taskID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+
+	userIDStr, _ := userID.(string)
+	isAdminBool, _ := isAdmin.(bool)
+	if !isAdminBool {
+		isCreator := task.CreatedBy != nil && *task.CreatedBy == userIDStr
+		isApplyConfirmer := task.ApplyConfirmedBy != nil && *task.ApplyConfirmedBy == userIDStr
+		if !isCreator && !isApplyConfirmer {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "only task creator, apply confirmer, or admin can confirm decision"})
+			return
+		}
+	}
+
+	// 校验 decision_code 合法性
+	if len(summary.DecisionActions) > 0 {
+		var actions []struct {
+			Code string `json:"code"`
+		}
+		json.Unmarshal(summary.DecisionActions, &actions)
+		validCode := false
+		for _, a := range actions {
+			if a.Code == req.DecisionCode {
+				validCode = true
+				break
+			}
+		}
+		if !validCode {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid decision_code"})
+			return
+		}
+	}
+
+	// 写入决策（一次性写入）
+	now := time.Now()
+	c.db.Model(&models.AIPlanSummary{}).Where("id = ?", summary.ID).Updates(map[string]interface{}{
+		"user_decision_code": req.DecisionCode,
+		"user_decision_note": req.Note,
+		"user_decision_by":   userIDStr,
+		"user_decision_at":   now,
+	})
+
+	// task 从 decision_required 改回 apply_pending（CAS）
+	c.db.Model(&models.WorkspaceTask{}).
+		Where("id = ? AND status = ?", taskID, string(models.TaskStatusDecisionRequired)).
+		Updates(map[string]interface{}{
+			"status": string(models.TaskStatusApplyPending),
+			"stage":  "apply_pending",
+		})
+
+	// 自动写入 task comment
+	decisionLabel := req.DecisionCode
+	if len(summary.DecisionActions) > 0 {
+		var actions []struct {
+			Code  string `json:"code"`
+			Label string `json:"label"`
+		}
+		json.Unmarshal(summary.DecisionActions, &actions)
+		for _, a := range actions {
+			if a.Code == req.DecisionCode {
+				decisionLabel = a.Label
+				break
+			}
+		}
+	}
+
+	usernameStr := "unknown"
+	if u, ok := username.(string); ok && u != "" {
+		usernameStr = u
+	}
+	commentContent := fmt.Sprintf("[AI 风险决策] %s 确认：%s", usernameStr, decisionLabel)
+	if req.Note != "" {
+		commentContent += fmt.Sprintf("\n补充说明：%s", req.Note)
+	}
+	c.db.Create(&models.TaskComment{
+		TaskID:     uint(taskID),
+		UserID:     &userIDStr,
+		Username:   usernameStr,
+		Comment:    commentContent,
+		ActionType: "risk_decision",
+	})
+	_ = workspaceID // used in workspace validation above
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "决策已提交"})
 }

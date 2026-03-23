@@ -279,12 +279,15 @@ func (s *AISummaryService) RetryApplySummary(taskID uint) error {
 
 // ========== internal helpers ==========
 
-// planSummaryValidator 验证 Plan Summary 的 AI 输出
+// planSummaryValidator 验证 Plan Summary 的 AI 输出（兼容 V2 和 V3）
 var planSummaryValidator OutputValidator = func(output string) error {
 	text := extractJSON(output)
 	var parsed struct {
 		ChangesOverview string `json:"changes_overview"`
-		RiskLevel       string `json:"risk_level"`
+		RiskLevel       string `json:"risk_level"` // V2
+		RiskEvaluation  *struct {
+			RiskLevel string `json:"risk_level"`
+		} `json:"risk_evaluation"` // V3
 	}
 	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
 		return fmt.Errorf("输出不是有效的 JSON 格式，请确保输出纯 JSON（不要包含 markdown 代码块标记）")
@@ -292,7 +295,11 @@ var planSummaryValidator OutputValidator = func(output string) error {
 	if parsed.ChangesOverview == "" {
 		return fmt.Errorf("缺少 changes_overview 字段，请确保包含变更概述")
 	}
-	if parsed.RiskLevel == "" {
+	riskLevel := parsed.RiskLevel
+	if parsed.RiskEvaluation != nil && parsed.RiskEvaluation.RiskLevel != "" {
+		riskLevel = parsed.RiskEvaluation.RiskLevel
+	}
+	if riskLevel == "" {
 		return fmt.Errorf("缺少 risk_level 字段，请确保包含风险等级（low/medium/high/critical）")
 	}
 	return nil
@@ -377,12 +384,25 @@ func (s *AISummaryService) extractPlanChanges(planJSON models.JSONB) interface{}
 }
 
 func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, result *AgentLoopResult, planChangesJSON []byte, startTime time.Time) {
-	// 解析 AI 输出
+	// 解析 AI 输出（V3 结构：risk_evaluation 嵌套）
 	var aiOutput struct {
 		ChangesOverview   string      `json:"changes_overview"`
 		ImpactAnalysis    interface{} `json:"impact_analysis"`
 		AffectedResources interface{} `json:"affected_resources"`
-		RiskLevel         string      `json:"risk_level"`
+		RiskLevel         string      `json:"risk_level"` // V2 兼容
+		RiskEvaluation    *struct {
+			RiskLevel                string `json:"risk_level"`
+			Confidence               string `json:"confidence"`
+			RequiresHumanConfirmation bool   `json:"requires_human_confirmation"`
+			DecisionHints            []struct {
+				Scenario           string `json:"scenario"`
+				Title              string `json:"title"`
+				RecommendedActions []struct {
+					Code  string `json:"code"`
+					Label string `json:"label"`
+				} `json:"recommended_actions"`
+			} `json:"decision_hints"`
+		} `json:"risk_evaluation"`
 	}
 
 	log.Printf("[AISummaryService] AI raw output for task %d (len=%d): %.500s", summary.TaskID, len(result.FinalOutput), result.FinalOutput)
@@ -390,7 +410,6 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 	outputText := extractJSON(result.FinalOutput)
 	if err := json.Unmarshal([]byte(outputText), &aiOutput); err != nil {
 		log.Printf("[AISummaryService] Failed to parse AI output as JSON for task %d: %v, extracted text (len=%d): %.300s", summary.TaskID, err, len(outputText), outputText)
-		// AI 输出不是标准 JSON，直接把原文作为 changes_overview
 		aiOutput.ChangesOverview = result.FinalOutput
 	}
 
@@ -401,7 +420,26 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 	if aiOutput.AffectedResources != nil {
 		summary.AffectedResources, _ = json.Marshal(aiOutput.AffectedResources)
 	}
-	summary.RiskLevel = aiOutput.RiskLevel
+
+	// 提取 risk_level（V3 嵌套结构优先，V2 顶层兼容）
+	if aiOutput.RiskEvaluation != nil && aiOutput.RiskEvaluation.RiskLevel != "" {
+		summary.RiskLevel = aiOutput.RiskEvaluation.RiskLevel
+	} else if aiOutput.RiskLevel != "" {
+		summary.RiskLevel = aiOutput.RiskLevel
+	}
+
+	// 提取决策字段（V3）
+	if aiOutput.RiskEvaluation != nil {
+		summary.RequiresConfirmation = aiOutput.RiskEvaluation.RequiresHumanConfirmation
+		if len(aiOutput.RiskEvaluation.DecisionHints) > 0 {
+			hint := aiOutput.RiskEvaluation.DecisionHints[0]
+			summary.DecisionScenario = hint.Scenario
+			if len(hint.RecommendedActions) > 0 {
+				summary.DecisionActions, _ = json.Marshal(hint.RecommendedActions)
+			}
+		}
+	}
+
 	summary.PlanChanges = planChangesJSON
 	summary.ToolCalls, _ = json.Marshal(result.ToolCalls)
 	summary.Status = "completed"
@@ -409,9 +447,23 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 
 	if err := s.db.Save(summary).Error; err != nil {
 		log.Printf("[AISummaryService] Failed to save plan summary: %v", err)
-	} else {
-		log.Printf("[AISummaryService] Plan summary completed for task %d (id=%s, duration=%dms, steps=%d)",
-			summary.TaskID, summary.ID, summary.Duration, result.TotalSteps)
+		return
+	}
+
+	log.Printf("[AISummaryService] Plan summary completed for task %d (id=%s, duration=%dms, steps=%d, requires_confirmation=%v)",
+		summary.TaskID, summary.ID, summary.Duration, result.TotalSteps, summary.RequiresConfirmation)
+
+	// 如果需要人工确认，将 task 从 apply_pending 改为 decision_required（CAS）
+	if summary.RequiresConfirmation {
+		result := s.db.Model(&models.WorkspaceTask{}).
+			Where("id = ? AND status = ?", summary.TaskID, string(models.TaskStatusApplyPending)).
+			Updates(map[string]interface{}{
+				"status": string(models.TaskStatusDecisionRequired),
+				"stage":  "decision_required",
+			})
+		if result.RowsAffected > 0 {
+			log.Printf("[AISummaryService] Task %d status changed to decision_required", summary.TaskID)
+		}
 	}
 }
 
