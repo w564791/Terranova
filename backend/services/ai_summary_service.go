@@ -65,6 +65,13 @@ const defaultApplySummaryPrompt = `你是基础设施执行结果分析专家。
 func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	startTime := time.Now()
 
+	// 前置检查：能力开关
+	featureService := NewAIFeatureService(s.db)
+	if !featureService.IsFeatureEnabled("execute_summary") {
+		log.Printf("[AISummaryService] Execute summary feature disabled, skipping plan summary for task %d", taskID)
+		return
+	}
+
 	// 前置检查：AI 配置
 	cfg, err := s.configService.GetConfigForCapability("summary")
 	if err != nil || cfg == nil {
@@ -153,6 +160,12 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 // GenerateApplySummary 生成 Apply 阶段摘要（异步调用）
 func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 	startTime := time.Now()
+
+	featureService := NewAIFeatureService(s.db)
+	if !featureService.IsFeatureEnabled("execute_summary") {
+		log.Printf("[AISummaryService] Execute summary feature disabled, skipping apply summary for task %d", taskID)
+		return
+	}
 
 	cfg, err := s.configService.GetConfigForCapability("summary")
 	if err != nil || cfg == nil {

@@ -142,6 +142,12 @@ func (w *EmbeddingWorker) recoverProcessingTasks() {
 
 // processPendingTasks 处理待处理的任务
 func (w *EmbeddingWorker) processPendingTasks() {
+	// 检查能力开关
+	featureService := NewAIFeatureService(w.db)
+	if !featureService.IsFeatureEnabled("embedding") {
+		return
+	}
+
 	// 检查 embedding 配置是否可用
 	configStatus := w.embeddingService.GetConfigStatus()
 	if !configStatus.Configured || !configStatus.HasAPIKey {

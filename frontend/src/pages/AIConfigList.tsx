@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { 
-  listAIConfigs, 
-  deleteAIConfig, 
+import {
+  listAIConfigs,
+  deleteAIConfig,
   batchUpdatePriorities,
-  type AIConfig, 
+  getAIFeatures,
+  updateAIFeatures,
+  type AIConfig,
   type PriorityUpdate,
-  CAPABILITY_LABELS 
+  CAPABILITY_LABELS
 } from '../services/ai';
 import { 
   listSkills, 
@@ -801,6 +803,199 @@ const SkillsTab = () => {
   );
 };
 
+// ========== Features Tab ==========
+
+const FEATURE_DEFS = [
+  {
+    group: 'CMDB',
+    groupLabel: '资源索引与搜索',
+    items: [
+      {
+        key: 'embedding',
+        title: '向量搜索 (Embedding)',
+        badge: 'VECTOR',
+        desc: 'CMDB 同步后自动生成资源向量索引，支持语义搜索',
+      },
+      {
+        key: 'cmdb_resource_summary',
+        title: '资源摘要',
+        badge: 'AI GEN',
+        desc: 'CMDB 同步后 AI 生成资源配置摘要，增强向量搜索精度和变更影响分析',
+      },
+    ],
+  },
+  {
+    group: 'EXECUTE',
+    groupLabel: '执行流程',
+    items: [
+      {
+        key: 'execute_summary',
+        title: '变更影响分析与风险决策',
+        badge: 'RISK',
+        desc: 'Plan/Apply 完成后自动分析变更影响。高风险变更需人工确认后才能 Apply。',
+      },
+    ],
+  },
+];
+
+const FeaturesTab = () => {
+  const [features, setFeatures] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    loadFeatures();
+  }, []);
+
+  const loadFeatures = async () => {
+    try {
+      setLoading(true);
+      const data = await getAIFeatures();
+      setFeatures(data);
+    } catch (err) {
+      console.error('Failed to load AI features:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggle = (key: string) => {
+    setFeatures(prev => ({ ...prev, [key]: !prev[key] }));
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await updateAIFeatures(features);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error('Failed to save AI features:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Loading...</div>;
+  }
+
+  return (
+    <div style={{ maxWidth: 720, padding: '8px 0' }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', marginBottom: 4 }}>AI 能力开关</h2>
+      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24, lineHeight: 1.5 }}>
+        控制平台中嵌入的 AI 能力。关闭后对应功能将不再自动触发，已有数据不受影响。
+      </p>
+
+      {FEATURE_DEFS.map((group) => (
+        <div key={group.group} style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: 11, fontWeight: 500, letterSpacing: 0.5,
+              textTransform: 'uppercase' as const,
+              padding: '3px 8px', borderRadius: 5,
+              background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb'
+            }}>{group.group}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>{group.groupLabel}</span>
+          </div>
+
+          <div style={{
+            background: '#fff', border: '1px solid #e5e7eb',
+            borderRadius: 10, overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+          }}>
+            {group.items.map((item, idx) => (
+              <div key={item.key} style={{
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                padding: '18px 22px', gap: 20,
+                borderTop: idx > 0 ? '1px solid #f3f4f6' : 'none',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: '#1f2937' }}>{item.title}</span>
+                    <span style={{
+                      fontFamily: '"JetBrains Mono", monospace',
+                      fontSize: 10, fontWeight: 500, padding: '2px 6px', borderRadius: 4,
+                      background: 'rgba(59,130,246,0.08)', color: '#2563eb', letterSpacing: 0.3,
+                    }}>{item.badge}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{item.desc}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <div style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: features[item.key] !== false ? '#10b981' : '#d1d5db',
+                      boxShadow: features[item.key] !== false
+                        ? '0 0 0 3px rgba(16,185,129,0.12)'
+                        : '0 0 0 3px rgba(209,213,219,0.12)',
+                    }} />
+                    <span style={{
+                      fontFamily: '"JetBrains Mono", monospace',
+                      fontSize: 11, fontWeight: 500,
+                      color: features[item.key] !== false ? '#059669' : '#9ca3af',
+                    }}>
+                      {features[item.key] !== false ? 'ENABLED' : 'DISABLED'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ flexShrink: 0, paddingTop: 2 }}>
+                  <label style={{
+                    position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={features[item.key] !== false}
+                      onChange={() => handleToggle(item.key)}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{
+                      position: 'absolute', inset: 0, borderRadius: 12,
+                      background: features[item.key] !== false ? '#3b82f6' : '#d1d5db',
+                      transition: 'background 0.25s',
+                    }} />
+                    <span style={{
+                      position: 'absolute', top: 2, left: features[item.key] !== false ? 22 : 2,
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                      transition: 'left 0.25s',
+                    }} />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+        <button
+          onClick={loadFeatures}
+          style={{
+            padding: '10px 24px', fontSize: 14, fontWeight: 600, borderRadius: 8,
+            background: '#fff', color: '#4b5563', border: '1px solid #d1d5db', cursor: 'pointer',
+          }}
+        >
+          重置
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: '10px 24px', fontSize: 14, fontWeight: 600, borderRadius: 8,
+            background: saving ? '#9ca3af' : '#3b82f6', color: '#fff', border: 'none',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            boxShadow: '0 1px 3px rgba(59,130,246,0.3)',
+          }}
+        >
+          {saving ? '保存中...' : saved ? '已保存' : '保存配置'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // 主组件
 const AIConfigList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -817,22 +1012,30 @@ const AIConfigList = () => {
       </div>
 
       <div className={styles.tabs}>
-        <button 
+        <button
           className={`${styles.tab} ${activeTab === 'configs' ? styles.activeTab : ''}`}
           onClick={() => handleTabChange('configs')}
         >
           模型配置
         </button>
-        <button 
+        <button
           className={`${styles.tab} ${activeTab === 'skills' ? styles.activeTab : ''}`}
           onClick={() => handleTabChange('skills')}
         >
           AI Skills
         </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'features' ? styles.activeTab : ''}`}
+          onClick={() => handleTabChange('features')}
+        >
+          能力开关
+        </button>
       </div>
 
       <div className={styles.tabContent}>
-        {activeTab === 'configs' ? <ConfigsTab /> : <SkillsTab />}
+        {activeTab === 'configs' && <ConfigsTab />}
+        {activeTab === 'skills' && <SkillsTab />}
+        {activeTab === 'features' && <FeaturesTab />}
       </div>
     </div>
   );

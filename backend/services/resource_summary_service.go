@@ -68,6 +68,13 @@ func (s *ResourceSummaryService) CompensateMissingSummaries(ctx context.Context)
 }
 
 func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Context, logID string, where string, args ...interface{}) error {
+	// 检查能力开关
+	featureService := NewAIFeatureService(s.db)
+	if !featureService.IsFeatureEnabled("cmdb_resource_summary") {
+		log.Printf("[ResourceSummary] CMDB resource summary feature disabled, skipping for %s", logID)
+		return nil
+	}
+
 	// 检查 AI 配置
 	cfg, err := s.configService.GetConfigForCapability("cmdb_resource_summary")
 	if err != nil || cfg == nil {

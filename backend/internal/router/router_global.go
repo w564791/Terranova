@@ -122,6 +122,17 @@ func setupGlobalRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *m
 			aiController.SetAsDefault,
 		)
 
+		// AI 能力开关
+		aiFeatureController := controllers.NewAIFeatureController(db)
+		globalSettings.GET("/ai-features",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
+			aiFeatureController.GetFeatures,
+		)
+		globalSettings.PUT("/ai-features",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN"),
+			aiFeatureController.UpdateFeatures,
+		)
+
 		globalSettings.GET("/ai-config/regions",
 			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
 			aiController.GetAvailableRegions,
