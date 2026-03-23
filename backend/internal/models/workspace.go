@@ -349,6 +349,7 @@ const (
 	TaskStatusWaiting            TaskStatus = "waiting" // 等待前置任务完成
 	TaskStatusRunning            TaskStatus = "running"
 	TaskStatusApplyPending       TaskStatus = "apply_pending"        // Plan完成，等待用户确认Apply
+	TaskStatusDecisionRequired  TaskStatus = "decision_required"    // Plan完成，AI判定高风险，等待人工确认决策
 	TaskStatusPlannedAndFinished TaskStatus = "planned_and_finished" // Plan完成，无需Apply（无变更）
 	TaskStatusSuccess            TaskStatus = "success"              // Plan任务成功完成
 	TaskStatusApplied            TaskStatus = "applied"              // Apply任务成功完成
