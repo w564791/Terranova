@@ -247,6 +247,8 @@ SECURITY_GROUP_CHANGE:
       label: "临时变更，已知风险"
     - code: MISCONFIG_FIX
       label: "修复错误配置"
+    - code: ABORT
+      label: "终止本次变更"
 
 RESOURCE_DELETION:
   title: "资源删除确认"
