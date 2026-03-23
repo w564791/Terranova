@@ -453,6 +453,16 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 	log.Printf("[AISummaryService] Plan summary completed for task %d (id=%s, duration=%dms, steps=%d, requires_confirmation=%v)",
 		summary.TaskID, summary.ID, summary.Duration, result.TotalSteps, summary.RequiresConfirmation)
 
+	// plan-only 任务不需要决策确认（没有 apply 阶段）
+	var task models.WorkspaceTask
+	if err := s.db.Select("task_type").First(&task, summary.TaskID).Error; err == nil {
+		if task.TaskType != "plan_and_apply" {
+			summary.RequiresConfirmation = false
+			s.db.Model(&models.AIPlanSummary{}).Where("id = ?", summary.ID).
+				Update("requires_confirmation", false)
+		}
+	}
+
 	// 如果需要人工确认，将 task 从 apply_pending 改为 decision_required（CAS）
 	if summary.RequiresConfirmation {
 		result := s.db.Model(&models.WorkspaceTask{}).
