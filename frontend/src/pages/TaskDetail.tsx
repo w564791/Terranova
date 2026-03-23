@@ -308,32 +308,26 @@ const TaskDetail: React.FC = () => {
     }, 100);
   };
 
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [confirmModalTitle, setConfirmModalTitle] = useState('');
+  const [confirmModalContent, setConfirmModalContent] = useState('');
+
   const handleActionWithComment = async (action: 'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override') => {
     // Confirm Apply 时检查 plan summary 状态
-    if (action === 'confirm_apply' && task && workspaceId) {
+    if (action === 'confirm_apply' && task && workspaceId && !confirmModalVisible) {
       try {
         const summary: any = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary`);
         const data = summary?.data || summary;
         if (data) {
           if (data.status === 'running' || data.status === 'pending') {
-            Modal.confirm({
-              title: 'AI 分析尚未完成',
-              content: 'AI 变更影响分析正在进行中，建议等待分析完成后再确认 Apply。是否仍要继续？',
-              okText: '继续 Apply',
-              cancelText: '等待分析',
-              okButtonProps: { danger: true },
-              onOk: () => proceedWithAction(action),
-            });
+            setConfirmModalTitle('AI 分析尚未完成');
+            setConfirmModalContent('AI 变更影响分析正在进行中，建议等待分析完成后再确认 Apply。是否仍要继续？');
+            setConfirmModalVisible(true);
             return;
           } else if (data.requires_confirmation && !data.user_decision_code) {
-            Modal.confirm({
-              title: 'AI 风险决策未确认',
-              content: 'AI 判断本次变更存在风险，建议先在 Plan Summary 中提交风险决策确认。是否仍要继续 Apply？',
-              okText: '继续 Apply',
-              cancelText: '返回确认',
-              okButtonProps: { danger: true },
-              onOk: () => proceedWithAction(action),
-            });
+            setConfirmModalTitle('AI 风险决策未确认');
+            setConfirmModalContent('AI 判断本次变更存在风险，建议先在 Plan Summary 中提交风险决策确认。是否仍要继续 Apply？');
+            setConfirmModalVisible(true);
             return;
           }
         }
@@ -801,6 +795,21 @@ const TaskDetail: React.FC = () => {
           console.log('New run created successfully');
         }}
       />
+
+      <Modal
+        title={confirmModalTitle}
+        open={confirmModalVisible}
+        okText="继续 Apply"
+        cancelText="返回"
+        okButtonProps={{ danger: true }}
+        onOk={() => {
+          setConfirmModalVisible(false);
+          proceedWithAction('confirm_apply');
+        }}
+        onCancel={() => setConfirmModalVisible(false)}
+      >
+        <p>{confirmModalContent}</p>
+      </Modal>
     </div>
   );
 };
