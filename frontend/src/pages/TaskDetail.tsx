@@ -300,10 +300,31 @@ const TaskDetail: React.FC = () => {
     return date.toLocaleString();
   };
 
-  const handleActionWithComment = (action: 'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override') => {
+  const handleActionWithComment = async (action: 'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override') => {
+    // Confirm Apply 时检查 plan summary 状态
+    if (action === 'confirm_apply' && task && workspaceId) {
+      try {
+        const summary: any = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary`);
+        const data = summary?.data || summary;
+        if (data) {
+          if (data.status === 'running' || data.status === 'pending') {
+            if (!window.confirm('AI 变更影响分析尚未完成，是否仍要继续 Apply？')) {
+              return;
+            }
+          } else if (data.requires_confirmation && !data.user_decision_code) {
+            if (!window.confirm('AI 判断本次变更存在风险，但尚未提交风险决策确认。是否仍要继续 Apply？')) {
+              return;
+            }
+          }
+        }
+      } catch {
+        // summary 不存在（404）或请求失败，不阻塞
+      }
+    }
+
     setCommentAction(action);
     setShowCommentInput(true);
-    
+
     setTimeout(() => {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
