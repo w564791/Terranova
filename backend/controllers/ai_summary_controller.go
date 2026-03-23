@@ -210,13 +210,32 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		"user_decision_at":   now,
 	})
 
-	// task 从 decision_required 改回 apply_pending（CAS）
-	c.db.Model(&models.WorkspaceTask{}).
-		Where("id = ? AND status = ?", taskID, string(models.TaskStatusDecisionRequired)).
-		Updates(map[string]interface{}{
-			"status": string(models.TaskStatusApplyPending),
-			"stage":  "apply_pending",
-		})
+	// ABORT → 取消任务；其他 → 恢复 apply_pending
+	if req.DecisionCode == "ABORT" {
+		c.db.Model(&models.WorkspaceTask{}).
+			Where("id = ? AND status = ?", taskID, string(models.TaskStatusDecisionRequired)).
+			Updates(map[string]interface{}{
+				"status":       string(models.TaskStatusCancelled),
+				"stage":        "cancelled",
+				"error_message": "用户在风险决策阶段选择终止变更",
+				"completed_at":  now,
+			})
+		// 解锁 workspace
+		c.db.Model(&models.Workspace{}).
+			Where("workspace_id = ? AND is_locked = ?", task.WorkspaceID, true).
+			Updates(map[string]interface{}{
+				"is_locked":   false,
+				"locked_by":   nil,
+				"lock_reason": nil,
+			})
+	} else {
+		c.db.Model(&models.WorkspaceTask{}).
+			Where("id = ? AND status = ?", taskID, string(models.TaskStatusDecisionRequired)).
+			Updates(map[string]interface{}{
+				"status": string(models.TaskStatusApplyPending),
+				"stage":  "apply_pending",
+			})
+	}
 
 	// 自动写入 task comment
 	decisionLabel := req.DecisionCode
