@@ -6696,7 +6696,8 @@ CREATE TABLE public.workspace_state_versions (
     import_source character varying(50),
     is_rollback boolean DEFAULT false,
     rollback_from_version integer,
-    description text
+    description text,
+    is_temp boolean DEFAULT false
 );
 
 
@@ -6782,6 +6783,13 @@ COMMENT ON COLUMN public.workspace_state_versions.rollback_from_version IS '回�
 --
 
 COMMENT ON COLUMN public.workspace_state_versions.description IS 'State 版本描述（上传说明或回滚原因）';
+
+
+--
+-- Name: COLUMN workspace_state_versions.is_temp; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.workspace_state_versions.is_temp IS '临时状态标记（apply 过程中的中间 state，promote 后变为 false）';
 
 
 --
@@ -9610,7 +9618,7 @@ COPY public.workspace_run_tasks (id, workspace_run_task_id, workspace_id, run_ta
 -- Data for Name: workspace_state_versions; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.workspace_state_versions (id, content, version, checksum, size_bytes, task_id, created_by, created_at, run_id, resource_count, workspace_id, lineage, serial, is_imported, import_source, is_rollback, rollback_from_version, description) FROM stdin;
+COPY public.workspace_state_versions (id, content, version, checksum, size_bytes, task_id, created_by, created_at, run_id, resource_count, workspace_id, lineage, serial, is_imported, import_source, is_rollback, rollback_from_version, description, is_temp) FROM stdin;
 \.
 
 
@@ -13062,6 +13070,13 @@ CREATE INDEX idx_state_versions_is_imported ON public.workspace_state_versions U
 --
 
 CREATE INDEX idx_state_versions_is_rollback ON public.workspace_state_versions USING btree (workspace_id, is_rollback);
+
+
+--
+-- Name: idx_state_versions_temp; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_state_versions_temp ON public.workspace_state_versions USING btree (workspace_id, is_temp) WHERE (is_temp = true);
 
 
 --
