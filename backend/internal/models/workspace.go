@@ -443,6 +443,15 @@ func (WorkspaceTask) TableName() string {
 	return "workspace_tasks"
 }
 
+// IsTerminal 判断任务是否已终结
+func (t *WorkspaceTask) IsTerminal() bool {
+	return t.Status == TaskStatusFailed ||
+		t.Status == TaskStatusCancelled ||
+		t.Status == TaskStatusApplied ||
+		t.Status == TaskStatusSuccess ||
+		t.Status == TaskStatusPlannedAndFinished
+}
+
 // WorkspaceStateVersion State版本模型
 type WorkspaceStateVersion struct {
 	// 基础字段
@@ -477,6 +486,9 @@ type WorkspaceStateVersion struct {
 	// 关联任务和资源统计
 	TaskID        *uint `json:"task_id" gorm:"index"`            // 关联的任务ID
 	ResourceCount int   `json:"resource_count" gorm:"default:0"` // State中的资源数量
+
+	// 临时状态标记（apply 过程中的中间 state，promote 后变为 false）
+	IsTemp bool `json:"is_temp" gorm:"default:false"`
 
 	// 关联
 	Workspace         *Workspace             `json:"workspace,omitempty" gorm:"foreignKey:WorkspaceID"`
