@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"iac-platform/internal/crypto"
+	"iac-platform/internal/database"
 	"iac-platform/internal/models"
 	"log"
 	"time"
@@ -108,7 +109,7 @@ func (a *LocalDataAccessor) GetLatestStateVersion(workspaceID string) (*models.W
 	var stateVersion models.WorkspaceStateVersion
 	db := a.getDB()
 
-	err := db.Where("workspace_id = ? AND (is_temp = false OR is_temp IS NULL)", workspaceID).
+	err := db.Where("workspace_id = ?", workspaceID).
 		Order("version DESC").
 		First(&stateVersion).Error
 
@@ -390,7 +391,7 @@ func (a *LocalDataAccessor) GetMaxStateVersion(workspaceID string) (int, error) 
 	db := a.getDB()
 
 	err := db.Model(&models.WorkspaceStateVersion{}).
-		Where("workspace_id = ? AND (is_temp = false OR is_temp IS NULL)", workspaceID).
+		Where("workspace_id = ?", workspaceID).
 		Select("COALESCE(MAX(version), 0)").
 		Scan(&maxVersion).Error
 
@@ -403,7 +404,7 @@ func (a *LocalDataAccessor) GetMaxStateVersion(workspaceID string) (int, error) 
 
 // UpsertTempState 插入或更新临时 State 记录
 func (a *LocalDataAccessor) UpsertTempState(version *models.WorkspaceStateVersion) error {
-	db := a.getDB()
+	db := database.IncludeTempState(a.getDB())
 
 	// 查找已有的 temp 记录（同一 workspace + task）
 	var existing models.WorkspaceStateVersion
@@ -461,7 +462,7 @@ func (a *LocalDataAccessor) PromoteTempState(workspaceID string, recordID uint) 
 
 // CleanupOrphanedTempStates 清理孤儿临时 State 记录
 func (a *LocalDataAccessor) CleanupOrphanedTempStates(workspaceID string) error {
-	db := a.getDB()
+	db := database.IncludeTempState(a.getDB())
 
 	var orphans []models.WorkspaceStateVersion
 	if err := db.Where("workspace_id = ? AND is_temp = true", workspaceID).

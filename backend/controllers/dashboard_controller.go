@@ -64,7 +64,7 @@ func (ctrl *DashboardController) GetOverviewStats(c *gin.Context) {
 	var totalResources int64
 	ctrl.db.Model(&models.WorkspaceStateVersion{}).
 		Select("COALESCE(SUM(resource_count), 0)").
-		Where("id IN (SELECT MAX(id) FROM workspace_state_versions GROUP BY workspace_id)").
+		Where("id IN (SELECT MAX(id) FROM workspace_state_versions WHERE is_temp = false GROUP BY workspace_id)").
 		Scan(&totalResources)
 
 	// 7. Concurrent run limit reached (running tasks)

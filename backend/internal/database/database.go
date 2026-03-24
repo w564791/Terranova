@@ -30,6 +30,9 @@ func Initialize(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	metrics.RegisterGORMCallbacks(db)
 	tracing.RegisterGORMTracing(db)
 
+	// 注册 State Version temp 过滤回调
+	RegisterStateVersionTempFilter(db)
+
 	// Start DB connection stats collector
 	sqlDB, err := db.DB()
 	if err == nil {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"iac-platform/internal/database"
 	"iac-platform/internal/models"
 
 	"github.com/stretchr/testify/assert"
@@ -18,6 +19,10 @@ import (
 func setupWatcherTestDB(t *testing.T) (*LocalDataAccessor, *gorm.DB) {
 	t.Helper()
 	db := setupTestDB(t)
+
+	// 注册全局 temp 过滤回调（和生产环境一致）
+	database.RegisterStateVersionTempFilter(db)
+
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 

@@ -55,6 +55,9 @@ func Connect() (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
+	// 注册 State Version temp 过滤回调
+	RegisterStateVersionTempFilter(db)
+
 	log.Println("Database connected successfully")
 	return db, nil
 }
