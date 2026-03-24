@@ -531,9 +531,9 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 		}
 	}
 
-	// Get latest state version
+	// Get latest state version (排除 temp 记录)
 	var stateVersion models.WorkspaceStateVersion
-	err := h.db.Where("workspace_id = ?", workspace.WorkspaceID).
+	err := h.db.Where("workspace_id = ? AND (is_temp = false OR is_temp IS NULL)", workspace.WorkspaceID).
 		Order("version DESC").
 		First(&stateVersion).Error
 
@@ -1699,7 +1699,7 @@ func (h *AgentHandler) GetMaxStateVersion(c *gin.Context) {
 
 	var maxVersion int
 	err := h.db.Model(&models.WorkspaceStateVersion{}).
-		Where("workspace_id = ?", workspaceID).
+		Where("workspace_id = ? AND (is_temp = false OR is_temp IS NULL)", workspaceID).
 		Select("COALESCE(MAX(version), 0)").
 		Scan(&maxVersion).Error
 

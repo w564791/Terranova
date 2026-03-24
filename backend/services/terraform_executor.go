@@ -1617,6 +1617,7 @@ func (s *TerraformExecutor) saveTaskCancellation(
 	task *models.WorkspaceTask,
 	logger *TerraformLogger,
 	taskType string, // "plan" or "apply"
+	stateAlreadySaved ...bool, // 可选：state 已由 watcher 保存，跳过 partial state 保存
 ) {
 	fullOutput := logger.GetFullOutput()
 
@@ -1648,8 +1649,10 @@ func (s *TerraformExecutor) saveTaskCancellation(
 		}
 
 		// Apply 取消时，尝试保存 partial state（terraform 可能已创建部分资源）
+		// 如果 state 已由 watcher promote，跳过此步骤
+		skipPartialState := len(stateAlreadySaved) > 0 && stateAlreadySaved[0]
 		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
-		if s.db != nil {
+		if !skipPartialState && s.db != nil {
 			stateFile := filepath.Join(workDir, "terraform.tfstate")
 			if _, statErr := os.Stat(stateFile); statErr == nil {
 				logger.Info("Attempting to save partial state after apply cancellation...")
@@ -2441,13 +2444,16 @@ func (s *TerraformExecutor) ExecuteApply(
 		// 检查是否是context取消导致的
 		if ctx.Err() == context.Canceled {
 			// 取消时也 promote（可能有部分 state）
+			statePromotedOnCancel := false
 			if stateWatcher != nil && stateWatcher.GetTempRecordID() > 0 {
 				if promoteErr := stateWatcher.Promote(); promoteErr != nil {
 					logger.Warn("Failed to promote temp state on cancel: %v", promoteErr)
+				} else {
+					statePromotedOnCancel = true
 				}
 			}
 			logger.Info("Task cancelled by user during apply execution")
-			s.saveTaskCancellation(task, logger, "apply")
+			s.saveTaskCancellation(task, logger, "apply", statePromotedOnCancel)
 			return fmt.Errorf("task cancelled by user")
 		}
 
