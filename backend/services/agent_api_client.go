@@ -466,6 +466,7 @@ func (c *AgentAPIClient) UpsertTempState(version *models.WorkspaceStateVersion) 
 		"size_bytes": version.SizeBytes,
 		"version":    version.Version,
 		"task_id":    version.TaskID,
+		"created_by": version.CreatedBy,
 	}
 
 	respBody, err := c.doRequest("PUT", path, reqBody)

@@ -1919,6 +1919,7 @@ func (h *AgentHandler) UpsertTempState(c *gin.Context) {
 		SizeBytes int                    `json:"size_bytes"`
 		Version   int                    `json:"version"`
 		TaskID    *uint                  `json:"task_id"`
+		CreatedBy *string                `json:"created_by"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1933,6 +1934,7 @@ func (h *AgentHandler) UpsertTempState(c *gin.Context) {
 		SizeBytes:   req.SizeBytes,
 		Version:     req.Version,
 		TaskID:      req.TaskID,
+		CreatedBy:   req.CreatedBy,
 		IsTemp:      true,
 	}
 

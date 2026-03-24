@@ -466,21 +466,38 @@ func (a *LocalDataAccessor) CleanupOrphanedTempStates(workspaceID string) error 
 
 	var orphans []models.WorkspaceStateVersion
 	if err := db.Where("workspace_id = ? AND is_temp = true", workspaceID).
+		Order("version DESC").
 		Find(&orphans).Error; err != nil {
 		return fmt.Errorf("failed to find orphaned temp states: %w", err)
 	}
 
+	promoted := false
 	for _, orphan := range orphans {
 		if orphan.TaskID != nil {
 			var task models.WorkspaceTask
 			if err := db.First(&task, *orphan.TaskID).Error; err == nil {
 				if task.IsTerminal() {
-					log.Printf("[StateWatcher] Promoting orphaned temp state #%d (task %d status: %s)",
-						orphan.ID, task.ID, task.Status)
-					db.Model(&orphan).Update("is_temp", false)
-					db.Model(&models.Workspace{}).
-						Where("workspace_id = ?", workspaceID).
-						Update("tf_state", orphan.Content)
+					if !promoted {
+						// 只 promote 版本最高的孤儿（已按 version DESC 排序）
+						log.Printf("[StateWatcher] Promoting orphaned temp state #%d (task %d status: %s)",
+							orphan.ID, task.ID, task.Status)
+						if err := db.Transaction(func(tx *gorm.DB) error {
+							if err := tx.Model(&orphan).Update("is_temp", false).Error; err != nil {
+								return err
+							}
+							return tx.Model(&models.Workspace{}).
+								Where("workspace_id = ?", workspaceID).
+								Update("tf_state", orphan.Content).Error
+						}); err != nil {
+							log.Printf("[StateWatcher] Failed to promote orphaned temp state #%d: %v", orphan.ID, err)
+						} else {
+							promoted = true
+						}
+					} else {
+						// 已有更新版本被 promote，删除旧的孤儿
+						log.Printf("[StateWatcher] Deleting superseded orphaned temp state #%d", orphan.ID)
+						db.Delete(&orphan)
+					}
 					continue
 				}
 			}
