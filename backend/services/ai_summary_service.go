@@ -343,6 +343,7 @@ func (s *AISummaryService) buildSystemPrompt(cfg *models.AIConfig, stage string)
 		}
 		if len(composition.FoundationSkills) > 0 || composition.TaskSkill != "" {
 			result, err := s.skillAssembler.AssemblePrompt(composition, 0, &DynamicContext{
+				UseCMDB: true,
 				ExtraContext: map[string]interface{}{
 					"stage": stage,
 				},
@@ -404,17 +405,10 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		AffectedResources interface{} `json:"affected_resources"`
 		RiskLevel         string      `json:"risk_level"` // V2 兼容
 		RiskEvaluation    *struct {
-			RiskLevel                string `json:"risk_level"`
-			Confidence               string `json:"confidence"`
-			RequiresHumanConfirmation bool   `json:"requires_human_confirmation"`
-			DecisionHints            []struct {
-				Scenario           string `json:"scenario"`
-				Title              string `json:"title"`
-				RecommendedActions []struct {
-					Code  string `json:"code"`
-					Label string `json:"label"`
-				} `json:"recommended_actions"`
-			} `json:"decision_hints"`
+			RiskLevel                string          `json:"risk_level"`
+			Confidence               string          `json:"confidence"`
+			RequiresHumanConfirmation bool            `json:"requires_human_confirmation"`
+			DecisionHintsRaw         json.RawMessage `json:"decision_hints"`
 		} `json:"risk_evaluation"`
 	}
 
@@ -441,15 +435,11 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		summary.RiskLevel = aiOutput.RiskLevel
 	}
 
-	// 提取决策字段（V3 优先，V2 兜底）
+	// 提取决策字段
 	if aiOutput.RiskEvaluation != nil {
 		summary.RequiresConfirmation = aiOutput.RiskEvaluation.RequiresHumanConfirmation
-		if len(aiOutput.RiskEvaluation.DecisionHints) > 0 {
-			hint := aiOutput.RiskEvaluation.DecisionHints[0]
-			summary.DecisionScenario = hint.Scenario
-			if len(hint.RecommendedActions) > 0 {
-				summary.DecisionActions, _ = json.Marshal(hint.RecommendedActions)
-			}
+		if len(aiOutput.RiskEvaluation.DecisionHintsRaw) > 0 {
+			s.parseDecisionHints(summary, aiOutput.RiskEvaluation.DecisionHintsRaw)
 		}
 	}
 
@@ -493,6 +483,47 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 			})
 		if result.RowsAffected > 0 {
 			log.Printf("[AISummaryService] Task %d status changed to decision_required", summary.TaskID)
+		}
+	}
+}
+
+// parseDecisionHints 解析 decision_hints（兼容 V4 对象格式和 V3 数组格式）
+func (s *AISummaryService) parseDecisionHints(summary *models.AIPlanSummary, raw json.RawMessage) {
+	// V4 格式：对象 {title, risk_highlights, recommended_actions}
+	var v4Hint struct {
+		Title              string   `json:"title"`
+		RiskHighlights     []string `json:"risk_highlights"`
+		RecommendedActions []struct {
+			Code  string `json:"code"`
+			Label string `json:"label"`
+		} `json:"recommended_actions"`
+	}
+	if err := json.Unmarshal(raw, &v4Hint); err == nil && v4Hint.Title != "" {
+		summary.DecisionTitle = v4Hint.Title
+		if len(v4Hint.RiskHighlights) > 0 {
+			summary.RiskHighlights, _ = json.Marshal(v4Hint.RiskHighlights)
+		}
+		if len(v4Hint.RecommendedActions) > 0 {
+			summary.DecisionActions, _ = json.Marshal(v4Hint.RecommendedActions)
+		}
+		return
+	}
+
+	// V3 格式：数组 [{scenario, title, recommended_actions}]
+	var v3Hints []struct {
+		Scenario           string `json:"scenario"`
+		Title              string `json:"title"`
+		RecommendedActions []struct {
+			Code  string `json:"code"`
+			Label string `json:"label"`
+		} `json:"recommended_actions"`
+	}
+	if err := json.Unmarshal(raw, &v3Hints); err == nil && len(v3Hints) > 0 {
+		hint := v3Hints[0]
+		summary.DecisionScenario = hint.Scenario
+		summary.DecisionTitle = hint.Title
+		if len(hint.RecommendedActions) > 0 {
+			summary.DecisionActions, _ = json.Marshal(hint.RecommendedActions)
 		}
 	}
 }

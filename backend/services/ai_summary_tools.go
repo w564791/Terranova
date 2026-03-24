@@ -202,10 +202,27 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 
 	var resource models.ResourceIndex
 	if err := query.First(&resource).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if err == gorm.ErrRecordNotFound && workspaceID != "" {
+			// Fallback：不限 workspace_id，查外部 CMDB 数据（如 __external__）
+			fallbackQuery := t.db.Model(&models.ResourceIndex{})
+			if tfAddress != "" {
+				fallbackQuery = fallbackQuery.Where("terraform_address = ?", tfAddress)
+			}
+			if cloudID != "" {
+				fallbackQuery = fallbackQuery.Where("cloud_resource_id = ?", cloudID)
+			}
+			if err2 := fallbackQuery.First(&resource).Error; err2 != nil {
+				if err2 == gorm.ErrRecordNotFound {
+					return map[string]interface{}{"found": false, "message": "resource not found"}, nil
+				}
+				return nil, fmt.Errorf("fallback query failed: %w", err2)
+			}
+			log.Printf("[QueryResourceAttributes] fallback: found resource in workspace=%s (queried workspace=%s)", resource.WorkspaceID, workspaceID)
+		} else if err == gorm.ErrRecordNotFound {
 			return map[string]interface{}{"found": false, "message": "resource not found"}, nil
+		} else {
+			return nil, fmt.Errorf("query failed: %w", err)
 		}
-		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
 	// 解析 attributes
@@ -220,6 +237,7 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 
 	return map[string]interface{}{
 		"found":              true,
+		"workspace_id":       resource.WorkspaceID,
 		"terraform_address":  resource.TerraformAddress,
 		"resource_type":      resource.ResourceType,
 		"cloud_resource_id":  resource.CloudResourceID,

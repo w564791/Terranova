@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -174,53 +175,81 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 			ToolCalls: response.ToolCalls,
 		})
 
-		for _, tc := range response.ToolCalls {
-			record := AgentToolCallRecord{
-				ToolName: tc.Name,
-				Params:   tc.Params,
-			}
+		// 并发执行所有 tool calls
+		type toolResult struct {
+			index   int
+			record  AgentToolCallRecord
+			message AgentMessage
+		}
 
-			startTime := time.Now()
+		results := make([]toolResult, len(response.ToolCalls))
+		var wg sync.WaitGroup
 
-			tool, exists := loop.tools[tc.Name]
-			if !exists {
-				record.Error = fmt.Sprintf("tool not found: %s", tc.Name)
+		for idx, tc := range response.ToolCalls {
+			wg.Add(1)
+			go func(i int, tc AgentToolCall) {
+				defer wg.Done()
+
+				record := AgentToolCallRecord{
+					ToolName: tc.Name,
+					Params:   tc.Params,
+				}
+
+				startTime := time.Now()
+
+				tool, exists := loop.tools[tc.Name]
+				if !exists {
+					record.Error = fmt.Sprintf("tool not found: %s", tc.Name)
+					record.DurationMs = time.Since(startTime).Milliseconds()
+					results[i] = toolResult{
+						index:  i,
+						record: record,
+						message: AgentMessage{
+							Role:       "tool",
+							ToolCallID: tc.ID,
+							Content:    fmt.Sprintf("Error: tool '%s' not found", tc.Name),
+						},
+					}
+					return
+				}
+
+				result, execErr := tool.Execute(ctx, tc.Params)
 				record.DurationMs = time.Since(startTime).Milliseconds()
-				allToolCalls = append(allToolCalls, record)
 
-				messages = append(messages, AgentMessage{
-					Role:       "tool",
-					ToolCallID: tc.ID,
-					Content:    fmt.Sprintf("Error: tool '%s' not found", tc.Name),
-				})
-				continue
-			}
+				if execErr != nil {
+					record.Error = execErr.Error()
+					results[i] = toolResult{
+						index:  i,
+						record: record,
+						message: AgentMessage{
+							Role:       "tool",
+							ToolCallID: tc.ID,
+							Content:    fmt.Sprintf("Error: %s", execErr.Error()),
+						},
+					}
+					return
+				}
 
-			result, execErr := tool.Execute(ctx, tc.Params)
-			record.DurationMs = time.Since(startTime).Milliseconds()
+				record.Result = result
+				resultStr := loop.serializeResult(result)
+				results[i] = toolResult{
+					index:  i,
+					record: record,
+					message: AgentMessage{
+						Role:       "tool",
+						ToolCallID: tc.ID,
+						Content:    resultStr,
+					},
+				}
+			}(idx, tc)
+		}
 
-			if execErr != nil {
-				record.Error = execErr.Error()
-				allToolCalls = append(allToolCalls, record)
+		wg.Wait()
 
-				messages = append(messages, AgentMessage{
-					Role:       "tool",
-					ToolCallID: tc.ID,
-					Content:    fmt.Sprintf("Error: %s", execErr.Error()),
-				})
-				continue
-			}
-
-			record.Result = result
-			allToolCalls = append(allToolCalls, record)
-
-			// 序列化结果并截断
-			resultStr := loop.serializeResult(result)
-			messages = append(messages, AgentMessage{
-				Role:       "tool",
-				ToolCallID: tc.ID,
-				Content:    resultStr,
-			})
+		// 按原始顺序追加结果
+		for _, r := range results {
+			allToolCalls = append(allToolCalls, r.record)
+			messages = append(messages, r.message)
 		}
 	}
 

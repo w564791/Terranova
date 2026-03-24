@@ -141,6 +141,8 @@ export interface PlanSummary {
   // 人机协同决策字段
   requires_confirmation: boolean;
   decision_scenario?: string;
+  decision_title?: string;
+  risk_highlights?: string[];
   decision_actions?: { code: string; label: string }[];
   user_decision_code?: string;
   user_decision_note?: string;

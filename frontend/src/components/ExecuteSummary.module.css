@@ -463,6 +463,18 @@
   margin: 0 0 10px 0;
 }
 
+.riskHighlights {
+  margin: 0 0 12px 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.6;
+}
+
+.riskHighlights li {
+  margin-bottom: 4px;
+}
+
 .decisionOptions {
   display: flex;
   flex-direction: column;
@@ -487,8 +499,15 @@
   background-color: #f9fafb;
 }
 
-.decisionOption input[type="radio"] {
+.decisionOption input[type="radio"],
+.decisionOption input[type="checkbox"] {
   accent-color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.decisionOptionChecked {
+  background-color: #fffbeb;
+  border-color: #f59e0b;
 }
 
 .decisionNote {
@@ -525,6 +544,35 @@
 
 .decisionSubmit:disabled {
   background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.decisionButtonGroup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.decisionAbort {
+  padding: 8px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background-color: white;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.decisionAbort:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.decisionAbort:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

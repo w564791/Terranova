@@ -7,6 +7,7 @@ import (
 	"iac-platform/services"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -176,22 +177,22 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		}
 	}
 
-	// 校验 decision_code 合法性
-	if len(summary.DecisionActions) > 0 {
+	// 校验 decision_code 合法性（支持逗号分隔的多个 code）
+	if len(summary.DecisionActions) > 0 && req.DecisionCode != "ABORT" {
 		var actions []struct {
 			Code string `json:"code"`
 		}
 		json.Unmarshal(summary.DecisionActions, &actions)
-		validCode := false
+		actionSet := make(map[string]bool, len(actions))
 		for _, a := range actions {
-			if a.Code == req.DecisionCode {
-				validCode = true
-				break
-			}
+			actionSet[a.Code] = true
 		}
-		if !validCode {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid decision_code"})
-			return
+		submittedCodes := strings.Split(req.DecisionCode, ",")
+		for _, code := range submittedCodes {
+			if !actionSet[code] {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid decision_code: %s", code)})
+				return
+			}
 		}
 	}
 
@@ -238,22 +239,30 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 	}
 
 	// 自动写入 task comment
-	decisionLabel := req.DecisionCode
+	var decisionLabels []string
 	if len(summary.DecisionActions) > 0 {
 		var actions []struct {
 			Code  string `json:"code"`
 			Label string `json:"label"`
 		}
 		json.Unmarshal(summary.DecisionActions, &actions)
+		actionMap := make(map[string]string, len(actions))
 		for _, a := range actions {
-			if a.Code == req.DecisionCode {
-				decisionLabel = a.Label
-				break
+			actionMap[a.Code] = a.Label
+		}
+		for _, code := range strings.Split(req.DecisionCode, ",") {
+			if label, ok := actionMap[code]; ok {
+				decisionLabels = append(decisionLabels, label)
+			} else {
+				decisionLabels = append(decisionLabels, code)
 			}
 		}
 	}
+	if len(decisionLabels) == 0 {
+		decisionLabels = []string{req.DecisionCode}
+	}
 
-	commentContent := fmt.Sprintf("[AI 风险决策] %s 确认：%s", usernameStr, decisionLabel)
+	commentContent := fmt.Sprintf("[AI 风险决策] %s 确认：%s", usernameStr, strings.Join(decisionLabels, "；"))
 	if req.Note != "" {
 		commentContent += fmt.Sprintf("\n补充说明：%s", req.Note)
 	}

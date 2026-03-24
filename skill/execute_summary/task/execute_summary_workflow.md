@@ -42,7 +42,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
   - VPC: `vpc_id`
   - 子网: `subnet_id` 或 `subnet_ids`
   - IAM Role: `role_arn` 或 `iam_role`
-- `query_resource_attributes`: workspace_id, terraform_address 或 cloud_resource_id
+- `query_resource_attributes`: workspace_id（可选，不传则全局查询，含外部 CMDB 数据）, terraform_address 或 cloud_resource_id
 - `query_state_resources`: workspace_id
 - `query_plan_summary`: task_id
 
@@ -61,6 +61,14 @@ mandatory_calls:
     tool: query_cmdb_dependencies
     rule: OPTIONAL_CALL
     description: 仅当资源类型为共享型（如 security_group、subnet、iam_role）时调用
+
+  - condition: action == "create" AND 资源引用了已有基础设施（如 subnet_id, vpc_id, security_group_ids）
+    tool: query_resource_attributes
+    rule: SHOULD_CALL
+    description: |
+      对于新建资源引用的已有基础设施（子网、VPC、安全组等），
+      应通过 cloud_resource_id 查询其属性以补充影响分析。
+      如果在当前 workspace 查不到，不传 workspace_id 重新查询（可能在外部 CMDB 中）。
 
 禁止：
   - 禁止编造依赖关系
@@ -210,81 +218,45 @@ requires_human_confirmation_rules:
 
 -----
 
-## 九、决策场景定义（固定映射，禁止自由生成）
+## 九、人工确认内容生成（AI 生成 title/risk_highlights + 固定 ABORT）
 
-### 9.1 scenario 选择规则（按优先级匹配）
-
-```yaml
-优先级: impact_type > action
-
-rules:
-  - if: impact_type == "security" AND action == "update"
-    scenario: SECURITY_GROUP_CHANGE
-
-  - if: impact_type == "iam"
-    scenario: IAM_PERMISSION_CHANGE
-
-  - if: impact_type == "network" AND blast_radius_level == "high"
-    scenario: NETWORK_CORE_CHANGE
-
-  - if: action == "delete"
-    scenario: RESOURCE_DELETION
-
-  default: RESOURCE_DELETION  # 兜底，禁止使用 GENERIC_CHANGE
-```
-
-### 9.2 scenario 固定内容（title 和 label 均为固定值，禁止自由生成）
+当 requires_human_confirmation == true 时，AI 根据实际变更内容生成 decision_hints。
 
 ```yaml
-SECURITY_GROUP_CHANGE:
-  title: "安全组规则变更确认"
-  actions:
-    - code: VERIFIED_UNUSED
-      label: "确认原规则未被实际使用"
-    - code: MIGRATED
-      label: "流量来源已完成迁移"
-    - code: TEMP_CHANGE
-      label: "临时变更，已知风险"
-    - code: MISCONFIG_FIX
-      label: "修复错误配置"
-    - code: ABORT
-      label: "终止本次变更"
+decision_hints:
+  title: string
+    # AI 根据变更内容生成，一句话点明具体风险
+    # 必须包含具体资源标识（resource ID、地址、名称），禁止"某资源"等模糊指代
+    # 示例：
+    #   "新增 EC2 实例将获得公网 IP（subnet-01bc9c 配置 map_public_ip_on_launch=true）"
+    #   "删除安全组 sg-xxx，3 个 EC2 实例依赖此规则"
+    #   "IAM Role 权限范围扩大，新增 S3 全桶访问"
 
-RESOURCE_DELETION:
-  title: "资源删除确认"
-  actions:
-    - code: DECOMMISSIONED
-      label: "资源已废弃下线"
-    - code: MIGRATED
-      label: "依赖已迁移至其他资源"
-    - code: REPLACED
-      label: "已由新资源替代"
-    - code: ABORT
-      label: "终止本次变更"
+  risk_highlights:
+    - string  # 3-5 条关键风险点，每条必须具体、基于 impact_analysis 实际发现
+    # 示例：
+    #   - "subnet-01bc9c 配置 map_public_ip_on_launch=true，实例将自动分配公网 IP"
+    #   - "安全组入站规则允许 0.0.0.0/0:443，实例将直接暴露于公网"
+    #   - "当前无 NAT Gateway，公网 IP 是唯一出站路径"
 
-IAM_PERMISSION_CHANGE:
-  title: "IAM 权限变更确认"
-  actions:
-    - code: APPROVED_SCOPE
-      label: "变更范围已审批"
-    - code: TEMP_CHANGE
-      label: "临时授权，已知风险"
-    - code: LEAST_PRIVILEGE_ADJUSTMENT
-      label: "最小权限收紧调整"
+  recommended_actions:
+    # AI 根据变更场景生成 2-4 个风险确认项（checkbox 多选），用户必须全部勾选才能确认
+    # 最后一个必须是 ABORT（前端渲染为独立的终止按钮）
+    - code: string   # AI 生成，大写下划线命名，如 CONFIRMED_EXPOSURE、APPROVED_SCOPE
+      label: string  # AI 生成，必须以"我已经知晓: "开头，后接具体风险确认内容
+                     # 示例："我已经知晓: 实例将获得公网 IP 并暴露于公网"
+                     # 示例："我已经知晓: 删除安全组将影响 3 个 EC2 实例的网络访问"
     - code: ABORT
-      label: "终止本次变更"
+      label: "终止本次变更"  # 固定，不可修改
 
-NETWORK_CORE_CHANGE:
-  title: "核心网络架构变更确认"
-  actions:
-    - code: ARCH_CHANGE_APPROVED
-      label: "架构变更已审批"
-    - code: MIGRATED
-      label: "依赖流量已迁移"
-    - code: RISK_ACCEPTED
-      label: "风险已知，确认接受"
-    - code: ABORT
-      label: "终止本次变更"
+生成规则：
+  - title 禁止使用泛化描述，必须反映本次变更的具体风险
+  - risk_highlights 每条基于 impact_analysis 实际发现，禁止重复 title 内容
+  - risk_highlights 条数最多5条
+  - recommended_actions 中风险确认项（非 ABORT）为 2-3 个，必须与本次变更场景匹配
+  - recommended_actions 的 label 必须以"我已经知晓: "开头，后接用户确认的具体风险内容
+  - recommended_actions 最后一项必须是 ABORT（code="ABORT", label="终止本次变更"）
+  - 禁止使用与变更无关的固定模板文案
 ```
 
 -----
@@ -320,7 +292,7 @@ affected_resources_schema:
     e. 按第七节规则计算 risk_level 和 confidence
 7.  按第七节聚合规则生成全局 risk_evaluation
 8.  按第八节规则判断 requires_human_confirmation
-9.  若 true → 按第九节 scenario 选择规则选定 scenario，输出固定 decision_hints
+9.  若 true → 按第九节规则生成 decision_hints（title、risk_highlights、recommended_actions）
 ```
 
 ### Apply 阶段
@@ -382,18 +354,23 @@ affected_resources_schema:
     "confidence": "low|medium|high",
     "requires_human_confirmation": true,
 
-    "decision_hints": [
-      {
-        "scenario": "SECURITY_GROUP_CHANGE|RESOURCE_DELETION|IAM_PERMISSION_CHANGE|NETWORK_CORE_CHANGE",
-        "title": "固定值，来自第九节 scenario 定义",
-        "recommended_actions": [
-          {
-            "code": "来自 scenario.actions",
-            "label": "固定值，来自第九节 scenario 定义"
-          }
-        ]
-      }
-    ]
+    "decision_hints": {
+      "title": "AI 生成：一句话点明具体风险，含资源标识",
+      "risk_highlights": [
+        "风险点 1（具体、基于 impact_analysis）",
+        "风险点 2"
+      ],
+      "recommended_actions": [
+        {
+          "code": "AI_GENERATED_CODE",
+          "label": "AI 生成：与本次变更相关的确认理由"
+        },
+        {
+          "code": "ABORT",
+          "label": "终止本次变更"
+        }
+      ]
+    }
   }
 }
 ```
@@ -437,7 +414,7 @@ affected_resources_schema:
 - 只输出 JSON，禁止输出任何解释文字和 markdown 代码块标记
 - 禁止编造依赖数据，所有 direct_dependencies 必须来自工具查询
 - 所有枚举字段必须使用规定值，禁止自造值
-- scenario、title、label 必须使用第九节固定定义，禁止自由生成
+- decision_hints 的 title、risk_highlights、recommended_actions 必须按第九节规则生成，必须包含具体资源信息
 - uncertainty.reason_code 必须使用第五节枚举，禁止自由文本
 - risk_level / confidence 必须按第七节规则计算，禁止主观判断
 - blast_radius_level 必须按第六节规则判定

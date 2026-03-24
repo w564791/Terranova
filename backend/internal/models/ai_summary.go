@@ -24,9 +24,11 @@ type AIPlanSummary struct {
 	CreatedAt         time.Time       `json:"created_at"`                                                    // 创建时间（本地时间）
 	// 人机协同决策字段
 	RequiresConfirmation bool            `gorm:"default:false" json:"requires_confirmation"`                    // AI 判断是否需要人工确认
-	DecisionScenario     string          `gorm:"type:varchar(50)" json:"decision_scenario,omitempty"`           // 决策场景码
+	DecisionScenario     string          `gorm:"type:varchar(50)" json:"decision_scenario,omitempty"`           // 决策场景码（V3 旧字段，保留兼容）
+	DecisionTitle        string          `gorm:"type:text" json:"decision_title,omitempty"`                     // AI 生成的风险确认标题
+	RiskHighlights       json.RawMessage `gorm:"type:jsonb" json:"risk_highlights,omitempty"`                   // AI 生成的关键风险点 ["..."]
 	DecisionActions      json.RawMessage `gorm:"type:jsonb" json:"decision_actions,omitempty"`                  // 可选决策项 [{code, label}]
-	UserDecisionCode     string          `gorm:"type:varchar(50)" json:"user_decision_code,omitempty"`          // 用户选择的决策码
+	UserDecisionCode     string          `gorm:"type:text" json:"user_decision_code,omitempty"`                 // 用户选择的决策码（多选时逗号分隔）
 	UserDecisionNote     string          `gorm:"type:text" json:"user_decision_note,omitempty"`                 // 用户补充说明
 	UserDecisionBy       string          `gorm:"type:varchar(20)" json:"user_decision_by,omitempty"`            // 确认人 user_id
 	UserDecisionAt       *time.Time      `json:"user_decision_at,omitempty"`                                    // 确认时间

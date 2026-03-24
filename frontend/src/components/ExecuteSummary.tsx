@@ -408,50 +408,84 @@ const DecisionConfirmation: React.FC<{
   taskId: number;
   onConfirmed: () => void;
 }> = ({ summary, workspaceId, taskId, onConfirmed }) => {
-  const [selectedCode, setSelectedCode] = useState('');
+  const [checkedCodes, setCheckedCodes] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // 分离风险确认项和 ABORT
+  const allActions = summary.decision_actions || [];
+  const riskActions = allActions.filter(a => a.code !== 'ABORT');
+  const abortAction = allActions.find(a => a.code === 'ABORT');
+  const allChecked = riskActions.length > 0 && riskActions.every(a => checkedCodes.has(a.code));
+
   // 已确认状态
   if (summary.user_decision_code) {
-    const label = summary.decision_actions?.find(a => a.code === summary.user_decision_code)?.label || summary.user_decision_code;
+    // 兼容新旧格式：新格式用逗号分隔多个 code
+    const confirmedCodes = summary.user_decision_code.split(',');
+    const confirmedLabels = confirmedCodes
+      .map(code => summary.decision_actions?.find(a => a.code === code)?.label || code)
+      .filter(Boolean);
     return (
       <div className={styles.decisionBox} style={{ borderColor: '#10b981' }}>
         <div className={styles.decisionHeader}>
-          <span className={styles.decisionTitle}>{summary.decision_scenario || 'Risk Decision'}</span>
-          <span className={styles.decisionConfirmed}>Confirmed</span>
+          <span className={styles.decisionTitle}>{summary.decision_title || summary.decision_scenario || 'Risk Decision'}</span>
+          <span className={styles.decisionConfirmed}>已确认</span>
         </div>
         <div className={styles.decisionResult}>
-          <div>Decision: {label}</div>
-          <div style={{ fontSize: '12px', color: '#6b7280' }}>
-            By: {summary.user_decision_by} at {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''}
+          {confirmedLabels.map((label, i) => (
+            <div key={i} style={{ fontSize: '13px', color: '#374151', marginBottom: '2px' }}>✓ {label}</div>
+          ))}
+          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+            {summary.user_decision_by} 于 {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''} 确认
           </div>
           {summary.user_decision_note && (
-            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>Note: {summary.user_decision_note}</div>
+            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>备注: {summary.user_decision_note}</div>
           )}
         </div>
       </div>
     );
   }
 
-  const handleSubmit = async () => {
-    if (!selectedCode) {
-      setError('Please select a decision');
-      return;
-    }
+  const handleConfirm = async () => {
+    if (!allChecked) return;
     try {
       setSubmitting(true);
       setError('');
-      await confirmPlanSummary(workspaceId, taskId, selectedCode, note);
+      const decisionCode = Array.from(checkedCodes).join(',');
+      await confirmPlanSummary(workspaceId, taskId, decisionCode, note);
       onConfirmed();
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : 'Failed to submit decision');
+      setError(typeof err === 'string' ? err : '提交失败');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleAbort = async () => {
+    try {
+      setSubmitting(true);
+      setError('');
+      await confirmPlanSummary(workspaceId, taskId, 'ABORT', note);
+      onConfirmed();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : '提交失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleCheck = (code: string) => {
+    setCheckedCodes(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+    setError('');
+  };
+
+  // V4: 使用 AI 生成的 decision_title，V3 fallback 到 scenario 映射
   const scenarioTitles: Record<string, string> = {
     SECURITY_GROUP_CHANGE: 'Security Group Change Confirmation',
     RESOURCE_DELETION: 'Resource Deletion Confirmation',
@@ -459,7 +493,11 @@ const DecisionConfirmation: React.FC<{
     NETWORK_CORE_CHANGE: 'Core Network Change Confirmation',
   };
 
-  const title = scenarioTitles[summary.decision_scenario || ''] || 'Risk Decision Confirmation';
+  const title = summary.decision_title
+    || scenarioTitles[summary.decision_scenario || '']
+    || 'Risk Decision Confirmation';
+
+  const riskHighlights = summary.risk_highlights || [];
 
   return (
     <div className={styles.decisionBox}>
@@ -468,16 +506,24 @@ const DecisionConfirmation: React.FC<{
         <span className={styles.decisionRequired}>Action Required</span>
       </div>
       <div className={styles.decisionBody}>
-        <p className={styles.decisionPrompt}>AI has determined this change requires confirmation before apply:</p>
+        {riskHighlights.length > 0 && (
+          <ul className={styles.riskHighlights}>
+            {riskHighlights.map((highlight, i) => (
+              <li key={i}>{highlight}</li>
+            ))}
+          </ul>
+        )}
+        {riskHighlights.length === 0 && (
+          <p className={styles.decisionPrompt}>AI 判断此变更需要人工确认后才能执行 Apply：</p>
+        )}
         <div className={styles.decisionOptions}>
-          {(summary.decision_actions || []).map((action) => (
-            <label key={action.code} className={styles.decisionOption}>
+          {riskActions.map((action) => (
+            <label key={action.code} className={`${styles.decisionOption} ${checkedCodes.has(action.code) ? styles.decisionOptionChecked : ''}`}>
               <input
-                type="radio"
-                name="decision"
+                type="checkbox"
                 value={action.code}
-                checked={selectedCode === action.code}
-                onChange={() => { setSelectedCode(action.code); setError(''); }}
+                checked={checkedCodes.has(action.code)}
+                onChange={() => toggleCheck(action.code)}
               />
               <span>{action.label}</span>
             </label>
@@ -485,19 +531,29 @@ const DecisionConfirmation: React.FC<{
         </div>
         <textarea
           className={styles.decisionNote}
-          placeholder="Additional notes (optional)"
+          placeholder="补充说明（可选）"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={2}
         />
         {error && <div style={{ color: '#dc2626', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
-        <button
-          className={styles.decisionSubmit}
-          onClick={handleSubmit}
-          disabled={submitting || !selectedCode}
-        >
-          {submitting ? 'Submitting...' : 'Confirm Decision'}
-        </button>
+        <div className={styles.decisionButtonGroup}>
+          <button
+            className={styles.decisionAbort}
+            onClick={handleAbort}
+            disabled={submitting}
+          >
+            {abortAction?.label || '终止本次变更'}
+          </button>
+          <button
+            className={styles.decisionSubmit}
+            onClick={handleConfirm}
+            disabled={submitting || !allChecked}
+            title={allChecked ? '' : '请先确认所有风险项'}
+          >
+            {submitting ? '提交中...' : '已确认风险'}
+          </button>
+        </div>
       </div>
     </div>
   );
