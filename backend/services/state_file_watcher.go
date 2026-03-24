@@ -29,6 +29,8 @@ type StateFileWatcher struct {
 	mu           sync.Mutex
 	tempRecordID uint
 	lastChecksum string
+
+	stopOnce sync.Once
 }
 
 // NewStateFileWatcher 创建 watcher 实例
@@ -72,10 +74,12 @@ func (w *StateFileWatcher) Start() error {
 
 // Stop 停止监控，等待 goroutine 完成 drain + 最终 push 后退出
 func (w *StateFileWatcher) Stop() {
-	close(w.stopCh)
-	<-w.done // 阻塞直到 watchLoop 退出（含 drainAndFinalPush）
-	w.watcher.Close()
-	log.Printf("[StateWatcher] Stopped for workspace %s (task %d)", w.workspaceID, w.taskID)
+	w.stopOnce.Do(func() {
+		close(w.stopCh)
+		<-w.done // 阻塞直到 watchLoop 退出（含 drainAndFinalPush）
+		w.watcher.Close()
+		log.Printf("[StateWatcher] Stopped for workspace %s (task %d)", w.workspaceID, w.taskID)
+	})
 }
 
 // Promote 将 temp 记录提升为正式版本
@@ -186,14 +190,31 @@ func (w *StateFileWatcher) pushTempState() {
 		return
 	}
 
+	// 从 state JSON 中提取元数据
+	var lineage string
+	var serial int
+	var resourceCount int
+	if l, ok := stateContent["lineage"].(string); ok {
+		lineage = l
+	}
+	if s, ok := stateContent["serial"].(float64); ok {
+		serial = int(s)
+	}
+	if r, ok := stateContent["resources"].([]interface{}); ok {
+		resourceCount = len(r)
+	}
+
 	record := &models.WorkspaceStateVersion{
-		WorkspaceID: w.workspaceID,
-		Content:     stateContent,
-		Checksum:    checksum,
-		SizeBytes:   len(stateData),
-		TaskID:      &w.taskID,
-		CreatedBy:   w.createdBy,
-		IsTemp:      true,
+		WorkspaceID:   w.workspaceID,
+		Content:       stateContent,
+		Checksum:      checksum,
+		SizeBytes:     len(stateData),
+		TaskID:        &w.taskID,
+		CreatedBy:     w.createdBy,
+		IsTemp:        true,
+		Lineage:       lineage,
+		Serial:        serial,
+		ResourceCount: resourceCount,
 	}
 
 	if currentTempID == 0 {
