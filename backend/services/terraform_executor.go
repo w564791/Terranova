@@ -1707,6 +1707,7 @@ func (s *TerraformExecutor) saveTaskFailure(
 	logger *TerraformLogger,
 	err error,
 	taskType string, // "plan" or "apply"
+	stateAlreadySaved ...bool, // 可选：state 已由 watcher 保存，跳过 partial state 保存
 ) {
 	fullOutput := logger.GetFullOutput()
 
@@ -1746,9 +1747,12 @@ func (s *TerraformExecutor) saveTaskFailure(
 		}
 
 		// Apply失败时，尝试保存 partial state（terraform 可能已创建部分资源）
+		// 如果 state 已由 watcher promote，跳过此步骤
+		skipPartialState := len(stateAlreadySaved) > 0 && stateAlreadySaved[0]
 		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
 		stateFile := filepath.Join(workDir, "terraform.tfstate")
-		if _, statErr := os.Stat(stateFile); statErr == nil {
+		_, statErr := os.Stat(stateFile)
+		if !skipPartialState && statErr == nil {
 			logger.Info("Attempting to save partial state after apply failure...")
 			var workspace models.Workspace
 			if s.db != nil {
@@ -1922,6 +1926,11 @@ func (s *TerraformExecutor) ExecuteApply(
 		executionMode = "AGENT"
 	}
 	log.Printf("[%s MODE] ExecuteApply started for task %d, workspace %s", executionMode, task.ID, task.WorkspaceID)
+
+	// 清理可能存在的孤儿 temp state 记录
+	if cleanupErr := s.dataAccessor.CleanupOrphanedTempStates(task.WorkspaceID); cleanupErr != nil {
+		log.Printf("[StateWatcher] Failed to cleanup orphaned temp states: %v", cleanupErr)
+	}
 
 	// 创建输出流和日志记录器
 	stream := s.streamManager.GetOrCreate(task.ID)
@@ -2280,6 +2289,16 @@ func (s *TerraformExecutor) ExecuteApply(
 	logger.Info("✓ Pre-apply Run Tasks completed")
 	logger.StageEnd("pre_apply_run_tasks")
 
+	// ========== 启动 State File Watcher ==========
+	var stateWatcher *StateFileWatcher
+	stateWatcher = NewStateFileWatcher(
+		workDir, workspace.WorkspaceID, task.ID, task.CreatedBy, s.dataAccessor,
+	)
+	if err := stateWatcher.Start(); err != nil {
+		logger.Warn("Failed to start state watcher, will use fallback: %v", err)
+		stateWatcher = nil
+	}
+
 	// ========== 阶段4: Applying ==========
 	logger.StageBegin("applying")
 
@@ -2414,12 +2433,35 @@ func (s *TerraformExecutor) ExecuteApply(
 	duration := time.Since(startTime)
 
 	if cmdErr != nil {
+		// 停止 watcher（含 drain + 最终 push）
+		if stateWatcher != nil {
+			stateWatcher.Stop()
+		}
+
 		// 检查是否是context取消导致的
 		if ctx.Err() == context.Canceled {
+			// 取消时也 promote（可能有部分 state）
+			if stateWatcher != nil && stateWatcher.GetTempRecordID() > 0 {
+				if promoteErr := stateWatcher.Promote(); promoteErr != nil {
+					logger.Warn("Failed to promote temp state on cancel: %v", promoteErr)
+				}
+			}
 			logger.Info("Task cancelled by user during apply execution")
 			s.saveTaskCancellation(task, logger, "apply")
 			return fmt.Errorf("task cancelled by user")
 		}
+
+		// apply 失败，promote temp state（部分 apply 的 state）
+		statePromoted := false
+		if stateWatcher != nil && stateWatcher.GetTempRecordID() > 0 {
+			if promoteErr := stateWatcher.Promote(); promoteErr != nil {
+				logger.Warn("Failed to promote temp state on failure: %v", promoteErr)
+			} else {
+				statePromoted = true
+				logger.Info("✓ Partial state promoted from temp record")
+			}
+		}
+
 		logger.Error("Terraform apply failed: %v", cmdErr)
 		logger.LogError("applying", cmdErr, map[string]interface{}{
 			"workspace_id": workspace.WorkspaceID,
@@ -2428,7 +2470,7 @@ func (s *TerraformExecutor) ExecuteApply(
 		logger.StageEnd("applying")
 
 		// 保存失败信息（包含所有阶段的日志）
-		s.saveTaskFailure(task, logger, cmdErr, "apply")
+		s.saveTaskFailure(task, logger, cmdErr, "apply", statePromoted)
 		return fmt.Errorf("terraform apply failed: %w", cmdErr)
 	}
 
@@ -2458,6 +2500,11 @@ func (s *TerraformExecutor) ExecuteApply(
 	s.signalManager.EnterCriticalSection("saving_state")
 	defer s.signalManager.ExitCriticalSection("saving_state")
 
+	// 停止 watcher（成功路径）
+	if stateWatcher != nil {
+		stateWatcher.Stop()
+	}
+
 	logger.Info("Reading state file from work directory...")
 
 	// 先获取并保存日志（在State保存之前）
@@ -2467,8 +2514,22 @@ func (s *TerraformExecutor) ExecuteApply(
 	s.saveTaskLog(task.ID, "apply", applyOutputBeforeState, "info")
 	log.Printf("Task %d apply output saved before state (%d bytes)", task.ID, len(applyOutputBeforeState))
 
-	if err := s.SaveNewStateVersionWithLogging(workspace, task, workDir, logger); err != nil {
-		logger.LogError("saving_state", err, map[string]interface{}{
+	// Promote 或 Fallback 保存 state
+	stateErr := func() error {
+		if stateWatcher != nil && stateWatcher.GetTempRecordID() > 0 {
+			if err := stateWatcher.Promote(); err != nil {
+				logger.Warn("Failed to promote temp state, falling back: %v", err)
+				return s.SaveNewStateVersionWithLogging(workspace, task, workDir, logger)
+			}
+			logger.Info("✓ State promoted from temp to version successfully")
+			return nil
+		}
+		// watcher 未启动或无 temp 记录：使用原有逻辑
+		return s.SaveNewStateVersionWithLogging(workspace, task, workDir, logger)
+	}()
+
+	if stateErr != nil {
+		logger.LogError("saving_state", stateErr, map[string]interface{}{
 			"workspace_id": workspace.WorkspaceID,
 			"task_id":      task.ID,
 		}, nil)
@@ -2478,13 +2539,13 @@ func (s *TerraformExecutor) ExecuteApply(
 		finalOutput := logger.GetFullOutput()
 		task.ApplyOutput = finalOutput
 		task.Status = models.TaskStatusFailed
-		task.ErrorMessage = err.Error()
+		task.ErrorMessage = stateErr.Error()
 		task.CompletedAt = timePtr(time.Now())
 		s.dataAccessor.UpdateTask(task)
 		s.saveTaskLog(task.ID, "apply", finalOutput, "error")
 
 		// State保存失败是严重错误，但Apply已成功
-		return fmt.Errorf("apply succeeded but state save failed: %w", err)
+		return fmt.Errorf("apply succeeded but state save failed: %w", stateErr)
 	}
 
 	// 在所有阶段完成后获取完整输出（包含Fetching/Init/Restoring/Applying/Saving State所有阶段）
