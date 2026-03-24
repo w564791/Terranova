@@ -123,6 +123,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 		{Role: "user", Content: userPrompt},
 	}
 
+	loopStart := time.Now()
 	toolDefs := loop.buildToolDefs()
 	var allToolCalls []AgentToolCallRecord
 	retryCount := 0
@@ -132,10 +133,19 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 			return nil, ctx.Err()
 		}
 
+		stepStart := time.Now()
 		response, err := loop.aiCaller.ChatWithTools(ctx, messages, toolDefs)
+		stepMs := float64(time.Since(stepStart).Milliseconds())
 		if err != nil {
 			return nil, fmt.Errorf("AI call failed at step %d: %w", i+1, err)
 		}
+
+		stepType := "tool_call"
+		if len(response.ToolCalls) == 0 {
+			stepType = "final_output"
+		}
+		RecordAgentLoopStep(stepType, len(response.ToolCalls), stepMs)
+		log.Printf("[AIAgentLoop] step %d: %dms, type=%s, tool_calls=%d", i+1, int(stepMs), stepType, len(response.ToolCalls))
 
 		// AI 返回纯文本 = 决定结束
 		if len(response.ToolCalls) == 0 {
@@ -160,6 +170,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 				}
 			}
 
+			RecordAgentLoopTotal(true, float64(time.Since(loopStart).Milliseconds()))
 			return &AgentLoopResult{
 				FinalOutput: response.Content,
 				ToolCalls:   allToolCalls,
@@ -215,6 +226,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 				result, execErr := tool.Execute(ctx, tc.Params)
 				record.DurationMs = time.Since(startTime).Milliseconds()
+				RecordAgentLoopTool(tc.Name, execErr != nil, float64(record.DurationMs))
 
 				if execErr != nil {
 					record.Error = execErr.Error()
@@ -265,6 +277,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 		return nil, fmt.Errorf("final AI call failed: %w", err)
 	}
 
+	RecordAgentLoopTotal(false, float64(time.Since(loopStart).Milliseconds()))
 	return &AgentLoopResult{
 		FinalOutput: finalResponse.Content,
 		ToolCalls:   allToolCalls,

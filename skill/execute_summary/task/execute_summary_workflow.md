@@ -42,7 +42,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
   - VPC: `vpc_id`
   - 子网: `subnet_id` 或 `subnet_ids`
   - IAM Role: `role_arn` 或 `iam_role`
-- `query_resource_attributes`: workspace_id（可选，不传则全局查询，含外部 CMDB 数据）, terraform_address 或 cloud_resource_id
+- `query_resource_attributes`: query（搜索关键词，如 cloud_resource_id、terraform_address、资源名称，支持模糊匹配，自动跨 workspace 含外部 CMDB）
 - `query_state_resources`: workspace_id
 - `query_plan_summary`: task_id
 
@@ -281,9 +281,8 @@ affected_resources_schema:
 ```
 1.  验证 stage == "plan"，否则返回 INVALID_STAGE_CONTEXT
 2.  解析变更资源列表（resource、action、type）
-3.  变更资源属于某 module 且数量不完整时，调用 query_module_resources 补全视图
-4.  对所有 action in [update, delete] → 强制调用 query_cmdb_dependencies（禁止跳过）
-5.  根据查询结果记录 direct_dependencies（禁止估算）
+3.  在同一轮响应中一次性发起所有需要的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止分多轮逐个调用
+4.  根据查询结果记录 direct_dependencies（禁止估算）
 6.  对每个资源：
     a. 判定 impact_type（从枚举选一个）
     b. 提取 risk_factors（从枚举多选）

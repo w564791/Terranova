@@ -156,76 +156,62 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 	}, nil
 }
 
-// QueryResourceAttributesTool 查询资源完整属性
+// QueryResourceAttributesTool 查询资源完整属性（复用 CMDB 关键字搜索）
 type QueryResourceAttributesTool struct {
-	db *gorm.DB
+	db          *gorm.DB
+	cmdbService *CMDBService
 }
 
 func NewQueryResourceAttributesTool(db *gorm.DB) *QueryResourceAttributesTool {
-	return &QueryResourceAttributesTool{db: db}
+	return &QueryResourceAttributesTool{db: db, cmdbService: NewCMDBService(db)}
 }
 
 func (t *QueryResourceAttributesTool) Name() string { return "query_resource_attributes" }
 func (t *QueryResourceAttributesTool) Description() string {
-	return "查询指定资源的完整属性信息。可通过 terraform_address 或 cloud_resource_id 查询。"
+	return "搜索并查询资源的完整属性信息。支持通过 cloud_resource_id、terraform_address 或关键词模糊搜索，自动跨 workspace 查询（含外部 CMDB 数据）。"
 }
 func (t *QueryResourceAttributesTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"workspace_id":      map[string]interface{}{"type": "string", "description": "工作空间 ID"},
-			"terraform_address": map[string]interface{}{"type": "string", "description": "Terraform 资源地址"},
-			"cloud_resource_id": map[string]interface{}{"type": "string", "description": "云资源 ID"},
+			"query": map[string]interface{}{"type": "string", "description": "搜索关键词：cloud_resource_id、terraform_address、资源名称等，支持模糊匹配"},
 		},
+		"required": []string{"query"},
 	}
 }
 
 func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	workspaceID, _ := params["workspace_id"].(string)
-	tfAddress, _ := params["terraform_address"].(string)
-	cloudID, _ := params["cloud_resource_id"].(string)
-
-	if tfAddress == "" && cloudID == "" {
-		return nil, fmt.Errorf("either terraform_address or cloud_resource_id is required")
+	q, _ := params["query"].(string)
+	if q == "" {
+		return nil, fmt.Errorf("query is required")
 	}
 
-	query := t.db.Model(&models.ResourceIndex{})
-	if workspaceID != "" {
-		query = query.Where("workspace_id = ?", workspaceID)
-	}
-	if tfAddress != "" {
-		query = query.Where("terraform_address = ?", tfAddress)
-	}
-	if cloudID != "" {
-		query = query.Where("cloud_resource_id = ?", cloudID)
+	// 复用 CMDB 关键字搜索（支持模糊匹配，自动跨 workspace 含外部 CMDB）
+	results, err := t.cmdbService.SearchResources(q, "", "", 1)
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
+	if len(results) == 0 {
+		return map[string]interface{}{"found": false, "message": "resource not found", "query": q}, nil
+	}
+
+	// 用搜到的精确 ID 取完整属性（含 attributes、tags）
+	hit := results[0]
 	var resource models.ResourceIndex
-	if err := query.First(&resource).Error; err != nil {
-		if err == gorm.ErrRecordNotFound && workspaceID != "" {
-			// Fallback：不限 workspace_id，查外部 CMDB 数据（如 __external__）
-			fallbackQuery := t.db.Model(&models.ResourceIndex{})
-			if tfAddress != "" {
-				fallbackQuery = fallbackQuery.Where("terraform_address = ?", tfAddress)
-			}
-			if cloudID != "" {
-				fallbackQuery = fallbackQuery.Where("cloud_resource_id = ?", cloudID)
-			}
-			if err2 := fallbackQuery.First(&resource).Error; err2 != nil {
-				if err2 == gorm.ErrRecordNotFound {
-					return map[string]interface{}{"found": false, "message": "resource not found"}, nil
-				}
-				return nil, fmt.Errorf("fallback query failed: %w", err2)
-			}
-			log.Printf("[QueryResourceAttributes] fallback: found resource in workspace=%s (queried workspace=%s)", resource.WorkspaceID, workspaceID)
-		} else if err == gorm.ErrRecordNotFound {
-			return map[string]interface{}{"found": false, "message": "resource not found"}, nil
-		} else {
-			return nil, fmt.Errorf("query failed: %w", err)
-		}
+	if err := t.db.Where("workspace_id = ? AND cloud_resource_id = ?", hit.WorkspaceID, hit.CloudResourceID).
+		First(&resource).Error; err != nil {
+		// 搜索能找到但取属性失败，返回搜索结果的基本信息
+		log.Printf("[QueryResourceAttributes] search hit but attributes fetch failed: %v", err)
+		return map[string]interface{}{
+			"found":             true,
+			"workspace_id":      hit.WorkspaceID,
+			"terraform_address": hit.TerraformAddress,
+			"resource_type":     hit.ResourceType,
+			"cloud_resource_id": hit.CloudResourceID,
+		}, nil
 	}
 
-	// 解析 attributes
 	var attrs map[string]interface{}
 	if len(resource.Attributes) > 0 {
 		json.Unmarshal(resource.Attributes, &attrs)
@@ -235,6 +221,7 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 		json.Unmarshal(resource.Tags, &tags)
 	}
 
+	log.Printf("[QueryResourceAttributes] query=%s found=%s workspace=%s", q, resource.CloudResourceID, resource.WorkspaceID)
 	return map[string]interface{}{
 		"found":              true,
 		"workspace_id":       resource.WorkspaceID,

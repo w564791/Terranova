@@ -175,6 +175,33 @@ func generateMockData() []CMDBResource {
 			CreatedAt: "2024-01-05T00:00:00Z",
 			UpdatedAt: time.Now().Format(time.RFC3339),
 		},
+		{
+			ID:          "subnet-01bc9ccfe9259b6e7",
+			Name:        "exchange-public-1b",
+			Type:        "aws_subnet",
+			Status:      "available",
+			Region:      "ap-northeast-1",
+			AccountID:   "123456789012",
+			AccountName: "Production Account",
+			ARN:         "arn:aws:ec2:ap-northeast-1:123456789012:subnet/subnet-01bc9ccfe9259b6e7",
+			Description: "东京 1b 可用区公有子网 (Exchange VPC) - 自动分配公网 IP",
+			Tags: map[string]string{
+				"Name":             "exchange-public-1b",
+				"Environment":      "production",
+				"Type":             "public",
+				"AvailabilityZone": "ap-northeast-1b",
+				"VPC":              "exchange-vpc",
+			},
+			Attributes: map[string]interface{}{
+				"vpc_id":                          "vpc-0a1b2c3d4e5f67890",
+				"availability_zone":               "ap-northeast-1b",
+				"cidr_block":                      "10.0.2.0/24",
+				"map_public_ip_on_launch":         true,
+				"assign_ipv6_address_on_creation": false,
+			},
+			CreatedAt: "2024-01-06T00:00:00Z",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		},
 
 		// ==================== 安全组资源 ====================
 		{

@@ -23,11 +23,15 @@ var (
 	parallelExecutionDur    *prometheus.HistogramVec
 	domainSkillSelectionDur *prometheus.HistogramVec
 	cmdbAssessmentDur       *prometheus.HistogramVec
+	agentLoopStepDuration   *prometheus.HistogramVec
+	agentLoopToolDuration   *prometheus.HistogramVec
+	agentLoopTotalDuration  *prometheus.HistogramVec
 
 	// Counters
 	aiCallTotal        *prometheus.CounterVec
 	vectorSearchTotal  *prometheus.CounterVec
 	cmdbQueryTotal     *prometheus.CounterVec
+	agentLoopStepTotal *prometheus.CounterVec
 
 	// Gauges
 	activeParallelTasks *prometheus.GaugeVec
@@ -79,6 +83,24 @@ func initAIMetrics() {
 			Buckets: defaultBuckets,
 		}, []string{"need_cmdb", "resource_type_count", "method"})
 
+		agentLoopStepDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_agent_loop_step_duration_ms",
+			Help:    "Agent loop per-step AI call duration in milliseconds",
+			Buckets: defaultBuckets,
+		}, []string{"step_type"}) // step_type: "tool_call" or "final_output"
+
+		agentLoopToolDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_agent_loop_tool_duration_ms",
+			Help:    "Agent loop tool execution duration in milliseconds",
+			Buckets: []float64{1, 5, 10, 50, 100, 500, 1000, 5000},
+		}, []string{"tool_name", "status"}) // status: "ok" or "error"
+
+		agentLoopTotalDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "iac_agent_loop_total_duration_ms",
+			Help:    "Agent loop total duration in milliseconds",
+			Buckets: []float64{1000, 5000, 10000, 20000, 30000, 60000, 120000},
+		}, []string{"completed"}) // completed: "true" or "false"
+
 		// --- Counters ---
 
 		aiCallTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -96,6 +118,11 @@ func initAIMetrics() {
 			Help: "Total number of CMDB queries",
 		}, []string{"resource_type", "status", "candidate_count"})
 
+		agentLoopStepTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "iac_agent_loop_step_total",
+			Help: "Total number of agent loop steps",
+		}, []string{"step_type", "tool_count"}) // tool_count: "0" for final, "1", "2", etc.
+
 		// --- Gauges ---
 
 		activeParallelTasks = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -111,9 +138,13 @@ func initAIMetrics() {
 			parallelExecutionDur,
 			domainSkillSelectionDur,
 			cmdbAssessmentDur,
+			agentLoopStepDuration,
+			agentLoopToolDuration,
+			agentLoopTotalDuration,
 			aiCallTotal,
 			vectorSearchTotal,
 			cmdbQueryTotal,
+			agentLoopStepTotal,
 			activeParallelTasks,
 		)
 	})
@@ -213,6 +244,29 @@ func IncCMDBQueryCount(resourceType string, found bool, candidateCount int) {
 func SetActiveParallelTasks(count int) {
 	initAIMetrics()
 	activeParallelTasks.WithLabelValues().Set(float64(count))
+}
+
+// RecordAgentLoopStep records a single agent loop step (AI call) duration.
+func RecordAgentLoopStep(stepType string, toolCount int, durationMs float64) {
+	initAIMetrics()
+	agentLoopStepDuration.WithLabelValues(stepType).Observe(durationMs)
+	agentLoopStepTotal.WithLabelValues(stepType, fmt.Sprintf("%d", toolCount)).Inc()
+}
+
+// RecordAgentLoopTool records a single tool execution duration.
+func RecordAgentLoopTool(toolName string, hasError bool, durationMs float64) {
+	initAIMetrics()
+	status := "ok"
+	if hasError {
+		status = "error"
+	}
+	agentLoopToolDuration.WithLabelValues(toolName, status).Observe(durationMs)
+}
+
+// RecordAgentLoopTotal records the total agent loop duration.
+func RecordAgentLoopTotal(completed bool, durationMs float64) {
+	initAIMetrics()
+	agentLoopTotalDuration.WithLabelValues(fmt.Sprintf("%t", completed)).Observe(durationMs)
 }
 
 // Timer is a simple timer for conveniently recording durations.
