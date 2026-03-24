@@ -541,7 +541,7 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 			ri.cloud_region,
 			wr.id as platform_resource_id,
 			wr.resource_name as platform_resource_name,
-			CASE 
+			CASE
 				WHEN ri.source_type = 'external' THEN NULL
 				WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
 				ELSE NULL

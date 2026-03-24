@@ -955,13 +955,52 @@ const CMDB: React.FC = () => {
   };
 
   // Handle search result click - navigate directly
-  const handleResultClick = (result: ResourceSearchResult) => {
-    // 外部数据源不跳转
-    if (!result.jump_url) {
+  const [expandedResultIndex, setExpandedResultIndex] = useState<number | null>(null);
+  const [expandedDetail, setExpandedDetail] = useState<any>(null);
+  const [expandedDetailLoading, setExpandedDetailLoading] = useState(false);
+
+  const handleResultClick = async (result: ResourceSearchResult, index: number) => {
+    // 有 jump_url 的直接跳转（terraform 资源）
+    if (result.jump_url) {
+      navigate(result.jump_url);
       return;
     }
-    navigate(result.jump_url);
+
+    // 已展开则收起
+    if (expandedResultIndex === index) {
+      setExpandedResultIndex(null);
+      setExpandedDetail(null);
+      return;
+    }
+
+    // 展开并加载详情
+    setExpandedResultIndex(index);
+    setExpandedDetail(null);
+    try {
+      setExpandedDetailLoading(true);
+      const addr = result.terraform_address || `external.__external__.${result.cloud_resource_id}`;
+      const detail = await cmdbService.getResourceDetail(result.workspace_id, addr);
+      setExpandedDetail(detail);
+    } catch (err) {
+      console.error('Failed to load resource detail:', err);
+    } finally {
+      setExpandedDetailLoading(false);
+    }
   };
+
+  // 点击空白处收起
+  useEffect(() => {
+    if (expandedResultIndex === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(`.${styles.resultItem}`) && !target.closest(`.${styles.resultItemClickable}`)) {
+        setExpandedResultIndex(null);
+        setExpandedDetail(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [expandedResultIndex]);
 
   // Sync all workspaces
   const handleSyncAll = async () => {
@@ -1548,11 +1587,11 @@ const CMDB: React.FC = () => {
               ) : (
                 <div className={styles.resultsList}>
                   {searchResults.map((result, index) => (
-                    <div 
-                      key={`${result.workspace_id}-${result.terraform_address}-${index}`} 
-                      className={result.jump_url ? styles.resultItemClickable : styles.resultItem}
-                      onClick={() => handleResultClick(result)}
-                      style={{ cursor: result.jump_url ? 'pointer' : 'default' }}
+                    <div
+                      key={`${result.workspace_id}-${result.terraform_address}-${index}`}
+                      className={`${result.jump_url ? styles.resultItemClickable : styles.resultItem} ${expandedResultIndex === index ? styles.resultItemExpanded : ''}`}
+                      onClick={() => handleResultClick(result, index)}
+                      style={{ cursor: 'pointer' }}
                     >
                       <div className={styles.resultHeader}>
                         <span className={styles.resourceType}>
@@ -1567,6 +1606,9 @@ const CMDB: React.FC = () => {
                           <span className={styles.workspaceBadge}>
                             {result.workspace_name || result.workspace_id}
                           </span>
+                        )}
+                        {!result.jump_url && (
+                          <span className={styles.expandHint}>{expandedResultIndex === index ? '▲' : '▼'}</span>
                         )}
                       </div>
                       <h4 className={styles.resourceName}>
@@ -1603,6 +1645,54 @@ const CMDB: React.FC = () => {
                       <div className={styles.terraformAddress}>
                         {result.terraform_address}
                       </div>
+
+                      {/* Inline detail panel (accordion) */}
+                      {expandedResultIndex === index && (
+                        <div className={styles.resultDetailPanel} onClick={(e) => e.stopPropagation()}>
+                          {expandedDetailLoading ? (
+                            <div className={styles.resultDetailLoading}>Loading...</div>
+                          ) : expandedDetail ? (
+                            <>
+                              {expandedDetail.attributes && Object.keys(expandedDetail.attributes).length > 0 && (
+                                <div className={styles.resultDetailSection}>
+                                  <div className={styles.resultDetailTitle}>Attributes</div>
+                                  <div className={styles.resultDetailGrid}>
+                                    {Object.entries(expandedDetail.attributes).map(([key, value]) => (
+                                      <div key={key} className={styles.resultDetailRow}>
+                                        <span className={styles.resultDetailKey}>{key}</span>
+                                        <span className={styles.resultDetailValue}>
+                                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {expandedDetail.tags && Object.keys(expandedDetail.tags).length > 0 && (
+                                <div className={styles.resultDetailSection}>
+                                  <div className={styles.resultDetailTitle}>Tags</div>
+                                  <div className={styles.resultDetailGrid}>
+                                    {Object.entries(expandedDetail.tags).map(([key, value]) => (
+                                      <div key={key} className={styles.resultDetailRow}>
+                                        <span className={styles.resultDetailKey}>{key}</span>
+                                        <span className={styles.resultDetailValue}>{String(value)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {expandedDetail.resource_summary && (
+                                <div className={styles.resultDetailSection}>
+                                  <div className={styles.resultDetailTitle}>Summary</div>
+                                  <div className={styles.resultDetailSummary}>{expandedDetail.resource_summary}</div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className={styles.resultDetailLoading}>No details available</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
