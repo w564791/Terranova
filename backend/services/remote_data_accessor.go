@@ -388,6 +388,21 @@ func (a *RemoteDataAccessor) GetMaxStateVersion(workspaceID string) (int, error)
 	return a.apiClient.GetMaxStateVersion(workspaceID)
 }
 
+// UpsertTempState 插入或更新临时 State（Agent 模式）
+func (a *RemoteDataAccessor) UpsertTempState(version *models.WorkspaceStateVersion) error {
+	return a.apiClient.UpsertTempState(version)
+}
+
+// PromoteTempState 提升临时 State（Agent 模式）
+func (a *RemoteDataAccessor) PromoteTempState(workspaceID string, recordID uint) error {
+	return a.apiClient.PromoteTempState(workspaceID, recordID)
+}
+
+// CleanupOrphanedTempStates 清理孤儿临时 State（Agent 模式）
+func (a *RemoteDataAccessor) CleanupOrphanedTempStates(workspaceID string) error {
+	return a.apiClient.CleanupOrphanedTempStates(workspaceID)
+}
+
 // ============================================================================
 // Task 相关（扩展）
 // ============================================================================

@@ -25,6 +25,11 @@ type DataAccessor interface {
 	UpdateWorkspaceState(workspaceID string, stateContent map[string]interface{}) error
 	GetMaxStateVersion(workspaceID string) (int, error)
 
+	// State Watcher 相关（temp state 管理）
+	UpsertTempState(version *models.WorkspaceStateVersion) error
+	PromoteTempState(workspaceID string, recordID uint) error
+	CleanupOrphanedTempStates(workspaceID string) error
+
 	// Task 相关
 	GetTask(taskID uint) (*models.WorkspaceTask, error)
 	GetPlanTask(taskID uint) (*models.WorkspaceTask, error)

@@ -456,6 +456,58 @@ func (c *AgentAPIClient) GetMaxStateVersion(workspaceID string) (int, error) {
 	return maxVersion, nil
 }
 
+// UpsertTempState upserts a temp state version via API
+func (c *AgentAPIClient) UpsertTempState(version *models.WorkspaceStateVersion) error {
+	path := fmt.Sprintf("/api/v1/agents/workspaces/%s/state/temp", version.WorkspaceID)
+
+	reqBody := map[string]interface{}{
+		"content":    version.Content,
+		"checksum":   version.Checksum,
+		"size_bytes": version.SizeBytes,
+		"version":    version.Version,
+		"task_id":    version.TaskID,
+	}
+
+	respBody, err := c.doRequest("PUT", path, reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to upsert temp state: %w", err)
+	}
+
+	if id, ok := respBody["id"].(float64); ok {
+		version.ID = uint(id)
+	}
+
+	return nil
+}
+
+// PromoteTempState promotes a temp state version via API
+func (c *AgentAPIClient) PromoteTempState(workspaceID string, recordID uint) error {
+	path := fmt.Sprintf("/api/v1/agents/workspaces/%s/state/promote", workspaceID)
+
+	reqBody := map[string]interface{}{
+		"record_id": recordID,
+	}
+
+	_, err := c.doRequest("POST", path, reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to promote temp state: %w", err)
+	}
+
+	return nil
+}
+
+// CleanupOrphanedTempStates cleans up orphaned temp states via API
+func (c *AgentAPIClient) CleanupOrphanedTempStates(workspaceID string) error {
+	path := fmt.Sprintf("/api/v1/agents/workspaces/%s/state/temp", workspaceID)
+
+	_, err := c.doRequest("DELETE", path, nil)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup orphaned temp states: %w", err)
+	}
+
+	return nil
+}
+
 // UploadPlanData uploads plan_data to server
 func (c *AgentAPIClient) UploadPlanData(taskID uint, encodedData string) error {
 	path := fmt.Sprintf("/api/v1/agents/tasks/%d/plan-data", taskID)

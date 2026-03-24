@@ -108,7 +108,7 @@ func (a *LocalDataAccessor) GetLatestStateVersion(workspaceID string) (*models.W
 	var stateVersion models.WorkspaceStateVersion
 	db := a.getDB()
 
-	err := db.Where("workspace_id = ?", workspaceID).
+	err := db.Where("workspace_id = ? AND (is_temp = false OR is_temp IS NULL)", workspaceID).
 		Order("version DESC").
 		First(&stateVersion).Error
 
@@ -390,7 +390,7 @@ func (a *LocalDataAccessor) GetMaxStateVersion(workspaceID string) (int, error) 
 	db := a.getDB()
 
 	err := db.Model(&models.WorkspaceStateVersion{}).
-		Where("workspace_id = ?", workspaceID).
+		Where("workspace_id = ? AND (is_temp = false OR is_temp IS NULL)", workspaceID).
 		Select("COALESCE(MAX(version), 0)").
 		Scan(&maxVersion).Error
 
@@ -399,6 +399,98 @@ func (a *LocalDataAccessor) GetMaxStateVersion(workspaceID string) (int, error) 
 	}
 
 	return maxVersion, nil
+}
+
+// UpsertTempState 插入或更新临时 State 记录
+func (a *LocalDataAccessor) UpsertTempState(version *models.WorkspaceStateVersion) error {
+	db := a.getDB()
+
+	// 查找已有的 temp 记录（同一 workspace + task）
+	var existing models.WorkspaceStateVersion
+	err := db.Where("workspace_id = ? AND task_id = ? AND is_temp = true",
+		version.WorkspaceID, version.TaskID).First(&existing).Error
+
+	if err == gorm.ErrRecordNotFound {
+		if err := db.Create(version).Error; err != nil {
+			return fmt.Errorf("failed to create temp state: %w", err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to query temp state: %w", err)
+	}
+
+	// 更新已有记录的 content
+	if err := db.Model(&existing).Updates(map[string]interface{}{
+		"content":    version.Content,
+		"checksum":   version.Checksum,
+		"size_bytes": version.SizeBytes,
+	}).Error; err != nil {
+		return fmt.Errorf("failed to update temp state: %w", err)
+	}
+
+	// 回写 ID 给调用方
+	version.ID = existing.ID
+	return nil
+}
+
+// PromoteTempState 将临时 State 记录提升为正式版本
+func (a *LocalDataAccessor) PromoteTempState(workspaceID string, recordID uint) error {
+	db := a.getDB()
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.WorkspaceStateVersion{}).
+			Where("id = ?", recordID).
+			Update("is_temp", false).Error; err != nil {
+			return fmt.Errorf("failed to promote temp state: %w", err)
+		}
+
+		var record models.WorkspaceStateVersion
+		if err := tx.First(&record, recordID).Error; err != nil {
+			return fmt.Errorf("failed to read promoted state: %w", err)
+		}
+
+		if err := tx.Model(&models.Workspace{}).
+			Where("workspace_id = ?", workspaceID).
+			Update("tf_state", record.Content).Error; err != nil {
+			return fmt.Errorf("failed to update workspace state: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// CleanupOrphanedTempStates 清理孤儿临时 State 记录
+func (a *LocalDataAccessor) CleanupOrphanedTempStates(workspaceID string) error {
+	db := a.getDB()
+
+	var orphans []models.WorkspaceStateVersion
+	if err := db.Where("workspace_id = ? AND is_temp = true", workspaceID).
+		Find(&orphans).Error; err != nil {
+		return fmt.Errorf("failed to find orphaned temp states: %w", err)
+	}
+
+	for _, orphan := range orphans {
+		if orphan.TaskID != nil {
+			var task models.WorkspaceTask
+			if err := db.First(&task, *orphan.TaskID).Error; err == nil {
+				if task.IsTerminal() {
+					log.Printf("[StateWatcher] Promoting orphaned temp state #%d (task %d status: %s)",
+						orphan.ID, task.ID, task.Status)
+					db.Model(&orphan).Update("is_temp", false)
+					db.Model(&models.Workspace{}).
+						Where("workspace_id = ?", workspaceID).
+						Update("tf_state", orphan.Content)
+					continue
+				}
+			}
+		}
+
+		if orphan.CreatedAt.Before(time.Now().Add(-1 * time.Hour)) {
+			log.Printf("[StateWatcher] Deleting stale orphaned temp state #%d", orphan.ID)
+			db.Delete(&orphan)
+		}
+	}
+	return nil
 }
 
 // ============================================================================
