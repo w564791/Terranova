@@ -92,6 +92,11 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 		// State version management
 		agentWorkspaces.GET("/:workspace_id/state/max-version", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.GetMaxStateVersion)
 
+		// Temp state management (for state file watcher)
+		agentWorkspaces.PUT("/:workspace_id/state/temp", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UpsertTempState)
+		agentWorkspaces.POST("/:workspace_id/state/promote", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.PromoteTempState)
+		agentWorkspaces.DELETE("/:workspace_id/state/temp", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.CleanupOrphanedTempStates)
+
 		// Update workspace fields (for init optimization - last_init_hash, etc.)
 		agentWorkspaces.PATCH("/:workspace_id/fields", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UpdateWorkspaceFields)
 

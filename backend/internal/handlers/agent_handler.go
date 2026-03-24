@@ -1908,3 +1908,74 @@ func (h *AgentHandler) SaveTerraformLockHCL(c *gin.Context) {
 		"message": "terraform lock hcl saved successfully",
 	})
 }
+
+// UpsertTempState handles temp state upsert from agent
+func (h *AgentHandler) UpsertTempState(c *gin.Context) {
+	workspaceID := c.Param("workspace_id")
+
+	var req struct {
+		Content   map[string]interface{} `json:"content" binding:"required"`
+		Checksum  string                 `json:"checksum"`
+		SizeBytes int                    `json:"size_bytes"`
+		Version   int                    `json:"version"`
+		TaskID    *uint                  `json:"task_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	version := &models.WorkspaceStateVersion{
+		WorkspaceID: workspaceID,
+		Content:     req.Content,
+		Checksum:    req.Checksum,
+		SizeBytes:   req.SizeBytes,
+		Version:     req.Version,
+		TaskID:      req.TaskID,
+		IsTemp:      true,
+	}
+
+	accessor := services.NewLocalDataAccessor(h.db)
+	if err := accessor.UpsertTempState(version); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"id": version.ID, "message": "temp state upserted"})
+}
+
+// PromoteTempState handles temp state promotion from agent
+func (h *AgentHandler) PromoteTempState(c *gin.Context) {
+	workspaceID := c.Param("workspace_id")
+
+	var req struct {
+		RecordID uint `json:"record_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	accessor := services.NewLocalDataAccessor(h.db)
+	if err := accessor.PromoteTempState(workspaceID, req.RecordID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "temp state promoted"})
+}
+
+// CleanupOrphanedTempStates handles orphaned temp state cleanup from agent
+func (h *AgentHandler) CleanupOrphanedTempStates(c *gin.Context) {
+	workspaceID := c.Param("workspace_id")
+
+	accessor := services.NewLocalDataAccessor(h.db)
+	if err := accessor.CleanupOrphanedTempStates(workspaceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "orphaned temp states cleaned up"})
+}
