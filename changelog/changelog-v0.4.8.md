@@ -16,7 +16,7 @@ State File Watcher 实时状态监控、AI Plan Summary CMDB 上下文修复、�
 
 #### AI Plan Summary — CMDB 上下文修复与风险决策 UI 重构
 
-- **query_resource_attributes 跨 workspace 查询** — workspace 内查不到时自动 fallback 全局查询，覆盖 `__external__` 中的外部 CMDB 数据 (`ai_summary_tools.go`)
+- **query_resource_attributes 复用 CMDB 关键字搜索** — 入参简化为单个 `query` 字段，复用 `CMDBService.SearchResources` 做模糊匹配，自动跨 workspace 查询含外部 CMDB 数据 (`ai_summary_tools.go`)
 - **Plan Summary 注入 CMDB 上下文** — `buildSystemPrompt` 设置 `UseCMDB: true` (`ai_summary_service.go`)
 - **风险决策 UI 重构** — 去掉 4 个固定 scenario 模板，改为 AI 动态生成：
   - `decision_title`: 具体风险标题（含资源 ID）
@@ -26,6 +26,8 @@ State File Watcher 实时状态监控、AI Plan Summary CMDB 上下文修复、�
   - (`ExecuteSummary.tsx`, `ExecuteSummary.module.css`, `execute_summary_workflow.md`)
 - **Skill 引导 create 场景查询** — AI 在 create 场景通过 `query_resource_attributes` 查询引用的子网/VPC 属性 (`execute_summary_workflow.md`)
 - **Agent Loop 并发 tool call** — 同一轮多个 tool call 并发执行 (`ai_agent_loop.go`)
+- **Agent Loop Prometheus 监控** — 新增 `iac_agent_loop_step_duration_ms`（每轮 AI 耗时）、`iac_agent_loop_tool_duration_ms`（tool 执行耗时）、`iac_agent_loop_total_duration_ms`（总耗时）、`iac_agent_loop_step_total`（轮次计数）(`ai_metrics.go`)
+- **CMDB 测试数据** — cmdb-test-server 新增 subnet-01bc9ccfe9259b6e7 测试资源 (`cmdb-test-server/main.go`)
 - **V3/V4 decision_hints 兼容** — `parseDecisionHints` 同时支持数组（V3）和对象（V4）格式 (`ai_summary_service.go`)
 
 ### Bug Fixes
