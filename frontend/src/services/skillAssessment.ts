@@ -42,6 +42,7 @@ export interface AssessmentOverview {
   high_risk_skills: string[];
   by_capability: CapabilityStats[];
   recent_failures: RecentFailure[];
+  failure_total: number;
   daily_trend: DailyTrendItem[];
   // Business metrics
   accept_rate: number | null;
@@ -49,8 +50,8 @@ export interface AssessmentOverview {
   negative_feedback: number | null;
 }
 
-export async function getAssessmentOverview(days: number = 7): Promise<AssessmentOverview> {
-  return await api.get(`/admin/skill-assessment/overview?days=${days}`) as unknown as AssessmentOverview;
+export async function getAssessmentOverview(days: number = 7, failPage: number = 1, failPageSize: number = 10): Promise<AssessmentOverview> {
+  return await api.get(`/admin/skill-assessment/overview?days=${days}&fail_page=${failPage}&fail_page_size=${failPageSize}`) as unknown as AssessmentOverview;
 }
 
 // ========== Skill Detail API ==========
@@ -106,9 +107,10 @@ export interface CapabilityDetail {
   task_skill: string;
   versions: VersionStats[];
   assessments: AssessmentRecord[];
+  assessment_total: number;
   feedback_matrix: FeedbackMatrix | null;
 }
 
-export async function getCapabilityDetail(capability: string, days: number = 7): Promise<CapabilityDetail> {
-  return await api.get(`/admin/skill-assessment/detail?capability=${encodeURIComponent(capability)}&days=${days}`) as unknown as CapabilityDetail;
+export async function getCapabilityDetail(capability: string, days: number = 7, page: number = 1, pageSize: number = 20): Promise<CapabilityDetail> {
+  return await api.get(`/admin/skill-assessment/detail?capability=${encodeURIComponent(capability)}&days=${days}&page=${page}&page_size=${pageSize}`) as unknown as CapabilityDetail;
 }

@@ -31,6 +31,7 @@ type AssessmentOverview struct {
 	HighRiskSkills []string           `json:"high_risk_skills"`
 	ByCapability   []CapabilityStats  `json:"by_capability"`
 	RecentFailures []RecentFailure    `json:"recent_failures"`
+	FailureTotal   int64              `json:"failure_total"`
 	DailyTrend     []DailyTrendItem   `json:"daily_trend"`
 	// 业务指标
 	AcceptRate       *float64 `json:"accept_rate"`        // 采纳率：accepted / (accepted+modified+aborted)
@@ -86,7 +87,7 @@ type dailyVerdictRow struct {
 }
 
 // GetOverview returns aggregated assessment data for the given time window
-func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, error) {
+func (s *SkillAssessmentService) GetOverview(days, failPage, failPageSize int) (*AssessmentOverview, error) {
 	if days <= 0 {
 		days = 7
 	}
@@ -196,7 +197,21 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 		}
 	}
 
-	// 6. Recent failures (limit 10, 按调用时间过滤)
+	// 6. Recent failures with pagination
+	if failPage < 1 {
+		failPage = 1
+	}
+	if failPageSize < 1 || failPageSize > 50 {
+		failPageSize = 10
+	}
+	failOffset := (failPage - 1) * failPageSize
+
+	s.db.Raw(`
+		SELECT count(*)
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE r.verdict = 'fail' AND l.created_at > ?`, since).Scan(&overview.FailureTotal)
+
 	if err := s.db.Raw(`
 		SELECT r.usage_log_id, l.capability, r.skill_name, r.verdict, r.score,
 		       COALESCE(array_to_json(r.missing_fields), '[]') as missing_fields,
@@ -206,7 +221,7 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
 		WHERE r.verdict = 'fail' AND l.created_at > ?
-		ORDER BY r.assessed_at DESC LIMIT 10`, since).Scan(&overview.RecentFailures).Error; err != nil {
+		ORDER BY r.assessed_at DESC LIMIT ? OFFSET ?`, since, failPageSize, failOffset).Scan(&overview.RecentFailures).Error; err != nil {
 		return nil, err
 	}
 
@@ -310,9 +325,10 @@ type CapabilityDetail struct {
 	AvgLatencyMs   float64              `json:"avg_latency_ms"`
 	LatestHash     string               `json:"latest_hash"`
 	TaskSkill      string               `json:"task_skill"`
-	Versions       []VersionStats       `json:"versions"`
-	Assessments    []AssessmentRecord   `json:"assessments"`
-	FeedbackMatrix *FeedbackMatrix      `json:"feedback_matrix"`
+	Versions        []VersionStats       `json:"versions"`
+	Assessments     []AssessmentRecord   `json:"assessments"`
+	AssessmentTotal int64                `json:"assessment_total"`
+	FeedbackMatrix  *FeedbackMatrix      `json:"feedback_matrix"`
 }
 
 // VersionStats holds per content_hash stats
@@ -345,7 +361,7 @@ type AssessmentRecord struct {
 }
 
 // GetCapabilityDetail returns detail data for a single capability
-func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int) (*CapabilityDetail, error) {
+func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, page, pageSize int) (*CapabilityDetail, error) {
 	if days <= 0 {
 		days = 7
 	}
@@ -470,7 +486,22 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		ORDER BY r.assessed_at DESC LIMIT 1`, capability, since).Scan(&taskSkill)
 	detail.TaskSkill = taskSkill.SkillName
 
-	// 4. Recent assessments (all verdicts, limit 20)
+	// 4. Assessments with pagination
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	// Total count
+	s.db.Raw(`
+		SELECT count(*)
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.capability = ? AND l.created_at > ?`, capability, since).Scan(&detail.AssessmentTotal)
+
 	if err := s.db.Raw(`
 		SELECT r.usage_log_id, r.assessment_layer as layer, r.verdict, r.score,
 		       r.assessment_latency_ms as latency_ms,
@@ -480,7 +511,7 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
 		WHERE l.capability = ? AND l.created_at > ?
-		ORDER BY r.assessed_at DESC LIMIT 20`, capability, since).Scan(&detail.Assessments).Error; err != nil {
+		ORDER BY r.assessed_at DESC LIMIT ? OFFSET ?`, capability, since, pageSize, offset).Scan(&detail.Assessments).Error; err != nil {
 		return nil, err
 	}
 

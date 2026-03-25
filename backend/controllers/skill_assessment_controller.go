@@ -34,8 +34,10 @@ func (c *SkillAssessmentController) GetOverview(ctx *gin.Context) {
 	if days <= 0 || days > 365 {
 		days = 7
 	}
+	failPage, _ := strconv.Atoi(ctx.DefaultQuery("fail_page", "1"))
+	failPageSize, _ := strconv.Atoi(ctx.DefaultQuery("fail_page_size", "10"))
 
-	overview, err := c.service.GetOverview(days)
+	overview, err := c.service.GetOverview(days, failPage, failPageSize)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to fetch assessment overview",
@@ -59,8 +61,10 @@ func (c *SkillAssessmentController) GetCapabilityDetail(ctx *gin.Context) {
 	if days <= 0 || days > 365 {
 		days = 7
 	}
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "20"))
 
-	detail, err := c.service.GetCapabilityDetail(capability, days)
+	detail, err := c.service.GetCapabilityDetail(capability, days, page, pageSize)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to fetch capability detail",

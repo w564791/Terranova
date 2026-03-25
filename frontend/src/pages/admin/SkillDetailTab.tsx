@@ -428,7 +428,12 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               <Table
                 columns={assessmentColumns}
                 dataSource={detail.assessments}
-                pagination={false}
+                pagination={{
+                  total: detail.assessment_total || 0,
+                  pageSize: 20,
+                  showSizeChanger: false,
+                  showTotal: (total) => `共 ${total} 条`,
+                }}
                 size="small"
                 rowKey="usage_log_id"
               />

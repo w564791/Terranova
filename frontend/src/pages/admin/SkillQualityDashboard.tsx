@@ -542,7 +542,12 @@ const SkillQualityDashboard: React.FC = () => {
           <Table
             columns={failureColumns}
             dataSource={data.recent_failures}
-            pagination={false}
+            pagination={{
+              total: data.failure_total || 0,
+              pageSize: 10,
+              showSizeChanger: false,
+              showTotal: (total) => `共 ${total} 条`,
+            }}
             size="small"
             rowKey="usage_log_id"
           />
