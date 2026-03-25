@@ -114,3 +114,16 @@ export interface CapabilityDetail {
 export async function getCapabilityDetail(capability: string, days: number = 7, page: number = 1, pageSize: number = 20): Promise<CapabilityDetail> {
   return await api.get(`/admin/skill-assessment/detail?capability=${encodeURIComponent(capability)}&days=${days}&page=${page}&page_size=${pageSize}`) as unknown as CapabilityDetail;
 }
+
+// ========== Version Compare API ==========
+
+export interface VersionCompare {
+  capability: string;
+  version_a: VersionStats;
+  version_b: VersionStats;
+  score_delta: { l1: number | null; l2: number | null; l3: number | null };
+}
+
+export async function compareVersions(capability: string, hashA: string, hashB: string, days: number = 7): Promise<VersionCompare> {
+  return await api.get(`/admin/skill-assessment/compare?capability=${encodeURIComponent(capability)}&hash_a=${encodeURIComponent(hashA)}&hash_b=${encodeURIComponent(hashB)}&days=${days}`) as unknown as VersionCompare;
+}

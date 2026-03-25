@@ -209,6 +209,7 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		assessmentController := controllers.NewSkillAssessmentController(db)
 		admin.GET("/skill-assessment/overview", assessmentController.GetOverview)
 		admin.GET("/skill-assessment/detail", assessmentController.GetCapabilityDetail)
+		admin.GET("/skill-assessment/compare", assessmentController.CompareVersions)
 
 		// ========== Embedding Cache API ==========
 		embeddingCacheController := controllers.NewEmbeddingCacheController(db)

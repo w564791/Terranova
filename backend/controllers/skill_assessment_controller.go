@@ -75,3 +75,34 @@ func (c *SkillAssessmentController) GetCapabilityDetail(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, detail)
 }
+
+// CompareVersions returns comparison data between two content_hash versions
+// GET /api/v1/admin/skill-assessment/compare?capability=xxx&hash_a=xxx&hash_b=xxx&days=7
+func (c *SkillAssessmentController) CompareVersions(ctx *gin.Context) {
+	capability := ctx.Query("capability")
+	if capability == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "capability is required"})
+		return
+	}
+	hashA := ctx.Query("hash_a")
+	hashB := ctx.Query("hash_b")
+	if hashA == "" || hashB == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "hash_a and hash_b are required"})
+		return
+	}
+	days, _ := strconv.Atoi(ctx.DefaultQuery("days", "7"))
+	if days <= 0 || days > 365 {
+		days = 7
+	}
+
+	compare, err := c.service.CompareVersions(capability, hashA, hashB, days)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to compare versions",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, compare)
+}
