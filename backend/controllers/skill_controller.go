@@ -703,15 +703,18 @@ func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 	}
 
 	type pendingItem struct {
-		ID         string `json:"id"`
-		Capability string `json:"capability"`
-		UserAction string `json:"user_action"`
-		CreatedAt  string `json:"created_at"`
+		ID         string  `json:"id"`
+		Capability string  `json:"capability"`
+		UserAction string  `json:"user_action"`
+		TaskID     *string `json:"task_id"`
+		CreatedAt  string  `json:"created_at"`
 	}
 
 	var items []pendingItem
 	c.db.Raw(`
-		SELECT id, capability, user_action, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at
+		SELECT id, capability, user_action,
+		       input_snapshot->>'task_id' as task_id,
+		       TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at
 		FROM skill_usage_logs
 		WHERE user_id IN (?, 'system')
 		  AND user_action IS NOT NULL

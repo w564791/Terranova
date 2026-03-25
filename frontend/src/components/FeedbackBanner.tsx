@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 interface PendingItem {
   id: string;
   capability: string;
   user_action: string;
+  task_id: string | null;
   created_at: string;
 }
 
@@ -34,6 +36,13 @@ function addDismissed(id: string) {
 
 const FeedbackBanner: React.FC = () => {
   const [item, setItem] = useState<PendingItem | null>(null);
+  const location = useLocation();
+
+  // 从 URL 提取当前 task ID（如 /workspaces/xxx/tasks/123 或 /workspaces/xxx 页面）
+  const currentTaskId = React.useMemo(() => {
+    const match = location.pathname.match(/\/tasks\/(\d+)/);
+    return match ? match[1] : null;
+  }, [location.pathname]);
 
   const loadPending = useCallback(async () => {
     if (!localStorage.getItem('token')) return;
@@ -41,13 +50,23 @@ const FeedbackBanner: React.FC = () => {
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
       const all: PendingItem[] = res?.items || [];
       const dismissed = getDismissed();
-      // 只取第一个未跳过的
-      const next = all.find(i => !dismissed.has(i.id)) || null;
-      setItem(next);
+      // 过滤：只显示当前 task 相关的（或非 task 页面时显示 form_generation 类型）
+      const filtered = all.filter(i => {
+        if (dismissed.has(i.id)) return false;
+        if (i.task_id && currentTaskId) {
+          return i.task_id === currentTaskId;
+        }
+        // 非 task 页面：只显示 form_generation 类型
+        if (!currentTaskId) {
+          return i.capability === 'form_generation';
+        }
+        return false;
+      });
+      setItem(filtered[0] || null);
     } catch {
       // silent
     }
-  }, []);
+  }, [currentTaskId]);
 
   useEffect(() => {
     loadPending();
