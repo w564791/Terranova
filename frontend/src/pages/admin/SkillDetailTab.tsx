@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Select, Table, Tag, Tooltip, Spin, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { getCapabilityDetail, getAssessmentOverview, CapabilityDetail, VersionStats, AssessmentRecord, FeedbackMatrix } from '../../services/skillAssessment';
 import styles from './SkillQualityDashboard.module.css';
@@ -19,10 +20,18 @@ interface Props {
 }
 
 const SkillDetailTab: React.FC<Props> = ({ days }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [capabilities, setCapabilities] = useState<string[]>([]);
-  const [selected, setSelected] = useState<string>('');
+  const [selected, setSelectedLocal] = useState<string>(() => searchParams.get('cap') || '');
   const [detail, setDetail] = useState<CapabilityDetail | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const setSelected = (cap: string) => {
+    setSelectedLocal(cap);
+    const p = new URLSearchParams(searchParams);
+    p.set('cap', cap);
+    setSearchParams(p, { replace: true });
+  };
 
   // Load capability list
   useEffect(() => {
