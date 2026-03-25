@@ -96,6 +96,16 @@ type SkillUsageLog struct {
 	ContextSummary  string    `gorm:"type:text" json:"context_summary,omitempty"`
 	ResponseSummary string    `gorm:"type:text" json:"response_summary,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
+
+	// New fields for skill quality assessment
+	InputSnapshot        *json.RawMessage `gorm:"type:jsonb" json:"input_snapshot,omitempty"`
+	OutputSnapshot       *json.RawMessage `gorm:"type:jsonb" json:"output_snapshot,omitempty"`
+	SkillContentHash     string           `gorm:"type:varchar(64)" json:"skill_content_hash,omitempty"`
+	SkillContentSnapshot *string          `gorm:"type:text" json:"skill_content_snapshot,omitempty"`
+	UserAction           *string          `gorm:"type:varchar(16)" json:"user_action,omitempty"`
+	UserModificationDiff *string          `gorm:"type:text" json:"user_modification_diff,omitempty"`
+	LatencyMs            *int             `gorm:"type:integer" json:"latency_ms,omitempty"`
+	AssessmentStatus     string           `gorm:"type:varchar(16);default:'pending'" json:"assessment_status"`
 }
 
 // TableName 指定表名
