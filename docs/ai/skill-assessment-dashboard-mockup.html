@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill 质量监控 Dashboard - 原型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1f1f1f; }
+
+  /* Layout */
+  .header { background: #fff; padding: 16px 24px; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header .time-range { display: flex; gap: 8px; }
+  .header .time-range button { padding: 4px 12px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; }
+  .header .time-range button.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid #e8e8e8; }
+  .tabs .tab { padding: 10px 20px; cursor: pointer; font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tabs .tab.active { color: #1677ff; border-bottom-color: #1677ff; font-weight: 500; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Cards */
+  .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .stat-card .label { font-size: 13px; color: #8c8c8c; margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: 600; }
+  .stat-card .value.green { color: #52c41a; }
+  .stat-card .value.red { color: #ff4d4f; }
+  .stat-card .value.orange { color: #fa8c16; }
+  .stat-card .value.blue { color: #1677ff; }
+  .stat-card .sub { font-size: 12px; color: #8c8c8c; margin-top: 4px; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .row.full { grid-template-columns: 1fr; }
+  .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 400; }
+  .badge.green { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+  .badge.red { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+  .badge.orange { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
+
+  /* Chart mockups */
+  .chart-placeholder { height: 220px; display: flex; align-items: flex-end; gap: 2px; padding: 0 0 30px 40px; position: relative; }
+  .chart-placeholder .y-axis { position: absolute; left: 0; top: 0; bottom: 30px; width: 35px; display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: #8c8c8c; text-align: right; }
+  .chart-placeholder .x-axis { position: absolute; bottom: 0; left: 40px; right: 0; display: flex; justify-content: space-around; font-size: 11px; color: #8c8c8c; }
+  .bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; justify-content: flex-end; }
+  .bar { width: 100%; max-width: 40px; border-radius: 3px 3px 0 0; min-height: 2px; transition: all 0.3s; position: relative; }
+  .bar:hover { opacity: 0.8; }
+  .bar.pass { background: #52c41a; }
+  .bar.fail { background: #ff4d4f; }
+  .bar.warn { background: #fa8c16; }
+
+  /* Donut chart */
+  .donut-container { display: flex; align-items: center; gap: 24px; }
+  .donut { width: 140px; height: 140px; border-radius: 50%; position: relative; }
+  .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .donut-center .pct { font-size: 24px; font-weight: 600; }
+  .donut-center .lbl { font-size: 11px; color: #8c8c8c; }
+  .donut-legend { font-size: 13px; }
+  .donut-legend .item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .donut-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; background: #fafafa; border-bottom: 1px solid #e8e8e8; font-weight: 500; color: #666; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+  tr:hover td { background: #fafafa; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+  .tag.pass { background: #f6ffed; color: #389e0d; }
+  .tag.fail { background: #fff2f0; color: #cf1322; }
+  .tag.warn { background: #fff7e6; color: #d46b08; }
+  .tag.p1 { background: #fff2f0; color: #cf1322; font-weight: 500; }
+  .tag.p2 { background: #fff7e6; color: #d46b08; }
+  .tag.p3 { background: #e6f4ff; color: #0958d9; }
+
+  /* Horizontal bar */
+  .hbar-row { display: flex; align-items: center; margin-bottom: 10px; font-size: 13px; }
+  .hbar-label { width: 260px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+  .hbar-track { flex: 1; height: 18px; background: #f5f5f5; border-radius: 3px; margin: 0 12px; overflow: hidden; }
+  .hbar-fill { height: 100%; border-radius: 3px; }
+  .hbar-fill.red { background: #ff4d4f; }
+  .hbar-fill.orange { background: #fa8c16; }
+  .hbar-fill.blue { background: #1677ff; }
+  .hbar-count { width: 50px; text-align: right; color: #8c8c8c; }
+
+  /* Timeline chart */
+  .timeline { position: relative; padding: 20px 0 20px 60px; }
+  .timeline .line { position: absolute; left: 55px; top: 0; bottom: 0; width: 2px; background: #e8e8e8; }
+  .timeline .point { position: relative; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; }
+  .timeline .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #1677ff; background: #fff; position: absolute; left: -65px; z-index: 1; }
+  .timeline .dot.green { border-color: #52c41a; }
+  .timeline .content { background: #fafafa; padding: 12px 16px; border-radius: 6px; flex: 1; }
+  .timeline .hash { font-family: monospace; font-size: 12px; color: #8c8c8c; }
+  .timeline .scores { display: flex; gap: 16px; margin-top: 6px; font-size: 13px; }
+  .timeline .scores span { display: flex; align-items: center; gap: 4px; }
+
+  /* Alert row */
+  .alert-row { padding: 12px 16px; border-left: 3px solid; margin-bottom: 8px; border-radius: 0 4px 4px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .alert-row.p1 { border-color: #ff4d4f; background: #fff2f0; }
+  .alert-row.p2 { border-color: #fa8c16; background: #fff7e6; }
+  .alert-row.p3 { border-color: #1677ff; background: #e6f4ff; }
+  .alert-time { color: #8c8c8c; font-size: 12px; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 40px; color: #8c8c8c; }
+  .empty .icon { font-size: 40px; margin-bottom: 12px; }
+
+  /* Responsive */
+  @media (max-width: 1000px) {
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Skill 质量监控</h1>
+  <div class="time-range">
+    <button>24h</button>
+    <button class="active">7 天</button>
+    <button>30 天</button>
+    <button>自定义</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('overview')">全局概览</div>
+    <div class="tab" onclick="switchTab('detail')">Skill 详情</div>
+    <div class="tab" onclick="switchTab('compare')">版本对比</div>
+    <div class="tab" onclick="switchTab('alerts')">告警</div>
+    <div class="tab" onclick="switchTab('golden')">Golden Set 校准</div>
+  </div>
+
+  <!-- ==================== TAB 1: 全局概览 ==================== -->
+  <div id="tab-overview" class="tab-content active">
+
+    <!-- 技术指标 KPI -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">Schema 通过率（7天）</div>
+        <div class="value green">97.1%</div>
+        <div class="sub">198 pass / 204 total</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">规则通过率（7天）</div>
+        <div class="value" style="color:#bbb">-</div>
+        <div class="sub">Layer 2 未启用（Phase 3）</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">语义质量均分（7天）</div>
+        <div class="value" style="color:#bbb">-</div>
+        <div class="sub">Layer 3 未启用（Phase 3）</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">活跃 Skill 数</div>
+        <div class="value blue">4</div>
+        <div class="sub">近 7 天有调用</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">高风险 Skill</div>
+        <div class="value red">1</div>
+        <div class="sub">fail 率 > 20%: plan_summary</div>
+      </div>
+    </div>
+
+    <!-- 业务指标 KPI -->
+    <div class="stats-row" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="stat-card">
+        <div class="label">用户采纳率</div>
+        <div class="value green">-</div>
+        <div class="sub">暂无 user_action 数据</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">二次修改率</div>
+        <div class="value orange">-</div>
+        <div class="sub">暂无 modified 数据</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">负面反馈率</div>
+        <div class="value">-</div>
+        <div class="sub">暂无 user_feedback 数据</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">评估-反馈一致率</div>
+        <div class="value">-</div>
+        <div class="sub">需同时有评估和反馈</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- 各 Capability 通过率 -->
+      <div class="card">
+        <h3>各 Capability Schema 通过率</h3>
+        <table>
+          <thead>
+            <tr><th>Capability</th><th>Total</th><th>Pass</th><th>Fail</th><th>通过率</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>form_generation</strong></td>
+              <td>184</td><td>184</td><td>0</td>
+              <td>100%</td>
+              <td><span class="tag pass">健康</span></td>
+            </tr>
+            <tr>
+              <td><strong>module_skill_generation</strong></td>
+              <td>14</td><td>14</td><td>0</td>
+              <td>100%</td>
+              <td><span class="tag pass">健康</span></td>
+            </tr>
+            <tr>
+              <td><strong>plan_summary</strong></td>
+              <td>6</td><td>4</td><td>2</td>
+              <td>66.7%</td>
+              <td><span class="tag fail">风险</span></td>
+            </tr>
+            <tr>
+              <td><strong>apply_summary</strong></td>
+              <td>0</td><td>-</td><td>-</td>
+              <td>-</td>
+              <td><span class="tag" style="background:#f5f5f5;color:#8c8c8c">无数据</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 评估结果分布饼图 -->
+      <div class="card">
+        <h3>评估结果分布（7天）</h3>
+        <div class="donut-container">
+          <div class="donut" style="background: conic-gradient(#52c41a 0deg 349.7deg, #ff4d4f 349.7deg 360deg);">
+            <div class="donut-center">
+              <div class="pct">97.1%</div>
+              <div class="lbl">通过率</div>
+            </div>
+          </div>
+          <div class="donut-legend">
+            <div class="item"><div class="dot" style="background:#52c41a"></div>Pass: 202 (97.1%)</div>
+            <div class="item"><div class="dot" style="background:#ff4d4f"></div>Fail: 2 (1.0%)</div>
+            <div class="item"><div class="dot" style="background:#fa8c16"></div>Warn: 0 (0%)</div>
+            <div class="item" style="margin-top:16px;color:#8c8c8c;font-size:12px">
+              评估覆盖率: 100%<br>
+              (204 assessed / 204 total)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 每日趋势 -->
+    <div class="row full">
+      <div class="card">
+        <h3>每日评估趋势（近 7 天）</h3>
+        <div class="chart-placeholder" style="height:200px;">
+          <div class="y-axis"><span>200</span><span>150</span><span>100</span><span>50</span><span>0</span></div>
+          <div class="bar-group"><div class="bar pass" style="height:10px"></div></div>
+          <div class="bar-group"><div class="bar pass" style="height:8px"></div></div>
+          <div class="bar-group"><div class="bar pass" style="height:5px"></div></div>
+          <div class="bar-group"><div class="bar pass" style="height:3px"></div></div>
+          <div class="bar-group"><div class="bar pass" style="height:6px"></div></div>
+          <div class="bar-group">
+            <div class="bar fail" style="height:4px"></div>
+            <div class="bar pass" style="height:30px"></div>
+          </div>
+          <div class="bar-group">
+            <div class="bar fail" style="height:3px"></div>
+            <div class="bar pass" style="height:160px"></div>
+          </div>
+          <div class="x-axis"><span>3/19</span><span>3/20</span><span>3/21</span><span>3/22</span><span>3/23</span><span>3/24</span><span>3/25</span></div>
+        </div>
+        <div style="display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:12px;color:#8c8c8c;">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#52c41a;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Pass</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#ff4d4f;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Fail</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最近失败记录 -->
+    <div class="row full">
+      <div class="card">
+        <h3>最近失败记录 <span class="badge red">2</span></h3>
+        <table>
+          <thead>
+            <tr><th>时间</th><th>Capability</th><th>Skill Name</th><th>Verdict</th><th>问题</th><th>Content Hash</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-03-25 12:02</td>
+              <td>plan_summary</td>
+              <td>plan_summary</td>
+              <td><span class="tag fail">fail</span></td>
+              <td>output 为 JSON string 而非 object（已修复）</td>
+              <td><code style="font-size:11px;color:#8c8c8c">92bfcfba...6f97</code></td>
+            </tr>
+            <tr>
+              <td>2026-03-25 11:55</td>
+              <td>plan_summary</td>
+              <td>plan_summary</td>
+              <td><span class="tag fail">fail</span></td>
+              <td>missing_fields: {risk_level}（V2/V3 兼容问题，已修复）</td>
+              <td><code style="font-size:11px;color:#8c8c8c">92bfcfba...6f97</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: Skill 详情 ==================== -->
+  <div id="tab-detail" class="tab-content">
+
+    <!-- Skill 选择器 -->
+    <div style="margin-bottom:20px;display:flex;gap:12px;align-items:center;">
+      <label style="font-size:14px;font-weight:500;">选择 Capability:</label>
+      <select style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;min-width:200px;" onchange="switchSkill(this.value)">
+        <option value="plan_summary" selected>plan_summary</option>
+        <option value="form_generation">form_generation</option>
+        <option value="module_skill_generation">module_skill_generation</option>
+        <option value="apply_summary">apply_summary</option>
+      </select>
+    </div>
+
+    <div class="stats-row" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="stat-card">
+        <div class="label">Schema 通过率</div>
+        <div class="value orange">66.7%</div>
+        <div class="sub">4 pass / 6 total</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">总调用次数</div>
+        <div class="value">6</div>
+        <div class="sub">近 7 天</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">用户采纳率</div>
+        <div class="value">-</div>
+        <div class="sub">系统触发，无用户操作</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">当前版本</div>
+        <div class="value" style="font-size:14px;font-family:monospace">92bfcfba</div>
+        <div class="sub">execute_summary_workflow</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- 版本质量趋势 -->
+      <div class="card">
+        <h3>版本质量趋势（按 content_hash）</h3>
+        <div class="timeline">
+          <div class="line"></div>
+          <div class="point">
+            <div class="dot green"></div>
+            <div class="content">
+              <div class="hash">hash: 92bfcfba... (当前)</div>
+              <div class="scores">
+                <span>Layer 1: <strong style="color:#52c41a">66.7%</strong></span>
+                <span style="color:#8c8c8c">Layer 2: -</span>
+                <span style="color:#8c8c8c">Layer 3: -</span>
+              </span>
+              <div style="font-size:12px;color:#8c8c8c;margin-top:4px;">前 6 次调用 | 首次出现: 2026-03-25</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 违规分布 -->
+      <div class="card">
+        <h3>违规分布</h3>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;color:#8c8c8c;margin-bottom:8px;font-weight:500;">Layer 1 - Schema 违规</div>
+          <div class="hbar-row">
+            <div class="hbar-label">output 非 JSON object（raw text）</div>
+            <div class="hbar-track"><div class="hbar-fill red" style="width:66%"></div></div>
+            <div class="hbar-count">1 次</div>
+          </div>
+          <div class="hbar-row">
+            <div class="hbar-label">missing: risk_level（V2/V3 兼容）</div>
+            <div class="hbar-track"><div class="hbar-fill orange" style="width:33%"></div></div>
+            <div class="hbar-count">1 次</div>
+          </div>
+        </div>
+        <div style="margin-top:24px;">
+          <div style="font-size:12px;color:#8c8c8c;margin-bottom:8px;font-weight:500;">Layer 2 - 规则违规</div>
+          <div class="empty" style="padding:20px;"><div style="font-size:13px;">Phase 3 启用后可用</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 用户行为对照 -->
+    <div class="row full">
+      <div class="card">
+        <h3>评估结果 vs 用户反馈</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+          <div>
+            <table>
+              <thead>
+                <tr><th></th><th>用户好评</th><th>用户差评</th><th>无反馈</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="tag pass">评估 pass</span></td><td>-</td><td>-</td><td>4</td></tr>
+                <tr><td><span class="tag warn">评估 warn</span></td><td>-</td><td>-</td><td>0</td></tr>
+                <tr><td><span class="tag fail">评估 fail</span></td><td>-</td><td>-</td><td>2</td></tr>
+              </tbody>
+            </table>
+            <div style="font-size:12px;color:#8c8c8c;margin-top:8px;">
+              plan_summary 为系统自动触发，暂无用户直接反馈数据。
+              用户的间接反馈（确认执行/终止任务）待接入。
+            </div>
+          </div>
+          <div style="text-align:center;padding:20px;">
+            <div style="font-size:14px;color:#8c8c8c;margin-bottom:12px;">评估盲区检测</div>
+            <div style="font-size:36px;font-weight:600;color:#bbb;">-</div>
+            <div style="font-size:12px;color:#8c8c8c;margin-top:8px;">
+              评估 pass 但用户差评的比例<br>
+              (需要用户反馈数据积累后可用)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最近评估记录 -->
+    <div class="row full">
+      <div class="card">
+        <h3>最近评估记录</h3>
+        <table>
+          <thead>
+            <tr><th>时间</th><th>Layer</th><th>Verdict</th><th>Score</th><th>耗时</th><th>问题</th><th>Usage Log ID</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-03-25 12:12</td><td>schema</td><td><span class="tag pass">pass</span></td>
+              <td>100</td><td>1ms</td><td>-</td><td><code style="font-size:11px">52430178...</code></td>
+            </tr>
+            <tr>
+              <td>2026-03-25 12:02</td><td>schema</td><td><span class="tag fail">fail</span></td>
+              <td>0</td><td>0ms</td><td>output 非 JSON object</td><td><code style="font-size:11px">0eca4611...</code></td>
+            </tr>
+            <tr>
+              <td>2026-03-25 11:55</td><td>schema</td><td><span class="tag fail">fail</span></td>
+              <td>0</td><td>1ms</td><td>missing: risk_level</td><td><code style="font-size:11px">b5e1482d...</code></td>
+            </tr>
+            <tr>
+              <td>2026-03-25 11:29</td><td>schema</td><td><span class="tag pass">pass</span></td>
+              <td>100</td><td>1ms</td><td>-</td><td><code style="font-size:11px">3249db6e...</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: 版本对比 ==================== -->
+  <div id="tab-detail-compare" class="tab-content" id="tab-compare">
+    <div class="card">
+      <h3>版本对比</h3>
+      <div style="display:flex;gap:16px;margin-bottom:20px;align-items:center;">
+        <label>Skill:</label>
+        <select style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:4px;">
+          <option>plan_summary</option>
+        </select>
+        <label>版本 A:</label>
+        <select style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:4px;">
+          <option>92bfcfba... (当前)</option>
+        </select>
+        <label>版本 B:</label>
+        <select style="padding:6px 12px;border:1px solid #d9d9d9;border-radius:4px;">
+          <option disabled selected>暂无其他版本</option>
+        </select>
+        <button style="padding:6px 16px;background:#1677ff;color:#fff;border:none;border-radius:4px;cursor:pointer;">对比</button>
+      </div>
+      <div class="empty">
+        <div class="icon">&#x1f50d;</div>
+        <div>需要至少两个版本（content_hash）才能进行对比分析。<br>当 Skill 内容发生变更时，系统会自动记录新版本。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 4: 告警 ==================== -->
+  <div id="tab-alerts" class="tab-content">
+    <div class="stats-row" style="grid-template-columns: repeat(3, 1fr); margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="label">P1 告警（活跃）</div>
+        <div class="value red">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">P2 告警（活跃）</div>
+        <div class="value orange">1</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">P3 告警（活跃）</div>
+        <div class="value blue">0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>告警规则与状态</h3>
+      <table>
+        <thead>
+          <tr><th>规则</th><th>触发条件</th><th>级别</th><th>当前状态</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>新版本质量下降</td><td>新 hash 前20次均分比上一版低 10分+</td>
+            <td><span class="tag p1">P1</span></td>
+            <td><span style="color:#52c41a">正常</span> — 仅一个版本</td>
+          </tr>
+          <tr>
+            <td>Schema 错误率突增</td><td>某 skill 近1小时 fail 率 > 10%</td>
+            <td><span class="tag p1">P1</span></td>
+            <td><span style="color:#52c41a">正常</span></td>
+          </tr>
+          <tr>
+            <td>单次 Schema 错误</td><td>任何 schema_valid=false</td>
+            <td><span class="tag p2">P2</span></td>
+            <td><span style="color:#fa8c16">触发 2 次</span> — plan_summary (已修复)</td>
+          </tr>
+          <tr>
+            <td>fail 率突增</td><td>某 skill 近1小时 Layer 2 fail率 > 30%</td>
+            <td><span class="tag p1">P1</span></td>
+            <td><span style="color:#bbb">未启用</span> — Layer 2 Phase 3</td>
+          </tr>
+          <tr>
+            <td>评估器漂移</td><td>Golden Set verdict 一致率 < 80%</td>
+            <td><span class="tag p2">P2</span></td>
+            <td><span style="color:#bbb">未启用</span> — Phase 4</td>
+          </tr>
+          <tr>
+            <td>用户差评激增</td><td>某 skill 近24小时负面反馈率 > 25%</td>
+            <td><span class="tag p2">P2</span></td>
+            <td><span style="color:#bbb">无数据</span></td>
+          </tr>
+          <tr>
+            <td>评估-反馈不一致</td><td>评估 pass 但用户差评占比 > 15%</td>
+            <td><span class="tag p2">P2</span></td>
+            <td><span style="color:#bbb">无数据</span></td>
+          </tr>
+          <tr>
+            <td>评估积压</td><td>pending 超1小时 > 50条</td>
+            <td><span class="tag p3">P3</span></td>
+            <td><span style="color:#52c41a">正常</span> — 0 pending</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>告警历史</h3>
+      <div class="alert-row p2">
+        <div>
+          <strong>单次 Schema 错误</strong> — plan_summary output 为 JSON string 而非 object
+          <div style="font-size:12px;color:#8c8c8c;margin-top:2px;">usage_log_id: 0eca4611-2757-4e66-9251-5ec707ecfc16</div>
+        </div>
+        <div class="alert-time">2026-03-25 12:02 <span class="tag" style="background:#f6ffed;color:#52c41a;margin-left:8px;">已修复</span></div>
+      </div>
+      <div class="alert-row p2">
+        <div>
+          <strong>单次 Schema 错误</strong> — plan_summary missing_fields: {risk_level}（V2/V3 兼容）
+          <div style="font-size:12px;color:#8c8c8c;margin-top:2px;">usage_log_id: b5e1482d-fb6e-420e-bc55-f197d9e8202b</div>
+        </div>
+        <div class="alert-time">2026-03-25 11:55 <span class="tag" style="background:#f6ffed;color:#52c41a;margin-left:8px;">已修复</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: Golden Set ==================== -->
+  <div id="tab-golden" class="tab-content">
+    <div class="card">
+      <h3>Golden Set 校准报告</h3>
+      <div class="empty">
+        <div class="icon">&#x1f9ea;</div>
+        <div style="max-width:500px;margin:0 auto;">
+          Golden Set 校准机制将在 Phase 4 启用。<br><br>
+          每个 Skill 维护 3-5 个人工标注的 input/output 对，定期用评估器跑这些数据，对比评估结果和人工标注。<br><br>
+          <span style="color:#1677ff;">目前需要：</span>
+          <ul style="text-align:left;margin-top:8px;list-style:disc;padding-left:20px;">
+            <li>每个核心 Skill 标注 3-5 个样本</li>
+            <li>覆盖 pass / warn / fail 各类场景</li>
+            <li>按 Layer 分别标注（rule 层和 semantic 层）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+  // Find tab button
+  const tabs = document.querySelectorAll('.tab');
+  const mapping = { overview: 0, detail: 1, compare: 2, alerts: 3, golden: 4 };
+  if (mapping[name] !== undefined) tabs[mapping[name]].classList.add('active');
+
+  const el = document.getElementById('tab-' + name);
+  if (el) el.classList.add('active');
+
+  // Handle compare tab special ID
+  if (name === 'compare') {
+    document.getElementById('tab-detail-compare').classList.add('active');
+  }
+}
+</script>
+
+</body>
+</html>
