@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"time"
 
 	"iac-platform/internal/models"
@@ -45,14 +46,14 @@ type CapabilityStats struct {
 
 // RecentFailure holds details of a recent failed assessment
 type RecentFailure struct {
-	UsageLogID    string           `json:"usage_log_id"`
-	Capability    string           `json:"capability"`
-	SkillName     string           `json:"skill_name"`
-	Verdict       string           `json:"verdict"`
-	MissingFields models.TextArray `json:"missing_fields"`
-	InvalidEnums  models.TextArray `json:"invalid_enum_fields"`
-	AssessedAt    time.Time        `json:"assessed_at"`
-	ContentHash   string           `json:"content_hash"`
+	UsageLogID    string          `json:"usage_log_id"`
+	Capability    string          `json:"capability"`
+	SkillName     string          `json:"skill_name"`
+	Verdict       string          `json:"verdict"`
+	MissingFields json.RawMessage `json:"missing_fields"`
+	InvalidEnums  json.RawMessage `json:"invalid_enum_fields"`
+	AssessedAt    time.Time       `json:"assessed_at"`
+	ContentHash   string          `json:"content_hash"`
 }
 
 // DailyTrendItem holds daily verdict counts
@@ -111,13 +112,14 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 	overview.TotalLogs = logStats.Total
 	overview.AssessedLogs = logStats.Assessed
 
-	// 2. Verdict counts
+	// 2. Verdict counts (按调用时间过滤，不是评估时间)
 	var verdicts []verdictCount
-	if err := s.db.Model(&models.SkillAssessmentResult{}).
-		Select("verdict, count(*) as cnt").
-		Where("assessed_at > ?", since).
-		Group("verdict").
-		Scan(&verdicts).Error; err != nil {
+	if err := s.db.Raw(`
+		SELECT r.verdict, count(*) as cnt
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.created_at > ?
+		GROUP BY r.verdict`, since).Scan(&verdicts).Error; err != nil {
 		return nil, err
 	}
 	for _, v := range verdicts {
@@ -149,7 +151,7 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 		SELECT l.capability, r.verdict, count(*) as cnt
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
-		WHERE r.assessed_at > ?
+		WHERE l.created_at > ?
 		GROUP BY l.capability, r.verdict`, since).Scan(&capRows).Error; err != nil {
 		return nil, err
 	}
@@ -185,25 +187,28 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 		}
 	}
 
-	// 6. Recent failures (limit 10)
+	// 6. Recent failures (limit 10, 按调用时间过滤)
 	if err := s.db.Raw(`
 		SELECT r.usage_log_id, l.capability, r.skill_name, r.verdict,
-		       r.missing_fields, r.invalid_enum_fields, r.assessed_at,
+		       COALESCE(array_to_json(r.missing_fields), '[]') as missing_fields,
+		       COALESCE(array_to_json(r.invalid_enum_fields), '[]') as invalid_enum_fields,
+		       r.assessed_at,
 		       r.skill_content_hash as content_hash
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
-		WHERE r.verdict = 'fail' AND r.assessed_at > ?
+		WHERE r.verdict = 'fail' AND l.created_at > ?
 		ORDER BY r.assessed_at DESC LIMIT 10`, since).Scan(&overview.RecentFailures).Error; err != nil {
 		return nil, err
 	}
 
-	// 7. Daily trend
+	// 7. Daily trend (按调用日期聚合)
 	var trendRows []dailyVerdictRow
 	if err := s.db.Raw(`
-		SELECT TO_CHAR(r.assessed_at, 'YYYY-MM-DD') as date, r.verdict, count(*) as cnt
+		SELECT TO_CHAR(l.created_at, 'YYYY-MM-DD') as date, r.verdict, count(*) as cnt
 		FROM skill_assessment_results r
-		WHERE r.assessed_at > ?
-		GROUP BY TO_CHAR(r.assessed_at, 'YYYY-MM-DD'), r.verdict
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.created_at > ?
+		GROUP BY TO_CHAR(l.created_at, 'YYYY-MM-DD'), r.verdict
 		ORDER BY date`, since).Scan(&trendRows).Error; err != nil {
 		return nil, err
 	}

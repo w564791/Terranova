@@ -107,15 +107,21 @@ const SkillQualityDashboard: React.FC = () => {
       key: 'issues',
       render: (_: unknown, record: RecentFailure) => {
         const issues: string[] = [];
-        if (record.missing_fields && record.missing_fields.length > 0) {
-          issues.push(`缺失字段: ${record.missing_fields.join(', ')}`);
+        const mf = record.missing_fields || [];
+        const ie = record.invalid_enum_fields || [];
+        if (mf.length > 0) {
+          issues.push(`缺失字段: ${mf.join(', ')}`);
         }
-        if (record.invalid_enum_fields && record.invalid_enum_fields.length > 0) {
-          issues.push(`枚举无效: ${record.invalid_enum_fields.join(', ')}`);
+        if (ie.length > 0) {
+          issues.push(`枚举无效: ${ie.join(', ')}`);
         }
+        if (issues.length === 0 && record.verdict === 'fail') {
+          issues.push('输出非合法 JSON');
+        }
+        const text = issues.join('; ');
         return (
-          <Tooltip title={issues.join('; ')}>
-            <span>{issues.join('; ').substring(0, 60)}{issues.join('; ').length > 60 ? '...' : ''}</span>
+          <Tooltip title={text}>
+            <span>{text.substring(0, 60)}{text.length > 60 ? '...' : ''}</span>
           </Tooltip>
         );
       },
