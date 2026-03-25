@@ -9798,7 +9798,7 @@ SELECT pg_catalog.setval('public.ai_analysis_rate_limits_id_seq', 278, true);
 -- Name: ai_configs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.ai_configs_id_seq', 15, true);
+SELECT pg_catalog.setval('public.ai_configs_id_seq', 18, true);
 
 
 --
@@ -14961,6 +14961,14 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
+-- Skill quality assessment AI config (inserted after COPY block)
+INSERT INTO public.ai_configs (id, service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode)
+SELECT 18, service_type, aws_region, model_id, true,
+       '["skill_quality_assessment"]'::jsonb, '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0, 'prompt'
+FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
 -- PostgreSQL database dump complete
 --
 
