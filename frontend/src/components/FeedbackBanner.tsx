@@ -21,13 +21,13 @@ const FeedbackBanner: React.FC = () => {
   const [items, setItems] = useState<PendingItem[]>([]);
 
   const loadPending = useCallback(async () => {
+    // 未登录时不请求
+    if (!localStorage.getItem('token')) return;
     try {
-      console.log('[FeedbackBanner] Loading pending feedback...');
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
-      console.log('[FeedbackBanner] Response:', res);
       setItems(res?.items || []);
-    } catch (err) {
-      console.warn('[FeedbackBanner] Error:', err);
+    } catch {
+      // silent - 401 or other errors
     }
   }, []);
 
