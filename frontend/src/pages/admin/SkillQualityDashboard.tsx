@@ -234,40 +234,27 @@ const SkillQualityDashboard: React.FC = () => {
     },
   ];
 
-  /* ---------- Loading / empty states ---------- */
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '80px 0' }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return <Empty description="暂无评估数据" />;
-  }
-
-  /* ---------- Derived values ---------- */
-  const totalAssessed = data.total_pass + data.total_fail + data.total_warn;
-  const passRate = totalAssessed > 0 ? (data.total_pass / totalAssessed) * 100 : 0;
-  const coverage = data.total_logs > 0 ? ((data.assessed_logs / data.total_logs) * 100) : 0;
+  /* ---------- Derived values (safe even when data is null) ---------- */
+  const totalAssessed = data ? data.total_pass + data.total_fail + data.total_warn : 0;
+  const passRate = totalAssessed > 0 ? ((data?.total_pass ?? 0) / totalAssessed) * 100 : 0;
+  const coverage = (data?.total_logs ?? 0) > 0 ? (((data?.assessed_logs ?? 0) / data!.total_logs) * 100) : 0;
 
   // Donut angles
-  const passDeg = totalAssessed > 0 ? (data.total_pass / totalAssessed) * 360 : 0;
-  const failDeg = totalAssessed > 0 ? (data.total_fail / totalAssessed) * 360 : 0;
+  const passDeg = totalAssessed > 0 ? ((data?.total_pass ?? 0) / totalAssessed) * 360 : 0;
+  const failDeg = totalAssessed > 0 ? ((data?.total_fail ?? 0) / totalAssessed) * 360 : 0;
   const donutGradient = totalAssessed > 0
     ? `conic-gradient(#52c41a 0deg ${passDeg}deg, #ff4d4f ${passDeg}deg ${passDeg + failDeg}deg, #fa8c16 ${passDeg + failDeg}deg 360deg)`
     : '#f0f0f0';
 
   // Bar chart scaling
-  const trendData = data.daily_trend || [];
+  const trendData = data?.daily_trend || [];
   const maxBar = Math.max(...trendData.map(d => d.pass + d.fail + d.warn), 1);
   const barHeight = 170; // px available for bars
 
   // Alert summary
-  const hasSchemaErrorRate = (data.by_capability || []).some(c => c.total > 0 && c.fail / c.total > 0.1);
-  const hasHighRisk = (data.high_risk_skills?.length || 0) > 0;
-  const pendingBacklog = data.total_logs - data.assessed_logs;
+  const hasSchemaErrorRate = (data?.by_capability || []).some(c => c.total > 0 && c.fail / c.total > 0.1);
+  const hasHighRisk = (data?.high_risk_skills?.length || 0) > 0;
+  const pendingBacklog = (data?.total_logs ?? 0) - (data?.assessed_logs ?? 0);
 
   // Violation max
   const violationMax = violations.length > 0 ? violations[0].count : 1;
@@ -294,8 +281,12 @@ const SkillQualityDashboard: React.FC = () => {
 
       {activeSubTab === 'detail' ? (
         <SkillDetailTab days={days} />
+      ) : !data && loading ? (
+        <div style={{ textAlign: 'center', padding: '80px 0' }}><Spin size="large" /></div>
+      ) : !data ? (
+        <Empty description="暂无评估数据" />
       ) : (
-      <>
+      <Spin spinning={loading}>
 
       {/* ===================== KPI Row ===================== */}
       <div className={styles.kpiGrid}>
@@ -528,7 +519,7 @@ const SkillQualityDashboard: React.FC = () => {
           <Empty description="无失败记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
       </div>
-      </>
+      </Spin>
       )}
     </div>
   );
