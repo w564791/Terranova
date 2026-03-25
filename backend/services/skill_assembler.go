@@ -1,6 +1,9 @@
 package services
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
 	"log"
@@ -12,6 +15,27 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// ComputeContentHash 计算内容的 SHA256 哈希值
+func ComputeContentHash(content string) string {
+	h := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(h[:])
+}
+
+// LogSkillUsageParams LogSkillUsage 的参数
+type LogSkillUsageParams struct {
+	SkillIDs         []string
+	Capability       string
+	WorkspaceID      string
+	UserID           string
+	ModuleID         *uint
+	AIModel          string
+	ExecutionTimeMs  int
+	InputSnapshot    json.RawMessage
+	OutputSnapshot   json.RawMessage
+	TaskSkillName    string
+	TaskSkillContent string
+}
 
 // SkillAssembler Skill 组装器
 // 负责根据 SkillComposition 配置组装最终的 Prompt
@@ -663,27 +687,61 @@ func (a *SkillAssembler) regenerateModuleSkill(moduleID uint, existingSkill *mod
 }
 
 // LogSkillUsage 记录 Skill 使用日志
-func (a *SkillAssembler) LogSkillUsage(
-	skillIDs []string,
-	capability string,
-	workspaceID string,
-	userID string,
-	moduleID *uint,
-	aiModel string,
-	executionTimeMs int,
-) error {
-	log := &models.SkillUsageLog{
-		ID:              uuid.New().String(),
-		SkillIDs:        skillIDs,
-		Capability:      capability,
-		WorkspaceID:     workspaceID,
-		UserID:          userID,
-		ModuleID:        moduleID,
-		AIModel:         aiModel,
-		ExecutionTimeMs: executionTimeMs,
+// 返回 (logID, error)，支持输入/输出快照和内容哈希去重
+func (a *SkillAssembler) LogSkillUsage(params LogSkillUsageParams) (string, error) {
+	logID := uuid.New().String()
+
+	// 计算内容哈希
+	var contentHash string
+	var contentSnapshot *string
+	if params.TaskSkillContent != "" {
+		contentHash = ComputeContentHash(params.TaskSkillContent)
+
+		// 去重策略：检查此哈希是否已经存在
+		var count int64
+		a.db.Model(&models.SkillUsageLog{}).
+			Where("skill_content_hash = ?", contentHash).
+			Count(&count)
+		if count == 0 {
+			// 第一次出现，保存完整内容
+			contentSnapshot = &params.TaskSkillContent
+		}
 	}
 
-	return a.db.Create(log).Error
+	// 构建快照指针
+	var inputSnap, outputSnap *json.RawMessage
+	if len(params.InputSnapshot) > 0 {
+		inputSnap = &params.InputSnapshot
+	}
+	if len(params.OutputSnapshot) > 0 {
+		outputSnap = &params.OutputSnapshot
+	}
+
+	latency := params.ExecutionTimeMs
+
+	entry := &models.SkillUsageLog{
+		ID:                   logID,
+		SkillIDs:             params.SkillIDs,
+		Capability:           params.Capability,
+		WorkspaceID:          params.WorkspaceID,
+		UserID:               params.UserID,
+		ModuleID:             params.ModuleID,
+		AIModel:              params.AIModel,
+		ExecutionTimeMs:      params.ExecutionTimeMs,
+		InputSnapshot:        inputSnap,
+		OutputSnapshot:       outputSnap,
+		SkillContentHash:     contentHash,
+		SkillContentSnapshot: contentSnapshot,
+		LatencyMs:            &latency,
+		AssessmentStatus:     "pending",
+	}
+
+	return logID, a.db.Create(entry).Error
+}
+
+// GetSkillByName 根据名称加载 Skill（公开方法，包装 LoadSkill）
+func (a *SkillAssembler) GetSkillByName(name string) (*models.Skill, error) {
+	return a.LoadSkill(name)
 }
 
 // ClearCache 清除缓存

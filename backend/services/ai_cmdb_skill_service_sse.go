@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"log"
@@ -207,16 +208,41 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 	RecordAICallDuration("form_generation", "total", totalTimer.ElapsedMs())
 	IncAICallCount("form_generation", "success")
 
-	if err := s.skillAssembler.LogSkillUsage(
-		assembleResult.UsedSkillIDs,
-		"form_generation",
-		workspaceID,
-		userID,
-		&moduleID,
-		aiConfig.ModelID,
-		executionTimeMs,
-	); err != nil {
+	// Build input/output snapshots
+	inputSnapshot, _ := json.Marshal(map[string]interface{}{
+		"user_description": userDescription,
+		"module_id":        moduleID,
+		"workspace_id":     workspaceID,
+		"use_cmdb":         cmdbData != "",
+	})
+	outputSnapshot, _ := json.Marshal(response)
+
+	// Load task skill content for content hash
+	var taskSkillName, taskSkillContent string
+	if composition.TaskSkill != "" {
+		taskSkillName = composition.TaskSkill
+		if taskSkill, err := s.skillAssembler.GetSkillByName(composition.TaskSkill); err == nil && taskSkill != nil {
+			taskSkillContent = taskSkill.Content
+		}
+	}
+
+	logID, err := s.skillAssembler.LogSkillUsage(LogSkillUsageParams{
+		SkillIDs:         assembleResult.UsedSkillIDs,
+		Capability:       "form_generation",
+		WorkspaceID:      workspaceID,
+		UserID:           userID,
+		ModuleID:         &moduleID,
+		AIModel:          aiConfig.ModelID,
+		ExecutionTimeMs:  executionTimeMs,
+		InputSnapshot:    json.RawMessage(inputSnapshot),
+		OutputSnapshot:   json.RawMessage(outputSnapshot),
+		TaskSkillName:    taskSkillName,
+		TaskSkillContent: taskSkillContent,
+	})
+	if err != nil {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
+	} else {
+		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
 	}
 
 	log.Printf("[AICMDBSkillService] ========== Skill 模式配置生成完成 ==========")
@@ -627,16 +653,41 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 	RecordAICallDuration("form_generation_optimized", "total", totalTimer.ElapsedMs())
 	IncAICallCount("form_generation_optimized", "success")
 
-	if err := s.skillAssembler.LogSkillUsage(
-		assembleResult.UsedSkillIDs,
-		"form_generation",
-		workspaceID,
-		userID,
-		&moduleID,
-		aiConfig.ModelID,
-		executionTimeMs,
-	); err != nil {
+	// Build input/output snapshots
+	inputSnapshotOpt, _ := json.Marshal(map[string]interface{}{
+		"user_description": userDescription,
+		"module_id":        moduleID,
+		"workspace_id":     workspaceID,
+		"use_cmdb":         cmdbData != "",
+	})
+	outputSnapshotOpt, _ := json.Marshal(response)
+
+	// Load task skill content for content hash
+	var taskSkillNameOpt, taskSkillContentOpt string
+	if composition.TaskSkill != "" {
+		taskSkillNameOpt = composition.TaskSkill
+		if taskSkill, err := s.skillAssembler.GetSkillByName(composition.TaskSkill); err == nil && taskSkill != nil {
+			taskSkillContentOpt = taskSkill.Content
+		}
+	}
+
+	logID, err := s.skillAssembler.LogSkillUsage(LogSkillUsageParams{
+		SkillIDs:         assembleResult.UsedSkillIDs,
+		Capability:       "form_generation",
+		WorkspaceID:      workspaceID,
+		UserID:           userID,
+		ModuleID:         &moduleID,
+		AIModel:          aiConfig.ModelID,
+		ExecutionTimeMs:  executionTimeMs,
+		InputSnapshot:    json.RawMessage(inputSnapshotOpt),
+		OutputSnapshot:   json.RawMessage(outputSnapshotOpt),
+		TaskSkillName:    taskSkillNameOpt,
+		TaskSkillContent: taskSkillContentOpt,
+	})
+	if err != nil {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
+	} else {
+		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
 	}
 
 	log.Printf("[AICMDBSkillService] ========== 优化版配置生成完成 ==========")

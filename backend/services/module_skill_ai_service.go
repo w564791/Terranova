@@ -82,15 +82,19 @@ func (s *ModuleSkillAIService) GenerateModuleSkillContent(module *models.Module,
 	executionTime := int(time.Since(startTime).Milliseconds())
 
 	// 6. 记录使用日志
-	if err := s.skillAssembler.LogSkillUsage(
-		assembleResult.UsedSkillIDs,
-		"module_skill_generation",
-		"",
-		"system",
-		&module.ID,
-		aiConfig.ModelID,
-		executionTime,
-	); err != nil {
+	if _, err := s.skillAssembler.LogSkillUsage(LogSkillUsageParams{
+		SkillIDs:         assembleResult.UsedSkillIDs,
+		Capability:       "module_skill_generation",
+		WorkspaceID:      "",
+		UserID:           "system",
+		ModuleID:         &module.ID,
+		AIModel:          aiConfig.ModelID,
+		ExecutionTimeMs:  executionTime,
+		InputSnapshot:    json.RawMessage("null"),
+		OutputSnapshot:   json.RawMessage("null"),
+		TaskSkillName:    "",
+		TaskSkillContent: "",
+	}); err != nil {
 		log.Printf("[ModuleSkillAIService] 记录使用日志失败: %v", err)
 	}
 
