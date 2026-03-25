@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../store';
 import { logout } from '../store/slices/authSlice';
+import FeedbackBanner from './FeedbackBanner';
 import { authService } from '../services/auth';
 import MotivationalQuote from './MotivationalQuote';
 import NoPermission from '../pages/NoPermission';
@@ -353,6 +354,7 @@ const Layout: React.FC = () => {
             <Outlet />
           </div>
         </div>
+        <FeedbackBanner />
       </main>
     </div>
   );

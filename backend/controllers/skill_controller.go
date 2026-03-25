@@ -691,3 +691,64 @@ func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 	c.db.Model(&usageLog).Updates(updates)
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok", "usage_log_id": usageLog.ID})
 }
+
+// GetPendingFeedback 获取当前用户待评分的 usage logs
+// GET /api/v1/ai/skill-usage/pending-feedback
+func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+	if uid == "" {
+		ctx.JSON(http.StatusOK, gin.H{"items": []interface{}{}})
+		return
+	}
+
+	type pendingItem struct {
+		ID         string `json:"id"`
+		Capability string `json:"capability"`
+		UserAction string `json:"user_action"`
+		CreatedAt  string `json:"created_at"`
+	}
+
+	var items []pendingItem
+	c.db.Raw(`
+		SELECT id, capability, user_action, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at
+		FROM skill_usage_logs
+		WHERE user_id = ?
+		  AND user_action IS NOT NULL
+		  AND user_feedback IS NULL
+		  AND created_at > NOW() - INTERVAL '24 hours'
+		ORDER BY created_at DESC
+		LIMIT 5
+	`, uid).Scan(&items)
+
+	if items == nil {
+		items = []pendingItem{}
+	}
+	ctx.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// SubmitFeedback 提交评分（通过 usage_log_id）
+// PUT /api/v1/ai/skill-usage/:id/feedback
+func (c *SkillController) SubmitFeedback(ctx *gin.Context) {
+	logID := ctx.Param("id")
+	var req struct {
+		Feedback int `json:"feedback" binding:"required,min=1,max=5"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+
+	result := c.db.Model(&models.SkillUsageLog{}).
+		Where("id = ? AND user_id = ?", logID, uid).
+		Update("user_feedback", req.Feedback)
+
+	if result.RowsAffected == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found or not owned by you"})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
+}

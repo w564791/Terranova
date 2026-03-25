@@ -117,6 +117,21 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			}),
 			skillController.UpdateSkillUsageByCapability,
 		)
+		ai.GET("/skill-usage/pending-feedback",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.GetPendingFeedback,
+		)
+		ai.PUT("/skill-usage/:id/feedback",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.SubmitFeedback,
+		)
 
 		// Embedding 相关路由
 		// 初始化 embedding worker（如果还没有初始化）
