@@ -479,23 +479,37 @@ export async function reportSkillUsageFeedback(
 }
 
 // Report user action by capability + context (for plan_summary etc.)
-// Returns usage_log_id if successful (for subsequent feedback)
 export async function reportSkillUsageByCapability(
   capability: string,
   action: 'accepted' | 'aborted',
-  taskId?: number
-): Promise<string | null> {
+  taskId?: number,
+  feedback?: number
+): Promise<void> {
   try {
-    const res: any = await api.put('/ai/skill-usage/by-capability', {
+    await api.put('/ai/skill-usage/by-capability', {
       capability,
       action,
       task_id: taskId,
+      ...(feedback ? { feedback } : {}),
     });
-    // api interceptor returns response.data directly, so res = { status: "ok", usage_log_id: "xxx" }
-    const logId = res?.usage_log_id || res?.data?.usage_log_id || null;
-    return logId;
   } catch (error) {
     console.warn('[AI] Failed to report usage by capability:', error);
-    return null;
+  }
+}
+
+// Report feedback by capability (separate call, no action)
+export async function reportFeedbackByCapability(
+  capability: string,
+  feedback: number,
+  taskId?: number
+): Promise<void> {
+  try {
+    await api.put('/ai/skill-usage/by-capability', {
+      capability,
+      feedback,
+      task_id: taskId,
+    });
+  } catch (error) {
+    console.warn('[AI] Failed to report feedback by capability:', error);
   }
 }

@@ -5,7 +5,7 @@ import {
   confirmPlanSummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
-import { reportSkillUsageByCapability, reportSkillUsageFeedback } from '../services/aiForm';
+import { reportSkillUsageByCapability, reportFeedbackByCapability } from '../services/aiForm';
 import { notification } from 'antd';
 import styles from './ExecuteSummary.module.css';
 
@@ -449,9 +449,9 @@ const DecisionConfirmation: React.FC<{
     );
   }
 
-  const showFeedback = (logId: string) => {
+  const showFeedback = (tid: number) => {
     const stars = ['😞', '😕', '😐', '🙂', '😊'];
-    const key = `feedback-${logId}`;
+    const key = `feedback-plan-${tid}`;
     notification.info({
       key,
       message: 'AI 分析质量如何？',
@@ -467,7 +467,7 @@ const DecisionConfirmation: React.FC<{
             onMouseEnter: (e: React.MouseEvent) => { (e.target as HTMLElement).style.transform = 'scale(1.3)'; },
             onMouseLeave: (e: React.MouseEvent) => { (e.target as HTMLElement).style.transform = 'scale(1)'; },
             onClick: () => {
-              reportSkillUsageFeedback(logId, i + 1);
+              reportFeedbackByCapability('plan_summary', i + 1, tid);
               notification.destroy(key);
               notification.success({ message: `感谢评分：${emoji} (${i + 1}/5)`, duration: 3, placement: 'bottomRight' });
             },
@@ -484,9 +484,8 @@ const DecisionConfirmation: React.FC<{
       setError('');
       const decisionCode = Array.from(checkedCodes).join(',');
       await confirmPlanSummary(workspaceId, taskId, decisionCode, note);
-      // 先弹评分，再触发 onConfirmed（避免组件卸载导致通知丢失）
-      const logId = await reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
-      if (logId) showFeedback(logId);
+      reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
+      showFeedback(taskId);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');
@@ -500,8 +499,8 @@ const DecisionConfirmation: React.FC<{
       setSubmitting(true);
       setError('');
       await confirmPlanSummary(workspaceId, taskId, 'ABORT', note);
-      const logId = await reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
-      if (logId) showFeedback(logId);
+      reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
+      showFeedback(taskId);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');
