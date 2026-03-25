@@ -713,7 +713,7 @@ func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 	c.db.Raw(`
 		SELECT id, capability, user_action, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at
 		FROM skill_usage_logs
-		WHERE user_id = ?
+		WHERE user_id IN (?, 'system')
 		  AND user_action IS NOT NULL
 		  AND user_feedback IS NULL
 		  AND created_at > NOW() - INTERVAL '24 hours'
@@ -743,7 +743,7 @@ func (c *SkillController) SubmitFeedback(ctx *gin.Context) {
 	uid, _ := userID.(string)
 
 	result := c.db.Model(&models.SkillUsageLog{}).
-		Where("id = ? AND user_id = ?", logID, uid).
+		Where("id = ? AND user_id IN (?, 'system')", logID, uid).
 		Update("user_feedback", req.Feedback)
 
 	if result.RowsAffected == 0 {
