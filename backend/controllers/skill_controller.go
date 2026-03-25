@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 	"net/http"
@@ -644,4 +645,49 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// UpdateSkillUsageByCapability 按 capability + 关联 ID 更新 user_action / feedback
+// PUT /api/v1/ai/skill-usage/by-capability
+// 用于 plan_summary 等无法在前端获取 usage_log_id 的场景
+func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
+	var req struct {
+		Capability string `json:"capability" binding:"required"`
+		TaskID     *uint  `json:"task_id,omitempty"`
+		Action     string `json:"action,omitempty" binding:"omitempty,oneof=accepted modified aborted"`
+		Feedback   *int   `json:"feedback,omitempty" binding:"omitempty,min=1,max=5"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Action == "" && req.Feedback == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "action or feedback is required"})
+		return
+	}
+
+	// 根据 capability + 关联条件查找最近的 usage log
+	query := c.db.Model(&models.SkillUsageLog{}).Where("capability = ?", req.Capability)
+	if req.TaskID != nil {
+		// task_id 存在于 input_snapshot JSON 中
+		query = query.Where("input_snapshot->>'task_id' = ?", fmt.Sprintf("%d", *req.TaskID))
+	}
+
+	var usageLog models.SkillUsageLog
+	if err := query.Order("created_at DESC").First(&usageLog).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Action != "" {
+		updates["user_action"] = req.Action
+	}
+	if req.Feedback != nil {
+		updates["user_feedback"] = *req.Feedback
+	}
+
+	c.db.Model(&usageLog).Updates(updates)
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok", "usage_log_id": usageLog.ID})
 }

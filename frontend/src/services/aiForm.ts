@@ -477,3 +477,20 @@ export async function reportSkillUsageFeedback(
     console.warn('[AI] Failed to report usage feedback:', error);
   }
 }
+
+// Report user action by capability + context (for plan_summary etc.)
+export async function reportSkillUsageByCapability(
+  capability: string,
+  action: 'accepted' | 'aborted',
+  taskId?: number
+): Promise<void> {
+  try {
+    await api.put('/ai/skill-usage/by-capability', {
+      capability,
+      action,
+      task_id: taskId,
+    });
+  } catch (error) {
+    console.warn('[AI] Failed to report usage by capability:', error);
+  }
+}

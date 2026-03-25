@@ -110,6 +110,13 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			}),
 			skillController.UpdateSkillUsageAction,
 		)
+		ai.PUT("/skill-usage/by-capability",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.UpdateSkillUsageByCapability,
+		)
 
 		// Embedding 相关路由
 		// 初始化 embedding worker（如果还没有初始化）
