@@ -22,6 +22,45 @@ func ComputeContentHash(content string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// sanitizeSnapshot 对 JSON 快照中的敏感字段进行脱敏
+// 复用 provider_template_service.go 中的 isSensitiveKey 判断
+func sanitizeSnapshot(data json.RawMessage) json.RawMessage {
+	if len(data) == 0 {
+		return data
+	}
+	var obj interface{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return data // 非 JSON 原样返回
+	}
+	sanitized := sanitizeValue(obj)
+	result, err := json.Marshal(sanitized)
+	if err != nil {
+		return data
+	}
+	return result
+}
+
+func sanitizeValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		for k, child := range val {
+			if isSensitiveKey(k) {
+				val[k] = "***REDACTED***"
+			} else {
+				val[k] = sanitizeValue(child)
+			}
+		}
+		return val
+	case []interface{}:
+		for i, child := range val {
+			val[i] = sanitizeValue(child)
+		}
+		return val
+	default:
+		return v
+	}
+}
+
 // LogSkillUsageParams LogSkillUsage 的参数
 type LogSkillUsageParams struct {
 	SkillIDs         []string
@@ -708,13 +747,15 @@ func (a *SkillAssembler) LogSkillUsage(params LogSkillUsageParams) (string, erro
 		}
 	}
 
-	// 构建快照指针
+	// 脱敏后构建快照指针
+	sanitizedInput := sanitizeSnapshot(params.InputSnapshot)
+	sanitizedOutput := sanitizeSnapshot(params.OutputSnapshot)
 	var inputSnap, outputSnap *json.RawMessage
-	if len(params.InputSnapshot) > 0 {
-		inputSnap = &params.InputSnapshot
+	if len(sanitizedInput) > 0 {
+		inputSnap = &sanitizedInput
 	}
-	if len(params.OutputSnapshot) > 0 {
-		outputSnap = &params.OutputSnapshot
+	if len(sanitizedOutput) > 0 {
+		outputSnap = &sanitizedOutput
 	}
 
 	latency := params.ExecutionTimeMs

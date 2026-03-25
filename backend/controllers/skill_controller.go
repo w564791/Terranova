@@ -592,15 +592,25 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 		return
 	}
 
+	// 校验用户权限：只能更新自己的 usage log
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+
+	var log models.SkillUsageLog
+	if err := c.db.First(&log, "id = ?", logID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+		return
+	}
+	if uid != "" && log.UserID != uid {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's action"})
+		return
+	}
+
 	updates := map[string]interface{}{"user_action": req.Action}
 	if req.ModificationDiff != nil && req.Action == "modified" {
 		updates["user_modification_diff"] = *req.ModificationDiff
 	}
 
-	result := c.db.Model(&models.SkillUsageLog{}).Where("id = ?", logID).Updates(updates)
-	if result.RowsAffected == 0 {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
-		return
-	}
+	c.db.Model(&log).Updates(updates)
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
