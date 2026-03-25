@@ -14969,6 +14969,15 @@ SELECT 18, service_type, aws_region, model_id, true,
 FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
 ON CONFLICT (id) DO NOTHING;
 
+-- Skill quality evaluation Skills (Layer 2 + Layer 3 prompt templates)
+INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
+VALUES ('skill-quality-rule-eval', 'skill_quality_rule_evaluation', 'Skill 质量 - 规则一致性评估', '对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则', 'task', 'Layer 2 rule evaluation prompt - see migration SQL for full content', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","rule"]}', 'system', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
+VALUES ('skill-quality-semantic-eval', 'skill_quality_semantic_evaluation', 'Skill 质量 - 语义质量评估', '评估 AI 输出的表述质量、信息量和用户可读性', 'task', 'Layer 3 semantic evaluation prompt - see migration SQL for full content', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","semantic"]}', 'system', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
 -- PostgreSQL database dump complete
 --
 
