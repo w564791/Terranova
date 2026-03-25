@@ -17,23 +17,40 @@ const capabilityLabels: Record<string, string> = {
 
 const stars = ['😞', '😕', '😐', '🙂', '😊'];
 
+// 记住已跳过的 ID，避免轮询再弹出
+const DISMISSED_KEY = 'skill_feedback_dismissed';
+function getDismissed(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]'));
+  } catch { return new Set(); }
+}
+function addDismissed(id: string) {
+  const set = getDismissed();
+  set.add(id);
+  // 只保留最近 50 个
+  const arr = [...set].slice(-50);
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify(arr));
+}
+
 const FeedbackBanner: React.FC = () => {
-  const [items, setItems] = useState<PendingItem[]>([]);
+  const [item, setItem] = useState<PendingItem | null>(null);
 
   const loadPending = useCallback(async () => {
-    // 未登录时不请求
     if (!localStorage.getItem('token')) return;
     try {
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
-      setItems(res?.items || []);
+      const all: PendingItem[] = res?.items || [];
+      const dismissed = getDismissed();
+      // 只取第一个未跳过的
+      const next = all.find(i => !dismissed.has(i.id)) || null;
+      setItem(next);
     } catch {
-      // silent - 401 or other errors
+      // silent
     }
   }, []);
 
   useEffect(() => {
     loadPending();
-    // 每 60 秒轮询一次
     const timer = setInterval(loadPending, 60000);
     return () => clearInterval(timer);
   }, [loadPending]);
@@ -44,14 +61,19 @@ const FeedbackBanner: React.FC = () => {
     } catch {
       // silent
     }
-    setItems(prev => prev.filter(item => item.id !== id));
+    addDismissed(id);
+    setItem(null);
+    // 加载下一个
+    setTimeout(loadPending, 500);
   };
 
   const dismiss = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+    addDismissed(id);
+    setItem(null);
+    setTimeout(loadPending, 500);
   };
 
-  if (items.length === 0) return null;
+  if (!item) return null;
 
   return (
     <div style={{
@@ -59,50 +81,45 @@ const FeedbackBanner: React.FC = () => {
       bottom: 16,
       right: 16,
       zIndex: 1050,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-      maxWidth: 360,
+      maxWidth: 340,
     }}>
-      {items.map(item => (
-        <div key={item.id} style={{
-          background: '#fff',
-          borderRadius: 8,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-          padding: '14px 16px',
-          border: '1px solid #e8e8e8',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>
-              {capabilityLabels[item.capability] || item.capability} 质量如何？
-            </span>
-            <span
-              onClick={() => dismiss(item.id)}
-              style={{ cursor: 'pointer', color: '#8c8c8c', fontSize: 16, lineHeight: 1 }}
-              title="跳过"
-            >×</span>
-          </div>
-          <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 10 }}>
-            {item.created_at} · {item.user_action === 'accepted' ? '已应用' : '已终止'}
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            {stars.map((emoji, i) => (
-              <span
-                key={i}
-                onClick={() => submitFeedback(item.id, i + 1)}
-                title={`${i + 1} 分`}
-                style={{
-                  cursor: 'pointer',
-                  fontSize: 26,
-                  transition: 'transform 0.15s',
-                }}
-                onMouseEnter={e => { (e.target as HTMLElement).style.transform = 'scale(1.3)'; }}
-                onMouseLeave={e => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
-              >{emoji}</span>
-            ))}
-          </div>
+      <div style={{
+        background: '#fff',
+        borderRadius: 8,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+        padding: '14px 16px',
+        border: '1px solid #e8e8e8',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>
+            {capabilityLabels[item.capability] || item.capability} 质量如何？
+          </span>
+          <span
+            onClick={() => dismiss(item.id)}
+            style={{ cursor: 'pointer', color: '#8c8c8c', fontSize: 16, lineHeight: 1 }}
+            title="跳过"
+          >×</span>
         </div>
-      ))}
+        <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 10 }}>
+          {item.created_at} · {item.user_action === 'accepted' ? '已应用' : '已终止'}
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+          {stars.map((emoji, i) => (
+            <span
+              key={i}
+              onClick={() => submitFeedback(item.id, i + 1)}
+              title={`${i + 1} 分`}
+              style={{
+                cursor: 'pointer',
+                fontSize: 26,
+                transition: 'transform 0.15s',
+              }}
+              onMouseEnter={e => { (e.target as HTMLElement).style.transform = 'scale(1.3)'; }}
+              onMouseLeave={e => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
+            >{emoji}</span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
