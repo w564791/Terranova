@@ -68,10 +68,17 @@ const SkillQualityDashboard: React.FC = () => {
 
   // Local state for immediate UI response, URL for persistence
   const [days, setDaysLocal] = useState(() => Number(searchParams.get('days')) || 7);
+  const [activeSubTab, setActiveSubTabLocal] = useState(() => searchParams.get('subtab') || 'overview');
   const setDays = (d: number) => {
     setDaysLocal(d);
     const p = new URLSearchParams(searchParams);
     p.set('days', String(d));
+    setSearchParams(p, { replace: true });
+  };
+  const setActiveSubTab = (key: string) => {
+    setActiveSubTabLocal(key);
+    const p = new URLSearchParams(searchParams);
+    p.set('subtab', key);
     setSearchParams(p, { replace: true });
   };
 
@@ -264,14 +271,6 @@ const SkillQualityDashboard: React.FC = () => {
 
   // Violation max
   const violationMax = violations.length > 0 ? violations[0].count : 1;
-
-  const [activeSubTab, setActiveSubTabLocal] = useState(() => searchParams.get('subtab') || 'overview');
-  const setActiveSubTab = (key: string) => {
-    setActiveSubTabLocal(key);
-    const p = new URLSearchParams(searchParams);
-    p.set('subtab', key);
-    setSearchParams(p, { replace: true });
-  };
 
   return (
     <div className={styles.container}>
