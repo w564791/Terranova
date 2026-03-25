@@ -272,6 +272,7 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkillSSE(ctx *gin.Context)
 			Config:         response.Config,
 			ElapsedMs:      time.Since(startTime).Milliseconds(),
 			CompletedSteps: lastCompletedSteps, // 包含所有已完成步骤的耗时
+			UsageLogID:     response.UsageLogID,
 		})
 	}
 

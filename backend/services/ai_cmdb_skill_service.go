@@ -280,6 +280,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
 	} else {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
+		response.UsageLogID = logID
 		if s.assessmentWorker != nil {
 			s.assessmentWorker.Submit(logID, taskSkillName)
 		}
@@ -1800,6 +1801,7 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkills(
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
 	} else {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
+		response.UsageLogID = logID
 		if s.assessmentWorker != nil {
 			s.assessmentWorker.Submit(logID, taskSkillNameOpt)
 		}
