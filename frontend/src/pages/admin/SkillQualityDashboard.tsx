@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Progress, Segmented, Spin, Empty, Tooltip } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Table, Tag, Segmented, Spin, Empty, Tooltip } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { getAssessmentOverview, AssessmentOverview, CapabilityStats, RecentFailure, DailyTrendItem } from '../../services/skillAssessment';
@@ -21,6 +21,43 @@ const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
   </span>
 );
 
+/* ------------------------------------------------------------------ */
+/* Violation distribution: parse from recent_failures                  */
+/* ------------------------------------------------------------------ */
+interface ViolationEntry {
+  label: string;
+  count: number;
+  color: string;
+}
+
+function buildViolations(failures: RecentFailure[] | undefined): ViolationEntry[] {
+  if (!failures || failures.length === 0) return [];
+  const counts: Record<string, { count: number; type: 'missing' | 'enum' }> = {};
+  for (const f of failures) {
+    for (const mf of f.missing_fields || []) {
+      const key = `缺失字段: ${mf}`;
+      if (!counts[key]) counts[key] = { count: 0, type: 'missing' };
+      counts[key].count++;
+    }
+    for (const ie of f.invalid_enum_fields || []) {
+      const key = `枚举无效: ${ie}`;
+      if (!counts[key]) counts[key] = { count: 0, type: 'enum' };
+      counts[key].count++;
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([label, { count, type }]) => ({
+      label,
+      count,
+      color: type === 'missing' ? '#ff4d4f' : '#fa8c16',
+    }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Main component                                                      */
+/* ------------------------------------------------------------------ */
 const SkillQualityDashboard: React.FC = () => {
   const [data, setData] = useState<AssessmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +79,9 @@ const SkillQualityDashboard: React.FC = () => {
     }
   };
 
+  const violations = useMemo(() => buildViolations(data?.recent_failures), [data?.recent_failures]);
+
+  /* ---------- Capability table columns ---------- */
   const capabilityColumns: ColumnsType<CapabilityStats> = [
     {
       title: <ColTitle title="Capability" tip="AI 能力类型：form_generation（配置生成）、plan_summary（Plan 分析）、apply_summary（Apply 分析）、module_skill_generation（Skill 自动生成）" />,
@@ -109,6 +149,7 @@ const SkillQualityDashboard: React.FC = () => {
     },
   ];
 
+  /* ---------- Recent failures table columns ---------- */
   const failureColumns: ColumnsType<RecentFailure> = [
     {
       title: <ColTitle title="时间" tip="评估完成的时间" />,
@@ -174,50 +215,7 @@ const SkillQualityDashboard: React.FC = () => {
     },
   ];
 
-  const trendColumns: ColumnsType<DailyTrendItem> = [
-    {
-      title: '日期',
-      dataIndex: 'date',
-      key: 'date',
-    },
-    {
-      title: <ColTitle title="Pass" tip="当天 Schema 校验通过的次数" />,
-      dataIndex: 'pass',
-      key: 'pass',
-      render: (val: number) => <span style={{ color: '#52c41a' }}>{val}</span>,
-    },
-    {
-      title: <ColTitle title="Fail" tip="当天 Schema 校验失败的次数" />,
-      dataIndex: 'fail',
-      key: 'fail',
-      render: (val: number) => <span style={{ color: val > 0 ? '#ff4d4f' : undefined }}>{val}</span>,
-    },
-    {
-      title: 'Warn',
-      dataIndex: 'warn',
-      key: 'warn',
-      render: (val: number) => <span style={{ color: val > 0 ? '#faad14' : undefined }}>{val}</span>,
-    },
-    {
-      title: 'Total',
-      key: 'total',
-      render: (_: unknown, record: DailyTrendItem) => record.pass + record.fail + record.warn,
-    },
-    {
-      title: <ColTitle title="通过率" tip="当天 Pass / Total 百分比" />,
-      key: 'pass_rate',
-      render: (_: unknown, record: DailyTrendItem) => {
-        const total = record.pass + record.fail + record.warn;
-        if (total === 0) return '-';
-        const rate = (record.pass / total) * 100;
-        let color = '#52c41a';
-        if (rate < 50) color = '#ff4d4f';
-        else if (rate < 80) color = '#faad14';
-        return <span style={{ color, fontWeight: 600 }}>{rate.toFixed(1)}%</span>;
-      },
-    },
-  ];
-
+  /* ---------- Loading / empty states ---------- */
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 0' }}>
@@ -230,11 +228,30 @@ const SkillQualityDashboard: React.FC = () => {
     return <Empty description="暂无评估数据" />;
   }
 
+  /* ---------- Derived values ---------- */
   const totalAssessed = data.total_pass + data.total_fail + data.total_warn;
-  const passPercent = totalAssessed > 0 ? Math.round((data.total_pass / totalAssessed) * 100) : 0;
-  const failPercent = totalAssessed > 0 ? Math.round((data.total_fail / totalAssessed) * 100) : 0;
-  const warnPercent = totalAssessed > 0 ? Math.round((data.total_warn / totalAssessed) * 100) : 0;
-  const coverage = data.total_logs > 0 ? ((data.assessed_logs / data.total_logs) * 100).toFixed(1) : '0';
+  const passRate = totalAssessed > 0 ? (data.total_pass / totalAssessed) * 100 : 0;
+  const coverage = data.total_logs > 0 ? ((data.assessed_logs / data.total_logs) * 100) : 0;
+
+  // Donut angles
+  const passDeg = totalAssessed > 0 ? (data.total_pass / totalAssessed) * 360 : 0;
+  const failDeg = totalAssessed > 0 ? (data.total_fail / totalAssessed) * 360 : 0;
+  const donutGradient = totalAssessed > 0
+    ? `conic-gradient(#52c41a 0deg ${passDeg}deg, #ff4d4f ${passDeg}deg ${passDeg + failDeg}deg, #fa8c16 ${passDeg + failDeg}deg 360deg)`
+    : '#f0f0f0';
+
+  // Bar chart scaling
+  const trendData = data.daily_trend || [];
+  const maxBar = Math.max(...trendData.map(d => d.pass + d.fail + d.warn), 1);
+  const barHeight = 170; // px available for bars
+
+  // Alert summary
+  const hasSchemaErrorRate = (data.by_capability || []).some(c => c.total > 0 && c.fail / c.total > 0.1);
+  const hasHighRisk = (data.high_risk_skills?.length || 0) > 0;
+  const pendingBacklog = data.total_logs - data.assessed_logs;
+
+  // Violation max
+  const violationMax = violations.length > 0 ? violations[0].count : 1;
 
   return (
     <div className={styles.container}>
@@ -246,105 +263,220 @@ const SkillQualityDashboard: React.FC = () => {
         />
       </div>
 
-      <Row gutter={16} className={styles.kpiRow}>
-        <Col span={5}>
-          <Card size="small">
-            <Statistic
-              title={<ColTitle title="Schema 通过率" tip="Layer 1 纯代码校验的通过率，检查输出 JSON 结构是否符合预期（必填字段、枚举值）" />}
-              value={data.pass_rate}
-              precision={1}
-              suffix="%"
-              valueStyle={{ color: data.pass_rate >= 80 ? '#52c41a' : data.pass_rate >= 50 ? '#faad14' : '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card size="small">
-            <Statistic
-              title={<ColTitle title="评估覆盖率" tip="已完成评估的记录占总记录的百分比，100% 表示所有 Skill 调用都已评估" />}
-              value={parseFloat(coverage)}
-              precision={1}
-              suffix="%"
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card size="small">
-            <Statistic
-              title={<ColTitle title="活跃 Skill 数" tip="该时间范围内有调用记录的不同 Capability 数量" />}
-              value={data.active_skills}
-            />
-          </Card>
-        </Col>
-        <Col span={5}>
-          <Card size="small">
-            <Statistic
-              title={<ColTitle title="高风险 Skill" tip="Schema 校验 fail 率超过 20% 的 Capability 数量" />}
-              value={data.high_risk_skills ? data.high_risk_skills.length : 0}
-              valueStyle={{ color: (data.high_risk_skills?.length || 0) > 0 ? '#cf1322' : undefined }}
-            />
-            {data.high_risk_skills && data.high_risk_skills.length > 0 && (
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
-                {data.high_risk_skills.join(', ')}
+      {/* ===================== KPI Row ===================== */}
+      <div className={styles.kpiGrid}>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="Schema 通过率" tip="Layer 1 纯代码校验的通过率，检查输出 JSON 结构是否符合预期（必填字段、枚举值）" />
+          </div>
+          <div className={styles.statValue} style={{ color: data.pass_rate >= 80 ? '#52c41a' : data.pass_rate >= 50 ? '#faad14' : '#ff4d4f' }}>
+            {data.pass_rate.toFixed(1)}%
+          </div>
+          <div className={styles.statSub}>Pass {data.total_pass} / Total {totalAssessed}</div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="评估覆盖率" tip="已完成评估的记录占总记录的百分比，100% 表示所有 Skill 调用都已评估" />
+          </div>
+          <div className={styles.statValue} style={{ color: '#1677ff' }}>
+            {coverage.toFixed(1)}%
+          </div>
+          <div className={styles.statSub}>{data.assessed_logs} / {data.total_logs} 条记录</div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="活跃 Skill 数" tip="该时间范围内有调用记录的不同 Capability 数量" />
+          </div>
+          <div className={styles.statValue} style={{ color: '#262626' }}>
+            {data.active_skills}
+          </div>
+          <div className={styles.statSub}>Capability 类型</div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="高风险 Skill" tip="Schema 校验 fail 率超过 20% 的 Capability 数量" />
+          </div>
+          <div className={styles.statValue} style={{ color: (data.high_risk_skills?.length || 0) > 0 ? '#ff4d4f' : '#52c41a' }}>
+            {data.high_risk_skills ? data.high_risk_skills.length : 0}
+          </div>
+          {data.high_risk_skills && data.high_risk_skills.length > 0 && (
+            <div className={styles.statSub}>{data.high_risk_skills.join(', ')}</div>
+          )}
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="总评估数" tip="该时间范围内完成的 Schema 校验总次数" />
+          </div>
+          <div className={styles.statValue} style={{ color: '#262626' }}>
+            {totalAssessed}
+          </div>
+          <div className={styles.statSub}>Pass {data.total_pass} / Fail {data.total_fail} / Warn {data.total_warn}</div>
+        </div>
+      </div>
+
+      {/* ===================== Two-column: Donut + Alert Summary ===================== */}
+      <div className={styles.twoCol}>
+        {/* Evaluation Distribution — Donut */}
+        <div className={styles.sectionCard}>
+          <div className={styles.sectionTitle}>
+            <ColTitle title="评估结果分布" tip="Pass/Fail/Warn 的数量和占比" />
+          </div>
+          <div className={styles.donutWrap}>
+            <div
+              className={styles.donut}
+              style={{ background: donutGradient }}
+            >
+              <div className={styles.donutCenter}>
+                <span className={styles.donutRate}>{passRate.toFixed(0)}%</span>
+                <span className={styles.donutRateLabel}>通过率</span>
               </div>
-            )}
-          </Card>
-        </Col>
-        <Col span={4}>
-          <Card size="small">
-            <Statistic
-              title={<ColTitle title="总评估数" tip="该时间范围内完成的 Schema 校验总次数" />}
-              value={totalAssessed}
-            />
-          </Card>
-        </Col>
-      </Row>
+            </div>
+            <div className={styles.legend}>
+              <div className={styles.legendItem}>
+                <span className={styles.legendDot} style={{ background: '#52c41a' }} />
+                Pass <span className={styles.legendValue}>{data.total_pass}</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendDot} style={{ background: '#ff4d4f' }} />
+                Fail <span className={styles.legendValue}>{data.total_fail}</span>
+              </div>
+              <div className={styles.legendItem}>
+                <span className={styles.legendDot} style={{ background: '#fa8c16' }} />
+                Warn <span className={styles.legendValue}>{data.total_warn}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <Row gutter={16}>
-        <Col span={14}>
-          <Card title={<ColTitle title="各 Capability 通过率" tip="按 AI 能力类型分组的 Schema 校验统计，包含通过率、平均分和平均耗时" />} className={styles.card}>
-            <Table
-              columns={capabilityColumns}
-              dataSource={data.by_capability}
-              pagination={false}
-              size="small"
-              rowKey="capability"
-            />
-          </Card>
-        </Col>
-        <Col span={10}>
-          <Card title={<ColTitle title="评估结果分布" tip="Pass/Fail/Warn 的数量和占比" />} className={styles.card}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ marginBottom: 4, fontSize: 13 }}>Pass <span style={{ color: '#8c8c8c' }}>({data.total_pass})</span></div>
-              <Progress percent={passPercent} strokeColor="#52c41a" format={(pct) => `${pct}%`} />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ marginBottom: 4, fontSize: 13 }}>Fail <span style={{ color: '#8c8c8c' }}>({data.total_fail})</span></div>
-              <Progress percent={failPercent} strokeColor="#ff4d4f" format={(pct) => `${pct}%`} />
-            </div>
-            <div>
-              <div style={{ marginBottom: 4, fontSize: 13 }}>Warn <span style={{ color: '#8c8c8c' }}>({data.total_warn})</span></div>
-              <Progress percent={warnPercent} strokeColor="#faad14" format={(pct) => `${pct}%`} />
-            </div>
-          </Card>
-        </Col>
-      </Row>
+        {/* Alert Summary */}
+        <div className={styles.sectionCard}>
+          <div className={styles.sectionTitle}>
+            <ColTitle title="告警摘要" tip="基于当前数据自动生成的告警指标" />
+          </div>
+          <div className={`${styles.alertRow} ${hasSchemaErrorRate ? styles.alertP1 : ''}`} style={!hasSchemaErrorRate ? { borderColor: '#d9d9d9', background: '#fafafa' } : undefined}>
+            <span className={styles.alertLabel}>Schema 错误率</span>
+            {hasSchemaErrorRate
+              ? <span className={`${styles.alertBadge} ${styles.alertBadgeP1}`}>P1 告警</span>
+              : <span className={styles.alertOk}>正常</span>
+            }
+          </div>
+          <div className={`${styles.alertRow} ${hasHighRisk ? styles.alertP2 : ''}`} style={!hasHighRisk ? { borderColor: '#d9d9d9', background: '#fafafa' } : undefined}>
+            <span className={styles.alertLabel}>高风险 Skill</span>
+            {hasHighRisk
+              ? <span className={`${styles.alertBadge} ${styles.alertBadgeP2}`}>P2 风险 ({data.high_risk_skills!.length})</span>
+              : <span className={styles.alertOk}>正常</span>
+            }
+          </div>
+          <div className={`${styles.alertRow} ${pendingBacklog > 0 ? styles.alertP3 : ''}`} style={pendingBacklog <= 0 ? { borderColor: '#d9d9d9', background: '#fafafa' } : undefined}>
+            <span className={styles.alertLabel}>评估积压</span>
+            {pendingBacklog > 0
+              ? <span className={`${styles.alertBadge} ${styles.alertBadgeP3}`}>P3 待处理 ({pendingBacklog})</span>
+              : <span className={styles.alertOk}>正常</span>
+            }
+          </div>
+        </div>
+      </div>
 
-      <Card title={<ColTitle title="每日评估趋势" tip="按调用日期聚合的每日 Schema 校验结果统计" />} className={styles.card}>
+      {/* ===================== Capability Table ===================== */}
+      <div className={`${styles.sectionCard} ${styles.tableCard}`}>
+        <div className={styles.sectionTitle}>
+          <ColTitle title="各 Capability 通过率" tip="按 AI 能力类型分组的 Schema 校验统计，包含通过率、平均分和平均耗时" />
+        </div>
         <Table
-          columns={trendColumns}
-          dataSource={data.daily_trend}
+          columns={capabilityColumns}
+          dataSource={data.by_capability}
           pagination={false}
           size="small"
-          rowKey="date"
+          rowKey="capability"
         />
-      </Card>
+      </div>
 
-      <Card
-        title={<ColTitle title="最近失败记录" tip="最近 10 条 Schema 校验失败的记录，显示失败原因和 Skill 版本" />}
-        className={styles.card}
-        extra={data.recent_failures && data.recent_failures.length > 0 ? <Tag color="red">{data.recent_failures.length}</Tag> : null}
-      >
+      {/* ===================== Two-column: Trend bar chart + Violation distribution ===================== */}
+      <div className={styles.twoCol}>
+        {/* Daily Trend — Bar Chart */}
+        <div className={styles.sectionCard}>
+          <div className={styles.sectionTitle}>
+            <ColTitle title="每日评估趋势" tip="按调用日期聚合的每日 Schema 校验结果统计" />
+          </div>
+          {trendData.length > 0 ? (
+            <>
+              <div className={styles.barChart}>
+                {trendData.map((d) => {
+                  const total = d.pass + d.fail + d.warn;
+                  const passH = (d.pass / maxBar) * barHeight;
+                  const failH = (d.fail / maxBar) * barHeight;
+                  const warnH = (d.warn / maxBar) * barHeight;
+                  return (
+                    <Tooltip key={d.date} title={`${d.date}: Pass ${d.pass}, Fail ${d.fail}, Warn ${d.warn}, Total ${total}`}>
+                      <div className={styles.barGroup}>
+                        <div className={styles.bar} style={{ height: warnH, background: '#fa8c16' }} />
+                        <div className={styles.bar} style={{ height: failH, background: '#ff4d4f' }} />
+                        <div className={styles.bar} style={{ height: passH, background: '#52c41a' }} />
+                      </div>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+              <div className={styles.barXAxis}>
+                {trendData.map((d) => (
+                  <span key={d.date} className={styles.barXLabel}>{d.date.slice(5)}</span>
+                ))}
+              </div>
+              <div className={styles.barLegend}>
+                <span className={styles.barLegendItem}>
+                  <span className={styles.barLegendDot} style={{ background: '#52c41a' }} /> Pass
+                </span>
+                <span className={styles.barLegendItem}>
+                  <span className={styles.barLegendDot} style={{ background: '#ff4d4f' }} /> Fail
+                </span>
+                <span className={styles.barLegendItem}>
+                  <span className={styles.barLegendDot} style={{ background: '#fa8c16' }} /> Warn
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className={styles.emptyState}>暂无趋势数据</div>
+          )}
+        </div>
+
+        {/* Violation Distribution — Horizontal Bar Chart */}
+        <div className={styles.sectionCard}>
+          <div className={styles.sectionTitle}>
+            <ColTitle title="违规分布" tip="最近失败记录中最常见的字段缺失和枚举非法问题" />
+          </div>
+          {violations.length > 0 ? (
+            violations.map((v) => (
+              <div key={v.label} className={styles.hbarRow}>
+                <Tooltip title={v.label}>
+                  <span className={styles.hbarLabel}>{v.label}</span>
+                </Tooltip>
+                <div className={styles.hbarTrack}>
+                  <div
+                    className={styles.hbarFill}
+                    style={{ width: `${(v.count / violationMax) * 100}%`, background: v.color }}
+                  />
+                </div>
+                <span className={styles.hbarCount}>{v.count}</span>
+              </div>
+            ))
+          ) : (
+            <div className={styles.emptyState}>无违规记录</div>
+          )}
+        </div>
+      </div>
+
+      {/* ===================== Recent Failures Table ===================== */}
+      <div className={`${styles.sectionCard} ${styles.tableCard}`}>
+        <div className={styles.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ColTitle title="最近失败记录" tip="最近 10 条 Schema 校验失败的记录，显示失败原因和 Skill 版本" />
+          {data.recent_failures && data.recent_failures.length > 0 && (
+            <Tag color="red">{data.recent_failures.length}</Tag>
+          )}
+        </div>
         {data.recent_failures && data.recent_failures.length > 0 ? (
           <Table
             columns={failureColumns}
@@ -356,7 +488,7 @@ const SkillQualityDashboard: React.FC = () => {
         ) : (
           <Empty description="无失败记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
-      </Card>
+      </div>
     </div>
   );
 };
