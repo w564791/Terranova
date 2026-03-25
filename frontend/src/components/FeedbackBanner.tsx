@@ -50,17 +50,14 @@ const FeedbackBanner: React.FC = () => {
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
       const all: PendingItem[] = res?.items || [];
       const dismissed = getDismissed();
-      // 过滤：只显示当前 task 相关的（或非 task 页面时显示 form_generation 类型）
+      // 只在 task 详情页显示，且只显示当前 task 的评分
+      if (!currentTaskId) {
+        setItem(null);
+        return;
+      }
       const filtered = all.filter(i => {
         if (dismissed.has(i.id)) return false;
-        if (i.task_id && currentTaskId) {
-          return i.task_id === currentTaskId;
-        }
-        // 非 task 页面：只显示 form_generation 类型
-        if (!currentTaskId) {
-          return i.capability === 'form_generation';
-        }
-        return false;
+        return i.task_id === currentTaskId;
       });
       setItem(filtered[0] || null);
     } catch {

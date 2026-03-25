@@ -712,17 +712,18 @@ func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 
 	var items []pendingItem
 	c.db.Raw(`
-		SELECT id, capability, user_action,
-		       input_snapshot->>'task_id' as task_id,
-		       TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI') as created_at
-		FROM skill_usage_logs
-		WHERE user_id IN (?, 'system')
-		  AND user_action IS NOT NULL
-		  AND user_feedback IS NULL
-		  AND created_at > NOW() - INTERVAL '24 hours'
-		ORDER BY created_at DESC
+		SELECT l.id, l.capability, l.user_action,
+		       l.input_snapshot->>'task_id' as task_id,
+		       TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI') as created_at
+		FROM skill_usage_logs l
+		LEFT JOIN workspace_tasks t ON t.id = CAST(l.input_snapshot->>'task_id' AS INTEGER)
+		WHERE l.user_action IS NOT NULL
+		  AND l.user_feedback IS NULL
+		  AND l.created_at > NOW() - INTERVAL '24 hours'
+		  AND (l.user_id = ? OR t.created_by = ?)
+		ORDER BY l.created_at DESC
 		LIMIT 5
-	`, uid).Scan(&items)
+	`, uid, uid).Scan(&items)
 
 	if items == nil {
 		items = []pendingItem{}
