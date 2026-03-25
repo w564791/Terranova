@@ -202,9 +202,14 @@ func main() {
 	skillValidator.RegisterSchema("module_skill_generation", services.SkillOutputSchema{
 		RequiredFields: []string{"content"},
 	})
+	// 从 DB 加载 Task Skill metadata 中定义的 output_schema（覆盖硬编码）
+	skillValidator.LoadSchemasFromDB(db)
 	assessmentWorker := services.NewAssessmentWorker(db, skillValidator)
 	router.SetAssessmentWorker(assessmentWorker)
 	log.Println("Skill Assessment Worker initialized")
+
+	// 初始化评估数据清理（每日清理过期快照）
+	assessmentCleanup := services.NewAssessmentCleanup(db)
 
 	// 初始化Agent清理服务
 	agentCleanupService := services.NewAgentCleanupService(db)
@@ -396,6 +401,9 @@ func main() {
 			// 8. Skill Assessment Worker
 			go assessmentWorker.Start(leaderCtx)
 			log.Println("[Leader] Skill Assessment Worker started")
+
+			// 8b. Assessment Data Cleanup (daily)
+			assessmentCleanup.Start(leaderCtx)
 
 			// 9. Resource Summary 补偿（启动时检查未完成的摘要）
 			go func() {

@@ -3,10 +3,13 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
 	"iac-platform/internal/models"
+
+	"gorm.io/gorm"
 )
 
 // SkillOutputSchema defines the schema for a skill's output validation
@@ -43,6 +46,33 @@ func (v *SkillSchemaValidator) RegisterSchema(skillName string, schema SkillOutp
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.schemas[skillName] = schema
+}
+
+// LoadSchemasFromDB loads output_schema from all Task Skills' metadata
+// Skills with output_schema defined in metadata will be registered automatically
+func (v *SkillSchemaValidator) LoadSchemasFromDB(db *gorm.DB) int {
+	var skills []models.Skill
+	db.Where("layer = ? AND is_active = true", models.SkillLayerTask).Find(&skills)
+
+	loaded := 0
+	for _, skill := range skills {
+		if skill.Metadata.OutputSchema == nil {
+			continue
+		}
+		os := skill.Metadata.OutputSchema
+		schema := SkillOutputSchema{
+			RequiredFields: os.RequiredFields,
+			RequiredOneOf:  os.RequiredOneOf,
+			EnumFields:     os.EnumFields,
+		}
+		v.RegisterSchema(skill.Name, schema)
+		loaded++
+	}
+
+	if loaded > 0 {
+		log.Printf("[SkillSchemaValidator] Loaded %d schemas from DB (Task Skills with output_schema)", loaded)
+	}
+	return loaded
 }
 
 // Validate validates the output against the registered schema for the given skill
