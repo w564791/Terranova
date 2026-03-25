@@ -484,8 +484,9 @@ const DecisionConfirmation: React.FC<{
       setError('');
       const decisionCode = Array.from(checkedCodes).join(',');
       await confirmPlanSummary(workspaceId, taskId, decisionCode, note);
+      // 先弹评分，再触发 onConfirmed（避免组件卸载导致通知丢失）
       const logId = await reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
-      if (logId) setTimeout(() => showFeedback(logId), 1000);
+      if (logId) showFeedback(logId);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');
@@ -500,7 +501,7 @@ const DecisionConfirmation: React.FC<{
       setError('');
       await confirmPlanSummary(workspaceId, taskId, 'ABORT', note);
       const logId = await reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
-      if (logId) setTimeout(() => showFeedback(logId), 1000);
+      if (logId) showFeedback(logId);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');
