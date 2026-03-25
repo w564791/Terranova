@@ -82,6 +82,25 @@ func (s *ModuleSkillAIService) GenerateModuleSkillContent(module *models.Module,
 	executionTime := int(time.Since(startTime).Milliseconds())
 
 	// 6. 记录使用日志
+	inputData, _ := json.Marshal(map[string]interface{}{
+		"module_id":   module.ID,
+		"module_name": module.Name,
+		"provider":    module.Provider,
+	})
+	// response 是 Markdown 文本，包装为 JSON 字符串存储
+	outputData, _ := json.Marshal(map[string]interface{}{
+		"content":        response,
+		"content_length": len(response),
+	})
+
+	taskSkillName := composition.TaskSkill
+	taskSkillContent := ""
+	if taskSkillName != "" {
+		if skill, err := s.skillAssembler.GetSkillByName(taskSkillName); err == nil && skill != nil {
+			taskSkillContent = skill.Content
+		}
+	}
+
 	if _, err := s.skillAssembler.LogSkillUsage(LogSkillUsageParams{
 		SkillIDs:         assembleResult.UsedSkillIDs,
 		Capability:       "module_skill_generation",
@@ -90,10 +109,10 @@ func (s *ModuleSkillAIService) GenerateModuleSkillContent(module *models.Module,
 		ModuleID:         &module.ID,
 		AIModel:          aiConfig.ModelID,
 		ExecutionTimeMs:  executionTime,
-		InputSnapshot:    json.RawMessage("null"),
-		OutputSnapshot:   json.RawMessage("null"),
-		TaskSkillName:    "",
-		TaskSkillContent: "",
+		InputSnapshot:    inputData,
+		OutputSnapshot:   outputData,
+		TaskSkillName:    taskSkillName,
+		TaskSkillContent: taskSkillContent,
 	}); err != nil {
 		log.Printf("[ModuleSkillAIService] 记录使用日志失败: %v", err)
 	}

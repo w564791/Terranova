@@ -176,11 +176,27 @@ func main() {
 
 	// 初始化 Skill 质量评估 Worker
 	skillValidator := services.NewSkillSchemaValidator()
+	// form_generation: AI 生成 Terraform 配置
 	skillValidator.RegisterSchema("form-generation-task", services.SkillOutputSchema{
 		RequiredFields: []string{"status", "config"},
 		EnumFields: map[string][]string{
 			"status": {"complete", "need_selection", "blocked"},
 		},
+	})
+	// plan_summary: Plan 阶段变更影响分析（capability 名作为 schema key）
+	skillValidator.RegisterSchema("plan_summary", services.SkillOutputSchema{
+		RequiredFields: []string{"changes_overview", "risk_level"},
+		EnumFields: map[string][]string{
+			"risk_level": {"low", "medium", "high", "critical"},
+		},
+	})
+	// apply_summary: Apply 阶段执行结果分析
+	skillValidator.RegisterSchema("apply_summary", services.SkillOutputSchema{
+		RequiredFields: []string{"execution_summary"},
+	})
+	// module_skill_generation: Module Skill 自动生成
+	skillValidator.RegisterSchema("module_skill_generation", services.SkillOutputSchema{
+		RequiredFields: []string{"content"},
 	})
 	assessmentWorker := services.NewAssessmentWorker(db, skillValidator)
 	router.SetAssessmentWorker(assessmentWorker)

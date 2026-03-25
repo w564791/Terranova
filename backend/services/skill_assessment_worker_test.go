@@ -317,41 +317,61 @@ func TestAssessmentWorker_StartStop(t *testing.T) {
 	require.False(t, worker.IsRunning())
 }
 
-func TestAssessmentWorker_UsesSkillContentHashAsFallback(t *testing.T) {
+func TestAssessmentWorker_UsesCapabilityThenHashAsFallback(t *testing.T) {
 	db := setupAssessmentTestDB(t)
 
 	validator := NewSkillSchemaValidator()
-	validator.RegisterSchema("fallback_hash_xyz", SkillOutputSchema{
+	// 注册 capability 名作为 schema key
+	validator.RegisterSchema("test_capability", SkillOutputSchema{
 		RequiredFields: []string{"data"},
 	})
 
 	worker := NewAssessmentWorker(db, validator)
 
-	// Create a usage log without taskSkillName (empty string)
+	// Case 1: 有 capability → 用 capability 作为 schema key
 	validOutput := json.RawMessage(`{"data": "test"}`)
-	usageLog := models.SkillUsageLog{
-		ID:                  uuid.New().String(),
-		SkillIDs:            []string{"skill-1"},
-		Capability:          "test_capability",
-		UserID:              "user-1",
-		OutputSnapshot:      &validOutput,
-		SkillContentHash:    "fallback_hash_xyz",
-		AssessmentStatus:    "pending",
-		CreatedAt:           time.Now(),
+	log1 := models.SkillUsageLog{
+		ID:               uuid.New().String(),
+		SkillIDs:         []string{"skill-1"},
+		Capability:       "test_capability",
+		UserID:           "user-1",
+		OutputSnapshot:   &validOutput,
+		SkillContentHash: "some_hash",
+		AssessmentStatus: "pending",
+		CreatedAt:        time.Now(),
 	}
-	err := db.Create(&usageLog).Error
-	require.NoError(t, err)
+	require.NoError(t, db.Create(&log1).Error)
 
-	// Process with empty taskSkillName - should use content hash as fallback
-	success, err := worker.ProcessOne(usageLog.ID, "")
+	success, err := worker.ProcessOne(log1.ID, "")
 	require.NoError(t, err)
 	require.True(t, success)
 
-	// Verify assessment result uses content hash as skill name
-	var result models.SkillAssessmentResult
-	err = db.Where("usage_log_id = ?", usageLog.ID).First(&result).Error
-	require.NoError(t, err)
+	var result1 models.SkillAssessmentResult
+	require.NoError(t, db.Where("usage_log_id = ?", log1.ID).First(&result1).Error)
+	require.Equal(t, "test_capability", result1.SkillName) // capability 优先
+	require.Equal(t, models.AssessmentVerdictPass, result1.Verdict)
 
-	require.Equal(t, "fallback_hash_xyz", result.SkillName)
-	require.Equal(t, models.AssessmentVerdictPass, result.Verdict)
+	// Case 2: capability 为空 → fallback 到 content_hash
+	validator.RegisterSchema("fallback_hash", SkillOutputSchema{
+		RequiredFields: []string{"data"},
+	})
+	log2 := models.SkillUsageLog{
+		ID:               uuid.New().String(),
+		SkillIDs:         []string{"skill-1"},
+		Capability:       "",
+		UserID:           "user-1",
+		OutputSnapshot:   &validOutput,
+		SkillContentHash: "fallback_hash",
+		AssessmentStatus: "pending",
+		CreatedAt:        time.Now(),
+	}
+	require.NoError(t, db.Create(&log2).Error)
+
+	success, err = worker.ProcessOne(log2.ID, "")
+	require.NoError(t, err)
+	require.True(t, success)
+
+	var result2 models.SkillAssessmentResult
+	require.NoError(t, db.Where("usage_log_id = ?", log2.ID).First(&result2).Error)
+	require.Equal(t, "fallback_hash", result2.SkillName) // hash fallback
 }

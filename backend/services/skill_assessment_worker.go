@@ -198,8 +198,11 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 		output = json.RawMessage(`null`)
 	}
 
-	// 4. If taskSkillName is empty, use SkillContentHash as fallback key
+	// 4. Determine schema lookup key (priority: taskSkillName > capability > content_hash)
 	skillName := taskSkillName
+	if skillName == "" {
+		skillName = usageLog.Capability // 用 capability 作为 schema key（plan_summary, apply_summary 等）
+	}
 	if skillName == "" {
 		skillName = usageLog.SkillContentHash
 	}
