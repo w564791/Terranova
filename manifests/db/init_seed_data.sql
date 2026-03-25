@@ -14962,8 +14962,9 @@ ALTER TABLE ONLY public.workspaces
 
 --
 -- Skill quality assessment AI config (inserted after COPY block)
+-- enabled=false: 专用 capability config（不是默认兜底）
 INSERT INTO public.ai_configs (id, service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode)
-SELECT 18, service_type, aws_region, model_id, true,
+SELECT 18, service_type, aws_region, model_id, false,
        '["skill_quality_assessment"]'::jsonb, '{}'::jsonb,
        use_inference_profile, rate_limit_seconds, 0, 'prompt'
 FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
