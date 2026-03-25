@@ -41,6 +41,12 @@ type LLMEvalResult struct {
 	Model          string          `json:"-"`
 }
 
+// DefaultRuleEvalSkill 默认的 Layer 2 评估 Skill 名称（可被 AI Config skill_composition 覆盖）
+const DefaultRuleEvalSkill = "skill_quality_rule_evaluation"
+
+// DefaultSemanticEvalSkill 默认的 Layer 3 评估 Skill 名称
+const DefaultSemanticEvalSkill = "skill_quality_semantic_evaluation"
+
 // EvaluateRule performs Layer 2 (rule-based) evaluation using the LLM.
 // It checks whether the skill output violates any rules defined in the skill content.
 func (e *SkillLLMEvaluator) EvaluateRule(ctx context.Context, usageLog *models.SkillUsageLog) (*LLMEvalResult, error) {
@@ -50,10 +56,14 @@ func (e *SkillLLMEvaluator) EvaluateRule(ctx context.Context, usageLog *models.S
 		return nil, fmt.Errorf("no AI config for skill_quality_assessment: %w", err)
 	}
 
-	// 2. Load the rule evaluation skill
-	evalSkill, err := e.skillAssembler.GetSkillByName("skill_quality_rule_evaluation")
+	// 2. Load the rule evaluation skill（优先从 AI Config skill_composition 读取，否则用默认值）
+	evalSkillName := DefaultRuleEvalSkill
+	if aiConfig.SkillComposition.TaskSkill != "" {
+		evalSkillName = aiConfig.SkillComposition.TaskSkill
+	}
+	evalSkill, err := e.skillAssembler.GetSkillByName(evalSkillName)
 	if err != nil {
-		return nil, fmt.Errorf("eval skill not found: skill_quality_rule_evaluation: %w", err)
+		return nil, fmt.Errorf("eval skill not found: %s: %w", evalSkillName, err)
 	}
 
 	// 3. Get the skill content snapshot for this usage log
@@ -87,9 +97,14 @@ func (e *SkillLLMEvaluator) EvaluateSemantic(ctx context.Context, usageLog *mode
 	}
 
 	// 2. Load the semantic evaluation skill
-	evalSkill, err := e.skillAssembler.GetSkillByName("skill_quality_semantic_evaluation")
+	// L3 Skill 名可通过 capability_prompts["semantic_skill"] 配置，否则用默认值
+	semanticSkillName := DefaultSemanticEvalSkill
+	if name, ok := aiConfig.CapabilityPrompts["semantic_skill"]; ok && name != "" {
+		semanticSkillName = name
+	}
+	evalSkill, err := e.skillAssembler.GetSkillByName(semanticSkillName)
 	if err != nil {
-		return nil, fmt.Errorf("eval skill not found: skill_quality_semantic_evaluation: %w", err)
+		return nil, fmt.Errorf("eval skill not found: %s: %w", semanticSkillName, err)
 	}
 
 	// 3. Get the full skill content snapshot for this usage log
