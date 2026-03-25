@@ -4529,6 +4529,14 @@ CREATE TABLE public.skill_usage_logs (
     ai_model character varying(100),
     context_summary text,
     response_summary text,
+    input_snapshot jsonb,
+    output_snapshot jsonb,
+    skill_content_hash character varying(64),
+    skill_content_snapshot text,
+    user_action character varying(16),
+    user_modification_diff text,
+    latency_ms integer,
+    assessment_status character varying(16) DEFAULT 'pending'::character varying,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT skill_usage_logs_user_feedback_check CHECK (((user_feedback >= 1) AND (user_feedback <= 5)))
 );
@@ -4616,6 +4624,115 @@ COMMENT ON COLUMN public.skill_usage_logs.context_summary IS '调用时的上下
 --
 
 COMMENT ON COLUMN public.skill_usage_logs.response_summary IS 'AI 响应摘要';
+
+
+--
+-- Name: COLUMN skill_usage_logs.input_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.input_snapshot IS '调用时的完整输入';
+
+
+--
+-- Name: COLUMN skill_usage_logs.output_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.output_snapshot IS '完整输出 JSON';
+
+
+--
+-- Name: COLUMN skill_usage_logs.skill_content_hash; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.skill_content_hash IS 'skill content 的 SHA256';
+
+
+--
+-- Name: COLUMN skill_usage_logs.skill_content_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.skill_content_snapshot IS 'skill content 完整快照（仅 hash 首次出现时写入）';
+
+
+--
+-- Name: COLUMN skill_usage_logs.user_action; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.user_action IS '用户行为：accepted | modified | aborted';
+
+
+--
+-- Name: COLUMN skill_usage_logs.user_modification_diff; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.user_modification_diff IS '用户修改的 diff';
+
+
+--
+-- Name: COLUMN skill_usage_logs.latency_ms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.latency_ms IS '调用耗时（毫秒）';
+
+
+--
+-- Name: COLUMN skill_usage_logs.assessment_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.assessment_status IS '评估状态：pending | assessed';
+
+
+--
+-- Name: skill_assessment_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.skill_assessment_results (
+    id character varying(36) NOT NULL,
+    usage_log_id character varying(36) NOT NULL,
+    skill_name character varying(128) NOT NULL,
+    skill_content_hash character varying(64) NOT NULL,
+    assessed_at timestamp with time zone DEFAULT now(),
+    assessment_layer character varying(16) NOT NULL,
+    verdict character varying(16) NOT NULL,
+    score smallint NOT NULL,
+    assessment_latency_ms integer,
+    schema_valid boolean,
+    missing_fields text[],
+    invalid_enum_fields text[],
+    rule_violations jsonb,
+    quality_issues jsonb,
+    assessment_confidence character varying(16),
+    assessment_model character varying(64),
+    assessment_raw_output text
+);
+
+
+--
+-- Name: TABLE skill_assessment_results; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.skill_assessment_results IS 'Skill 质量评估结果记录';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_layer; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_layer IS '评估层级：schema | rule | semantic';
+
+
+--
+-- Name: COLUMN skill_assessment_results.verdict; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.verdict IS '评估结果：pass | warn | fail';
+
+
+--
+-- Name: COLUMN skill_assessment_results.score; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.score IS '评分：0-100';
 
 
 --
@@ -10892,6 +11009,22 @@ ALTER TABLE ONLY public.secrets
 
 
 --
+-- Name: skill_assessment_results skill_assessment_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.skill_assessment_results
+    ADD CONSTRAINT skill_assessment_results_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: skill_assessment_results skill_assessment_results_usage_log_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.skill_assessment_results
+    ADD CONSTRAINT skill_assessment_results_usage_log_id_fkey FOREIGN KEY (usage_log_id) REFERENCES public.skill_usage_logs(id);
+
+
+--
 -- Name: skill_usage_logs skill_usage_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12918,6 +13051,34 @@ CREATE INDEX idx_secrets_secret_type ON public.secrets USING btree (secret_type)
 --
 
 CREATE UNIQUE INDEX idx_secrets_unique_key ON public.secrets USING btree (resource_type, resource_id, ((metadata ->> 'key'::text)));
+
+
+--
+-- Name: idx_assessment_skill_hash; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_skill_hash ON public.skill_assessment_results USING btree (skill_name, skill_content_hash);
+
+
+--
+-- Name: idx_assessment_usage_layer; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_usage_layer ON public.skill_assessment_results USING btree (usage_log_id, assessment_layer);
+
+
+--
+-- Name: idx_assessment_verdict; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_verdict ON public.skill_assessment_results USING btree (verdict);
+
+
+--
+-- Name: idx_assessment_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_at ON public.skill_assessment_results USING btree (assessed_at DESC);
 
 
 --
