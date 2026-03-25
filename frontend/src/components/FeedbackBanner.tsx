@@ -38,32 +38,39 @@ const FeedbackBanner: React.FC = () => {
   const [item, setItem] = useState<PendingItem | null>(null);
   const location = useLocation();
 
-  // 从 URL 提取当前 task ID（如 /workspaces/xxx/tasks/123 或 /workspaces/xxx 页面）
-  const currentTaskId = React.useMemo(() => {
-    const match = location.pathname.match(/\/tasks\/(\d+)/);
-    return match ? match[1] : null;
+  // 判断当前页面类型
+  const pageContext = React.useMemo(() => {
+    const taskMatch = location.pathname.match(/\/tasks\/(\d+)/);
+    if (taskMatch) return { type: 'task' as const, id: taskMatch[1] };
+    const moduleMatch = location.pathname.match(/\/modules\/(\d+)\/skill/);
+    if (moduleMatch) return { type: 'module_skill' as const, id: moduleMatch[1] };
+    return null;
   }, [location.pathname]);
 
   const loadPending = useCallback(async () => {
-    if (!localStorage.getItem('token')) return;
+    if (!localStorage.getItem('token') || !pageContext) {
+      setItem(null);
+      return;
+    }
     try {
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
       const all: PendingItem[] = res?.items || [];
       const dismissed = getDismissed();
-      // 只在 task 详情页显示，且只显示当前 task 的评分
-      if (!currentTaskId) {
-        setItem(null);
-        return;
-      }
       const filtered = all.filter(i => {
         if (dismissed.has(i.id)) return false;
-        return i.task_id === currentTaskId;
+        if (pageContext.type === 'task') {
+          return i.task_id === pageContext.id;
+        }
+        if (pageContext.type === 'module_skill') {
+          return i.capability === 'module_skill_generation';
+        }
+        return false;
       });
       setItem(filtered[0] || null);
     } catch {
       // silent
     }
-  }, [currentTaskId]);
+  }, [pageContext?.type, pageContext?.id]);
 
   useEffect(() => {
     loadPending();
