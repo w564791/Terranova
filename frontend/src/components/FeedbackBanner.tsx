@@ -22,10 +22,12 @@ const FeedbackBanner: React.FC = () => {
 
   const loadPending = useCallback(async () => {
     try {
+      console.log('[FeedbackBanner] Loading pending feedback...');
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
+      console.log('[FeedbackBanner] Response:', res);
       setItems(res?.items || []);
-    } catch {
-      // silent
+    } catch (err) {
+      console.warn('[FeedbackBanner] Error:', err);
     }
   }, []);
 
