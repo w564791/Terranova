@@ -101,6 +101,16 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			aiCMDBSkillController.PreviewAssembledPrompt,
 		)
 
+		// Skill 使用行为上报
+		skillController := controllers.NewSkillController(db)
+		ai.PUT("/skill-usage/:id/action",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.UpdateSkillUsageAction,
+		)
+
 		// Embedding 相关路由
 		// 初始化 embedding worker（如果还没有初始化）
 		if embeddingWorker == nil {

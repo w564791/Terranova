@@ -578,3 +578,29 @@ func (c *SkillController) GetSkillUsageStats(ctx *gin.Context) {
 		"last_used_at":     lastUsedAt,
 	})
 }
+
+// UpdateSkillUsageAction 更新用户对 Skill 输出的操作
+// PUT /api/v1/ai/skill-usage/:id/action
+func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
+	logID := ctx.Param("id")
+	var req struct {
+		Action           string  `json:"action" binding:"required,oneof=accepted modified aborted"`
+		ModificationDiff *string `json:"modification_diff,omitempty"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updates := map[string]interface{}{"user_action": req.Action}
+	if req.ModificationDiff != nil && req.Action == "modified" {
+		updates["user_modification_diff"] = *req.ModificationDiff
+	}
+
+	result := c.db.Model(&models.SkillUsageLog{}).Where("id = ?", logID).Updates(updates)
+	if result.RowsAffected == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
