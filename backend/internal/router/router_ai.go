@@ -183,6 +183,10 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		admin.POST("/module-versions/:id/skill/inherit", moduleVersionSkillController.InheritFromVersion)
 		admin.DELETE("/module-versions/:id/skill", moduleVersionSkillController.DeleteSkill)
 
+		// ========== Skill Assessment Dashboard API ==========
+		assessmentController := controllers.NewSkillAssessmentController(db)
+		admin.GET("/skill-assessment/overview", assessmentController.GetOverview)
+
 		// ========== Embedding Cache API ==========
 		embeddingCacheController := controllers.NewEmbeddingCacheController(db)
 		embeddingCache := admin.Group("/embedding-cache")
