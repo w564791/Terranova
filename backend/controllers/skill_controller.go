@@ -615,7 +615,7 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
 		return
 	}
-	if uid != "" && usageLog.UserID != uid {
+	if uid != "" && usageLog.UserID != uid && usageLog.UserID != "system" {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's action"})
 		return
 	}
@@ -677,6 +677,14 @@ func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 	var usageLog models.SkillUsageLog
 	if err := query.Order("created_at DESC").First(&usageLog).Error; err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+		return
+	}
+
+	// 权限校验：只有 owner 或 system 记录可以被更新
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+	if uid != "" && usageLog.UserID != uid && usageLog.UserID != "system" {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's record"})
 		return
 	}
 
