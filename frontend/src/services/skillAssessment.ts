@@ -77,6 +77,18 @@ export interface AssessmentRecord {
   content_hash: string;
 }
 
+export interface FeedbackMatrix {
+  pass_positive: number;
+  pass_negative: number;
+  pass_no_feedback: number;
+  warn_positive: number;
+  warn_negative: number;
+  warn_no_feedback: number;
+  fail_positive: number;
+  fail_negative: number;
+  fail_no_feedback: number;
+}
+
 export interface CapabilityDetail {
   capability: string;
   pass_rate: number;
@@ -89,6 +101,7 @@ export interface CapabilityDetail {
   task_skill: string;
   versions: VersionStats[];
   assessments: AssessmentRecord[];
+  feedback_matrix: FeedbackMatrix | null;
 }
 
 export async function getCapabilityDetail(capability: string, days: number = 7): Promise<CapabilityDetail> {

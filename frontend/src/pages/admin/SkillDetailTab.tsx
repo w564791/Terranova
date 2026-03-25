@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Select, Table, Tag, Tooltip, Spin, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { getCapabilityDetail, getAssessmentOverview, CapabilityDetail, VersionStats, AssessmentRecord } from '../../services/skillAssessment';
+import { getCapabilityDetail, getAssessmentOverview, CapabilityDetail, VersionStats, AssessmentRecord, FeedbackMatrix } from '../../services/skillAssessment';
 import styles from './SkillQualityDashboard.module.css';
 
 const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
@@ -285,49 +285,66 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               <ColTitle title="评估结果 vs 用户反馈" tip="评估结论与用户实际反馈的交叉对比，用于检测评估盲区" />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-              <div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#fafafa' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #e8e8e8' }}></th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>用户好评</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>用户差评</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>无反馈</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}><Tag color="green">评估 pass</Tag></td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: '#bbb' }}>-</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: '#bbb' }}>-</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center' }}>{detail.pass}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}><Tag color="orange">评估 warn</Tag></td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: '#bbb' }}>-</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: '#bbb' }}>-</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center' }}>0</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '8px 12px' }}><Tag color="red">评估 fail</Tag></td>
-                      <td style={{ padding: '8px 12px', textAlign: 'center', color: '#bbb' }}>-</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'center', color: '#bbb' }}>-</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>{detail.fail}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 8 }}>
-                  用户反馈数据待积累。当前仅展示评估结果分布。
-                </div>
-              </div>
-              <div style={{ textAlign: 'center', padding: 20 }}>
-                <div style={{ fontSize: 14, color: '#8c8c8c', marginBottom: 12 }}>评估盲区检测</div>
-                <div style={{ fontSize: 36, fontWeight: 600, color: '#bbb' }}>-</div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 8 }}>
-                  评估 pass 但用户差评的比例<br />
-                  (需要用户反馈数据积累后可用)
-                </div>
-              </div>
+              {(() => {
+                const fm = detail.feedback_matrix;
+                const cell = (v: number) => (
+                  <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: v > 0 ? '#262626' : '#bbb' }}>
+                    {v > 0 ? v : '-'}
+                  </td>
+                );
+                const totalWithFeedback = fm
+                  ? fm.pass_positive + fm.pass_negative + fm.warn_positive + fm.warn_negative + fm.fail_positive + fm.fail_negative
+                  : 0;
+                const blindSpot = totalWithFeedback > 0 && fm
+                  ? ((fm.pass_negative / totalWithFeedback) * 100).toFixed(1)
+                  : null;
+                return (
+                  <>
+                    <div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: '#fafafa' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #e8e8e8' }}></th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>好评 (4-5)</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>差评 (1-2)</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>无反馈</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}><Tag color="green">评估 pass</Tag></td>
+                            {cell(fm?.pass_positive ?? 0)}
+                            {cell(fm?.pass_negative ?? 0)}
+                            {cell(fm?.pass_no_feedback ?? 0)}
+                          </tr>
+                          <tr>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}><Tag color="orange">评估 warn</Tag></td>
+                            {cell(fm?.warn_positive ?? 0)}
+                            {cell(fm?.warn_negative ?? 0)}
+                            {cell(fm?.warn_no_feedback ?? 0)}
+                          </tr>
+                          <tr>
+                            <td style={{ padding: '8px 12px' }}><Tag color="red">评估 fail</Tag></td>
+                            {cell(fm?.fail_positive ?? 0)}
+                            {cell(fm?.fail_negative ?? 0)}
+                            {cell(fm?.fail_no_feedback ?? 0)}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: 20 }}>
+                      <div style={{ fontSize: 14, color: '#8c8c8c', marginBottom: 12 }}>评估盲区检测</div>
+                      <div style={{ fontSize: 36, fontWeight: 600, color: blindSpot && parseFloat(blindSpot) > 15 ? '#ff4d4f' : blindSpot ? '#52c41a' : '#bbb' }}>
+                        {blindSpot ? `${blindSpot}%` : '-'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 8 }}>
+                        评估 pass 但用户差评的比例<br />
+                        {blindSpot ? `(${fm!.pass_negative} 条盲区 / ${totalWithFeedback} 条有反馈)` : '(需要用户反馈数据积累)'}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

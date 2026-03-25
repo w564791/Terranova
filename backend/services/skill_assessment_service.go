@@ -287,18 +287,32 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 // ========== Skill Detail API ==========
 
 // CapabilityDetail holds per-capability detail data
+// FeedbackMatrix 评估结果 vs 用户反馈交叉矩阵
+type FeedbackMatrix struct {
+	PassPositive   int64 `json:"pass_positive"`   // 评估pass + 好评(>=4)
+	PassNegative   int64 `json:"pass_negative"`   // 评估pass + 差评(<=2)
+	PassNoFeedback int64 `json:"pass_no_feedback"` // 评估pass + 无反馈
+	WarnPositive   int64 `json:"warn_positive"`
+	WarnNegative   int64 `json:"warn_negative"`
+	WarnNoFeedback int64 `json:"warn_no_feedback"`
+	FailPositive   int64 `json:"fail_positive"`
+	FailNegative   int64 `json:"fail_negative"`
+	FailNoFeedback int64 `json:"fail_no_feedback"`
+}
+
 type CapabilityDetail struct {
-	Capability   string               `json:"capability"`
-	PassRate     float64              `json:"pass_rate"`
-	Total        int64                `json:"total"`
-	Pass         int64                `json:"pass"`
-	Fail         int64                `json:"fail"`
-	AvgScore     float64              `json:"avg_score"`
-	AvgLatencyMs float64              `json:"avg_latency_ms"`
-	LatestHash   string               `json:"latest_hash"`
-	TaskSkill    string               `json:"task_skill"`
-	Versions     []VersionStats       `json:"versions"`
-	Assessments  []AssessmentRecord   `json:"assessments"`
+	Capability     string               `json:"capability"`
+	PassRate       float64              `json:"pass_rate"`
+	Total          int64                `json:"total"`
+	Pass           int64                `json:"pass"`
+	Fail           int64                `json:"fail"`
+	AvgScore       float64              `json:"avg_score"`
+	AvgLatencyMs   float64              `json:"avg_latency_ms"`
+	LatestHash     string               `json:"latest_hash"`
+	TaskSkill      string               `json:"task_skill"`
+	Versions       []VersionStats       `json:"versions"`
+	Assessments    []AssessmentRecord   `json:"assessments"`
+	FeedbackMatrix *FeedbackMatrix      `json:"feedback_matrix"`
 }
 
 // VersionStats holds per content_hash stats
@@ -433,6 +447,24 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		ORDER BY r.assessed_at DESC LIMIT 20`, capability, since).Scan(&detail.Assessments).Error; err != nil {
 		return nil, err
 	}
+
+	// 5. Feedback matrix: 评估结果 vs 用户反馈
+	var fm FeedbackMatrix
+	s.db.Raw(`
+		SELECT
+		  count(CASE WHEN r.verdict='pass' AND l.user_feedback >= 4 THEN 1 END) as pass_positive,
+		  count(CASE WHEN r.verdict='pass' AND l.user_feedback <= 2 THEN 1 END) as pass_negative,
+		  count(CASE WHEN r.verdict='pass' AND l.user_feedback IS NULL THEN 1 END) as pass_no_feedback,
+		  count(CASE WHEN r.verdict='warn' AND l.user_feedback >= 4 THEN 1 END) as warn_positive,
+		  count(CASE WHEN r.verdict='warn' AND l.user_feedback <= 2 THEN 1 END) as warn_negative,
+		  count(CASE WHEN r.verdict='warn' AND l.user_feedback IS NULL THEN 1 END) as warn_no_feedback,
+		  count(CASE WHEN r.verdict='fail' AND l.user_feedback >= 4 THEN 1 END) as fail_positive,
+		  count(CASE WHEN r.verdict='fail' AND l.user_feedback <= 2 THEN 1 END) as fail_negative,
+		  count(CASE WHEN r.verdict='fail' AND l.user_feedback IS NULL THEN 1 END) as fail_no_feedback
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.capability = ? AND l.created_at > ?`, capability, since).Scan(&fm)
+	detail.FeedbackMatrix = &fm
 
 	return detail, nil
 }
