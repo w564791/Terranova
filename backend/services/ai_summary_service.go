@@ -153,11 +153,8 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 		return
 	}
 
-	// 记录 Skill 使用日志
-	s.logSummarySkillUsage(cfg, "plan_summary", task.WorkspaceID, taskID, userPrompt, result.FinalOutput, startTime)
-
-	// 解析 AI 输出
-	s.completePlanSummary(&summary, result, planChangesJSON, startTime)
+	// 解析 AI 输出（extractJSON 后再记录日志，确保 output_snapshot 是结构化 JSON）
+	s.completePlanSummary(&summary, result, planChangesJSON, startTime, cfg, task.WorkspaceID, taskID, userPrompt)
 }
 
 // GenerateApplySummary 生成 Apply 阶段摘要（异步调用）
@@ -238,10 +235,7 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 		return
 	}
 
-	// 记录 Skill 使用日志
-	s.logSummarySkillUsage(cfg, "apply_summary", task.WorkspaceID, taskID, applyContext, result.FinalOutput, startTime)
-
-	s.completeApplySummary(&summary, result, startTime)
+	s.completeApplySummary(&summary, result, startTime, cfg, task.WorkspaceID, taskID, applyContext)
 }
 
 // GetPlanSummary 查询 Plan Summary
@@ -403,7 +397,7 @@ func (s *AISummaryService) extractPlanChanges(planJSON models.JSONB) interface{}
 	return plan
 }
 
-func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, result *AgentLoopResult, planChangesJSON []byte, startTime time.Time) {
+func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, result *AgentLoopResult, planChangesJSON []byte, startTime time.Time, cfg *models.AIConfig, workspaceID string, taskID uint, userPrompt string) {
 	// 解析 AI 输出（V3 结构：risk_evaluation 嵌套）
 	var aiOutput struct {
 		ChangesOverview   string      `json:"changes_overview"`
@@ -425,6 +419,9 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		log.Printf("[AISummaryService] Failed to parse AI output as JSON for task %d: %v, extracted text (len=%d): %.300s", summary.TaskID, err, len(outputText), outputText)
 		aiOutput.ChangesOverview = result.FinalOutput
 	}
+
+	// 记录 Skill 使用日志（用 extractJSON 后的结构化输出）
+	s.logSummarySkillUsage(cfg, "plan_summary", workspaceID, taskID, userPrompt, outputText, startTime)
 
 	summary.ChangesOverview = aiOutput.ChangesOverview
 	if aiOutput.ImpactAnalysis != nil {
@@ -534,7 +531,7 @@ func (s *AISummaryService) parseDecisionHints(summary *models.AIPlanSummary, raw
 	}
 }
 
-func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, result *AgentLoopResult, startTime time.Time) {
+func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, result *AgentLoopResult, startTime time.Time, cfg *models.AIConfig, workspaceID string, taskID uint, userPrompt string) {
 	var aiOutput struct {
 		ExecutionSummary    string      `json:"execution_summary"`
 		ResourceResults     interface{} `json:"resource_results"`
@@ -549,6 +546,9 @@ func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, 
 		log.Printf("[AISummaryService] Failed to parse AI output as JSON for apply task %d: %v", summary.TaskID, err)
 		aiOutput.ExecutionSummary = result.FinalOutput
 	}
+
+	// 记录 Skill 使用日志（用 extractJSON 后的结构化输出）
+	s.logSummarySkillUsage(cfg, "apply_summary", workspaceID, taskID, userPrompt, outputText, startTime)
 
 	summary.ExecutionSummary = aiOutput.ExecutionSummary
 	if aiOutput.ResourceResults != nil {
