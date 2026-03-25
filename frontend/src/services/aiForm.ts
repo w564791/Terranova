@@ -453,7 +453,7 @@ export const generateFormConfigWithProgress = async (
 // Report user action on AI generation result
 export async function reportSkillUsageAction(
   usageLogId: string,
-  action: 'accepted' | 'modified' | 'aborted',
+  action?: 'accepted' | 'modified' | 'aborted',
   modificationDiff?: string
 ): Promise<void> {
   try {
@@ -463,6 +463,17 @@ export async function reportSkillUsageAction(
     });
   } catch (error) {
     console.warn('[AI] Failed to report usage action:', error);
-    // Non-critical, don't throw
+  }
+}
+
+// Report user feedback score (1-5)
+export async function reportSkillUsageFeedback(
+  usageLogId: string,
+  feedback: number
+): Promise<void> {
+  try {
+    await api.put(`/ai/skill-usage/${usageLogId}/action`, { feedback });
+  } catch (error) {
+    console.warn('[AI] Failed to report usage feedback:', error);
   }
 }

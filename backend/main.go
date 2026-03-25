@@ -177,12 +177,14 @@ func main() {
 	// 初始化 Skill 质量评估 Worker
 	skillValidator := services.NewSkillSchemaValidator()
 	// form_generation: AI 生成 Terraform 配置
-	skillValidator.RegisterSchema("form-generation-task", services.SkillOutputSchema{
+	formGenSchema := services.SkillOutputSchema{
 		RequiredFields: []string{"status", "config"},
 		EnumFields: map[string][]string{
 			"status": {"complete", "need_selection", "blocked"},
 		},
-	})
+	}
+	skillValidator.RegisterSchema("form_generation", formGenSchema)                  // capability 名（scanner 兜底）
+	skillValidator.RegisterSchema("resource_generation_workflow", formGenSchema)      // 实际 task skill 名（Submit 直接传入）
 	// plan_summary: Plan 阶段变更影响分析（capability 名作为 schema key）
 	// V2 用顶级 risk_level，V3 用嵌套 risk_evaluation，二选一即可
 	skillValidator.RegisterSchema("plan_summary", services.SkillOutputSchema{

@@ -102,7 +102,7 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		)
 
 		// Skill 使用行为上报
-		skillController := controllers.NewSkillController(db)
+		skillController := controllers.NewSkillController(db, assessmentWorker)
 		ai.PUT("/skill-usage/:id/action",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},

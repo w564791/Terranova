@@ -43,6 +43,10 @@ export interface AssessmentOverview {
   by_capability: CapabilityStats[];
   recent_failures: RecentFailure[];
   daily_trend: DailyTrendItem[];
+  // Business metrics
+  accept_rate: number | null;
+  modify_rate: number | null;
+  negative_feedback: number | null;
 }
 
 export async function getAssessmentOverview(days: number = 7): Promise<AssessmentOverview> {

@@ -13,16 +13,23 @@ import (
 
 // SkillController Skill 管理控制器
 type SkillController struct {
-	db             *gorm.DB
-	skillAssembler *services.SkillAssembler
+	db               *gorm.DB
+	skillAssembler   *services.SkillAssembler
+	assessmentWorker *services.AssessmentWorker
 }
 
 // NewSkillController 创建控制器实例
-func NewSkillController(db *gorm.DB) *SkillController {
-	return &SkillController{
+func NewSkillController(db *gorm.DB, opts ...interface{}) *SkillController {
+	c := &SkillController{
 		db:             db,
 		skillAssembler: services.NewSkillAssembler(db),
 	}
+	for _, opt := range opts {
+		if w, ok := opt.(*services.AssessmentWorker); ok {
+			c.assessmentWorker = w
+		}
+	}
+	return c
 }
 
 // ListSkills 获取 Skill 列表
@@ -584,11 +591,17 @@ func (c *SkillController) GetSkillUsageStats(ctx *gin.Context) {
 func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 	logID := ctx.Param("id")
 	var req struct {
-		Action           string  `json:"action" binding:"required,oneof=accepted modified aborted"`
+		Action           string  `json:"action,omitempty" binding:"omitempty,oneof=accepted modified aborted"`
 		ModificationDiff *string `json:"modification_diff,omitempty"`
+		Feedback         *int    `json:"feedback,omitempty" binding:"omitempty,min=1,max=5"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Action == "" && req.Feedback == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "action or feedback is required"})
 		return
 	}
 
@@ -596,21 +609,39 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 	userID, _ := ctx.Get("user_id")
 	uid, _ := userID.(string)
 
-	var log models.SkillUsageLog
-	if err := c.db.First(&log, "id = ?", logID).Error; err != nil {
+	var usageLog models.SkillUsageLog
+	if err := c.db.First(&usageLog, "id = ?", logID).Error; err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
 		return
 	}
-	if uid != "" && log.UserID != uid {
+	if uid != "" && usageLog.UserID != uid {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's action"})
 		return
 	}
 
-	updates := map[string]interface{}{"user_action": req.Action}
+	updates := map[string]interface{}{}
+	if req.Action != "" {
+		updates["user_action"] = req.Action
+	}
 	if req.ModificationDiff != nil && req.Action == "modified" {
 		updates["user_modification_diff"] = *req.ModificationDiff
 	}
+	if req.Feedback != nil {
+		updates["user_feedback"] = *req.Feedback
+	}
 
-	c.db.Model(&log).Updates(updates)
+	c.db.Model(&usageLog).Updates(updates)
+
+	// 延迟补评触发：差评（<= 2）且尚未完成 Layer 2+3 评估时，提交补评
+	if req.Feedback != nil && *req.Feedback <= 2 && c.assessmentWorker != nil {
+		var ruleCount int64
+		c.db.Model(&models.SkillAssessmentResult{}).
+			Where("usage_log_id = ? AND assessment_layer = ?", logID, "rule").
+			Count(&ruleCount)
+		if ruleCount == 0 {
+			c.assessmentWorker.Submit(logID, "")
+		}
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

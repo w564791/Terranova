@@ -343,6 +343,37 @@ const SkillQualityDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* ===================== Business Metrics Row ===================== */}
+      <div className={styles.kpiGrid} style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 16 }}>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="用户采纳率" tip="用户直接应用 AI 配置的比例：accepted / (accepted+modified+aborted)" />
+          </div>
+          <div className={styles.statValue} style={{ color: data.accept_rate != null ? '#52c41a' : '#bbb' }}>
+            {data.accept_rate != null ? `${data.accept_rate.toFixed(1)}%` : '-'}
+          </div>
+          <div className={styles.statSub}>{data.accept_rate != null ? '有 user_action 数据' : '暂无 user_action 数据'}</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="二次修改率" tip="用户修改后再应用的比例：modified / (accepted+modified+aborted)" />
+          </div>
+          <div className={styles.statValue} style={{ color: data.modify_rate != null ? '#fa8c16' : '#bbb' }}>
+            {data.modify_rate != null ? `${data.modify_rate.toFixed(1)}%` : '-'}
+          </div>
+          <div className={styles.statSub}>{data.modify_rate != null ? '有 user_action 数据' : '暂无数据'}</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>
+            <ColTitle title="差评率" tip="用户评分 <= 2 的比例（1-5 分制）" />
+          </div>
+          <div className={styles.statValue} style={{ color: data.negative_feedback != null ? (data.negative_feedback > 20 ? '#ff4d4f' : '#52c41a') : '#bbb' }}>
+            {data.negative_feedback != null ? `${data.negative_feedback.toFixed(1)}%` : '-'}
+          </div>
+          <div className={styles.statSub}>{data.negative_feedback != null ? '有 feedback 数据' : '暂无评分数据'}</div>
+        </div>
+      </div>
+
       {/* ===================== Donut + Alert Summary ===================== */}
       <div className={styles.twoCol}>
         {/* Evaluation Distribution — Donut */}

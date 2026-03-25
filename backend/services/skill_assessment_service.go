@@ -32,6 +32,10 @@ type AssessmentOverview struct {
 	ByCapability   []CapabilityStats  `json:"by_capability"`
 	RecentFailures []RecentFailure    `json:"recent_failures"`
 	DailyTrend     []DailyTrendItem   `json:"daily_trend"`
+	// 业务指标
+	AcceptRate       *float64 `json:"accept_rate"`        // 采纳率：accepted / (accepted+modified+aborted)
+	ModifyRate       *float64 `json:"modify_rate"`        // 修改率：modified / (accepted+modified+aborted)
+	NegativeFeedback *float64 `json:"negative_feedback"`  // 差评率：feedback<=2 / 有反馈总数
 }
 
 // CapabilityStats holds per-capability verdict breakdown
@@ -238,6 +242,43 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 	}
 	for _, date := range trendOrder {
 		overview.DailyTrend = append(overview.DailyTrend, *trendMap[date])
+	}
+
+	// 8. Business metrics: accept/modify/negative rates
+	type actionStats struct {
+		Accepted int64
+		Modified int64
+		Aborted  int64
+	}
+	var as actionStats
+	s.db.Model(&models.SkillUsageLog{}).
+		Select(`count(CASE WHEN user_action = 'accepted' THEN 1 END) as accepted,
+		        count(CASE WHEN user_action = 'modified' THEN 1 END) as modified,
+		        count(CASE WHEN user_action = 'aborted' THEN 1 END) as aborted`).
+		Where("created_at > ? AND user_action IS NOT NULL", since).
+		Scan(&as)
+
+	actionTotal := as.Accepted + as.Modified + as.Aborted
+	if actionTotal > 0 {
+		ar := float64(as.Accepted) / float64(actionTotal) * 100
+		mr := float64(as.Modified) / float64(actionTotal) * 100
+		overview.AcceptRate = &ar
+		overview.ModifyRate = &mr
+	}
+
+	type feedbackStats struct {
+		Total    int64
+		Negative int64
+	}
+	var fs feedbackStats
+	s.db.Model(&models.SkillUsageLog{}).
+		Select(`count(*) as total, count(CASE WHEN user_feedback <= 2 THEN 1 END) as negative`).
+		Where("created_at > ? AND user_feedback IS NOT NULL", since).
+		Scan(&fs)
+
+	if fs.Total > 0 {
+		nf := float64(fs.Negative) / float64(fs.Total) * 100
+		overview.NegativeFeedback = &nf
 	}
 
 	return overview, nil

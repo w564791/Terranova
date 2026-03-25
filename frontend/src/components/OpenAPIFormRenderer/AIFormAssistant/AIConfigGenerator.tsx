@@ -1,13 +1,42 @@
 import React, { useState, useCallback } from 'react';
 import { Input, Button, message, Alert, Modal, Spin, Collapse, Tabs, Tooltip, Switch, Tag, Select, notification, Popover } from 'antd';
 import { QuestionCircleOutlined, CloseOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, CodeOutlined, ToolOutlined, CopyOutlined, CheckOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { generateFormConfig, generateFormConfigWithCMDB, generateFormConfigWithProgress, reportSkillUsageAction } from '../../../services/aiForm';
+import { generateFormConfig, generateFormConfigWithCMDB, generateFormConfigWithProgress, reportSkillUsageAction, reportSkillUsageFeedback } from '../../../services/aiForm';
 import type { PlaceholderInfo, CMDBLookupResult, ProgressEvent, CompletedStep } from '../../../services/aiForm';
 import styles from './AIConfigGenerator.module.css';
 
 // 稳定的空数组常量，避免在组件 props 默认值中创建新引用导致无限循环
 const EMPTY_CMDB_LOOKUPS: CMDBLookupResult[] = [];
 const EMPTY_WARNINGS: string[] = [];
+
+// 弹出评分通知
+function showFeedbackNotification(logId: string) {
+  const stars = ['😞', '😕', '😐', '🙂', '😊'];
+  const key = `feedback-${logId}`;
+  notification.info({
+    key,
+    message: 'AI 生成质量如何？',
+    description: '点击表情评分，帮助我们改进 AI 质量',
+    duration: 20,
+    placement: 'bottomRight',
+    btn: React.createElement('div', { style: { display: 'flex', gap: 12, marginTop: 8 } },
+      stars.map((emoji, i) =>
+        React.createElement('span', {
+          key: i + 1,
+          style: { cursor: 'pointer', fontSize: 28, transition: 'transform 0.15s' },
+          title: `${i + 1} 分`,
+          onMouseEnter: (e: React.MouseEvent) => { (e.target as HTMLElement).style.transform = 'scale(1.3)'; },
+          onMouseLeave: (e: React.MouseEvent) => { (e.target as HTMLElement).style.transform = 'scale(1)'; },
+          onClick: () => {
+            reportSkillUsageFeedback(logId, i + 1);
+            notification.destroy(key);
+            notification.success({ message: `感谢评分：${emoji} (${i + 1}/5)`, duration: 3, placement: 'bottomRight' });
+          },
+        }, emoji)
+      )
+    ),
+  });
+}
 
 // 格式化步骤时间：时间很短的步骤（<500ms）固定显示为 0.5s
 const formatStepTime = (elapsedMs: number): string => {
@@ -1072,9 +1101,12 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
     if (configToApply) {
       onGenerate(configToApply);
 
-      // 上报用户接受了 AI 生成的配置
-      if (usageLogIdRef.current) {
-        reportSkillUsageAction(usageLogIdRef.current, 'accepted');
+      // 上报用户接受了 AI 生成的配置，并弹出评分
+      const logId = usageLogIdRef.current;
+      if (logId) {
+        reportSkillUsageAction(logId, 'accepted');
+        // 延迟弹出评分提示，不打断主流程
+        setTimeout(() => showFeedbackNotification(logId), 1500);
         usageLogIdRef.current = null;
       }
 
