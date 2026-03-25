@@ -36,12 +36,14 @@ type AssessmentOverview struct {
 
 // CapabilityStats holds per-capability verdict breakdown
 type CapabilityStats struct {
-	Capability string  `json:"capability"`
-	Total      int64   `json:"total"`
-	Pass       int64   `json:"pass"`
-	Fail       int64   `json:"fail"`
-	Warn       int64   `json:"warn"`
-	PassRate   float64 `json:"pass_rate"`
+	Capability   string  `json:"capability"`
+	Total        int64   `json:"total"`
+	Pass         int64   `json:"pass"`
+	Fail         int64   `json:"fail"`
+	Warn         int64   `json:"warn"`
+	PassRate     float64 `json:"pass_rate"`
+	AvgScore     float64 `json:"avg_score"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
 }
 
 // RecentFailure holds details of a recent failed assessment
@@ -50,10 +52,12 @@ type RecentFailure struct {
 	Capability    string          `json:"capability"`
 	SkillName     string          `json:"skill_name"`
 	Verdict       string          `json:"verdict"`
+	Score         int             `json:"score"`
 	MissingFields json.RawMessage `json:"missing_fields"`
 	InvalidEnums  json.RawMessage `json:"invalid_enum_fields"`
 	AssessedAt    time.Time       `json:"assessed_at"`
 	ContentHash   string          `json:"content_hash"`
+	LatencyMs     *int            `json:"latency_ms"`
 }
 
 // DailyTrendItem holds daily verdict counts
@@ -68,13 +72,6 @@ type DailyTrendItem struct {
 type verdictCount struct {
 	Verdict string
 	Cnt     int64
-}
-
-// capabilityVerdictRow is a helper for scanning capability × verdict results
-type capabilityVerdictRow struct {
-	Capability string
-	Verdict    string
-	Cnt        int64
 }
 
 // dailyVerdictRow is a helper for scanning daily trend results
@@ -145,39 +142,47 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 		return nil, err
 	}
 
-	// 4. By capability
-	var capRows []capabilityVerdictRow
+	// 4. By capability (verdict counts + avg score + avg latency)
+	type capabilityAggRow struct {
+		Capability   string  `json:"capability"`
+		Total        int64   `json:"total"`
+		Pass         int64   `json:"pass"`
+		Fail         int64   `json:"fail"`
+		Warn         int64   `json:"warn"`
+		AvgScore     float64 `json:"avg_score"`
+		AvgLatencyMs float64 `json:"avg_latency_ms"`
+	}
+	var capAggRows []capabilityAggRow
 	if err := s.db.Raw(`
-		SELECT l.capability, r.verdict, count(*) as cnt
+		SELECT l.capability,
+		       count(*) as total,
+		       count(CASE WHEN r.verdict = 'pass' THEN 1 END) as pass,
+		       count(CASE WHEN r.verdict = 'fail' THEN 1 END) as fail,
+		       count(CASE WHEN r.verdict = 'warn' THEN 1 END) as warn,
+		       COALESCE(avg(r.score), 0) as avg_score,
+		       COALESCE(avg(l.latency_ms), 0) as avg_latency_ms
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
 		WHERE l.created_at > ?
-		GROUP BY l.capability, r.verdict`, since).Scan(&capRows).Error; err != nil {
+		GROUP BY l.capability`, since).Scan(&capAggRows).Error; err != nil {
 		return nil, err
 	}
 
-	capMap := make(map[string]*CapabilityStats)
-	for _, row := range capRows {
-		cs, ok := capMap[row.Capability]
-		if !ok {
-			cs = &CapabilityStats{Capability: row.Capability}
-			capMap[row.Capability] = cs
+	for _, row := range capAggRows {
+		passRate := float64(0)
+		if row.Total > 0 {
+			passRate = float64(row.Pass) / float64(row.Total) * 100
 		}
-		cs.Total += row.Cnt
-		switch models.AssessmentVerdict(row.Verdict) {
-		case models.AssessmentVerdictPass:
-			cs.Pass = row.Cnt
-		case models.AssessmentVerdictFail:
-			cs.Fail = row.Cnt
-		case models.AssessmentVerdictWarn:
-			cs.Warn = row.Cnt
-		}
-	}
-	for _, cs := range capMap {
-		if cs.Total > 0 {
-			cs.PassRate = float64(cs.Pass) / float64(cs.Total) * 100
-		}
-		overview.ByCapability = append(overview.ByCapability, *cs)
+		overview.ByCapability = append(overview.ByCapability, CapabilityStats{
+			Capability:   row.Capability,
+			Total:        row.Total,
+			Pass:         row.Pass,
+			Fail:         row.Fail,
+			Warn:         row.Warn,
+			PassRate:     passRate,
+			AvgScore:     row.AvgScore,
+			AvgLatencyMs: row.AvgLatencyMs,
+		})
 	}
 
 	// 5. High risk skills (fail rate > 20%)
@@ -189,10 +194,10 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 
 	// 6. Recent failures (limit 10, 按调用时间过滤)
 	if err := s.db.Raw(`
-		SELECT r.usage_log_id, l.capability, r.skill_name, r.verdict,
+		SELECT r.usage_log_id, l.capability, r.skill_name, r.verdict, r.score,
 		       COALESCE(array_to_json(r.missing_fields), '[]') as missing_fields,
 		       COALESCE(array_to_json(r.invalid_enum_fields), '[]') as invalid_enum_fields,
-		       r.assessed_at,
+		       r.assessed_at, r.assessment_latency_ms as latency_ms,
 		       r.skill_content_hash as content_hash
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id

@@ -7,6 +7,8 @@ export interface CapabilityStats {
   fail: number;
   warn: number;
   pass_rate: number;
+  avg_score: number;
+  avg_latency_ms: number;
 }
 
 export interface RecentFailure {
@@ -14,10 +16,12 @@ export interface RecentFailure {
   capability: string;
   skill_name: string;
   verdict: string;
+  score: number;
   missing_fields: string[];
   invalid_enum_fields: string[];
   assessed_at: string;
   content_hash: string;
+  latency_ms: number | null;
 }
 
 export interface DailyTrendItem {
