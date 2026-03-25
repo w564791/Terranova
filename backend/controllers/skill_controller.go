@@ -716,13 +716,15 @@ func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 		       l.input_snapshot->>'task_id' as task_id,
 		       TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI') as created_at
 		FROM skill_usage_logs l
-		LEFT JOIN workspace_tasks t ON t.id = CAST(l.input_snapshot->>'task_id' AS INTEGER)
+		LEFT JOIN workspace_tasks t ON t.id = CAST(
+		  CASE WHEN l.input_snapshot->>'task_id' ~ '^\d+$'
+		       THEN l.input_snapshot->>'task_id' ELSE NULL END AS INTEGER)
 		WHERE l.user_action IS NOT NULL
 		  AND l.user_feedback IS NULL
 		  AND l.created_at > NOW() - INTERVAL '24 hours'
-		  AND (l.user_id = ? OR t.created_by = ?)
+		  AND (l.user_id = ? OR t.created_by = ? OR l.user_id = 'system')
 		ORDER BY l.created_at DESC
-		LIMIT 5
+		LIMIT 10
 	`, uid, uid).Scan(&items)
 
 	if items == nil {
