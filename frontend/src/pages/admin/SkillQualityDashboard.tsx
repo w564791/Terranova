@@ -356,12 +356,17 @@ const SkillQualityDashboard: React.FC = () => {
         </div>
         <div className={styles.statCard}>
           <div className={styles.statLabel}>
-            <ColTitle title="二次修改率" tip="用户修改后再应用的比例：modified / (accepted+modified+aborted)" />
+            <ColTitle title="放弃率" tip="用户放弃/终止 AI 输出的比例：aborted / (accepted+aborted)" />
           </div>
-          <div className={styles.statValue} style={{ color: data.modify_rate != null ? '#fa8c16' : '#bbb' }}>
-            {data.modify_rate != null ? `${data.modify_rate.toFixed(1)}%` : '-'}
+          <div className={styles.statValue} style={{
+            color: data.modify_rate != null ? (
+              // 复用 modify_rate 字段暂时展示放弃率（后端已有 aborted 数据）
+              '#fa8c16'
+            ) : '#bbb'
+          }}>
+            {data.accept_rate != null ? `${(100 - data.accept_rate).toFixed(1)}%` : '-'}
           </div>
-          <div className={styles.statSub}>{data.modify_rate != null ? '有 user_action 数据' : '暂无数据'}</div>
+          <div className={styles.statSub}>{data.accept_rate != null ? `采纳率 ${data.accept_rate.toFixed(1)}%` : '暂无数据'}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statLabel}>
