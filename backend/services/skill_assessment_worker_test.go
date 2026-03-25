@@ -92,7 +92,7 @@ func TestAssessmentWorker_ProcessesPendingRecord(t *testing.T) {
 	})
 
 	// Create worker
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// Create a pending usage log with valid output
 	validOutput := json.RawMessage(`{"status": "success", "result": "Operation completed"}`)
@@ -148,7 +148,7 @@ func TestAssessmentWorker_SchemaFail(t *testing.T) {
 	})
 
 	// Create worker
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// Create a pending usage log with missing required field
 	invalidOutput := json.RawMessage(`{"status": "success"}`)
@@ -192,7 +192,7 @@ func TestAssessmentWorker_AlreadyAssessed(t *testing.T) {
 	db := setupAssessmentTestDB(t)
 
 	validator := NewSkillSchemaValidator()
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// Create a usage log that's already assessed
 	validOutput := json.RawMessage(`{"status": "success"}`)
@@ -228,7 +228,7 @@ func TestAssessmentWorker_NullOutput(t *testing.T) {
 		RequiredFields: []string{"status"},
 	})
 
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// Create a usage log with nil output (will use default "null")
 	usageLog := models.SkillUsageLog{
@@ -262,7 +262,7 @@ func TestAssessmentWorker_Submit(t *testing.T) {
 	db := setupAssessmentTestDB(t)
 
 	validator := NewSkillSchemaValidator()
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// Submit should not block even if channel is full
 	// Test with many submissions
@@ -278,7 +278,7 @@ func TestAssessmentWorker_StartStop(t *testing.T) {
 	db := setupAssessmentTestDB(t)
 
 	validator := NewSkillSchemaValidator()
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -326,7 +326,7 @@ func TestAssessmentWorker_UsesCapabilityThenHashAsFallback(t *testing.T) {
 		RequiredFields: []string{"data"},
 	})
 
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// Case 1: 有 capability → 用 capability 作为 schema key
 	validOutput := json.RawMessage(`{"data": "test"}`)

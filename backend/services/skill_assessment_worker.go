@@ -21,9 +21,12 @@ type assessmentTask struct {
 }
 
 // AssessmentWorker processes pending skill usage logs through Layer 1 Schema validation
+// and optionally Layer 2 (rule) and Layer 3 (semantic) LLM evaluations.
 type AssessmentWorker struct {
 	db        *gorm.DB
 	validator *SkillSchemaValidator
+	sampler   *AssessmentSampler
+	evaluator *SkillLLMEvaluator
 	taskCh    chan assessmentTask
 	poolSize  int
 	interval  time.Duration
@@ -37,10 +40,12 @@ type AssessmentWorker struct {
 // - Channel size: 100
 // - Pool size: 3 concurrent workers
 // - Scanner interval: 30 seconds
-func NewAssessmentWorker(db *gorm.DB, validator *SkillSchemaValidator) *AssessmentWorker {
+func NewAssessmentWorker(db *gorm.DB, validator *SkillSchemaValidator, sampler *AssessmentSampler, evaluator *SkillLLMEvaluator) *AssessmentWorker {
 	return &AssessmentWorker{
 		db:        db,
 		validator: validator,
+		sampler:   sampler,
+		evaluator: evaluator,
 		taskCh:    make(chan assessmentTask, 100),
 		poolSize:  3,
 		interval:  30 * time.Second,
@@ -234,15 +239,88 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 		return false, fmt.Errorf("failed to insert assessment result: %w", err)
 	}
 
-	// 8. Update usage log assessment_status to "assessed"
+	log.Printf("[AssessmentWorker] Layer 1 assessed %s: verdict=%s, score=%d, latency=%dms",
+		usageLogID, result.Verdict, result.Score, assessmentLatencyMs)
+
+	// --- Layer 2/3: LLM evaluation (optional, based on sampling) ---
+	if w.sampler != nil && w.evaluator != nil {
+		decision := w.sampler.Decide(&usageLog, validationResult.Valid)
+
+		// Layer 2: Rule consistency
+		if decision.ShouldEvalRule {
+			evalCtx, evalCancel := context.WithTimeout(context.Background(), 60*time.Second)
+			ruleResult, err := w.evaluator.EvaluateRule(evalCtx, &usageLog)
+			evalCancel()
+			if err != nil {
+				log.Printf("[AssessmentWorker] Layer 2 eval error for %s: %v", usageLogID, err)
+			} else {
+				latency := ruleResult.LatencyMs
+				ruleViolations := ruleResult.RuleViolations
+				ruleAssessment := models.SkillAssessmentResult{
+					ID:                   uuid.New().String(),
+					UsageLogID:           usageLogID,
+					SkillName:            skillName,
+					SkillContentHash:     usageLog.SkillContentHash,
+					AssessedAt:           time.Now(),
+					AssessmentLayer:      models.AssessmentLayerRule,
+					Verdict:              models.AssessmentVerdict(ruleResult.Verdict),
+					Score:                int16(ruleResult.Score),
+					AssessmentLatencyMs:  &latency,
+					RuleViolations:       &ruleViolations,
+					AssessmentConfidence: assessmentStrPtr(ruleResult.Confidence),
+					AssessmentModel:      assessmentStrPtr(ruleResult.Model),
+					AssessmentRawOutput:  assessmentStrPtr(ruleResult.RawOutput),
+				}
+				w.db.Create(&ruleAssessment)
+				log.Printf("[AssessmentWorker] Layer 2 assessed %s: verdict=%s, score=%d", usageLogID, ruleResult.Verdict, ruleResult.Score)
+			}
+		}
+
+		// Layer 3: Semantic quality
+		if decision.ShouldEvalSemantic {
+			evalCtx, evalCancel := context.WithTimeout(context.Background(), 60*time.Second)
+			semanticResult, err := w.evaluator.EvaluateSemantic(evalCtx, &usageLog)
+			evalCancel()
+			if err != nil {
+				log.Printf("[AssessmentWorker] Layer 3 eval error for %s: %v", usageLogID, err)
+			} else {
+				latency := semanticResult.LatencyMs
+				qualityIssues := semanticResult.QualityIssues
+				semanticAssessment := models.SkillAssessmentResult{
+					ID:                   uuid.New().String(),
+					UsageLogID:           usageLogID,
+					SkillName:            skillName,
+					SkillContentHash:     usageLog.SkillContentHash,
+					AssessedAt:           time.Now(),
+					AssessmentLayer:      models.AssessmentLayerSemantic,
+					Verdict:              models.AssessmentVerdict(semanticResult.Verdict),
+					Score:                int16(semanticResult.Score),
+					AssessmentLatencyMs:  &latency,
+					QualityIssues:        &qualityIssues,
+					AssessmentConfidence: assessmentStrPtr(semanticResult.Confidence),
+					AssessmentModel:      assessmentStrPtr(semanticResult.Model),
+					AssessmentRawOutput:  assessmentStrPtr(semanticResult.RawOutput),
+				}
+				w.db.Create(&semanticAssessment)
+				log.Printf("[AssessmentWorker] Layer 3 assessed %s: verdict=%s, score=%d", usageLogID, semanticResult.Verdict, semanticResult.Score)
+			}
+		}
+	}
+
+	// 8. Update usage log assessment_status to "assessed" (after all layers complete)
 	if err := w.db.Model(&models.SkillUsageLog{}).
 		Where("id = ?", usageLogID).
 		Update("assessment_status", models.AssessmentStatusAssessed).Error; err != nil {
 		return false, fmt.Errorf("failed to update assessment status: %w", err)
 	}
 
-	log.Printf("[AssessmentWorker] Assessed log %s: verdict=%s, score=%d, latency=%dms",
-		usageLogID, result.Verdict, result.Score, assessmentLatencyMs)
-
 	return true, nil
+}
+
+// assessmentStrPtr returns a pointer to the string, or nil if empty.
+func assessmentStrPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

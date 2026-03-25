@@ -92,7 +92,7 @@ func TestAssessment_EndToEnd_Pass(t *testing.T) {
 	})
 
 	// 3. Create an AssessmentWorker
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// 4. Insert a SkillUsageLog with valid output
 	validOutput := json.RawMessage(`{"status":"complete","config":{"vpc_id":"vpc-123"}}`)
@@ -150,7 +150,7 @@ func TestAssessment_EndToEnd_Fail(t *testing.T) {
 	})
 
 	// 3. Create worker
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// 4. Insert log with missing "config" field and invalid enum value
 	invalidOutput := json.RawMessage(`{"status":"unknown_value"}`)
@@ -213,7 +213,7 @@ func TestAssessment_EndToEnd_InvalidJSON(t *testing.T) {
 	})
 
 	// 3. Create worker
-	worker := NewAssessmentWorker(db, validator)
+	worker := NewAssessmentWorker(db, validator, nil, nil)
 
 	// 4. Insert log with invalid JSON
 	invalidJSON := json.RawMessage(`not valid json`)

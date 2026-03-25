@@ -204,7 +204,9 @@ func main() {
 	})
 	// 从 DB 加载 Task Skill metadata 中定义的 output_schema（覆盖硬编码）
 	skillValidator.LoadSchemasFromDB(db)
-	assessmentWorker := services.NewAssessmentWorker(db, skillValidator)
+	assessmentSampler := services.NewAssessmentSampler(db)
+	assessmentEvaluator := services.NewSkillLLMEvaluator(db)
+	assessmentWorker := services.NewAssessmentWorker(db, skillValidator, assessmentSampler, assessmentEvaluator)
 	router.SetAssessmentWorker(assessmentWorker)
 	log.Println("Skill Assessment Worker initialized")
 
