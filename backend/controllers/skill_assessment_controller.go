@@ -46,3 +46,28 @@ func (c *SkillAssessmentController) GetOverview(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, overview)
 }
+
+// GetCapabilityDetail returns detail data for a single capability
+// GET /api/v1/admin/skill-assessment/detail?capability=plan_summary&days=7
+func (c *SkillAssessmentController) GetCapabilityDetail(ctx *gin.Context) {
+	capability := ctx.Query("capability")
+	if capability == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "capability is required"})
+		return
+	}
+	days, _ := strconv.Atoi(ctx.DefaultQuery("days", "7"))
+	if days <= 0 || days > 365 {
+		days = 7
+	}
+
+	detail, err := c.service.GetCapabilityDetail(capability, days)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch capability detail",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, detail)
+}

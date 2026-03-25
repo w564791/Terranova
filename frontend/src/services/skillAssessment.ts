@@ -48,3 +48,45 @@ export interface AssessmentOverview {
 export async function getAssessmentOverview(days: number = 7): Promise<AssessmentOverview> {
   return await api.get(`/admin/skill-assessment/overview?days=${days}`) as unknown as AssessmentOverview;
 }
+
+// ========== Skill Detail API ==========
+
+export interface VersionStats {
+  content_hash: string;
+  total: number;
+  pass: number;
+  fail: number;
+  avg_score: number;
+  pass_rate: number;
+  first_seen: string;
+}
+
+export interface AssessmentRecord {
+  usage_log_id: string;
+  layer: string;
+  verdict: string;
+  score: number;
+  latency_ms: number | null;
+  missing_fields: string[];
+  invalid_enum_fields: string[];
+  assessed_at: string;
+  content_hash: string;
+}
+
+export interface CapabilityDetail {
+  capability: string;
+  pass_rate: number;
+  total: number;
+  pass: number;
+  fail: number;
+  avg_score: number;
+  avg_latency_ms: number;
+  latest_hash: string;
+  task_skill: string;
+  versions: VersionStats[];
+  assessments: AssessmentRecord[];
+}
+
+export async function getCapabilityDetail(capability: string, days: number = 7): Promise<CapabilityDetail> {
+  return await api.get(`/admin/skill-assessment/detail?capability=${encodeURIComponent(capability)}&days=${days}`) as unknown as CapabilityDetail;
+}

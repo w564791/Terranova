@@ -242,3 +242,156 @@ func (s *SkillAssessmentService) GetOverview(days int) (*AssessmentOverview, err
 
 	return overview, nil
 }
+
+// ========== Skill Detail API ==========
+
+// CapabilityDetail holds per-capability detail data
+type CapabilityDetail struct {
+	Capability   string               `json:"capability"`
+	PassRate     float64              `json:"pass_rate"`
+	Total        int64                `json:"total"`
+	Pass         int64                `json:"pass"`
+	Fail         int64                `json:"fail"`
+	AvgScore     float64              `json:"avg_score"`
+	AvgLatencyMs float64              `json:"avg_latency_ms"`
+	LatestHash   string               `json:"latest_hash"`
+	TaskSkill    string               `json:"task_skill"`
+	Versions     []VersionStats       `json:"versions"`
+	Assessments  []AssessmentRecord   `json:"assessments"`
+}
+
+// VersionStats holds per content_hash stats
+type VersionStats struct {
+	ContentHash string    `json:"content_hash"`
+	Total       int64     `json:"total"`
+	Pass        int64     `json:"pass"`
+	Fail        int64     `json:"fail"`
+	AvgScore    float64   `json:"avg_score"`
+	PassRate    float64   `json:"pass_rate"`
+	FirstSeen   time.Time `json:"first_seen"`
+}
+
+// AssessmentRecord holds a single assessment record for the detail table
+type AssessmentRecord struct {
+	UsageLogID    string          `json:"usage_log_id"`
+	Layer         string          `json:"layer"`
+	Verdict       string          `json:"verdict"`
+	Score         int             `json:"score"`
+	LatencyMs     *int            `json:"latency_ms"`
+	MissingFields json.RawMessage `json:"missing_fields"`
+	InvalidEnums  json.RawMessage `json:"invalid_enum_fields"`
+	AssessedAt    time.Time       `json:"assessed_at"`
+	ContentHash   string          `json:"content_hash"`
+}
+
+// GetCapabilityDetail returns detail data for a single capability
+func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int) (*CapabilityDetail, error) {
+	if days <= 0 {
+		days = 7
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	detail := &CapabilityDetail{
+		Capability:  capability,
+		Versions:    []VersionStats{},
+		Assessments: []AssessmentRecord{},
+	}
+
+	// 1. Aggregate stats for this capability
+	type aggRow struct {
+		Total        int64   `json:"total"`
+		Pass         int64   `json:"pass"`
+		Fail         int64   `json:"fail"`
+		AvgScore     float64 `json:"avg_score"`
+		AvgLatencyMs float64 `json:"avg_latency_ms"`
+	}
+	var agg aggRow
+	if err := s.db.Raw(`
+		SELECT count(*) as total,
+		       count(CASE WHEN r.verdict = 'pass' THEN 1 END) as pass,
+		       count(CASE WHEN r.verdict = 'fail' THEN 1 END) as fail,
+		       COALESCE(avg(r.score), 0) as avg_score,
+		       COALESCE(avg(l.latency_ms), 0) as avg_latency_ms
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.capability = ? AND l.created_at > ?`, capability, since).Scan(&agg).Error; err != nil {
+		return nil, err
+	}
+	detail.Total = agg.Total
+	detail.Pass = agg.Pass
+	detail.Fail = agg.Fail
+	detail.AvgScore = agg.AvgScore
+	detail.AvgLatencyMs = agg.AvgLatencyMs
+	if agg.Total > 0 {
+		detail.PassRate = float64(agg.Pass) / float64(agg.Total) * 100
+	}
+
+	// 2. Version stats (per content_hash)
+	type versionRow struct {
+		ContentHash string    `json:"content_hash"`
+		Total       int64     `json:"total"`
+		Pass        int64     `json:"pass"`
+		Fail        int64     `json:"fail"`
+		AvgScore    float64   `json:"avg_score"`
+		FirstSeen   time.Time `json:"first_seen"`
+	}
+	var vRows []versionRow
+	if err := s.db.Raw(`
+		SELECT l.skill_content_hash as content_hash,
+		       count(*) as total,
+		       count(CASE WHEN r.verdict = 'pass' THEN 1 END) as pass,
+		       count(CASE WHEN r.verdict = 'fail' THEN 1 END) as fail,
+		       COALESCE(avg(r.score), 0) as avg_score,
+		       min(l.created_at) as first_seen
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.capability = ? AND l.created_at > ? AND l.skill_content_hash != ''
+		GROUP BY l.skill_content_hash
+		ORDER BY first_seen DESC`, capability, since).Scan(&vRows).Error; err != nil {
+		return nil, err
+	}
+	for _, v := range vRows {
+		passRate := float64(0)
+		if v.Total > 0 {
+			passRate = float64(v.Pass) / float64(v.Total) * 100
+		}
+		detail.Versions = append(detail.Versions, VersionStats{
+			ContentHash: v.ContentHash,
+			Total:       v.Total,
+			Pass:        v.Pass,
+			Fail:        v.Fail,
+			AvgScore:    v.AvgScore,
+			PassRate:    passRate,
+			FirstSeen:   v.FirstSeen,
+		})
+	}
+	if len(vRows) > 0 {
+		detail.LatestHash = vRows[0].ContentHash
+	}
+
+	// 3. Task skill name (from latest usage log)
+	var taskSkill struct{ SkillName string }
+	s.db.Raw(`
+		SELECT r.skill_name
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.capability = ? AND l.created_at > ?
+		ORDER BY r.assessed_at DESC LIMIT 1`, capability, since).Scan(&taskSkill)
+	detail.TaskSkill = taskSkill.SkillName
+
+	// 4. Recent assessments (all verdicts, limit 20)
+	if err := s.db.Raw(`
+		SELECT r.usage_log_id, r.assessment_layer as layer, r.verdict, r.score,
+		       r.assessment_latency_ms as latency_ms,
+		       COALESCE(array_to_json(r.missing_fields), '[]') as missing_fields,
+		       COALESCE(array_to_json(r.invalid_enum_fields), '[]') as invalid_enum_fields,
+		       r.assessed_at, r.skill_content_hash as content_hash
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id
+		WHERE l.capability = ? AND l.created_at > ?
+		ORDER BY r.assessed_at DESC LIMIT 20`, capability, since).Scan(&detail.Assessments).Error; err != nil {
+		return nil, err
+	}
+
+	return detail, nil
+}

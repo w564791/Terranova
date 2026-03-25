@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Table, Tag, Segmented, Spin, Empty, Tooltip } from 'antd';
+import { Table, Tag, Tabs, Segmented, Spin, Empty, Tooltip } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
+import SkillDetailTab from './SkillDetailTab';
 import type { ColumnsType } from 'antd/es/table';
+import { useSearchParams } from 'react-router-dom';
 import { getAssessmentOverview, AssessmentOverview, CapabilityStats, RecentFailure, DailyTrendItem } from '../../services/skillAssessment';
 import styles from './SkillQualityDashboard.module.css';
 
@@ -10,6 +12,7 @@ const timeRangeMap: Record<string, number> = {
   '7天': 7,
   '30天': 30,
 };
+const daysToLabel: Record<number, string> = { 1: '24h', 7: '7天', 30: '30天' };
 
 // 列标题 + 说明 tooltip
 const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
@@ -59,9 +62,17 @@ function buildViolations(failures: RecentFailure[] | undefined): ViolationEntry[
 /* Main component                                                      */
 /* ------------------------------------------------------------------ */
 const SkillQualityDashboard: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<AssessmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState(7);
+
+  // Read state from URL: ?tab=quality&subtab=detail&days=7
+  const days = Number(searchParams.get('days')) || 7;
+  const setDays = (d: number) => {
+    const p = new URLSearchParams(searchParams);
+    p.set('days', String(d));
+    setSearchParams(p);
+  };
 
   useEffect(() => {
     loadData();
@@ -253,15 +264,37 @@ const SkillQualityDashboard: React.FC = () => {
   // Violation max
   const violationMax = violations.length > 0 ? violations[0].count : 1;
 
+  const activeSubTab = searchParams.get('subtab') || 'overview';
+  const setActiveSubTab = (key: string) => {
+    const p = new URLSearchParams(searchParams);
+    p.set('subtab', key);
+    setSearchParams(p);
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.timeRange}>
         <Segmented
           options={['24h', '7天', '30天']}
-          defaultValue="7天"
+          value={daysToLabel[days] || '7天'}
           onChange={(val) => setDays(timeRangeMap[val as string])}
         />
       </div>
+
+      <Tabs
+        activeKey={activeSubTab}
+        onChange={setActiveSubTab}
+        items={[
+          { key: 'overview', label: '全局概览', children: null },
+          { key: 'detail', label: 'Skill 详情', children: null },
+        ]}
+        style={{ marginBottom: 16 }}
+      />
+
+      {activeSubTab === 'detail' ? (
+        <SkillDetailTab days={days} />
+      ) : (
+      <>
 
       {/* ===================== KPI Row ===================== */}
       <div className={styles.kpiGrid}>
@@ -489,6 +522,8 @@ const SkillQualityDashboard: React.FC = () => {
           <Empty description="无失败记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };
