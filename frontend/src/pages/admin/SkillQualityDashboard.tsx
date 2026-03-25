@@ -351,8 +351,8 @@ const SkillQualityDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ===================== Two-column: Donut + Alert Summary ===================== */}
-      <div className={styles.twoCol}>
+      {/* ===================== Donut + Alert Summary (if any) ===================== */}
+      <div className={(hasSchemaErrorRate || hasHighRisk || pendingBacklog > 0) ? styles.twoCol : ''} style={{ marginBottom: 16 }}>
         {/* Evaluation Distribution — Donut */}
         <div className={styles.sectionCard}>
           <div className={styles.sectionTitle}>
@@ -385,33 +385,32 @@ const SkillQualityDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Alert Summary */}
+        {/* Alert Summary — only show when there are active alerts */}
+        {(hasSchemaErrorRate || hasHighRisk || pendingBacklog > 0) && (
         <div className={styles.sectionCard}>
           <div className={styles.sectionTitle}>
-            <ColTitle title="告警摘要" tip="基于当前数据自动生成的告警指标" />
+            <ColTitle title="告警摘要" tip="仅显示当前有风险的告警项" />
           </div>
-          <div className={`${styles.alertRow} ${hasSchemaErrorRate ? styles.alertP1 : ''}`} style={!hasSchemaErrorRate ? { borderColor: '#d9d9d9', background: '#fafafa' } : undefined}>
-            <span className={styles.alertLabel}>Schema 错误率</span>
-            {hasSchemaErrorRate
-              ? <span className={`${styles.alertBadge} ${styles.alertBadgeP1}`}>P1 告警</span>
-              : <span className={styles.alertOk}>正常</span>
-            }
-          </div>
-          <div className={`${styles.alertRow} ${hasHighRisk ? styles.alertP2 : ''}`} style={!hasHighRisk ? { borderColor: '#d9d9d9', background: '#fafafa' } : undefined}>
-            <span className={styles.alertLabel}>高风险 Skill</span>
-            {hasHighRisk
-              ? <span className={`${styles.alertBadge} ${styles.alertBadgeP2}`}>P2 风险 ({data.high_risk_skills!.length})</span>
-              : <span className={styles.alertOk}>正常</span>
-            }
-          </div>
-          <div className={`${styles.alertRow} ${pendingBacklog > 0 ? styles.alertP3 : ''}`} style={pendingBacklog <= 0 ? { borderColor: '#d9d9d9', background: '#fafafa' } : undefined}>
-            <span className={styles.alertLabel}>评估积压</span>
-            {pendingBacklog > 0
-              ? <span className={`${styles.alertBadge} ${styles.alertBadgeP3}`}>P3 待处理 ({pendingBacklog})</span>
-              : <span className={styles.alertOk}>正常</span>
-            }
-          </div>
+          {hasSchemaErrorRate && (
+            <div className={`${styles.alertRow} ${styles.alertP1}`}>
+              <span className={styles.alertLabel}>Schema 错误率超过 10%</span>
+              <span className={`${styles.alertBadge} ${styles.alertBadgeP1}`}>P1 告警</span>
+            </div>
+          )}
+          {hasHighRisk && (
+            <div className={`${styles.alertRow} ${styles.alertP2}`}>
+              <span className={styles.alertLabel}>高风险 Skill: {data.high_risk_skills!.join(', ')}</span>
+              <span className={`${styles.alertBadge} ${styles.alertBadgeP2}`}>P2 风险</span>
+            </div>
+          )}
+          {pendingBacklog > 0 && (
+            <div className={`${styles.alertRow} ${styles.alertP3}`}>
+              <span className={styles.alertLabel}>评估积压 {pendingBacklog} 条</span>
+              <span className={`${styles.alertBadge} ${styles.alertBadgeP3}`}>P3 待处理</span>
+            </div>
+          )}
         </div>
+        )}
       </div>
 
       {/* ===================== Capability Table ===================== */}
