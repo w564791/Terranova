@@ -492,6 +492,8 @@ export async function reportSkillUsageByCapability(
       task_id: taskId,
       ...(feedback ? { feedback } : {}),
     });
+    // 通知 FeedbackBanner 刷新
+    window.dispatchEvent(new Event('skill-action-reported'));
   } catch (error) {
     console.warn('[AI] Failed to report usage by capability:', error);
   }

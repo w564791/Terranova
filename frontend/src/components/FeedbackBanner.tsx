@@ -68,7 +68,13 @@ const FeedbackBanner: React.FC = () => {
   useEffect(() => {
     loadPending();
     const timer = setInterval(loadPending, 60000);
-    return () => clearInterval(timer);
+    // 监听 action 上报事件，立刻刷新
+    const onRefresh = () => setTimeout(loadPending, 1500); // 等后端落库
+    window.addEventListener('skill-action-reported', onRefresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('skill-action-reported', onRefresh);
+    };
   }, [loadPending]);
 
   const submitFeedback = async (id: string, score: number) => {
