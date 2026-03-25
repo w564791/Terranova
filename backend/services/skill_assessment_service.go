@@ -317,13 +317,18 @@ type CapabilityDetail struct {
 
 // VersionStats holds per content_hash stats
 type VersionStats struct {
-	ContentHash string    `json:"content_hash"`
-	Total       int64     `json:"total"`
-	Pass        int64     `json:"pass"`
-	Fail        int64     `json:"fail"`
-	AvgScore    float64   `json:"avg_score"`
-	PassRate    float64   `json:"pass_rate"`
-	FirstSeen   time.Time `json:"first_seen"`
+	ContentHash    string    `json:"content_hash"`
+	Total          int64     `json:"total"`
+	Pass           int64     `json:"pass"`
+	Fail           int64     `json:"fail"`
+	AvgScore       float64   `json:"avg_score"`
+	PassRate       float64   `json:"pass_rate"`
+	FirstSeen      time.Time `json:"first_seen"`
+	L1PassRate     *float64  `json:"l1_pass_rate"`
+	L2PassRate     *float64  `json:"l2_pass_rate"`
+	L2AvgScore     *float64  `json:"l2_avg_score"`
+	L3PassRate     *float64  `json:"l3_pass_rate"`
+	L3AvgScore     *float64  `json:"l3_avg_score"`
 }
 
 // AssessmentRecord holds a single assessment record for the detail table
@@ -381,7 +386,7 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		detail.PassRate = float64(agg.Pass) / float64(agg.Total) * 100
 	}
 
-	// 2. Version stats (per content_hash)
+	// 2. Version stats (per content_hash, with per-layer breakdown)
 	type versionRow struct {
 		ContentHash string    `json:"content_hash"`
 		Total       int64     `json:"total"`
@@ -389,6 +394,14 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		Fail        int64     `json:"fail"`
 		AvgScore    float64   `json:"avg_score"`
 		FirstSeen   time.Time `json:"first_seen"`
+		L1Total     int64     `json:"l1_total"`
+		L1Pass      int64     `json:"l1_pass"`
+		L2Total     int64     `json:"l2_total"`
+		L2Pass      int64     `json:"l2_pass"`
+		L2AvgScore  float64   `json:"l2_avg_score"`
+		L3Total     int64     `json:"l3_total"`
+		L3Pass      int64     `json:"l3_pass"`
+		L3AvgScore  float64   `json:"l3_avg_score"`
 	}
 	var vRows []versionRow
 	if err := s.db.Raw(`
@@ -397,7 +410,15 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		       count(CASE WHEN r.verdict = 'pass' THEN 1 END) as pass,
 		       count(CASE WHEN r.verdict = 'fail' THEN 1 END) as fail,
 		       COALESCE(avg(r.score), 0) as avg_score,
-		       min(l.created_at) as first_seen
+		       min(l.created_at) as first_seen,
+		       count(CASE WHEN r.assessment_layer = 'schema' THEN 1 END) as l1_total,
+		       count(CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'pass' THEN 1 END) as l1_pass,
+		       count(CASE WHEN r.assessment_layer = 'rule' THEN 1 END) as l2_total,
+		       count(CASE WHEN r.assessment_layer = 'rule' AND r.verdict = 'pass' THEN 1 END) as l2_pass,
+		       COALESCE(avg(CASE WHEN r.assessment_layer = 'rule' THEN r.score END), 0) as l2_avg_score,
+		       count(CASE WHEN r.assessment_layer = 'semantic' THEN 1 END) as l3_total,
+		       count(CASE WHEN r.assessment_layer = 'semantic' AND r.verdict = 'pass' THEN 1 END) as l3_pass,
+		       COALESCE(avg(CASE WHEN r.assessment_layer = 'semantic' THEN r.score END), 0) as l3_avg_score
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
 		WHERE l.capability = ? AND l.created_at > ? AND l.skill_content_hash != ''
@@ -410,7 +431,7 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 		if v.Total > 0 {
 			passRate = float64(v.Pass) / float64(v.Total) * 100
 		}
-		detail.Versions = append(detail.Versions, VersionStats{
+		vs := VersionStats{
 			ContentHash: v.ContentHash,
 			Total:       v.Total,
 			Pass:        v.Pass,
@@ -418,7 +439,22 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days int
 			AvgScore:    v.AvgScore,
 			PassRate:    passRate,
 			FirstSeen:   v.FirstSeen,
-		})
+		}
+		if v.L1Total > 0 {
+			r := float64(v.L1Pass) / float64(v.L1Total) * 100
+			vs.L1PassRate = &r
+		}
+		if v.L2Total > 0 {
+			r := float64(v.L2Pass) / float64(v.L2Total) * 100
+			vs.L2PassRate = &r
+			vs.L2AvgScore = &v.L2AvgScore
+		}
+		if v.L3Total > 0 {
+			r := float64(v.L3Pass) / float64(v.L3Total) * 100
+			vs.L3PassRate = &r
+			vs.L3AvgScore = &v.L3AvgScore
+		}
+		detail.Versions = append(detail.Versions, vs)
 	}
 	if len(vRows) > 0 {
 		detail.LatestHash = vRows[0].ContentHash

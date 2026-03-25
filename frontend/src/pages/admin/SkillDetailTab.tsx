@@ -68,8 +68,24 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
         return <span style={{ color, fontWeight: 600 }}>{r.pass_rate.toFixed(1)}%</span>;
       },
     },
-    { title: 'Layer 2', key: 'l2', render: () => <span style={{ color: '#bbb' }}>-</span> },
-    { title: 'Layer 3', key: 'l3', render: () => <span style={{ color: '#bbb' }}>-</span> },
+    {
+      title: <ColTitle title="Layer 2" tip="规则一致性评估通过率（LLM 评估）" />,
+      key: 'l2',
+      render: (_: unknown, r: VersionStats) => {
+        if (r.l2_pass_rate == null) return <span style={{ color: '#bbb' }}>-</span>;
+        const color = r.l2_pass_rate >= 80 ? '#52c41a' : r.l2_pass_rate >= 50 ? '#faad14' : '#ff4d4f';
+        return <Tooltip title={`均分: ${r.l2_avg_score?.toFixed(1) ?? '-'}`}><span style={{ color, fontWeight: 600 }}>{r.l2_pass_rate.toFixed(1)}%</span></Tooltip>;
+      },
+    },
+    {
+      title: <ColTitle title="Layer 3" tip="语义质量评估通过率（LLM 评估）" />,
+      key: 'l3',
+      render: (_: unknown, r: VersionStats) => {
+        if (r.l3_pass_rate == null) return <span style={{ color: '#bbb' }}>-</span>;
+        const color = r.l3_pass_rate >= 80 ? '#52c41a' : r.l3_pass_rate >= 50 ? '#faad14' : '#ff4d4f';
+        return <Tooltip title={`均分: ${r.l3_avg_score?.toFixed(1) ?? '-'}`}><span style={{ color, fontWeight: 600 }}>{r.l3_pass_rate.toFixed(1)}%</span></Tooltip>;
+      },
+    },
     {
       title: '调用次数',
       dataIndex: 'total',
@@ -275,7 +291,34 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
                 <div className={styles.emptyState}>无违规记录</div>
               )}
               <div style={{ marginTop: 24, fontSize: 12, color: '#8c8c8c', fontWeight: 500 }}>Layer 2 - 规则违规</div>
-              <div className={styles.emptyState} style={{ padding: 16 }}>Phase 3 启用后可用</div>
+              {(() => {
+                // Parse rule_violations from assessments with layer=rule
+                const ruleViolations: { label: string; count: number }[] = [];
+                const counts: Record<string, number> = {};
+                for (const a of detail?.assessments || []) {
+                  if (a.layer !== 'rule' || a.verdict === 'pass') continue;
+                  // rule_violations is JSON array of {rule, detail}
+                  try {
+                    const violations = typeof a.missing_fields === 'string' ? [] : (a as any).rule_violations;
+                    // rule_violations may not be in AssessmentRecord type, check raw
+                  } catch { /* ignore */ }
+                }
+                // Simpler: just show count of rule layer failures
+                const ruleAssessments = (detail?.assessments || []).filter(a => a.layer === 'rule');
+                const ruleFails = ruleAssessments.filter(a => a.verdict === 'fail' || a.verdict === 'warn');
+                if (ruleFails.length === 0) {
+                  return <div className={styles.emptyState} style={{ padding: 16 }}>无规则违规记录</div>;
+                }
+                return ruleFails.map(a => (
+                  <div key={a.usage_log_id} className={styles.hbarRow}>
+                    <span className={styles.hbarLabel}>评估 {a.verdict} (score: {a.score})</span>
+                    <div className={styles.hbarTrack}>
+                      <div className={styles.hbarFill} style={{ width: `${100 - a.score}%`, background: a.verdict === 'fail' ? '#ff4d4f' : '#fa8c16' }} />
+                    </div>
+                    <span className={styles.hbarCount}>{a.score}分</span>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 

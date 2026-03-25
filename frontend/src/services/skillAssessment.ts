@@ -63,6 +63,11 @@ export interface VersionStats {
   avg_score: number;
   pass_rate: number;
   first_seen: string;
+  l1_pass_rate: number | null;
+  l2_pass_rate: number | null;
+  l2_avg_score: number | null;
+  l3_pass_rate: number | null;
+  l3_avg_score: number | null;
 }
 
 export interface AssessmentRecord {
