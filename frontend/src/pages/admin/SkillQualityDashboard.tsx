@@ -66,12 +66,13 @@ const SkillQualityDashboard: React.FC = () => {
   const [data, setData] = useState<AssessmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Read state from URL: ?tab=quality&subtab=detail&days=7
-  const days = Number(searchParams.get('days')) || 7;
+  // Local state for immediate UI response, URL for persistence
+  const [days, setDaysLocal] = useState(() => Number(searchParams.get('days')) || 7);
   const setDays = (d: number) => {
+    setDaysLocal(d);
     const p = new URLSearchParams(searchParams);
     p.set('days', String(d));
-    setSearchParams(p);
+    setSearchParams(p, { replace: true });
   };
 
   useEffect(() => {
@@ -264,11 +265,12 @@ const SkillQualityDashboard: React.FC = () => {
   // Violation max
   const violationMax = violations.length > 0 ? violations[0].count : 1;
 
-  const activeSubTab = searchParams.get('subtab') || 'overview';
+  const [activeSubTab, setActiveSubTabLocal] = useState(() => searchParams.get('subtab') || 'overview');
   const setActiveSubTab = (key: string) => {
+    setActiveSubTabLocal(key);
     const p = new URLSearchParams(searchParams);
     p.set('subtab', key);
-    setSearchParams(p);
+    setSearchParams(p, { replace: true });
   };
 
   return (
