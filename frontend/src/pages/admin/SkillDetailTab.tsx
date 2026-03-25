@@ -78,21 +78,23 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
       },
     },
     {
-      title: <ColTitle title="Layer 2" tip="规则一致性评估通过率（LLM 评估）" />,
+      title: <ColTitle title="Layer 2" tip="规则一致性 LLM 评估均分（0-100）。>=70 良好，50-69 有问题，<50 严重违规" />,
       key: 'l2',
       render: (_: unknown, r: VersionStats) => {
-        if (r.l2_pass_rate == null) return <span style={{ color: '#bbb' }}>-</span>;
-        const color = r.l2_pass_rate >= 80 ? '#52c41a' : r.l2_pass_rate >= 50 ? '#faad14' : '#ff4d4f';
-        return <Tooltip title={`均分: ${r.l2_avg_score?.toFixed(1) ?? '-'}`}><span style={{ color, fontWeight: 600 }}>{r.l2_pass_rate.toFixed(1)}%</span></Tooltip>;
+        if (r.l2_avg_score == null) return <span style={{ color: '#bbb' }}>-</span>;
+        const score = r.l2_avg_score;
+        const color = score >= 70 ? '#52c41a' : score >= 50 ? '#faad14' : '#ff4d4f';
+        return <span style={{ color, fontWeight: 600 }}>{score.toFixed(0)}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></span>;
       },
     },
     {
-      title: <ColTitle title="Layer 3" tip="语义质量评估通过率（LLM 评估）" />,
+      title: <ColTitle title="Layer 3" tip="语义质量 LLM 评估均分（0-100）。>=70 良好，50-69 有问题，<50 质量差" />,
       key: 'l3',
       render: (_: unknown, r: VersionStats) => {
-        if (r.l3_pass_rate == null) return <span style={{ color: '#bbb' }}>-</span>;
-        const color = r.l3_pass_rate >= 80 ? '#52c41a' : r.l3_pass_rate >= 50 ? '#faad14' : '#ff4d4f';
-        return <Tooltip title={`均分: ${r.l3_avg_score?.toFixed(1) ?? '-'}`}><span style={{ color, fontWeight: 600 }}>{r.l3_pass_rate.toFixed(1)}%</span></Tooltip>;
+        if (r.l3_avg_score == null) return <span style={{ color: '#bbb' }}>-</span>;
+        const score = r.l3_avg_score;
+        const color = score >= 70 ? '#52c41a' : score >= 50 ? '#faad14' : '#ff4d4f';
+        return <span style={{ color, fontWeight: 600 }}>{score.toFixed(0)}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></span>;
       },
     },
     {
