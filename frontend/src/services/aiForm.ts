@@ -486,12 +486,14 @@ export async function reportSkillUsageByCapability(
   taskId?: number
 ): Promise<string | null> {
   try {
-    const res = await api.put('/ai/skill-usage/by-capability', {
+    const res: any = await api.put('/ai/skill-usage/by-capability', {
       capability,
       action,
       task_id: taskId,
-    }) as { usage_log_id?: string };
-    return res?.usage_log_id || null;
+    });
+    // api interceptor returns response.data directly, so res = { status: "ok", usage_log_id: "xxx" }
+    const logId = res?.usage_log_id || res?.data?.usage_log_id || null;
+    return logId;
   } catch (error) {
     console.warn('[AI] Failed to report usage by capability:', error);
     return null;
