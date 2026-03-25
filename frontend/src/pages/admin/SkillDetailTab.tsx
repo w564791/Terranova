@@ -332,14 +332,31 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ textAlign: 'center', padding: 20 }}>
-                      <div style={{ fontSize: 14, color: '#8c8c8c', marginBottom: 12 }}>评估盲区检测</div>
-                      <div style={{ fontSize: 36, fontWeight: 600, color: blindSpot && parseFloat(blindSpot) > 15 ? '#ff4d4f' : blindSpot ? '#52c41a' : '#bbb' }}>
-                        {blindSpot ? `${blindSpot}%` : '-'}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 8 }}>
-                        评估 pass 但用户差评的比例<br />
-                        {blindSpot ? `(${fm!.pass_negative} 条盲区 / ${totalWithFeedback} 条有反馈)` : '(需要用户反馈数据积累)'}
+                    <div style={{ padding: 16 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>盲区检测</div>
+                      <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.8 }}>
+                        {totalWithFeedback > 0 ? (
+                          <>
+                            <div>共 <b>{totalWithFeedback}</b> 条有用户评分的记录：</div>
+                            {fm!.pass_negative > 0 && (
+                              <div style={{ color: '#ff4d4f', fontWeight: 500 }}>
+                                ⚠ AI 评估通过但用户给了差评：<b>{fm!.pass_negative}</b> 条
+                                <span style={{ color: '#8c8c8c', fontWeight: 400 }}>（占 {((fm!.pass_negative / totalWithFeedback) * 100).toFixed(0)}%，说明评估标准可能遗漏了用户关注的问题）</span>
+                              </div>
+                            )}
+                            {fm!.fail_positive > 0 && (
+                              <div style={{ color: '#fa8c16', fontWeight: 500 }}>
+                                ⚠ AI 评估失败但用户给了好评：<b>{fm!.fail_positive}</b> 条
+                                <span style={{ color: '#8c8c8c', fontWeight: 400 }}>（说明评估标准可能过于严格）</span>
+                              </div>
+                            )}
+                            {fm!.pass_negative === 0 && fm!.fail_positive === 0 && (
+                              <div style={{ color: '#52c41a' }}>✓ 评估结果与用户反馈一致，暂无盲区</div>
+                            )}
+                          </>
+                        ) : (
+                          <div style={{ color: '#8c8c8c' }}>暂无用户评分数据，无法检测盲区</div>
+                        )}
                       </div>
                     </div>
                   </>
