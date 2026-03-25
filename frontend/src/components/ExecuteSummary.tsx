@@ -5,7 +5,8 @@ import {
   confirmPlanSummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
-import { reportSkillUsageByCapability } from '../services/aiForm';
+import { reportSkillUsageByCapability, reportSkillUsageFeedback } from '../services/aiForm';
+import { notification } from 'antd';
 import styles from './ExecuteSummary.module.css';
 
 // 安全渲染：防止 AI 返回的对象被直接当 React child
@@ -448,6 +449,34 @@ const DecisionConfirmation: React.FC<{
     );
   }
 
+  const showFeedback = (logId: string) => {
+    const stars = ['😞', '😕', '😐', '🙂', '😊'];
+    const key = `feedback-${logId}`;
+    notification.info({
+      key,
+      message: 'AI 分析质量如何？',
+      description: '点击表情评分，帮助我们改进',
+      duration: 20,
+      placement: 'bottomRight',
+      btn: React.createElement('div', { style: { display: 'flex', gap: 12, marginTop: 8 } },
+        stars.map((emoji, i) =>
+          React.createElement('span', {
+            key: i + 1,
+            style: { cursor: 'pointer', fontSize: 28, transition: 'transform 0.15s' },
+            title: `${i + 1} 分`,
+            onMouseEnter: (e: React.MouseEvent) => { (e.target as HTMLElement).style.transform = 'scale(1.3)'; },
+            onMouseLeave: (e: React.MouseEvent) => { (e.target as HTMLElement).style.transform = 'scale(1)'; },
+            onClick: () => {
+              reportSkillUsageFeedback(logId, i + 1);
+              notification.destroy(key);
+              notification.success({ message: `感谢评分：${emoji} (${i + 1}/5)`, duration: 3, placement: 'bottomRight' });
+            },
+          }, emoji)
+        )
+      ),
+    });
+  };
+
   const handleConfirm = async () => {
     if (!allChecked) return;
     try {
@@ -455,8 +484,8 @@ const DecisionConfirmation: React.FC<{
       setError('');
       const decisionCode = Array.from(checkedCodes).join(',');
       await confirmPlanSummary(workspaceId, taskId, decisionCode, note);
-      // 上报 plan_summary 用户决策：确认执行
-      reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
+      const logId = await reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
+      if (logId) setTimeout(() => showFeedback(logId), 1000);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');
@@ -470,8 +499,8 @@ const DecisionConfirmation: React.FC<{
       setSubmitting(true);
       setError('');
       await confirmPlanSummary(workspaceId, taskId, 'ABORT', note);
-      // 上报 plan_summary 用户决策：终止
-      reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
+      const logId = await reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
+      if (logId) setTimeout(() => showFeedback(logId), 1000);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');

@@ -479,18 +479,21 @@ export async function reportSkillUsageFeedback(
 }
 
 // Report user action by capability + context (for plan_summary etc.)
+// Returns usage_log_id if successful (for subsequent feedback)
 export async function reportSkillUsageByCapability(
   capability: string,
   action: 'accepted' | 'aborted',
   taskId?: number
-): Promise<void> {
+): Promise<string | null> {
   try {
-    await api.put('/ai/skill-usage/by-capability', {
+    const res = await api.put('/ai/skill-usage/by-capability', {
       capability,
       action,
       task_id: taskId,
-    });
+    }) as { usage_log_id?: string };
+    return res?.usage_log_id || null;
   } catch (error) {
     console.warn('[AI] Failed to report usage by capability:', error);
+    return null;
   }
 }
