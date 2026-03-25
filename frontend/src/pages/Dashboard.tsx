@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Tabs } from 'antd';
 import api from '../services/api';
+import SkillQualityDashboard from './admin/SkillQualityDashboard';
 import styles from './Dashboard.module.css';
 
 interface OverviewStats {
@@ -50,8 +52,8 @@ const Dashboard: React.FC = () => {
     return <div className={styles.loading}>Loading...</div>;
   }
 
-  return (
-    <div className={styles.container}>
+  const overviewContent = (
+    <>
       {/* Usage Report Section */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
@@ -152,6 +154,18 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </section>
+    </>
+  );
+
+  return (
+    <div className={styles.container}>
+      <Tabs
+        defaultActiveKey="overview"
+        items={[
+          { key: 'overview', label: '概览', children: overviewContent },
+          { key: 'quality', label: 'Skill 质量监控', children: <SkillQualityDashboard /> },
+        ]}
+      />
     </div>
   );
 };
