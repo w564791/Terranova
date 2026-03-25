@@ -13082,6 +13082,33 @@ CREATE INDEX idx_assessment_at ON public.skill_assessment_results USING btree (a
 
 
 --
+-- Name: skill_golden_sets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE IF NOT EXISTS public.skill_golden_sets (
+  id                  VARCHAR(36) PRIMARY KEY,
+  skill_name          VARCHAR(128) NOT NULL,
+  assessment_layer    VARCHAR(16)  NOT NULL,
+  input_snapshot      JSONB        NOT NULL,
+  output_snapshot     JSONB        NOT NULL,
+  expected_verdict    VARCHAR(16)  NOT NULL,
+  expected_score_min  SMALLINT     NOT NULL,
+  expected_score_max  SMALLINT     NOT NULL,
+  annotations         JSONB,
+  created_by          VARCHAR(128),
+  created_at          TIMESTAMPTZ  DEFAULT NOW(),
+  is_active           BOOLEAN      DEFAULT true
+);
+
+
+--
+-- Name: idx_golden_skill_layer; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_golden_skill_layer ON public.skill_golden_sets (skill_name, assessment_layer) WHERE is_active = true;
+
+
+--
 -- Name: idx_skill_usage_logs_capability; Type: INDEX; Schema: public; Owner: -
 --
 

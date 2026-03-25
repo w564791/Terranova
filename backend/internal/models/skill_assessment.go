@@ -139,3 +139,22 @@ type SkillAssessmentResult struct {
 func (SkillAssessmentResult) TableName() string {
 	return "skill_assessment_results"
 }
+
+// SkillGoldenSet Golden Set 黄金测试集模型
+type SkillGoldenSet struct {
+	ID               string           `gorm:"primaryKey;type:varchar(36)" json:"id"`
+	SkillName        string           `gorm:"type:varchar(128);not null" json:"skill_name"`
+	AssessmentLayer  AssessmentLayer  `gorm:"type:varchar(16);not null" json:"assessment_layer"`
+	InputSnapshot    json.RawMessage  `gorm:"type:jsonb;not null" json:"input_snapshot"`
+	OutputSnapshot   json.RawMessage  `gorm:"type:jsonb;not null" json:"output_snapshot"`
+	ExpectedVerdict  string           `gorm:"type:varchar(16);not null" json:"expected_verdict"`
+	ExpectedScoreMin int              `gorm:"type:smallint;not null" json:"expected_score_min"`
+	ExpectedScoreMax int              `gorm:"type:smallint;not null" json:"expected_score_max"`
+	Annotations      *json.RawMessage `gorm:"type:jsonb" json:"annotations,omitempty"`
+	CreatedBy        string           `gorm:"type:varchar(128)" json:"created_by,omitempty"`
+	CreatedAt        time.Time        `json:"created_at"`
+	IsActive         bool             `gorm:"default:true" json:"is_active"`
+}
+
+// TableName 指定表名
+func (SkillGoldenSet) TableName() string { return "skill_golden_sets" }
