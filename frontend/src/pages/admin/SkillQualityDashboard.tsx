@@ -261,23 +261,23 @@ const SkillQualityDashboard: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.timeRange}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
+        <Tabs
+          activeKey={activeSubTab}
+          onChange={setActiveSubTab}
+          items={[
+            { key: 'overview', label: '全局概览', children: null },
+            { key: 'detail', label: 'Skill 详情', children: null },
+          ]}
+          style={{ marginBottom: 0, flex: 1 }}
+        />
         <Segmented
           options={['24h', '7天', '30天']}
           value={daysToLabel[days] || '7天'}
           onChange={(val) => setDays(timeRangeMap[val as string])}
+          style={{ flexShrink: 0 }}
         />
       </div>
-
-      <Tabs
-        activeKey={activeSubTab}
-        onChange={setActiveSubTab}
-        items={[
-          { key: 'overview', label: '全局概览', children: null },
-          { key: 'detail', label: 'Skill 详情', children: null },
-        ]}
-        style={{ marginBottom: 16 }}
-      />
 
       {activeSubTab === 'detail' ? (
         <SkillDetailTab days={days} />
