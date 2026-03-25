@@ -157,6 +157,7 @@ export interface GenerateConfigWithCMDBResponse {
   message: string;
   cmdb_lookups?: CMDBLookupResult[];
   warnings?: string[];
+  usage_log_id?: string;
 }
 
 // 带 CMDB 查询的配置生成请求
@@ -222,6 +223,7 @@ export interface ProgressEvent {
   config?: Record<string, unknown>;
   cmdb_lookups?: CMDBLookupResult[];
   error?: string;
+  usage_log_id?: string;
 }
 
 // SSE 配置生成请求参数
@@ -354,6 +356,7 @@ export const generateFormConfigWithSSE = async (
               config: event.config,
               cmdb_lookups: event.cmdb_lookups,
               message: event.message || '配置生成成功',
+              usage_log_id: event.usage_log_id,
             };
           } else if (event.type === 'need_selection') {
             finalResponse = {
@@ -446,3 +449,20 @@ export const generateFormConfigWithProgress = async (
     clearTimeout(timeoutId);
   }
 };
+
+// Report user action on AI generation result
+export async function reportSkillUsageAction(
+  usageLogId: string,
+  action: 'accepted' | 'modified' | 'aborted',
+  modificationDiff?: string
+): Promise<void> {
+  try {
+    await api.put(`/ai/skill-usage/${usageLogId}/action`, {
+      action,
+      modification_diff: modificationDiff,
+    });
+  } catch (error) {
+    console.warn('[AI] Failed to report usage action:', error);
+    // Non-critical, don't throw
+  }
+}
