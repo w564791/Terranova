@@ -106,3 +106,18 @@ func (c *SkillAssessmentController) CompareVersions(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, compare)
 }
+
+// GetTopViolations returns the most frequent rule violations
+// GET /api/v1/admin/skill-assessment/top-violations?capability=xxx&days=7&limit=10
+func (c *SkillAssessmentController) GetTopViolations(ctx *gin.Context) {
+	capability := ctx.Query("capability") // optional
+	days, _ := strconv.Atoi(ctx.DefaultQuery("days", "7"))
+	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+
+	violations, err := c.service.GetTopViolations(capability, days, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"violations": violations})
+}

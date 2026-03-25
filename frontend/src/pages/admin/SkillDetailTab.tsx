@@ -3,7 +3,7 @@ import { Select, Table, Tag, Tooltip, Spin, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
-import { getCapabilityDetail, getAssessmentOverview, CapabilityDetail, VersionStats, AssessmentRecord, FeedbackMatrix } from '../../services/skillAssessment';
+import { getCapabilityDetail, getAssessmentOverview, getTopViolations, CapabilityDetail, VersionStats, AssessmentRecord, FeedbackMatrix, TopViolation } from '../../services/skillAssessment';
 import styles from './SkillQualityDashboard.module.css';
 
 const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
@@ -24,6 +24,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [selected, setSelectedLocal] = useState<string>(() => searchParams.get('cap') || '');
   const [detail, setDetail] = useState<CapabilityDetail | null>(null);
+  const [violations, setViolations] = useState<TopViolation[]>([]);
   const [loading, setLoading] = useState(false);
 
   const setSelected = (cap: string) => {
@@ -44,12 +45,15 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
     });
   }, [days]);
 
-  // Load detail when selection changes
+  // Load detail + violations when selection changes
   useEffect(() => {
     if (!selected) return;
     setLoading(true);
-    getCapabilityDetail(selected, days)
-      .then(setDetail)
+    Promise.all([
+      getCapabilityDetail(selected, days),
+      getTopViolations(selected, days, 10),
+    ])
+      .then(([d, v]) => { setDetail(d); setViolations(v); })
       .catch(e => console.error('Failed to load detail:', e))
       .finally(() => setLoading(false));
   }, [selected, days]);
@@ -172,35 +176,11 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
     },
   ];
 
-  /* ---------- Violation distribution from assessments ---------- */
-  const violations = React.useMemo(() => {
-    if (!detail?.assessments) return [];
-    const counts: Record<string, { count: number; color: string }> = {};
-    for (const a of detail.assessments) {
-      if (a.verdict !== 'fail') continue;
-      for (const mf of a.missing_fields || []) {
-        const k = `缺失: ${mf}`;
-        if (!counts[k]) counts[k] = { count: 0, color: '#ff4d4f' };
-        counts[k].count++;
-      }
-      for (const ie of a.invalid_enum_fields || []) {
-        const k = `枚举: ${ie}`;
-        if (!counts[k]) counts[k] = { count: 0, color: '#fa8c16' };
-        counts[k].count++;
-      }
-      if (!(a.missing_fields?.length) && !(a.invalid_enum_fields?.length)) {
-        const k = '输出非合法 JSON';
-        if (!counts[k]) counts[k] = { count: 0, color: '#ff4d4f' };
-        counts[k].count++;
-      }
-    }
-    return Object.entries(counts)
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 10)
-      .map(([label, { count, color }]) => ({ label, count, color }));
-  }, [detail?.assessments]);
-
-  const violationMax = violations.length > 0 ? violations[0].count : 1;
+  // Violations: split by layer for display
+  const ruleViolations = violations.filter(v => v.layer === 'rule');
+  const semanticViolations = violations.filter(v => v.layer === 'semantic');
+  const allViolations = [...ruleViolations, ...semanticViolations];
+  const violationMax = allViolations.length > 0 ? Math.max(...allViolations.map(v => v.count)) : 1;
 
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '80px 0' }}><Spin size="large" /></div>;
@@ -280,56 +260,46 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               )}
             </div>
 
-            {/* Violation distribution */}
+            {/* Violation distribution — from API */}
             <div className={styles.sectionCard}>
               <div className={styles.sectionTitle}>
-                <ColTitle title="违规分布" tip="该 Capability 下最常见的 Schema 校验失败原因" />
+                <ColTitle title="高频违规分布" tip="从 L2 规则违反和 L3 质量问题中提取的高频问题（后端聚合）" />
               </div>
-              <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8, fontWeight: 500 }}>Layer 1 - Schema 违规</div>
-              {violations.length > 0 ? (
-                violations.map(v => (
-                  <div key={v.label} className={styles.hbarRow}>
-                    <Tooltip title={v.label}>
-                      <span className={styles.hbarLabel}>{v.label}</span>
-                    </Tooltip>
-                    <div className={styles.hbarTrack}>
-                      <div className={styles.hbarFill} style={{ width: `${(v.count / violationMax) * 100}%`, background: v.color }} />
+              {ruleViolations.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8, fontWeight: 500 }}>Layer 2 - 规则违规 Top {ruleViolations.length}</div>
+                  {ruleViolations.map((v, i) => (
+                    <div key={`r-${i}`} className={styles.hbarRow}>
+                      <Tooltip title={v.rule_name}>
+                        <span className={styles.hbarLabel}>{v.rule_name}</span>
+                      </Tooltip>
+                      <div className={styles.hbarTrack}>
+                        <div className={styles.hbarFill} style={{ width: `${(v.count / violationMax) * 100}%`, background: '#ff4d4f' }} />
+                      </div>
+                      <span className={styles.hbarCount}>{v.count}</span>
                     </div>
-                    <span className={styles.hbarCount}>{v.count} 次</span>
-                  </div>
-                ))
-              ) : (
+                  ))}
+                </>
+              )}
+              {semanticViolations.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8, marginTop: ruleViolations.length > 0 ? 16 : 0, fontWeight: 500 }}>Layer 3 - 语义问题 Top {semanticViolations.length}</div>
+                  {semanticViolations.map((v, i) => (
+                    <div key={`s-${i}`} className={styles.hbarRow}>
+                      <Tooltip title={v.rule_name}>
+                        <span className={styles.hbarLabel}>{v.rule_name}</span>
+                      </Tooltip>
+                      <div className={styles.hbarTrack}>
+                        <div className={styles.hbarFill} style={{ width: `${(v.count / violationMax) * 100}%`, background: '#fa8c16' }} />
+                      </div>
+                      <span className={styles.hbarCount}>{v.count}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              {ruleViolations.length === 0 && semanticViolations.length === 0 && (
                 <div className={styles.emptyState}>无违规记录</div>
               )}
-              <div style={{ marginTop: 24, fontSize: 12, color: '#8c8c8c', fontWeight: 500 }}>Layer 2 - 规则违规</div>
-              {(() => {
-                // Parse rule_violations from assessments with layer=rule
-                const ruleViolations: { label: string; count: number }[] = [];
-                const counts: Record<string, number> = {};
-                for (const a of detail?.assessments || []) {
-                  if (a.layer !== 'rule' || a.verdict === 'pass') continue;
-                  // rule_violations is JSON array of {rule, detail}
-                  try {
-                    const violations = typeof a.missing_fields === 'string' ? [] : (a as any).rule_violations;
-                    // rule_violations may not be in AssessmentRecord type, check raw
-                  } catch { /* ignore */ }
-                }
-                // Simpler: just show count of rule layer failures
-                const ruleAssessments = (detail?.assessments || []).filter(a => a.layer === 'rule');
-                const ruleFails = ruleAssessments.filter(a => a.verdict === 'fail' || a.verdict === 'warn');
-                if (ruleFails.length === 0) {
-                  return <div className={styles.emptyState} style={{ padding: 16 }}>无规则违规记录</div>;
-                }
-                return ruleFails.map(a => (
-                  <div key={a.usage_log_id} className={styles.hbarRow}>
-                    <span className={styles.hbarLabel}>评估 {a.verdict} (score: {a.score})</span>
-                    <div className={styles.hbarTrack}>
-                      <div className={styles.hbarFill} style={{ width: `${100 - a.score}%`, background: a.verdict === 'fail' ? '#ff4d4f' : '#fa8c16' }} />
-                    </div>
-                    <span className={styles.hbarCount}>{a.score}分</span>
-                  </div>
-                ));
-              })()}
             </div>
           </div>
 

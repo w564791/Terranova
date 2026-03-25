@@ -127,3 +127,16 @@ export interface VersionCompare {
 export async function compareVersions(capability: string, hashA: string, hashB: string, days: number = 7): Promise<VersionCompare> {
   return await api.get(`/admin/skill-assessment/compare?capability=${encodeURIComponent(capability)}&hash_a=${encodeURIComponent(hashA)}&hash_b=${encodeURIComponent(hashB)}&days=${days}`) as unknown as VersionCompare;
 }
+
+// ========== Top Violations API ==========
+
+export interface TopViolation {
+  rule_name: string;
+  count: number;
+  layer: string; // rule | semantic
+}
+
+export async function getTopViolations(capability: string, days: number = 7, limit: number = 10): Promise<TopViolation[]> {
+  const res: any = await api.get(`/admin/skill-assessment/top-violations?capability=${encodeURIComponent(capability)}&days=${days}&limit=${limit}`);
+  return res?.violations || [];
+}

@@ -421,6 +421,71 @@ func (s *SkillAssessmentService) CompareVersions(capability, hashA, hashB string
 	return result, nil
 }
 
+// ========== Top Violations API ==========
+
+// TopViolation holds a single high-frequency violation entry
+type TopViolation struct {
+	RuleName string `json:"rule_name"`
+	Count    int64  `json:"count"`
+	Layer    string `json:"layer"` // rule | semantic
+}
+
+// GetTopViolations returns the most frequent rule violations across all assessments
+func (s *SkillAssessmentService) GetTopViolations(capability string, days, limit int) ([]TopViolation, error) {
+	if days <= 0 {
+		days = 7
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	var results []TopViolation
+
+	// Layer 2: rule_violations
+	var ruleViolations []TopViolation
+	query := `
+		SELECT v->>'rule' as rule_name, count(*) as count, 'rule' as layer
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id,
+		     jsonb_array_elements(r.rule_violations) as v
+		WHERE r.assessment_layer = 'rule'
+		  AND r.rule_violations IS NOT NULL AND r.rule_violations != 'null'
+		  AND l.created_at > ?`
+	args := []interface{}{since}
+	if capability != "" {
+		query += " AND l.capability = ?"
+		args = append(args, capability)
+	}
+	query += " GROUP BY v->>'rule' ORDER BY count DESC LIMIT ?"
+	args = append(args, limit)
+	s.db.Raw(query, args...).Scan(&ruleViolations)
+	results = append(results, ruleViolations...)
+
+	// Layer 3: quality_issues
+	var qualityIssues []TopViolation
+	query2 := `
+		SELECT COALESCE(v->>'field', 'general') || ': ' || COALESCE(LEFT(v->>'issue', 60), '') as rule_name,
+		       count(*) as count, 'semantic' as layer
+		FROM skill_assessment_results r
+		JOIN skill_usage_logs l ON l.id = r.usage_log_id,
+		     jsonb_array_elements(r.quality_issues) as v
+		WHERE r.assessment_layer = 'semantic'
+		  AND r.quality_issues IS NOT NULL AND r.quality_issues != 'null'
+		  AND l.created_at > ?`
+	args2 := []interface{}{since}
+	if capability != "" {
+		query2 += " AND l.capability = ?"
+		args2 = append(args2, capability)
+	}
+	query2 += " GROUP BY rule_name ORDER BY count DESC LIMIT ?"
+	args2 = append(args2, limit)
+	s.db.Raw(query2, args2...).Scan(&qualityIssues)
+	results = append(results, qualityIssues...)
+
+	return results, nil
+}
+
 // ========== Skill Detail API ==========
 
 // CapabilityDetail holds per-capability detail data
