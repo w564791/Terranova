@@ -44,14 +44,11 @@ const FeedbackBanner: React.FC = () => {
     if (taskMatch) return { type: 'task' as const, id: taskMatch[1] };
     const moduleMatch = location.pathname.match(/\/modules\/(\d+)\/skill/);
     if (moduleMatch) return { type: 'module_skill' as const, id: moduleMatch[1] };
-    return null;
+    return { type: 'general' as const, id: null };
   }, [location.pathname]);
 
   const loadPending = useCallback(async () => {
-    if (!localStorage.getItem('token') || !pageContext) {
-      setItem(null);
-      return;
-    }
+    if (!localStorage.getItem('token')) return;
     try {
       const res: any = await api.get('/ai/skill-usage/pending-feedback');
       const all: PendingItem[] = res?.items || [];
@@ -59,18 +56,20 @@ const FeedbackBanner: React.FC = () => {
       const filtered = all.filter(i => {
         if (dismissed.has(i.id)) return false;
         if (pageContext.type === 'task') {
+          // task 页面：只显示该 task 的 plan_summary/apply_summary
           return i.task_id === pageContext.id;
         }
         if (pageContext.type === 'module_skill') {
           return i.capability === 'module_skill_generation';
         }
-        return false;
+        // 其他页面：显示 form_generation
+        return i.capability === 'form_generation';
       });
       setItem(filtered[0] || null);
     } catch {
       // silent
     }
-  }, [pageContext?.type, pageContext?.id]);
+  }, [pageContext.type, pageContext.id]);
 
   useEffect(() => {
     loadPending();

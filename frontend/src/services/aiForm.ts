@@ -461,6 +461,7 @@ export async function reportSkillUsageAction(
       action,
       modification_diff: modificationDiff,
     });
+    window.dispatchEvent(new Event('skill-action-reported'));
   } catch (error) {
     console.warn('[AI] Failed to report usage action:', error);
   }
