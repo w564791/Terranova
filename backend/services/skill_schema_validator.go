@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"iac-platform/internal/models"
@@ -11,6 +12,7 @@ import (
 // SkillOutputSchema defines the schema for a skill's output validation
 type SkillOutputSchema struct {
 	RequiredFields []string            // List of required field names
+	RequiredOneOf  [][]string          // Groups of fields where at least one must exist (e.g. [["risk_level","risk_evaluation"]])
 	EnumFields     map[string][]string // Map of field name to allowed enum values
 }
 
@@ -79,6 +81,20 @@ func (v *SkillSchemaValidator) Validate(skillName string, output json.RawMessage
 		value, exists := data[field]
 		if !exists || value == nil {
 			missingFields = append(missingFields, field)
+		}
+	}
+
+	// Check required-one-of groups
+	for _, group := range schema.RequiredOneOf {
+		found := false
+		for _, field := range group {
+			if val, ok := data[field]; ok && val != nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingFields = append(missingFields, fmt.Sprintf("one_of(%s)", strings.Join(group, "|")))
 		}
 	}
 

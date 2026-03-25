@@ -184,8 +184,10 @@ func main() {
 		},
 	})
 	// plan_summary: Plan 阶段变更影响分析（capability 名作为 schema key）
+	// V2 用顶级 risk_level，V3 用嵌套 risk_evaluation，二选一即可
 	skillValidator.RegisterSchema("plan_summary", services.SkillOutputSchema{
-		RequiredFields: []string{"changes_overview", "risk_level"},
+		RequiredFields: []string{"changes_overview"},
+		RequiredOneOf: [][]string{{"risk_level", "risk_evaluation"}},
 		EnumFields: map[string][]string{
 			"risk_level": {"low", "medium", "high", "critical"},
 		},
