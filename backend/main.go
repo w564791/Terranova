@@ -174,6 +174,18 @@ func main() {
 	// 初始化CMDB外部数据源同步调度器
 	cmdbSyncScheduler := services.NewCMDBSyncScheduler(db)
 
+	// 初始化 Skill 质量评估 Worker
+	skillValidator := services.NewSkillSchemaValidator()
+	skillValidator.RegisterSchema("form-generation-task", services.SkillOutputSchema{
+		RequiredFields: []string{"status", "config"},
+		EnumFields: map[string][]string{
+			"status": {"complete", "need_selection", "blocked"},
+		},
+	})
+	assessmentWorker := services.NewAssessmentWorker(db, skillValidator)
+	router.SetAssessmentWorker(assessmentWorker)
+	log.Println("Skill Assessment Worker initialized")
+
 	// 初始化Agent清理服务
 	agentCleanupService := services.NewAgentCleanupService(db)
 
@@ -361,7 +373,11 @@ func main() {
 				log.Println("[Leader] Embedding worker started for CMDB vector search")
 			}
 
-			// 8. Resource Summary 补偿（启动时检查未完成的摘要）
+			// 8. Skill Assessment Worker
+			go assessmentWorker.Start(leaderCtx)
+			log.Println("[Leader] Skill Assessment Worker started")
+
+			// 9. Resource Summary 补偿（启动时检查未完成的摘要）
 			go func() {
 				log.Println("[Leader] Starting resource summary compensation check...")
 				summaryService := services.NewResourceSummaryService(db)

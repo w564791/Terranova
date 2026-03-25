@@ -17,6 +17,14 @@ func GetEmbeddingWorker() *services.EmbeddingWorker {
 	return embeddingWorker
 }
 
+// assessmentWorker 全局 assessment worker 实例
+var assessmentWorker *services.AssessmentWorker
+
+// SetAssessmentWorker 设置全局 assessment worker 实例（在 main.go 中调用）
+func SetAssessmentWorker(w *services.AssessmentWorker) {
+	assessmentWorker = w
+}
+
 // setupAIRoutes sets up AI analysis routes
 func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
 	// AI分析 - 使用AI_ANALYSIS权限，允许WRITE和ADMIN级别访问
@@ -64,7 +72,7 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		)
 
 		// AI + CMDB + Skill 集成路由（新版 Skill 模式）
-		aiCMDBSkillController := controllers.NewAICMDBSkillController(db)
+		aiCMDBSkillController := controllers.NewAICMDBSkillController(db, assessmentWorker)
 
 		// 使用 Skill 模式的配置生成 - 使用AI_ANALYSIS权限
 		ai.POST("/form/generate-with-cmdb-skill",

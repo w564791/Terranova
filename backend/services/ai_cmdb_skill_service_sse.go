@@ -243,6 +243,9 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
 	} else {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
+		if s.assessmentWorker != nil {
+			s.assessmentWorker.Submit(logID, taskSkillName)
+		}
 	}
 
 	log.Printf("[AICMDBSkillService] ========== Skill 模式配置生成完成 ==========")
@@ -688,6 +691,9 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
 	} else {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
+		if s.assessmentWorker != nil {
+			s.assessmentWorker.Submit(logID, taskSkillNameOpt)
+		}
 	}
 
 	log.Printf("[AICMDBSkillService] ========== 优化版配置生成完成 ==========")

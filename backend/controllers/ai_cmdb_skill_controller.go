@@ -19,10 +19,10 @@ type AICMDBSkillController struct {
 }
 
 // NewAICMDBSkillController 创建控制器实例
-func NewAICMDBSkillController(db *gorm.DB) *AICMDBSkillController {
+func NewAICMDBSkillController(db *gorm.DB, assessmentWorker ...*services.AssessmentWorker) *AICMDBSkillController {
 	return &AICMDBSkillController{
 		db:      db,
-		service: services.NewAICMDBSkillService(db),
+		service: services.NewAICMDBSkillService(db, assessmentWorker...),
 	}
 }
 

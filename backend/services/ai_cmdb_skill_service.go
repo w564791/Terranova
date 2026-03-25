@@ -68,11 +68,12 @@ type AICMDBSkillService struct {
 	configService    *AIConfigService
 	embeddingService *EmbeddingService
 	skillAssembler   *SkillAssembler
+	assessmentWorker *AssessmentWorker
 }
 
 // NewAICMDBSkillService 创建 AI + CMDB + Skill 集成服务实例
-func NewAICMDBSkillService(db *gorm.DB) *AICMDBSkillService {
-	return &AICMDBSkillService{
+func NewAICMDBSkillService(db *gorm.DB, assessmentWorker ...*AssessmentWorker) *AICMDBSkillService {
+	svc := &AICMDBSkillService{
 		db:               db,
 		aiFormService:    NewAIFormService(db),
 		cmdbService:      NewCMDBService(db),
@@ -80,6 +81,10 @@ func NewAICMDBSkillService(db *gorm.DB) *AICMDBSkillService {
 		embeddingService: NewEmbeddingService(db),
 		skillAssembler:   NewSkillAssembler(db),
 	}
+	if len(assessmentWorker) > 0 {
+		svc.assessmentWorker = assessmentWorker[0]
+	}
+	return svc
 }
 
 // GenerateConfigWithCMDBSkill 使用 Skill 模式生成配置
@@ -275,6 +280,9 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
 	} else {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
+		if s.assessmentWorker != nil {
+			s.assessmentWorker.Submit(logID, taskSkillName)
+		}
 	}
 
 	log.Printf("[AICMDBSkillService] ========== Skill 模式配置生成完成 ==========")
@@ -1792,6 +1800,9 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkills(
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志失败: %v", err)
 	} else {
 		log.Printf("[AICMDBSkillService] 记录 Skill 使用日志成功, logID: %s", logID)
+		if s.assessmentWorker != nil {
+			s.assessmentWorker.Submit(logID, taskSkillNameOpt)
+		}
 	}
 
 	log.Printf("[AICMDBSkillService] ========== 优化版配置生成完成 ==========")
