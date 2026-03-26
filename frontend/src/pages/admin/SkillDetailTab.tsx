@@ -27,6 +27,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
   const [violations, setViolations] = useState<TopViolation[]>([]);
   const [violationLayer, setViolationLayer] = useState<string>('rule');
   const [loading, setLoading] = useState(false);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessmentPage, setAssessmentPageLocal] = useState<number>(() => Number(searchParams.get('page')) || 1);
   const [assessmentPageSize, setAssessmentPageSizeLocal] = useState<number>(() => Number(searchParams.get('pageSize')) || 10);
 
@@ -59,7 +60,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
     });
   }, [days]);
 
-  // Load detail + violations when selection or pagination changes
+  // Load full detail + violations when capability or time range changes
   useEffect(() => {
     if (!selected) return;
     setLoading(true);
@@ -70,7 +71,17 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
       .then(([d, v]) => { setDetail(d); setViolations(v); })
       .catch(e => console.error('Failed to load detail:', e))
       .finally(() => setLoading(false));
-  }, [selected, days, assessmentPage, assessmentPageSize]);
+  }, [selected, days]);
+
+  // Only refresh assessment records when pagination changes (no full-page loading)
+  useEffect(() => {
+    if (!selected || loading) return;
+    setAssessmentLoading(true);
+    getCapabilityDetail(selected, days, assessmentPage, assessmentPageSize)
+      .then(d => setDetail(prev => prev ? { ...prev, assessments: d.assessments, assessment_total: d.assessment_total } : d))
+      .catch(e => console.error('Failed to load assessments:', e))
+      .finally(() => setAssessmentLoading(false));
+  }, [assessmentPage, assessmentPageSize]);
 
   /* ---------- Version timeline ---------- */
   const versionColumns: ColumnsType<VersionStats> = [
@@ -414,6 +425,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               <Table
                 columns={assessmentColumns}
                 dataSource={detail.assessments}
+                loading={assessmentLoading}
                 pagination={{
                   current: assessmentPage,
                   pageSize: assessmentPageSize,
