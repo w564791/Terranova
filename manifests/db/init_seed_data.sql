@@ -4736,6 +4736,69 @@ COMMENT ON COLUMN public.skill_assessment_results.score IS '评分：0-100';
 
 
 --
+-- Name: COLUMN skill_assessment_results.assessment_latency_ms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_latency_ms IS '评估耗时（毫秒）';
+
+
+--
+-- Name: COLUMN skill_assessment_results.schema_valid; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.schema_valid IS 'Schema 校验是否通过';
+
+
+--
+-- Name: COLUMN skill_assessment_results.missing_fields; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.missing_fields IS '缺失的必需字段';
+
+
+--
+-- Name: COLUMN skill_assessment_results.invalid_enum_fields; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.invalid_enum_fields IS '枚举值无效的字段';
+
+
+--
+-- Name: COLUMN skill_assessment_results.rule_violations; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.rule_violations IS '规则违反详情';
+
+
+--
+-- Name: COLUMN skill_assessment_results.quality_issues; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.quality_issues IS '质量问题详情';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_confidence; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_confidence IS '评估置信度';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_model; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_model IS '评估使用的 AI 模型';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_raw_output; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_raw_output IS '评估原始输出';
+
+
+--
 -- Name: skills; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -15009,11 +15072,11 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Skill quality evaluation Skills (Layer 2 + Layer 3 prompt templates)
 INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
-VALUES ('skill-quality-rule-eval', 'skill_quality_rule_evaluation', 'Skill 质量 - 规则一致性评估', '对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则', 'task', 'Layer 2 rule evaluation prompt - see migration SQL for full content', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","rule"]}', 'system', NOW(), NOW())
+VALUES ('skill-quality-rule-eval', 'skill_quality_rule_evaluation', 'Skill 质量 - 规则一致性评估', '对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则', 'task', E'你是一个 Skill 输出质量的规则一致性检查器。\n\n## 你的职责\n检查 AI 的最终输出 JSON 是否违反了 Skill 定义中关于**输出内容**的规则。\n\n## 重要：检查范围限定\n你只检查**输出内容本身**的规则，包括：\n- 输出 JSON 的字段值是否符合规则定义的约束（如枚举值、条件触发）\n- 字段之间的逻辑一致性（如 risk_level=high 时 requires_confirmation 是否为 true）\n- 数值计算规则（如 score 计算逻辑）\n- 输出格式规范（如 recommended_actions 的结构要求）\n\n你**不检查**以下内容（这些是 Agent 流程层面的，不是输出内容的问题）：\n- 是否调用了特定工具（如 query_cmdb_dependencies）\n- 阶段识别（stage 字段由系统注入，不是 AI 输出的一部分）\n- 工具调用顺序或次数\n- Agent loop 的执行流程\n\n## Skill 定义（仅规则部分）\n{skill_rules_section}\n\n## 本次调用输入\n{input}\n\n## 本次调用输出\n{output}\n\n---\n\n仅检查输出内容的规则一致性。按以下 JSON 格式输出：\n\n{\n  "verdict": "pass | warn | fail",\n  "score": 0-100的整数,\n  "rule_violations": [\n    {\n      "rule": "规则简短名称",\n      "detail": "具体违反内容，引用输出中的实际值"\n    }\n  ],\n  "assessment_confidence": "high | medium | low"\n}\n\n评分参考：\n- 90-100：输出完全符合所有内容规则\n- 70-89 ：轻微偏差（如枚举值可接受但非最优、格式小瑕疵）\n- 50-69 ：存在规则违反，但核心字段正确\n- 30-49 ：多处规则违反，影响输出可用性\n- 0-29  ：关键规则违反（如 risk_level 与实际风险严重不匹配）\n\n注意：\n- 如果规则涉及工具调用或流程步骤，跳过该规则（不算违反）\n- rule_violations 必须引用输出中的具体值\n- 只输出 JSON，不要有额外文字', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","rule"],"description":"Layer 2 规则一致性评估 prompt"}', 'system', NOW(), NOW())
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
-VALUES ('skill-quality-semantic-eval', 'skill_quality_semantic_evaluation', 'Skill 质量 - 语义质量评估', '评估 AI 输出的表述质量、信息量和用户可读性', 'task', 'Layer 3 semantic evaluation prompt - see migration SQL for full content', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","semantic"]}', 'system', NOW(), NOW())
+VALUES ('skill-quality-semantic-eval', 'skill_quality_semantic_evaluation', 'Skill 质量 - 语义质量评估', '评估 AI 输出的表述质量、信息量和用户可读性', 'task', E'你是一个 Skill 语义质量评估器。你只需关注输出的语义质量，不要检查 JSON 结构合规性或规则一致性（这些由其他评估层负责）。\n\n## Skill 定义\n{skill_md}\n\n## 本次调用输入\n{input}\n\n## 本次调用输出\n{output}\n\n---\n\n仅评估语义质量，不检查结构和规则。按以下 JSON 格式输出：\n\n{\n  "verdict": "pass | warn | fail",\n  "score": 0-100的整数,\n  "quality_issues": [\n    {\n      "field": "有问题的字段路径",\n      "issue": "具体问题描述，禁止使用信息不足等模糊表述",\n      "severity": "high | medium | low"\n    }\n  ],\n  "highlights": ["做得好的地方，1-3条"],\n  "assessment_confidence": "high | medium | low"\n}\n\n评分参考：\n- 90-100：表述精准具体、信息量充分、用户可直接理解\n- 70-89 ：基本清晰，有轻微含糊或冗余\n- 50-69 ：多处表述模糊或信息量不足\n- 0-49  ：严重的语义问题，用户无法从输出中获取有效信息\n\n注意：\n- quality_issues 每条必须基于实际输出内容，禁止假设\n- 引用实际输出中的具体文本来说明问题\n- 只输出 JSON，不要有任何额外文字', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","semantic"],"description":"Layer 3 语义质量评估 prompt"}', 'system', NOW(), NOW())
 ON CONFLICT (name) DO NOTHING;
 
 -- PostgreSQL database dump complete
