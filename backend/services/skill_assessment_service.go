@@ -561,6 +561,8 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 	}
 
 	// 1. Aggregate stats for this capability
+	// total = unique invocations (not assessment records)
+	// pass/fail = schema layer (L1) verdict per invocation (L1 always runs)
 	type aggRow struct {
 		Total        int64   `json:"total"`
 		Pass         int64   `json:"pass"`
@@ -570,9 +572,9 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 	}
 	var agg aggRow
 	if err := s.db.Raw(`
-		SELECT count(*) as total,
-		       count(CASE WHEN r.verdict = 'pass' THEN 1 END) as pass,
-		       count(CASE WHEN r.verdict = 'fail' THEN 1 END) as fail,
+		SELECT count(DISTINCT r.usage_log_id) as total,
+		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'pass' THEN r.usage_log_id END) as pass,
+		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'fail' THEN r.usage_log_id END) as fail,
 		       COALESCE(avg(r.score), 0) as avg_score,
 		       COALESCE(avg(l.latency_ms), 0) as avg_latency_ms
 		FROM skill_assessment_results r
@@ -609,9 +611,9 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 	var vRows []versionRow
 	if err := s.db.Raw(`
 		SELECT l.skill_content_hash as content_hash,
-		       count(*) as total,
-		       count(CASE WHEN r.verdict = 'pass' THEN 1 END) as pass,
-		       count(CASE WHEN r.verdict = 'fail' THEN 1 END) as fail,
+		       count(DISTINCT r.usage_log_id) as total,
+		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'pass' THEN r.usage_log_id END) as pass,
+		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'fail' THEN r.usage_log_id END) as fail,
 		       COALESCE(avg(r.score), 0) as avg_score,
 		       min(l.created_at) as first_seen,
 		       count(CASE WHEN r.assessment_layer = 'schema' THEN 1 END) as l1_total,
