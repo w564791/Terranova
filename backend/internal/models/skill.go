@@ -25,14 +25,22 @@ const (
 	SkillSourceHybrid     SkillSourceType = "hybrid"      // 自动生成后手动修改
 )
 
+// SkillOutputSchema 定义 Skill 输出的校验规则（存储在 metadata 中）
+type SkillOutputSchema struct {
+	RequiredFields []string            `json:"required_fields,omitempty"`
+	RequiredOneOf  [][]string          `json:"required_one_of,omitempty"`
+	EnumFields     map[string][]string `json:"enum_fields,omitempty"`
+}
+
 // SkillMetadata Skill 元数据
 type SkillMetadata struct {
-	Tags        []string `json:"tags,omitempty"`        // 标签（Domain Skill 用于被发现）
-	DomainTags  []string `json:"domain_tags,omitempty"` // 需要的领域标签（Task Skill 用于发现 Domain Skills）
-	Description string   `json:"description,omitempty"` // 描述
-	Author      string   `json:"author,omitempty"`      // 作者
-	UsageCount  int      `json:"usage_count,omitempty"` // 使用次数
-	AvgRating   float64  `json:"avg_rating,omitempty"`  // 平均评分
+	Tags         []string          `json:"tags,omitempty"`          // 标签（Domain Skill 用于被发现）
+	DomainTags   []string          `json:"domain_tags,omitempty"`   // 需要的领域标签（Task Skill 用于发现 Domain Skills）
+	Description  string            `json:"description,omitempty"`   // 描述
+	Author       string            `json:"author,omitempty"`        // 作者
+	UsageCount   int               `json:"usage_count,omitempty"`   // 使用次数
+	AvgRating    float64           `json:"avg_rating,omitempty"`    // 平均评分
+	OutputSchema *SkillOutputSchema `json:"output_schema,omitempty"` // 输出结构校验规则
 }
 
 // Scan 实现 sql.Scanner 接口
@@ -96,6 +104,16 @@ type SkillUsageLog struct {
 	ContextSummary  string    `gorm:"type:text" json:"context_summary,omitempty"`
 	ResponseSummary string    `gorm:"type:text" json:"response_summary,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
+
+	// New fields for skill quality assessment
+	InputSnapshot        *json.RawMessage `gorm:"type:jsonb" json:"input_snapshot,omitempty"`
+	OutputSnapshot       *json.RawMessage `gorm:"type:jsonb" json:"output_snapshot,omitempty"`
+	SkillContentHash     string           `gorm:"type:varchar(64)" json:"skill_content_hash,omitempty"`
+	SkillContentSnapshot *string          `gorm:"type:text" json:"skill_content_snapshot,omitempty"`
+	UserAction           *string          `gorm:"type:varchar(16)" json:"user_action,omitempty"`
+	UserModificationDiff *string          `gorm:"type:text" json:"user_modification_diff,omitempty"`
+	LatencyMs            *int             `gorm:"type:integer" json:"latency_ms,omitempty"`
+	AssessmentStatus     string           `gorm:"type:varchar(16);default:'pending'" json:"assessment_status"`
 }
 
 // TableName 指定表名

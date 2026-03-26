@@ -812,7 +812,9 @@ const AIConfigForm = () => {
             formData.capabilities.includes(CAPABILITIES.CMDB_QUERY_PLAN) ||
             formData.capabilities.includes(CAPABILITIES.CMDB_NEED_ASSESSMENT) ||
             formData.capabilities.includes(CAPABILITIES.INTENT_ASSERTION) ||
-            formData.capabilities.includes(CAPABILITIES.SUMMARY)) && (
+            formData.capabilities.includes(CAPABILITIES.SUMMARY) ||
+            formData.capabilities.includes(CAPABILITIES.SKILL_RULE_EVALUATION) ||
+            formData.capabilities.includes(CAPABILITIES.SKILL_SEMANTIC_EVALUATION)) && (
             <div style={{ 
               border: '1px solid #722ed1', 
               borderRadius: '8px', 

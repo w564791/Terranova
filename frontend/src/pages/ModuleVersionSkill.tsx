@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
+import { reportSkillUsageByCapability } from '../services/aiForm';
 import { listVersions, type ModuleVersion } from '../services/moduleVersions';
 import { 
   getModuleVersionSkill, 
@@ -128,6 +129,8 @@ const ModuleVersionSkillPage: React.FC = () => {
       const generatedSkill = await generateModuleVersionSkill(selectedVersionId);
       setSkill(generatedSkill);
       showToast('Skill 生成成功', 'success');
+      // 上报 module_skill_generation 已完成（用于质量评估反馈）
+      reportSkillUsageByCapability('module_skill_generation', 'accepted');
     } catch (error) {
       showToast(extractErrorMessage(error), 'error');
     } finally {

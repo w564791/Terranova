@@ -63,6 +63,7 @@ type GenerateConfigWithCMDBResponse struct {
 	Message          string                 `json:"message"`                     // 提示信息
 	CMDBLookups      []CMDBLookupResult     `json:"cmdb_lookups,omitempty"`      // CMDB 查询记录
 	Warnings         []string               `json:"warnings,omitempty"`          // 警告
+	UsageLogID       string                 `json:"usage_log_id,omitempty"`      // Skill 使用日志 ID（用于前端行为上报）
 }
 
 // CMDBLookupResult CMDB 查询结果

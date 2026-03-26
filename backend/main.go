@@ -174,6 +174,45 @@ func main() {
 	// 初始化CMDB外部数据源同步调度器
 	cmdbSyncScheduler := services.NewCMDBSyncScheduler(db)
 
+	// 初始化 Skill 质量评估 Worker
+	skillValidator := services.NewSkillSchemaValidator()
+	// form_generation: AI 生成 Terraform 配置
+	formGenSchema := services.SkillOutputSchema{
+		RequiredFields: []string{"status", "config"},
+		EnumFields: map[string][]string{
+			"status": {"complete", "need_selection", "blocked"},
+		},
+	}
+	skillValidator.RegisterSchema("form_generation", formGenSchema)                  // capability 名（scanner 兜底）
+	skillValidator.RegisterSchema("resource_generation_workflow", formGenSchema)      // 实际 task skill 名（Submit 直接传入）
+	// plan_summary: Plan 阶段变更影响分析（capability 名作为 schema key）
+	// V2 用顶级 risk_level，V3 用嵌套 risk_evaluation，二选一即可
+	skillValidator.RegisterSchema("plan_summary", services.SkillOutputSchema{
+		RequiredFields: []string{"changes_overview"},
+		RequiredOneOf: [][]string{{"risk_level", "risk_evaluation"}},
+		EnumFields: map[string][]string{
+			"risk_level": {"low", "medium", "high", "critical"},
+		},
+	})
+	// apply_summary: Apply 阶段执行结果分析
+	skillValidator.RegisterSchema("apply_summary", services.SkillOutputSchema{
+		RequiredFields: []string{"execution_summary"},
+	})
+	// module_skill_generation: Module Skill 自动生成
+	skillValidator.RegisterSchema("module_skill_generation", services.SkillOutputSchema{
+		RequiredFields: []string{"content"},
+	})
+	// 从 DB 加载 Task Skill metadata 中定义的 output_schema（覆盖硬编码）
+	skillValidator.LoadSchemasFromDB(db)
+	assessmentSampler := services.NewAssessmentSampler(db)
+	assessmentEvaluator := services.NewSkillLLMEvaluator(db)
+	assessmentWorker := services.NewAssessmentWorker(db, skillValidator, assessmentSampler, assessmentEvaluator)
+	router.SetAssessmentWorker(assessmentWorker)
+	log.Println("Skill Assessment Worker initialized")
+
+	// 初始化评估数据清理（每日清理过期快照）
+	assessmentCleanup := services.NewAssessmentCleanup(db)
+
 	// 初始化Agent清理服务
 	agentCleanupService := services.NewAgentCleanupService(db)
 
@@ -361,7 +400,14 @@ func main() {
 				log.Println("[Leader] Embedding worker started for CMDB vector search")
 			}
 
-			// 8. Resource Summary 补偿（启动时检查未完成的摘要）
+			// 8. Skill Assessment Worker
+			go assessmentWorker.Start(leaderCtx)
+			log.Println("[Leader] Skill Assessment Worker started")
+
+			// 8b. Assessment Data Cleanup (daily)
+			assessmentCleanup.Start(leaderCtx)
+
+			// 9. Resource Summary 补偿（启动时检查未完成的摘要）
 			go func() {
 				log.Println("[Leader] Starting resource summary compensation check...")
 				summaryService := services.NewResourceSummaryService(db)

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import { ToastProvider } from './contexts/ToastContext';
+import FeedbackBanner from './components/FeedbackBanner';
 import { NotificationProvider } from './contexts/NotificationContext';
 import AuthProvider from './components/AuthProvider';
 import Layout from './components/Layout';
@@ -227,6 +228,7 @@ const App: FC = () => {
                 <Route path="audit" element={<AuditLog />} />
               </Route>
             </Routes>
+            <FeedbackBanner />
             </Router>
           </AuthProvider>
           </NotificationProvider>

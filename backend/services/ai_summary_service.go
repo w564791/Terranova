@@ -153,8 +153,8 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 		return
 	}
 
-	// 解析 AI 输出
-	s.completePlanSummary(&summary, result, planChangesJSON, startTime)
+	// 解析 AI 输出（extractJSON 后再记录日志，确保 output_snapshot 是结构化 JSON）
+	s.completePlanSummary(&summary, result, planChangesJSON, startTime, cfg, task.WorkspaceID, taskID, userPrompt)
 }
 
 // GenerateApplySummary 生成 Apply 阶段摘要（异步调用）
@@ -235,7 +235,7 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 		return
 	}
 
-	s.completeApplySummary(&summary, result, startTime)
+	s.completeApplySummary(&summary, result, startTime, cfg, task.WorkspaceID, taskID, applyContext)
 }
 
 // GetPlanSummary 查询 Plan Summary
@@ -397,7 +397,7 @@ func (s *AISummaryService) extractPlanChanges(planJSON models.JSONB) interface{}
 	return plan
 }
 
-func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, result *AgentLoopResult, planChangesJSON []byte, startTime time.Time) {
+func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, result *AgentLoopResult, planChangesJSON []byte, startTime time.Time, cfg *models.AIConfig, workspaceID string, taskID uint, userPrompt string) {
 	// 解析 AI 输出（V3 结构：risk_evaluation 嵌套）
 	var aiOutput struct {
 		ChangesOverview   string      `json:"changes_overview"`
@@ -419,6 +419,9 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		log.Printf("[AISummaryService] Failed to parse AI output as JSON for task %d: %v, extracted text (len=%d): %.300s", summary.TaskID, err, len(outputText), outputText)
 		aiOutput.ChangesOverview = result.FinalOutput
 	}
+
+	// 记录 Skill 使用日志（用 extractJSON 后的结构化输出）
+	s.logSummarySkillUsage(cfg, "plan_summary", workspaceID, taskID, userPrompt, outputText, startTime)
 
 	summary.ChangesOverview = aiOutput.ChangesOverview
 	if aiOutput.ImpactAnalysis != nil {
@@ -528,7 +531,7 @@ func (s *AISummaryService) parseDecisionHints(summary *models.AIPlanSummary, raw
 	}
 }
 
-func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, result *AgentLoopResult, startTime time.Time) {
+func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, result *AgentLoopResult, startTime time.Time, cfg *models.AIConfig, workspaceID string, taskID uint, userPrompt string) {
 	var aiOutput struct {
 		ExecutionSummary    string      `json:"execution_summary"`
 		ResourceResults     interface{} `json:"resource_results"`
@@ -543,6 +546,9 @@ func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, 
 		log.Printf("[AISummaryService] Failed to parse AI output as JSON for apply task %d: %v", summary.TaskID, err)
 		aiOutput.ExecutionSummary = result.FinalOutput
 	}
+
+	// 记录 Skill 使用日志（用 extractJSON 后的结构化输出）
+	s.logSummarySkillUsage(cfg, "apply_summary", workspaceID, taskID, userPrompt, outputText, startTime)
 
 	summary.ExecutionSummary = aiOutput.ExecutionSummary
 	if aiOutput.ResourceResults != nil {
@@ -580,6 +586,63 @@ func (s *AISummaryService) failApplySummary(summary *models.AIApplySummary, err 
 	summary.Duration = int(time.Since(startTime).Milliseconds())
 	s.db.Save(summary)
 	log.Printf("[AISummaryService] Apply summary failed for task %d: %v", summary.TaskID, err)
+}
+
+// logSummarySkillUsage 记录 Summary 的 Skill 使用日志
+func (s *AISummaryService) logSummarySkillUsage(cfg *models.AIConfig, capability string, workspaceID string, taskID uint, userPrompt string, aiOutput string, startTime time.Time) {
+	// 获取 task skill 信息
+	composition := &cfg.SkillComposition
+	if composition.TaskSkill == "" && len(composition.FoundationSkills) == 0 {
+		composition = s.getDefaultSummarySkillComposition()
+	}
+
+	taskSkillName := composition.TaskSkill
+	taskSkillContent := ""
+	if taskSkillName != "" {
+		if skill, err := s.skillAssembler.GetSkillByName(taskSkillName); err == nil && skill != nil {
+			taskSkillContent = skill.Content
+		}
+	}
+
+	// 收集使用的 skill IDs
+	var skillIDs []string
+	if result, err := s.skillAssembler.AssemblePrompt(composition, 0, &DynamicContext{
+		UseCMDB: true,
+		ExtraContext: map[string]interface{}{"stage": capability},
+	}); err == nil {
+		skillIDs = result.UsedSkillIDs
+	}
+
+	inputSnapshot, _ := json.Marshal(map[string]interface{}{
+		"task_id":      taskID,
+		"workspace_id": workspaceID,
+		"capability":   capability,
+		"user_prompt":  userPrompt,
+	})
+	outputSnapshot := json.RawMessage(fmt.Sprintf("%q", aiOutput))
+	// 尝试解析为 JSON，如果成功用结构化格式
+	if json.Valid([]byte(aiOutput)) {
+		outputSnapshot = json.RawMessage(aiOutput)
+	}
+
+	executionTimeMs := int(time.Since(startTime).Milliseconds())
+	moduleID := uint(0)
+
+	if _, err := s.skillAssembler.LogSkillUsage(LogSkillUsageParams{
+		SkillIDs:         skillIDs,
+		Capability:       capability,
+		WorkspaceID:      workspaceID,
+		UserID:           "system",
+		ModuleID:         &moduleID,
+		AIModel:          cfg.ModelID,
+		ExecutionTimeMs:  executionTimeMs,
+		InputSnapshot:    inputSnapshot,
+		OutputSnapshot:   outputSnapshot,
+		TaskSkillName:    taskSkillName,
+		TaskSkillContent: taskSkillContent,
+	}); err != nil {
+		log.Printf("[AISummaryService] Failed to log skill usage for %s task %d: %v", capability, taskID, err)
+	}
 }
 
 // contextWithTimeout 创建带超时的 context（5 分钟，agent loop 可能多轮调用）

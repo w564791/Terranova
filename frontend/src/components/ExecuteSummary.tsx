@@ -5,6 +5,7 @@ import {
   confirmPlanSummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
+import { reportSkillUsageByCapability } from '../services/aiForm';
 import styles from './ExecuteSummary.module.css';
 
 // 安全渲染：防止 AI 返回的对象被直接当 React child
@@ -454,6 +455,8 @@ const DecisionConfirmation: React.FC<{
       setError('');
       const decisionCode = Array.from(checkedCodes).join(',');
       await confirmPlanSummary(workspaceId, taskId, decisionCode, note);
+      // 上报 action，评分由全局 FeedbackBanner 组件处理
+      reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');
@@ -467,6 +470,7 @@ const DecisionConfirmation: React.FC<{
       setSubmitting(true);
       setError('');
       await confirmPlanSummary(workspaceId, taskId, 'ABORT', note);
+      reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
       onConfirmed();
     } catch (err: any) {
       setError(typeof err === 'string' ? err : '提交失败');

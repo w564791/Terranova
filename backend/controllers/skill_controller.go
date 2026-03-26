@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 	"net/http"
@@ -13,16 +14,23 @@ import (
 
 // SkillController Skill 管理控制器
 type SkillController struct {
-	db             *gorm.DB
-	skillAssembler *services.SkillAssembler
+	db               *gorm.DB
+	skillAssembler   *services.SkillAssembler
+	assessmentWorker *services.AssessmentWorker
 }
 
 // NewSkillController 创建控制器实例
-func NewSkillController(db *gorm.DB) *SkillController {
-	return &SkillController{
+func NewSkillController(db *gorm.DB, opts ...interface{}) *SkillController {
+	c := &SkillController{
 		db:             db,
 		skillAssembler: services.NewSkillAssembler(db),
 	}
+	for _, opt := range opts {
+		if w, ok := opt.(*services.AssessmentWorker); ok {
+			c.assessmentWorker = w
+		}
+	}
+	return c
 }
 
 // ListSkills 获取 Skill 列表
@@ -577,4 +585,184 @@ func (c *SkillController) GetSkillUsageStats(ctx *gin.Context) {
 		"avg_exec_time_ms": avgExecTime,
 		"last_used_at":     lastUsedAt,
 	})
+}
+
+// UpdateSkillUsageAction 更新用户对 Skill 输出的操作
+// PUT /api/v1/ai/skill-usage/:id/action
+func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
+	logID := ctx.Param("id")
+	var req struct {
+		Action           string  `json:"action,omitempty" binding:"omitempty,oneof=accepted modified aborted"`
+		ModificationDiff *string `json:"modification_diff,omitempty"`
+		Feedback         *int    `json:"feedback,omitempty" binding:"omitempty,min=1,max=5"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Action == "" && req.Feedback == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "action or feedback is required"})
+		return
+	}
+
+	// 校验用户权限：只能更新自己的 usage log
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+
+	var usageLog models.SkillUsageLog
+	if err := c.db.First(&usageLog, "id = ?", logID).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+		return
+	}
+	if uid != "" && usageLog.UserID != uid && usageLog.UserID != "system" {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's action"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Action != "" {
+		updates["user_action"] = req.Action
+	}
+	if req.ModificationDiff != nil && req.Action == "modified" {
+		updates["user_modification_diff"] = *req.ModificationDiff
+	}
+	if req.Feedback != nil {
+		updates["user_feedback"] = *req.Feedback
+	}
+
+	c.db.Model(&usageLog).Updates(updates)
+
+	// 延迟补评触发：差评（<= 2）且尚未完成 Layer 2+3 评估时，提交补评
+	if req.Feedback != nil && *req.Feedback <= 2 && c.assessmentWorker != nil {
+		var ruleCount int64
+		c.db.Model(&models.SkillAssessmentResult{}).
+			Where("usage_log_id = ? AND assessment_layer = ?", logID, "rule").
+			Count(&ruleCount)
+		if ruleCount == 0 {
+			c.assessmentWorker.Submit(logID, "")
+		}
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// UpdateSkillUsageByCapability 按 capability + 关联 ID 更新 user_action / feedback
+// PUT /api/v1/ai/skill-usage/by-capability
+// 用于 plan_summary 等无法在前端获取 usage_log_id 的场景
+func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
+	var req struct {
+		Capability string `json:"capability" binding:"required"`
+		TaskID     *uint  `json:"task_id,omitempty"`
+		Action     string `json:"action,omitempty" binding:"omitempty,oneof=accepted modified aborted"`
+		Feedback   *int   `json:"feedback,omitempty" binding:"omitempty,min=1,max=5"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Action == "" && req.Feedback == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "action or feedback is required"})
+		return
+	}
+
+	// 根据 capability + 关联条件查找最近的 usage log
+	query := c.db.Model(&models.SkillUsageLog{}).Where("capability = ?", req.Capability)
+	if req.TaskID != nil {
+		// task_id 存在于 input_snapshot JSON 中
+		query = query.Where("input_snapshot->>'task_id' = ?", fmt.Sprintf("%d", *req.TaskID))
+	}
+
+	var usageLog models.SkillUsageLog
+	if err := query.Order("created_at DESC").First(&usageLog).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+		return
+	}
+
+	// 权限校验：只有 owner 或 system 记录可以被更新
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+	if uid != "" && usageLog.UserID != uid && usageLog.UserID != "system" {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's record"})
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Action != "" {
+		updates["user_action"] = req.Action
+	}
+	if req.Feedback != nil {
+		updates["user_feedback"] = *req.Feedback
+	}
+
+	c.db.Model(&usageLog).Updates(updates)
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok", "usage_log_id": usageLog.ID})
+}
+
+// GetPendingFeedback 获取当前用户待评分的 usage logs
+// GET /api/v1/ai/skill-usage/pending-feedback
+func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+	if uid == "" {
+		ctx.JSON(http.StatusOK, gin.H{"items": []interface{}{}})
+		return
+	}
+
+	type pendingItem struct {
+		ID         string  `json:"id"`
+		Capability string  `json:"capability"`
+		UserAction string  `json:"user_action"`
+		TaskID     *string `json:"task_id"`
+		CreatedAt  string  `json:"created_at"`
+	}
+
+	var items []pendingItem
+	c.db.Raw(`
+		SELECT l.id, l.capability, l.user_action,
+		       l.input_snapshot->>'task_id' as task_id,
+		       TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI') as created_at
+		FROM skill_usage_logs l
+		LEFT JOIN workspace_tasks t ON t.id = CAST(
+		  CASE WHEN l.input_snapshot->>'task_id' ~ '^\d+$'
+		       THEN l.input_snapshot->>'task_id' ELSE NULL END AS INTEGER)
+		WHERE l.user_action IS NOT NULL
+		  AND l.user_feedback IS NULL
+		  AND l.created_at > NOW() - INTERVAL '24 hours'
+		  AND (l.user_id = ? OR t.created_by = ? OR l.user_id = 'system')
+		ORDER BY l.created_at DESC
+		LIMIT 10
+	`, uid, uid).Scan(&items)
+
+	if items == nil {
+		items = []pendingItem{}
+	}
+	ctx.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// SubmitFeedback 提交评分（通过 usage_log_id）
+// PUT /api/v1/ai/skill-usage/:id/feedback
+func (c *SkillController) SubmitFeedback(ctx *gin.Context) {
+	logID := ctx.Param("id")
+	var req struct {
+		Feedback int `json:"feedback" binding:"required,min=1,max=5"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, _ := ctx.Get("user_id")
+	uid, _ := userID.(string)
+
+	result := c.db.Model(&models.SkillUsageLog{}).
+		Where("id = ? AND user_id IN (?, 'system')", logID, uid).
+		Update("user_feedback", req.Feedback)
+
+	if result.RowsAffected == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found or not owned by you"})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

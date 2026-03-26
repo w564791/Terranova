@@ -4529,6 +4529,14 @@ CREATE TABLE public.skill_usage_logs (
     ai_model character varying(100),
     context_summary text,
     response_summary text,
+    input_snapshot jsonb,
+    output_snapshot jsonb,
+    skill_content_hash character varying(64),
+    skill_content_snapshot text,
+    user_action character varying(16),
+    user_modification_diff text,
+    latency_ms integer,
+    assessment_status character varying(16) DEFAULT 'pending'::character varying,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT skill_usage_logs_user_feedback_check CHECK (((user_feedback >= 1) AND (user_feedback <= 5)))
 );
@@ -4616,6 +4624,178 @@ COMMENT ON COLUMN public.skill_usage_logs.context_summary IS '调用时的上下
 --
 
 COMMENT ON COLUMN public.skill_usage_logs.response_summary IS 'AI 响应摘要';
+
+
+--
+-- Name: COLUMN skill_usage_logs.input_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.input_snapshot IS '调用时的完整输入';
+
+
+--
+-- Name: COLUMN skill_usage_logs.output_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.output_snapshot IS '完整输出 JSON';
+
+
+--
+-- Name: COLUMN skill_usage_logs.skill_content_hash; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.skill_content_hash IS 'skill content 的 SHA256';
+
+
+--
+-- Name: COLUMN skill_usage_logs.skill_content_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.skill_content_snapshot IS 'skill content 完整快照（仅 hash 首次出现时写入）';
+
+
+--
+-- Name: COLUMN skill_usage_logs.user_action; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.user_action IS '用户行为：accepted | modified | aborted';
+
+
+--
+-- Name: COLUMN skill_usage_logs.user_modification_diff; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.user_modification_diff IS '用户修改的 diff';
+
+
+--
+-- Name: COLUMN skill_usage_logs.latency_ms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.latency_ms IS '调用耗时（毫秒）';
+
+
+--
+-- Name: COLUMN skill_usage_logs.assessment_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_usage_logs.assessment_status IS '评估状态：pending | assessed';
+
+
+--
+-- Name: skill_assessment_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.skill_assessment_results (
+    id character varying(36) NOT NULL,
+    usage_log_id character varying(36) NOT NULL,
+    skill_name character varying(128) NOT NULL,
+    skill_content_hash character varying(64) NOT NULL,
+    assessed_at timestamp with time zone DEFAULT now(),
+    assessment_layer character varying(16) NOT NULL,
+    verdict character varying(16) NOT NULL,
+    score smallint NOT NULL,
+    assessment_latency_ms integer,
+    schema_valid boolean,
+    missing_fields text[],
+    invalid_enum_fields text[],
+    rule_violations jsonb,
+    quality_issues jsonb,
+    assessment_confidence character varying(16),
+    assessment_model character varying(64),
+    assessment_raw_output text
+);
+
+
+--
+-- Name: TABLE skill_assessment_results; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.skill_assessment_results IS 'Skill 质量评估结果记录';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_layer; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_layer IS '评估层级：schema | rule | semantic';
+
+
+--
+-- Name: COLUMN skill_assessment_results.verdict; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.verdict IS '评估结果：pass | warn | fail';
+
+
+--
+-- Name: COLUMN skill_assessment_results.score; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.score IS '评分：0-100';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_latency_ms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_latency_ms IS '评估耗时（毫秒）';
+
+
+--
+-- Name: COLUMN skill_assessment_results.schema_valid; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.schema_valid IS 'Schema 校验是否通过';
+
+
+--
+-- Name: COLUMN skill_assessment_results.missing_fields; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.missing_fields IS '缺失的必需字段';
+
+
+--
+-- Name: COLUMN skill_assessment_results.invalid_enum_fields; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.invalid_enum_fields IS '枚举值无效的字段';
+
+
+--
+-- Name: COLUMN skill_assessment_results.rule_violations; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.rule_violations IS '规则违反详情';
+
+
+--
+-- Name: COLUMN skill_assessment_results.quality_issues; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.quality_issues IS '质量问题详情';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_confidence; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_confidence IS '评估置信度';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_model; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_model IS '评估使用的 AI 模型';
+
+
+--
+-- Name: COLUMN skill_assessment_results.assessment_raw_output; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.skill_assessment_results.assessment_raw_output IS '评估原始输出';
 
 
 --
@@ -9681,7 +9861,7 @@ SELECT pg_catalog.setval('public.ai_analysis_rate_limits_id_seq', 278, true);
 -- Name: ai_configs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.ai_configs_id_seq', 15, true);
+SELECT pg_catalog.setval('public.ai_configs_id_seq', 19, true);
 
 
 --
@@ -10889,6 +11069,22 @@ ALTER TABLE ONLY public.secrets
 
 ALTER TABLE ONLY public.secrets
     ADD CONSTRAINT secrets_secret_id_key UNIQUE (secret_id);
+
+
+--
+-- Name: skill_assessment_results skill_assessment_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.skill_assessment_results
+    ADD CONSTRAINT skill_assessment_results_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: skill_assessment_results skill_assessment_results_usage_log_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.skill_assessment_results
+    ADD CONSTRAINT skill_assessment_results_usage_log_id_fkey FOREIGN KEY (usage_log_id) REFERENCES public.skill_usage_logs(id);
 
 
 --
@@ -12921,6 +13117,61 @@ CREATE UNIQUE INDEX idx_secrets_unique_key ON public.secrets USING btree (resour
 
 
 --
+-- Name: idx_assessment_skill_hash; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_skill_hash ON public.skill_assessment_results USING btree (skill_name, skill_content_hash);
+
+
+--
+-- Name: idx_assessment_usage_layer; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_usage_layer ON public.skill_assessment_results USING btree (usage_log_id, assessment_layer);
+
+
+--
+-- Name: idx_assessment_verdict; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_verdict ON public.skill_assessment_results USING btree (verdict);
+
+
+--
+-- Name: idx_assessment_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_at ON public.skill_assessment_results USING btree (assessed_at DESC);
+
+
+--
+-- Name: skill_golden_sets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE IF NOT EXISTS public.skill_golden_sets (
+  id                  VARCHAR(36) PRIMARY KEY,
+  skill_name          VARCHAR(128) NOT NULL,
+  assessment_layer    VARCHAR(16)  NOT NULL,
+  input_snapshot      JSONB        NOT NULL,
+  output_snapshot     JSONB        NOT NULL,
+  expected_verdict    VARCHAR(16)  NOT NULL,
+  expected_score_min  SMALLINT     NOT NULL,
+  expected_score_max  SMALLINT     NOT NULL,
+  annotations         JSONB,
+  created_by          VARCHAR(128),
+  created_at          TIMESTAMPTZ  DEFAULT NOW(),
+  is_active           BOOLEAN      DEFAULT true
+);
+
+
+--
+-- Name: idx_golden_skill_layer; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_golden_skill_layer ON public.skill_golden_sets (skill_name, assessment_layer) WHERE is_active = true;
+
+
+--
 -- Name: idx_skill_usage_logs_capability; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14800,6 +15051,34 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
+-- Skill quality assessment AI config (inserted after COPY block)
+-- Layer 2: skill_rule_evaluation
+INSERT INTO public.ai_configs (id, service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode, skill_composition)
+SELECT 18, service_type, aws_region, model_id, false,
+       '["skill_rule_evaluation"]'::jsonb, '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0, 'skill',
+       '{"task_skill": "skill_quality_rule_evaluation", "foundation_skills": [], "domain_skills": [], "domain_skill_mode": "fixed", "conditional_rules": [], "auto_load_module_skill": false}'::jsonb
+FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
+-- Layer 3: skill_semantic_evaluation
+INSERT INTO public.ai_configs (id, service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode, skill_composition)
+SELECT 19, service_type, aws_region, model_id, false,
+       '["skill_semantic_evaluation"]'::jsonb, '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0, 'skill',
+       '{"task_skill": "skill_quality_semantic_evaluation", "foundation_skills": [], "domain_skills": [], "domain_skill_mode": "fixed", "conditional_rules": [], "auto_load_module_skill": false}'::jsonb
+FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
+-- Skill quality evaluation Skills (Layer 2 + Layer 3 prompt templates)
+INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
+VALUES ('skill-quality-rule-eval', 'skill_quality_rule_evaluation', 'Skill 质量 - 规则一致性评估', '对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则', 'task', E'你是一个 Skill 输出质量的规则一致性检查器。\n\n## 你的职责\n检查 AI 的最终输出 JSON 是否违反了 Skill 定义中关于**输出内容**的规则。\n\n## 重要：检查范围限定\n你只检查**输出内容本身**的规则，包括：\n- 输出 JSON 的字段值是否符合规则定义的约束（如枚举值、条件触发）\n- 字段之间的逻辑一致性（如 risk_level=high 时 requires_confirmation 是否为 true）\n- 数值计算规则（如 score 计算逻辑）\n- 输出格式规范（如 recommended_actions 的结构要求）\n\n你**不检查**以下内容（这些是 Agent 流程层面的，不是输出内容的问题）：\n- 是否调用了特定工具（如 query_cmdb_dependencies）\n- 阶段识别（stage 字段由系统注入，不是 AI 输出的一部分）\n- 工具调用顺序或次数\n- Agent loop 的执行流程\n\n## Skill 定义（仅规则部分）\n{skill_rules_section}\n\n## 本次调用输入\n{input}\n\n## 本次调用输出\n{output}\n\n---\n\n仅检查输出内容的规则一致性。按以下 JSON 格式输出：\n\n{\n  "verdict": "pass | warn | fail",\n  "score": 0-100的整数,\n  "rule_violations": [\n    {\n      "rule": "规则简短名称",\n      "detail": "具体违反内容，引用输出中的实际值"\n    }\n  ],\n  "assessment_confidence": "high | medium | low"\n}\n\n评分参考：\n- 90-100：输出完全符合所有内容规则\n- 70-89 ：轻微偏差（如枚举值可接受但非最优、格式小瑕疵）\n- 50-69 ：存在规则违反，但核心字段正确\n- 30-49 ：多处规则违反，影响输出可用性\n- 0-29  ：关键规则违反（如 risk_level 与实际风险严重不匹配）\n\n注意：\n- 如果规则涉及工具调用或流程步骤，跳过该规则（不算违反）\n- rule_violations 必须引用输出中的具体值\n- 只输出 JSON，不要有额外文字', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","rule"],"description":"Layer 2 规则一致性评估 prompt"}', 'system', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
+VALUES ('skill-quality-semantic-eval', 'skill_quality_semantic_evaluation', 'Skill 质量 - 语义质量评估', '评估 AI 输出的表述质量、信息量和用户可读性', 'task', E'你是一个 Skill 语义质量评估器。你只需关注输出的语义质量，不要检查 JSON 结构合规性或规则一致性（这些由其他评估层负责）。\n\n## Skill 定义\n{skill_md}\n\n## 本次调用输入\n{input}\n\n## 本次调用输出\n{output}\n\n---\n\n仅评估语义质量，不检查结构和规则。按以下 JSON 格式输出：\n\n{\n  "verdict": "pass | warn | fail",\n  "score": 0-100的整数,\n  "quality_issues": [\n    {\n      "field": "有问题的字段路径",\n      "issue": "具体问题描述，禁止使用信息不足等模糊表述",\n      "severity": "high | medium | low"\n    }\n  ],\n  "highlights": ["做得好的地方，1-3条"],\n  "assessment_confidence": "high | medium | low"\n}\n\n评分参考：\n- 90-100：表述精准具体、信息量充分、用户可直接理解\n- 70-89 ：基本清晰，有轻微含糊或冗余\n- 50-69 ：多处表述模糊或信息量不足\n- 0-49  ：严重的语义问题，用户无法从输出中获取有效信息\n\n注意：\n- quality_issues 每条必须基于实际输出内容，禁止假设\n- 引用实际输出中的具体文本来说明问题\n- 只输出 JSON，不要有任何额外文字', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","semantic"],"description":"Layer 3 语义质量评估 prompt"}', 'system', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
 -- PostgreSQL database dump complete
 --
 

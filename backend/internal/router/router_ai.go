@@ -17,6 +17,14 @@ func GetEmbeddingWorker() *services.EmbeddingWorker {
 	return embeddingWorker
 }
 
+// assessmentWorker 全局 assessment worker 实例
+var assessmentWorker *services.AssessmentWorker
+
+// SetAssessmentWorker 设置全局 assessment worker 实例（在 main.go 中调用）
+func SetAssessmentWorker(w *services.AssessmentWorker) {
+	assessmentWorker = w
+}
+
 // setupAIRoutes sets up AI analysis routes
 func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
 	// AI分析 - 使用AI_ANALYSIS权限，允许WRITE和ADMIN级别访问
@@ -64,7 +72,7 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		)
 
 		// AI + CMDB + Skill 集成路由（新版 Skill 模式）
-		aiCMDBSkillController := controllers.NewAICMDBSkillController(db)
+		aiCMDBSkillController := controllers.NewAICMDBSkillController(db, assessmentWorker)
 
 		// 使用 Skill 模式的配置生成 - 使用AI_ANALYSIS权限
 		ai.POST("/form/generate-with-cmdb-skill",
@@ -91,6 +99,38 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			}),
 			aiCMDBSkillController.PreviewAssembledPrompt,
+		)
+
+		// Skill 使用行为上报
+		skillController := controllers.NewSkillController(db, assessmentWorker)
+		ai.PUT("/skill-usage/:id/action",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.UpdateSkillUsageAction,
+		)
+		ai.PUT("/skill-usage/by-capability",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.UpdateSkillUsageByCapability,
+		)
+		ai.GET("/skill-usage/pending-feedback",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.GetPendingFeedback,
+		)
+		ai.PUT("/skill-usage/:id/feedback",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			skillController.SubmitFeedback,
 		)
 
 		// Embedding 相关路由
@@ -164,6 +204,13 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		admin.PUT("/module-versions/:id/skill", moduleVersionSkillController.UpdateCustomContent)
 		admin.POST("/module-versions/:id/skill/inherit", moduleVersionSkillController.InheritFromVersion)
 		admin.DELETE("/module-versions/:id/skill", moduleVersionSkillController.DeleteSkill)
+
+		// ========== Skill Assessment Dashboard API ==========
+		assessmentController := controllers.NewSkillAssessmentController(db)
+		admin.GET("/skill-assessment/overview", assessmentController.GetOverview)
+		admin.GET("/skill-assessment/detail", assessmentController.GetCapabilityDetail)
+		admin.GET("/skill-assessment/compare", assessmentController.CompareVersions)
+		admin.GET("/skill-assessment/top-violations", assessmentController.GetTopViolations)
 
 		// ========== Embedding Cache API ==========
 		embeddingCacheController := controllers.NewEmbeddingCacheController(db)

@@ -157,6 +157,7 @@ export interface GenerateConfigWithCMDBResponse {
   message: string;
   cmdb_lookups?: CMDBLookupResult[];
   warnings?: string[];
+  usage_log_id?: string;
 }
 
 // 带 CMDB 查询的配置生成请求
@@ -222,6 +223,7 @@ export interface ProgressEvent {
   config?: Record<string, unknown>;
   cmdb_lookups?: CMDBLookupResult[];
   error?: string;
+  usage_log_id?: string;
 }
 
 // SSE 配置生成请求参数
@@ -354,6 +356,7 @@ export const generateFormConfigWithSSE = async (
               config: event.config,
               cmdb_lookups: event.cmdb_lookups,
               message: event.message || '配置生成成功',
+              usage_log_id: event.usage_log_id,
             };
           } else if (event.type === 'need_selection') {
             finalResponse = {
@@ -446,3 +449,70 @@ export const generateFormConfigWithProgress = async (
     clearTimeout(timeoutId);
   }
 };
+
+// Report user action on AI generation result
+export async function reportSkillUsageAction(
+  usageLogId: string,
+  action?: 'accepted' | 'modified' | 'aborted',
+  modificationDiff?: string
+): Promise<void> {
+  try {
+    await api.put(`/ai/skill-usage/${usageLogId}/action`, {
+      action,
+      modification_diff: modificationDiff,
+    });
+    window.dispatchEvent(new Event('skill-action-reported'));
+  } catch (error) {
+    console.warn('[AI] Failed to report usage action:', error);
+  }
+}
+
+// Report user feedback score (1-5)
+export async function reportSkillUsageFeedback(
+  usageLogId: string,
+  feedback: number
+): Promise<void> {
+  try {
+    await api.put(`/ai/skill-usage/${usageLogId}/action`, { feedback });
+  } catch (error) {
+    console.warn('[AI] Failed to report usage feedback:', error);
+  }
+}
+
+// Report user action by capability + context (for plan_summary etc.)
+export async function reportSkillUsageByCapability(
+  capability: string,
+  action: 'accepted' | 'aborted',
+  taskId?: number,
+  feedback?: number
+): Promise<void> {
+  try {
+    await api.put('/ai/skill-usage/by-capability', {
+      capability,
+      action,
+      task_id: taskId,
+      ...(feedback ? { feedback } : {}),
+    });
+    // 通知 FeedbackBanner 刷新
+    window.dispatchEvent(new Event('skill-action-reported'));
+  } catch (error) {
+    console.warn('[AI] Failed to report usage by capability:', error);
+  }
+}
+
+// Report feedback by capability (separate call, no action)
+export async function reportFeedbackByCapability(
+  capability: string,
+  feedback: number,
+  taskId?: number
+): Promise<void> {
+  try {
+    await api.put('/ai/skill-usage/by-capability', {
+      capability,
+      feedback,
+      task_id: taskId,
+    });
+  } catch (error) {
+    console.warn('[AI] Failed to report feedback by capability:', error);
+  }
+}

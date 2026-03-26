@@ -22,6 +22,7 @@ type ProgressEvent struct {
 	// 完成时的数据
 	Config      map[string]interface{} `json:"config,omitempty"`       // 生成的配置
 	CMDBLookups []CMDBLookupResult     `json:"cmdb_lookups,omitempty"` // CMDB 查询结果
+	UsageLogID  string                 `json:"usage_log_id,omitempty"` // Skill 使用日志 ID（用于前端行为上报）
 
 	// 错误时的数据
 	Error string `json:"error,omitempty"` // 错误信息

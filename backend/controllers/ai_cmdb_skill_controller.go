@@ -19,10 +19,10 @@ type AICMDBSkillController struct {
 }
 
 // NewAICMDBSkillController 创建控制器实例
-func NewAICMDBSkillController(db *gorm.DB) *AICMDBSkillController {
+func NewAICMDBSkillController(db *gorm.DB, assessmentWorker ...*services.AssessmentWorker) *AICMDBSkillController {
 	return &AICMDBSkillController{
 		db:      db,
-		service: services.NewAICMDBSkillService(db),
+		service: services.NewAICMDBSkillService(db, assessmentWorker...),
 	}
 }
 
@@ -272,6 +272,7 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkillSSE(ctx *gin.Context)
 			Config:         response.Config,
 			ElapsedMs:      time.Since(startTime).Milliseconds(),
 			CompletedSteps: lastCompletedSteps, // 包含所有已完成步骤的耗时
+			UsageLogID:     response.UsageLogID,
 		})
 	}
 

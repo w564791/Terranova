@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Input, Button, message, Alert, Modal, Spin, Collapse, Tabs, Tooltip, Switch, Tag, Select, notification, Popover } from 'antd';
 import { QuestionCircleOutlined, CloseOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, CodeOutlined, ToolOutlined, CopyOutlined, CheckOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { generateFormConfig, generateFormConfigWithCMDB, generateFormConfigWithProgress } from '../../../services/aiForm';
+import { generateFormConfig, generateFormConfigWithCMDB, generateFormConfigWithProgress, reportSkillUsageAction } from '../../../services/aiForm';
 import type { PlaceholderInfo, CMDBLookupResult, ProgressEvent, CompletedStep } from '../../../services/aiForm';
 import styles from './AIConfigGenerator.module.css';
 
@@ -544,6 +544,7 @@ export interface UseAIConfigGeneratorReturn {
   handleGenerate: (mode: GenerateMode) => Promise<void>;
   handleGenerateWithSelections: (userSelections: Record<string, string | string[]>) => Promise<void>;  // 带用户选择的重新生成
   handleApplyConfig: () => void;
+  handlePreviewClose: () => void;
   setPreviewOpen: (open: boolean) => void;
   openPreview: () => void;
   // 渲染辅助
@@ -683,6 +684,8 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
   // 进度状态（用于实时显示和执行摘要）
   const [progress, setProgress] = useState<ProgressInfo | null>(null);
   const progressRef = React.useRef<ProgressInfo | null>(null);
+  // 追踪 AI 生成的 usage_log_id，用于上报用户操作
+  const usageLogIdRef = React.useRef<string | null>(null);
   // 单独保存最后一个包含 completedSteps 的进度（用于执行摘要）
   const lastCompletedStepsRef = React.useRef<Array<{ name: string; elapsed_ms: number }> | null>(null);
   // 保存第一步（need_selection 之前）的进度，用于累加
@@ -844,6 +847,9 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
       // 清除第一步的进度数据
       firstPhaseStepsRef.current = null;
 
+      // 捕获 usage_log_id
+      usageLogIdRef.current = response.usage_log_id || null;
+
       // 处理被拦截的情况
       if (response.status === 'blocked') {
         setBlockMessage(response.message || '请求已被安全系统拦截');
@@ -858,13 +864,13 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
       setBlockMessage(null);
 
       let config = response.config || null;
-      
+
       // 【关键】在前端直接替换用户选中的资源 ID
       // 这样就不依赖 AI 是否正确理解了
       if (config) {
         config = applyResourceSelections(config, resourceIdMap);
       }
-      
+
       setGeneratedConfig(config);
       setMergedConfig(config);
       
@@ -995,6 +1001,9 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
         );
       }
 
+      // 捕获 usage_log_id
+      usageLogIdRef.current = (response as any).usage_log_id || null;
+
       // 处理被拦截的情况
       if (response.status === 'blocked') {
         setBlockMessage(response.message || '请求已被安全系统拦截');
@@ -1062,7 +1071,14 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
     const configToApply = currentMode === 'refine' && mergedConfig ? mergedConfig : generatedConfig;
     if (configToApply) {
       onGenerate(configToApply);
-      
+
+      // 上报用户接受了 AI 生成的配置（评分由全局 FeedbackBanner 组件处理）
+      const logId = usageLogIdRef.current;
+      if (logId) {
+        reportSkillUsageAction(logId, 'accepted');
+        usageLogIdRef.current = null;
+      }
+
       // 构建执行摘要消息
       // 优先使用 finalProgress 状态（在请求完成时保存的最终进度）
       // 如果 finalProgress 为 null，则使用 progressRef.current
@@ -1147,6 +1163,15 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
     }
   }, [generatedConfig]);
 
+  // 关闭预览弹窗（非应用），上报 aborted
+  const handlePreviewClose = useCallback(() => {
+    if (usageLogIdRef.current) {
+      reportSkillUsageAction(usageLogIdRef.current, 'aborted');
+      usageLogIdRef.current = null;
+    }
+    setPreviewOpen(false);
+  }, []);
+
   const renderConfigValue = useCallback((value: unknown): React.ReactNode => {
     if (value === null || value === undefined) {
       return <span className={styles.nullValue}>null</span>;
@@ -1224,6 +1249,7 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
     handleGenerate,
     handleGenerateWithSelections,
     handleApplyConfig,
+    handlePreviewClose,
     setPreviewOpen,
     openPreview,
     renderConfigValue,
@@ -2051,7 +2077,7 @@ const AIConfigGenerator: React.FC<AIConfigGeneratorProps> = ({
 
       <AIPreviewModal
         open={ai.previewOpen}
-        onClose={() => ai.setPreviewOpen(false)}
+        onClose={ai.handlePreviewClose}
         onApply={ai.handleApplyConfig}
         onRegenerate={ai.handleGenerateWithSelections}
         generatedConfig={ai.mergedConfig || ai.generatedConfig}
