@@ -7,7 +7,7 @@ tags: [“task”, “summary”, “impact_analysis”, “risk_analysis”, �
 priority: 0
 domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 
-# 执行流程摘要工作流（V3 Final）
+# 执行流程摘要工作流
 
 -----
 
@@ -292,6 +292,7 @@ affected_resources_schema:
 7.  按第七节聚合规则生成全局 risk_evaluation
 8.  按第八节规则判断 requires_human_confirmation
 9.  若 true → 按第九节规则生成 decision_hints（title、risk_highlights、recommended_actions）
+10. 如果包任何在`十二、 必须查询CMDB的资源列表`中的资源变更,必须查询CMDB
 ```
 
 ### Apply 阶段
@@ -304,6 +305,16 @@ affected_resources_schema:
 3. 对比 Plan 预测 vs 实际执行结果，标记 unexpected_changes
 4. 汇总 resource_results（每个资源的执行状态）
 5. 汇总 affected_resources（实际影响范围）
+```
+
+-----
+
+## 十二、 必须查询CMDB的资源列表
+
+```
+1. 安全组/安全组规则
+2. iam role/iam policy
+3. resource base policy,例如secretsmanager policy,kms policy
 ```
 
 -----
