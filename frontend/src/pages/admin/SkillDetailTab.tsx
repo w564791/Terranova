@@ -73,12 +73,14 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
     },
     {
       title: <ColTitle title="Layer 1" tip="Schema 校验通过率" />,
-      key: 'pass_rate',
+      key: 'l1_pass_rate',
       render: (_: unknown, r: VersionStats) => {
+        if (r.l1_pass_rate == null) return <span style={{ color: '#bbb' }}>-</span>;
+        const rate = r.l1_pass_rate;
         let color = '#52c41a';
-        if (r.pass_rate < 50) color = '#ff4d4f';
-        else if (r.pass_rate < 80) color = '#faad14';
-        return <span style={{ color, fontWeight: 600 }}>{r.pass_rate.toFixed(1)}%</span>;
+        if (rate < 50) color = '#ff4d4f';
+        else if (rate < 80) color = '#faad14';
+        return <span style={{ color, fontWeight: 600 }}>{rate.toFixed(1)}%</span>;
       },
     },
     {
