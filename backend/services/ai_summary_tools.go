@@ -97,7 +97,6 @@ func (t *QueryCMDBDependenciesTool) InputSchema() map[string]interface{} {
 		"properties": map[string]interface{}{
 			"resource_id":      map[string]interface{}{"type": "string", "description": "被依赖资源的 ID（如 sg-123, vpc-456）"},
 			"dependency_field": map[string]interface{}{"type": "string", "description": "依赖字段名（如 security_group_ids, vpc_id, subnet_id）"},
-			"workspace_id":     map[string]interface{}{"type": "string", "description": "可选，限定搜索范围"},
 		},
 		"required": []string{"resource_id", "dependency_field"},
 	}
@@ -106,17 +105,13 @@ func (t *QueryCMDBDependenciesTool) InputSchema() map[string]interface{} {
 func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	resourceID, _ := params["resource_id"].(string)
 	depField, _ := params["dependency_field"].(string)
-	workspaceID, _ := params["workspace_id"].(string)
 
 	if resourceID == "" || depField == "" {
 		return nil, fmt.Errorf("resource_id and dependency_field are required")
 	}
 
+	// 全局查询，不限定 workspace，确保 __external__ CMDB 数据也能被搜索到
 	query := t.db.Where("resource_mode = 'managed'")
-
-	if workspaceID != "" {
-		query = query.Where("workspace_id = ?", workspaceID)
-	}
 
 	// 搜索 JSONB 属性：字符串字段精确匹配 + 数组字段包含匹配
 	query = query.Where(

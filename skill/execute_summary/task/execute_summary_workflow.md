@@ -37,7 +37,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 **工具入参说明：**
 
 - `query_module_resources`: workspace_id, module_path
-- `query_cmdb_dependencies`: resource_id, dependency_field, workspace_id（可选）
+- `query_cmdb_dependencies`: resource_id, dependency_field（全局搜索，自动含外部 CMDB）
   - 安全组: `security_group_ids` 或 `vpc_security_group_ids`
   - VPC: `vpc_id`
   - 子网: `subnet_id` 或 `subnet_ids`
