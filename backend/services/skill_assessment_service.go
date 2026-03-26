@@ -527,6 +527,7 @@ type VersionStats struct {
 	AvgScore       float64   `json:"avg_score"`
 	PassRate       float64   `json:"pass_rate"`
 	FirstSeen      time.Time `json:"first_seen"`
+	AvgLatencyMs   float64   `json:"avg_latency_ms"`
 	L1PassRate     *float64  `json:"l1_pass_rate"`
 	L2PassRate     *float64  `json:"l2_pass_rate"`
 	L2AvgScore     *float64  `json:"l2_avg_score"`
@@ -576,7 +577,7 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'pass' THEN r.usage_log_id END) as pass,
 		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'fail' THEN r.usage_log_id END) as fail,
 		       COALESCE(avg(r.score), 0) as avg_score,
-		       COALESCE(avg(l.latency_ms), 0) as avg_latency_ms
+		       COALESCE(avg(CASE WHEN r.assessment_layer = 'schema' THEN l.latency_ms END), 0) as avg_latency_ms
 		FROM skill_assessment_results r
 		JOIN skill_usage_logs l ON l.id = r.usage_log_id
 		WHERE l.capability = ? AND l.created_at > ?`, capability, since).Scan(&agg).Error; err != nil {
@@ -593,20 +594,21 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 
 	// 2. Version stats (per content_hash, with per-layer breakdown)
 	type versionRow struct {
-		ContentHash string    `json:"content_hash"`
-		Total       int64     `json:"total"`
-		Pass        int64     `json:"pass"`
-		Fail        int64     `json:"fail"`
-		AvgScore    float64   `json:"avg_score"`
-		FirstSeen   time.Time `json:"first_seen"`
-		L1Total     int64     `json:"l1_total"`
-		L1Pass      int64     `json:"l1_pass"`
-		L2Total     int64     `json:"l2_total"`
-		L2Pass      int64     `json:"l2_pass"`
-		L2AvgScore  float64   `json:"l2_avg_score"`
-		L3Total     int64     `json:"l3_total"`
-		L3Pass      int64     `json:"l3_pass"`
-		L3AvgScore  float64   `json:"l3_avg_score"`
+		ContentHash  string    `json:"content_hash"`
+		Total        int64     `json:"total"`
+		Pass         int64     `json:"pass"`
+		Fail         int64     `json:"fail"`
+		AvgScore     float64   `json:"avg_score"`
+		FirstSeen    time.Time `json:"first_seen"`
+		AvgLatencyMs float64   `json:"avg_latency_ms"`
+		L1Total      int64     `json:"l1_total"`
+		L1Pass       int64     `json:"l1_pass"`
+		L2Total      int64     `json:"l2_total"`
+		L2Pass       int64     `json:"l2_pass"`
+		L2AvgScore   float64   `json:"l2_avg_score"`
+		L3Total      int64     `json:"l3_total"`
+		L3Pass       int64     `json:"l3_pass"`
+		L3AvgScore   float64   `json:"l3_avg_score"`
 	}
 	var vRows []versionRow
 	if err := s.db.Raw(`
@@ -616,6 +618,7 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 		       count(DISTINCT CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'fail' THEN r.usage_log_id END) as fail,
 		       COALESCE(avg(r.score), 0) as avg_score,
 		       min(l.created_at) as first_seen,
+		       COALESCE(avg(CASE WHEN r.assessment_layer = 'schema' THEN l.latency_ms END), 0) as avg_latency_ms,
 		       count(CASE WHEN r.assessment_layer = 'schema' THEN 1 END) as l1_total,
 		       count(CASE WHEN r.assessment_layer = 'schema' AND r.verdict = 'pass' THEN 1 END) as l1_pass,
 		       count(CASE WHEN r.assessment_layer = 'rule' THEN 1 END) as l2_total,
@@ -637,13 +640,14 @@ func (s *SkillAssessmentService) GetCapabilityDetail(capability string, days, pa
 			passRate = float64(v.Pass) / float64(v.Total) * 100
 		}
 		vs := VersionStats{
-			ContentHash: v.ContentHash,
-			Total:       v.Total,
-			Pass:        v.Pass,
-			Fail:        v.Fail,
-			AvgScore:    v.AvgScore,
-			PassRate:    passRate,
-			FirstSeen:   v.FirstSeen,
+			ContentHash:  v.ContentHash,
+			Total:        v.Total,
+			Pass:         v.Pass,
+			Fail:         v.Fail,
+			AvgScore:     v.AvgScore,
+			PassRate:     passRate,
+			FirstSeen:    v.FirstSeen,
+			AvgLatencyMs: v.AvgLatencyMs,
 		}
 		if v.L1Total > 0 {
 			r := float64(v.L1Pass) / float64(v.L1Total) * 100

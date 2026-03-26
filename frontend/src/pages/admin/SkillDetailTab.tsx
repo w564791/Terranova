@@ -238,7 +238,16 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               <div className={styles.statValue} style={{ fontSize: 14, fontFamily: 'monospace' }}>
                 {detail.latest_hash ? detail.latest_hash.substring(0, 12) : '-'}
               </div>
-              <div className={styles.statSub}>{detail.task_skill || detail.capability}</div>
+              <div className={styles.statSub}>
+                {detail.task_skill || detail.capability}
+                {(() => {
+                  const current = detail.versions?.[0];
+                  if (!current?.avg_latency_ms) return null;
+                  const ms = current.avg_latency_ms;
+                  const text = ms > 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+                  return <span style={{ marginLeft: 8, color: '#8c8c8c' }}>⏱ {text}</span>;
+                })()}
+              </div>
             </div>
           </div>
 
