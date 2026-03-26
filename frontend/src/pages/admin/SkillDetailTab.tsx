@@ -27,11 +27,24 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
   const [violations, setViolations] = useState<TopViolation[]>([]);
   const [violationLayer, setViolationLayer] = useState<string>('rule');
   const [loading, setLoading] = useState(false);
+  const [assessmentPage, setAssessmentPageLocal] = useState<number>(() => Number(searchParams.get('page')) || 1);
+  const [assessmentPageSize, setAssessmentPageSizeLocal] = useState<number>(() => Number(searchParams.get('pageSize')) || 10);
+
+  const setAssessmentPagination = (page: number, pageSize: number) => {
+    setAssessmentPageLocal(page);
+    setAssessmentPageSizeLocal(pageSize);
+    const p = new URLSearchParams(searchParams);
+    if (page > 1) p.set('page', String(page)); else p.delete('page');
+    if (pageSize !== 10) p.set('pageSize', String(pageSize)); else p.delete('pageSize');
+    setSearchParams(p, { replace: true });
+  };
 
   const setSelected = (cap: string) => {
     setSelectedLocal(cap);
+    setAssessmentPageLocal(1);
     const p = new URLSearchParams(searchParams);
     p.set('cap', cap);
+    p.delete('page');
     setSearchParams(p, { replace: true });
   };
 
@@ -46,18 +59,18 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
     });
   }, [days]);
 
-  // Load detail + violations when selection changes
+  // Load detail + violations when selection or pagination changes
   useEffect(() => {
     if (!selected) return;
     setLoading(true);
     Promise.all([
-      getCapabilityDetail(selected, days),
+      getCapabilityDetail(selected, days, assessmentPage, assessmentPageSize),
       getTopViolations(selected, days, 10),
     ])
       .then(([d, v]) => { setDetail(d); setViolations(v); })
       .catch(e => console.error('Failed to load detail:', e))
       .finally(() => setLoading(false));
-  }, [selected, days]);
+  }, [selected, days, assessmentPage, assessmentPageSize]);
 
   /* ---------- Version timeline ---------- */
   const versionColumns: ColumnsType<VersionStats> = [
@@ -395,17 +408,20 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
           {/* Recent assessment records (all verdicts) */}
           <div className={`${styles.sectionCard} ${styles.tableCard}`}>
             <div className={styles.sectionTitle}>
-              <ColTitle title="最近评估记录" tip="该 Capability 最近 20 条评估记录（包含所有 verdict）" />
+              <ColTitle title="最近评估记录" tip="该 Capability 的评估记录（包含所有 verdict）" />
             </div>
             {detail.assessments.length > 0 ? (
               <Table
                 columns={assessmentColumns}
                 dataSource={detail.assessments}
                 pagination={{
+                  current: assessmentPage,
+                  pageSize: assessmentPageSize,
                   total: detail.assessment_total || 0,
-                  pageSize: 20,
-                  showSizeChanger: false,
+                  showSizeChanger: true,
+                  pageSizeOptions: ['10', '20', '50'],
                   showTotal: (total) => `共 ${total} 条`,
+                  onChange: (page, size) => setAssessmentPagination(page, size),
                 }}
                 size="small"
                 rowKey="usage_log_id"
