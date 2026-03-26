@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Select, Table, Tag, Tooltip, Spin, Empty } from 'antd';
+import { Select, Segmented, Table, Tag, Tooltip, Spin, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -25,6 +25,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
   const [selected, setSelectedLocal] = useState<string>(() => searchParams.get('cap') || '');
   const [detail, setDetail] = useState<CapabilityDetail | null>(null);
   const [violations, setViolations] = useState<TopViolation[]>([]);
+  const [violationLayer, setViolationLayer] = useState<string>('rule');
   const [loading, setLoading] = useState(false);
 
   const setSelected = (cap: string) => {
@@ -273,44 +274,35 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
 
             {/* Violation distribution — from API */}
             <div className={styles.sectionCard}>
-              <div className={styles.sectionTitle}>
+              <div className={styles.sectionTitle} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <ColTitle title="高频违规分布" tip="从 L2 规则违反和 L3 质量问题中提取的高频问题（后端聚合）" />
+                <Segmented
+                  size="small"
+                  value={violationLayer}
+                  onChange={(v) => setViolationLayer(v as string)}
+                  options={[
+                    { label: `L2 规则 (${ruleViolations.length})`, value: 'rule' },
+                    { label: `L3 语义 (${semanticViolations.length})`, value: 'semantic' },
+                  ]}
+                />
               </div>
-              {ruleViolations.length > 0 && (
-                <>
-                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8, fontWeight: 500 }}>Layer 2 - 规则违规 Top {ruleViolations.length}</div>
-                  {ruleViolations.map((v, i) => (
-                    <div key={`r-${i}`} className={styles.hbarRow}>
-                      <Tooltip title={v.rule_name}>
-                        <span className={styles.hbarLabel}>{v.rule_name}</span>
-                      </Tooltip>
-                      <div className={styles.hbarTrack}>
-                        <div className={styles.hbarFill} style={{ width: `${(v.count / violationMax) * 100}%`, background: '#ff4d4f' }} />
-                      </div>
-                      <span className={styles.hbarCount}>{v.count}</span>
+              {(() => {
+                const items = violationLayer === 'rule' ? ruleViolations : semanticViolations;
+                const color = violationLayer === 'rule' ? '#ff4d4f' : '#fa8c16';
+                const max = items.length > 0 ? Math.max(...items.map(v => v.count)) : 1;
+                if (items.length === 0) return <div className={styles.emptyState}>无违规记录</div>;
+                return items.map((v, i) => (
+                  <div key={i} className={styles.hbarRow}>
+                    <Tooltip title={v.rule_name}>
+                      <span className={styles.hbarLabel}>{v.rule_name}</span>
+                    </Tooltip>
+                    <div className={styles.hbarTrack}>
+                      <div className={styles.hbarFill} style={{ width: `${(v.count / max) * 100}%`, background: color }} />
                     </div>
-                  ))}
-                </>
-              )}
-              {semanticViolations.length > 0 && (
-                <>
-                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8, marginTop: ruleViolations.length > 0 ? 16 : 0, fontWeight: 500 }}>Layer 3 - 语义问题 Top {semanticViolations.length}</div>
-                  {semanticViolations.map((v, i) => (
-                    <div key={`s-${i}`} className={styles.hbarRow}>
-                      <Tooltip title={v.rule_name}>
-                        <span className={styles.hbarLabel}>{v.rule_name}</span>
-                      </Tooltip>
-                      <div className={styles.hbarTrack}>
-                        <div className={styles.hbarFill} style={{ width: `${(v.count / violationMax) * 100}%`, background: '#fa8c16' }} />
-                      </div>
-                      <span className={styles.hbarCount}>{v.count}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-              {ruleViolations.length === 0 && semanticViolations.length === 0 && (
-                <div className={styles.emptyState}>无违规记录</div>
-              )}
+                    <span className={styles.hbarCount}>{v.count}</span>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 
