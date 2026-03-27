@@ -562,7 +562,7 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 				ELSE 0.1
 			END as match_rank
 		`, query, query, query, query+"%", query+"%", query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
-		Joins("LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id AND ri.source_type = 'terraform' AND (ri.root_module_name LIKE '%' || wr.resource_name || '%' OR wr.resource_name LIKE '%' || ri.root_module_name || '%') AND wr.is_active = true").
+		Joins("LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id AND ri.source_type = 'terraform' AND ri.root_module_name LIKE '%\\_' || wr.resource_name AND wr.is_active = true").
 		Joins("LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id").
 		Joins("LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id").
 		Where("ri.resource_mode = ?", "managed").

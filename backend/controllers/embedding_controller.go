@@ -491,7 +491,7 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 		LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id
 		LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id
 			AND ri.source_type = 'terraform'
-			AND (ri.root_module_name LIKE '%' || wr.resource_name || '%' OR wr.resource_name LIKE '%' || ri.root_module_name || '%')
+			AND ri.root_module_name LIKE '%\_' || wr.resource_name
 			AND wr.is_active = true
 		WHERE ri.embedding IS NOT NULL
 		  AND ri.resource_mode = 'managed'
