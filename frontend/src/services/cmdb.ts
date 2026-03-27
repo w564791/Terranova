@@ -122,7 +122,7 @@ export interface VectorSearchResponse {
   query: string;
   count: number;
   results: ResourceSearchResult[];
-  search_method: 'vector' | 'keyword';
+  search_method: 'vector' | 'keyword' | 'hybrid';
   fallback_reason?: string;
 }
 

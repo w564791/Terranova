@@ -819,7 +819,7 @@ const CMDB: React.FC = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(!!initialQuery);
   const [searchMode, setSearchMode] = useState<'vector' | 'keyword'>('vector'); // 默认使用 vector 搜索
-  const [actualSearchMethod, setActualSearchMethod] = useState<'vector' | 'keyword' | null>(null); // 实际使用的搜索方式
+  const [actualSearchMethod, setActualSearchMethod] = useState<'vector' | 'keyword' | 'hybrid' | null>(null); // 实际使用的搜索方式
   const [fallbackReason, setFallbackReason] = useState<string | null>(null); // 降级原因
 
   // Autocomplete state
@@ -1561,12 +1561,12 @@ const CMDB: React.FC = () => {
                         padding: '2px 8px',
                         borderRadius: '4px',
                         fontSize: '12px',
-                        background: actualSearchMethod === 'vector' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                        color: actualSearchMethod === 'vector' ? '#3b82f6' : '#16a34a',
+                        background: actualSearchMethod === 'keyword' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                        color: actualSearchMethod === 'keyword' ? '#16a34a' : '#3b82f6',
                       }}
                       title={fallbackReason || undefined}
                     >
-                      {actualSearchMethod === 'vector' ? 'Vector Search' : 'Keyword Search'}
+                      {actualSearchMethod === 'hybrid' ? 'Hybrid Search' : actualSearchMethod === 'vector' ? 'Vector Search' : 'Keyword Search'}
                       {fallbackReason && ' (fallback)'}
                     </span>
                   )}
