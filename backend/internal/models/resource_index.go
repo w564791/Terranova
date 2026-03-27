@@ -119,6 +119,7 @@ type ResourceSearchResult struct {
 	CloudAccountID     string `json:"cloud_account_id,omitempty" gorm:"column:cloud_account_id"`         // 云账户ID
 	CloudAccountName   string `json:"cloud_account_name,omitempty" gorm:"column:cloud_account_name"`     // 云账户名称
 	CloudRegion        string `json:"cloud_region,omitempty" gorm:"column:cloud_region"`                 // 云区域
+	ResourceSummary    string `json:"resource_summary,omitempty" gorm:"column:resource_summary"`        // AI 生成的资源摘要
 }
 
 // ResourceTreeNode 资源树节点

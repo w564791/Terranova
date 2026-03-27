@@ -346,6 +346,7 @@ type SearchResult struct {
 	CloudRegion        string  `json:"cloud_region"`
 	PlatformResourceID *uint   `json:"platform_resource_id"`
 	JumpURL            string  `json:"jump_url"`
+	ResourceSummary    string  `json:"resource_summary,omitempty"`
 	Similarity         float64 `json:"similarity"`
 }
 
@@ -477,6 +478,7 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 			ri.cloud_account_id,
 			ri.cloud_account_name,
 			ri.cloud_region,
+			ri.resource_summary,
 			wr.id as platform_resource_id,
 			CASE
 				WHEN ri.source_type = 'external' THEN NULL
@@ -558,6 +560,7 @@ func (c *EmbeddingController) doKeywordSearch(req VectorSearchRequest) ([]Search
 			CloudRegion:        r.CloudRegion,
 			PlatformResourceID: r.PlatformResourceID,
 			JumpURL:            r.JumpURL,
+			ResourceSummary:    r.ResourceSummary,
 			Similarity:         0,
 		})
 	}

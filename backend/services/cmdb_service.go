@@ -539,6 +539,7 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 			ri.cloud_account_id,
 			ri.cloud_account_name,
 			ri.cloud_region,
+			ri.resource_summary,
 			wr.id as platform_resource_id,
 			wr.resource_name as platform_resource_name,
 			CASE
