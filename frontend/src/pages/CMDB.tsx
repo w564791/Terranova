@@ -1104,25 +1104,14 @@ const CMDB: React.FC = () => {
       setFallbackReason(null);
       setShowSuggestions(false); // 搜索时隐藏建议
 
-      if (searchMode === 'vector') {
-        // 使用 vector 搜索（支持自动降级）
-        const response = await cmdbService.vectorSearch(query, {
-          resource_type: searchResourceType || undefined,
-          limit: 50,
-        });
-        setSearchResults(response.results || []);
-        setActualSearchMethod(response.search_method);
-        setFallbackReason(response.fallback_reason || null);
-      } else {
-        // 使用关键字搜索
-        const response = await cmdbService.searchResources(query, {
-          resource_type: searchResourceType || undefined,
-          limit: 50,
-        });
-        setSearchResults(response.results || []);
-        setActualSearchMethod('keyword');
-        setFallbackReason(null);
-      }
+      // 使用混合搜索（向量 + 关键词并行）
+      const response = await cmdbService.vectorSearch(query, {
+        resource_type: searchResourceType || undefined,
+        limit: 50,
+      });
+      setSearchResults(response.results || []);
+      setActualSearchMethod(response.search_method);
+      setFallbackReason(response.fallback_reason || null);
     } catch (err) {
       console.error('Search failed:', err);
       setSearchResults([]);
@@ -1440,43 +1429,15 @@ const CMDB: React.FC = () => {
           <div className={styles.searchSection}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 className={styles.searchTitle} style={{ margin: 0 }}>Search Resources</h3>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#6b7280' }}>Search Mode:</span>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('vector')}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    background: searchMode === 'vector' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(156, 163, 175, 0.1)',
-                    color: searchMode === 'vector' ? '#3b82f6' : '#6b7280',
-                    fontWeight: searchMode === 'vector' ? 500 : 400,
-                  }}
-                  title="AI 语义搜索（支持自然语言）"
-                >
-                  Vector
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('keyword')}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    background: searchMode === 'keyword' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(156, 163, 175, 0.1)',
-                    color: searchMode === 'keyword' ? '#16a34a' : '#6b7280',
-                    fontWeight: searchMode === 'keyword' ? 500 : 400,
-                  }}
-                  title="精确关键字搜索"
-                >
-                  Keyword
-                </button>
-              </div>
+              <span style={{
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                color: '#3b82f6',
+              }}>
+                Hybrid Search
+              </span>
             </div>
             <form className={styles.searchForm} onSubmit={handleSearch}>
               <div className={styles.searchInputWrapper}>
