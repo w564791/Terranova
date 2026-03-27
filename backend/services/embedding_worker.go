@@ -397,7 +397,18 @@ func (w *EmbeddingWorker) SyncAllWorkspaces() error {
 		return nil
 	}
 
-	// 2. 批量创建 embedding 任务
+	// 2. 删除这些资源已有的 completed 任务（避免 OnConflict{DoNothing} 阻塞新任务创建）
+	resourceIDs := make([]uint, len(resources))
+	for i, r := range resources {
+		resourceIDs[i] = r.ID
+	}
+	deleteResult := w.db.Where("resource_id IN ? AND status = ?", resourceIDs, models.EmbeddingTaskStatusCompleted).
+		Delete(&models.EmbeddingTask{})
+	if deleteResult.RowsAffected > 0 {
+		log.Printf("[EmbeddingWorker] 清理 %d 个旧 completed 任务", deleteResult.RowsAffected)
+	}
+
+	// 3. 批量创建 embedding 任务
 	now := time.Now()
 	tasks := make([]models.EmbeddingTask, 0, len(resources))
 	for _, r := range resources {
@@ -442,6 +453,17 @@ func (w *EmbeddingWorker) SyncWorkspace(workspaceID string) error {
 	if len(resources) == 0 {
 		log.Printf("[EmbeddingWorker] Workspace %s 没有需要同步的资源", workspaceID)
 		return nil
+	}
+
+	// 删除这些资源已有的 completed 任务（避免 OnConflict{DoNothing} 阻塞新任务创建）
+	resourceIDs := make([]uint, len(resources))
+	for i, r := range resources {
+		resourceIDs[i] = r.ID
+	}
+	deleteResult := w.db.Where("resource_id IN ? AND status = ?", resourceIDs, models.EmbeddingTaskStatusCompleted).
+		Delete(&models.EmbeddingTask{})
+	if deleteResult.RowsAffected > 0 {
+		log.Printf("[EmbeddingWorker] Workspace %s 清理 %d 个旧 completed 任务", workspaceID, deleteResult.RowsAffected)
 	}
 
 	// 批量创建 embedding 任务
