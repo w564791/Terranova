@@ -15079,6 +15079,24 @@ INSERT INTO public.skills (id, name, display_name, description, layer, content, 
 VALUES ('skill-quality-semantic-eval', 'skill_quality_semantic_evaluation', 'Skill 质量 - 语义质量评估', '评估 AI 输出的表述质量、信息量和用户可读性', 'task', E'你是一个 Skill 语义质量评估器。你只需关注输出的语义质量，不要检查 JSON 结构合规性或规则一致性（这些由其他评估层负责）。\n\n## Skill 定义\n{skill_md}\n\n## 本次调用输入\n{input}\n\n## 本次调用输出\n{output}\n\n---\n\n仅评估语义质量，不检查结构和规则。按以下 JSON 格式输出：\n\n{\n  "verdict": "pass | warn | fail",\n  "score": 0-100的整数,\n  "quality_issues": [\n    {\n      "field": "有问题的字段路径",\n      "issue": "具体问题描述，禁止使用信息不足等模糊表述",\n      "severity": "high | medium | low"\n    }\n  ],\n  "highlights": ["做得好的地方，1-3条"],\n  "assessment_confidence": "high | medium | low"\n}\n\n评分参考：\n- 90-100：表述精准具体、信息量充分、用户可直接理解\n- 70-89 ：基本清晰，有轻微含糊或冗余\n- 50-69 ：多处表述模糊或信息量不足\n- 0-49  ：严重的语义问题，用户无法从输出中获取有效信息\n\n注意：\n- quality_issues 每条必须基于实际输出内容，禁止假设\n- 引用实际输出中的具体文本来说明问题\n- 只输出 JSON，不要有任何额外文字', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","semantic"],"description":"Layer 3 语义质量评估 prompt"}', 'system', NOW(), NOW())
 ON CONFLICT (name) DO NOTHING;
 
+-- CMDB 同步后处理任务队列
+CREATE TABLE IF NOT EXISTS cmdb_post_sync_jobs (
+    id            SERIAL PRIMARY KEY,
+    source_id     VARCHAR(50) NOT NULL,
+    job_type      VARCHAR(20) NOT NULL,
+    status        VARCHAR(20) NOT NULL DEFAULT 'pending',
+    depends_on    INTEGER REFERENCES cmdb_post_sync_jobs(id) ON DELETE SET NULL,
+    error_message TEXT DEFAULT '',
+    retry_count   INTEGER DEFAULT 0,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at    TIMESTAMP,
+    completed_at  TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_sync_jobs_source ON cmdb_post_sync_jobs (source_id);
+CREATE INDEX IF NOT EXISTS idx_post_sync_jobs_status ON cmdb_post_sync_jobs (status);
+CREATE INDEX IF NOT EXISTS idx_post_sync_jobs_depends ON cmdb_post_sync_jobs (depends_on);
+
 -- PostgreSQL database dump complete
 --
 

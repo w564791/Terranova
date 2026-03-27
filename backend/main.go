@@ -321,8 +321,9 @@ func main() {
 	health.MarkStartupReady()
 	log.Println("Startup health check marked ready")
 
-	// 获取 Embedding Worker（在 router.Setup 之后才可用）
+	// 获取 Embedding Worker 和 PostSync Worker（在 router.Setup 之后才可用）
 	embeddingWorker := router.GetEmbeddingWorker()
+	postSyncWorker := router.GetPostSyncWorker()
 
 	// ---------------------------------------------------------------
 	// Leader Election: 只有 leader 才运行后台调度/清理 goroutine
@@ -400,6 +401,12 @@ func main() {
 				log.Println("[Leader] Embedding worker started for CMDB vector search")
 			}
 
+			// 7b. PostSync Worker (CMDB post-sync queue)
+			if postSyncWorker != nil {
+				go postSyncWorker.Start(leaderCtx)
+				log.Println("[Leader] PostSync worker started for CMDB post-sync queue")
+			}
+
 			// 8. Skill Assessment Worker
 			go assessmentWorker.Start(leaderCtx)
 			log.Println("[Leader] Skill Assessment Worker started")
@@ -465,6 +472,9 @@ func main() {
 			// 停止有显式 Stop 方法的服务
 			cmdbSyncScheduler.Stop()
 			agentCleanupService.Stop()
+			if postSyncWorker != nil {
+				postSyncWorker.Stop()
+			}
 		},
 		OnNewLeader: func(identity string) {
 			log.Printf("[Main] New leader elected: %s", identity)

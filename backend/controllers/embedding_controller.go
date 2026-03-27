@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"iac-platform/internal/models"
@@ -277,68 +279,140 @@ type VectorSearchRequest struct {
 	Limit        int      `json:"limit,omitempty"`
 }
 
-// VectorSearch 向量搜索（支持自动降级到关键字搜索）
+// SearchResult 搜索结果（向量搜索和关键词搜索的统一结构）
+type SearchResult struct {
+	ID                 uint    `json:"id"`
+	WorkspaceID        string  `json:"workspace_id"`
+	WorkspaceName      string  `json:"workspace_name"`
+	TerraformAddress   string  `json:"terraform_address"`
+	ResourceType       string  `json:"resource_type"`
+	ResourceName       string  `json:"resource_name"`
+	CloudResourceID    string  `json:"cloud_resource_id"`
+	CloudResourceName  string  `json:"cloud_resource_name"`
+	CloudResourceARN   string  `json:"cloud_resource_arn"`
+	Description        string  `json:"description"`
+	ModulePath         string  `json:"module_path"`
+	RootModuleName     string  `json:"root_module_name"`
+	SourceType         string  `json:"source_type"`
+	ExternalSourceID   string  `json:"external_source_id"`
+	ExternalSourceName string  `json:"external_source_name"`
+	CloudProvider      string  `json:"cloud_provider"`
+	CloudAccountID     string  `json:"cloud_account_id"`
+	CloudAccountName   string  `json:"cloud_account_name"`
+	CloudRegion        string  `json:"cloud_region"`
+	PlatformResourceID *uint   `json:"platform_resource_id"`
+	JumpURL            string  `json:"jump_url"`
+	Similarity         float64 `json:"similarity"`
+}
+
+// VectorSearch 混合搜索（向量搜索 + 关键词搜索并行，合并去重）
 // POST /api/cmdb/vector-search
 func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	var req VectorSearchRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": err.Error(),
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
-
-	// 设置默认值
 	if req.Limit <= 0 || req.Limit > 100 {
 		req.Limit = 50
 	}
 
-	// 检查配置状态
-	configStatus := c.embeddingService.GetConfigStatus()
+	var vectorResults, keywordResults []SearchResult
+	var vectorErr, keywordErr error
+	searchMethod := "hybrid"
 
-	// 如果 embedding 配置不可用，降级到关键字搜索
-	if !configStatus.Configured || !configStatus.HasAPIKey {
-		c.fallbackToKeywordSearch(ctx, req, "embedding 配置未就绪")
+	var wg sync.WaitGroup
+
+	// 并行：向量搜索（仅当配置可用时）
+	configStatus := c.embeddingService.GetConfigStatus()
+	if configStatus.Configured && configStatus.HasAPIKey {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vectorResults, vectorErr = c.doVectorSearch(req)
+		}()
+	}
+
+	// 并行：关键词搜索
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		keywordResults, keywordErr = c.doKeywordSearch(req)
+	}()
+
+	wg.Wait()
+
+	// 合并去重：向量结果优先（有 similarity score）
+	seen := make(map[uint]bool)
+	var merged []SearchResult
+
+	if vectorErr == nil {
+		for _, r := range vectorResults {
+			seen[r.ID] = true
+			merged = append(merged, r)
+		}
+	}
+	if keywordErr == nil {
+		for _, r := range keywordResults {
+			if !seen[r.ID] {
+				seen[r.ID] = true
+				merged = append(merged, r)
+			}
+		}
+	}
+
+	if vectorErr != nil && keywordErr != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "搜索失败"})
 		return
 	}
 
-	// 生成查询向量
+	if vectorErr != nil || len(vectorResults) == 0 {
+		searchMethod = "keyword"
+	} else if keywordErr != nil || len(keywordResults) == 0 {
+		searchMethod = "vector"
+	}
+
+	if len(merged) > req.Limit {
+		merged = merged[:req.Limit]
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"query":         req.Query,
+			"results":       merged,
+			"count":         len(merged),
+			"search_method": searchMethod,
+		},
+	})
+}
+
+// doVectorSearch 执行向量搜索
+func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchResult, error) {
 	queryVector, err := c.embeddingService.GenerateEmbedding(req.Query)
 	if err != nil {
-		// 生成向量失败，降级到关键字搜索
-		c.fallbackToKeywordSearch(ctx, req, "生成查询向量失败: "+err.Error())
-		return
+		return nil, fmt.Errorf("生成查询向量失败: %w", err)
 	}
 
-	// 构建 SQL 查询
 	vectorStr := services.VectorToString(queryVector)
 
-	// 从 embedding 配置中获取 topK 和 similarityThreshold
 	embeddingConfig, _ := c.embeddingService.GetConfigService().GetConfigForCapability("embedding")
 	topK := 50
 	similarityThreshold := 0.3
 	if embeddingConfig != nil {
-		log.Printf("[VectorSearch] 读取 embedding 配置: ID=%d, TopK=%d, SimilarityThreshold=%.2f",
-			embeddingConfig.ID, embeddingConfig.TopK, embeddingConfig.SimilarityThreshold)
 		if embeddingConfig.TopK > 0 {
 			topK = embeddingConfig.TopK
 		}
 		if embeddingConfig.SimilarityThreshold > 0 {
 			similarityThreshold = embeddingConfig.SimilarityThreshold
 		}
-	} else {
-		log.Printf("[VectorSearch] 未找到 embedding 配置，使用默认值: TopK=%d, SimilarityThreshold=%.2f", topK, similarityThreshold)
 	}
-	log.Printf("[VectorSearch] 最终使用: TopK=%d, SimilarityThreshold=%.2f", topK, similarityThreshold)
-
-	// 如果请求中指定了 limit，使用请求中的值（但不超过配置的 topK）
 	if req.Limit > 0 && req.Limit < topK {
 		topK = req.Limit
 	}
 
 	sql := `
-		SELECT 
+		SELECT
 			ri.id,
 			ri.workspace_id,
 			w.name as workspace_name,
@@ -359,7 +433,7 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 			ri.cloud_account_name,
 			ri.cloud_region,
 			wr.id as platform_resource_id,
-			CASE 
+			CASE
 				WHEN ri.source_type = 'external' THEN NULL
 				WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
 				ELSE NULL
@@ -368,9 +442,9 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 		FROM resource_index ri
 		LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id
 		LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id
-		LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id 
-			AND ri.source_type = 'terraform' 
-			AND (ri.root_module_name LIKE '%' || wr.resource_name || '%' OR wr.resource_name LIKE '%' || ri.root_module_name || '%') 
+		LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id
+			AND ri.source_type = 'terraform'
+			AND (ri.root_module_name LIKE '%' || wr.resource_name || '%' OR wr.resource_name LIKE '%' || ri.root_module_name || '%')
 			AND wr.is_active = true
 		WHERE ri.embedding IS NOT NULL
 		  AND ri.resource_mode = 'managed'
@@ -380,75 +454,30 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	args := []interface{}{vectorStr, similarityThreshold}
 	argIndex := 3
 
-	// 添加资源类型过滤
 	if req.ResourceType != "" {
-		sql += " AND ri.resource_type = $" + string(rune('0'+argIndex))
+		sql += fmt.Sprintf(" AND ri.resource_type = $%d", argIndex)
 		args = append(args, req.ResourceType)
 		argIndex++
 	}
 
-	// 添加 workspace 过滤
 	if len(req.WorkspaceIDs) > 0 {
-		sql += " AND ri.workspace_id = ANY($" + string(rune('0'+argIndex)) + ")"
+		sql += fmt.Sprintf(" AND ri.workspace_id = ANY($%d)", argIndex)
 		args = append(args, req.WorkspaceIDs)
 		argIndex++
 	}
 
-	sql += " ORDER BY similarity DESC LIMIT $" + string(rune('0'+argIndex))
+	sql += fmt.Sprintf(" ORDER BY similarity DESC LIMIT $%d", argIndex)
 	args = append(args, topK)
-
-	// 执行查询
-	type SearchResult struct {
-		ID                 uint    `json:"id"`
-		WorkspaceID        string  `json:"workspace_id"`
-		WorkspaceName      string  `json:"workspace_name"`
-		TerraformAddress   string  `json:"terraform_address"`
-		ResourceType       string  `json:"resource_type"`
-		ResourceName       string  `json:"resource_name"`
-		CloudResourceID    string  `json:"cloud_resource_id"`
-		CloudResourceName  string  `json:"cloud_resource_name"`
-		CloudResourceARN   string  `json:"cloud_resource_arn"`
-		Description        string  `json:"description"`
-		ModulePath         string  `json:"module_path"`
-		RootModuleName     string  `json:"root_module_name"`
-		SourceType         string  `json:"source_type"`
-		ExternalSourceID   string  `json:"external_source_id"`
-		ExternalSourceName string  `json:"external_source_name"`
-		CloudProvider      string  `json:"cloud_provider"`
-		CloudAccountID     string  `json:"cloud_account_id"`
-		CloudAccountName   string  `json:"cloud_account_name"`
-		CloudRegion        string  `json:"cloud_region"`
-		PlatformResourceID *uint   `json:"platform_resource_id"`
-		JumpURL            string  `json:"jump_url"`
-		Similarity         float64 `json:"similarity"`
-	}
 
 	var results []SearchResult
 	if err := c.db.Raw(sql, args...).Scan(&results).Error; err != nil {
-		// 查询失败，降级到关键字搜索
-		c.fallbackToKeywordSearch(ctx, req, "向量搜索查询失败: "+err.Error())
-		return
+		return nil, fmt.Errorf("向量搜索失败: %w", err)
 	}
-
-	// 如果向量搜索没有结果，降级到关键字搜索
-	if len(results) == 0 {
-		c.fallbackToKeywordSearch(ctx, req, "向量搜索无结果")
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"data": gin.H{
-			"query":         req.Query,
-			"results":       results,
-			"count":         len(results),
-			"search_method": "vector",
-		},
-	})
+	return results, nil
 }
 
-// fallbackToKeywordSearch 降级到关键字搜索
-func (c *EmbeddingController) fallbackToKeywordSearch(ctx *gin.Context, req VectorSearchRequest, reason string) {
+// doKeywordSearch 执行关键词搜索
+func (c *EmbeddingController) doKeywordSearch(req VectorSearchRequest) ([]SearchResult, error) {
 	cmdbService := services.NewCMDBService(c.db)
 
 	workspaceID := ""
@@ -456,25 +485,38 @@ func (c *EmbeddingController) fallbackToKeywordSearch(ctx *gin.Context, req Vect
 		workspaceID = req.WorkspaceIDs[0]
 	}
 
-	results, err := cmdbService.SearchResources(req.Query, workspaceID, req.ResourceType, req.Limit)
+	resources, err := cmdbService.SearchResources(req.Query, workspaceID, req.ResourceType, req.Limit)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": "搜索失败: " + err.Error(),
-		})
-		return
+		return nil, err
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"data": gin.H{
-			"query":           req.Query,
-			"results":         results,
-			"count":           len(results),
-			"search_method":   "keyword",
-			"fallback_reason": reason,
-		},
-	})
+	results := make([]SearchResult, 0, len(resources))
+	for _, r := range resources {
+		results = append(results, SearchResult{
+			WorkspaceID:        r.WorkspaceID,
+			WorkspaceName:      r.WorkspaceName,
+			TerraformAddress:   r.TerraformAddress,
+			ResourceType:       r.ResourceType,
+			ResourceName:       r.ResourceName,
+			CloudResourceID:    r.CloudResourceID,
+			CloudResourceName:  r.CloudResourceName,
+			CloudResourceARN:   r.CloudResourceARN,
+			Description:        r.Description,
+			ModulePath:         r.ModulePath,
+			RootModuleName:     r.RootModuleName,
+			SourceType:         r.SourceType,
+			ExternalSourceID:   r.ExternalSourceID,
+			ExternalSourceName: r.ExternalSourceName,
+			CloudProvider:      r.CloudProvider,
+			CloudAccountID:     r.CloudAccountID,
+			CloudAccountName:   r.CloudAccountName,
+			CloudRegion:        r.CloudRegion,
+			PlatformResourceID: r.PlatformResourceID,
+			JumpURL:            r.JumpURL,
+			Similarity:         0,
+		})
+	}
+	return results, nil
 }
 
 // isWorkspaceBusy 检查 workspace 是否有同步任务在运行

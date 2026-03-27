@@ -17,6 +17,14 @@ func GetEmbeddingWorker() *services.EmbeddingWorker {
 	return embeddingWorker
 }
 
+// postSyncWorker 全局 post-sync worker 实例
+var postSyncWorker *services.PostSyncWorker
+
+// GetPostSyncWorker 获取全局 post-sync worker 实例
+func GetPostSyncWorker() *services.PostSyncWorker {
+	return postSyncWorker
+}
+
 // assessmentWorker 全局 assessment worker 实例
 var assessmentWorker *services.AssessmentWorker
 
@@ -137,6 +145,9 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		// 初始化 embedding worker（如果还没有初始化）
 		if embeddingWorker == nil {
 			embeddingWorker = services.NewEmbeddingWorker(db)
+		}
+		if postSyncWorker == nil {
+			postSyncWorker = services.NewPostSyncWorker(db)
 		}
 		embeddingController := controllers.NewEmbeddingController(db, embeddingWorker)
 

@@ -17,7 +17,6 @@ import (
 	"iac-platform/internal/models"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // CMDBExternalSourceService 外部CMDB数据源服务
@@ -575,14 +574,8 @@ func (s *CMDBExternalSourceService) SyncExternalSource(ctx context.Context, sour
 			"last_sync_count":   added + updated,
 		})
 
-		// 6. 同步成功后，先生成资源摘要，再创建 embedding 任务
-		summaryCtx, summaryCancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer summaryCancel()
-		summaryService := NewResourceSummaryService(s.db)
-		if err := summaryService.GenerateSummariesForExternalSource(summaryCtx, sourceID); err != nil {
-			log.Printf("[CMDBExternalSource] Resource summary failed for source %s: %v", sourceID, err)
-		}
-		s.createEmbeddingTasksForExternalSource(sourceID)
+		// 6. 同步成功后，入队后处理任务（摘要 → embedding）
+		s.enqueuePostSyncJobs(sourceID)
 	}
 
 	s.db.Save(syncLog)
@@ -590,33 +583,42 @@ func (s *CMDBExternalSourceService) SyncExternalSource(ctx context.Context, sour
 	return syncErr
 }
 
-// createEmbeddingTasksForExternalSource 为外部数据源的资源创建 embedding 任务
-func (s *CMDBExternalSourceService) createEmbeddingTasksForExternalSource(sourceID string) {
-	// 获取该数据源没有 embedding 的资源
-	var resources []models.ResourceIndex
-	s.db.Where("external_source_id = ? AND embedding IS NULL", sourceID).Find(&resources)
+// enqueuePostSyncJobs 同步成功后入队后处理任务
+func (s *CMDBExternalSourceService) enqueuePostSyncJobs(sourceID string) {
+	now := time.Now()
 
-	if len(resources) == 0 {
+	// 检查是否已有该 source 的活跃 job，避免重复入队
+	var activeCount int64
+	s.db.Model(&models.PostSyncJob{}).
+		Where("source_id = ? AND status IN ?", sourceID, []string{
+			models.PostSyncJobStatusPending,
+			models.PostSyncJobStatusProcessing,
+		}).Count(&activeCount)
+
+	if activeCount > 0 {
+		log.Printf("[CMDBExternalSource] source %s 已有 %d 个活跃 job，跳过入队", sourceID, activeCount)
 		return
 	}
 
-	// 批量创建 embedding 任务
-	now := time.Now()
-	tasks := make([]models.EmbeddingTask, 0, len(resources))
-	for _, r := range resources {
-		tasks = append(tasks, models.EmbeddingTask{
-			ResourceID:  r.ID,
-			WorkspaceID: ExternalWorkspaceID, // 使用外部数据源的特殊 workspace_id
-			Status:      models.EmbeddingTaskStatusPending,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		})
+	summaryJob := models.PostSyncJob{
+		SourceID: sourceID, JobType: models.PostSyncJobTypeSummary,
+		Status: models.PostSyncJobStatusPending, CreatedAt: now,
+	}
+	if err := s.db.Create(&summaryJob).Error; err != nil {
+		log.Printf("[CMDBExternalSource] 创建 summary job 失败: %v", err)
+		return
 	}
 
-	// 批量插入，忽略重复
-	s.db.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&tasks, 1000)
+	embeddingJob := models.PostSyncJob{
+		SourceID: sourceID, JobType: models.PostSyncJobTypeEmbedding,
+		Status: models.PostSyncJobStatusPending, DependsOn: &summaryJob.ID, CreatedAt: now,
+	}
+	if err := s.db.Create(&embeddingJob).Error; err != nil {
+		log.Printf("[CMDBExternalSource] 创建 embedding job 失败: %v", err)
+	}
 
-	log.Printf("[CMDBExternalSource] Created %d embedding tasks for source %s", len(tasks), sourceID)
+	log.Printf("[CMDBExternalSource] source %s 入队 2 个 post-sync job (summary=%d, embedding=%d)",
+		sourceID, summaryJob.ID, embeddingJob.ID)
 }
 
 // doSync 执行同步
