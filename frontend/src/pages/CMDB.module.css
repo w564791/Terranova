@@ -424,6 +424,18 @@
   word-break: break-all;
 }
 
+.resourceSummaryPreview {
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
+  background: #f9fafb;
+  border-left: 3px solid #e5e7eb;
+  border-radius: 0 4px 4px 0;
+  white-space: pre-line;
+}
+
 .resultActions {
   display: flex;
   gap: 8px;

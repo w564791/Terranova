@@ -1645,6 +1645,11 @@ const CMDB: React.FC = () => {
                       <div className={styles.terraformAddress}>
                         {result.terraform_address}
                       </div>
+                      {result.resource_summary && (
+                        <div className={styles.resourceSummaryPreview}>
+                          {result.resource_summary}
+                        </div>
+                      )}
 
                       {/* Inline detail panel (accordion) */}
                       {expandedResultIndex === index && (
