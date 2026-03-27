@@ -516,9 +516,19 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 	sql += fmt.Sprintf(" ORDER BY similarity DESC LIMIT $%d", argIndex)
 	args = append(args, topK)
 
-	var results []SearchResult
-	if err := c.db.Raw(sql, args...).Scan(&results).Error; err != nil {
+	var rawResults []SearchResult
+	if err := c.db.Raw(sql, args...).Scan(&rawResults).Error; err != nil {
 		return nil, fmt.Errorf("向量搜索失败: %w", err)
+	}
+
+	// 按 ri.id 去重（LEFT JOIN workspace_resources 可能产生多行）
+	seen := make(map[uint]bool)
+	results := make([]SearchResult, 0, len(rawResults))
+	for _, r := range rawResults {
+		if !seen[r.ID] {
+			seen[r.ID] = true
+			results = append(results, r)
+		}
 	}
 	return results, nil
 }
