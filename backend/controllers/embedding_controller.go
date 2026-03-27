@@ -387,19 +387,20 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	wg.Wait()
 
 	// 合并去重：向量结果优先（有 similarity score）
-	seen := make(map[uint]bool)
+	// 用 TerraformAddress 做去重 key（关键词搜索结果无 ID 字段）
+	seen := make(map[string]bool)
 	var merged []SearchResult
 
 	if vectorErr == nil {
 		for _, r := range vectorResults {
-			seen[r.ID] = true
+			seen[r.TerraformAddress] = true
 			merged = append(merged, r)
 		}
 	}
 	if keywordErr == nil {
 		for _, r := range keywordResults {
-			if !seen[r.ID] {
-				seen[r.ID] = true
+			if !seen[r.TerraformAddress] {
+				seen[r.TerraformAddress] = true
 				merged = append(merged, r)
 			}
 		}
