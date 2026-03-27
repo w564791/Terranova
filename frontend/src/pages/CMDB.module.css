@@ -432,11 +432,15 @@
   color: #6b7280;
   background: #f8fafc;
   border-radius: 4px;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   cursor: pointer;
   transition: all 0.2s ease;
+  max-width: 100%;
+  word-break: break-word;
 }
 
 .resourceSummaryPreview:hover {
@@ -445,6 +449,8 @@
 }
 
 .resourceSummaryPreview.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
   white-space: pre-line;
   overflow: visible;
   text-overflow: unset;
