@@ -426,14 +426,28 @@
 
 .resourceSummaryPreview {
   margin-top: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 12px;
   line-height: 1.5;
   color: #6b7280;
-  background: #f9fafb;
-  border-left: 3px solid #e5e7eb;
-  border-radius: 0 4px 4px 0;
+  background: #f8fafc;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.resourceSummaryPreview:hover {
+  color: #4b5563;
+  background: #f1f5f9;
+}
+
+.resourceSummaryPreview.expanded {
   white-space: pre-line;
+  overflow: visible;
+  text-overflow: unset;
 }
 
 .resultActions {

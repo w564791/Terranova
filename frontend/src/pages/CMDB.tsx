@@ -956,6 +956,7 @@ const CMDB: React.FC = () => {
 
   // Handle search result click - navigate directly
   const [expandedResultIndex, setExpandedResultIndex] = useState<number | null>(null);
+  const [expandedSummaryIndex, setExpandedSummaryIndex] = useState<number | null>(null);
   const [expandedDetail, setExpandedDetail] = useState<any>(null);
   const [expandedDetailLoading, setExpandedDetailLoading] = useState(false);
 
@@ -1646,8 +1647,18 @@ const CMDB: React.FC = () => {
                         {result.terraform_address}
                       </div>
                       {result.resource_summary && (
-                        <div className={styles.resourceSummaryPreview}>
-                          {result.resource_summary}
+                        <div
+                          className={`${styles.resourceSummaryPreview} ${expandedSummaryIndex === index ? styles.expanded : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedSummaryIndex(expandedSummaryIndex === index ? null : index);
+                          }}
+                          title={expandedSummaryIndex === index ? '点击折叠' : '点击展开摘要'}
+                        >
+                          {/* 跳过第一行（标题行，和卡片上的资源名/ID 重复） */}
+                          {result.resource_summary.includes('\n')
+                            ? result.resource_summary.substring(result.resource_summary.indexOf('\n') + 1).trim()
+                            : result.resource_summary}
                         </div>
                       )}
 
