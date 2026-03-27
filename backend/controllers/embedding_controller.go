@@ -249,6 +249,12 @@ func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 		"cmdb_sync_completed_at": nil,
 	})
 
+	// 外部 CMDB 资源走 PostSyncWorker 路径
+	if workspaceID == "__external__" {
+		c.rebuildExternalEmbedding(ctx)
+		return
+	}
+
 	err := c.worker.RebuildWorkspace(workspaceID)
 	if err != nil {
 		// 重建失败，重置状态
@@ -268,6 +274,44 @@ func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 		"code":    200,
 		"message": "重建任务已创建，后台处理中",
 		"data":    c.worker.GetWorkspaceStatus(workspaceID),
+	})
+}
+
+// rebuildExternalEmbedding 重建外部 CMDB 资源的 embedding
+// 清空 embedding 后，为每个外部 source 入队 embedding job（跳过 summary，只重建 embedding）
+func (c *EmbeddingController) rebuildExternalEmbedding(ctx *gin.Context) {
+	// 清空所有外部资源的 embedding
+	result := c.db.Exec(`
+		UPDATE resource_index
+		SET embedding = NULL, embedding_text = '', embedding_updated_at = NULL
+		WHERE workspace_id = '__external__'
+	`)
+	log.Printf("[EmbeddingController] 清空 %d 个外部资源的 embedding", result.RowsAffected)
+
+	// 为每个外部 source 入队 embedding job（不需要 summary，只重建 embedding）
+	var sourceIDs []string
+	c.db.Model(&models.ResourceIndex{}).
+		Where("workspace_id = '__external__' AND external_source_id != ''").
+		Distinct("external_source_id").
+		Pluck("external_source_id", &sourceIDs)
+
+	now := time.Now()
+	jobCount := 0
+	for _, sourceID := range sourceIDs {
+		job := models.PostSyncJob{
+			SourceID: sourceID, JobType: models.PostSyncJobTypeEmbedding,
+			Status: models.PostSyncJobStatusPending, CreatedAt: now,
+		}
+		if err := c.db.Create(&job).Error; err == nil {
+			jobCount++
+		}
+	}
+
+	log.Printf("[EmbeddingController] 为 %d 个外部 source 创建 embedding rebuild job", jobCount)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": fmt.Sprintf("重建任务已创建，%d 个数据源将后台处理", jobCount),
 	})
 }
 
