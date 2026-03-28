@@ -588,17 +588,31 @@ func (w *EmbeddingWorker) GetWorkspaceStatus(workspaceID string) *models.Embeddi
 		Where("workspace_id = ? AND embedding IS NOT NULL", workspaceID).
 		Count(&withEmbedding)
 
-	// 统计任务状态
-	w.db.Model(&models.EmbeddingTask{}).
-		Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusPending).
-		Count(&pendingTasks)
-	w.db.Model(&models.EmbeddingTask{}).
-		Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusProcessing).
-		Count(&processingTasks)
-	w.db.Model(&models.EmbeddingTask{}).
-		Where("workspace_id = ? AND status = ? AND retry_count >= ?",
-			workspaceID, models.EmbeddingTaskStatusPending, w.maxRetries).
-		Count(&failedTasks)
+	if workspaceID == "__external__" {
+		// 外部资源的任务在 cmdb_post_sync_jobs 表
+		w.db.Model(&models.PostSyncJob{}).
+			Where("status = ?", models.PostSyncJobStatusPending).
+			Count(&pendingTasks)
+		w.db.Model(&models.PostSyncJob{}).
+			Where("status = ?", models.PostSyncJobStatusProcessing).
+			Count(&processingTasks)
+		w.db.Model(&models.PostSyncJob{}).
+			Where("status = ? AND retry_count >= ?",
+				models.PostSyncJobStatusFailed, 1).
+			Count(&failedTasks)
+	} else {
+		// Workspace 资源的任务在 embedding_tasks 表
+		w.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusPending).
+			Count(&pendingTasks)
+		w.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusProcessing).
+			Count(&processingTasks)
+		w.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status = ? AND retry_count >= ?",
+				workspaceID, models.EmbeddingTaskStatusPending, w.maxRetries).
+			Count(&failedTasks)
+	}
 
 	// 计算进度
 	// 进度 = 已完成的 embedding 数量 / 总资源数量
