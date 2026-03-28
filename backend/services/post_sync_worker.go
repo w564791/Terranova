@@ -211,7 +211,7 @@ func (w *PostSyncWorker) executeSummaryJob(job models.PostSyncJob) error {
 }
 
 // executeEmbeddingJob 执行 embedding 生成
-// 只 embed resource_summary，通过 embedding_text != resource_summary 检测变更
+// 优先使用 resource_summary，对无 summary 的资源 fallback 到 BuildEmbeddingText
 func (w *PostSyncWorker) executeEmbeddingJob(job models.PostSyncJob) error {
 	featureService := NewAIFeatureService(w.db)
 	if !featureService.IsFeatureEnabled("embedding") {
@@ -226,13 +226,13 @@ func (w *PostSyncWorker) executeEmbeddingJob(job models.PostSyncJob) error {
 	}
 
 	// 查找需要生成/刷新 embedding 的资源：
-	//   1. embedding IS NULL（从未生成，或被 summary service 清空）
-	//   2. embedding_text != resource_summary（摘要已变更）
+	//   1. 有 summary 且 embedding 缺失或过期（summary 变更）
+	//   2. 无 summary 且 embedding 缺失（fallback 到 BuildEmbeddingText）
 	var resources []models.ResourceIndex
-	w.db.Where(`external_source_id = ?
-		AND resource_summary IS NOT NULL AND resource_summary != ''
-		AND (embedding IS NULL OR embedding_text != resource_summary)`,
-		job.SourceID).
+	w.db.Where(`external_source_id = ? AND (
+		(resource_summary IS NOT NULL AND resource_summary != '' AND (embedding IS NULL OR embedding_text != resource_summary))
+		OR (embedding IS NULL AND (resource_summary IS NULL OR resource_summary = ''))
+	)`, job.SourceID).
 		Find(&resources)
 
 	if len(resources) == 0 {
@@ -256,8 +256,13 @@ func (w *PostSyncWorker) executeEmbeddingJob(job models.PostSyncJob) error {
 		default:
 		}
 
+		// 优先用 summary，无 summary 则 fallback 到 BuildEmbeddingText
 		text := r.ResourceSummary
 		if text == "" {
+			text = w.embeddingService.BuildEmbeddingText(&r)
+		}
+		if text == "" {
+			log.Printf("[PostSyncWorker] 资源 %d 无法构建 embedding 文本，跳过", r.ID)
 			continue
 		}
 
