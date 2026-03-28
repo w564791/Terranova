@@ -38,6 +38,7 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + 评估去
 - **Embedding 重建不再清空数据** — `RebuildWorkspace` 和 `rebuildExternalEmbedding` 不再先清空所有 embedding，改为逐条覆盖，重建期间旧 embedding 仍可搜索 (`embedding_worker.go`, `embedding_controller.go`)
 - **Summary 更新不再清空 embedding** — summary 生成后不再置空 embedding，由 PostSyncWorker 通过 `embedding_text != resource_summary` 检测变更并自动覆盖 (`resource_summary_service.go`)
 - **API Key 更新逻辑** — 切换 service type 时正确处理 API Key 持久化，支持清除已存储的 Key (`ai_config_service.go`)
+- **重建进度显示修正** — Embedding 重建不再清空数据后，进度 badge 改为显示任务数（"处理中 X 个任务待完成"）而非百分比；确认弹窗文案更新 (`CMDB.tsx`, `ExternalSourcesTab.tsx`)
 - **Summary prompt 优化** — plan/apply 阶段标注 stage 前缀，过滤 no-op 资源 (`ai_summary_service.go`)
 
 ### Database Migrations
