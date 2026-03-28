@@ -278,19 +278,30 @@ func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 }
 
 // rebuildExternalEmbedding 重建外部 CMDB 资源的 summary + embedding
-// 为每个外部 source 入队 summary → embedding 任务链（和正常同步后一致）
-// 不清空现有数据，旧 embedding 在被覆盖前仍可搜索
+// summary 只对缺失的资源生成（靠 hash 机制自动跳过未变更的）
+// embedding 全部重建（清空 embedding_text 触发覆盖）
+// 同时清理已删除数据源的孤儿资源
 func (c *EmbeddingController) rebuildExternalEmbedding(ctx *gin.Context) {
-	// 清空 summary_hash 让 summary job 重新生成所有摘要
-	// 清空 embedding_text 让 embedding job 重新生成所有向量
+	// 1. 清理孤儿资源：external_source_id 不再存在于 cmdb_external_sources 的资源
+	cleanupResult := c.db.Exec(`
+		DELETE FROM resource_index
+		WHERE workspace_id = '__external__'
+		  AND external_source_id != ''
+		  AND external_source_id NOT IN (SELECT source_id FROM cmdb_external_sources)
+	`)
+	if cleanupResult.RowsAffected > 0 {
+		log.Printf("[EmbeddingController] 清理 %d 个孤儿资源（数据源已删除）", cleanupResult.RowsAffected)
+	}
+
+	// 2. 清空 embedding_text 触发 embedding 重建（不清空 summary_hash，summary 靠 hash 机制跳过未变更的）
 	result := c.db.Exec(`
 		UPDATE resource_index
-		SET summary_hash = '', embedding_text = ''
+		SET embedding_text = ''
 		WHERE workspace_id = '__external__'
 	`)
-	log.Printf("[EmbeddingController] 标记 %d 个外部资源待重建 summary + embedding", result.RowsAffected)
+	log.Printf("[EmbeddingController] 标记 %d 个外部资源待重建 embedding", result.RowsAffected)
 
-	// 为每个外部 source 入队 summary → embedding job（和 enqueuePostSyncJobs 同模式）
+	// 3. 为每个外部 source 入队 summary → embedding job
 	var sourceIDs []string
 	c.db.Model(&models.ResourceIndex{}).
 		Where("workspace_id = '__external__' AND external_source_id != ''").
