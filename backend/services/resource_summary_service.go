@@ -164,11 +164,6 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 			continue
 		}
 
-		// 清空 embedding（raw SQL，因为 Embedding 字段标记了 gorm:"-"）
-		if err := s.db.Exec("UPDATE resource_index SET embedding = NULL, embedding_text = '' WHERE id = ?", resource.ID).Error; err != nil {
-			log.Printf("[ResourceSummary] Failed to clear embedding for resource %d: %v", resource.ID, err)
-		}
-
 		generated++
 
 		// Rate limiting
