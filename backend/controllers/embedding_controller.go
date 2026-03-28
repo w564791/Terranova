@@ -278,15 +278,16 @@ func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 }
 
 // rebuildExternalEmbedding 重建外部 CMDB 资源的 embedding
-// 清空 embedding 后，为每个外部 source 入队 embedding job（跳过 summary，只重建 embedding）
+// 不清空现有 embedding，而是清空 embedding_text 触发 PostSyncWorker 重新生成
+// 旧 embedding 在被覆盖前仍可搜索
 func (c *EmbeddingController) rebuildExternalEmbedding(ctx *gin.Context) {
-	// 清空所有外部资源的 embedding
+	// 清空 embedding_text 让 PostSyncWorker 检测到变更并覆盖（保留 embedding 本身）
 	result := c.db.Exec(`
 		UPDATE resource_index
-		SET embedding = NULL, embedding_text = '', embedding_updated_at = NULL
+		SET embedding_text = ''
 		WHERE workspace_id = '__external__'
 	`)
-	log.Printf("[EmbeddingController] 清空 %d 个外部资源的 embedding", result.RowsAffected)
+	log.Printf("[EmbeddingController] 标记 %d 个外部资源待重建 embedding", result.RowsAffected)
 
 	// 为每个外部 source 入队 embedding job（不需要 summary，只重建 embedding）
 	var sourceIDs []string

@@ -227,11 +227,11 @@ func (w *PostSyncWorker) executeEmbeddingJob(job models.PostSyncJob) error {
 
 	// 查找需要生成/刷新 embedding 的资源：
 	//   1. 有 summary 且 embedding 缺失或过期（summary 变更）
-	//   2. 无 summary 且 embedding 缺失（fallback 到 BuildEmbeddingText）
+	//   2. 无 summary 且 embedding 缺失或被标记重建（embedding_text 为空）
 	var resources []models.ResourceIndex
 	w.db.Where(`external_source_id = ? AND (
 		(resource_summary IS NOT NULL AND resource_summary != '' AND (embedding IS NULL OR embedding_text != resource_summary))
-		OR (embedding IS NULL AND (resource_summary IS NULL OR resource_summary = ''))
+		OR ((resource_summary IS NULL OR resource_summary = '') AND (embedding IS NULL OR embedding_text = ''))
 	)`, job.SourceID).
 		Find(&resources)
 
