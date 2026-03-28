@@ -33,6 +33,7 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + 评估去
 ### Bug Fixes
 
 - **Embedding 覆盖扩展** — 对没有 summary 的资源，也用 `BuildEmbeddingText` 生成 embedding（这些资源有 name/description/tags，足以生成有意义的 embedding）
+- **Summary 覆盖无 attributes 资源** — 没有 attributes 但有 name/description/tags 的资源不再跳过，用元数据生成 summary (`resource_summary_service.go`)
 - **评估记录去重** — 修复竞态条件导致的重复 assessment 记录，添加 `(usage_log_id, assessment_layer)` 唯一约束 (`fix_duplicate_assessment_records.sql`, `skill_assessment_worker.go`)
 - **外部 CMDB 重建优化** — 重建时 summary 只对缺失的资源生成（靠 hash 跳过未变更的），embedding 全量重建；同时清理已删除数据源的孤儿资源 (`embedding_controller.go`)
 - **Embedding 重建不再清空数据** — `RebuildWorkspace` 和 `rebuildExternalEmbedding` 不再先清空所有 embedding，改为逐条覆盖，重建期间旧 embedding 仍可搜索 (`embedding_worker.go`, `embedding_controller.go`)
