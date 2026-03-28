@@ -522,20 +522,19 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
 
   // 正在处理中（有 pending 或 processing 任务）
   if (processing_tasks > 0 || pending_tasks > 0) {
-    const actualProgress = total_resources > 0 ? (with_embedding / total_resources) * 100 : 0;
     const remainingTasks = pending_tasks + processing_tasks;
     const estimatedMinutes = Math.ceil(remainingTasks * 5 / 60);
-    
+
     // 区分：正在处理 vs 等待队列
     const isProcessing = processing_tasks > 0;
-    const statusText = isProcessing 
-      ? `处理中 ${actualProgress.toFixed(0)}% (${with_embedding}/${total_resources})`
+    const statusText = isProcessing
+      ? `处理中 (${remainingTasks} 个任务待完成)`
       : `队列中 (${pending_tasks} 个任务等待)`;
     const bgColor = isProcessing ? 'rgba(59, 130, 246, 0.15)' : 'rgba(156, 163, 175, 0.15)';
     const textColor = isProcessing ? '#3b82f6' : '#6b7280';
-    
+
     return (
-      <span 
+      <span
         style={{ background: bgColor, color: textColor, padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
         title={`Embedding: ${with_embedding}/${total_resources}\n等待中: ${pending_tasks}, 处理中: ${processing_tasks}\n预计: ${estimatedMinutes > 0 ? estimatedMinutes + ' 分钟' : '不到 1 分钟'}`}
       >

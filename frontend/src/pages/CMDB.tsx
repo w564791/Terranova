@@ -498,18 +498,16 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
 
   // 正在处理中（有 pending 或 processing 任务）
   if (processing_tasks > 0 || pending_tasks > 0) {
-    // 计算实际进度：已完成的 embedding 数量 / 总资源数量
-    const actualProgress = total_resources > 0 ? (with_embedding / total_resources) * 100 : 0;
     const remainingTasks = pending_tasks + processing_tasks;
     const estimatedMinutes = Math.ceil(remainingTasks * 5 / 60); // 每个资源约 5 秒
-    
+
     return (
-      <span 
-        className={styles.embeddingBadge} 
+      <span
+        className={styles.embeddingBadge}
         style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
         title={`Embedding: ${with_embedding}/${total_resources}\nPending: ${pending_tasks}, Processing: ${processing_tasks}\n预计: ${estimatedMinutes} 分钟`}
       >
-        Embedding {actualProgress.toFixed(0)}% ({with_embedding}/{total_resources})
+        处理中 ({remainingTasks} 个任务待完成)
       </span>
     );
   }
@@ -750,7 +748,7 @@ const WorkspaceTree: React.FC<{
       <ConfirmDialog
         isOpen={showRebuildConfirm}
         title="重建 Embedding 索引"
-        message={`确定要重建 "${workspace.name}" 的所有 embedding 吗？这将清空现有的 embedding 数据并重新生成，可能需要较长时间。`}
+        message={`确定要重建 "${workspace.name}" 的所有 embedding 吗？重建期间现有 embedding 仍可搜索，新数据会逐条覆盖，可能需要较长时间。`}
         confirmText="确认重建"
         cancelText="取消"
         type="warning"
