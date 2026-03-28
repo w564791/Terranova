@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	appconfig "iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"io"
 	"net/http"
@@ -68,6 +69,7 @@ func (s *AIConfigService) GetConfigForCapability(capability string) (*models.AIC
 		Find(&configs).Error
 
 	if err == nil && len(configs) > 0 {
+		s.fillAPIKeyFallback(&configs[0])
 		return &configs[0], nil
 	}
 
@@ -77,6 +79,7 @@ func (s *AIConfigService) GetConfigForCapability(capability string) (*models.AIC
 		First(&defaultConfig).Error
 
 	if err == nil {
+		s.fillAPIKeyFallback(&defaultConfig)
 		return &defaultConfig, nil
 	}
 
@@ -210,18 +213,26 @@ func (s *AIConfigService) UpdateConfig(id uint, cfg *models.AIConfig, forceUpdat
 	}
 
 	// 创建测试配置（合并现有配置和新配置）
+	// "__CLEAR__" 是清空指令，测试时视为空
+	testAPIKey := cfg.APIKey
+	if testAPIKey == "__CLEAR__" {
+		testAPIKey = ""
+	}
 	testCfg := &models.AIConfig{
 		ServiceType:         cfg.ServiceType,
 		AWSRegion:           cfg.AWSRegion,
 		ModelID:             cfg.ModelID,
 		BaseURL:             cfg.BaseURL,
-		APIKey:              cfg.APIKey,
+		APIKey:              testAPIKey,
 		UseInferenceProfile: cfg.UseInferenceProfile,
 	}
 
-	// 如果没有提供新的 API Key，使用现有的
-	if testCfg.APIKey == "" {
+	// API Key 回退链：请求传入 > DB 已存（仅同类型） > 环境变量（qwen）
+	if testCfg.APIKey == "" && cfg.ServiceType == existing.ServiceType {
 		testCfg.APIKey = existing.APIKey
+	}
+	if testCfg.APIKey == "" && testCfg.ServiceType == "qwen" {
+		testCfg.APIKey = appconfig.Load().AI.DashScopeAPIKey
 	}
 
 	// 先测试配置是否有效
@@ -251,6 +262,9 @@ func (s *AIConfigService) UpdateConfig(id uint, cfg *models.AIConfig, forceUpdat
 		}
 	}
 
+	// service_type 变更时清掉旧 API Key（不同服务的 key 不通用）
+	serviceTypeChanged := cfg.ServiceType != existing.ServiceType
+
 	// 更新字段
 	existing.ServiceType = cfg.ServiceType
 	existing.AWSRegion = cfg.AWSRegion
@@ -272,13 +286,30 @@ func (s *AIConfigService) UpdateConfig(id uint, cfg *models.AIConfig, forceUpdat
 	existing.SimilarityThreshold = cfg.SimilarityThreshold
 	existing.EmbeddingBatchEnabled = cfg.EmbeddingBatchEnabled
 	existing.EmbeddingBatchSize = cfg.EmbeddingBatchSize
+	// Extended Thinking 配置
+	existing.ThinkingEnabled = cfg.ThinkingEnabled
+	existing.ThinkingBudgetTokens = cfg.ThinkingBudgetTokens
 
-	// 只有当提供了新的 API Key 时才更新（空字符串表示不更新）
-	if cfg.APIKey != "" {
+	// API Key 更新逻辑：
+	// - service_type 变了 → 清掉旧 key（不同服务的 key 不通用）
+	// - "__CLEAR__" → 清空
+	// - 非空 → 更新
+	// - 空字符串 → 不修改
+	if serviceTypeChanged {
+		existing.APIKey = ""
+	}
+	if cfg.APIKey == "__CLEAR__" {
+		existing.APIKey = ""
+	} else if cfg.APIKey != "" {
 		existing.APIKey = cfg.APIKey
 	}
 
 	return s.db.Save(&existing).Error
+}
+
+// UpdateAPIKey 仅更新 API Key（模型列表验证成功后自动持久化）
+func (s *AIConfigService) UpdateAPIKey(id uint, apiKey string) {
+	s.db.Model(&models.AIConfig{}).Where("id = ?", id).Update("api_key", apiKey)
 }
 
 // GetAvailableModels 获取指定 Region 的可用模型列表
@@ -402,7 +433,7 @@ func (s *AIConfigService) TestConfig(cfg *models.AIConfig) error {
 	switch cfg.ServiceType {
 	case "bedrock":
 		return s.testBedrock(cfg.AWSRegion, cfg.ModelID, testPrompt, cfg.UseInferenceProfile)
-	case "openai", "azure_openai", "ollama":
+	case "openai", "azure_openai", "qwen", "ollama":
 		return s.testOpenAICompatible(cfg.BaseURL, cfg.APIKey, cfg.ModelID, testPrompt)
 	default:
 		return fmt.Errorf("不支持的服务类型: %s", cfg.ServiceType)
@@ -480,6 +511,63 @@ func (s *AIConfigService) testBedrock(region, modelID, prompt string, useInferen
 	}
 
 	return nil
+}
+
+// OpenAIModel OpenAI 兼容 API 返回的模型信息
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// ListOpenAICompatibleModels 获取 OpenAI 兼容 API 的模型列表
+func (s *AIConfigService) ListOpenAICompatibleModels(baseURL, apiKey string) ([]OpenAIModel, error) {
+	url := strings.TrimSuffix(baseURL, "/") + "/models"
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API 返回 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []OpenAIModel `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	return result.Data, nil
+}
+
+// fillAPIKeyFallback 按 service_type 填充环境变量兜底 API Key
+// 统一入口，所有通过 GetConfigForCapability 获取的配置都会走这里
+func (s *AIConfigService) fillAPIKeyFallback(cfg *models.AIConfig) {
+	if cfg.APIKey != "" {
+		return
+	}
+	switch cfg.ServiceType {
+	case "qwen":
+		cfg.APIKey = appconfig.Load().AI.DashScopeAPIKey
+	}
 }
 
 // testOpenAICompatible 测试 OpenAI Compatible 配置

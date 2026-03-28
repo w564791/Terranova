@@ -7,8 +7,10 @@ import {
   deleteAIConfig,
   getAvailableRegions,
   getAvailableModels,
+  listOpenAIModels,
   type AIConfig as AIConfigType,
   type BedrockModel,
+  type OpenAIModel,
   CAPABILITIES,
   CAPABILITY_LABELS,
   CAPABILITY_DESCRIPTIONS,
@@ -45,6 +47,9 @@ const AIConfigForm = () => {
   const [remainingSeconds, setRemainingSeconds] = useState<number>(10);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // OpenAI 兼容 API 模型列表
+  const [openaiModels, setOpenaiModels] = useState<OpenAIModel[]>([]);
+  const [loadingOpenaiModels, setLoadingOpenaiModels] = useState(false);
 
   // Skill 相关状态
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
@@ -81,6 +86,9 @@ const AIConfigForm = () => {
     similarity_threshold: 0.3,
     embedding_batch_enabled: false,
     embedding_batch_size: 10,
+    // Extended Thinking 配置
+    thinking_enabled: false,
+    thinking_budget_tokens: 10000,
   });
 
   // 展开的 prompt 编辑器
@@ -184,6 +192,8 @@ const AIConfigForm = () => {
           similarity_threshold: configData.similarity_threshold || 0.3,
           embedding_batch_enabled: configData.embedding_batch_enabled || false,
           embedding_batch_size: configData.embedding_batch_size || 10,
+          thinking_enabled: configData.thinking_enabled || false,
+          thinking_budget_tokens: configData.thinking_budget_tokens || 10000,
         });
 
         // 加载已保存的 skill_composition
@@ -465,19 +475,22 @@ const AIConfigForm = () => {
             <select
               className={styles.select}
               value={formData.service_type}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                service_type: e.target.value,
+              onChange={(e) => {
+                const newType = e.target.value;
+                setFormData({
+                ...formData,
+                service_type: newType,
                 // 切换服务类型时重置相关字段
                 aws_region: '',
                 model_id: '',
-                base_url: '',
+                base_url: newType === 'qwen' ? 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' : '',
                 api_key: '',
-              })}
+              })}}
             >
               <option value="bedrock">AWS Bedrock</option>
               <option value="openai">OpenAI</option>
               <option value="azure_openai">Azure OpenAI</option>
+              <option value="qwen">Qwen (DashScope)</option>
               <option value="ollama">Ollama</option>
             </select>
           </div>
@@ -524,8 +537,9 @@ const AIConfigForm = () => {
           )}
 
           {/* OpenAI Compatible 字段 */}
-          {(formData.service_type === 'openai' || 
-            formData.service_type === 'azure_openai' || 
+          {(formData.service_type === 'openai' ||
+            formData.service_type === 'azure_openai' ||
+            formData.service_type === 'qwen' ||
             formData.service_type === 'ollama') && (
             <>
               <div className={styles.formGroup}>
@@ -536,8 +550,10 @@ const AIConfigForm = () => {
                   value={formData.base_url}
                   onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
                   placeholder={
-                    formData.service_type === 'openai' 
+                    formData.service_type === 'openai'
                       ? 'https://api.openai.com/v1'
+                      : formData.service_type === 'qwen'
+                      ? 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
                       : formData.service_type === 'ollama'
                       ? 'http://localhost:11434/v1'
                       : 'https://your-resource.openai.azure.com'
@@ -547,6 +563,7 @@ const AIConfigForm = () => {
                 <div className={styles.hint}>
                   {formData.service_type === 'openai' && 'OpenAI API 基础 URL'}
                   {formData.service_type === 'azure_openai' && 'Azure OpenAI 端点 URL'}
+                  {formData.service_type === 'qwen' && 'DashScope API 地址（国际版 dashscope-intl，国内版 dashscope）'}
                   {formData.service_type === 'ollama' && 'Ollama 服务地址'}
                 </div>
               </div>
@@ -562,31 +579,109 @@ const AIConfigForm = () => {
                   required={!isEditMode}
                 />
                 <div className={styles.hint}>
-                  {isEditMode 
-                    ? 'API Key 已加密存储，留空表示不修改' 
+                  {isEditMode
+                    ? 'API Key 已加密存储，留空表示不修改'
                     : 'API Key 将加密存储，查询时不返回'}
                 </div>
+                {isEditMode && (
+                  <label className={styles.checkboxLabel} style={{ marginTop: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.api_key === '__CLEAR__'}
+                      onChange={(e) => setFormData({ ...formData, api_key: e.target.checked ? '__CLEAR__' : '' })}
+                    />
+                    <span style={{ fontSize: '12px', color: '#ff4d4f' }}>清空已保存的 API Key（保存后使用系统环境变量兜底）</span>
+                  </label>
+                )}
               </div>
 
               <div className={styles.formGroup}>
-                <label className={styles.label}>模型 ID</label>
-                <input
-                  type="text"
-                  className={styles.select}
-                  value={formData.model_id}
-                  onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
-                  placeholder={
-                    formData.service_type === 'openai' 
-                      ? 'gpt-4, gpt-3.5-turbo'
-                      : formData.service_type === 'ollama'
-                      ? 'llama2, mistral'
-                      : 'your-deployment-name'
-                  }
-                  required
-                />
+                <label className={styles.label}>模型</label>
+                {formData.service_type === 'qwen' ? (
+                  <>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <select
+                        className={styles.select}
+                        value={formData.model_id}
+                        onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+                        style={{ flex: 1 }}
+                        required
+                      >
+                        <option value="">{loadingOpenaiModels ? '加载中...' : '请选择模型（先点击获取）'}</option>
+                        {openaiModels
+                          .filter((m) => {
+                            if (formData.service_type !== 'qwen') return true;
+                            // Qwen: 过滤非文本对话模型
+                            const skip = /image|vl-|tts|asr|omni|s2s|mt-|ocr|captioner|realtime|livetranslate|character/i;
+                            return !skip.test(m.id);
+                          })
+                          .map((m) => (
+                          <option key={m.id} value={m.id}>{m.id}{m.owned_by ? ` (${m.owned_by})` : ''}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!formData.base_url) {
+                            setMessage({ type: 'error', text: '请先填写 Base URL' });
+                            return;
+                          }
+                          if (!formData.api_key && !isEditMode) {
+                            setMessage({ type: 'error', text: '请先填写 API Key' });
+                            return;
+                          }
+                          try {
+                            setLoadingOpenaiModels(true);
+                            const isClearKey = formData.api_key === '__CLEAR__';
+                            const apiKeyParam = formData.api_key && !isClearKey ? formData.api_key : undefined;
+                            // 勾了"清空"时不传 config_id，跳过 DB 直接走环境变量兜底
+                            const configIdParam = isEditMode && id && !isClearKey ? parseInt(id) : undefined;
+                            const result = await listOpenAIModels(formData.base_url, apiKeyParam, configIdParam);
+                            setOpenaiModels(result);
+                            if (result.length === 0) {
+                              setMessage({ type: 'error', text: '未获取到模型列表，请检查 API Key 是否正确' });
+                            }
+                          } catch (err: any) {
+                            setMessage({ type: 'error', text: err.response?.data?.message || '获取模型列表失败' });
+                          } finally {
+                            setLoadingOpenaiModels(false);
+                          }
+                        }}
+                        disabled={loadingOpenaiModels}
+                        style={{
+                          padding: '8px 16px',
+                          backgroundColor: '#1890ff',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: loadingOpenaiModels ? 'not-allowed' : 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {loadingOpenaiModels ? '获取中...' : '获取模型'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <input
+                    type="text"
+                    className={styles.select}
+                    value={formData.model_id}
+                    onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+                    placeholder={
+                      formData.service_type === 'openai'
+                        ? 'gpt-4, gpt-3.5-turbo'
+                        : formData.service_type === 'ollama'
+                        ? 'llama2, mistral'
+                        : 'your-deployment-name'
+                    }
+                    required
+                  />
+                )}
                 <div className={styles.hint}>
                   {formData.service_type === 'openai' && '如：gpt-4, gpt-4-turbo, gpt-3.5-turbo'}
                   {formData.service_type === 'azure_openai' && 'Azure 部署名称'}
+                  {formData.service_type === 'qwen' && '填写 API Key 后点击「获取模型」拉取可用模型列表'}
                   {formData.service_type === 'ollama' && '本地模型名称'}
                 </div>
               </div>
@@ -636,6 +731,40 @@ const AIConfigForm = () => {
               </label>
               <div className={styles.hint}>
                 某些新模型（如 Claude Sonnet 4）需要启用此选项。启用后会减少请求次数，避免 503 错误。
+              </div>
+            </div>
+          )}
+
+          {/* Extended Thinking 配置（Bedrock + OpenAI 都支持） */}
+          <div className={styles.formGroup}>
+            <label className={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={formData.thinking_enabled}
+                onChange={(e) => setFormData({ ...formData, thinking_enabled: e.target.checked })}
+              />
+              <span>Extended Thinking</span>
+            </label>
+            <div className={styles.hint}>
+              启用后，AI 会在输出前进行深度推理。适合复杂分析场景（如风险评估），但会增加延迟和 token 消耗。
+            </div>
+          </div>
+
+          {formData.thinking_enabled && (
+            <div className={styles.formGroup}>
+              <label className={styles.label}>Thinking Budget (tokens)</label>
+              <input
+                type="number"
+                className={styles.select}
+                value={formData.thinking_budget_tokens}
+                onChange={(e) => setFormData({ ...formData, thinking_budget_tokens: parseInt(e.target.value) || 10000 })}
+                min="1024"
+                max="50000"
+                step="1024"
+                required
+              />
+              <div className={styles.hint}>
+                thinking token 预算（最小 1024，建议 5000-20000）。越大推理越深但延迟越高。
               </div>
             </div>
           )}

@@ -283,5 +283,262 @@ func TestNewAICallerFromConfig(t *testing.T) {
 	}
 }
 
+func TestBuildBedrockRequestWithThinking(t *testing.T) {
+	caller := &BedrockCaller{
+		region:               "us-west-2",
+		modelID:              "anthropic.claude-opus-4-6-v1",
+		thinkingEnabled:      true,
+		thinkingBudgetTokens: 5000,
+	}
+
+	messages := []AgentMessage{
+		{Role: "system", Content: "You are an assistant"},
+		{Role: "user", Content: "Analyze this"},
+	}
+
+	body := caller.buildBedrockRequest(messages, nil)
+
+	thinking, ok := body["thinking"].(map[string]interface{})
+	if !ok {
+		t.Fatal("thinking block not found in request")
+	}
+	if thinking["type"] != "enabled" {
+		t.Errorf("thinking type should be 'enabled', got %v", thinking["type"])
+	}
+	if thinking["budget_tokens"] != 5000 {
+		t.Errorf("budget_tokens should be 5000, got %v", thinking["budget_tokens"])
+	}
+
+	// temperature must NOT be set when thinking is enabled
+	if _, hasTemp := body["temperature"]; hasTemp {
+		t.Error("temperature must not be set when thinking is enabled")
+	}
+}
+
+func TestBuildBedrockRequestWithoutThinking(t *testing.T) {
+	caller := &BedrockCaller{
+		region:          "us-west-2",
+		modelID:         "anthropic.claude-sonnet-4-6",
+		thinkingEnabled: false,
+	}
+
+	messages := []AgentMessage{
+		{Role: "user", Content: "Hello"},
+	}
+
+	body := caller.buildBedrockRequest(messages, nil)
+
+	if _, ok := body["thinking"]; ok {
+		t.Error("thinking block should not exist when thinking is disabled")
+	}
+}
+
+func TestBuildBedrockRequestThinkingBudgetTooSmall(t *testing.T) {
+	caller := &BedrockCaller{
+		region:               "us-west-2",
+		modelID:              "anthropic.claude-opus-4-6-v1",
+		thinkingEnabled:      true,
+		thinkingBudgetTokens: 500, // below 1024 minimum
+	}
+
+	body := caller.buildBedrockRequest([]AgentMessage{{Role: "user", Content: "test"}}, nil)
+
+	if _, ok := body["thinking"]; ok {
+		t.Error("thinking block should not exist when budget < 1024")
+	}
+}
+
+func TestParseBedrockThinkingResponse(t *testing.T) {
+	caller := &BedrockCaller{}
+
+	responseJSON := `{
+		"content": [
+			{"type": "thinking", "thinking": "Let me analyze this step by step..."},
+			{"type": "text", "text": "Here is my analysis"}
+		],
+		"usage": {"input_tokens": 100, "output_tokens": 200},
+		"stop_reason": "end_turn"
+	}`
+
+	result, err := caller.parseBedrockResponse([]byte(responseJSON))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Content != "Here is my analysis" {
+		t.Errorf("wrong content: %s", result.Content)
+	}
+	if result.ThinkingContent != "Let me analyze this step by step..." {
+		t.Errorf("wrong thinking content: %s", result.ThinkingContent)
+	}
+}
+
+func TestParseBedrockResponseWithoutThinking(t *testing.T) {
+	caller := &BedrockCaller{}
+
+	responseJSON := `{
+		"content": [
+			{"type": "text", "text": "Normal response"}
+		],
+		"usage": {"input_tokens": 50, "output_tokens": 30},
+		"stop_reason": "end_turn"
+	}`
+
+	result, err := caller.parseBedrockResponse([]byte(responseJSON))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.ThinkingContent != "" {
+		t.Errorf("thinking content should be empty, got: %s", result.ThinkingContent)
+	}
+}
+
+func TestNewAICallerFromConfig_ThinkingPassthrough(t *testing.T) {
+	cfg := &models.AIConfig{
+		ServiceType:          "bedrock",
+		AWSRegion:            "us-west-2",
+		ModelID:              "anthropic.claude-opus-4-6-v1",
+		ThinkingEnabled:      true,
+		ThinkingBudgetTokens: 8000,
+	}
+	caller := NewAICallerFromConfig(cfg)
+	bc, ok := caller.(*BedrockCaller)
+	if !ok {
+		t.Fatal("expected BedrockCaller")
+	}
+	if !bc.thinkingEnabled {
+		t.Error("thinkingEnabled should be true")
+	}
+	if bc.thinkingBudgetTokens != 8000 {
+		t.Errorf("thinkingBudgetTokens should be 8000, got %d", bc.thinkingBudgetTokens)
+	}
+}
+
+// ========== Qwen Caller Tests ==========
+
+func TestBuildQwenRequestWithThinking(t *testing.T) {
+	caller := &QwenCaller{
+		OpenAICaller: OpenAICaller{modelID: "qwen3.5-plus"},
+		thinkingEnabled:      true,
+		thinkingBudgetTokens: 10240,
+	}
+
+	body := caller.buildQwenRequest([]AgentMessage{{Role: "user", Content: "test"}}, nil)
+
+	if body["enable_thinking"] != true {
+		t.Error("enable_thinking should be true")
+	}
+	if _, hasTemp := body["temperature"]; hasTemp {
+		t.Error("temperature must not be set when thinking is enabled")
+	}
+}
+
+func TestBuildQwenRequestWithoutThinking(t *testing.T) {
+	caller := &QwenCaller{
+		OpenAICaller: OpenAICaller{modelID: "qwen3.5-plus"},
+		thinkingEnabled: false,
+	}
+
+	body := caller.buildQwenRequest([]AgentMessage{{Role: "user", Content: "test"}}, nil)
+
+	if _, ok := body["enable_thinking"]; ok {
+		t.Error("enable_thinking should not exist when thinking is disabled")
+	}
+	if body["temperature"] != 0.7 {
+		t.Errorf("temperature should be 0.7, got %v", body["temperature"])
+	}
+	// 非 thinking 模式应自动加 json_object
+	rf, ok := body["response_format"].(map[string]interface{})
+	if !ok {
+		t.Fatal("response_format should be set when thinking is disabled")
+	}
+	if rf["type"] != "json_object" {
+		t.Errorf("response_format type should be json_object, got %v", rf["type"])
+	}
+}
+
+func TestBuildQwenRequestWithThinkingNoJsonMode(t *testing.T) {
+	caller := &QwenCaller{
+		OpenAICaller:         OpenAICaller{modelID: "qwen3.5-plus"},
+		thinkingEnabled:      true,
+		thinkingBudgetTokens: 10240,
+	}
+
+	body := caller.buildQwenRequest([]AgentMessage{{Role: "user", Content: "test"}}, nil)
+
+	// thinking 模式不能加 response_format
+	if _, ok := body["response_format"]; ok {
+		t.Error("response_format should not be set when thinking is enabled")
+	}
+}
+
+func TestParseQwenThinkingResponse(t *testing.T) {
+	caller := &QwenCaller{}
+
+	responseJSON := `{
+		"choices": [{
+			"message": {
+				"reasoning_content": "Let me think step by step...",
+				"content": "Here is my answer"
+			}
+		}],
+		"usage": {"prompt_tokens": 100, "completion_tokens": 200}
+	}`
+
+	result, err := caller.parseQwenResponse([]byte(responseJSON))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Content != "Here is my answer" {
+		t.Errorf("wrong content: %s", result.Content)
+	}
+	if result.ThinkingContent != "Let me think step by step..." {
+		t.Errorf("wrong thinking content: %s", result.ThinkingContent)
+	}
+}
+
+func TestParseQwenResponseWithoutThinking(t *testing.T) {
+	caller := &QwenCaller{}
+
+	responseJSON := `{
+		"choices": [{
+			"message": {
+				"content": "Normal response"
+			}
+		}],
+		"usage": {"prompt_tokens": 50, "completion_tokens": 30}
+	}`
+
+	result, err := caller.parseQwenResponse([]byte(responseJSON))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ThinkingContent != "" {
+		t.Errorf("thinking content should be empty, got: %s", result.ThinkingContent)
+	}
+}
+
+func TestNewAICallerFromConfig_QwenType(t *testing.T) {
+	cfg := &models.AIConfig{
+		ServiceType:          "qwen",
+		BaseURL:              "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+		ModelID:              "qwen3.5-plus",
+		ThinkingEnabled:      true,
+		ThinkingBudgetTokens: 10240,
+	}
+	caller := NewAICallerFromConfig(cfg)
+	qc, ok := caller.(*QwenCaller)
+	if !ok {
+		t.Fatal("expected QwenCaller for qwen service type")
+	}
+	if !qc.thinkingEnabled {
+		t.Error("thinkingEnabled should be true")
+	}
+	if qc.thinkingBudgetTokens != 10240 {
+		t.Errorf("thinkingBudgetTokens should be 10240, got %d", qc.thinkingBudgetTokens)
+	}
+}
+
 // suppress unused import warning
 var _ = json.Marshal

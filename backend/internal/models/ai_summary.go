@@ -18,6 +18,7 @@ type AIPlanSummary struct {
 	PlanChanges       json.RawMessage `gorm:"type:jsonb" json:"plan_changes"`                               // 当次 plan 的资源变更快照
 	CMDBLookups       json.RawMessage `gorm:"type:jsonb" json:"cmdb_lookups"`                               // CMDB 查询审计记录
 	ToolCalls         json.RawMessage `gorm:"type:jsonb" json:"tool_calls"`                                 // Agent Loop 所有工具调用记录
+	ThinkingContent   json.RawMessage `gorm:"type:jsonb" json:"thinking_content,omitempty"`                  // Extended thinking 内容（调试用）
 	Status            string          `gorm:"type:varchar(20);not null;default:'pending'" json:"status"`    // pending/running/completed/failed
 	ErrorMessage      string          `gorm:"type:text" json:"error_message,omitempty"`                     // 失败原因
 	Duration          int             `json:"duration"`                                                      // 分析耗时（毫秒）
@@ -51,6 +52,7 @@ type AIApplySummary struct {
 	ApplyChanges        json.RawMessage `gorm:"type:jsonb" json:"apply_changes"`                              // apply 实际变更快照
 	CMDBLookups         json.RawMessage `gorm:"type:jsonb" json:"cmdb_lookups"`                               // CMDB 查询审计记录
 	ToolCalls           json.RawMessage `gorm:"type:jsonb" json:"tool_calls"`                                 // Agent Loop 所有工具调用记录
+	ThinkingContent     json.RawMessage `gorm:"type:jsonb" json:"thinking_content,omitempty"`                  // Extended thinking 内容（调试用）
 	Status              string          `gorm:"type:varchar(20);not null;default:'pending'" json:"status"`    // pending/running/completed/failed
 	ErrorMessage        string          `gorm:"type:text" json:"error_message,omitempty"`                     // 失败原因
 	Duration            int             `json:"duration"`                                                      // 分析耗时（毫秒）

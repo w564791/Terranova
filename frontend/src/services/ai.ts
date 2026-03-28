@@ -23,6 +23,9 @@ export interface AIConfig {
   similarity_threshold?: number;
   embedding_batch_enabled?: boolean;
   embedding_batch_size?: number;
+  // Extended Thinking 配置
+  thinking_enabled?: boolean;
+  thinking_budget_tokens?: number;
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +105,20 @@ export const getAvailableModels = async (region: string): Promise<BedrockModel[]
   return response.data?.models || [];
 };
 
+export interface OpenAIModel {
+  id: string;
+  object: string;
+  owned_by: string;
+}
+
+export const listOpenAIModels = async (baseURL: string, apiKey?: string, configId?: number): Promise<OpenAIModel[]> => {
+  const body: Record<string, unknown> = { base_url: baseURL };
+  if (apiKey) body.api_key = apiKey;
+  if (configId) body.config_id = configId;
+  const response = await api.post('/global/settings/ai-config/openai-models', body);
+  return response.data || [];
+};
+
 // 分析错误
 // 安全说明：只需要传入 task_id，error_message 等信息从数据库获取，防止 prompt injection 攻击
 export const analyzeError = async (data: {
@@ -134,6 +151,7 @@ export interface PlanSummary {
   plan_changes: any;
   cmdb_lookups: any;
   tool_calls: any;
+  thinking_content?: string[];
   status: string;
   error_message?: string;
   duration: number;
@@ -161,6 +179,7 @@ export interface ApplySummary {
   apply_changes: any;
   cmdb_lookups: any;
   tool_calls: any;
+  thinking_content?: string[];
   status: string;
   error_message?: string;
   duration: number;

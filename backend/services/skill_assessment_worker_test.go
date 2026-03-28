@@ -375,3 +375,44 @@ func TestAssessmentWorker_UsesCapabilityThenHashAsFallback(t *testing.T) {
 	require.NoError(t, db.Where("usage_log_id = ?", log2.ID).First(&result2).Error)
 	require.Equal(t, "fallback_hash", result2.SkillName) // hash fallback
 }
+
+func TestAssessmentWorker_Idempotent(t *testing.T) {
+	db := setupAssessmentTestDB(t)
+
+	validator := NewSkillSchemaValidator()
+	validator.RegisterSchema("test_skill", SkillOutputSchema{
+		RequiredFields: []string{"status"},
+	})
+
+	worker := NewAssessmentWorker(db, validator, nil, nil)
+
+	validOutput := json.RawMessage(`{"status": "ok"}`)
+	usageLog := models.SkillUsageLog{
+		ID:               uuid.New().String(),
+		SkillIDs:         []string{"skill-1"},
+		Capability:       "test_capability",
+		UserID:           "user-1",
+		OutputSnapshot:   &validOutput,
+		SkillContentHash: "idem123",
+		AssessmentStatus: "pending",
+		CreatedAt:        time.Now(),
+	}
+	require.NoError(t, db.Create(&usageLog).Error)
+
+	// First call succeeds
+	success1, err := worker.ProcessOne(usageLog.ID, "test_skill")
+	require.NoError(t, err)
+	require.True(t, success1)
+
+	// Second call on the same log should be a no-op (CAS fails)
+	success2, err := worker.ProcessOne(usageLog.ID, "test_skill")
+	require.NoError(t, err)
+	require.False(t, success2)
+
+	// Only one schema assessment record should exist
+	var count int64
+	db.Model(&models.SkillAssessmentResult{}).
+		Where("usage_log_id = ? AND assessment_layer = 'schema'", usageLog.ID).
+		Count(&count)
+	require.Equal(t, int64(1), count)
+}

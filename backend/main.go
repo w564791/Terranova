@@ -180,7 +180,7 @@ func main() {
 	formGenSchema := services.SkillOutputSchema{
 		RequiredFields: []string{"status", "config"},
 		EnumFields: map[string][]string{
-			"status": {"complete", "need_selection", "blocked"},
+			"status": {"complete", "need_more_info", "partial"},
 		},
 	}
 	skillValidator.RegisterSchema("form_generation", formGenSchema)                  // capability 名（scanner 兜底）

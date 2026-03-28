@@ -100,7 +100,7 @@ func (m *TaskQueueManager) SetK8sDeploymentService(svc *K8sDeploymentService) {
 
 // CanExecuteNewTask 检查workspace是否可以执行新任务
 // plan任务可以并发，plan_and_apply任务必须串行
-// 注意: 此方法目前未被使用,但保持逻辑与GetNextExecutableTask一致
+// NOTE: 当前未被生产代码调用（仅测试使用），终态列表需与 IsTerminal() 保持同步
 func (m *TaskQueueManager) CanExecuteNewTask(workspaceID string) (bool, string) {
 	// 1. 检查workspace是否被lock
 	var workspace models.Workspace
@@ -117,14 +117,14 @@ func (m *TaskQueueManager) CanExecuteNewTask(workspaceID string) (bool, string) 
 	}
 
 	// 2. 检查是否有plan_and_apply任务处于非最终状态
-	// 非最终状态：pending, running, apply_pending
-	// 最终状态：success, applied, failed, cancelled
+	// 非最终状态：pending, running, apply_pending, decision_required
+	// 最终状态：success, applied, failed, cancelled, planned_and_finished, discarded
 	var blockingTaskCount int64
 	m.db.Model(&models.WorkspaceTask{}).
 		Where("workspace_id = ? AND task_type = ? AND status NOT IN (?)",
 			workspaceID,
 			models.TaskTypePlanAndApply,
-			[]string{"success", "applied", "failed", "cancelled"}).
+			[]string{"success", "applied", "failed", "cancelled", "planned_and_finished", "discarded"}).
 		Count(&blockingTaskCount)
 
 	if blockingTaskCount > 0 {

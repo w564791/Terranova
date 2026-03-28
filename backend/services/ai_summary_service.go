@@ -126,7 +126,8 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 
 	// 构建 user prompt
 	userPrompt := fmt.Sprintf(
-		"请分析以下 Terraform Plan 变更：\n\n"+
+		"stage: plan\n\n"+
+			"请分析以下 Terraform Plan 变更：\n\n"+
 			"工作空间: %s\n"+
 			"变更统计: 新增 %d, 修改 %d, 删除 %d\n\n"+
 			"资源变更详情:\n%s",
@@ -207,7 +208,8 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 
 	// 构建 apply 上下文
 	applyContext := fmt.Sprintf(
-		"请分析以下 Terraform Apply 执行结果：\n\n"+
+		"stage: apply\n\n"+
+			"请分析以下 Terraform Apply 执行结果：\n\n"+
 			"工作空间: %s\n"+
 			"任务 ID: %d\n"+
 			"变更统计: 新增 %d, 修改 %d, 删除 %d\n"+
@@ -391,10 +393,45 @@ func (s *AISummaryService) extractPlanChanges(planJSON models.JSONB) interface{}
 		return nil
 	}
 
-	if changes, ok := plan["resource_changes"]; ok {
+	changes, ok := plan["resource_changes"]
+	if !ok {
+		return plan
+	}
+
+	// 过滤 no-op 资源，只保留有实际变更的资源
+	changeList, ok := changes.([]interface{})
+	if !ok {
 		return changes
 	}
-	return plan
+
+	var filtered []interface{}
+	for _, item := range changeList {
+		change, ok := item.(map[string]interface{})
+		if !ok {
+			filtered = append(filtered, item)
+			continue
+		}
+		// 检查 change.change.actions，过滤纯 ["no-op"] 的资源
+		changeBlock, _ := change["change"].(map[string]interface{})
+		if changeBlock == nil {
+			filtered = append(filtered, item)
+			continue
+		}
+		actions, ok := changeBlock["actions"].([]interface{})
+		if !ok {
+			filtered = append(filtered, item)
+			continue
+		}
+		if len(actions) == 1 {
+			if action, ok := actions[0].(string); ok && (action == "no-op" || action == "read") {
+				continue // 跳过 no-op 和 read（data source）
+			}
+		}
+		filtered = append(filtered, item)
+	}
+
+	log.Printf("[AISummaryService] Filtered plan changes: %d/%d resources have actual changes", len(filtered), len(changeList))
+	return filtered
 }
 
 func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, result *AgentLoopResult, planChangesJSON []byte, startTime time.Time, cfg *models.AIConfig, workspaceID string, taskID uint, userPrompt string) {
@@ -455,6 +492,9 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 
 	summary.PlanChanges = planChangesJSON
 	summary.ToolCalls, _ = json.Marshal(result.ToolCalls)
+	if len(result.ThinkingContents) > 0 {
+		summary.ThinkingContent, _ = json.Marshal(result.ThinkingContents)
+	}
 	summary.Status = "completed"
 	summary.Duration = int(time.Since(startTime).Milliseconds())
 
@@ -463,8 +503,8 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		return
 	}
 
-	log.Printf("[AISummaryService] Plan summary completed for task %d (id=%s, duration=%dms, steps=%d, requires_confirmation=%v)",
-		summary.TaskID, summary.ID, summary.Duration, result.TotalSteps, summary.RequiresConfirmation)
+	log.Printf("[AISummaryService] Plan summary completed for task %d (id=%s, duration=%dms, steps=%d, thinking=%d, requires_confirmation=%v)",
+		summary.TaskID, summary.ID, summary.Duration, result.TotalSteps, len(result.ThinkingContents), summary.RequiresConfirmation)
 
 	// plan-only 任务不需要决策确认（没有 apply 阶段）
 	var task models.WorkspaceTask
@@ -561,6 +601,9 @@ func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, 
 		summary.AffectedResources, _ = json.Marshal(aiOutput.AffectedResources)
 	}
 	summary.ToolCalls, _ = json.Marshal(result.ToolCalls)
+	if len(result.ThinkingContents) > 0 {
+		summary.ThinkingContent, _ = json.Marshal(result.ThinkingContents)
+	}
 	summary.Status = "completed"
 	summary.Duration = int(time.Since(startTime).Milliseconds())
 
