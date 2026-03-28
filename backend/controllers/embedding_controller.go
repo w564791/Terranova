@@ -277,19 +277,20 @@ func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 	})
 }
 
-// rebuildExternalEmbedding 重建外部 CMDB 资源的 embedding
-// 不清空现有 embedding，而是清空 embedding_text 触发 PostSyncWorker 重新生成
-// 旧 embedding 在被覆盖前仍可搜索
+// rebuildExternalEmbedding 重建外部 CMDB 资源的 summary + embedding
+// 为每个外部 source 入队 summary → embedding 任务链（和正常同步后一致）
+// 不清空现有数据，旧 embedding 在被覆盖前仍可搜索
 func (c *EmbeddingController) rebuildExternalEmbedding(ctx *gin.Context) {
-	// 清空 embedding_text 让 PostSyncWorker 检测到变更并覆盖（保留 embedding 本身）
+	// 清空 summary_hash 让 summary job 重新生成所有摘要
+	// 清空 embedding_text 让 embedding job 重新生成所有向量
 	result := c.db.Exec(`
 		UPDATE resource_index
-		SET embedding_text = ''
+		SET summary_hash = '', embedding_text = ''
 		WHERE workspace_id = '__external__'
 	`)
-	log.Printf("[EmbeddingController] 标记 %d 个外部资源待重建 embedding", result.RowsAffected)
+	log.Printf("[EmbeddingController] 标记 %d 个外部资源待重建 summary + embedding", result.RowsAffected)
 
-	// 为每个外部 source 入队 embedding job（不需要 summary，只重建 embedding）
+	// 为每个外部 source 入队 summary → embedding job（和 enqueuePostSyncJobs 同模式）
 	var sourceIDs []string
 	c.db.Model(&models.ResourceIndex{}).
 		Where("workspace_id = '__external__' AND external_source_id != ''").
@@ -299,20 +300,43 @@ func (c *EmbeddingController) rebuildExternalEmbedding(ctx *gin.Context) {
 	now := time.Now()
 	jobCount := 0
 	for _, sourceID := range sourceIDs {
-		job := models.PostSyncJob{
-			SourceID: sourceID, JobType: models.PostSyncJobTypeEmbedding,
+		// 跳过已有活跃 job 的 source
+		var activeCount int64
+		c.db.Model(&models.PostSyncJob{}).
+			Where("source_id = ? AND status IN ?", sourceID, []string{
+				models.PostSyncJobStatusPending,
+				models.PostSyncJobStatusProcessing,
+			}).Count(&activeCount)
+		if activeCount > 0 {
+			log.Printf("[EmbeddingController] source %s 已有 %d 个活跃 job，跳过", sourceID, activeCount)
+			continue
+		}
+
+		summaryJob := models.PostSyncJob{
+			SourceID: sourceID, JobType: models.PostSyncJobTypeSummary,
 			Status: models.PostSyncJobStatusPending, CreatedAt: now,
 		}
-		if err := c.db.Create(&job).Error; err == nil {
-			jobCount++
+		if err := c.db.Create(&summaryJob).Error; err != nil {
+			log.Printf("[EmbeddingController] source %s 创建 summary job 失败: %v", sourceID, err)
+			continue
 		}
+
+		embeddingJob := models.PostSyncJob{
+			SourceID: sourceID, JobType: models.PostSyncJobTypeEmbedding,
+			Status: models.PostSyncJobStatusPending, DependsOn: &summaryJob.ID, CreatedAt: now,
+		}
+		if err := c.db.Create(&embeddingJob).Error; err != nil {
+			log.Printf("[EmbeddingController] source %s 创建 embedding job 失败: %v", sourceID, err)
+		}
+
+		jobCount++
 	}
 
-	log.Printf("[EmbeddingController] 为 %d 个外部 source 创建 embedding rebuild job", jobCount)
+	log.Printf("[EmbeddingController] 为 %d 个外部 source 创建 summary + embedding rebuild job", jobCount)
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"code":    200,
-		"message": fmt.Sprintf("重建任务已创建，%d 个数据源将后台处理", jobCount),
+		"message": fmt.Sprintf("重建任务已创建，%d 个数据源将后台处理（summary → embedding）", jobCount),
 	})
 }
 
