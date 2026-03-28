@@ -1,8 +1,19 @@
 ## v0.4.11
 
-Extended Thinking 支持 + Qwen/DashScope 接入 + 评估去重修复。
+Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + 评估去重修复。
 
 ### Features
+
+#### CMDB 观测面板
+
+- **Dashboard 新增 "CMDB 概览" Tab** — 在首页 Dashboard 增加第三个 Tab，集中展示 CMDB 系统运行状态 (`Dashboard.tsx`, `CMDBOverviewDashboard.tsx`)
+- **数据源概览** — 展示 Workspace 数量、外部数据源数量及健康状态、资源总数（含 Workspace/外部源拆分）
+- **Embedding & Summary 覆盖率** — 进度条可视化展示覆盖率百分比，颜色按阈值自动变化（绿 ≥90% / 橙 ≥60% / 红 <60%）
+- **任务队列监控** — 分别展示 Embedding 队列 (Workspace)、Summary 队列 (外部源)、Embedding 队列 (外部源) 的待处理/处理中/失败数
+- **资源类型分布** — 横向条形图展示 Top 10 资源类型，底部附来源占比条（Workspace vs 外部源）
+- **同步历史（分页）** — 统一展示 Workspace + 外部源的同步记录，含来源类型、触发方式、增删改计数，后端分页默认 10 条/页 (`GET /cmdb/sync-history`)
+- **Workspace 同步日志** — Workspace 同步现在也写入 `cmdb_sync_logs`，和外部源同步日志统一管理，支持区分 `triggered_by`（auto/manual/scheduled）
+- **Tab 按需加载** — Dashboard Tabs 启用 `destroyInactiveTabPane`，切换 Tab 时重新加载数据，避免过早请求和数据过期
 
 #### Extended Thinking
 
@@ -21,6 +32,7 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + 评估去重修复。
 
 ### Bug Fixes
 
+- **Embedding 覆盖扩展** — 对没有 summary 的资源，也用 `BuildEmbeddingText` 生成 embedding（这些资源有 name/description/tags，足以生成有意义的 embedding）
 - **评估记录去重** — 修复竞态条件导致的重复 assessment 记录，添加 `(usage_log_id, assessment_layer)` 唯一约束 (`fix_duplicate_assessment_records.sql`, `skill_assessment_worker.go`)
 - **API Key 更新逻辑** — 切换 service type 时正确处理 API Key 持久化，支持清除已存储的 Key (`ai_config_service.go`)
 - **Summary prompt 优化** — plan/apply 阶段标注 stage 前缀，过滤 no-op 资源 (`ai_summary_service.go`)
@@ -28,6 +40,14 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + 评估去重修复。
 ### Database Migrations
 
 ```sql
+-- 扩展 cmdb_sync_logs 支持 Workspace 同步日志 (add_cmdb_sync_log_source_type.sql)
+ALTER TABLE cmdb_sync_logs DROP CONSTRAINT IF EXISTS fk_cmdb_sync_logs_source;
+ALTER TABLE cmdb_sync_logs ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) NOT NULL DEFAULT 'external';
+ALTER TABLE cmdb_sync_logs ADD COLUMN IF NOT EXISTS source_name VARCHAR(200) DEFAULT '';
+ALTER TABLE cmdb_sync_logs ADD COLUMN IF NOT EXISTS triggered_by VARCHAR(20) DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_cmdb_sync_logs_source_type ON cmdb_sync_logs (source_type);
+CREATE INDEX IF NOT EXISTS idx_cmdb_sync_logs_completed_at ON cmdb_sync_logs (completed_at DESC);
+
 -- Extended Thinking 配置 (add_thinking_config.sql)
 ALTER TABLE ai_configs ADD COLUMN thinking_enabled boolean NOT NULL DEFAULT false;
 ALTER TABLE ai_configs ADD COLUMN thinking_budget_tokens integer NOT NULL DEFAULT 10000;
@@ -35,10 +55,14 @@ ALTER TABLE ai_plan_summaries ADD COLUMN thinking_content jsonb;
 ALTER TABLE ai_apply_summaries ADD COLUMN thinking_content jsonb;
 
 -- 评估去重 (fix_duplicate_assessment_records.sql)
--- 删除重复记录，保留最早的
 CREATE UNIQUE INDEX idx_assessment_usage_log_layer_unique
   ON skill_assessment_results (usage_log_id, assessment_layer);
 ```
+
+### API Changes
+
+- `GET /cmdb/overview` — CMDB 观测面板数据（数据源、资源、Embedding/Summary 覆盖率、任务队列）
+- `GET /cmdb/sync-history?page=1&size=10` — 同步历史分页查询（统一 Workspace + 外部源）
 
 ### Full Changelog
 

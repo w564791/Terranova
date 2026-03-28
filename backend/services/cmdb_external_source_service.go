@@ -525,7 +525,12 @@ func (s *CMDBExternalSourceService) extractDataFromResponse(data interface{}, re
 }
 
 // SyncExternalSource 同步外部数据源
-func (s *CMDBExternalSourceService) SyncExternalSource(ctx context.Context, sourceID string) error {
+func (s *CMDBExternalSourceService) SyncExternalSource(ctx context.Context, sourceID string, triggeredBy ...string) error {
+	triggerSource := "manual"
+	if len(triggeredBy) > 0 && triggeredBy[0] != "" {
+		triggerSource = triggeredBy[0]
+	}
+
 	// 1. 获取数据源配置
 	source, err := s.GetExternalSource(ctx, sourceID)
 	if err != nil {
@@ -534,9 +539,12 @@ func (s *CMDBExternalSourceService) SyncExternalSource(ctx context.Context, sour
 
 	// 2. 创建同步日志
 	syncLog := &models.CMDBSyncLog{
-		SourceID:  sourceID,
-		StartedAt: time.Now(),
-		Status:    models.SyncStatusRunning,
+		SourceID:    sourceID,
+		SourceType:  "external",
+		SourceName:  source.Name,
+		TriggeredBy: triggerSource,
+		StartedAt:   time.Now(),
+		Status:      models.SyncStatusRunning,
 	}
 	if err := s.db.Create(syncLog).Error; err != nil {
 		return fmt.Errorf("failed to create sync log: %w", err)

@@ -133,7 +133,12 @@ func cmdbGetMap(m map[string]interface{}, key string) map[string]interface{} {
 }
 
 // SyncWorkspaceResources 同步workspace的资源索引
-func (s *CMDBService) SyncWorkspaceResources(workspaceID string) error {
+func (s *CMDBService) SyncWorkspaceResources(workspaceID string, triggeredBy ...string) error {
+	triggerSource := "manual"
+	if len(triggeredBy) > 0 && triggeredBy[0] != "" {
+		triggerSource = triggeredBy[0]
+	}
+
 	// 1. 获取最新的state版本
 	var stateVersion models.WorkspaceStateVersion
 	if err := s.db.Where("workspace_id = ?", workspaceID).
@@ -145,13 +150,46 @@ func (s *CMDBService) SyncWorkspaceResources(workspaceID string) error {
 		return fmt.Errorf("failed to get state version: %w", err)
 	}
 
+	// 获取 workspace 名称
+	var workspace models.Workspace
+	s.db.Select("name").Where("workspace_id = ?", workspaceID).First(&workspace)
+
+	// 创建 sync log
+	syncLog := models.CMDBSyncLog{
+		SourceID:    workspaceID,
+		SourceType:  "workspace",
+		SourceName:  workspace.Name,
+		TriggeredBy: triggerSource,
+		StartedAt:   time.Now(),
+		Status:      models.SyncStatusRunning,
+	}
+	s.db.Create(&syncLog)
+
 	// 2. Content已经是JSONB类型（map[string]interface{}），直接使用
 	stateContent := map[string]interface{}(stateVersion.Content)
 
 	// 3. 解析并同步资源
-	if err := s.parseAndSyncState(workspaceID, stateContent, stateVersion.ID); err != nil {
+	counts, err := s.parseAndSyncState(workspaceID, stateContent, stateVersion.ID)
+	if err != nil {
+		now := time.Now()
+		s.db.Model(&syncLog).Updates(map[string]interface{}{
+			"status":        models.SyncStatusFailed,
+			"completed_at":  now,
+			"error_message": err.Error(),
+		})
 		return err
 	}
+
+	// 更新 sync log
+	now := time.Now()
+	s.db.Model(&syncLog).Updates(map[string]interface{}{
+		"status":           models.SyncStatusSuccess,
+		"completed_at":     now,
+		"resources_synced": counts.Added + counts.Updated,
+		"resources_added":  counts.Added,
+		"resources_updated": counts.Updated,
+		"resources_deleted": counts.Deleted,
+	})
 
 	// 4. 异步生成资源摘要 → 完成后触发 embedding
 	go func() {
@@ -177,13 +215,20 @@ func (s *CMDBService) SyncWorkspaceResources(workspaceID string) error {
 	return nil
 }
 
+// SyncCounts 同步资源计数
+type SyncCounts struct {
+	Added   int
+	Updated int
+	Deleted int
+}
+
 // parseAndSyncState 解析State并同步到资源索引
 // 使用增量更新模式，保留已有的 embedding 数据
-func (s *CMDBService) parseAndSyncState(workspaceID string, stateContent map[string]interface{}, stateVersionID uint) error {
+func (s *CMDBService) parseAndSyncState(workspaceID string, stateContent map[string]interface{}, stateVersionID uint) (*SyncCounts, error) {
 	// 1. 解析resources数组
 	resources, ok := stateContent["resources"].([]interface{})
 	if !ok {
-		return nil // 空state
+		return &SyncCounts{}, nil // 空state
 	}
 
 	// 2. 解析每个资源
@@ -208,7 +253,8 @@ func (s *CMDBService) parseAndSyncState(workspaceID string, stateContent map[str
 	}
 
 	// 3. 事务更新数据库 - 使用增量更新模式
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	counts := &SyncCounts{}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 获取现有资源（用于增量更新）
 		existingResources := make(map[string]*models.ResourceIndex)
 		var existing []models.ResourceIndex
@@ -251,11 +297,13 @@ func (s *CMDBService) parseAndSyncState(workspaceID string, stateContent map[str
 					}).Error; err != nil {
 					return err
 				}
+				counts.Updated++
 			} else {
 				// 创建新记录
 				if err := tx.Create(&record).Error; err != nil {
 					return err
 				}
+				counts.Added++
 			}
 		}
 
@@ -265,12 +313,14 @@ func (s *CMDBService) parseAndSyncState(workspaceID string, stateContent map[str
 				if err := tx.Delete(existingRecord).Error; err != nil {
 					return err
 				}
+				counts.Deleted++
 			}
 		}
 
 		// 更新module层级表
 		return s.syncModuleHierarchy(tx, workspaceID, moduleSet)
 	})
+	return counts, err
 }
 
 // parseResource 解析单个资源
@@ -795,6 +845,103 @@ func (s *CMDBService) GetCMDBStats() (*models.CMDBStats, error) {
 	}
 
 	return &stats, nil
+}
+
+// GetCMDBOverview 获取 CMDB 观测面板数据
+func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
+	var overview models.CMDBOverview
+
+	// === Sources ===
+	s.db.Model(&models.ResourceIndex{}).
+		Where("source_type = ?", "terraform").
+		Select("COUNT(DISTINCT workspace_id)").
+		Scan(&overview.Sources.WorkspaceCount)
+
+	s.db.Model(&models.CMDBExternalSource{}).
+		Where("is_enabled = ?", true).
+		Count(&overview.Sources.ExternalSourceCount)
+	s.db.Model(&models.CMDBExternalSource{}).
+		Where("is_enabled = ? AND last_sync_status = ?", true, "success").
+		Count(&overview.Sources.ExternalSourceHealthy)
+	overview.Sources.ExternalSourceError = overview.Sources.ExternalSourceCount - overview.Sources.ExternalSourceHealthy
+
+	// === Resources ===
+	s.db.Model(&models.ResourceIndex{}).
+		Where("resource_mode = ?", "managed").
+		Count(&overview.Resources.Total)
+	s.db.Model(&models.ResourceIndex{}).
+		Where("resource_mode = ? AND source_type = ?", "managed", "terraform").
+		Count(&overview.Resources.FromWorkspace)
+	overview.Resources.FromExternal = overview.Resources.Total - overview.Resources.FromWorkspace
+
+	typeStats := make([]models.ResourceTypeStat, 0)
+	s.db.Model(&models.ResourceIndex{}).
+		Select("resource_type, COUNT(*) as count").
+		Where("resource_mode = ?", "managed").
+		Group("resource_type").Order("count DESC").Limit(10).
+		Scan(&typeStats)
+	overview.Resources.TypeTop10 = typeStats
+
+	// === Embedding ===
+	overview.Embedding.Total = overview.Resources.Total
+	s.db.Model(&models.ResourceIndex{}).
+		Where("resource_mode = ? AND embedding IS NOT NULL", "managed").
+		Count(&overview.Embedding.Completed)
+	if overview.Embedding.Total > 0 {
+		overview.Embedding.CoveragePct = float64(overview.Embedding.Completed) / float64(overview.Embedding.Total) * 100
+	}
+
+	// === Summary ===
+	overview.Summary.Total = overview.Resources.Total
+	s.db.Model(&models.ResourceIndex{}).
+		Where("resource_mode = ? AND resource_summary IS NOT NULL AND resource_summary != ''", "managed").
+		Count(&overview.Summary.Completed)
+	if overview.Summary.Total > 0 {
+		overview.Summary.CoveragePct = float64(overview.Summary.Completed) / float64(overview.Summary.Total) * 100
+	}
+
+	// === Queue ===
+	// Workspace embedding 任务队列 (embedding_tasks)
+	s.db.Model(&models.EmbeddingTask{}).Where("status = ?", "pending").Count(&overview.Queue.EmbeddingPending)
+	s.db.Model(&models.EmbeddingTask{}).Where("status = ?", "processing").Count(&overview.Queue.EmbeddingProcessing)
+	s.db.Model(&models.EmbeddingTask{}).Where("status = ?", "failed").Count(&overview.Queue.EmbeddingFailed)
+	// 外部源 summary 任务队列 (cmdb_post_sync_jobs, job_type=summary)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "pending").Count(&overview.Queue.SummaryPending)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "processing").Count(&overview.Queue.SummaryProcessing)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "failed").Count(&overview.Queue.SummaryFailed)
+	// 外部源 embedding 任务队列 (cmdb_post_sync_jobs, job_type=embedding)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "pending").Count(&overview.Queue.ExtEmbeddingPending)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "processing").Count(&overview.Queue.ExtEmbeddingProcessing)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "failed").Count(&overview.Queue.ExtEmbeddingFailed)
+
+	return &overview, nil
+}
+
+// GetSyncHistory 获取同步历史（分页）
+func (s *CMDBService) GetSyncHistory(page, size int) (*models.CMDBSyncHistoryResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 || size > 100 {
+		size = 10
+	}
+
+	var total int64
+	s.db.Table("cmdb_sync_logs").Count(&total)
+
+	syncs := make([]models.CMDBRecentSync, 0)
+	s.db.Table("cmdb_sync_logs").
+		Order("started_at DESC").
+		Offset((page - 1) * size).
+		Limit(size).
+		Scan(&syncs)
+
+	return &models.CMDBSyncHistoryResponse{
+		Syncs: syncs,
+		Total: total,
+		Page:  page,
+		Size:  size,
+	}, nil
 }
 
 // SyncAllWorkspaces 同步所有workspace的资源索引

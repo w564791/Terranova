@@ -1504,7 +1504,7 @@ func (m *TaskQueueManager) SyncCMDBAfterApply(task *models.WorkspaceTask) {
 		task.ID, task.Status, task.WorkspaceID)
 
 	cmdbService := NewCMDBService(m.db)
-	if err := cmdbService.SyncWorkspaceResources(task.WorkspaceID); err != nil {
+	if err := cmdbService.SyncWorkspaceResources(task.WorkspaceID, "auto"); err != nil {
 		log.Printf("[CMDB] Failed to sync workspace %s after apply: %v", task.WorkspaceID, err)
 		// 同步失败，重置状态
 		completedAt := time.Now()

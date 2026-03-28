@@ -127,6 +127,9 @@ func (s *CMDBExternalSource) SetFieldMapping(mapping *FieldMapping) error {
 type CMDBSyncLog struct {
 	ID               uint       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	SourceID         string     `gorm:"column:source_id;type:varchar(50);not null" json:"source_id"`
+	SourceType       string     `gorm:"column:source_type;type:varchar(20);not null;default:'external'" json:"source_type"`
+	SourceName       string     `gorm:"column:source_name;type:varchar(200);default:''" json:"source_name"`
+	TriggeredBy      string     `gorm:"column:triggered_by;type:varchar(20);default:''" json:"triggered_by"`
 	StartedAt        time.Time  `gorm:"column:started_at;not null;default:CURRENT_TIMESTAMP" json:"started_at"`
 	CompletedAt      *time.Time `gorm:"column:completed_at" json:"completed_at,omitempty"`
 	Status           string     `gorm:"column:status;type:varchar(20);not null;default:'running'" json:"status"`
@@ -249,6 +252,9 @@ type TestConnectionResponse struct {
 type SyncLogResponse struct {
 	ID               uint       `json:"id"`
 	SourceID         string     `json:"source_id"`
+	SourceType       string     `json:"source_type"`
+	SourceName       string     `json:"source_name"`
+	TriggeredBy      string     `json:"triggered_by"`
 	StartedAt        time.Time  `json:"started_at"`
 	CompletedAt      *time.Time `json:"completed_at,omitempty"`
 	Status           string     `json:"status"`
@@ -321,6 +327,9 @@ func (l *CMDBSyncLog) ToResponse() *SyncLogResponse {
 	return &SyncLogResponse{
 		ID:               l.ID,
 		SourceID:         l.SourceID,
+		SourceType:       l.SourceType,
+		SourceName:       l.SourceName,
+		TriggeredBy:      l.TriggeredBy,
 		StartedAt:        l.StartedAt,
 		CompletedAt:      l.CompletedAt,
 		Status:           l.Status,

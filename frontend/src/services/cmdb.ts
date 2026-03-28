@@ -1,5 +1,64 @@
 import api from './api';
 
+// CMDB Overview 观测面板数据
+export interface CMDBOverview {
+  sources: {
+    workspace_count: number;
+    external_source_count: number;
+    external_source_healthy: number;
+    external_source_error: number;
+  };
+  resources: {
+    total: number;
+    from_workspace: number;
+    from_external: number;
+    type_top10: ResourceTypeStat[];
+  };
+  embedding: {
+    total: number;
+    completed: number;
+    coverage_pct: number;
+  };
+  summary: {
+    total: number;
+    completed: number;
+    coverage_pct: number;
+  };
+  queue: {
+    embedding_pending: number;
+    embedding_processing: number;
+    embedding_failed: number;
+    summary_pending: number;
+    summary_processing: number;
+    summary_failed: number;
+    ext_embedding_pending: number;
+    ext_embedding_processing: number;
+    ext_embedding_failed: number;
+  };
+}
+
+export interface CMDBSyncHistoryResponse {
+  syncs: CMDBRecentSync[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface CMDBRecentSync {
+  source_type: string;
+  source_id: string;
+  source_name: string;
+  triggered_by: string;
+  status: string;
+  started_at: string;
+  completed_at?: string;
+  resources_synced: number;
+  resources_added: number;
+  resources_updated: number;
+  resources_deleted: number;
+  error_message?: string;
+}
+
 // CMDB统计信息
 export interface CMDBStats {
   total_workspaces: number;
@@ -128,6 +187,16 @@ export interface VectorSearchResponse {
 
 // CMDB API服务
 export const cmdbService = {
+  // 获取 CMDB 观测面板数据
+  getCMDBOverview: async (): Promise<CMDBOverview> => {
+    return api.get('/cmdb/overview');
+  },
+
+  // 获取同步历史（分页）
+  getSyncHistory: async (page: number = 1, size: number = 10): Promise<CMDBSyncHistoryResponse> => {
+    return api.get(`/cmdb/sync-history?page=${page}&size=${size}`);
+  },
+
   // 搜索资源（关键字搜索）
   searchResources: async (
     query: string,

@@ -1448,6 +1448,9 @@ ALTER SEQUENCE public.cmdb_external_sources_id_seq OWNED BY public.cmdb_external
 CREATE TABLE public.cmdb_sync_logs (
     id integer NOT NULL,
     source_id character varying(50) NOT NULL,
+    source_type character varying(20) DEFAULT 'external'::character varying NOT NULL,
+    source_name character varying(200) DEFAULT ''::character varying,
+    triggered_by character varying(20) DEFAULT ''::character varying,
     started_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     completed_at timestamp without time zone,
     status character varying(20) DEFAULT 'running'::character varying NOT NULL,
@@ -8264,7 +8267,7 @@ COPY public.cmdb_external_sources (id, source_id, name, description, api_endpoin
 -- Data for Name: cmdb_sync_logs; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.cmdb_sync_logs (id, source_id, started_at, completed_at, status, resources_synced, resources_added, resources_updated, resources_deleted, error_message) FROM stdin;
+COPY public.cmdb_sync_logs (id, source_id, source_type, source_name, triggered_by, started_at, completed_at, status, resources_synced, resources_added, resources_updated, resources_deleted, error_message) FROM stdin;
 \.
 
 
@@ -11910,6 +11913,20 @@ CREATE INDEX idx_cmdb_sync_logs_status ON public.cmdb_sync_logs USING btree (sta
 
 
 --
+-- Name: idx_cmdb_sync_logs_source_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cmdb_sync_logs_source_type ON public.cmdb_sync_logs USING btree (source_type);
+
+
+--
+-- Name: idx_cmdb_sync_logs_completed_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cmdb_sync_logs_completed_at ON public.cmdb_sync_logs USING btree (completed_at DESC);
+
+
+--
 -- Name: idx_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14307,14 +14324,6 @@ ALTER TABLE ONLY public.deployments
 
 ALTER TABLE ONLY public.deployments
     ADD CONSTRAINT deployments_schema_id_fkey FOREIGN KEY (schema_id) REFERENCES public.schemas(id);
-
-
---
--- Name: cmdb_sync_logs fk_cmdb_sync_logs_source; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.cmdb_sync_logs
-    ADD CONSTRAINT fk_cmdb_sync_logs_source FOREIGN KEY (source_id) REFERENCES public.cmdb_external_sources(source_id) ON DELETE CASCADE;
 
 
 --
