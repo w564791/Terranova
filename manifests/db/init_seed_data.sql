@@ -3679,7 +3679,8 @@ CREATE TABLE public.resource_index (
     embedding public.vector(1536),
     resource_summary text,
     summary_hash character varying(32),
-    summary_assessment_status character varying(16) DEFAULT ''::character varying
+    summary_assessment_status character varying(16) DEFAULT ''::character varying,
+    summary_regeneration_hint text DEFAULT ''::text
 );
 
 

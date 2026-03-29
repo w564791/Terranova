@@ -53,7 +53,8 @@ type ResourceIndex struct {
 	// AI 资源摘要
 	ResourceSummary         string `gorm:"column:resource_summary;type:text" json:"resource_summary,omitempty"`                    // AI 生成的配置摘要
 	SummaryHash             string `gorm:"column:summary_hash;type:varchar(32)" json:"summary_hash,omitempty"`                     // attributes 的 MD5 hash，用于变更检测
-	SummaryAssessmentStatus string `gorm:"column:summary_assessment_status;type:varchar(16);default:''" json:"summary_assessment_status,omitempty"` // 摘要评估状态：空 | pending | assessed
+	SummaryAssessmentStatus  string `gorm:"column:summary_assessment_status;type:varchar(16);default:''" json:"summary_assessment_status,omitempty"` // 摘要评估状态：空 | pending | assessed
+	SummaryRegenerationHint string `gorm:"column:summary_regeneration_hint;type:text;default:''" json:"summary_regeneration_hint,omitempty"`      // 重新生成时的质量反馈提示
 
 	// 向量搜索相关字段（CMDB 向量化搜索）
 	// 注意：Embedding 字段使用 gorm:"-" 忽略自动映射，因为 GORM 不支持 pgvector 类型的自动序列化/反序列化

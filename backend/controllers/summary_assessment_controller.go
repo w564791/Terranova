@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"iac-platform/internal/models"
@@ -433,24 +435,26 @@ func (c *SummaryAssessmentController) RegenerateSummaries(ctx *gin.Context) {
 		return
 	}
 
-	// 1. 清空 summary_hash 和评估状态，触发重新生成
-	result := c.db.Model(&models.ResourceIndex{}).
-		Where("id IN ?", req.ResourceIDs).
-		Updates(map[string]interface{}{
-			"summary_hash":              "",
-			"summary_assessment_status": "",
-		})
+	// 1. 收集每个资源的评估问题，构建 regeneration hint
+	hints := c.buildRegenerationHints(req.ResourceIDs)
 
-	if result.Error != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
-		return
+	// 2. 清空 summary_hash 和评估状态，写入 hint，触发重新生成
+	for _, id := range req.ResourceIDs {
+		updates := map[string]interface{}{
+			"summary_hash":               "",
+			"summary_assessment_status":  "",
+			"summary_regeneration_hint":  hints[id],
+		}
+		c.db.Model(&models.ResourceIndex{}).Where("id = ?", id).Updates(updates)
 	}
 
-	// 2. 删除旧的评估记录
+	// 3. 删除旧的评估记录
 	c.db.Where("source_type = ? AND resource_id IN ?", "summary", req.ResourceIDs).
 		Delete(&models.SkillAssessmentResult{})
 
-	// 3. 按 source 分组，为每个 source 创建 summary + assessment job
+	affectedCount := int64(len(req.ResourceIDs))
+
+	// 4. 按 source 分组，为每个 source 创建 summary + assessment job
 	type sourceGroup struct {
 		ExternalSourceID string
 	}
@@ -488,13 +492,92 @@ func (c *SummaryAssessmentController) RegenerateSummaries(ctx *gin.Context) {
 		jobCount++
 	}
 
-	log.Printf("[SummaryAssessment] 重新生成 %d 个资源的摘要，创建 %d 组 job", result.RowsAffected, jobCount)
+	log.Printf("[SummaryAssessment] 重新生成 %d 个资源的摘要，创建 %d 组 job", affectedCount, jobCount)
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message":            "regeneration scheduled",
-		"resources_affected": result.RowsAffected,
+		"resources_affected": affectedCount,
 		"jobs_created":       jobCount,
 	})
+}
+
+// buildRegenerationHints 从评估记录中收集问题，为每个资源构建 regeneration hint
+func (c *SummaryAssessmentController) buildRegenerationHints(resourceIDs []uint) map[uint]string {
+	var assessments []models.SkillAssessmentResult
+	c.db.Where("source_type = ? AND resource_id IN ?", "summary", resourceIDs).
+		Order("resource_id, assessment_layer").
+		Find(&assessments)
+
+	hints := make(map[uint]string)
+	// Group by resource_id
+	grouped := make(map[uint][]models.SkillAssessmentResult)
+	for _, a := range assessments {
+		if a.ResourceID != nil {
+			grouped[*a.ResourceID] = append(grouped[*a.ResourceID], a)
+		}
+	}
+
+	for rid, results := range grouped {
+		var parts []string
+		for _, r := range results {
+			layerName := string(r.AssessmentLayer)
+			switch r.AssessmentLayer {
+			case models.AssessmentLayerSchema:
+				layerName = "文本规则检测"
+			case models.AssessmentLayerRule:
+				layerName = "Prompt遵从度"
+			case models.AssessmentLayerSemantic:
+				layerName = "内容质量"
+			}
+
+			if r.Verdict == models.AssessmentVerdictPass {
+				continue
+			}
+
+			issues := []string{}
+			if len(r.FormatViolations) > 0 {
+				issues = append(issues, "格式问题: "+formatTextArray(r.FormatViolations))
+			}
+			if len(r.HallucinationSuspects) > 0 {
+				issues = append(issues, "疑似幻觉值: "+formatTextArray(r.HallucinationSuspects))
+			}
+			if r.SecurityTagMisses != nil {
+				var misses []map[string]string
+				json.Unmarshal(*r.SecurityTagMisses, &misses)
+				for _, m := range misses {
+					issues = append(issues, fmt.Sprintf("缺失安全标注: %s", m["expected_tag"]))
+				}
+			}
+			if r.RuleViolations != nil {
+				var violations []map[string]interface{}
+				json.Unmarshal(*r.RuleViolations, &violations)
+				for _, v := range violations {
+					if detail, ok := v["detail"].(string); ok {
+						issues = append(issues, detail)
+					}
+				}
+			}
+			if r.QualityIssues != nil {
+				var qis []map[string]interface{}
+				json.Unmarshal(*r.QualityIssues, &qis)
+				for _, qi := range qis {
+					if detail, ok := qi["detail"].(string); ok {
+						issues = append(issues, detail)
+					}
+				}
+			}
+
+			if len(issues) > 0 {
+				parts = append(parts, fmt.Sprintf("[%s] %s", layerName, strings.Join(issues, "; ")))
+			}
+		}
+
+		if len(parts) > 0 {
+			hints[rid] = strings.Join(parts, "\n")
+		}
+	}
+
+	return hints
 }
 
 func formatTextArray(arr models.TextArray) string {

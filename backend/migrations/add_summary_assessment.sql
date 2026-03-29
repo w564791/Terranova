@@ -40,3 +40,8 @@ ALTER TABLE resource_index
 ADD COLUMN IF NOT EXISTS summary_assessment_status VARCHAR(16) DEFAULT '';
 
 COMMENT ON COLUMN resource_index.summary_assessment_status IS '摘要评估状态：空 | pending | assessed';
+
+ALTER TABLE resource_index
+ADD COLUMN IF NOT EXISTS summary_regeneration_hint TEXT DEFAULT '';
+
+COMMENT ON COLUMN resource_index.summary_regeneration_hint IS '重新生成时的质量反馈提示（评估问题摘要）';

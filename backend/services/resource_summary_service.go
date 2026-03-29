@@ -138,6 +138,11 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 			continue
 		}
 
+		// 如果有 regeneration hint（质量反馈），追加到 prompt
+		if resource.SummaryRegenerationHint != "" {
+			userPrompt += fmt.Sprintf("\n\n上一次生成的摘要存在以下问题，请在本次生成中修正：\n%s", resource.SummaryRegenerationHint)
+		}
+
 		// 调 AI（单个资源 30 秒超时）
 		callCtx, callCancel := context.WithTimeout(ctx, 30*time.Second)
 		messages := []AgentMessage{
@@ -160,9 +165,10 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 
 		// 写入 resource_summary + summary_hash（GORM）
 		if err := s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).Updates(map[string]interface{}{
-			"resource_summary":          summary,
-			"summary_hash":              hash,
-			"summary_assessment_status": "pending",
+			"resource_summary":           summary,
+			"summary_hash":               hash,
+			"summary_assessment_status":  "pending",
+			"summary_regeneration_hint":  "",
 		}).Error; err != nil {
 			log.Printf("[ResourceSummary] Failed to save summary for resource %d: %v", resource.ID, err)
 			failed++
