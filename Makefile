@@ -170,6 +170,13 @@ docker-push: ## 构建多架构后端镜像并推送 (arm64+amd64)
 		-t $(IMAGE_SERVER):latest \
 		--push backend/
 	@echo "推送完成"
+docker-local-push: ## 构建多架构后端镜像并推送 (arm64)
+	@echo "构建并推送: $(IMAGE_SERVER):$(VERSION) [$(PLATFORMS)]"
+	docker buildx build --platform linux/arm64 \
+		-t $(IMAGE_SERVER):$(VERSION) \
+		-t $(IMAGE_SERVER):latest \
+		--push backend/
+	@echo "推送完成"
 
 docker-push-frontend: ## 构建多架构前端镜像并推送 (arm64+amd64)
 	@echo "构建并推送: $(IMAGE_FRONTEND):$(VERSION) [$(PLATFORMS)]"

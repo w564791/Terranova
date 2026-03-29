@@ -15099,6 +15099,22 @@ SELECT 19, service_type, aws_region, model_id, false,
 FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
 ON CONFLICT (id) DO NOTHING;
 
+-- Summary L2: summary_rule_evaluation
+INSERT INTO public.ai_configs (id, service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode)
+SELECT 20, service_type, aws_region, model_id, false,
+       '["summary_rule_evaluation"]'::jsonb, '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0, 'prompt'
+FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
+-- Summary L3: summary_semantic_evaluation
+INSERT INTO public.ai_configs (id, service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode)
+SELECT 21, service_type, aws_region, model_id, false,
+       '["summary_semantic_evaluation"]'::jsonb, '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0, 'prompt'
+FROM public.ai_configs WHERE capabilities @> '["*"]'::jsonb AND enabled = true LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
 -- Skill quality evaluation Skills (Layer 2 + Layer 3 prompt templates)
 INSERT INTO public.skills (id, name, display_name, description, layer, content, version, is_active, priority, source_type, metadata, created_by, created_at, updated_at)
 VALUES ('skill-quality-rule-eval', 'skill_quality_rule_evaluation', 'Skill 质量 - 规则一致性评估', '对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则', 'task', E'你是一个 Skill 输出质量的规则一致性检查器。\n\n## 你的职责\n检查 AI 的最终输出 JSON 是否违反了 Skill 定义中关于**输出内容**的规则。\n\n## 重要：检查范围限定\n你只检查**输出内容本身**的规则，包括：\n- 输出 JSON 的字段值是否符合规则定义的约束（如枚举值、条件触发）\n- 字段之间的逻辑一致性（如 risk_level=high 时 requires_confirmation 是否为 true）\n- 数值计算规则（如 score 计算逻辑）\n- 输出格式规范（如 recommended_actions 的结构要求）\n\n你**不检查**以下内容（这些是 Agent 流程层面的，不是输出内容的问题）：\n- 是否调用了特定工具（如 query_cmdb_dependencies）\n- 阶段识别（stage 字段由系统注入，不是 AI 输出的一部分）\n- 工具调用顺序或次数\n- Agent loop 的执行流程\n\n## Skill 定义（仅规则部分）\n{skill_rules_section}\n\n## 本次调用输入\n{input}\n\n## 本次调用输出\n{output}\n\n---\n\n仅检查输出内容的规则一致性。按以下 JSON 格式输出：\n\n{\n  "verdict": "pass | warn | fail",\n  "score": 0-100的整数,\n  "rule_violations": [\n    {\n      "rule": "规则简短名称",\n      "detail": "具体违反内容，引用输出中的实际值"\n    }\n  ],\n  "assessment_confidence": "high | medium | low"\n}\n\n评分参考：\n- 90-100：输出完全符合所有内容规则\n- 70-89 ：轻微偏差（如枚举值可接受但非最优、格式小瑕疵）\n- 50-69 ：存在规则违反，但核心字段正确\n- 30-49 ：多处规则违反，影响输出可用性\n- 0-29  ：关键规则违反（如 risk_level 与实际风险严重不匹配）\n\n注意：\n- 如果规则涉及工具调用或流程步骤，跳过该规则（不算违反）\n- rule_violations 必须引用输出中的具体值\n- 只输出 JSON，不要有额外文字', '1.0.0', true, 0, 'manual', '{"tags":["quality","evaluation","rule"],"description":"Layer 2 规则一致性评估 prompt"}', 'system', NOW(), NOW())

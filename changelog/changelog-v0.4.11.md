@@ -1,6 +1,6 @@
 ## v0.4.11
 
-Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + 评估去重修复。
+Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + Summary 质量评估 + Skill 迭代。
 
 ### Features
 
@@ -40,6 +40,26 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + 评估去
 - **Dashboard 搜索质量面板** — CMDB 概览 Tab 新增搜索召回质量 section：5 个指标卡片 + 搜索方式分布条形图 + 纯 CSS 词云（热门查询 Top 30）+ 零结果查询列表 (`CMDBOverviewDashboard.tsx`)
 - **Period + Source 切换** — 支持 24h / 7d / 30d 时间范围 + 全部 / 用户 / Agent 来源切换，独立加载不影响其他 section
 - **日志自动清理** — 复用 EmbeddingWorker 每日清理机制，自动删除 30 天前的搜索日志 (`embedding_worker.go`)
+
+#### Summary 质量评估
+
+- **三层评估架构** — L1 文本规则校验 (`summary_text_validator.go`)、L2 规则一致性 LLM 评估、L3 语义质量 LLM 评估，复用 skill assessment 框架扩展而来
+- **采样策略** — 按资源类型分层采样，支持配置采样率，避免全量评估的开销 (`summary_assessment_sampler.go`)
+- **编排服务** — 串联 L1→L2→L3 评估流程，L1 失败可提前终止 (`summary_assessment_service.go`)
+- **PostSyncWorker 集成** — 外部源同步完成后自动触发 summary 评估，评估结果写入 `skill_assessment_results`（`source_type='summary'`）
+- **启动补偿** — 服务启动时自动恢复 `pending` 状态的评估任务，防止因重启丢失 (`summary_assessment_service.go`)
+- **Dashboard 质量 Tab** — 新增 Summary Quality Tab，展示评估覆盖率、各层通过率、问题分布 (`SummaryQualityTab.tsx`)
+- **Issue Drill-down** — 点击问题类型可查看具体资源列表，支持按 resource_id 跳转 (`SummaryQualityTab.tsx`)
+- **摘要重新生成** — Issue 详情中支持一键重新生成 summary，并将评估发现的问题作为质量反馈传给 AI (`summary_regeneration_hint`)
+- **评估 AI Config** — 新增 `summary_rule_evaluation` / `summary_semantic_evaluation` 两个 capability config，mode 为 `prompt`（无 skill 编排）
+- **Dashboard API** — 新增 `GET /summary-assessment/dashboard` 端点，返回评估统计和问题列表 (`summary_assessment_controller.go`)
+
+#### Skill 质量迭代
+
+- **service_disruption 风险因子** — execute_summary_workflow 新增服务中断风险评估，高影响变更标记 `service_disruption` (`execute_summary_workflow.md`)
+- **高 blast radius 深度分析** — 当变更影响范围大时，强制要求 deep-dive 查询依赖关系 (`execute_summary_workflow.md`)
+- **Tool calls 两轮拆分** — 将工具调用拆分为两轮，第一轮查基础信息，第二轮查依赖关系，确保依赖查询基于第一轮结果 (`execute_summary_workflow.md`)
+- **resource_summary 用于风险评估** — plan/apply 阶段引入已有的 resource_summary 作为上下文，提升变更影响分析的准确性 (`ai_cmdb_service.go`)
 
 ### Bug Fixes
 
@@ -106,6 +126,22 @@ CREATE TABLE IF NOT EXISTS cmdb_search_logs (
 );
 CREATE INDEX idx_search_logs_created_at ON cmdb_search_logs (created_at);
 
+-- Summary 评估扩展 (add_summary_assessment.sql)
+ALTER TABLE skill_assessment_results DROP CONSTRAINT IF EXISTS skill_assessment_results_usage_log_id_fkey;
+ALTER TABLE skill_assessment_results ALTER COLUMN usage_log_id DROP NOT NULL;
+ALTER TABLE skill_assessment_results ADD COLUMN IF NOT EXISTS source_type VARCHAR(16) DEFAULT 'skill';
+ALTER TABLE skill_assessment_results ADD COLUMN IF NOT EXISTS resource_id INTEGER;
+ALTER TABLE skill_assessment_results ADD COLUMN IF NOT EXISTS format_violations TEXT[];
+ALTER TABLE skill_assessment_results ADD COLUMN IF NOT EXISTS security_tag_misses JSONB;
+ALTER TABLE skill_assessment_results ADD COLUMN IF NOT EXISTS hallucination_suspects TEXT[];
+CREATE INDEX IF NOT EXISTS idx_assessment_source_type ON skill_assessment_results (source_type);
+CREATE INDEX IF NOT EXISTS idx_assessment_resource_id ON skill_assessment_results (resource_id) WHERE resource_id IS NOT NULL;
+ALTER TABLE resource_index ADD COLUMN IF NOT EXISTS summary_assessment_status VARCHAR(16) DEFAULT '';
+ALTER TABLE resource_index ADD COLUMN IF NOT EXISTS summary_regeneration_hint TEXT DEFAULT '';
+
+-- Summary 评估 AI Config (add_skill_quality_assessment_config.sql 部分)
+-- summary_rule_evaluation + summary_semantic_evaluation 两个 capability config (mode='prompt')
+
 -- 评估去重 (fix_duplicate_assessment_records.sql)
 CREATE UNIQUE INDEX idx_assessment_usage_log_layer_unique
   ON skill_assessment_results (usage_log_id, assessment_layer);
@@ -116,6 +152,9 @@ CREATE UNIQUE INDEX idx_assessment_usage_log_layer_unique
 - `GET /cmdb/overview` — CMDB 观测面板数据（数据源、资源、Embedding/Summary 覆盖率、任务队列）
 - `GET /cmdb/sync-history?page=1&size=10` — 同步历史分页查询（统一 Workspace + 外部源）
 - `GET /cmdb/search-analytics?period=7d&source=all` — 搜索召回质量分析（使用统计 + 质量指标 + 热门查询 + 零结果查询），source 支持 `all`/`manual`/`auto`/`agent`
+- `GET /admin/summary-assessment/overview` — Summary 质量评估统计（覆盖率、各层通过率、问题分布）
+- `GET /admin/summary-assessment/issue-resources?type=over_length&days=7` — 按问题类型查询具体资源列表
+- `POST /admin/summary-assessment/regenerate` — 根据评估反馈批量重新生成 summary
 
 ### Full Changelog
 
