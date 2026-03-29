@@ -113,6 +113,7 @@ mandatory_calls:
 |`configuration_drift`      |配置偏移（与预期/基线不符）        |
 |`high_blast_radius`        |变更影响面大                |
 |`sensitive_resource_change`|涉及敏感资源（生产环境、核心基础设施）   |
+|`service_disruption`       |变更可能导致依赖方服务中断（如端口变更导致 VPC Endpoint 不可达、安全组规则删除导致连接丢失）。判定依据：通过第二轮查询获取的依赖方 resource_summary 和 tags，确认依赖方为生产环境（Environment=production）的运行中服务 |
 
 -----
 
@@ -172,8 +173,9 @@ indirect_estimate 字段含义:
 ### 7.1 risk_level 计算（按优先级从高到低匹配，取最高）
 
 ```yaml
-critical:
-  - risk_factors 包含 external_exposure_change AND blast_radius_level == high
+critical（满足任一即为 critical，必须逐条检查，不可跳过）:
+  - risk_factors 包含 service_disruption AND direct_dependencies >= 3（生产服务可能中断）
+  - OR risk_factors 包含 external_exposure_change AND blast_radius_level == high
   - OR risk_factors 包含 resource_deletion AND direct_dependencies >= 3
 
 high:
