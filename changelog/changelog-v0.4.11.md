@@ -33,11 +33,12 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + 评估去
 #### CMDB 搜索召回质量分析
 
 - **搜索日志记录** — VectorSearch handler 异步写入搜索日志到 `cmdb_search_logs` 表，记录 query、search_method、结果数、similarity、耗时等指标 (`embedding_controller.go`)
-- **搜索来源标记** — 区分用户主动搜索 (manual) 和输入防抖自动搜索 (auto)，分析 API 默认只统计 manual，避免中间态查询污染数据 (`CMDB.tsx`, `cmdb.ts`)
+- **搜索来源标记** — 区分用户主动搜索 (manual)、输入防抖自动搜索 (auto)、AI agent 搜索 (agent)，避免中间态查询污染数据 (`CMDB.tsx`, `cmdb.ts`, `ai_summary_tools.go`)
+- **AI Agent 搜索日志** — `QueryResourceAttributesTool` 和 `QueryCMDBDependenciesTool` 也写入搜索日志（`source='agent'`），覆盖成功、零结果、查询失败三条路径 (`ai_summary_tools.go`)
 - **Query 归一化** — 搜索日志写入前执行 `ToLower + TrimSpace`，避免大小写/空格导致聚合分裂
-- **搜索分析 API** — 新增 `GET /cmdb/search-analytics?period=7d` 端点，返回使用统计（搜索次数、零结果率、平均结果数）、质量指标（method 分布、similarity、fallback 率、耗时）、热门查询 Top 30、零结果查询 Top 10
+- **搜索分析 API** — 新增 `GET /cmdb/search-analytics?period=7d&source=all` 端点，返回使用统计（搜索次数、零结果率、平均结果数）、质量指标（method 分布、similarity、fallback 率、耗时）、热门查询 Top 30、零结果查询 Top 10。source 参数支持 `all`/`manual`/`auto`/`agent` 过滤
 - **Dashboard 搜索质量面板** — CMDB 概览 Tab 新增搜索召回质量 section：5 个指标卡片 + 搜索方式分布条形图 + 纯 CSS 词云（热门查询 Top 30）+ 零结果查询列表 (`CMDBOverviewDashboard.tsx`)
-- **Period 切换** — 支持 24h / 7d / 30d 时间范围切换，独立加载不影响其他 section
+- **Period + Source 切换** — 支持 24h / 7d / 30d 时间范围 + 全部 / 用户 / Agent 来源切换，独立加载不影响其他 section
 - **日志自动清理** — 复用 EmbeddingWorker 每日清理机制，自动删除 30 天前的搜索日志 (`embedding_worker.go`)
 
 ### Bug Fixes
@@ -114,7 +115,7 @@ CREATE UNIQUE INDEX idx_assessment_usage_log_layer_unique
 
 - `GET /cmdb/overview` — CMDB 观测面板数据（数据源、资源、Embedding/Summary 覆盖率、任务队列）
 - `GET /cmdb/sync-history?page=1&size=10` — 同步历史分页查询（统一 Workspace + 外部源）
-- `GET /cmdb/search-analytics?period=7d&source=manual` — 搜索召回质量分析（使用统计 + 质量指标 + 热门查询 + 零结果查询）
+- `GET /cmdb/search-analytics?period=7d&source=all` — 搜索召回质量分析（使用统计 + 质量指标 + 热门查询 + 零结果查询），source 支持 `all`/`manual`/`auto`/`agent`
 
 ### Full Changelog
 
