@@ -276,6 +276,8 @@ export const CAPABILITIES = {
   CMDB_RESOURCE_SUMMARY: 'cmdb_resource_summary',
   SKILL_RULE_EVALUATION: 'skill_rule_evaluation',
   SKILL_SEMANTIC_EVALUATION: 'skill_semantic_evaluation',
+  SUMMARY_RULE_EVALUATION: 'summary_rule_evaluation',
+  SUMMARY_SEMANTIC_EVALUATION: 'summary_semantic_evaluation',
 } as const;
 
 // 能力场景标签映射
@@ -293,6 +295,8 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 资源摘要',
   [CAPABILITIES.SKILL_RULE_EVALUATION]: 'Skill 规则评估 (L2)',
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Skill 语义评估 (L3)',
+  [CAPABILITIES.SUMMARY_RULE_EVALUATION]: '摘要规则评估 (L2)',
+  [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: '摘要语义评估 (L3)',
 };
 
 // 能力场景描述映射
@@ -310,6 +314,8 @@ export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 同步时为资源生成配置摘要，增强向量搜索和变更影响分析',
   [CAPABILITIES.SKILL_RULE_EVALUATION]: 'Layer 2 规则一致性评估：对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则',
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Layer 3 语义质量评估：评估 AI 输出的表述质量、信息量和用户可读性',
+  [CAPABILITIES.SUMMARY_RULE_EVALUATION]: 'Layer 2 摘要规则评估：检查 CMDB 资源摘要是否严格遵守生成 Prompt 的所有规则',
+  [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: 'Layer 3 摘要语义评估：评估 CMDB 资源摘要的内容准确性、完整性和幻觉检测',
 };
 
 // 每个能力场景的默认 Prompt 模板
