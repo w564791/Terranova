@@ -151,12 +151,12 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 	// 异步写入搜索日志
 	go func() {
 		searchLog := models.CMDBSearchLog{
-			Query:        strings.ToLower(strings.TrimSpace(resourceID)),
-			ResourceType: depField,
-			SearchMethod: "jsonb",
-			Source:       "agent",
-			TotalCount:   len(result),
-			DurationMs:   int(elapsed.Milliseconds()),
+			Query:          strings.ToLower(strings.TrimSpace(resourceID)),
+			SearchMethod:   "jsonb",
+			Source:         "agent",
+			TotalCount:     len(result),
+			DurationMs:     int(elapsed.Milliseconds()),
+			FallbackReason: "dep_field:" + depField,
 		}
 		if err := t.db.Create(&searchLog).Error; err != nil {
 			log.Printf("[SearchLog] write failed: %v", err)
@@ -233,7 +233,23 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	if err := t.db.Where("workspace_id = ? AND cloud_resource_id = ?", hit.WorkspaceID, hit.CloudResourceID).
 		First(&resource).Error; err != nil {
 		// 搜索能找到但取属性失败，返回搜索结果的基本信息
+		elapsed := time.Since(start)
 		log.Printf("[QueryResourceAttributes] search hit but attributes fetch failed: %v", err)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:          strings.ToLower(strings.TrimSpace(q)),
+				ResourceType:   hit.ResourceType,
+				SearchMethod:   "keyword",
+				Source:         "agent",
+				TotalCount:     1,
+				KeywordCount:   1,
+				DurationMs:     int(elapsed.Milliseconds()),
+				FallbackReason: "attributes fetch failed",
+			}
+			if err := t.db.Create(&searchLog).Error; err != nil {
+				log.Printf("[SearchLog] write failed: %v", err)
+			}
+		}()
 		return map[string]interface{}{
 			"found":             true,
 			"workspace_id":      hit.WorkspaceID,
