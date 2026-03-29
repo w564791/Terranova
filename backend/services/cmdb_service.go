@@ -1419,7 +1419,7 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 		AvgResultCount  float64 `gorm:"column:avg_result_count"`
 		UniqueQueries   int64   `gorm:"column:unique_queries"`
 	}
-	s.db.Raw(fmt.Sprintf(`
+	if err := s.db.Raw(fmt.Sprintf(`
 		SELECT
 			COUNT(*) AS total_searches,
 			COUNT(*) FILTER (WHERE total_count = 0) AS zero_result_count,
@@ -1427,7 +1427,9 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 			COUNT(DISTINCT query) AS unique_queries
 		FROM cmdb_search_logs
 		WHERE %s
-	`, baseWhere)).Scan(&usage)
+	`, baseWhere)).Scan(&usage).Error; err != nil {
+		return nil, fmt.Errorf("search analytics usage query failed: %w", err)
+	}
 
 	result.Usage = models.CMDBSearchUsage{
 		TotalSearches:   usage.TotalSearches,

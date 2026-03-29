@@ -409,4 +409,8 @@
   .row2 { grid-template-columns: 1fr; }
   .rowQueueType { grid-template-columns: 1fr; }
   .cardValue { font-size: 28px; }
+  .searchDetailRow { flex-direction: column; }
+  .searchDetailLeft { flex: none; }
+  .searchMetricsRow { flex-wrap: wrap; }
+  .searchMetric { flex: 1 1 120px; }
 }

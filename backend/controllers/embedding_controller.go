@@ -472,18 +472,7 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 
 	elapsed := time.Since(start)
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"data": gin.H{
-			"query":           req.Query,
-			"results":         merged,
-			"count":           len(merged),
-			"search_method":   searchMethod,
-			"fallback_reason": fallbackReason,
-		},
-	})
-
-	// 异步写入搜索日志
+	// 在响应前提取所有需要的值，避免 goroutine 访问 gin.Context
 	var topSim, avgSim float32
 	if len(vectorResults) > 0 {
 		var sumSim float64
@@ -496,10 +485,21 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 		}
 		avgSim = float32(sumSim / float64(len(vectorResults)))
 	}
-
 	userID, _ := ctx.Get("user_id")
 	userIDStr, _ := userID.(string)
 
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"query":           req.Query,
+			"results":         merged,
+			"count":           len(merged),
+			"search_method":   searchMethod,
+			"fallback_reason": fallbackReason,
+		},
+	})
+
+	// 异步写入搜索日志
 	go func() {
 		searchLog := models.CMDBSearchLog{
 			Query:          strings.ToLower(strings.TrimSpace(req.Query)),
