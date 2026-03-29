@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -357,6 +358,7 @@ type VectorSearchRequest struct {
 	ResourceType string   `json:"resource_type,omitempty"`
 	WorkspaceIDs []string `json:"workspace_ids,omitempty"`
 	Limit        int      `json:"limit,omitempty"`
+	Source       string   `json:"source,omitempty"`
 }
 
 // SearchResult 搜索结果（向量搜索和关键词搜索的统一结构）
@@ -389,6 +391,8 @@ type SearchResult struct {
 // VectorSearch 混合搜索（向量搜索 + 关键词搜索并行，合并去重）
 // POST /api/cmdb/vector-search
 func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
+	start := time.Now()
+
 	var req VectorSearchRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
@@ -397,10 +401,14 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	if req.Limit <= 0 || req.Limit > 100 {
 		req.Limit = 50
 	}
+	if req.Source == "" {
+		req.Source = "manual"
+	}
 
 	var vectorResults, keywordResults []SearchResult
 	var vectorErr, keywordErr error
 	searchMethod := "hybrid"
+	fallbackReason := ""
 
 	var wg sync.WaitGroup
 
@@ -412,6 +420,8 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 			defer wg.Done()
 			vectorResults, vectorErr = c.doVectorSearch(req)
 		}()
+	} else {
+		fallbackReason = "embedding not configured"
 	}
 
 	// 并行：关键词搜索
@@ -424,7 +434,6 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	wg.Wait()
 
 	// 合并去重：向量结果优先（有 similarity score）
-	// 用 TerraformAddress 做去重 key（关键词搜索结果无 ID 字段）
 	seen := make(map[string]bool)
 	var merged []SearchResult
 
@@ -450,6 +459,9 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 
 	if vectorErr != nil || len(vectorResults) == 0 {
 		searchMethod = "keyword"
+		if vectorErr != nil && fallbackReason == "" {
+			fallbackReason = vectorErr.Error()
+		}
 	} else if keywordErr != nil || len(keywordResults) == 0 {
 		searchMethod = "vector"
 	}
@@ -458,15 +470,55 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 		merged = merged[:req.Limit]
 	}
 
+	elapsed := time.Since(start)
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"data": gin.H{
-			"query":         req.Query,
-			"results":       merged,
-			"count":         len(merged),
-			"search_method": searchMethod,
+			"query":           req.Query,
+			"results":         merged,
+			"count":           len(merged),
+			"search_method":   searchMethod,
+			"fallback_reason": fallbackReason,
 		},
 	})
+
+	// 异步写入搜索日志
+	var topSim, avgSim float32
+	if len(vectorResults) > 0 {
+		var sumSim float64
+		for _, r := range vectorResults {
+			sim := float32(r.Similarity)
+			if sim > topSim {
+				topSim = sim
+			}
+			sumSim += r.Similarity
+		}
+		avgSim = float32(sumSim / float64(len(vectorResults)))
+	}
+
+	userID, _ := ctx.Get("user_id")
+	userIDStr, _ := userID.(string)
+
+	go func() {
+		searchLog := models.CMDBSearchLog{
+			Query:          strings.ToLower(strings.TrimSpace(req.Query)),
+			ResourceType:   req.ResourceType,
+			SearchMethod:   searchMethod,
+			Source:         req.Source,
+			TotalCount:     len(merged),
+			VectorCount:    len(vectorResults),
+			KeywordCount:   len(keywordResults),
+			TopSimilarity:  topSim,
+			AvgSimilarity:  avgSim,
+			DurationMs:     int(elapsed.Milliseconds()),
+			FallbackReason: fallbackReason,
+			UserID:         userIDStr,
+		}
+		if err := c.db.Create(&searchLog).Error; err != nil {
+			log.Printf("[SearchLog] write failed: %v", err)
+		}
+	}()
 }
 
 // doVectorSearch 执行向量搜索
