@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Table, Tag, Tabs, Segmented, Spin, Empty, Tooltip } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import SkillDetailTab from './SkillDetailTab';
+import SummaryQualityTab from './SummaryQualityTab';
 import type { ColumnsType } from 'antd/es/table';
 import { useSearchParams } from 'react-router-dom';
 import { getAssessmentOverview, AssessmentOverview, CapabilityStats, RecentFailure, DailyTrendItem } from '../../services/skillAssessment';
@@ -268,6 +269,7 @@ const SkillQualityDashboard: React.FC = () => {
           items={[
             { key: 'overview', label: '全局概览', children: null },
             { key: 'detail', label: 'Skill 详情', children: null },
+            { key: 'summary', label: '摘要质量', children: null },
           ]}
           style={{ marginBottom: 0, flex: 1 }}
         />
@@ -279,7 +281,9 @@ const SkillQualityDashboard: React.FC = () => {
         />
       </div>
 
-      {activeSubTab === 'detail' ? (
+      {activeSubTab === 'summary' ? (
+        <SummaryQualityTab days={days} />
+      ) : activeSubTab === 'detail' ? (
         <SkillDetailTab days={days} />
       ) : !data && loading ? (
         <div style={{ textAlign: 'center', padding: '80px 0' }}><Spin size="large" /></div>
