@@ -185,6 +185,27 @@ export interface VectorSearchResponse {
   fallback_reason?: string;
 }
 
+// 搜索召回质量分析
+export interface CMDBSearchAnalytics {
+  period: string;
+  usage: {
+    total_searches: number;
+    zero_result_count: number;
+    zero_result_rate: number;
+    avg_result_count: number;
+    unique_queries: number;
+  };
+  quality: {
+    method_distribution: Record<string, number>;
+    avg_top_similarity: number;
+    avg_similarity: number;
+    fallback_rate: number;
+    avg_duration_ms: number;
+  };
+  top_queries: { query: string; count: number; avg_results: number }[];
+  zero_result_queries: { query: string; count: number; last_at: string }[];
+}
+
 // CMDB API服务
 export const cmdbService = {
   // 获取 CMDB 观测面板数据
@@ -195,6 +216,11 @@ export const cmdbService = {
   // 获取同步历史（分页）
   getSyncHistory: async (page: number = 1, size: number = 10): Promise<CMDBSyncHistoryResponse> => {
     return api.get(`/cmdb/sync-history?page=${page}&size=${size}`);
+  },
+
+  // 获取搜索召回质量分析
+  getSearchAnalytics: async (period: string = '7d'): Promise<CMDBSearchAnalytics> => {
+    return api.get(`/cmdb/search-analytics?period=${period}`);
   },
 
   // 搜索资源（关键字搜索）
@@ -222,6 +248,7 @@ export const cmdbService = {
       workspace_ids?: string[];
       resource_type?: string;
       limit?: number;
+      source?: 'manual' | 'auto';
     }
   ): Promise<VectorSearchResponse> => {
     // 注意：vector-search 在 /ai 路由组下
@@ -230,6 +257,7 @@ export const cmdbService = {
       workspace_ids: options?.workspace_ids,
       resource_type: options?.resource_type,
       limit: options?.limit || 50,
+      source: options?.source || 'manual',
     });
     // 后端返回 {code: 200, data: {...}}
     return response.data || response;
