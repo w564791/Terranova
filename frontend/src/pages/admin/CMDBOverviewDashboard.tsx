@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Spin, Pagination } from 'antd';
-import { cmdbService, CMDBOverview, CMDBRecentSync } from '../../services/cmdb';
+import { cmdbService, CMDBOverview, CMDBRecentSync, CMDBSearchAnalytics } from '../../services/cmdb';
 import styles from './CMDBOverviewDashboard.module.css';
 
 const CMDBOverviewDashboard: React.FC = () => {
@@ -13,6 +13,11 @@ const CMDBOverviewDashboard: React.FC = () => {
   const [syncPage, setSyncPage] = useState(1);
   const [syncLoading, setSyncLoading] = useState(false);
   const syncSize = 10;
+
+  // 搜索分析状态
+  const [searchAnalytics, setSearchAnalytics] = useState<CMDBSearchAnalytics | null>(null);
+  const [searchAnalyticsLoading, setSearchAnalyticsLoading] = useState(false);
+  const [searchPeriod, setSearchPeriod] = useState<'24h' | '7d' | '30d'>('7d');
 
   useEffect(() => {
     loadData();
@@ -46,6 +51,45 @@ const CMDBOverviewDashboard: React.FC = () => {
       setSyncLoading(false);
     }
   };
+
+  const loadSearchAnalytics = async (period: string) => {
+    try {
+      setSearchAnalyticsLoading(true);
+      const data = await cmdbService.getSearchAnalytics(period);
+      setSearchAnalytics(data);
+    } catch (err) {
+      console.error('Failed to load search analytics:', err);
+    } finally {
+      setSearchAnalyticsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSearchAnalytics(searchPeriod);
+  }, [searchPeriod]);
+
+  // 词云数据：随机打乱 + 字体映射
+  const wordCloudItems = useMemo(() => {
+    if (!searchAnalytics?.top_queries?.length) return [];
+    const queries = [...searchAnalytics.top_queries];
+    const maxCount = Math.max(...queries.map(q => q.count));
+    const minCount = Math.min(...queries.map(q => q.count));
+    const colors = ['#1677ff','#597ef7','#85a5ff','#9333ea','#f759ab','#fa8c16','#52c41a','#13c2c2','#ff4d4f','#faad14'];
+    const rotations = [-5, 0, 0, 0, 5];
+    // 随机打乱
+    for (let i = queries.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [queries[i], queries[j]] = [queries[j], queries[i]];
+    }
+    return queries.map((q, i) => ({
+      text: q.query,
+      count: q.count,
+      avgResults: q.avg_results,
+      fontSize: maxCount === minCount ? 20 : 14 + (q.count - minCount) / (maxCount - minCount) * 34,
+      color: colors[i % colors.length],
+      rotation: rotations[i % rotations.length],
+    }));
+  }, [searchAnalytics?.top_queries]);
 
   if (loading) return <Spin style={{ display: 'block', margin: '80px auto' }} />;
   if (!data) return <div className={styles.emptyHint}>暂无数据</div>;
@@ -121,6 +165,118 @@ const CMDBOverviewDashboard: React.FC = () => {
             />
           </div>
         </div>
+      </div>
+
+      {/* Row: Search Analytics */}
+      <div className={styles.card}>
+        <div className={styles.searchAnalyticsHeader}>
+          <div className={styles.cardLabel}>搜索召回质量</div>
+          <div className={styles.periodButtons}>
+            {(['24h', '7d', '30d'] as const).map(p => (
+              <button
+                key={p}
+                className={`${styles.periodButton} ${searchPeriod === p ? styles.periodButtonActive : ''}`}
+                onClick={() => setSearchPeriod(p)}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {searchAnalyticsLoading ? (
+          <Spin style={{ display: 'block', margin: '24px auto' }} />
+        ) : !searchAnalytics || searchAnalytics.usage.total_searches === 0 ? (
+          <div className={styles.emptyHint}>暂无搜索记录</div>
+        ) : (
+          <>
+            {/* 指标卡片行 */}
+            <div className={styles.searchMetricsRow}>
+              <div className={styles.searchMetric}>
+                <div className={styles.searchMetricValue}>{searchAnalytics.usage.total_searches}</div>
+                <div className={styles.searchMetricLabel}>搜索次数</div>
+              </div>
+              <div className={styles.searchMetric}>
+                <div className={styles.searchMetricValue} style={{ color: searchAnalytics.usage.zero_result_rate > 20 ? '#ff4d4f' : undefined }}>
+                  {searchAnalytics.usage.zero_result_rate.toFixed(1)}%
+                </div>
+                <div className={styles.searchMetricLabel}>零结果率</div>
+              </div>
+              <div className={styles.searchMetric}>
+                <div className={styles.searchMetricValue}>{searchAnalytics.usage.avg_result_count.toFixed(1)}</div>
+                <div className={styles.searchMetricLabel}>平均结果数</div>
+              </div>
+              <div className={styles.searchMetric}>
+                <div className={styles.searchMetricValue}>{searchAnalytics.quality.avg_duration_ms.toFixed(0)}ms</div>
+                <div className={styles.searchMetricLabel}>平均耗时</div>
+              </div>
+              <div className={styles.searchMetric}>
+                <div className={styles.searchMetricValue} style={{ color: searchAnalytics.quality.fallback_rate > 30 ? '#ff4d4f' : undefined }}>
+                  {searchAnalytics.quality.fallback_rate.toFixed(1)}%
+                </div>
+                <div className={styles.searchMetricLabel}>Fallback 率</div>
+              </div>
+            </div>
+
+            {/* 下半部分：方法分布 + 零结果 | 词云 */}
+            <div className={styles.searchDetailRow}>
+              <div className={styles.searchDetailLeft}>
+                {/* 搜索方式分布 */}
+                <div className={styles.searchSubSection}>
+                  <div className={styles.searchSubTitle}>搜索方式分布</div>
+                  {Object.entries(searchAnalytics.quality.method_distribution).map(([method, count]) => {
+                    const total = searchAnalytics.usage.total_searches;
+                    const pct = total > 0 ? (count as number) / total * 100 : 0;
+                    const barColors: Record<string, string> = { hybrid: '#1677ff', vector: '#52c41a', keyword: '#fa8c16' };
+                    return (
+                      <div key={method} className={styles.methodBarRow}>
+                        <span className={styles.methodBarLabel}>{method}</span>
+                        <div className={styles.methodBarTrack}>
+                          <div className={styles.methodBarFill} style={{ width: `${pct}%`, background: barColors[method] || '#999' }} />
+                        </div>
+                        <span className={styles.methodBarCount}>{count as number}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 零结果查询 */}
+                {searchAnalytics.zero_result_queries.length > 0 && (
+                  <div className={styles.searchSubSection}>
+                    <div className={styles.searchSubTitle}>零结果查询 Top 5</div>
+                    {searchAnalytics.zero_result_queries.slice(0, 5).map((q, i) => (
+                      <div key={i} className={styles.zeroResultItem}>
+                        <span className={styles.zeroResultQuery}>{q.query}</span>
+                        <span className={styles.zeroResultCount}>{q.count}次</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 词云 */}
+              <div className={styles.searchDetailRight}>
+                <div className={styles.searchSubTitle}>热门查询</div>
+                <div className={styles.wordCloud}>
+                  {wordCloudItems.map((item, i) => (
+                    <span
+                      key={i}
+                      className={styles.wordCloudItem}
+                      style={{
+                        fontSize: `${item.fontSize}px`,
+                        color: item.color,
+                        transform: `rotate(${item.rotation}deg)`,
+                      }}
+                      title={`${item.text} (${item.count}次搜索, 平均${item.avgResults.toFixed(1)}条结果)`}
+                    >
+                      {item.text}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Row 3: Task Queues + Resource Type Top 10 */}

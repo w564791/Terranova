@@ -224,6 +224,181 @@
   padding: 24px 0;
 }
 
+/* Search Analytics */
+.searchAnalyticsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.periodButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.periodButton {
+  padding: 2px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.periodButton:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.periodButtonActive {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #fff;
+}
+
+.periodButtonActive:hover {
+  background: #4096ff;
+  border-color: #4096ff;
+  color: #fff;
+}
+
+.searchMetricsRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.searchMetric {
+  flex: 1;
+  text-align: center;
+  padding: 12px 8px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.searchMetricValue {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.searchMetricLabel {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.searchDetailRow {
+  display: flex;
+  gap: 20px;
+}
+
+.searchDetailLeft {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.searchDetailRight {
+  flex: 1;
+  min-width: 0;
+}
+
+.searchSubSection {
+}
+
+.searchSubTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.methodBarRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.methodBarLabel {
+  font-size: 12px;
+  color: #666;
+  width: 56px;
+  text-align: right;
+}
+
+.methodBarTrack {
+  flex: 1;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.methodBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.methodBarCount {
+  font-size: 12px;
+  color: #999;
+  width: 36px;
+  text-align: right;
+}
+
+.zeroResultItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.zeroResultQuery {
+  color: #ff4d4f;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.zeroResultCount {
+  color: #999;
+  flex-shrink: 0;
+}
+
+/* Word Cloud */
+.wordCloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  min-height: 160px;
+  padding: 12px;
+}
+
+.wordCloudItem {
+  display: inline-block;
+  cursor: default;
+  transition: opacity 0.2s;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.wordCloudItem:hover {
+  opacity: 0.7;
+}
+
 @media (max-width: 1200px) {
   .row3 { grid-template-columns: 1fr 1fr; }
   .rowQueueType { grid-template-columns: 1fr 1fr; }
