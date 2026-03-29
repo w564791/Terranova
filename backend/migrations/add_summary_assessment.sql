@@ -2,6 +2,10 @@
 -- Extends skill_assessment_results for summary evaluation
 -- Extends resource_index with assessment tracking
 
+-- 0. Allow NULL usage_log_id (summary assessments have no usage log)
+ALTER TABLE skill_assessment_results DROP CONSTRAINT IF EXISTS skill_assessment_results_usage_log_id_fkey;
+ALTER TABLE skill_assessment_results ALTER COLUMN usage_log_id DROP NOT NULL;
+
 -- 1. Extend skill_assessment_results table
 ALTER TABLE skill_assessment_results
 ADD COLUMN IF NOT EXISTS source_type VARCHAR(16) DEFAULT 'skill';

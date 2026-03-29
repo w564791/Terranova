@@ -4696,7 +4696,7 @@ COMMENT ON COLUMN public.skill_usage_logs.assessment_status IS '评估状态：p
 
 CREATE TABLE public.skill_assessment_results (
     id character varying(36) NOT NULL,
-    usage_log_id character varying(36) NOT NULL,
+    usage_log_id character varying(36),
     skill_name character varying(128) NOT NULL,
     skill_content_hash character varying(64) NOT NULL,
     assessed_at timestamp with time zone DEFAULT now(),
@@ -11094,10 +11094,8 @@ ALTER TABLE ONLY public.skill_assessment_results
 
 --
 -- Name: skill_assessment_results skill_assessment_results_usage_log_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Removed: summary assessments have no usage_log_id
 --
-
-ALTER TABLE ONLY public.skill_assessment_results
-    ADD CONSTRAINT skill_assessment_results_usage_log_id_fkey FOREIGN KEY (usage_log_id) REFERENCES public.skill_usage_logs(id);
 
 
 --
