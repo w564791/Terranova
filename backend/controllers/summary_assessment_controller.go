@@ -303,3 +303,125 @@ func (c *SummaryAssessmentController) getByResourceType(since time.Time) []Resou
 	}
 	return out
 }
+
+// IssueResource 问题资源详情
+type IssueResource struct {
+	ResourceID      uint   `json:"resource_id"`
+	ResourceType    string `json:"resource_type"`
+	ResourceName    string `json:"resource_name"`
+	ResourceSummary string `json:"resource_summary"`
+	Verdict         string `json:"verdict"`
+	Score           int    `json:"score"`
+	Details         string `json:"details"` // 具体问题内容
+}
+
+// GetIssueResources 查询指定问题类型的受影响资源
+// GET /admin/summary-assessment/issue-resources?type=over_length&days=7
+// type: format violation type (over_length, markdown_syntax, first_line_format, empty_summary)
+//       or "hallucination" or "security_miss" or "security_miss:{rule_name}"
+func (c *SummaryAssessmentController) GetIssueResources(ctx *gin.Context) {
+	issueType := ctx.Query("type")
+	if issueType == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "type parameter required"})
+		return
+	}
+	days, _ := strconv.Atoi(ctx.DefaultQuery("days", "7"))
+	if days < 1 || days > 365 {
+		days = 7
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	var assessments []models.SkillAssessmentResult
+	baseQuery := c.db.Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ?", "summary", "schema", since)
+
+	switch {
+	case issueType == "hallucination":
+		baseQuery = baseQuery.Where("hallucination_suspects IS NOT NULL AND hallucination_suspects != '{}'")
+	case issueType == "security_miss":
+		baseQuery = baseQuery.Where("security_tag_misses IS NOT NULL AND security_tag_misses != 'null' AND security_tag_misses != '[]'")
+	case len(issueType) > 14 && issueType[:14] == "security_miss:":
+		// security_miss:公网暴露 — filter by specific rule name
+		ruleName := issueType[14:]
+		baseQuery = baseQuery.Where("security_tag_misses::text LIKE ?", "%"+ruleName+"%")
+	default:
+		// format violation type: over_length, markdown_syntax, first_line_format, empty_summary
+		baseQuery = baseQuery.Where("format_violations::text LIKE ?", "%"+issueType+"%")
+	}
+
+	baseQuery.Select("resource_id, skill_name, verdict, score, format_violations, security_tag_misses, hallucination_suspects").
+		Order("assessed_at DESC").
+		Limit(100).
+		Find(&assessments)
+
+	// Collect resource IDs
+	resourceIDs := make([]uint, 0, len(assessments))
+	for _, a := range assessments {
+		if a.ResourceID != nil {
+			resourceIDs = append(resourceIDs, *a.ResourceID)
+		}
+	}
+
+	// Batch fetch resource details
+	resourceMap := make(map[uint]models.ResourceIndex)
+	if len(resourceIDs) > 0 {
+		var resources []models.ResourceIndex
+		c.db.Where("id IN ?", resourceIDs).
+			Select("id, resource_type, resource_name, resource_summary, terraform_address").
+			Find(&resources)
+		for _, r := range resources {
+			resourceMap[r.ID] = r
+		}
+	}
+
+	// Build response
+	var result []IssueResource
+	for _, a := range assessments {
+		if a.ResourceID == nil {
+			continue
+		}
+		r := resourceMap[*a.ResourceID]
+		name := r.ResourceName
+		if name == "" {
+			name = r.TerraformAddress
+		}
+
+		// Build details string based on issue type
+		details := ""
+		switch {
+		case issueType == "hallucination":
+			details = formatTextArray(a.HallucinationSuspects)
+		case issueType == "security_miss" || (len(issueType) > 14 && issueType[:14] == "security_miss:"):
+			if a.SecurityTagMisses != nil {
+				details = string(*a.SecurityTagMisses)
+			}
+		default:
+			details = formatTextArray(a.FormatViolations)
+		}
+
+		result = append(result, IssueResource{
+			ResourceID:      *a.ResourceID,
+			ResourceType:    a.SkillName,
+			ResourceName:    name,
+			ResourceSummary: r.ResourceSummary,
+			Verdict:         string(a.Verdict),
+			Score:           int(a.Score),
+			Details:         details,
+		})
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func formatTextArray(arr models.TextArray) string {
+	if len(arr) == 0 {
+		return ""
+	}
+	result := ""
+	for i, s := range arr {
+		if i > 0 {
+			result += ", "
+		}
+		result += s
+	}
+	return result
+}

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Spin, Empty, Table, Tooltip } from 'antd';
+import { Spin, Empty, Table, Tooltip, Drawer, Tag } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   getSummaryAssessmentOverview,
+  getIssueResources,
   SummaryAssessmentOverview,
   ResourceTypeStats,
+  IssueResource,
 } from '../../services/summaryAssessment';
 import styles from './SkillQualityDashboard.module.css';
 
@@ -25,6 +27,10 @@ interface Props {
 const SummaryQualityTab: React.FC<Props> = ({ days }) => {
   const [data, setData] = useState<SummaryAssessmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTitle, setDrawerTitle] = useState('');
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [issueResources, setIssueResources] = useState<IssueResource[]>([]);
 
   useEffect(() => {
     loadData();
@@ -39,6 +45,21 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
       console.error('Failed to load summary assessment data:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openIssueDrawer = async (issueType: string, title: string) => {
+    setDrawerTitle(title);
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    try {
+      const resources = await getIssueResources(issueType, days);
+      setIssueResources(resources || []);
+    } catch (e) {
+      console.error('Failed to load issue resources:', e);
+      setIssueResources([]);
+    } finally {
+      setDrawerLoading(false);
     }
   };
 
@@ -181,8 +202,8 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
             issue_distribution.security_tag_misses > 0) ? (
             <>
               {(issue_distribution.format_violations || []).map((v) => (
-                <div key={v.type} className={styles.hbarRow}>
-                  <span className={styles.hbarLabel}>{formatLabel(v.type)}</span>
+                <div key={v.type} className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer(v.type, formatLabel(v.type))}>
+                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>{formatLabel(v.type)}</span>
                   <div className={styles.hbarTrack}>
                     <div className={styles.hbarFill} style={{ width: `${Math.min(100, v.count * 10)}%`, background: '#ff4d4f' }} />
                   </div>
@@ -190,8 +211,8 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
                 </div>
               ))}
               {issue_distribution.hallucination_suspects > 0 && (
-                <div className={styles.hbarRow}>
-                  <span className={styles.hbarLabel}>疑似幻觉</span>
+                <div className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer('hallucination', '疑似幻觉')}>
+                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>疑似幻觉</span>
                   <div className={styles.hbarTrack}>
                     <div className={styles.hbarFill} style={{ width: `${Math.min(100, issue_distribution.hallucination_suspects * 10)}%`, background: '#fa8c16' }} />
                   </div>
@@ -199,8 +220,8 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
                 </div>
               )}
               {issue_distribution.security_tag_misses > 0 && (
-                <div className={styles.hbarRow}>
-                  <span className={styles.hbarLabel}>安全标注缺失</span>
+                <div className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer('security_miss', '安全标注缺失')}>
+                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>安全标注缺失</span>
                   <div className={styles.hbarTrack}>
                     <div className={styles.hbarFill} style={{ width: `${Math.min(100, issue_distribution.security_tag_misses * 10)}%`, background: '#ff4d4f' }} />
                   </div>
@@ -208,8 +229,8 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
                 </div>
               )}
               {(security_tag_stats.misses_by_rule || []).map((m) => (
-                <div key={m.rule} className={styles.hbarRow}>
-                  <span className={styles.hbarLabel}>缺失: {m.rule}</span>
+                <div key={m.rule} className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer(`security_miss:${m.rule}`, `缺失: ${m.rule}`)}>
+                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>缺失: {m.rule}</span>
                   <div className={styles.hbarTrack}>
                     <div className={styles.hbarFill} style={{ width: `${Math.min(100, m.miss_count * 10)}%`, background: '#cf1322' }} />
                   </div>
@@ -236,6 +257,63 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
           rowKey="resource_type"
         />
       </div>
+      <Drawer
+        title={`问题资源: ${drawerTitle}`}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        width={720}
+      >
+        <Spin spinning={drawerLoading}>
+          {issueResources.length === 0 && !drawerLoading ? (
+            <Empty description="无相关资源" />
+          ) : (
+            <Table
+              dataSource={issueResources}
+              rowKey="resource_id"
+              size="small"
+              pagination={{ pageSize: 20 }}
+              columns={[
+                {
+                  title: '资源',
+                  key: 'resource',
+                  width: 200,
+                  render: (_: unknown, r: IssueResource) => (
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{r.resource_name || `#${r.resource_id}`}</div>
+                      <div style={{ fontSize: 11, color: '#8c8c8c' }}>{r.resource_type}</div>
+                    </div>
+                  ),
+                },
+                {
+                  title: '评分',
+                  dataIndex: 'score',
+                  width: 70,
+                  render: (v: number, r: IssueResource) => (
+                    <Tag color={r.verdict === 'pass' ? 'green' : r.verdict === 'fail' ? 'red' : 'orange'}>{v}</Tag>
+                  ),
+                },
+                {
+                  title: '问题详情',
+                  dataIndex: 'details',
+                  ellipsis: true,
+                  render: (v: string) => <span style={{ fontSize: 12 }}>{v}</span>,
+                },
+                {
+                  title: '摘要',
+                  dataIndex: 'resource_summary',
+                  width: 250,
+                  ellipsis: true,
+                  render: (v: string) => (
+                    <Tooltip title={v} placement="leftTop" overlayStyle={{ maxWidth: 500 }}>
+                      <span style={{ fontSize: 12 }}>{v}</span>
+                    </Tooltip>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </Spin>
+      </Drawer>
     </Spin>
   );
 };

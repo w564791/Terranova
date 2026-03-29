@@ -67,3 +67,17 @@ export interface SummaryAssessmentOverview {
 export async function getSummaryAssessmentOverview(days: number): Promise<SummaryAssessmentOverview> {
   return await api.get(`/admin/summary-assessment/overview?days=${days}`) as unknown as SummaryAssessmentOverview;
 }
+
+export interface IssueResource {
+  resource_id: number;
+  resource_type: string;
+  resource_name: string;
+  resource_summary: string;
+  verdict: string;
+  score: number;
+  details: string;
+}
+
+export async function getIssueResources(type: string, days: number): Promise<IssueResource[]> {
+  return await api.get(`/admin/summary-assessment/issue-resources?type=${encodeURIComponent(type)}&days=${days}`) as unknown as IssueResource[];
+}
