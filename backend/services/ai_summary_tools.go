@@ -125,6 +125,20 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 
 	var resources []models.ResourceIndex
 	if err := query.Limit(50).Find(&resources).Error; err != nil {
+		elapsed := time.Since(start)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:          strings.ToLower(strings.TrimSpace(resourceID)),
+				SearchMethod:   "jsonb",
+				Source:         "agent",
+				TotalCount:     0,
+				DurationMs:     int(elapsed.Milliseconds()),
+				FallbackReason: "query error: " + err.Error(),
+			}
+			if dbErr := t.db.Create(&searchLog).Error; dbErr != nil {
+				log.Printf("[SearchLog] write failed: %v", dbErr)
+			}
+		}()
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
@@ -205,6 +219,20 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	// 复用 CMDB 关键字搜索（支持模糊匹配，自动跨 workspace 含外部 CMDB）
 	results, err := t.cmdbService.SearchResources(q, "", "", 1)
 	if err != nil {
+		elapsed := time.Since(start)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:          strings.ToLower(strings.TrimSpace(q)),
+				SearchMethod:   "keyword",
+				Source:         "agent",
+				TotalCount:     0,
+				DurationMs:     int(elapsed.Milliseconds()),
+				FallbackReason: "search error: " + err.Error(),
+			}
+			if dbErr := t.db.Create(&searchLog).Error; dbErr != nil {
+				log.Printf("[SearchLog] write failed: %v", dbErr)
+			}
+		}()
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
