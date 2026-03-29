@@ -292,8 +292,9 @@ affected_resources_schema:
 ```
 1.  验证 stage == "plan"，否则返回 INVALID_STAGE_CONTEXT
 2.  解析变更资源列表（resource、action、type）
-3.  在同一轮响应中一次性发起所有需要的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止分多轮逐个调用
-4.  根据查询结果记录 direct_dependencies（禁止估算）
+3.  第一轮工具调用：一次性发起所有变更资源的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止对同类查询分多轮逐个调用
+4.  第二轮工具调用（依赖方深入查询）：如果 query_cmdb_dependencies 返回依赖方 >= 3 个，必须对依赖方抽样调用 query_resource_attributes（至少 3 个、最多 5 个），获取 resource_summary 用于具体影响描述。此步骤不可跳过。
+5.  根据查询结果记录 direct_dependencies（禁止估算）
 6.  对每个资源：
     a. 判定 impact_type（从枚举选一个）
     b. 提取 risk_factors（从枚举多选）
