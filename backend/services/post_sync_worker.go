@@ -44,6 +44,7 @@ func (w *PostSyncWorker) Start(ctx context.Context) {
 	log.Println("[PostSyncWorker] ========== 启动守护协程 ==========")
 
 	w.recoverProcessingJobs()
+	w.compensatePendingAssessments()
 	w.processPendingJobs()
 
 	ticker := time.NewTicker(2 * time.Second)
@@ -88,6 +89,43 @@ func (w *PostSyncWorker) recoverProcessingJobs() {
 		Update("status", models.PostSyncJobStatusPending)
 	if result.RowsAffected > 0 {
 		log.Printf("[PostSyncWorker] 恢复 %d 个 processing 状态的任务", result.RowsAffected)
+	}
+}
+
+// compensatePendingAssessments 启动补偿：为滞留在 pending 的摘要评估资源创建 assessment job
+func (w *PostSyncWorker) compensatePendingAssessments() {
+	// 按 external_source_id 分组，找出有 pending 评估资源但没有活跃 assessment job 的 source
+	type sourceGroup struct {
+		ExternalSourceID string
+		Count            int64
+	}
+	var groups []sourceGroup
+	w.db.Model(&models.ResourceIndex{}).
+		Select("external_source_id, COUNT(*) as count").
+		Where("summary_assessment_status = ? AND external_source_id != ''", "pending").
+		Group("external_source_id").
+		Scan(&groups)
+
+	for _, g := range groups {
+		// 检查该 source 是否已有活跃的 assessment job
+		var activeCount int64
+		w.db.Model(&models.PostSyncJob{}).
+			Where("source_id = ? AND job_type = ? AND status IN ?", g.ExternalSourceID,
+				models.PostSyncJobTypeSummaryAssessment,
+				[]string{models.PostSyncJobStatusPending, models.PostSyncJobStatusProcessing}).
+			Count(&activeCount)
+
+		if activeCount == 0 {
+			job := models.PostSyncJob{
+				SourceID:  g.ExternalSourceID,
+				JobType:   models.PostSyncJobTypeSummaryAssessment,
+				Status:    models.PostSyncJobStatusPending,
+				CreatedAt: time.Now(),
+			}
+			w.db.Create(&job)
+			log.Printf("[PostSyncWorker] 补偿：source %s 有 %d 条待评估资源，创建 assessment job %d",
+				g.ExternalSourceID, g.Count, job.ID)
+		}
 	}
 }
 
