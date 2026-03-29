@@ -156,6 +156,8 @@ func (w *PostSyncWorker) processJob(job models.PostSyncJob) {
 		err = w.executeSummaryJob(job)
 	case models.PostSyncJobTypeEmbedding:
 		err = w.executeEmbeddingJob(job)
+	case models.PostSyncJobTypeSummaryAssessment:
+		err = w.executeSummaryAssessmentJob(job)
 	default:
 		err = fmt.Errorf("unknown job type: %s", job.JobType)
 	}
@@ -195,6 +197,10 @@ func (w *PostSyncWorker) processJob(job models.PostSyncJob) {
 			"status":       models.PostSyncJobStatusCompleted,
 			"completed_at": completedAt,
 		})
+		// 旁路：summary job 完成后 enqueue assessment job
+		if job.JobType == models.PostSyncJobTypeSummary {
+			w.enqueueSummaryAssessment(job)
+		}
 	}
 }
 
@@ -294,6 +300,35 @@ func (w *PostSyncWorker) executeEmbeddingJob(job models.PostSyncJob) error {
 
 	if successCount == 0 && len(resources) > 0 {
 		return fmt.Errorf("all %d embedding generations failed", len(resources))
+	}
+	return nil
+}
+
+// enqueueSummaryAssessment 旁路创建摘要评估 job（不阻塞 embedding 链）
+func (w *PostSyncWorker) enqueueSummaryAssessment(summaryJob models.PostSyncJob) {
+	assessmentJob := models.PostSyncJob{
+		SourceID:  summaryJob.SourceID,
+		JobType:   models.PostSyncJobTypeSummaryAssessment,
+		Status:    models.PostSyncJobStatusPending,
+		DependsOn: &summaryJob.ID,
+		CreatedAt: time.Now(),
+	}
+	if err := w.db.Create(&assessmentJob).Error; err != nil {
+		log.Printf("[PostSyncWorker] 创建 summary_assessment job 失败: %v", err)
+		return
+	}
+	log.Printf("[PostSyncWorker] source %s 入队 summary_assessment job %d (依赖 summary job %d)",
+		summaryJob.SourceID, assessmentJob.ID, summaryJob.ID)
+}
+
+// executeSummaryAssessmentJob 执行摘要质量评估
+func (w *PostSyncWorker) executeSummaryAssessmentJob(job models.PostSyncJob) error {
+	ctx, cancel := context.WithTimeout(w.ctx, 10*time.Minute)
+	defer cancel()
+
+	assessmentService := NewSummaryAssessmentService(w.db)
+	if err := assessmentService.AssessSource(ctx, job.SourceID); err != nil {
+		return fmt.Errorf("summary assessment failed: %w", err)
 	}
 	return nil
 }
