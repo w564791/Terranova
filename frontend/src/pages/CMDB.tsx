@@ -1077,13 +1077,13 @@ const CMDB: React.FC = () => {
     if (value.trim().length >= 2) {
       autoSearchTimerRef.current = setTimeout(() => {
         // 自动触发搜索
-        performSearch(value);
+        performSearch(value, 'auto');
       }, 600);
     }
   };
 
   // Perform search (extracted for reuse)
-  const performSearch = async (query: string) => {
+  const performSearch = async (query: string, source: 'manual' | 'auto' = 'manual') => {
     if (!query.trim()) return;
 
     // Update URL with search params
@@ -1106,6 +1106,7 @@ const CMDB: React.FC = () => {
       const response = await cmdbService.vectorSearch(query, {
         resource_type: searchResourceType || undefined,
         limit: 50,
+        source,
       });
       setSearchResults(response.results || []);
       setActualSearchMethod(response.search_method);
