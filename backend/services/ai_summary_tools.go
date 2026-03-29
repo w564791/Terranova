@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"iac-platform/internal/models"
 	"log"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -103,6 +105,7 @@ func (t *QueryCMDBDependenciesTool) InputSchema() map[string]interface{} {
 }
 
 func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	start := time.Now()
 	resourceID, _ := params["resource_id"].(string)
 	depField, _ := params["dependency_field"].(string)
 
@@ -142,7 +145,24 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 		})
 	}
 
-	log.Printf("[QueryCMDBDependencies] resource=%s field=%s found=%d", resourceID, depField, len(result))
+	elapsed := time.Since(start)
+	log.Printf("[QueryCMDBDependencies] resource=%s field=%s found=%d elapsed=%dms", resourceID, depField, len(result), elapsed.Milliseconds())
+
+	// 异步写入搜索日志
+	go func() {
+		searchLog := models.CMDBSearchLog{
+			Query:        strings.ToLower(strings.TrimSpace(resourceID)),
+			ResourceType: depField,
+			SearchMethod: "jsonb",
+			Source:       "agent",
+			TotalCount:   len(result),
+			DurationMs:   int(elapsed.Milliseconds()),
+		}
+		if err := t.db.Create(&searchLog).Error; err != nil {
+			log.Printf("[SearchLog] write failed: %v", err)
+		}
+	}()
+
 	return map[string]interface{}{
 		"resource_id":      resourceID,
 		"dependency_field": depField,
@@ -176,6 +196,7 @@ func (t *QueryResourceAttributesTool) InputSchema() map[string]interface{} {
 }
 
 func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	start := time.Now()
 	q, _ := params["query"].(string)
 	if q == "" {
 		return nil, fmt.Errorf("query is required")
@@ -188,6 +209,21 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	}
 
 	if len(results) == 0 {
+		// 记录零结果搜索日志
+		elapsed := time.Since(start)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:        strings.ToLower(strings.TrimSpace(q)),
+				SearchMethod: "keyword",
+				Source:       "agent",
+				TotalCount:   0,
+				KeywordCount: 0,
+				DurationMs:   int(elapsed.Milliseconds()),
+			}
+			if err := t.db.Create(&searchLog).Error; err != nil {
+				log.Printf("[SearchLog] write failed: %v", err)
+			}
+		}()
 		return map[string]interface{}{"found": false, "message": "resource not found", "query": q}, nil
 	}
 
@@ -216,7 +252,25 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 		json.Unmarshal(resource.Tags, &tags)
 	}
 
-	log.Printf("[QueryResourceAttributes] query=%s found=%s workspace=%s", q, resource.CloudResourceID, resource.WorkspaceID)
+	elapsed := time.Since(start)
+	log.Printf("[QueryResourceAttributes] query=%s found=%s workspace=%s elapsed=%dms", q, resource.CloudResourceID, resource.WorkspaceID, elapsed.Milliseconds())
+
+	// 异步写入搜索日志
+	go func() {
+		searchLog := models.CMDBSearchLog{
+			Query:        strings.ToLower(strings.TrimSpace(q)),
+			ResourceType: resource.ResourceType,
+			SearchMethod: "keyword",
+			Source:       "agent",
+			TotalCount:   1,
+			KeywordCount: 1,
+			DurationMs:   int(elapsed.Milliseconds()),
+		}
+		if err := t.db.Create(&searchLog).Error; err != nil {
+			log.Printf("[SearchLog] write failed: %v", err)
+		}
+	}()
+
 	return map[string]interface{}{
 		"found":              true,
 		"workspace_id":       resource.WorkspaceID,
