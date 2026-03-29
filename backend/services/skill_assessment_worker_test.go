@@ -71,7 +71,12 @@ func setupAssessmentTestDB(t *testing.T) *gorm.DB {
 			quality_issues TEXT,
 			assessment_confidence TEXT,
 			assessment_model TEXT,
-			assessment_raw_output TEXT
+			assessment_raw_output TEXT,
+			source_type TEXT DEFAULT 'skill',
+			resource_id INTEGER,
+			format_violations TEXT,
+			security_tag_misses TEXT,
+			hallucination_suspects TEXT
 		)
 	`).Error
 	require.NoError(t, err)

@@ -117,7 +117,7 @@ func (a TextArray) Value() (driver.Value, error) {
 // SkillAssessmentResult Skill 评估结果模型
 type SkillAssessmentResult struct {
 	ID                     string             `gorm:"primaryKey;type:varchar(36)" json:"id"`
-	UsageLogID             string             `gorm:"type:varchar(36)" json:"usage_log_id"`
+	UsageLogID             *string            `gorm:"type:varchar(36)" json:"usage_log_id,omitempty"`
 	SkillName              string             `gorm:"type:varchar(128);not null" json:"skill_name"`
 	SkillContentHash       string             `gorm:"type:varchar(64);not null" json:"skill_content_hash"`
 	AssessedAt             time.Time          `gorm:"type:timestamptz;default:CURRENT_TIMESTAMP" json:"assessed_at"`

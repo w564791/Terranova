@@ -230,7 +230,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 
 	schemaResult := models.SkillAssessmentResult{
 		ID:                  uuid.New().String(),
-		UsageLogID:          usageLogID,
+		UsageLogID:          &usageLogID,
 		SkillName:           skillName,
 		SkillContentHash:    usageLog.SkillContentHash,
 		AssessedAt:          time.Now(),
@@ -267,7 +267,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 				ruleViolations := ruleResult.RuleViolations
 				ruleAssessment := models.SkillAssessmentResult{
 					ID:                   uuid.New().String(),
-					UsageLogID:           usageLogID,
+					UsageLogID:           &usageLogID,
 					SkillName:            skillName,
 					SkillContentHash:     usageLog.SkillContentHash,
 					AssessedAt:           time.Now(),
@@ -297,7 +297,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 				qualityIssues := semanticResult.QualityIssues
 				semanticAssessment := models.SkillAssessmentResult{
 					ID:                   uuid.New().String(),
-					UsageLogID:           usageLogID,
+					UsageLogID:           &usageLogID,
 					SkillName:            skillName,
 					SkillContentHash:     usageLog.SkillContentHash,
 					AssessedAt:           time.Now(),
