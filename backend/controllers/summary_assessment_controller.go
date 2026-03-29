@@ -339,16 +339,15 @@ func (c *SummaryAssessmentController) GetIssueResources(ctx *gin.Context) {
 
 	switch {
 	case issueType == "hallucination":
-		baseQuery = baseQuery.Where("hallucination_suspects IS NOT NULL AND hallucination_suspects != '{}'")
+		baseQuery = baseQuery.Where("hallucination_suspects IS NOT NULL AND array_length(hallucination_suspects, 1) > 0")
 	case issueType == "security_miss":
 		baseQuery = baseQuery.Where("security_tag_misses IS NOT NULL AND security_tag_misses != 'null' AND security_tag_misses != '[]'")
-	case len(issueType) > 14 && issueType[:14] == "security_miss:":
-		// security_miss:公网暴露 — filter by specific rule name
-		ruleName := issueType[14:]
-		baseQuery = baseQuery.Where("security_tag_misses::text LIKE ?", "%"+ruleName+"%")
+	case strings.HasPrefix(issueType, "security_miss:"):
+		ruleName := strings.TrimPrefix(issueType, "security_miss:")
+		baseQuery = baseQuery.Where("security_tag_misses::text LIKE ?", "%"+escapeLike(ruleName)+"%")
 	default:
-		// format violation type: over_length, markdown_syntax, first_line_format, empty_summary
-		baseQuery = baseQuery.Where("format_violations::text LIKE ?", "%"+issueType+"%")
+		// format violation type: use array contains
+		baseQuery = baseQuery.Where("? = ANY(format_violations)", issueType)
 	}
 
 	baseQuery.Select("resource_id, skill_name, verdict, score, format_violations, security_tag_misses, hallucination_suspects").
@@ -438,58 +437,78 @@ func (c *SummaryAssessmentController) RegenerateSummaries(ctx *gin.Context) {
 	// 1. 收集每个资源的评估问题，构建 regeneration hint
 	hints := c.buildRegenerationHints(req.ResourceIDs)
 
-	// 2. 清空 summary_hash 和评估状态，写入 hint，触发重新生成
-	for _, id := range req.ResourceIDs {
-		updates := map[string]interface{}{
-			"summary_hash":               "",
-			"summary_assessment_status":  "",
-			"summary_regeneration_hint":  hints[id],
-		}
-		c.db.Model(&models.ResourceIndex{}).Where("id = ?", id).Updates(updates)
-	}
-
-	// 3. 删除旧的评估记录
-	c.db.Where("source_type = ? AND resource_id IN ?", "summary", req.ResourceIDs).
-		Delete(&models.SkillAssessmentResult{})
-
-	affectedCount := int64(len(req.ResourceIDs))
-
-	// 4. 按 source 分组，为每个 source 创建 summary + assessment job
-	type sourceGroup struct {
-		ExternalSourceID string
-	}
-	var groups []sourceGroup
-	c.db.Model(&models.ResourceIndex{}).
-		Select("DISTINCT external_source_id").
-		Where("id IN ? AND external_source_id != ''", req.ResourceIDs).
-		Scan(&groups)
-
-	jobCount := 0
-	for _, g := range groups {
-		// 检查是否已有活跃 job
-		var activeCount int64
-		c.db.Model(&models.PostSyncJob{}).
-			Where("source_id = ? AND job_type = ? AND status IN ?", g.ExternalSourceID,
-				models.PostSyncJobTypeSummary,
-				[]string{models.PostSyncJobStatusPending, models.PostSyncJobStatusProcessing}).
-			Count(&activeCount)
-		if activeCount > 0 {
-			continue
+	// 2. 在事务中完成：清 hash + 写 hint + 删旧评估 + 建 job
+	var affectedCount int64
+	var jobCount int
+	txErr := c.db.Transaction(func(tx *gorm.DB) error {
+		// 清空 summary_hash 和评估状态，写入 hint
+		for _, id := range req.ResourceIDs {
+			hint := hints[id]
+			if len(hint) > 2000 {
+				hint = hint[:2000] + "...(truncated)"
+			}
+			result := tx.Model(&models.ResourceIndex{}).Where("id = ?", id).Updates(map[string]interface{}{
+				"summary_hash":               "",
+				"summary_assessment_status":  "",
+				"summary_regeneration_hint":  hint,
+			})
+			if result.Error != nil {
+				return result.Error
+			}
+			affectedCount += result.RowsAffected
 		}
 
-		now := time.Now()
-		summaryJob := models.PostSyncJob{
-			SourceID: g.ExternalSourceID, JobType: models.PostSyncJobTypeSummary,
-			Status: models.PostSyncJobStatusPending, CreatedAt: now,
+		// 删除旧的评估记录
+		if err := tx.Where("source_type = ? AND resource_id IN ?", "summary", req.ResourceIDs).
+			Delete(&models.SkillAssessmentResult{}).Error; err != nil {
+			return err
 		}
-		c.db.Create(&summaryJob)
 
-		assessmentJob := models.PostSyncJob{
-			SourceID: g.ExternalSourceID, JobType: models.PostSyncJobTypeSummaryAssessment,
-			Status: models.PostSyncJobStatusPending, DependsOn: &summaryJob.ID, CreatedAt: now,
+		// 按 source 分组，为每个 source 创建 summary + assessment job
+		type sourceGroup struct {
+			ExternalSourceID string
 		}
-		c.db.Create(&assessmentJob)
-		jobCount++
+		var groups []sourceGroup
+		tx.Model(&models.ResourceIndex{}).
+			Select("DISTINCT external_source_id").
+			Where("id IN ? AND external_source_id != ''", req.ResourceIDs).
+			Scan(&groups)
+
+		for _, g := range groups {
+			var activeCount int64
+			tx.Model(&models.PostSyncJob{}).
+				Where("source_id = ? AND job_type = ? AND status IN ?", g.ExternalSourceID,
+					models.PostSyncJobTypeSummary,
+					[]string{models.PostSyncJobStatusPending, models.PostSyncJobStatusProcessing}).
+				Count(&activeCount)
+			if activeCount > 0 {
+				continue
+			}
+
+			now := time.Now()
+			summaryJob := models.PostSyncJob{
+				SourceID: g.ExternalSourceID, JobType: models.PostSyncJobTypeSummary,
+				Status: models.PostSyncJobStatusPending, CreatedAt: now,
+			}
+			if err := tx.Create(&summaryJob).Error; err != nil {
+				return err
+			}
+
+			assessmentJob := models.PostSyncJob{
+				SourceID: g.ExternalSourceID, JobType: models.PostSyncJobTypeSummaryAssessment,
+				Status: models.PostSyncJobStatusPending, DependsOn: &summaryJob.ID, CreatedAt: now,
+			}
+			if err := tx.Create(&assessmentJob).Error; err != nil {
+				return err
+			}
+			jobCount++
+		}
+		return nil
+	})
+
+	if txErr != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": txErr.Error()})
+		return
 	}
 
 	log.Printf("[SummaryAssessment] 重新生成 %d 个资源的摘要，创建 %d 组 job", affectedCount, jobCount)
@@ -578,6 +597,13 @@ func (c *SummaryAssessmentController) buildRegenerationHints(resourceIDs []uint)
 	}
 
 	return hints
+}
+
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
 }
 
 func formatTextArray(arr models.TextArray) string {

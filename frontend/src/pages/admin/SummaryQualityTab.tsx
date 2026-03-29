@@ -55,6 +55,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
     setDrawerTitle(title);
     setDrawerOpen(true);
     setDrawerLoading(true);
+    setSelectedRowKeys([]);
     try {
       const resources = await getIssueResources(issueType, days);
       setIssueResources(resources || []);
