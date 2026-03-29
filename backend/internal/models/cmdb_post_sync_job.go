@@ -3,8 +3,9 @@ package models
 import "time"
 
 const (
-	PostSyncJobTypeSummary   = "summary"
-	PostSyncJobTypeEmbedding = "embedding"
+	PostSyncJobTypeSummary             = "summary"
+	PostSyncJobTypeEmbedding           = "embedding"
+	PostSyncJobTypeSummaryAssessment   = "summary_assessment"
 )
 
 const (

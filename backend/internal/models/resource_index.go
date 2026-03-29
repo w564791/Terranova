@@ -51,8 +51,9 @@ type ResourceIndex struct {
 	PrimaryKeyValue  string `gorm:"column:primary_key_value;type:varchar(500);index:idx_resource_index_primary_key" json:"primary_key_value,omitempty"`      // 主键值（用于唯一标识外部资源）
 
 	// AI 资源摘要
-	ResourceSummary string `gorm:"column:resource_summary;type:text" json:"resource_summary,omitempty"`     // AI 生成的配置摘要
-	SummaryHash     string `gorm:"column:summary_hash;type:varchar(32)" json:"summary_hash,omitempty"`      // attributes 的 MD5 hash，用于变更检测
+	ResourceSummary         string `gorm:"column:resource_summary;type:text" json:"resource_summary,omitempty"`                    // AI 生成的配置摘要
+	SummaryHash             string `gorm:"column:summary_hash;type:varchar(32)" json:"summary_hash,omitempty"`                     // attributes 的 MD5 hash，用于变更检测
+	SummaryAssessmentStatus string `gorm:"column:summary_assessment_status;type:varchar(16);default:''" json:"summary_assessment_status,omitempty"` // 摘要评估状态：空 | pending | assessed
 
 	// 向量搜索相关字段（CMDB 向量化搜索）
 	// 注意：Embedding 字段使用 gorm:"-" 忽略自动映射，因为 GORM 不支持 pgvector 类型的自动序列化/反序列化

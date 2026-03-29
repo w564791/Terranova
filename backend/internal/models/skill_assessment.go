@@ -133,6 +133,12 @@ type SkillAssessmentResult struct {
 	AssessmentConfidence   *string            `gorm:"type:varchar(16)" json:"assessment_confidence,omitempty"`
 	AssessmentModel        *string            `gorm:"type:varchar(64)" json:"assessment_model,omitempty"`
 	AssessmentRawOutput    *string            `gorm:"type:text" json:"assessment_raw_output,omitempty"`
+	// --- Summary assessment fields ---
+	SourceType             string            `gorm:"type:varchar(16);default:'skill'" json:"source_type"`
+	ResourceID             *uint             `gorm:"type:integer" json:"resource_id,omitempty"`
+	FormatViolations       TextArray         `gorm:"type:text[]" json:"format_violations,omitempty"`
+	SecurityTagMisses      *json.RawMessage  `gorm:"type:jsonb" json:"security_tag_misses,omitempty"`
+	HallucinationSuspects  TextArray         `gorm:"type:text[]" json:"hallucination_suspects,omitempty"`
 }
 
 // TableName 指定表名
