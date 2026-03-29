@@ -1,0 +1,288 @@
+package controllers
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"time"
+
+	"iac-platform/internal/models"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+type SummaryAssessmentController struct {
+	db *gorm.DB
+}
+
+func NewSummaryAssessmentController(db *gorm.DB) *SummaryAssessmentController {
+	return &SummaryAssessmentController{db: db}
+}
+
+type SummaryAssessmentOverview struct {
+	SummaryCoverage   SummaryCoverage     `json:"summary_coverage"`
+	Assessment        AssessmentStats     `json:"assessment"`
+	SecurityTagStats  SecurityTagStatsDTO `json:"security_tag_stats"`
+	IssueDistribution IssueDistribution   `json:"issue_distribution"`
+	DailyTrend        []SummaryDailyTrend `json:"daily_trend"`
+	ByResourceType    []ResourceTypeStats `json:"by_resource_type"`
+}
+
+type SummaryCoverage struct {
+	TotalResources int64   `json:"total_resources"`
+	WithSummary    int64   `json:"with_summary"`
+	CoveragePct    float64 `json:"coverage_pct"`
+}
+
+type AssessmentStats struct {
+	TotalAssessed int64   `json:"total_assessed"`
+	L1PassRate    float64 `json:"l1_pass_rate"`
+	L2AvgScore    float64 `json:"l2_avg_score"`
+	L3AvgScore    float64 `json:"l3_avg_score"`
+	L1Pass        int64   `json:"l1_pass"`
+	L1Warn        int64   `json:"l1_warn"`
+	L1Fail        int64   `json:"l1_fail"`
+}
+
+type SecurityTagStatsDTO struct {
+	TotalExpected int64          `json:"total_expected"`
+	TotalHit      int64          `json:"total_hit"`
+	HitRate       float64        `json:"hit_rate"`
+	MissesByRule  []RuleMissCount `json:"misses_by_rule"`
+}
+
+type RuleMissCount struct {
+	Rule      string `json:"rule"`
+	MissCount int64  `json:"miss_count"`
+}
+
+type IssueDistribution struct {
+	FormatViolations      []IssueCount `json:"format_violations"`
+	HallucinationSuspects int64        `json:"hallucination_suspects"`
+	SecurityTagMisses     int64        `json:"security_tag_misses"`
+}
+
+type IssueCount struct {
+	Type  string `json:"type"`
+	Count int64  `json:"count"`
+}
+
+type SummaryDailyTrend struct {
+	Date     string  `json:"date"`
+	Total    int64   `json:"total"`
+	Pass     int64   `json:"pass"`
+	Warn     int64   `json:"warn"`
+	Fail     int64   `json:"fail"`
+	PassRate float64 `json:"pass_rate"`
+}
+
+type ResourceTypeStats struct {
+	ResourceType string  `json:"resource_type"`
+	Count        int64   `json:"count"`
+	PassRate     float64 `json:"pass_rate"`
+	AvgScore     float64 `json:"avg_score"`
+}
+
+// GetOverview returns summary assessment dashboard data
+func (c *SummaryAssessmentController) GetOverview(ctx *gin.Context) {
+	days, _ := strconv.Atoi(ctx.DefaultQuery("days", "7"))
+	if days < 1 || days > 365 {
+		days = 7
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	overview := SummaryAssessmentOverview{}
+
+	// Summary Coverage
+	var totalResources, withSummary int64
+	c.db.Model(&models.ResourceIndex{}).
+		Where("resource_mode = 'managed'").
+		Count(&totalResources)
+	c.db.Model(&models.ResourceIndex{}).
+		Where("resource_mode = 'managed' AND resource_summary IS NOT NULL AND resource_summary != ''").
+		Count(&withSummary)
+
+	overview.SummaryCoverage = SummaryCoverage{
+		TotalResources: totalResources,
+		WithSummary:    withSummary,
+	}
+	if totalResources > 0 {
+		overview.SummaryCoverage.CoveragePct = float64(withSummary) / float64(totalResources) * 100
+	}
+
+	// Assessment Stats
+	var totalAssessed, l1Pass, l1Warn, l1Fail int64
+	baseWhere := "source_type = ? AND assessment_layer = ? AND assessed_at >= ?"
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where(baseWhere, "summary", "schema", since).Count(&totalAssessed)
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where(baseWhere+" AND verdict = ?", "summary", "schema", since, "pass").Count(&l1Pass)
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where(baseWhere+" AND verdict = ?", "summary", "schema", since, "warn").Count(&l1Warn)
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where(baseWhere+" AND verdict = ?", "summary", "schema", since, "fail").Count(&l1Fail)
+
+	var l2Avg, l3Avg struct{ Avg float64 }
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Select("COALESCE(AVG(score), 0) as avg").
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ?", "summary", "rule", since).Scan(&l2Avg)
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Select("COALESCE(AVG(score), 0) as avg").
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ?", "summary", "semantic", since).Scan(&l3Avg)
+
+	overview.Assessment = AssessmentStats{
+		TotalAssessed: totalAssessed, L1Pass: l1Pass, L1Warn: l1Warn, L1Fail: l1Fail,
+		L2AvgScore: l2Avg.Avg, L3AvgScore: l3Avg.Avg,
+	}
+	if totalAssessed > 0 {
+		overview.Assessment.L1PassRate = float64(l1Pass) / float64(totalAssessed) * 100
+	}
+
+	// Security Tag Stats
+	var withMisses int64
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND security_tag_misses IS NOT NULL AND security_tag_misses != 'null'",
+			"summary", "schema", since).Count(&withMisses)
+
+	overview.SecurityTagStats = SecurityTagStatsDTO{
+		TotalExpected: totalAssessed,
+		TotalHit:      totalAssessed - withMisses,
+	}
+	if totalAssessed > 0 {
+		overview.SecurityTagStats.HitRate = float64(totalAssessed-withMisses) / float64(totalAssessed) * 100
+	}
+	overview.SecurityTagStats.MissesByRule = c.getMissesByRule(since)
+
+	// Issue Distribution
+	overview.IssueDistribution = c.getIssueDistribution(since)
+
+	// Daily Trend
+	overview.DailyTrend = c.getDailyTrend(since)
+
+	// By Resource Type
+	overview.ByResourceType = c.getByResourceType(since)
+
+	ctx.JSON(http.StatusOK, overview)
+}
+
+func (c *SummaryAssessmentController) getMissesByRule(since time.Time) []RuleMissCount {
+	var results []models.SkillAssessmentResult
+	c.db.Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND security_tag_misses IS NOT NULL AND security_tag_misses != 'null'",
+		"summary", "schema", since).
+		Select("security_tag_misses").Find(&results)
+
+	counts := make(map[string]int64)
+	for _, r := range results {
+		if r.SecurityTagMisses == nil {
+			continue
+		}
+		var misses []map[string]string
+		if err := json.Unmarshal(*r.SecurityTagMisses, &misses); err != nil {
+			continue
+		}
+		for _, m := range misses {
+			counts[m["rule"]]++
+		}
+	}
+
+	var out []RuleMissCount
+	for rule, count := range counts {
+		out = append(out, RuleMissCount{Rule: rule, MissCount: count})
+	}
+	return out
+}
+
+func (c *SummaryAssessmentController) getIssueDistribution(since time.Time) IssueDistribution {
+	dist := IssueDistribution{}
+
+	var results []models.SkillAssessmentResult
+	c.db.Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND format_violations IS NOT NULL",
+		"summary", "schema", since).
+		Select("format_violations").Find(&results)
+
+	typeCounts := make(map[string]int64)
+	for _, r := range results {
+		for _, v := range r.FormatViolations {
+			typeCounts[v]++
+		}
+	}
+	for t, cnt := range typeCounts {
+		dist.FormatViolations = append(dist.FormatViolations, IssueCount{Type: t, Count: cnt})
+	}
+
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND hallucination_suspects IS NOT NULL",
+			"summary", "schema", since).Count(&dist.HallucinationSuspects)
+
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND security_tag_misses IS NOT NULL AND security_tag_misses != 'null'",
+			"summary", "schema", since).Count(&dist.SecurityTagMisses)
+
+	return dist
+}
+
+func (c *SummaryAssessmentController) getDailyTrend(since time.Time) []SummaryDailyTrend {
+	type row struct {
+		Date    string
+		Verdict string
+		Count   int64
+	}
+	var rows []row
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Select("TO_CHAR(assessed_at, 'YYYY-MM-DD') as date, verdict, COUNT(*) as count").
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ?", "summary", "schema", since).
+		Group("date, verdict").Order("date").Scan(&rows)
+
+	dayMap := make(map[string]*SummaryDailyTrend)
+	for _, r := range rows {
+		if _, ok := dayMap[r.Date]; !ok {
+			dayMap[r.Date] = &SummaryDailyTrend{Date: r.Date}
+		}
+		d := dayMap[r.Date]
+		switch r.Verdict {
+		case "pass":
+			d.Pass = r.Count
+		case "warn":
+			d.Warn = r.Count
+		case "fail":
+			d.Fail = r.Count
+		}
+		d.Total += r.Count
+	}
+
+	var out []SummaryDailyTrend
+	for _, d := range dayMap {
+		if d.Total > 0 {
+			d.PassRate = float64(d.Pass) / float64(d.Total) * 100
+		}
+		out = append(out, *d)
+	}
+	return out
+}
+
+func (c *SummaryAssessmentController) getByResourceType(since time.Time) []ResourceTypeStats {
+	type row struct {
+		SkillName string  `gorm:"column:skill_name"`
+		Count     int64
+		AvgScore  float64 `gorm:"column:avg_score"`
+		PassCount int64   `gorm:"column:pass_count"`
+	}
+	var rows []row
+	c.db.Model(&models.SkillAssessmentResult{}).
+		Select("skill_name, COUNT(*) as count, AVG(score) as avg_score, SUM(CASE WHEN verdict = 'pass' THEN 1 ELSE 0 END) as pass_count").
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ?", "summary", "schema", since).
+		Group("skill_name").Order("count DESC").Scan(&rows)
+
+	var out []ResourceTypeStats
+	for _, r := range rows {
+		passRate := float64(0)
+		if r.Count > 0 {
+			passRate = float64(r.PassCount) / float64(r.Count) * 100
+		}
+		out = append(out, ResourceTypeStats{
+			ResourceType: r.SkillName, Count: r.Count, PassRate: passRate, AvgScore: r.AvgScore,
+		})
+	}
+	return out
+}
