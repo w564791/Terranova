@@ -1386,7 +1386,7 @@ func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSu
 
 // GetSearchAnalytics 获取搜索分析聚合数据
 func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSearchAnalytics, error) {
-	// 解析时间范围
+	// 解析时间范围（白名单，防止注入）
 	var interval string
 	switch period {
 	case "24h":
@@ -1398,17 +1398,21 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 		interval = "7 days"
 	}
 
-	// 构建 source 条件
-	sourceCondition := ""
-	if source == "auto" {
-		sourceCondition = " AND source = 'auto'"
-	} else if source == "all" {
-		sourceCondition = ""
-	} else {
-		sourceCondition = " AND source = 'manual'"
-	}
+	// 构建参数化的 source 条件
+	// source 只允许 manual/auto/all，用白名单而非拼接用户输入
+	var sourceFilter string
+	var args []interface{}
+	since := fmt.Sprintf("NOW() - INTERVAL '%s'", interval) // interval 来自白名单 switch，安全
 
-	baseWhere := fmt.Sprintf("created_at >= NOW() - INTERVAL '%s'%s", interval, sourceCondition)
+	if source == "auto" {
+		sourceFilter = "created_at >= " + since + " AND source = $1"
+		args = append(args, "auto")
+	} else if source == "all" {
+		sourceFilter = "created_at >= " + since
+	} else {
+		sourceFilter = "created_at >= " + since + " AND source = $1"
+		args = append(args, "manual")
+	}
 
 	result := &models.CMDBSearchAnalytics{Period: period}
 
@@ -1419,15 +1423,15 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 		AvgResultCount  float64 `gorm:"column:avg_result_count"`
 		UniqueQueries   int64   `gorm:"column:unique_queries"`
 	}
-	if err := s.db.Raw(fmt.Sprintf(`
+	if err := s.db.Raw(`
 		SELECT
 			COUNT(*) AS total_searches,
 			COUNT(*) FILTER (WHERE total_count = 0) AS zero_result_count,
 			COALESCE(ROUND(AVG(total_count)::numeric, 1), 0) AS avg_result_count,
 			COUNT(DISTINCT query) AS unique_queries
 		FROM cmdb_search_logs
-		WHERE %s
-	`, baseWhere)).Scan(&usage).Error; err != nil {
+		WHERE `+sourceFilter,
+		args...).Scan(&usage).Error; err != nil {
 		return nil, fmt.Errorf("search analytics usage query failed: %w", err)
 	}
 
@@ -1451,7 +1455,7 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 		AvgDurationMs    float64 `gorm:"column:avg_duration_ms"`
 		FallbackCount    int64   `gorm:"column:fallback_count"`
 	}
-	if err := s.db.Raw(fmt.Sprintf(`
+	if err := s.db.Raw(`
 		SELECT
 			COUNT(*) FILTER (WHERE search_method = 'hybrid') AS method_hybrid,
 			COUNT(*) FILTER (WHERE search_method = 'vector') AS method_vector,
@@ -1461,8 +1465,8 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 			COALESCE(ROUND(AVG(duration_ms)::numeric, 0), 0) AS avg_duration_ms,
 			COUNT(*) FILTER (WHERE search_method = 'keyword' AND fallback_reason != '') AS fallback_count
 		FROM cmdb_search_logs
-		WHERE %s
-	`, baseWhere)).Scan(&quality).Error; err != nil {
+		WHERE `+sourceFilter,
+		args...).Scan(&quality).Error; err != nil {
 		return nil, fmt.Errorf("search analytics quality query failed: %w", err)
 	}
 
@@ -1482,12 +1486,12 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 
 	// 3. Top queries（Top 30，供词云使用）
 	var topQueries []models.CMDBSearchQueryStat
-	if err := s.db.Raw(fmt.Sprintf(`
+	if err := s.db.Raw(`
 		SELECT query, COUNT(*) AS count, ROUND(AVG(total_count)::numeric, 1) AS avg_results
 		FROM cmdb_search_logs
-		WHERE %s
-		GROUP BY query ORDER BY count DESC LIMIT 30
-	`, baseWhere)).Scan(&topQueries).Error; err != nil {
+		WHERE `+sourceFilter+`
+		GROUP BY query ORDER BY count DESC LIMIT 30`,
+		args...).Scan(&topQueries).Error; err != nil {
 		return nil, fmt.Errorf("search analytics top queries failed: %w", err)
 	}
 	if topQueries == nil {
@@ -1497,12 +1501,12 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 
 	// 4. Zero result queries（Top 10）
 	var zeroResultQueries []models.CMDBSearchZeroResultStat
-	if err := s.db.Raw(fmt.Sprintf(`
+	if err := s.db.Raw(`
 		SELECT query, COUNT(*) AS count, MAX(created_at) AS last_at
 		FROM cmdb_search_logs
-		WHERE %s AND total_count = 0
-		GROUP BY query ORDER BY count DESC LIMIT 10
-	`, baseWhere)).Scan(&zeroResultQueries).Error; err != nil {
+		WHERE `+sourceFilter+` AND total_count = 0
+		GROUP BY query ORDER BY count DESC LIMIT 10`,
+		args...).Scan(&zeroResultQueries).Error; err != nil {
 		return nil, fmt.Errorf("search analytics zero result queries failed: %w", err)
 	}
 	if zeroResultQueries == nil {

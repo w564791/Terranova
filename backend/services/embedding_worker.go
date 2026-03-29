@@ -126,7 +126,9 @@ func (w *EmbeddingWorker) cleanupExpiredTasks() {
 
 	// 清理 30 天前的搜索日志
 	searchLogResult := w.db.Exec("DELETE FROM cmdb_search_logs WHERE created_at < NOW() - INTERVAL '30 days'")
-	if searchLogResult.RowsAffected > 0 {
+	if searchLogResult.Error != nil {
+		log.Printf("[EmbeddingWorker] 搜索日志清理失败: %v", searchLogResult.Error)
+	} else if searchLogResult.RowsAffected > 0 {
 		log.Printf("[EmbeddingWorker] 清理 %d 条过期搜索日志（超过 30 天）", searchLogResult.RowsAffected)
 	}
 }
