@@ -63,6 +63,10 @@ type CMDBOverviewQueue struct {
 	ExtEmbeddingPending    int64 `json:"ext_embedding_pending"`
 	ExtEmbeddingProcessing int64 `json:"ext_embedding_processing"`
 	ExtEmbeddingFailed     int64 `json:"ext_embedding_failed"`
+	// 外部源摘要评估任务队列 (cmdb_post_sync_jobs, job_type=summary_assessment)
+	AssessmentPending    int64 `json:"assessment_pending"`
+	AssessmentProcessing int64 `json:"assessment_processing"`
+	AssessmentFailed     int64 `json:"assessment_failed"`
 }
 
 // CMDBRecentSync 最近同步记录

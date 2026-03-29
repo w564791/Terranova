@@ -298,52 +298,48 @@ const CMDBOverviewDashboard: React.FC = () => {
         <div className={styles.card}>
           <div className={styles.cardLabel}>任务队列</div>
           <div className={styles.queueNote}>Workspace 的 Summary 在同步时即时生成，无独立队列</div>
-          {/* Embedding 队列 (workspace) */}
-          <div className={styles.queueSection}>Embedding 队列 (Workspace)</div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>待处理</span>
-            <span className={styles.queueValue}>{data.queue.embedding_pending}</span>
+          <div className={styles.queueHeader}>
+            <span className={styles.queueHeaderLabel}>队列</span>
+            <span className={styles.queueHeaderCols}>待处理 / 处理中 / 失败</span>
           </div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>处理中</span>
-            <span className={styles.queueValue}>{data.queue.embedding_processing}</span>
-          </div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>失败</span>
-            <span className={styles.queueValue} style={{ color: data.queue.embedding_failed > 0 ? '#ff4d4f' : undefined }}>
-              {data.queue.embedding_failed}
+          <div className={styles.queueRow}>
+            <span className={styles.queueLabel}>Embedding (Workspace)</span>
+            <span className={styles.queueCounts}>
+              <span>{data.queue.embedding_pending}</span>
+              <span className={styles.queueSep}>/</span>
+              <span>{data.queue.embedding_processing}</span>
+              <span className={styles.queueSep}>/</span>
+              <span style={{ color: data.queue.embedding_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.embedding_failed}</span>
             </span>
           </div>
-          {/* Summary 队列 (外部源) */}
-          <div className={styles.queueSection}>Summary 队列 (外部源)</div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>待处理</span>
-            <span className={styles.queueValue}>{data.queue.summary_pending}</span>
-          </div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>处理中</span>
-            <span className={styles.queueValue}>{data.queue.summary_processing}</span>
-          </div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>失败</span>
-            <span className={styles.queueValue} style={{ color: data.queue.summary_failed > 0 ? '#ff4d4f' : undefined }}>
-              {data.queue.summary_failed}
+          <div className={styles.queueRow}>
+            <span className={styles.queueLabel}>Summary (外部源)</span>
+            <span className={styles.queueCounts}>
+              <span>{data.queue.summary_pending}</span>
+              <span className={styles.queueSep}>/</span>
+              <span>{data.queue.summary_processing}</span>
+              <span className={styles.queueSep}>/</span>
+              <span style={{ color: data.queue.summary_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.summary_failed}</span>
             </span>
           </div>
-          {/* Embedding 队列 (外部源) */}
-          <div className={styles.queueSection}>Embedding 队列 (外部源)</div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>待处理</span>
-            <span className={styles.queueValue}>{data.queue.ext_embedding_pending}</span>
+          <div className={styles.queueRow}>
+            <span className={styles.queueLabel}>Embedding (外部源)</span>
+            <span className={styles.queueCounts}>
+              <span>{data.queue.ext_embedding_pending}</span>
+              <span className={styles.queueSep}>/</span>
+              <span>{data.queue.ext_embedding_processing}</span>
+              <span className={styles.queueSep}>/</span>
+              <span style={{ color: data.queue.ext_embedding_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.ext_embedding_failed}</span>
+            </span>
           </div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>处理中</span>
-            <span className={styles.queueValue}>{data.queue.ext_embedding_processing}</span>
-          </div>
-          <div className={styles.queueItem}>
-            <span className={styles.queueLabel}>失败</span>
-            <span className={styles.queueValue} style={{ color: data.queue.ext_embedding_failed > 0 ? '#ff4d4f' : undefined }}>
-              {data.queue.ext_embedding_failed}
+          <div className={styles.queueRow}>
+            <span className={styles.queueLabel}>摘要评估 (外部源)</span>
+            <span className={styles.queueCounts}>
+              <span>{data.queue.assessment_pending}</span>
+              <span className={styles.queueSep}>/</span>
+              <span>{data.queue.assessment_processing}</span>
+              <span className={styles.queueSep}>/</span>
+              <span style={{ color: data.queue.assessment_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.assessment_failed}</span>
             </span>
           </div>
         </div>

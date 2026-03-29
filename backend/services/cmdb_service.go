@@ -913,6 +913,10 @@ func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
 	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "pending").Count(&overview.Queue.ExtEmbeddingPending)
 	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "processing").Count(&overview.Queue.ExtEmbeddingProcessing)
 	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "failed").Count(&overview.Queue.ExtEmbeddingFailed)
+	// 外部源摘要评估任务队列 (cmdb_post_sync_jobs, job_type=summary_assessment)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "pending").Count(&overview.Queue.AssessmentPending)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "processing").Count(&overview.Queue.AssessmentProcessing)
+	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "failed").Count(&overview.Queue.AssessmentFailed)
 
 	return &overview, nil
 }

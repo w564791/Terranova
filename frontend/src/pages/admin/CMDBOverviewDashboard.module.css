@@ -99,28 +99,37 @@
   font-style: italic;
 }
 
-.queueSection {
-  font-size: 12px;
-  font-weight: 500;
-  color: #495057;
-  padding: 8px 0 4px;
-  border-top: 1px solid #f1f3f5;
-  margin-top: 4px;
-}
-.queueSection:first-of-type {
-  border-top: none;
-  margin-top: 0;
-  padding-top: 0;
-}
-
-.queueItem {
+.queueHeader {
   display: flex;
   justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
+  padding: 4px 0 2px;
+  font-size: 11px;
+  color: #adb5bd;
+  border-bottom: 1px solid #f1f3f5;
+  margin-bottom: 2px;
 }
-.queueLabel { color: #6c757d; }
-.queueValue { font-weight: 600; color: #212529; }
+.queueHeaderLabel { flex: 1; }
+.queueHeaderCols { text-align: right; white-space: nowrap; }
+
+.queueRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #f8f9fa;
+}
+.queueRow:last-of-type { border-bottom: none; }
+.queueLabel { color: #6c757d; flex: 1; }
+.queueCounts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+  color: #212529;
+  font-variant-numeric: tabular-nums;
+}
+.queueSep { color: #dee2e6; font-weight: 400; }
 
 .typeBarRow {
   display: flex;

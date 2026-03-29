@@ -34,6 +34,9 @@ export interface CMDBOverview {
     ext_embedding_pending: number;
     ext_embedding_processing: number;
     ext_embedding_failed: number;
+    assessment_pending: number;
+    assessment_processing: number;
+    assessment_failed: number;
   };
 }
 
