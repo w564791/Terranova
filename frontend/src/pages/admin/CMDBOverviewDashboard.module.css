@@ -232,6 +232,12 @@
   margin-bottom: 16px;
 }
 
+.filterButtons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .periodButtons {
   display: flex;
   gap: 4px;

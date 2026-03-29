@@ -18,6 +18,7 @@ const CMDBOverviewDashboard: React.FC = () => {
   const [searchAnalytics, setSearchAnalytics] = useState<CMDBSearchAnalytics | null>(null);
   const [searchAnalyticsLoading, setSearchAnalyticsLoading] = useState(false);
   const [searchPeriod, setSearchPeriod] = useState<'24h' | '7d' | '30d'>('7d');
+  const [searchSource, setSearchSource] = useState<'all' | 'manual' | 'agent'>('all');
 
   useEffect(() => {
     loadData();
@@ -52,10 +53,10 @@ const CMDBOverviewDashboard: React.FC = () => {
     }
   };
 
-  const loadSearchAnalytics = async (period: string) => {
+  const loadSearchAnalytics = async (period: string, source: string) => {
     try {
       setSearchAnalyticsLoading(true);
-      const data = await cmdbService.getSearchAnalytics(period);
+      const data = await cmdbService.getSearchAnalytics(period, source);
       setSearchAnalytics(data);
     } catch (err) {
       console.error('Failed to load search analytics:', err);
@@ -65,8 +66,8 @@ const CMDBOverviewDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    loadSearchAnalytics(searchPeriod);
-  }, [searchPeriod]);
+    loadSearchAnalytics(searchPeriod, searchSource);
+  }, [searchPeriod, searchSource]);
 
   // 词云数据：随机打乱 + 字体映射
   const wordCloudItems = useMemo(() => {
@@ -171,16 +172,29 @@ const CMDBOverviewDashboard: React.FC = () => {
       <div className={styles.card}>
         <div className={styles.searchAnalyticsHeader}>
           <div className={styles.cardLabel}>搜索召回质量</div>
-          <div className={styles.periodButtons}>
-            {(['24h', '7d', '30d'] as const).map(p => (
-              <button
-                key={p}
-                className={`${styles.periodButton} ${searchPeriod === p ? styles.periodButtonActive : ''}`}
-                onClick={() => setSearchPeriod(p)}
-              >
-                {p}
-              </button>
-            ))}
+          <div className={styles.filterButtons}>
+            <div className={styles.periodButtons}>
+              {(['24h', '7d', '30d'] as const).map(p => (
+                <button
+                  key={p}
+                  className={`${styles.periodButton} ${searchPeriod === p ? styles.periodButtonActive : ''}`}
+                  onClick={() => setSearchPeriod(p)}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <div className={styles.periodButtons}>
+              {([['all', '全部'], ['manual', '用户'], ['agent', 'Agent']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  className={`${styles.periodButton} ${searchSource === val ? styles.periodButtonActive : ''}`}
+                  onClick={() => setSearchSource(val)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

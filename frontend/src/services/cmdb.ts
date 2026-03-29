@@ -219,8 +219,8 @@ export const cmdbService = {
   },
 
   // 获取搜索召回质量分析
-  getSearchAnalytics: async (period: string = '7d'): Promise<CMDBSearchAnalytics> => {
-    return api.get(`/cmdb/search-analytics?period=${period}`);
+  getSearchAnalytics: async (period: string = '7d', source: string = 'all'): Promise<CMDBSearchAnalytics> => {
+    return api.get(`/cmdb/search-analytics?period=${period}&source=${source}`);
   },
 
   // 搜索资源（关键字搜索）
