@@ -424,6 +424,38 @@
   word-break: break-all;
 }
 
+.resourceSummaryPreview {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+  background: #f8fafc;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.resourceSummaryPreview:hover {
+  color: #4b5563;
+  background: #f1f5f9;
+}
+
+.resourceSummaryPreview.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  white-space: pre-line;
+  overflow: visible;
+  text-overflow: unset;
+}
+
 .resultActions {
   display: flex;
   gap: 8px;

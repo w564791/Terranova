@@ -123,6 +123,14 @@ func (w *EmbeddingWorker) cleanupExpiredTasks() {
 	completedExpireTime := time.Now().AddDate(0, 0, -7)
 	w.db.Where("completed_at < ? AND status = ?", completedExpireTime, models.EmbeddingTaskStatusCompleted).
 		Delete(&models.EmbeddingTask{})
+
+	// 清理 30 天前的搜索日志
+	searchLogResult := w.db.Exec("DELETE FROM cmdb_search_logs WHERE created_at < NOW() - INTERVAL '30 days'")
+	if searchLogResult.Error != nil {
+		log.Printf("[EmbeddingWorker] 搜索日志清理失败: %v", searchLogResult.Error)
+	} else if searchLogResult.RowsAffected > 0 {
+		log.Printf("[EmbeddingWorker] 清理 %d 条过期搜索日志（超过 30 天）", searchLogResult.RowsAffected)
+	}
 }
 
 // recoverProcessingTasks 恢复 processing 状态的任务
@@ -397,7 +405,18 @@ func (w *EmbeddingWorker) SyncAllWorkspaces() error {
 		return nil
 	}
 
-	// 2. 批量创建 embedding 任务
+	// 2. 删除这些资源已有的 completed 任务（避免 OnConflict{DoNothing} 阻塞新任务创建）
+	resourceIDs := make([]uint, len(resources))
+	for i, r := range resources {
+		resourceIDs[i] = r.ID
+	}
+	deleteResult := w.db.Where("resource_id IN ? AND status = ?", resourceIDs, models.EmbeddingTaskStatusCompleted).
+		Delete(&models.EmbeddingTask{})
+	if deleteResult.RowsAffected > 0 {
+		log.Printf("[EmbeddingWorker] 清理 %d 个旧 completed 任务", deleteResult.RowsAffected)
+	}
+
+	// 3. 批量创建 embedding 任务
 	now := time.Now()
 	tasks := make([]models.EmbeddingTask, 0, len(resources))
 	for _, r := range resources {
@@ -444,6 +463,17 @@ func (w *EmbeddingWorker) SyncWorkspace(workspaceID string) error {
 		return nil
 	}
 
+	// 删除这些资源已有的 completed 任务（避免 OnConflict{DoNothing} 阻塞新任务创建）
+	resourceIDs := make([]uint, len(resources))
+	for i, r := range resources {
+		resourceIDs[i] = r.ID
+	}
+	deleteResult := w.db.Where("resource_id IN ? AND status = ?", resourceIDs, models.EmbeddingTaskStatusCompleted).
+		Delete(&models.EmbeddingTask{})
+	if deleteResult.RowsAffected > 0 {
+		log.Printf("[EmbeddingWorker] Workspace %s 清理 %d 个旧 completed 任务", workspaceID, deleteResult.RowsAffected)
+	}
+
 	// 批量创建 embedding 任务
 	now := time.Now()
 	tasks := make([]models.EmbeddingTask, 0, len(resources))
@@ -465,24 +495,55 @@ func (w *EmbeddingWorker) SyncWorkspace(workspaceID string) error {
 }
 
 // RebuildWorkspace 重建指定 Workspace 的所有 embedding
+// 不清空现有 embedding，而是为所有资源创建任务，worker 逐条覆盖
+// 旧 embedding 在被覆盖前仍可搜索，避免重建期间搜索完全不可用
 func (w *EmbeddingWorker) RebuildWorkspace(workspaceID string) error {
 	log.Printf("[EmbeddingWorker] 重建 Workspace: %s", workspaceID)
 
-	// 1. 清空该 Workspace 的所有 embedding，同时更新 last_synced_at
-	now := time.Now()
-	result := w.db.Exec(`
-		UPDATE resource_index 
-		SET embedding = NULL, embedding_updated_at = NULL, last_synced_at = ?
-		WHERE workspace_id = ?
-	`, now, workspaceID)
-	log.Printf("[EmbeddingWorker] 清空 %d 个资源的 embedding，更新 last_synced_at", result.RowsAffected)
+	configStatus := w.embeddingService.GetConfigStatus()
+	if !configStatus.Configured {
+		log.Printf("[EmbeddingWorker] Embedding 配置不可用: %s", configStatus.Message)
+		return nil
+	}
 
-	// 2. 删除该 Workspace 的所有任务（包括 completed 状态的，以便重新创建）
-	result = w.db.Where("workspace_id = ?", workspaceID).Delete(&models.EmbeddingTask{})
+	// 1. 删除该 Workspace 的所有任务（包括 completed 状态的，以便重新创建）
+	result := w.db.Where("workspace_id = ?", workspaceID).Delete(&models.EmbeddingTask{})
 	log.Printf("[EmbeddingWorker] 删除 %d 个旧任务", result.RowsAffected)
 
-	// 3. 重新创建任务
-	return w.SyncWorkspace(workspaceID)
+	// 2. 查询该 Workspace 的所有资源（不限 embedding IS NULL）
+	var resources []models.ResourceIndex
+	w.db.Where("workspace_id = ?", workspaceID).Find(&resources)
+
+	log.Printf("[EmbeddingWorker] Workspace %s 共 %d 个资源，全部重建 embedding", workspaceID, len(resources))
+
+	if len(resources) == 0 {
+		return nil
+	}
+
+	// 3. 清空 embedding_text 让 worker 重新构建文本（不清空 embedding 本身）
+	w.db.Exec(`
+		UPDATE resource_index
+		SET embedding_text = ''
+		WHERE workspace_id = ?
+	`, workspaceID)
+
+	// 4. 批量创建 embedding 任务
+	now := time.Now()
+	tasks := make([]models.EmbeddingTask, 0, len(resources))
+	for _, r := range resources {
+		tasks = append(tasks, models.EmbeddingTask{
+			ResourceID:  r.ID,
+			WorkspaceID: r.WorkspaceID,
+			Status:      models.EmbeddingTaskStatusPending,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		})
+	}
+
+	w.db.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&tasks, 1000)
+
+	log.Printf("[EmbeddingWorker] Workspace %s 创建 %d 个重建任务", workspaceID, len(tasks))
+	return nil
 }
 
 // GetStatus 获取 worker 状态
@@ -535,17 +596,31 @@ func (w *EmbeddingWorker) GetWorkspaceStatus(workspaceID string) *models.Embeddi
 		Where("workspace_id = ? AND embedding IS NOT NULL", workspaceID).
 		Count(&withEmbedding)
 
-	// 统计任务状态
-	w.db.Model(&models.EmbeddingTask{}).
-		Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusPending).
-		Count(&pendingTasks)
-	w.db.Model(&models.EmbeddingTask{}).
-		Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusProcessing).
-		Count(&processingTasks)
-	w.db.Model(&models.EmbeddingTask{}).
-		Where("workspace_id = ? AND status = ? AND retry_count >= ?",
-			workspaceID, models.EmbeddingTaskStatusPending, w.maxRetries).
-		Count(&failedTasks)
+	if workspaceID == "__external__" {
+		// 外部资源的任务在 cmdb_post_sync_jobs 表
+		w.db.Model(&models.PostSyncJob{}).
+			Where("status = ?", models.PostSyncJobStatusPending).
+			Count(&pendingTasks)
+		w.db.Model(&models.PostSyncJob{}).
+			Where("status = ?", models.PostSyncJobStatusProcessing).
+			Count(&processingTasks)
+		w.db.Model(&models.PostSyncJob{}).
+			Where("status = ? AND retry_count >= ?",
+				models.PostSyncJobStatusFailed, 1).
+			Count(&failedTasks)
+	} else {
+		// Workspace 资源的任务在 embedding_tasks 表
+		w.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusPending).
+			Count(&pendingTasks)
+		w.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status = ?", workspaceID, models.EmbeddingTaskStatusProcessing).
+			Count(&processingTasks)
+		w.db.Model(&models.EmbeddingTask{}).
+			Where("workspace_id = ? AND status = ? AND retry_count >= ?",
+				workspaceID, models.EmbeddingTaskStatusPending, w.maxRetries).
+			Count(&failedTasks)
+	}
 
 	// 计算进度
 	// 进度 = 已完成的 embedding 数量 / 总资源数量

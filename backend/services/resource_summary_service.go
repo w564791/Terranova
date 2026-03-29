@@ -115,24 +115,33 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 			break
 		}
 
-		// 计算 attributes hash（从 DB 返回的 JSONB，规范化排序）
-		hash := computeAttributesHash(resource.Attributes)
+		// 构建 prompt：优先用 attributes，无 attributes 则用元数据
+		var contentForHash string
+		var userPrompt string
+		hasAttributes := len(resource.Attributes) > 0 && string(resource.Attributes) != "null" && string(resource.Attributes) != "{}"
 
-		// 对比 hash，跳过未变更的资源
+		if hasAttributes {
+			contentForHash = string(resource.Attributes)
+			attributesStr := truncateAttributes(resource.Attributes)
+			userPrompt = fmt.Sprintf(prompt, resource.ResourceType, attributesStr)
+		} else {
+			meta := fmt.Sprintf("name: %s\ncloud_resource_id: %s\ndescription: %s\ntags: %s",
+				resource.ResourceName, resource.CloudResourceID, resource.Description, string(resource.Tags))
+			contentForHash = meta
+			userPrompt = fmt.Sprintf(prompt, resource.ResourceType, meta)
+		}
+
+		// 计算 hash，对比跳过未变更的资源
+		hash := computeContentHash(contentForHash)
 		if hash == resource.SummaryHash && resource.ResourceSummary != "" {
 			skipped++
 			continue
 		}
 
-		// 跳过 attributes 为空的资源
-		if len(resource.Attributes) == 0 || string(resource.Attributes) == "null" || string(resource.Attributes) == "{}" {
-			skipped++
-			continue
+		// 如果有 regeneration hint（质量反馈），追加到 prompt
+		if resource.SummaryRegenerationHint != "" {
+			userPrompt += fmt.Sprintf("\n\n上一次生成的摘要存在以下问题，请在本次生成中修正：\n%s", resource.SummaryRegenerationHint)
 		}
-
-		// 构建 prompt
-		attributesStr := truncateAttributes(resource.Attributes)
-		userPrompt := fmt.Sprintf(prompt, resource.ResourceType, attributesStr)
 
 		// 调 AI（单个资源 30 秒超时）
 		callCtx, callCancel := context.WithTimeout(ctx, 30*time.Second)
@@ -156,17 +165,14 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 
 		// 写入 resource_summary + summary_hash（GORM）
 		if err := s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).Updates(map[string]interface{}{
-			"resource_summary": summary,
-			"summary_hash":     hash,
+			"resource_summary":           summary,
+			"summary_hash":               hash,
+			"summary_assessment_status":  "pending",
+			"summary_regeneration_hint":  "",
 		}).Error; err != nil {
 			log.Printf("[ResourceSummary] Failed to save summary for resource %d: %v", resource.ID, err)
 			failed++
 			continue
-		}
-
-		// 清空 embedding（raw SQL，因为 Embedding 字段标记了 gorm:"-"）
-		if err := s.db.Exec("UPDATE resource_index SET embedding = NULL, embedding_text = '' WHERE id = ?", resource.ID).Error; err != nil {
-			log.Printf("[ResourceSummary] Failed to clear embedding for resource %d: %v", resource.ID, err)
 		}
 
 		generated++
@@ -183,13 +189,12 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 	return nil
 }
 
-// computeAttributesHash 计算 attributes 的 MD5 hash
-// 输入是从 DB 读回的 json.RawMessage（PostgreSQL JSONB 规范化排序）
-func computeAttributesHash(attributes json.RawMessage) string {
-	if len(attributes) == 0 {
+// computeContentHash 计算内容的 MD5 hash
+func computeContentHash(content string) string {
+	if content == "" {
 		return ""
 	}
-	hash := md5.Sum(attributes)
+	hash := md5.Sum([]byte(content))
 	return hex.EncodeToString(hash[:])
 }
 

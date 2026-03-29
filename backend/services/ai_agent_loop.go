@@ -29,10 +29,12 @@ type AICaller interface {
 
 // AgentMessage 对话消息
 type AgentMessage struct {
-	Role       string          `json:"role"`                  // system / user / assistant / tool
-	Content    string          `json:"content"`               // 文本内容
-	ToolCalls  []AgentToolCall `json:"tool_calls,omitempty"`  // assistant 角色的工具调用
-	ToolCallID string          `json:"tool_call_id,omitempty"` // tool 角色时对应的 tool call ID
+	Role            string          `json:"role"`                      // system / user / assistant / tool
+	Content         string          `json:"content"`                   // 文本内容
+	ToolCalls       []AgentToolCall `json:"tool_calls,omitempty"`      // assistant 角色的工具调用
+	ToolCallID      string          `json:"tool_call_id,omitempty"`    // tool 角色时对应的 tool call ID
+	ThinkingContent   string `json:"thinking_content,omitempty"`   // extended thinking 内容（回传给下一轮）
+	ThinkingSignature string `json:"thinking_signature,omitempty"` // Claude thinking signature（回传用）
 }
 
 // AgentToolCall AI 发起的工具调用
@@ -44,8 +46,10 @@ type AgentToolCall struct {
 
 // AgentAIResponse AI 响应
 type AgentAIResponse struct {
-	Content   string          `json:"content"`              // 纯文本（AI 决定结束时）
-	ToolCalls []AgentToolCall `json:"tool_calls,omitempty"` // 工具调用（AI 想继续时）
+	Content           string          `json:"content"`                      // 纯文本（AI 决定结束时）
+	ToolCalls         []AgentToolCall `json:"tool_calls,omitempty"`         // 工具调用（AI 想继续时）
+	ThinkingContent   string          `json:"thinking_content,omitempty"`   // Extended thinking 内容（调试用）
+	ThinkingSignature string          `json:"thinking_signature,omitempty"` // Claude thinking signature（回传用）
 }
 
 // AgentToolDef 传给 AI 的工具定义
@@ -66,10 +70,11 @@ type AgentToolCallRecord struct {
 
 // AgentLoopResult 循环结果
 type AgentLoopResult struct {
-	FinalOutput string                `json:"final_output"`
-	ToolCalls   []AgentToolCallRecord `json:"tool_calls"`
-	TotalSteps  int                   `json:"total_steps"`
-	Completed   bool                  `json:"completed"` // true=AI 主动结束, false=达到上限
+	FinalOutput      string                `json:"final_output"`
+	ToolCalls        []AgentToolCallRecord `json:"tool_calls"`
+	TotalSteps       int                   `json:"total_steps"`
+	Completed        bool                  `json:"completed"`          // true=AI 主动结束, false=达到上限
+	ThinkingContents []string              `json:"thinking_contents"`  // 每轮 AI 返回的 thinking 内容（调试用）
 }
 
 // AIAgentLoop 通用 AI Agent 循环
@@ -126,6 +131,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 	loopStart := time.Now()
 	toolDefs := loop.buildToolDefs()
 	var allToolCalls []AgentToolCallRecord
+	var allThinking []string
 	retryCount := 0
 
 	for i := 0; i < loop.maxIterations; i++ {
@@ -138,6 +144,11 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 		stepMs := float64(time.Since(stepStart).Milliseconds())
 		if err != nil {
 			return nil, fmt.Errorf("AI call failed at step %d: %w", i+1, err)
+		}
+
+		// 收集 thinking content（调试用）
+		if response.ThinkingContent != "" {
+			allThinking = append(allThinking, response.ThinkingContent)
 		}
 
 		stepType := "tool_call"
@@ -172,18 +183,21 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 			RecordAgentLoopTotal(true, float64(time.Since(loopStart).Milliseconds()))
 			return &AgentLoopResult{
-				FinalOutput: response.Content,
-				ToolCalls:   allToolCalls,
-				TotalSteps:  i + 1,
-				Completed:   true,
+				FinalOutput:      response.Content,
+				ToolCalls:        allToolCalls,
+				TotalSteps:       i + 1,
+				Completed:        true,
+				ThinkingContents: allThinking,
 			}, nil
 		}
 
-		// AI 要调用工具
+		// AI 要调用工具（回传 thinking content + signature 保持推理连贯性）
 		messages = append(messages, AgentMessage{
-			Role:      "assistant",
-			Content:   response.Content,
-			ToolCalls: response.ToolCalls,
+			Role:              "assistant",
+			Content:           response.Content,
+			ToolCalls:         response.ToolCalls,
+			ThinkingContent:   response.ThinkingContent,
+			ThinkingSignature: response.ThinkingSignature,
 		})
 
 		// 并发执行所有 tool calls
@@ -279,10 +293,11 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 	RecordAgentLoopTotal(false, float64(time.Since(loopStart).Milliseconds()))
 	return &AgentLoopResult{
-		FinalOutput: finalResponse.Content,
-		ToolCalls:   allToolCalls,
-		TotalSteps:  loop.maxIterations,
-		Completed:   false,
+		FinalOutput:      finalResponse.Content,
+		ToolCalls:        allToolCalls,
+		TotalSteps:       loop.maxIterations,
+		Completed:        false,
+		ThinkingContents: allThinking,
 	}, nil
 }
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"iac-platform/internal/models"
 	"log"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -103,6 +105,7 @@ func (t *QueryCMDBDependenciesTool) InputSchema() map[string]interface{} {
 }
 
 func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	start := time.Now()
 	resourceID, _ := params["resource_id"].(string)
 	depField, _ := params["dependency_field"].(string)
 
@@ -122,6 +125,20 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 
 	var resources []models.ResourceIndex
 	if err := query.Limit(50).Find(&resources).Error; err != nil {
+		elapsed := time.Since(start)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:          strings.ToLower(strings.TrimSpace(resourceID)),
+				SearchMethod:   "jsonb",
+				Source:         "agent",
+				TotalCount:     0,
+				DurationMs:     int(elapsed.Milliseconds()),
+				FallbackReason: "query error: " + err.Error(),
+			}
+			if dbErr := t.db.Create(&searchLog).Error; dbErr != nil {
+				log.Printf("[SearchLog] write failed: %v", dbErr)
+			}
+		}()
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
@@ -142,7 +159,24 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 		})
 	}
 
-	log.Printf("[QueryCMDBDependencies] resource=%s field=%s found=%d", resourceID, depField, len(result))
+	elapsed := time.Since(start)
+	log.Printf("[QueryCMDBDependencies] resource=%s field=%s found=%d elapsed=%dms", resourceID, depField, len(result), elapsed.Milliseconds())
+
+	// 异步写入搜索日志
+	go func() {
+		searchLog := models.CMDBSearchLog{
+			Query:          strings.ToLower(strings.TrimSpace(resourceID)),
+			SearchMethod:   "jsonb",
+			Source:         "agent",
+			TotalCount:     len(result),
+			DurationMs:     int(elapsed.Milliseconds()),
+			FallbackReason: "dep_field:" + depField,
+		}
+		if err := t.db.Create(&searchLog).Error; err != nil {
+			log.Printf("[SearchLog] write failed: %v", err)
+		}
+	}()
+
 	return map[string]interface{}{
 		"resource_id":      resourceID,
 		"dependency_field": depField,
@@ -176,6 +210,7 @@ func (t *QueryResourceAttributesTool) InputSchema() map[string]interface{} {
 }
 
 func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	start := time.Now()
 	q, _ := params["query"].(string)
 	if q == "" {
 		return nil, fmt.Errorf("query is required")
@@ -184,10 +219,39 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	// 复用 CMDB 关键字搜索（支持模糊匹配，自动跨 workspace 含外部 CMDB）
 	results, err := t.cmdbService.SearchResources(q, "", "", 1)
 	if err != nil {
+		elapsed := time.Since(start)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:          strings.ToLower(strings.TrimSpace(q)),
+				SearchMethod:   "keyword",
+				Source:         "agent",
+				TotalCount:     0,
+				DurationMs:     int(elapsed.Milliseconds()),
+				FallbackReason: "search error: " + err.Error(),
+			}
+			if dbErr := t.db.Create(&searchLog).Error; dbErr != nil {
+				log.Printf("[SearchLog] write failed: %v", dbErr)
+			}
+		}()
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
 	if len(results) == 0 {
+		// 记录零结果搜索日志
+		elapsed := time.Since(start)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:        strings.ToLower(strings.TrimSpace(q)),
+				SearchMethod: "keyword",
+				Source:       "agent",
+				TotalCount:   0,
+				KeywordCount: 0,
+				DurationMs:   int(elapsed.Milliseconds()),
+			}
+			if err := t.db.Create(&searchLog).Error; err != nil {
+				log.Printf("[SearchLog] write failed: %v", err)
+			}
+		}()
 		return map[string]interface{}{"found": false, "message": "resource not found", "query": q}, nil
 	}
 
@@ -197,7 +261,23 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	if err := t.db.Where("workspace_id = ? AND cloud_resource_id = ?", hit.WorkspaceID, hit.CloudResourceID).
 		First(&resource).Error; err != nil {
 		// 搜索能找到但取属性失败，返回搜索结果的基本信息
+		elapsed := time.Since(start)
 		log.Printf("[QueryResourceAttributes] search hit but attributes fetch failed: %v", err)
+		go func() {
+			searchLog := models.CMDBSearchLog{
+				Query:          strings.ToLower(strings.TrimSpace(q)),
+				ResourceType:   hit.ResourceType,
+				SearchMethod:   "keyword",
+				Source:         "agent",
+				TotalCount:     1,
+				KeywordCount:   1,
+				DurationMs:     int(elapsed.Milliseconds()),
+				FallbackReason: "attributes fetch failed",
+			}
+			if err := t.db.Create(&searchLog).Error; err != nil {
+				log.Printf("[SearchLog] write failed: %v", err)
+			}
+		}()
 		return map[string]interface{}{
 			"found":             true,
 			"workspace_id":      hit.WorkspaceID,
@@ -216,17 +296,41 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 		json.Unmarshal(resource.Tags, &tags)
 	}
 
-	log.Printf("[QueryResourceAttributes] query=%s found=%s workspace=%s", q, resource.CloudResourceID, resource.WorkspaceID)
-	return map[string]interface{}{
-		"found":              true,
-		"workspace_id":       resource.WorkspaceID,
-		"terraform_address":  resource.TerraformAddress,
-		"resource_type":      resource.ResourceType,
-		"cloud_resource_id":  resource.CloudResourceID,
+	elapsed := time.Since(start)
+	log.Printf("[QueryResourceAttributes] query=%s found=%s workspace=%s elapsed=%dms", q, resource.CloudResourceID, resource.WorkspaceID, elapsed.Milliseconds())
+
+	// 异步写入搜索日志
+	go func() {
+		searchLog := models.CMDBSearchLog{
+			Query:        strings.ToLower(strings.TrimSpace(q)),
+			ResourceType: resource.ResourceType,
+			SearchMethod: "keyword",
+			Source:       "agent",
+			TotalCount:   1,
+			KeywordCount: 1,
+			DurationMs:   int(elapsed.Milliseconds()),
+		}
+		if err := t.db.Create(&searchLog).Error; err != nil {
+			log.Printf("[SearchLog] write failed: %v", err)
+		}
+	}()
+
+	result := map[string]interface{}{
+		"found":             true,
+		"workspace_id":      resource.WorkspaceID,
+		"terraform_address": resource.TerraformAddress,
+		"resource_type":     resource.ResourceType,
+		"cloud_resource_id": resource.CloudResourceID,
 		"cloud_resource_arn": resource.CloudResourceARN,
-		"attributes":         attrs,
-		"tags":               tags,
-	}, nil
+		"tags":              tags,
+	}
+	// 有摘要时优先返回摘要（省 token），无摘要时 fallback 返回原始 attributes
+	if resource.ResourceSummary != "" {
+		result["resource_summary"] = resource.ResourceSummary
+	} else {
+		result["attributes"] = attrs
+	}
+	return result, nil
 }
 
 // QueryStateResourcesTool 查询工作空间完整资源概览

@@ -117,7 +117,7 @@ func (a TextArray) Value() (driver.Value, error) {
 // SkillAssessmentResult Skill 评估结果模型
 type SkillAssessmentResult struct {
 	ID                     string             `gorm:"primaryKey;type:varchar(36)" json:"id"`
-	UsageLogID             string             `gorm:"type:varchar(36)" json:"usage_log_id"`
+	UsageLogID             *string            `gorm:"type:varchar(36)" json:"usage_log_id,omitempty"`
 	SkillName              string             `gorm:"type:varchar(128);not null" json:"skill_name"`
 	SkillContentHash       string             `gorm:"type:varchar(64);not null" json:"skill_content_hash"`
 	AssessedAt             time.Time          `gorm:"type:timestamptz;default:CURRENT_TIMESTAMP" json:"assessed_at"`
@@ -133,6 +133,12 @@ type SkillAssessmentResult struct {
 	AssessmentConfidence   *string            `gorm:"type:varchar(16)" json:"assessment_confidence,omitempty"`
 	AssessmentModel        *string            `gorm:"type:varchar(64)" json:"assessment_model,omitempty"`
 	AssessmentRawOutput    *string            `gorm:"type:text" json:"assessment_raw_output,omitempty"`
+	// --- Summary assessment fields ---
+	SourceType             string            `gorm:"type:varchar(16);default:'skill'" json:"source_type"`
+	ResourceID             *uint             `gorm:"type:integer" json:"resource_id,omitempty"`
+	FormatViolations       TextArray         `gorm:"type:text[]" json:"format_violations,omitempty"`
+	SecurityTagMisses      *json.RawMessage  `gorm:"type:jsonb" json:"security_tag_misses,omitempty"`
+	HallucinationSuspects  TextArray         `gorm:"type:text[]" json:"hallucination_suspects,omitempty"`
 }
 
 // TableName 指定表名

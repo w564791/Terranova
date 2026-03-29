@@ -23,6 +23,9 @@ export interface AIConfig {
   similarity_threshold?: number;
   embedding_batch_enabled?: boolean;
   embedding_batch_size?: number;
+  // Extended Thinking 配置
+  thinking_enabled?: boolean;
+  thinking_budget_tokens?: number;
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +105,20 @@ export const getAvailableModels = async (region: string): Promise<BedrockModel[]
   return response.data?.models || [];
 };
 
+export interface OpenAIModel {
+  id: string;
+  object: string;
+  owned_by: string;
+}
+
+export const listOpenAIModels = async (baseURL: string, apiKey?: string, configId?: number): Promise<OpenAIModel[]> => {
+  const body: Record<string, unknown> = { base_url: baseURL };
+  if (apiKey) body.api_key = apiKey;
+  if (configId) body.config_id = configId;
+  const response = await api.post('/global/settings/ai-config/openai-models', body);
+  return response.data || [];
+};
+
 // 分析错误
 // 安全说明：只需要传入 task_id，error_message 等信息从数据库获取，防止 prompt injection 攻击
 export const analyzeError = async (data: {
@@ -134,6 +151,7 @@ export interface PlanSummary {
   plan_changes: any;
   cmdb_lookups: any;
   tool_calls: any;
+  thinking_content?: string[];
   status: string;
   error_message?: string;
   duration: number;
@@ -161,6 +179,7 @@ export interface ApplySummary {
   apply_changes: any;
   cmdb_lookups: any;
   tool_calls: any;
+  thinking_content?: string[];
   status: string;
   error_message?: string;
   duration: number;
@@ -257,6 +276,8 @@ export const CAPABILITIES = {
   CMDB_RESOURCE_SUMMARY: 'cmdb_resource_summary',
   SKILL_RULE_EVALUATION: 'skill_rule_evaluation',
   SKILL_SEMANTIC_EVALUATION: 'skill_semantic_evaluation',
+  SUMMARY_RULE_EVALUATION: 'summary_rule_evaluation',
+  SUMMARY_SEMANTIC_EVALUATION: 'summary_semantic_evaluation',
 } as const;
 
 // 能力场景标签映射
@@ -274,6 +295,8 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 资源摘要',
   [CAPABILITIES.SKILL_RULE_EVALUATION]: 'Skill 规则评估 (L2)',
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Skill 语义评估 (L3)',
+  [CAPABILITIES.SUMMARY_RULE_EVALUATION]: '摘要规则评估 (L2)',
+  [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: '摘要语义评估 (L3)',
 };
 
 // 能力场景描述映射
@@ -291,6 +314,8 @@ export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 同步时为资源生成配置摘要，增强向量搜索和变更影响分析',
   [CAPABILITIES.SKILL_RULE_EVALUATION]: 'Layer 2 规则一致性评估：对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则',
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Layer 3 语义质量评估：评估 AI 输出的表述质量、信息量和用户可读性',
+  [CAPABILITIES.SUMMARY_RULE_EVALUATION]: 'Layer 2 摘要规则评估：检查 CMDB 资源摘要是否严格遵守生成 Prompt 的所有规则',
+  [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: 'Layer 3 摘要语义评估：评估 CMDB 资源摘要的内容准确性、完整性和幻觉检测',
 };
 
 // 每个能力场景的默认 Prompt 模板
@@ -665,4 +690,38 @@ export const DEFAULT_CAPABILITY_PROMPTS: Record<string, string> = {
 </examples>
 
 请分析 input_to_analyze 中的用户输入，返回 JSON 格式的安全评估结果。`,
+
+  [CAPABILITIES.SUMMARY_RULE_EVALUATION]: `摘要规则评估使用 Prompt 模式，由系统自动构建评估 Prompt。
+
+【工作原理】
+系统从摘要生成 Prompt 中自动提取"严格规则"段落，连同资源类型、原始属性和生成的摘要一起发送给 AI，让 AI 逐条检查规则遵守情况。
+
+【评估内容】
+- 纯文本输出，禁止 markdown
+- 第一行格式：资源类型中文名 + 名称/ID
+- 只描述实际存在的配置
+- 安全标注：0.0.0.0/0 → [公网暴露]、deletion_protection=false → [删除保护未启用]、backup_retention_period=0 → [无备份]
+- 不超过 200 字
+
+【输出格式】
+{"verdict": "pass|warn|fail", "score": 0-100, "rule_violations": [{"rule": "规则描述", "detail": "违反详情", "severity": "fail|warn"}], "assessment_confidence": "high|medium|low"}
+
+【注意】
+此能力的 Prompt 由系统自动生成，无需手动配置。如需自定义评估标准，可在此处编写完整 Prompt，系统将使用自定义版本替代默认版本。`,
+
+  [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: `摘要语义评估使用 Prompt 模式，由系统自动构建评估 Prompt。
+
+【工作原理】
+系统将资源类型、原始属性和生成的摘要发送给 AI，从准确性、完整性和幻觉三个维度评估摘要质量。
+
+【评估维度】
+1. 准确性：摘要中的每个事实是否都能在原始属性中找到依据
+2. 完整性：重要的安全/网络/规格信息是否被遗漏
+3. 幻觉检测：是否包含原始属性中不存在的信息
+
+【输出格式】
+{"verdict": "pass|warn|fail", "score": 0-100, "quality_issues": [{"type": "hallucination|omission|inaccuracy", "detail": "具体问题", "severity": "fail|warn"}], "assessment_confidence": "high|medium|low"}
+
+【注意】
+此能力的 Prompt 由系统自动生成，无需手动配置。如需自定义评估标准，可在此处编写完整 Prompt，系统将使用自定义版本替代默认版本。`,
 };

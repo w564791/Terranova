@@ -70,10 +70,21 @@ mandatory_calls:
       应通过 cloud_resource_id 查询其属性以补充影响分析。
       如果在当前 workspace 查不到，不传 workspace_id 重新查询（可能在外部 CMDB 中）。
 
+  - condition: query_cmdb_dependencies 返回依赖方 >= 3 个
+    tool: query_resource_attributes
+    rule: MUST_CALL
+    description: |
+      当依赖方数量 >= 3 时，必须对依赖方进行抽样查询（至少查 3 个、最多查 5 个）
+      以获取 resource_summary，用于：
+      1. 在 affected_resources.impact 中写出具体影响（如"S3 VPC Endpoint 不可达将导致应用无法访问 S3"）
+      2. 评估实际业务影响严重程度
+      3. 禁止对所有依赖方使用相同的模板化 impact 描述
+
 禁止：
   - 禁止编造依赖关系
   - 禁止在未调用工具的情况下填写 direct_dependencies 非零值
   - 工具未返回依赖时，affected_resources 为空数组，不得填写任何数据
+  - 禁止对多个 affected_resources 使用完全相同的 impact 描述，每个资源的 impact 必须基于其实际用途
 ```
 
 -----
@@ -102,6 +113,7 @@ mandatory_calls:
 |`configuration_drift`      |配置偏移（与预期/基线不符）        |
 |`high_blast_radius`        |变更影响面大                |
 |`sensitive_resource_change`|涉及敏感资源（生产环境、核心基础设施）   |
+|`service_disruption`       |变更可能导致依赖方服务中断（如端口变更导致 VPC Endpoint 不可达、安全组规则删除导致连接丢失）。判定依据：通过第二轮查询获取的依赖方 resource_summary 和 tags，确认依赖方为生产环境（Environment=production）的运行中服务 |
 
 -----
 
@@ -161,8 +173,9 @@ indirect_estimate 字段含义:
 ### 7.1 risk_level 计算（按优先级从高到低匹配，取最高）
 
 ```yaml
-critical:
-  - risk_factors 包含 external_exposure_change AND blast_radius_level == high
+critical（满足任一即为 critical，必须逐条检查，不可跳过）:
+  - risk_factors 包含 service_disruption AND direct_dependencies >= 3（生产服务可能中断）
+  - OR risk_factors 包含 external_exposure_change AND blast_radius_level == high
   - OR risk_factors 包含 resource_deletion AND direct_dependencies >= 3
 
 high:
@@ -281,8 +294,9 @@ affected_resources_schema:
 ```
 1.  验证 stage == "plan"，否则返回 INVALID_STAGE_CONTEXT
 2.  解析变更资源列表（resource、action、type）
-3.  在同一轮响应中一次性发起所有需要的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止分多轮逐个调用
-4.  根据查询结果记录 direct_dependencies（禁止估算）
+3.  第一轮工具调用：一次性发起所有变更资源的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止对同类查询分多轮逐个调用
+4.  第二轮工具调用（依赖方深入查询）：如果 query_cmdb_dependencies 返回依赖方 >= 3 个，必须对依赖方抽样调用 query_resource_attributes（至少 3 个、最多 5 个），获取 resource_summary 用于具体影响描述。此步骤不可跳过。
+5.  根据查询结果记录 direct_dependencies（禁止估算）
 6.  对每个资源：
     a. 判定 impact_type（从枚举选一个）
     b. 提取 risk_factors（从枚举多选）

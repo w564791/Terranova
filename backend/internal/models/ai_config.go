@@ -68,7 +68,7 @@ type AIConfig struct {
 	BaseURL             string            `gorm:"type:varchar(500)" json:"base_url,omitempty"`                     // OpenAI Compatible API 基础 URL
 	APIKey              string            `gorm:"type:text" json:"api_key,omitempty"`                              // OpenAI Compatible API 密钥（查询时不返回）
 	CustomPrompt        string            `gorm:"type:text" json:"custom_prompt,omitempty"`
-	Enabled             bool              `gorm:"default:false" json:"enabled"`
+	Enabled             bool              `gorm:"default:false" json:"enabled"`                       // true=全局兜底配置(最低优先级), false=按 capabilities 精确匹配的专用配置(优先级更高)
 	RateLimitSeconds    int               `gorm:"default:10" json:"rate_limit_seconds"`              // 频率限制（秒）
 	UseInferenceProfile bool              `gorm:"default:false" json:"use_inference_profile"`        // 是否使用 inference profile（仅 Bedrock）
 	Capabilities        StringArray       `gorm:"type:jsonb;default:'[]'" json:"capabilities"`       // 支持的能力场景，["*"]表示默认配置，[]表示未配置
@@ -78,6 +78,9 @@ type AIConfig struct {
 	Mode             string           `gorm:"type:varchar(20);default:'prompt'" json:"mode"` // 模式：'prompt' 或 'skill'
 	SkillComposition SkillComposition `gorm:"type:jsonb" json:"skill_composition,omitempty"` // Skill 组合配置（mode='skill'时使用）
 	UseOptimized     bool             `gorm:"default:false" json:"use_optimized"`            // 是否使用优化版（并行执行 + AI 选择 Skills）
+	// Extended Thinking 配置
+	ThinkingEnabled      bool `gorm:"default:false" json:"thinking_enabled"`       // 是否启用 extended thinking
+	ThinkingBudgetTokens int  `gorm:"default:10000" json:"thinking_budget_tokens"` // thinking token 预算（最小 1024）
 	// Vector 搜索配置（仅 embedding 能力使用）
 	TopK                  int       `gorm:"default:50" json:"top_k"`                      // 向量搜索返回的最大结果数
 	SimilarityThreshold   float64   `gorm:"default:0.3" json:"similarity_threshold"`      // 向量搜索相似度阈值（0-1）

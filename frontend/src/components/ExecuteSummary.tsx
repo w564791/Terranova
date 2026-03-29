@@ -233,6 +233,7 @@ const PlanSummaryResult: React.FC<{
 }> = ({ summary, getRiskColor, getRiskLabel }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [showAffected, setShowAffected] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
 
   const detailsCount = summary.impact_analysis?.details?.length || 0;
   const affectedCount = summary.affected_resources?.length || 0;
@@ -304,6 +305,27 @@ const PlanSummaryResult: React.FC<{
         </div>
       )}
 
+      {/* AI Thinking 内容 — 默认折叠 */}
+      {summary.thinking_content && Array.isArray(summary.thinking_content) && summary.thinking_content.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.collapseToggle} onClick={() => setShowThinking(!showThinking)}>
+            {showThinking ? '∧' : '∨'} AI Thinking（{summary.thinking_content.length} 轮）
+          </div>
+          {showThinking && (
+            <div className={styles.detailsList}>
+              {summary.thinking_content.map((t: string, i: number) => (
+                <div key={i} className={styles.detailItem}>
+                  <div className={styles.detailHeader}>
+                    <span className={styles.detailResource}>Round {i + 1}</span>
+                  </div>
+                  <div className={styles.detailImpact} style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#666' }}>{t}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 风险等级已在 header badge 中展示，不再重复 */}
     </div>
   );
@@ -314,6 +336,7 @@ const PlanSummaryResult: React.FC<{
 const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) => {
   const [showResults, setShowResults] = useState(false);
   const [showAffected, setShowAffected] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
 
   const resultsCount = summary.resource_results?.length || 0;
   const affectedCount = summary.affected_resources?.length || 0;
@@ -391,6 +414,27 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
                     <span className={styles.affectedType}>{r.type}</span>
                   </div>
                   {r.impact && <div className={styles.affectedImpact}>{safeRender(r.impact)}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* AI Thinking 内容 — 默认折叠 */}
+      {summary.thinking_content && Array.isArray(summary.thinking_content) && summary.thinking_content.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.collapseToggle} onClick={() => setShowThinking(!showThinking)}>
+            {showThinking ? '∧' : '∨'} AI Thinking（{summary.thinking_content.length} 轮）
+          </div>
+          {showThinking && (
+            <div className={styles.detailsList}>
+              {summary.thinking_content.map((t: string, i: number) => (
+                <div key={i} className={styles.detailItem}>
+                  <div className={styles.detailHeader}>
+                    <span className={styles.detailResource}>Round {i + 1}</span>
+                  </div>
+                  <div className={styles.detailImpact} style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#666' }}>{t}</div>
                 </div>
               ))}
             </div>

@@ -25,9 +25,22 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 	switch cfg.ServiceType {
 	case "bedrock":
 		return &BedrockCaller{
-			region:              cfg.AWSRegion,
-			modelID:             cfg.ModelID,
-			useInferenceProfile: cfg.UseInferenceProfile,
+			region:               cfg.AWSRegion,
+			modelID:              cfg.ModelID,
+			useInferenceProfile:  cfg.UseInferenceProfile,
+			thinkingEnabled:      cfg.ThinkingEnabled,
+			thinkingBudgetTokens: cfg.ThinkingBudgetTokens,
+		}
+	case "qwen":
+		return &QwenCaller{
+			OpenAICaller: OpenAICaller{
+				baseURL:     cfg.BaseURL,
+				apiKey:      cfg.APIKey,
+				modelID:     cfg.ModelID,
+				serviceType: cfg.ServiceType,
+			},
+			thinkingEnabled:      cfg.ThinkingEnabled,
+			thinkingBudgetTokens: cfg.ThinkingBudgetTokens,
 		}
 	case "openai", "azure_openai", "ollama":
 		return &OpenAICaller{
@@ -38,8 +51,10 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 		}
 	default:
 		return &BedrockCaller{
-			region:  cfg.AWSRegion,
-			modelID: cfg.ModelID,
+			region:               cfg.AWSRegion,
+			modelID:              cfg.ModelID,
+			thinkingEnabled:      cfg.ThinkingEnabled,
+			thinkingBudgetTokens: cfg.ThinkingBudgetTokens,
 		}
 	}
 }
@@ -48,9 +63,11 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 
 // BedrockCaller Bedrock Claude tool calling 实现
 type BedrockCaller struct {
-	region              string
-	modelID             string
-	useInferenceProfile bool
+	region               string
+	modelID              string
+	useInferenceProfile  bool
+	thinkingEnabled      bool
+	thinkingBudgetTokens int
 }
 
 // ChatWithTools 调用 Bedrock Claude（支持 tool_use）
@@ -89,9 +106,25 @@ func (c *BedrockCaller) ChatWithTools(ctx context.Context, messages []AgentMessa
 
 // buildBedrockRequest 构建 Bedrock Claude 请求体（支持 tool_use）
 func (c *BedrockCaller) buildBedrockRequest(messages []AgentMessage, tools []AgentToolDef) map[string]interface{} {
+	maxTokens := 8000
+
+	// Extended thinking: inject thinking block (max_tokens must > budget_tokens, temperature must not be set)
+	if c.thinkingEnabled && c.thinkingBudgetTokens >= 1024 {
+		if maxTokens <= c.thinkingBudgetTokens {
+			maxTokens = c.thinkingBudgetTokens + 4000
+		}
+	}
+
 	body := map[string]interface{}{
 		"anthropic_version": "bedrock-2023-05-31",
-		"max_tokens":        8000,
+		"max_tokens":        maxTokens,
+	}
+
+	if c.thinkingEnabled && c.thinkingBudgetTokens >= 1024 {
+		body["thinking"] = map[string]interface{}{
+			"type":          "enabled",
+			"budget_tokens": c.thinkingBudgetTokens,
+		}
 	}
 
 	// 构建 messages（提取 system 到顶层）
@@ -105,8 +138,18 @@ func (c *BedrockCaller) buildBedrockRequest(messages []AgentMessage, tools []Age
 		}
 
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
-			// assistant 消息带 tool_use
+			// assistant 消息带 tool_use（回传 thinking 保持推理连贯性）
 			content := make([]interface{}, 0)
+			if msg.ThinkingContent != "" {
+				thinkingBlock := map[string]interface{}{
+					"type":     "thinking",
+					"thinking": msg.ThinkingContent,
+				}
+				if msg.ThinkingSignature != "" {
+					thinkingBlock["signature"] = msg.ThinkingSignature
+				}
+				content = append(content, thinkingBlock)
+			}
 			if msg.Content != "" {
 				content = append(content, map[string]interface{}{
 					"type": "text",
@@ -199,11 +242,13 @@ func (c *BedrockCaller) resolveModelID() string {
 func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, error) {
 	var response struct {
 		Content []struct {
-			Type  string          `json:"type"`
-			Text  string          `json:"text,omitempty"`
-			ID    string          `json:"id,omitempty"`
-			Name  string          `json:"name,omitempty"`
-			Input json.RawMessage `json:"input,omitempty"`
+			Type      string          `json:"type"`
+			Text      string          `json:"text,omitempty"`
+			Thinking  string          `json:"thinking,omitempty"`  // extended thinking content
+			Signature string          `json:"signature,omitempty"` // thinking signature（回传用）
+			ID        string          `json:"id,omitempty"`
+			Name      string          `json:"name,omitempty"`
+			Input     json.RawMessage `json:"input,omitempty"`
 		} `json:"content"`
 		Usage struct {
 			InputTokens  int `json:"input_tokens"`
@@ -225,9 +270,14 @@ func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, err
 
 	result := &AgentAIResponse{}
 	var textParts []string
+	var blockTypes []string
 
 	for _, block := range response.Content {
+		blockTypes = append(blockTypes, block.Type)
 		switch block.Type {
+		case "thinking":
+			result.ThinkingContent = block.Thinking
+			result.ThinkingSignature = block.Signature
 		case "text":
 			textParts = append(textParts, block.Text)
 		case "tool_use":
@@ -246,6 +296,7 @@ func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, err
 	}
 
 	result.Content = strings.Join(textParts, "\n")
+	log.Printf("[AICaller/Bedrock] Response block types: %v, thinking=%d chars", blockTypes, len(result.ThinkingContent))
 	return result, nil
 }
 
@@ -307,10 +358,11 @@ func (c *OpenAICaller) ChatWithTools(ctx context.Context, messages []AgentMessag
 // buildOpenAIRequest 构建 OpenAI 格式请求体
 func (c *OpenAICaller) buildOpenAIRequest(messages []AgentMessage, tools []AgentToolDef) map[string]interface{} {
 	body := map[string]interface{}{
-		"model":       c.modelID,
-		"max_tokens":  8000,
-		"temperature": 0.7,
+		"model":      c.modelID,
+		"max_tokens": 8000,
 	}
+
+	body["temperature"] = 0.7
 
 	// 构建 messages
 	var openaiMessages []interface{}
@@ -426,6 +478,156 @@ func (c *OpenAICaller) parseOpenAIResponse(body []byte) (*AgentAIResponse, error
 		if tc.Function.Arguments != "" {
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
 				log.Printf("[AICaller/OpenAI] failed to parse tool arguments for %s: %v", tc.Function.Name, err)
+			}
+		}
+		result.ToolCalls = append(result.ToolCalls, AgentToolCall{
+			ID:     tc.ID,
+			Name:   tc.Function.Name,
+			Params: params,
+		})
+	}
+
+	return result, nil
+}
+
+// ========== Qwen / DashScope Caller (OpenAI compatible + thinking) ==========
+
+// QwenCaller Qwen/DashScope 实现，继承 OpenAICaller 并添加 thinking 支持
+type QwenCaller struct {
+	OpenAICaller
+	thinkingEnabled      bool
+	thinkingBudgetTokens int
+}
+
+// ChatWithTools 调用 Qwen API（覆写请求构建和响应解析）
+func (c *QwenCaller) ChatWithTools(ctx context.Context, messages []AgentMessage, tools []AgentToolDef) (*AgentAIResponse, error) {
+	requestBody := c.buildQwenRequest(messages, tools)
+
+	requestJSON, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := c.baseURL
+	if !strings.HasSuffix(url, "/") {
+		url += "/"
+	}
+	url += "chat/completions"
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return c.parseQwenResponse(body)
+}
+
+// buildQwenRequest 构建 Qwen 请求体（基于 OpenAI 格式 + enable_thinking + reasoning_content 回传）
+func (c *QwenCaller) buildQwenRequest(messages []AgentMessage, tools []AgentToolDef) map[string]interface{} {
+	body := c.OpenAICaller.buildOpenAIRequest(messages, tools)
+
+	if c.thinkingEnabled && c.thinkingBudgetTokens >= 1024 {
+		body["enable_thinking"] = true
+		delete(body, "temperature")
+
+		// 回传 reasoning_content 到 assistant messages，保持多轮推理连贯性
+		if msgs, ok := body["messages"].([]interface{}); ok {
+			for i, rawMsg := range msgs {
+				if msgMap, ok := rawMsg.(map[string]interface{}); ok {
+					if msgMap["role"] == "assistant" && i < len(messages) {
+						for _, orig := range messages {
+							if orig.Role == "assistant" && orig.ThinkingContent != "" && orig.Content == msgMap["content"] {
+								msgMap["reasoning_content"] = orig.ThinkingContent
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	} else {
+		// 非 thinking 模式：强制 JSON 输出（减少格式错误）
+		body["response_format"] = map[string]interface{}{
+			"type": "json_object",
+		}
+	}
+
+	return body
+}
+
+// parseQwenResponse 解析 Qwen 响应（支持 reasoning_content 字段）
+func (c *QwenCaller) parseQwenResponse(body []byte) (*AgentAIResponse, error) {
+	var response struct {
+		Choices []struct {
+			Message struct {
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content,omitempty"`
+				ToolCalls        []struct {
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse qwen response: %w", err)
+	}
+
+	if response.Usage.PromptTokens > 0 || response.Usage.CompletionTokens > 0 {
+		metrics.IncAITokens("qwen", "prompt", float64(response.Usage.PromptTokens))
+		metrics.IncAITokens("qwen", "completion", float64(response.Usage.CompletionTokens))
+		log.Printf("[AICaller/Qwen] tokens: prompt=%d, completion=%d", response.Usage.PromptTokens, response.Usage.CompletionTokens)
+	}
+
+	if len(response.Choices) == 0 {
+		return nil, fmt.Errorf("empty response from Qwen API")
+	}
+
+	msg := response.Choices[0].Message
+	result := &AgentAIResponse{
+		Content:         msg.Content,
+		ThinkingContent: msg.ReasoningContent,
+	}
+
+	if result.ThinkingContent != "" {
+		log.Printf("[AICaller/Qwen] Thinking content received (%d chars)", len(result.ThinkingContent))
+	}
+
+	for _, tc := range msg.ToolCalls {
+		var params map[string]interface{}
+		if tc.Function.Arguments != "" {
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
+				log.Printf("[AICaller/Qwen] failed to parse tool arguments for %s: %v", tc.Function.Name, err)
 			}
 		}
 		result.ToolCalls = append(result.ToolCalls, AgentToolCall{

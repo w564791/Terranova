@@ -3,6 +3,7 @@ import { Tabs } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import SkillQualityDashboard from './admin/SkillQualityDashboard';
+import CMDBOverviewDashboard from './admin/CMDBOverviewDashboard';
 import styles from './Dashboard.module.css';
 
 interface OverviewStats {
@@ -166,9 +167,11 @@ const Dashboard: React.FC = () => {
       <Tabs
         activeKey={activeTab}
         onChange={(key) => setSearchParams({ tab: key })}
+        destroyInactiveTabPane
         items={[
           { key: 'overview', label: '概览', children: overviewContent },
           { key: 'quality', label: 'Skill 质量监控', children: <SkillQualityDashboard /> },
+          { key: 'cmdb', label: 'CMDB 概览', children: <CMDBOverviewDashboard /> },
         ]}
       />
     </div>

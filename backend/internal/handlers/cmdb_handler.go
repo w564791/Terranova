@@ -109,6 +109,42 @@ func (h *CMDBHandler) GetResourceDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, resource)
 }
 
+// GetCMDBOverview 获取 CMDB 观测面板数据
+func (h *CMDBHandler) GetCMDBOverview(c *gin.Context) {
+	overview, err := h.cmdbService.GetCMDBOverview()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, overview)
+}
+
+// GetSyncHistory 获取同步历史（分页）
+func (h *CMDBHandler) GetSyncHistory(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+
+	result, err := h.cmdbService.GetSyncHistory(page, size)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// GetSearchAnalytics 获取搜索召回质量分析数据
+func (h *CMDBHandler) GetSearchAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "7d")
+	source := c.DefaultQuery("source", "manual")
+
+	analytics, err := h.cmdbService.GetSearchAnalytics(period, source)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, analytics)
+}
+
 // GetCMDBStats 获取CMDB统计信息
 // @Summary 获取CMDB统计信息
 // @Description 获取CMDB的整体统计信息

@@ -27,3 +27,29 @@ FROM ai_configs
 WHERE enabled = true AND capabilities @> '["*"]'::jsonb
 LIMIT 1
 ON CONFLICT DO NOTHING;
+
+-- Summary assessment AI configs (for L2/L3 evaluation of resource summaries)
+
+-- Summary L2: summary_rule_evaluation
+INSERT INTO ai_configs (service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode)
+SELECT service_type, aws_region, model_id, false,
+       '["summary_rule_evaluation"]'::jsonb,
+       '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0,
+       'prompt'
+FROM ai_configs
+WHERE enabled = true AND capabilities @> '["*"]'::jsonb
+LIMIT 1
+ON CONFLICT DO NOTHING;
+
+-- Summary L3: summary_semantic_evaluation
+INSERT INTO ai_configs (service_type, aws_region, model_id, enabled, capabilities, capability_prompts, use_inference_profile, rate_limit_seconds, priority, mode)
+SELECT service_type, aws_region, model_id, false,
+       '["summary_semantic_evaluation"]'::jsonb,
+       '{}'::jsonb,
+       use_inference_profile, rate_limit_seconds, 0,
+       'prompt'
+FROM ai_configs
+WHERE enabled = true AND capabilities @> '["*"]'::jsonb
+LIMIT 1
+ON CONFLICT DO NOTHING;

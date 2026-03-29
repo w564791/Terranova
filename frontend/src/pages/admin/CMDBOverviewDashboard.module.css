@@ -1,0 +1,431 @@
+.container {
+  padding: 4px 0;
+}
+
+.row {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.row3 { grid-template-columns: repeat(3, 1fr); }
+.row2 { grid-template-columns: repeat(2, 1fr); }
+.rowQueueType { grid-template-columns: 2fr 3fr; }
+
+.card {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+.cardLabel {
+  font-size: 13px;
+  color: #6c757d;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cardValue {
+  font-size: 36px;
+  font-weight: 600;
+  color: #212529;
+  line-height: 1.2;
+}
+
+.cardHint {
+  font-size: 12px;
+  color: #868e96;
+  margin-top: 4px;
+}
+
+.coverageBar {
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.coverageFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.syncTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.syncTable th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #6c757d;
+  border-bottom: 1px solid #e9ecef;
+  font-weight: 500;
+}
+.syncTable td {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #212529;
+  border-bottom: 1px solid #f1f3f5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badgeSuccess { background: #d3f9d8; color: #2b8a3e; }
+.badgeFailed { background: #ffe3e3; color: #c92a2a; }
+.badgeRunning { background: #d0ebff; color: #1864ab; }
+.badgeWorkspace { background: #e7f5ff; color: #1971c2; }
+.badgeExternal { background: #fff3bf; color: #e67700; }
+
+.queueNote {
+  font-size: 11px;
+  color: #adb5bd;
+  padding-bottom: 6px;
+  font-style: italic;
+}
+
+.queueHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0 2px;
+  font-size: 11px;
+  color: #adb5bd;
+  border-bottom: 1px solid #f1f3f5;
+  margin-bottom: 2px;
+}
+.queueHeaderLabel { flex: 1; }
+.queueHeaderCols { text-align: right; white-space: nowrap; }
+
+.queueRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #f8f9fa;
+}
+.queueRow:last-of-type { border-bottom: none; }
+.queueLabel { color: #6c757d; flex: 1; }
+.queueCounts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+  color: #212529;
+  font-variant-numeric: tabular-nums;
+}
+.queueSep { color: #dee2e6; font-weight: 400; }
+
+.typeBarRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.typeBarLabel {
+  font-size: 12px;
+  color: #495057;
+  width: 130px;
+  text-align: right;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.typeBarTrack {
+  flex: 1;
+  height: 18px;
+  background: #f1f3f5;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.typeBarFill {
+  height: 100%;
+  border-radius: 3px;
+}
+.typeBarCount {
+  font-size: 11px;
+  color: #868e96;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.typeBarFooter {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f3f5;
+}
+.typeBarFooterText {
+  font-size: 12px;
+  color: #868e96;
+  margin-bottom: 6px;
+  padding-left: 138px;
+}
+.sourceBarRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sourceBarLabel {
+  font-size: 12px;
+  color: #868e96;
+  width: 130px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.sourceBar {
+  display: flex;
+  flex: 1;
+  height: 10px;
+  background: #f1f3f5;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.sourceBarFill {
+  height: 100%;
+}
+.sourceBarSpacer {
+  width: 32px;
+  flex-shrink: 0;
+}
+.sourceBarLegend {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: #868e96;
+  padding-left: 138px;
+}
+.legendDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.emptyHint {
+  color: #adb5bd;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* Search Analytics */
+.searchAnalyticsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.filterButtons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.periodButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.periodButton {
+  padding: 2px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.periodButton:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.periodButtonActive {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #fff;
+}
+
+.periodButtonActive:hover {
+  background: #4096ff;
+  border-color: #4096ff;
+  color: #fff;
+}
+
+.searchMetricsRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.searchMetric {
+  flex: 1;
+  text-align: center;
+  padding: 12px 8px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.searchMetricValue {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.searchMetricLabel {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.searchDetailRow {
+  display: flex;
+  gap: 20px;
+}
+
+.searchDetailLeft {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.searchDetailRight {
+  flex: 1;
+  min-width: 0;
+}
+
+.searchSubSection {
+}
+
+.searchSubTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.methodBarRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.methodBarLabel {
+  font-size: 12px;
+  color: #666;
+  width: 56px;
+  text-align: right;
+}
+
+.methodBarTrack {
+  flex: 1;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.methodBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.methodBarCount {
+  font-size: 12px;
+  color: #999;
+  width: 36px;
+  text-align: right;
+}
+
+.zeroResultItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.zeroResultQuery {
+  color: #ff4d4f;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.zeroResultCount {
+  color: #999;
+  flex-shrink: 0;
+}
+
+/* Word Cloud */
+.wordCloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  min-height: 160px;
+  padding: 12px;
+}
+
+.wordCloudItem {
+  display: inline-block;
+  cursor: default;
+  transition: opacity 0.2s;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.wordCloudItem:hover {
+  opacity: 0.7;
+}
+
+@media (max-width: 1200px) {
+  .row3 { grid-template-columns: 1fr 1fr; }
+  .rowQueueType { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .row3 { grid-template-columns: 1fr; }
+  .row2 { grid-template-columns: 1fr; }
+  .rowQueueType { grid-template-columns: 1fr; }
+  .cardValue { font-size: 28px; }
+  .searchDetailRow { flex-direction: column; }
+  .searchDetailLeft { flex: none; }
+  .searchMetricsRow { flex-wrap: wrap; }
+  .searchMetric { flex: 1 1 120px; }
+}

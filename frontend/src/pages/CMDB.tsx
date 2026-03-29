@@ -498,18 +498,16 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
 
   // 正在处理中（有 pending 或 processing 任务）
   if (processing_tasks > 0 || pending_tasks > 0) {
-    // 计算实际进度：已完成的 embedding 数量 / 总资源数量
-    const actualProgress = total_resources > 0 ? (with_embedding / total_resources) * 100 : 0;
     const remainingTasks = pending_tasks + processing_tasks;
     const estimatedMinutes = Math.ceil(remainingTasks * 5 / 60); // 每个资源约 5 秒
-    
+
     return (
-      <span 
-        className={styles.embeddingBadge} 
+      <span
+        className={styles.embeddingBadge}
         style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
         title={`Embedding: ${with_embedding}/${total_resources}\nPending: ${pending_tasks}, Processing: ${processing_tasks}\n预计: ${estimatedMinutes} 分钟`}
       >
-        Embedding {actualProgress.toFixed(0)}% ({with_embedding}/{total_resources})
+        处理中 ({remainingTasks} 个任务待完成)
       </span>
     );
   }
@@ -750,7 +748,7 @@ const WorkspaceTree: React.FC<{
       <ConfirmDialog
         isOpen={showRebuildConfirm}
         title="重建 Embedding 索引"
-        message={`确定要重建 "${workspace.name}" 的所有 embedding 吗？这将清空现有的 embedding 数据并重新生成，可能需要较长时间。`}
+        message={`确定要重建 "${workspace.name}" 的所有 embedding 吗？重建期间现有 embedding 仍可搜索，新数据会逐条覆盖，可能需要较长时间。`}
         confirmText="确认重建"
         cancelText="取消"
         type="warning"
@@ -819,7 +817,7 @@ const CMDB: React.FC = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(!!initialQuery);
   const [searchMode, setSearchMode] = useState<'vector' | 'keyword'>('vector'); // 默认使用 vector 搜索
-  const [actualSearchMethod, setActualSearchMethod] = useState<'vector' | 'keyword' | null>(null); // 实际使用的搜索方式
+  const [actualSearchMethod, setActualSearchMethod] = useState<'vector' | 'keyword' | 'hybrid' | null>(null); // 实际使用的搜索方式
   const [fallbackReason, setFallbackReason] = useState<string | null>(null); // 降级原因
 
   // Autocomplete state
@@ -956,6 +954,7 @@ const CMDB: React.FC = () => {
 
   // Handle search result click - navigate directly
   const [expandedResultIndex, setExpandedResultIndex] = useState<number | null>(null);
+  const [expandedSummaryIndex, setExpandedSummaryIndex] = useState<number | null>(null);
   const [expandedDetail, setExpandedDetail] = useState<any>(null);
   const [expandedDetailLoading, setExpandedDetailLoading] = useState(false);
 
@@ -1078,13 +1077,13 @@ const CMDB: React.FC = () => {
     if (value.trim().length >= 2) {
       autoSearchTimerRef.current = setTimeout(() => {
         // 自动触发搜索
-        performSearch(value);
+        performSearch(value, 'auto');
       }, 600);
     }
   };
 
   // Perform search (extracted for reuse)
-  const performSearch = async (query: string) => {
+  const performSearch = async (query: string, source: 'manual' | 'auto' = 'manual') => {
     if (!query.trim()) return;
 
     // Update URL with search params
@@ -1103,25 +1102,15 @@ const CMDB: React.FC = () => {
       setFallbackReason(null);
       setShowSuggestions(false); // 搜索时隐藏建议
 
-      if (searchMode === 'vector') {
-        // 使用 vector 搜索（支持自动降级）
-        const response = await cmdbService.vectorSearch(query, {
-          resource_type: searchResourceType || undefined,
-          limit: 50,
-        });
-        setSearchResults(response.results || []);
-        setActualSearchMethod(response.search_method);
-        setFallbackReason(response.fallback_reason || null);
-      } else {
-        // 使用关键字搜索
-        const response = await cmdbService.searchResources(query, {
-          resource_type: searchResourceType || undefined,
-          limit: 50,
-        });
-        setSearchResults(response.results || []);
-        setActualSearchMethod('keyword');
-        setFallbackReason(null);
-      }
+      // 使用混合搜索（向量 + 关键词并行）
+      const response = await cmdbService.vectorSearch(query, {
+        resource_type: searchResourceType || undefined,
+        limit: 50,
+        source,
+      });
+      setSearchResults(response.results || []);
+      setActualSearchMethod(response.search_method);
+      setFallbackReason(response.fallback_reason || null);
     } catch (err) {
       console.error('Search failed:', err);
       setSearchResults([]);
@@ -1439,43 +1428,15 @@ const CMDB: React.FC = () => {
           <div className={styles.searchSection}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 className={styles.searchTitle} style={{ margin: 0 }}>Search Resources</h3>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#6b7280' }}>Search Mode:</span>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('vector')}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    background: searchMode === 'vector' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(156, 163, 175, 0.1)',
-                    color: searchMode === 'vector' ? '#3b82f6' : '#6b7280',
-                    fontWeight: searchMode === 'vector' ? 500 : 400,
-                  }}
-                  title="AI 语义搜索（支持自然语言）"
-                >
-                  Vector
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('keyword')}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    background: searchMode === 'keyword' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(156, 163, 175, 0.1)',
-                    color: searchMode === 'keyword' ? '#16a34a' : '#6b7280',
-                    fontWeight: searchMode === 'keyword' ? 500 : 400,
-                  }}
-                  title="精确关键字搜索"
-                >
-                  Keyword
-                </button>
-              </div>
+              <span style={{
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                color: '#3b82f6',
+              }}>
+                Hybrid Search
+              </span>
             </div>
             <form className={styles.searchForm} onSubmit={handleSearch}>
               <div className={styles.searchInputWrapper}>
@@ -1561,12 +1522,12 @@ const CMDB: React.FC = () => {
                         padding: '2px 8px',
                         borderRadius: '4px',
                         fontSize: '12px',
-                        background: actualSearchMethod === 'vector' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                        color: actualSearchMethod === 'vector' ? '#3b82f6' : '#16a34a',
+                        background: actualSearchMethod === 'keyword' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                        color: actualSearchMethod === 'keyword' ? '#16a34a' : '#3b82f6',
                       }}
                       title={fallbackReason || undefined}
                     >
-                      {actualSearchMethod === 'vector' ? 'Vector Search' : 'Keyword Search'}
+                      {actualSearchMethod === 'hybrid' ? 'Hybrid Search' : actualSearchMethod === 'vector' ? 'Vector Search' : 'Keyword Search'}
                       {fallbackReason && ' (fallback)'}
                     </span>
                   )}
@@ -1645,6 +1606,21 @@ const CMDB: React.FC = () => {
                       <div className={styles.terraformAddress}>
                         {result.terraform_address}
                       </div>
+                      {result.resource_summary && (
+                        <div
+                          className={`${styles.resourceSummaryPreview} ${expandedSummaryIndex === index ? styles.expanded : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedSummaryIndex(expandedSummaryIndex === index ? null : index);
+                          }}
+                          title={expandedSummaryIndex === index ? '点击折叠' : '点击展开摘要'}
+                        >
+                          {/* 跳过第一行（标题行，和卡片上的资源名/ID 重复） */}
+                          {result.resource_summary.includes('\n')
+                            ? result.resource_summary.substring(result.resource_summary.indexOf('\n') + 1).trim()
+                            : result.resource_summary}
+                        </div>
+                      )}
 
                       {/* Inline detail panel (accordion) */}
                       {expandedResultIndex === index && (

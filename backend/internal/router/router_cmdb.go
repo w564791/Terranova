@@ -31,6 +31,12 @@ func SetupCMDBRoutes(r *gin.RouterGroup, db *gorm.DB) {
 		cmdb.GET("/suggestions",
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
 			cmdbHandler.GetSearchSuggestions)
+		cmdb.GET("/overview",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetCMDBOverview)
+		cmdb.GET("/sync-history",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetSyncHistory)
 		cmdb.GET("/stats",
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
 			cmdbHandler.GetCMDBStats)
@@ -40,6 +46,9 @@ func SetupCMDBRoutes(r *gin.RouterGroup, db *gorm.DB) {
 		cmdb.GET("/workspace-counts",
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
 			cmdbHandler.GetWorkspaceResourceCounts)
+		cmdb.GET("/search-analytics",
+			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			cmdbHandler.GetSearchAnalytics)
 		cmdb.GET("/workspaces/:workspace_id/tree",
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
 			cmdbHandler.GetWorkspaceResourceTree)

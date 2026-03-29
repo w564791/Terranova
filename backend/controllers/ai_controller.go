@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	appconfig "iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 	"net/http"
@@ -262,6 +263,59 @@ func (c *AIController) GetAvailableModels(ctx *gin.Context) {
 			"models": models,
 		},
 	})
+}
+
+// ListOpenAIModels 获取 OpenAI 兼容 API 的模型列表（POST，避免 API Key 暴露在 URL）
+// API Key 优先级：请求体 api_key > DB 已存（config_id） > DASHSCOPE_API_KEY 环境变量
+func (c *AIController) ListOpenAIModels(ctx *gin.Context) {
+	var req struct {
+		BaseURL  string `json:"base_url"`
+		APIKey   string `json:"api_key"`
+		ConfigID *uint  `json:"config_id"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "请求参数错误"})
+		return
+	}
+
+	baseURL := req.BaseURL
+	apiKey := req.APIKey
+
+	// 编辑模式：从 DB 补全
+	if req.ConfigID != nil && (baseURL == "" || apiKey == "") {
+		if existing, err := c.configService.GetConfigByID(*req.ConfigID); err == nil {
+			if baseURL == "" {
+				baseURL = existing.BaseURL
+			}
+			if apiKey == "" {
+				apiKey = existing.APIKey
+			}
+		}
+	}
+
+	// 兜底：环境变量
+	if apiKey == "" {
+		cfg := appconfig.Load()
+		apiKey = cfg.AI.DashScopeAPIKey
+	}
+
+	if baseURL == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "缺少 base_url"})
+		return
+	}
+
+	models, err := c.configService.ListOpenAICompatibleModels(baseURL, apiKey)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "获取模型列表失败: " + err.Error()})
+		return
+	}
+
+	// 成功获取模型列表 = key 有效，如果是用户新填的 key + 编辑模式，顺便持久化
+	if req.APIKey != "" && req.ConfigID != nil {
+		c.configService.UpdateAPIKey(*req.ConfigID, req.APIKey)
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"code": 200, "data": models})
 }
 
 // GetAvailableRegions 获取可用区域列表

@@ -7,6 +7,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -840,27 +841,105 @@ func (s *AICMDBService) executeQuery(query CMDBQuery, filters map[string]string,
 		}
 	}
 
-	// 2. 尝试向量搜索（如果 embedding 服务可用）
-	if s.embeddingService != nil && query.Keyword != "" && query.Keyword != "*" {
-		vectorResults, err := s.vectorSearch(query, filters, workspaceIDs)
-		if err == nil && len(vectorResults) > 0 {
-			log.Printf("[AICMDBService] 向量搜索成功: %d 个结果", len(vectorResults))
-			result.Found = true
-			if len(vectorResults) == 1 {
-				result.Resource = &vectorResults[0]
-			} else {
-				result.Candidates = vectorResults
+	// 2. 混合搜索（向量 + 关键词并行）
+	if query.Keyword != "" && query.Keyword != "*" {
+		return s.hybridSearch(query, filters, workspaceIDs)
+	}
+
+	// 通配符或空关键词，直接关键词搜索
+	return s.keywordSearch(query, filters, workspaceIDs)
+}
+
+// hybridSearch 混合搜索：向量搜索 + 关键词搜索并行，合并去重
+func (s *AICMDBService) hybridSearch(query CMDBQuery, filters map[string]string, workspaceIDs []string) *CMDBQueryResult {
+	result := &CMDBQueryResult{Query: query, Found: false}
+
+	var vectorResults []CMDBResourceInfo
+	var keywordResult *CMDBQueryResult
+	var vectorErr error
+
+	var wg sync.WaitGroup
+
+	// 并行：向量搜索
+	if s.embeddingService != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vectorResults, vectorErr = s.vectorSearch(query, filters, workspaceIDs)
+		}()
+	}
+
+	// 并行：关键词搜索
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		keywordResult = s.keywordSearch(query, filters, workspaceIDs)
+	}()
+
+	wg.Wait()
+
+	// 合并去重：向量结果优先
+	seen := make(map[string]bool)
+	var merged []CMDBResourceInfo
+
+	if vectorErr == nil {
+		for _, r := range vectorResults {
+			key := r.ID
+			if key == "" {
+				key = r.Name
 			}
-			return result
+			seen[key] = true
+			merged = append(merged, r)
 		}
-		if err != nil {
-			log.Printf("[AICMDBService] 向量搜索失败，降级到关键词搜索: %v", err)
+	} else {
+		log.Printf("[AICMDBService] 向量搜索失败: %v", vectorErr)
+	}
+
+	if keywordResult != nil && keywordResult.Found {
+		addFromKeyword := func(r *CMDBResourceInfo) {
+			if r == nil {
+				return
+			}
+			key := r.ID
+			if key == "" {
+				key = r.Name
+			}
+			if !seen[key] {
+				seen[key] = true
+				merged = append(merged, *r)
+			}
+		}
+		if keywordResult.Resource != nil {
+			addFromKeyword(keywordResult.Resource)
+		}
+		for i := range keywordResult.Candidates {
+			addFromKeyword(&keywordResult.Candidates[i])
 		}
 	}
 
-	// 3. 降级到关键词搜索
-	log.Printf("[AICMDBService] 使用关键词搜索: %s", query.Keyword)
-	return s.keywordSearch(query, filters, workspaceIDs)
+	if len(merged) == 0 {
+		result.Error = "未找到匹配的资源"
+		return result
+	}
+
+	result.Found = true
+	if len(merged) == 1 {
+		result.Resource = &merged[0]
+	} else {
+		result.Candidates = merged
+	}
+
+	kwCount := 0
+	if keywordResult != nil {
+		kwCount = len(keywordResult.Candidates)
+		if keywordResult.Resource != nil {
+			kwCount++
+		}
+	}
+	log.Printf("[AICMDBService] 混合搜索: vector=%d, keyword=%d, merged=%d",
+		len(vectorResults), kwCount, len(merged))
+
+	return result
 }
 
 // vectorSearch 向量搜索（批量 Embedding 优化版本）

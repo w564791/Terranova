@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMDB Overview Dashboard Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #212529; }
+
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px; }
+  .tab { padding: 12px 20px; font-size: 14px; color: #6c757d; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: #212529; }
+  .tab.active { color: #1677ff; border-bottom-color: #1677ff; font-weight: 500; }
+
+  /* Grid */
+  .row { display: grid; gap: 16px; margin-bottom: 16px; }
+  .row3 { grid-template-columns: repeat(3, 1fr); }
+  .row2 { grid-template-columns: repeat(2, 1fr); }
+  .row-queue-type { grid-template-columns: 2fr 3fr; }
+
+  /* Card */
+  .card { background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; transition: box-shadow 0.2s; }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card-label { font-size: 13px; color: #6c757d; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .card-value { font-size: 36px; font-weight: 600; color: #212529; line-height: 1.2; }
+  .card-hint { font-size: 12px; color: #868e96; margin-top: 4px; }
+
+  /* Coverage Bar */
+  .coverage-bar { height: 8px; background: #e9ecef; border-radius: 4px; margin-top: 12px; overflow: hidden; }
+  .coverage-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+  /* Type Bars */
+  .type-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .type-bar-label { font-size: 12px; color: #495057; width: 130px; text-align: right; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .type-bar-track { flex: 1; height: 18px; background: #f1f3f5; border-radius: 3px; overflow: hidden; }
+  .type-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .type-bar-count { font-size: 11px; color: #868e96; width: 32px; flex-shrink: 0; }
+  .type-bar-footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #f1f3f5; }
+  .type-bar-footer-text { font-size: 12px; color: #868e96; margin-bottom: 6px; padding-left: 138px; }
+  .source-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .source-bar-label { font-size: 12px; color: #868e96; width: 130px; text-align: right; flex-shrink: 0; }
+  .source-bar { display: flex; flex: 1; height: 10px; background: #f1f3f5; border-radius: 5px; overflow: hidden; }
+  .source-bar-fill { height: 100%; }
+  .source-bar-spacer { width: 32px; flex-shrink: 0; }
+  .source-bar-legend { display: flex; gap: 16px; font-size: 11px; color: #868e96; padding-left: 138px; }
+  .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+  /* Queue items */
+  .queue-note { font-size: 11px; color: #adb5bd; padding-bottom: 6px; font-style: italic; }
+  .queue-section { font-size: 12px; font-weight: 500; color: #495057; padding: 8px 0 4px; border-top: 1px solid #f1f3f5; margin-top: 4px; }
+  .queue-section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  .queue-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .queue-label { color: #6c757d; }
+  .queue-value { font-weight: 600; color: #212529; }
+
+  /* Table */
+  .sync-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .sync-table th { text-align: left; padding: 8px 12px; font-size: 12px; color: #6c757d; border-bottom: 1px solid #e9ecef; font-weight: 500; }
+  .sync-table td { padding: 8px 12px; font-size: 13px; color: #212529; border-bottom: 1px solid #f1f3f5; }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+  .badge-success { background: #d3f9d8; color: #2b8a3e; }
+  .badge-failed { background: #ffe3e3; color: #c92a2a; }
+  .badge-running { background: #d0ebff; color: #1864ab; }
+  .badge-workspace { background: #e7f5ff; color: #1971c2; }
+  .badge-external { background: #fff3bf; color: #e67700; }
+
+  .error-text { color: #ff4d4f; }
+
+  @media (max-width: 768px) {
+    .row3, .row2, .row-queue-type { grid-template-columns: 1fr; }
+    .card-value { font-size: 28px; }
+    .page { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <!-- Simulated Tabs -->
+  <div class="tabs">
+    <div class="tab">概览</div>
+    <div class="tab">Skill 质量监控</div>
+    <div class="tab active">CMDB 概览</div>
+  </div>
+
+  <!-- Row 1: Data Sources -->
+  <div class="row row3">
+    <div class="card">
+      <div class="card-label">Workspaces</div>
+      <div class="card-value">8</div>
+      <div class="card-hint">有资源的 workspace 数量</div>
+    </div>
+    <div class="card">
+      <div class="card-label">外部数据源</div>
+      <div class="card-value">3</div>
+      <div class="card-hint">2 正常 <span class="error-text">/ 1 异常</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">资源总数</div>
+      <div class="card-value">582</div>
+      <div class="card-hint">Workspace: 430 / 外部: 152</div>
+    </div>
+  </div>
+
+  <!-- Row 2: Embedding + Summary Coverage -->
+  <div class="row row2">
+    <div class="card">
+      <div class="card-label">Embedding 覆盖率</div>
+      <div class="card-value">89.9%</div>
+      <div class="card-hint">523/582</div>
+      <div class="coverage-bar">
+        <div class="coverage-fill" style="width: 89.9%; background: #52c41a;"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Summary 覆盖率</div>
+      <div class="card-value">96.4%</div>
+      <div class="card-hint">561/582</div>
+      <div class="coverage-bar">
+        <div class="coverage-fill" style="width: 96.4%; background: #52c41a;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Task Queues + Resource Type Distribution -->
+  <div class="row row-queue-type">
+    <div class="card">
+      <div class="card-label">任务队列</div>
+      <div class="queue-note">Workspace 的 Summary 在同步时即时生成，无独立队列</div>
+      <div class="queue-section">Embedding 队列 (Workspace)</div>
+      <div class="queue-item"><span class="queue-label">待处理</span><span class="queue-value">12</span></div>
+      <div class="queue-item"><span class="queue-label">处理中</span><span class="queue-value">3</span></div>
+      <div class="queue-item"><span class="queue-label">失败</span><span class="queue-value error-text">2</span></div>
+      <div class="queue-section">Summary 队列 (外部源)</div>
+      <div class="queue-item"><span class="queue-label">待处理</span><span class="queue-value">1</span></div>
+      <div class="queue-item"><span class="queue-label">处理中</span><span class="queue-value">0</span></div>
+      <div class="queue-item"><span class="queue-label">失败</span><span class="queue-value">0</span></div>
+      <div class="queue-section">Embedding 队列 (外部源)</div>
+      <div class="queue-item"><span class="queue-label">待处理</span><span class="queue-value">1</span></div>
+      <div class="queue-item"><span class="queue-label">处理中</span><span class="queue-value">1</span></div>
+      <div class="queue-item"><span class="queue-label">失败</span><span class="queue-value">0</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">资源类型分布</div>
+      <div id="type-bars"></div>
+      <div class="type-bar-footer">
+        <div class="type-bar-footer-text">其他类型: 190 个资源</div>
+        <div class="source-bar-row">
+          <span class="source-bar-label">来源占比</span>
+          <div class="source-bar">
+            <div class="source-bar-fill" style="width: 73.9%; background: #1677ff;"></div>
+            <div class="source-bar-fill" style="width: 26.1%; background: #fa8c16;"></div>
+          </div>
+          <span class="source-bar-spacer"></span>
+        </div>
+        <div class="source-bar-legend">
+          <span><span class="legend-dot" style="background: #1677ff;"></span>Workspace</span>
+          <span><span class="legend-dot" style="background: #fa8c16;"></span>外部源</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Recent Sync Activity -->
+  <div class="card">
+    <div class="card-label">最近同步活动</div>
+    <table class="sync-table">
+      <thead>
+        <tr>
+          <th>来源</th>
+          <th>名称</th>
+          <th>触发方式</th>
+          <th>状态</th>
+          <th>完成时间</th>
+          <th>同步</th>
+          <th>新增</th>
+          <th>更新</th>
+          <th>删除</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-workspace">Workspace</span></td>
+          <td>production-infra</td>
+          <td>auto</td>
+          <td><span class="badge badge-success">success</span></td>
+          <td>3/28 10:15</td>
+          <td>42</td>
+          <td>3</td>
+          <td>5</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-external">外部</span></td>
+          <td>ServiceNow CMDB</td>
+          <td>scheduled</td>
+          <td><span class="badge badge-success">success</span></td>
+          <td>3/28 09:00</td>
+          <td>152</td>
+          <td>8</td>
+          <td>12</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-workspace">Workspace</span></td>
+          <td>staging-env</td>
+          <td>manual</td>
+          <td><span class="badge badge-success">success</span></td>
+          <td>3/28 08:30</td>
+          <td>28</td>
+          <td>0</td>
+          <td>2</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-external">外部</span></td>
+          <td>AWS Config Inventory</td>
+          <td>scheduled</td>
+          <td><span class="badge badge-failed">failed</span></td>
+          <td>3/28 06:00</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-workspace">Workspace</span></td>
+          <td>network-core</td>
+          <td>auto</td>
+          <td><span class="badge badge-success">success</span></td>
+          <td>3/27 22:10</td>
+          <td>18</td>
+          <td>1</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  var colors = ['#1677ff','#597ef7','#85a5ff','#adc6ff','#bae7ff','#87e8de','#b7eb8f','#ffe58f','#ffd591','#ffbb96'];
+  var words = [
+    ['instance', 86], ['security_group', 64], ['subnet', 48],
+    ['iam_role', 42], ['s3_bucket', 38], ['lb_target_group', 30],
+    ['route53_record', 28], ['cloudwatch_log_group', 24],
+    ['vpc', 18], ['ecs_service', 14],
+  ];
+  var maxVal = words[0][1];
+  var container = document.getElementById('type-bars');
+  words.forEach(function(w, i) {
+    var pct = (w[1] / maxVal * 80).toFixed(1);
+    var row = document.createElement('div');
+    row.className = 'type-bar-row';
+
+    var label = document.createElement('span');
+    label.className = 'type-bar-label';
+    label.textContent = w[0];
+
+    var track = document.createElement('div');
+    track.className = 'type-bar-track';
+    var fill = document.createElement('div');
+    fill.className = 'type-bar-fill';
+    fill.style.width = pct + '%';
+    fill.style.background = colors[i % colors.length];
+    track.appendChild(fill);
+
+    var count = document.createElement('span');
+    count.className = 'type-bar-count';
+    count.textContent = w[1];
+
+    row.appendChild(label);
+    row.appendChild(track);
+    row.appendChild(count);
+    container.appendChild(row);
+  });
+</script>
+</body>
+</html>

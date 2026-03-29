@@ -195,6 +195,15 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 		return false, nil
 	}
 
+	// 3. Idempotency: CAS update pending → assessing to prevent duplicate processing
+	result := w.db.Model(&models.SkillUsageLog{}).
+		Where("id = ? AND assessment_status = ?", usageLogID, string(models.AssessmentStatusPending)).
+		Update("assessment_status", "assessing")
+	if result.RowsAffected == 0 {
+		// Another worker already picked this up
+		return false, nil
+	}
+
 	// 3. Get output from OutputSnapshot (default to null if nil)
 	var output json.RawMessage
 	if usageLog.OutputSnapshot != nil {
@@ -219,9 +228,9 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 	schemaValid := validationResult.Valid
 	assessmentLatencyMs := int(time.Since(startTime).Milliseconds())
 
-	result := models.SkillAssessmentResult{
+	schemaResult := models.SkillAssessmentResult{
 		ID:                  uuid.New().String(),
-		UsageLogID:          usageLogID,
+		UsageLogID:          &usageLogID,
 		SkillName:           skillName,
 		SkillContentHash:    usageLog.SkillContentHash,
 		AssessedAt:          time.Now(),
@@ -235,12 +244,12 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 	}
 
 	// 7. Insert assessment result
-	if err := w.db.Create(&result).Error; err != nil {
+	if err := w.db.Create(&schemaResult).Error; err != nil {
 		return false, fmt.Errorf("failed to insert assessment result: %w", err)
 	}
 
 	log.Printf("[AssessmentWorker] Layer 1 assessed %s: verdict=%s, score=%d, latency=%dms",
-		usageLogID, result.Verdict, result.Score, assessmentLatencyMs)
+		usageLogID, schemaResult.Verdict, schemaResult.Score, assessmentLatencyMs)
 
 	// --- Layer 2/3: LLM evaluation (optional, based on sampling) ---
 	if w.sampler != nil && w.evaluator != nil {
@@ -258,7 +267,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 				ruleViolations := ruleResult.RuleViolations
 				ruleAssessment := models.SkillAssessmentResult{
 					ID:                   uuid.New().String(),
-					UsageLogID:           usageLogID,
+					UsageLogID:           &usageLogID,
 					SkillName:            skillName,
 					SkillContentHash:     usageLog.SkillContentHash,
 					AssessedAt:           time.Now(),
@@ -288,7 +297,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 				qualityIssues := semanticResult.QualityIssues
 				semanticAssessment := models.SkillAssessmentResult{
 					ID:                   uuid.New().String(),
-					UsageLogID:           usageLogID,
+					UsageLogID:           &usageLogID,
 					SkillName:            skillName,
 					SkillContentHash:     usageLog.SkillContentHash,
 					AssessedAt:           time.Now(),

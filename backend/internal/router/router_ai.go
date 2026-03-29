@@ -17,6 +17,14 @@ func GetEmbeddingWorker() *services.EmbeddingWorker {
 	return embeddingWorker
 }
 
+// postSyncWorker 全局 post-sync worker 实例
+var postSyncWorker *services.PostSyncWorker
+
+// GetPostSyncWorker 获取全局 post-sync worker 实例
+func GetPostSyncWorker() *services.PostSyncWorker {
+	return postSyncWorker
+}
+
 // assessmentWorker 全局 assessment worker 实例
 var assessmentWorker *services.AssessmentWorker
 
@@ -138,6 +146,9 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		if embeddingWorker == nil {
 			embeddingWorker = services.NewEmbeddingWorker(db)
 		}
+		if postSyncWorker == nil {
+			postSyncWorker = services.NewPostSyncWorker(db)
+		}
 		embeddingController := controllers.NewEmbeddingController(db, embeddingWorker)
 
 		// 获取 embedding 配置状态
@@ -211,6 +222,12 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		admin.GET("/skill-assessment/detail", assessmentController.GetCapabilityDetail)
 		admin.GET("/skill-assessment/compare", assessmentController.CompareVersions)
 		admin.GET("/skill-assessment/top-violations", assessmentController.GetTopViolations)
+
+		// ========== Summary Assessment Dashboard API ==========
+		summaryAssessmentController := controllers.NewSummaryAssessmentController(db)
+		admin.GET("/summary-assessment/overview", summaryAssessmentController.GetOverview)
+		admin.GET("/summary-assessment/issue-resources", summaryAssessmentController.GetIssueResources)
+		admin.POST("/summary-assessment/regenerate", summaryAssessmentController.RegenerateSummaries)
 
 		// ========== Embedding Cache API ==========
 		embeddingCacheController := controllers.NewEmbeddingCacheController(db)
