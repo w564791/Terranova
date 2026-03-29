@@ -315,16 +315,22 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 		}
 	}()
 
-	return map[string]interface{}{
-		"found":              true,
-		"workspace_id":       resource.WorkspaceID,
-		"terraform_address":  resource.TerraformAddress,
-		"resource_type":      resource.ResourceType,
-		"cloud_resource_id":  resource.CloudResourceID,
+	result := map[string]interface{}{
+		"found":             true,
+		"workspace_id":      resource.WorkspaceID,
+		"terraform_address": resource.TerraformAddress,
+		"resource_type":     resource.ResourceType,
+		"cloud_resource_id": resource.CloudResourceID,
 		"cloud_resource_arn": resource.CloudResourceARN,
-		"attributes":         attrs,
-		"tags":               tags,
-	}, nil
+		"tags":              tags,
+	}
+	// 有摘要时优先返回摘要（省 token），无摘要时 fallback 返回原始 attributes
+	if resource.ResourceSummary != "" {
+		result["resource_summary"] = resource.ResourceSummary
+	} else {
+		result["attributes"] = attrs
+	}
+	return result, nil
 }
 
 // QueryStateResourcesTool 查询工作空间完整资源概览
