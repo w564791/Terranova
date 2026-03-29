@@ -3678,7 +3678,8 @@ CREATE TABLE public.resource_index (
     embedding_updated_at timestamp without time zone,
     embedding public.vector(1536),
     resource_summary text,
-    summary_hash character varying(32)
+    summary_hash character varying(32),
+    summary_assessment_status character varying(16) DEFAULT ''::character varying
 );
 
 
@@ -4710,7 +4711,12 @@ CREATE TABLE public.skill_assessment_results (
     quality_issues jsonb,
     assessment_confidence character varying(16),
     assessment_model character varying(64),
-    assessment_raw_output text
+    assessment_raw_output text,
+    source_type character varying(16) DEFAULT 'skill'::character varying,
+    resource_id integer,
+    format_violations text[],
+    security_tag_misses jsonb,
+    hallucination_suspects text[]
 );
 
 
@@ -13170,6 +13176,10 @@ CREATE INDEX idx_assessment_verdict ON public.skill_assessment_results USING btr
 --
 
 CREATE INDEX idx_assessment_at ON public.skill_assessment_results USING btree (assessed_at DESC);
+
+CREATE INDEX idx_assessment_source_type ON public.skill_assessment_results USING btree (source_type);
+
+CREATE INDEX idx_assessment_resource_id ON public.skill_assessment_results USING btree (resource_id) WHERE (resource_id IS NOT NULL);
 
 
 --
