@@ -70,10 +70,21 @@ mandatory_calls:
       应通过 cloud_resource_id 查询其属性以补充影响分析。
       如果在当前 workspace 查不到，不传 workspace_id 重新查询（可能在外部 CMDB 中）。
 
+  - condition: query_cmdb_dependencies 返回依赖方 >= 3 个
+    tool: query_resource_attributes
+    rule: MUST_CALL
+    description: |
+      当依赖方数量 >= 3 时，必须对依赖方进行抽样查询（至少查 3 个、最多查 5 个）
+      以获取 resource_summary，用于：
+      1. 在 affected_resources.impact 中写出具体影响（如"S3 VPC Endpoint 不可达将导致应用无法访问 S3"）
+      2. 评估实际业务影响严重程度
+      3. 禁止对所有依赖方使用相同的模板化 impact 描述
+
 禁止：
   - 禁止编造依赖关系
   - 禁止在未调用工具的情况下填写 direct_dependencies 非零值
   - 工具未返回依赖时，affected_resources 为空数组，不得填写任何数据
+  - 禁止对多个 affected_resources 使用完全相同的 impact 描述，每个资源的 impact 必须基于其实际用途
 ```
 
 -----
