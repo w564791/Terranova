@@ -65,6 +65,5 @@ export interface SummaryAssessmentOverview {
 }
 
 export async function getSummaryAssessmentOverview(days: number): Promise<SummaryAssessmentOverview> {
-  const res = await api.get(`/admin/summary-assessment/overview?days=${days}`);
-  return res.data;
+  return await api.get(`/admin/summary-assessment/overview?days=${days}`) as unknown as SummaryAssessmentOverview;
 }
