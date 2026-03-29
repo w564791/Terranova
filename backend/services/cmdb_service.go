@@ -1383,3 +1383,118 @@ func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSu
 
 	return suggestions, nil
 }
+
+// GetSearchAnalytics 获取搜索分析聚合数据
+func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSearchAnalytics, error) {
+	// 解析时间范围
+	var interval string
+	switch period {
+	case "24h":
+		interval = "1 day"
+	case "30d":
+		interval = "30 days"
+	default:
+		period = "7d"
+		interval = "7 days"
+	}
+
+	// 构建 source 条件
+	sourceCondition := ""
+	if source == "auto" {
+		sourceCondition = " AND source = 'auto'"
+	} else if source == "all" {
+		sourceCondition = ""
+	} else {
+		sourceCondition = " AND source = 'manual'"
+	}
+
+	baseWhere := fmt.Sprintf("created_at >= NOW() - INTERVAL '%s'%s", interval, sourceCondition)
+
+	result := &models.CMDBSearchAnalytics{Period: period}
+
+	// 1. Usage 统计
+	var usage struct {
+		TotalSearches   int64   `gorm:"column:total_searches"`
+		ZeroResultCount int64   `gorm:"column:zero_result_count"`
+		AvgResultCount  float64 `gorm:"column:avg_result_count"`
+		UniqueQueries   int64   `gorm:"column:unique_queries"`
+	}
+	s.db.Raw(fmt.Sprintf(`
+		SELECT
+			COUNT(*) AS total_searches,
+			COUNT(*) FILTER (WHERE total_count = 0) AS zero_result_count,
+			COALESCE(ROUND(AVG(total_count)::numeric, 1), 0) AS avg_result_count,
+			COUNT(DISTINCT query) AS unique_queries
+		FROM cmdb_search_logs
+		WHERE %s
+	`, baseWhere)).Scan(&usage)
+
+	result.Usage = models.CMDBSearchUsage{
+		TotalSearches:   usage.TotalSearches,
+		ZeroResultCount: usage.ZeroResultCount,
+		AvgResultCount:  usage.AvgResultCount,
+		UniqueQueries:   usage.UniqueQueries,
+	}
+	if usage.TotalSearches > 0 {
+		result.Usage.ZeroResultRate = float64(usage.ZeroResultCount) / float64(usage.TotalSearches) * 100
+	}
+
+	// 2. Quality 统计
+	var quality struct {
+		MethodHybrid     int64   `gorm:"column:method_hybrid"`
+		MethodVector     int64   `gorm:"column:method_vector"`
+		MethodKeyword    int64   `gorm:"column:method_keyword"`
+		AvgTopSimilarity float64 `gorm:"column:avg_top_similarity"`
+		AvgAvgSimilarity float64 `gorm:"column:avg_avg_similarity"`
+		AvgDurationMs    float64 `gorm:"column:avg_duration_ms"`
+		FallbackCount    int64   `gorm:"column:fallback_count"`
+	}
+	s.db.Raw(fmt.Sprintf(`
+		SELECT
+			COUNT(*) FILTER (WHERE search_method = 'hybrid') AS method_hybrid,
+			COUNT(*) FILTER (WHERE search_method = 'vector') AS method_vector,
+			COUNT(*) FILTER (WHERE search_method = 'keyword') AS method_keyword,
+			COALESCE(ROUND(AVG(top_similarity) FILTER (WHERE vector_count > 0)::numeric, 3), 0) AS avg_top_similarity,
+			COALESCE(ROUND(AVG(avg_similarity) FILTER (WHERE vector_count > 0)::numeric, 3), 0) AS avg_avg_similarity,
+			COALESCE(ROUND(AVG(duration_ms)::numeric, 0), 0) AS avg_duration_ms,
+			COUNT(*) FILTER (WHERE search_method = 'keyword' AND fallback_reason != '') AS fallback_count
+		FROM cmdb_search_logs
+		WHERE %s
+	`, baseWhere)).Scan(&quality)
+
+	result.Quality = models.CMDBSearchQuality{
+		MethodDistribution: map[string]int64{
+			"hybrid":  quality.MethodHybrid,
+			"vector":  quality.MethodVector,
+			"keyword": quality.MethodKeyword,
+		},
+		AvgTopSimilarity: quality.AvgTopSimilarity,
+		AvgSimilarity:    quality.AvgAvgSimilarity,
+		AvgDurationMs:    quality.AvgDurationMs,
+	}
+	if usage.TotalSearches > 0 {
+		result.Quality.FallbackRate = float64(quality.FallbackCount) / float64(usage.TotalSearches) * 100
+	}
+
+	// 3. Top queries（Top 30，供词云使用）
+	var topQueries []models.CMDBSearchQueryStat
+	s.db.Raw(fmt.Sprintf(`
+		SELECT query, COUNT(*) AS count, ROUND(AVG(total_count)::numeric, 1) AS avg_results
+		FROM cmdb_search_logs
+		WHERE %s
+		GROUP BY query ORDER BY count DESC LIMIT 30
+	`, baseWhere)).Scan(&topQueries)
+	result.TopQueries = topQueries
+
+	// 4. Zero result queries（Top 10）
+	var zeroResultQueries []models.CMDBSearchZeroResultStat
+	s.db.Raw(fmt.Sprintf(`
+		SELECT query, COUNT(*) AS count, MAX(created_at) AS last_at
+		FROM cmdb_search_logs
+		WHERE %s AND total_count = 0
+		GROUP BY query ORDER BY count DESC LIMIT 10
+	`, baseWhere)).Scan(&zeroResultQueries)
+	result.ZeroResultQueries = zeroResultQueries
+
+	return result, nil
+}
