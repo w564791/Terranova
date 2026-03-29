@@ -132,6 +132,19 @@ func (h *CMDBHandler) GetSyncHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// GetSearchAnalytics 获取搜索召回质量分析数据
+func (h *CMDBHandler) GetSearchAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "7d")
+	source := c.DefaultQuery("source", "manual")
+
+	analytics, err := h.cmdbService.GetSearchAnalytics(period, source)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, analytics)
+}
+
 // GetCMDBStats 获取CMDB统计信息
 // @Summary 获取CMDB统计信息
 // @Description 获取CMDB的整体统计信息
