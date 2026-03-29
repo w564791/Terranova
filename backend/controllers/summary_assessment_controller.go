@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -140,19 +141,29 @@ func (c *SummaryAssessmentController) GetOverview(ctx *gin.Context) {
 	}
 
 	// Security Tag Stats
+	// total_expected = resources where at least one security rule's AttrPattern matched
+	// We approximate by counting: resources with misses + resources that passed all security checks
+	// Since we only record misses, we count total misses and report that directly
 	var withMisses int64
 	c.db.Model(&models.SkillAssessmentResult{}).
-		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND security_tag_misses IS NOT NULL AND security_tag_misses != 'null'",
+		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND security_tag_misses IS NOT NULL AND security_tag_misses != 'null' AND security_tag_misses != '[]'",
 			"summary", "schema", since).Count(&withMisses)
+
+	missesByRule := c.getMissesByRule(since)
+	// Sum individual miss counts for total
+	var totalMissCount int64
+	for _, m := range missesByRule {
+		totalMissCount += m.MissCount
+	}
 
 	overview.SecurityTagStats = SecurityTagStatsDTO{
 		TotalExpected: totalAssessed,
 		TotalHit:      totalAssessed - withMisses,
+		MissesByRule:  missesByRule,
 	}
 	if totalAssessed > 0 {
 		overview.SecurityTagStats.HitRate = float64(totalAssessed-withMisses) / float64(totalAssessed) * 100
 	}
-	overview.SecurityTagStats.MissesByRule = c.getMissesByRule(since)
 
 	// Issue Distribution
 	overview.IssueDistribution = c.getIssueDistribution(since)
@@ -211,9 +222,14 @@ func (c *SummaryAssessmentController) getIssueDistribution(since time.Time) Issu
 		dist.FormatViolations = append(dist.FormatViolations, IssueCount{Type: t, Count: cnt})
 	}
 
-	c.db.Model(&models.SkillAssessmentResult{}).
-		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND hallucination_suspects IS NOT NULL",
-			"summary", "schema", since).Count(&dist.HallucinationSuspects)
+	// Count individual hallucination suspects, not just records
+	var hallucinationResults []models.SkillAssessmentResult
+	c.db.Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND hallucination_suspects IS NOT NULL",
+		"summary", "schema", since).
+		Select("hallucination_suspects").Find(&hallucinationResults)
+	for _, r := range hallucinationResults {
+		dist.HallucinationSuspects += int64(len(r.HallucinationSuspects))
+	}
 
 	c.db.Model(&models.SkillAssessmentResult{}).
 		Where("source_type = ? AND assessment_layer = ? AND assessed_at >= ? AND security_tag_misses IS NOT NULL AND security_tag_misses != 'null'",
@@ -258,6 +274,7 @@ func (c *SummaryAssessmentController) getDailyTrend(since time.Time) []SummaryDa
 		}
 		out = append(out, *d)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
 	return out
 }
 

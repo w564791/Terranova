@@ -141,11 +141,12 @@ func extractSummaryPromptRules() string {
 	return strings.Join(rules, "\n")
 }
 
-// truncateForEval truncates attributes for evaluation prompt (max 4000 chars)
+// truncateForEval truncates attributes for evaluation prompt (max 4000 runes)
 func truncateForEval(s string) string {
 	const maxLen = 4000
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "...(truncated)"
+	return string(runes[:maxLen]) + "...(truncated)"
 }

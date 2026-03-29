@@ -80,7 +80,7 @@ func NewSummaryTextValidator() *SummaryTextValidator {
 			regexp.MustCompile(`(?m)^\s*\d+\.\s`),
 		},
 		ipPattern:         regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:/\d{1,2})?\b`),
-		instancePattern:   regexp.MustCompile(`\b[a-z]\d[a-z]?\.\w+\b`),
+		instancePattern:   regexp.MustCompile(`\b[a-z][a-z0-9]*\.(?:\d*x?large|\d*micro|\d*small|\d*medium|\d*nano|metal)\b`),
 		resourceIDPattern: regexp.MustCompile(`\b(?:i-|sg-|vpc-|subnet-|vol-|eni-|rtb-|igw-|nat-|lb-)[a-z0-9]+\b`),
 	}
 }
