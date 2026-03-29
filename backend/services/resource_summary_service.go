@@ -160,8 +160,9 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 
 		// 写入 resource_summary + summary_hash（GORM）
 		if err := s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).Updates(map[string]interface{}{
-			"resource_summary": summary,
-			"summary_hash":     hash,
+			"resource_summary":          summary,
+			"summary_hash":              hash,
+			"summary_assessment_status": "pending",
 		}).Error; err != nil {
 			log.Printf("[ResourceSummary] Failed to save summary for resource %d: %v", resource.ID, err)
 			failed++
