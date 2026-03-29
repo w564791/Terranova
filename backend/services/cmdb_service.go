@@ -1404,12 +1404,13 @@ func (s *CMDBService) GetSearchAnalytics(period, source string) (*models.CMDBSea
 	var args []interface{}
 	since := fmt.Sprintf("NOW() - INTERVAL '%s'", interval) // interval 来自白名单 switch，安全
 
-	if source == "auto" {
-		sourceFilter = "created_at >= " + since + " AND source = $1"
-		args = append(args, "auto")
-	} else if source == "all" {
+	switch source {
+	case "all":
 		sourceFilter = "created_at >= " + since
-	} else {
+	case "auto", "agent", "manual":
+		sourceFilter = "created_at >= " + since + " AND source = $1"
+		args = append(args, source)
+	default:
 		sourceFilter = "created_at >= " + since + " AND source = $1"
 		args = append(args, "manual")
 	}
