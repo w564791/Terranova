@@ -81,3 +81,7 @@ export interface IssueResource {
 export async function getIssueResources(type: string, days: number): Promise<IssueResource[]> {
   return await api.get(`/admin/summary-assessment/issue-resources?type=${encodeURIComponent(type)}&days=${days}`) as unknown as IssueResource[];
 }
+
+export async function regenerateSummaries(resourceIds: number[]): Promise<{ message: string; resources_affected: number; jobs_created: number }> {
+  return await api.post('/admin/summary-assessment/regenerate', { resource_ids: resourceIds }) as unknown as { message: string; resources_affected: number; jobs_created: number };
+}

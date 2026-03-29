@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Spin, Empty, Table, Tooltip, Drawer, Tag } from 'antd';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { Spin, Empty, Table, Tooltip, Drawer, Tag, Button, message } from 'antd';
+import { QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   getSummaryAssessmentOverview,
   getIssueResources,
+  regenerateSummaries,
   SummaryAssessmentOverview,
   ResourceTypeStats,
   IssueResource,
@@ -31,6 +32,8 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
   const [drawerTitle, setDrawerTitle] = useState('');
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [issueResources, setIssueResources] = useState<IssueResource[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -60,6 +63,26 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
       setIssueResources([]);
     } finally {
       setDrawerLoading(false);
+    }
+  };
+
+  const handleRegenerate = async (ids?: number[]) => {
+    const resourceIds = ids || selectedRowKeys.map(k => Number(k));
+    if (resourceIds.length === 0) {
+      message.warning('请先选择要重新生成的资源');
+      return;
+    }
+    setRegenerating(true);
+    try {
+      const result = await regenerateSummaries(resourceIds);
+      message.success(`已提交 ${result.resources_affected} 个资源的摘要重新生成任务`);
+      setSelectedRowKeys([]);
+      setDrawerOpen(false);
+      loadData();
+    } catch (e) {
+      message.error('提交失败: ' + String(e));
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -260,8 +283,29 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
       <Drawer
         title={`问题资源: ${drawerTitle}`}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => { setDrawerOpen(false); setSelectedRowKeys([]); }}
         width={720}
+        extra={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => handleRegenerate()}
+              disabled={selectedRowKeys.length === 0}
+              loading={regenerating}
+            >
+              重跑选中 ({selectedRowKeys.length})
+            </Button>
+            <Button
+              type="primary"
+              icon={<ReloadOutlined />}
+              onClick={() => handleRegenerate(issueResources.map(r => r.resource_id))}
+              disabled={issueResources.length === 0}
+              loading={regenerating}
+            >
+              全部重跑 ({issueResources.length})
+            </Button>
+          </div>
+        }
       >
         <Spin spinning={drawerLoading}>
           {issueResources.length === 0 && !drawerLoading ? (
@@ -272,6 +316,10 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
               rowKey="resource_id"
               size="small"
               pagination={{ pageSize: 20 }}
+              rowSelection={{
+                selectedRowKeys,
+                onChange: setSelectedRowKeys,
+              }}
               columns={[
                 {
                   title: '资源',

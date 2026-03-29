@@ -227,6 +227,7 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		summaryAssessmentController := controllers.NewSummaryAssessmentController(db)
 		admin.GET("/summary-assessment/overview", summaryAssessmentController.GetOverview)
 		admin.GET("/summary-assessment/issue-resources", summaryAssessmentController.GetIssueResources)
+		admin.POST("/summary-assessment/regenerate", summaryAssessmentController.RegenerateSummaries)
 
 		// ========== Embedding Cache API ==========
 		embeddingCacheController := controllers.NewEmbeddingCacheController(db)

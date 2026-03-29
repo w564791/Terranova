@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -410,6 +411,90 @@ func (c *SummaryAssessmentController) GetIssueResources(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+// RegenerateSummaries 重新生成指定资源的摘要
+// POST /admin/summary-assessment/regenerate
+// Body: {"resource_ids": [1, 2, 3]}
+func (c *SummaryAssessmentController) RegenerateSummaries(ctx *gin.Context) {
+	var req struct {
+		ResourceIDs []uint `json:"resource_ids" binding:"required"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.ResourceIDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "resource_ids is empty"})
+		return
+	}
+	if len(req.ResourceIDs) > 100 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "max 100 resources per request"})
+		return
+	}
+
+	// 1. 清空 summary_hash 和评估状态，触发重新生成
+	result := c.db.Model(&models.ResourceIndex{}).
+		Where("id IN ?", req.ResourceIDs).
+		Updates(map[string]interface{}{
+			"summary_hash":              "",
+			"summary_assessment_status": "",
+		})
+
+	if result.Error != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	// 2. 删除旧的评估记录
+	c.db.Where("source_type = ? AND resource_id IN ?", "summary", req.ResourceIDs).
+		Delete(&models.SkillAssessmentResult{})
+
+	// 3. 按 source 分组，为每个 source 创建 summary + assessment job
+	type sourceGroup struct {
+		ExternalSourceID string
+	}
+	var groups []sourceGroup
+	c.db.Model(&models.ResourceIndex{}).
+		Select("DISTINCT external_source_id").
+		Where("id IN ? AND external_source_id != ''", req.ResourceIDs).
+		Scan(&groups)
+
+	jobCount := 0
+	for _, g := range groups {
+		// 检查是否已有活跃 job
+		var activeCount int64
+		c.db.Model(&models.PostSyncJob{}).
+			Where("source_id = ? AND job_type = ? AND status IN ?", g.ExternalSourceID,
+				models.PostSyncJobTypeSummary,
+				[]string{models.PostSyncJobStatusPending, models.PostSyncJobStatusProcessing}).
+			Count(&activeCount)
+		if activeCount > 0 {
+			continue
+		}
+
+		now := time.Now()
+		summaryJob := models.PostSyncJob{
+			SourceID: g.ExternalSourceID, JobType: models.PostSyncJobTypeSummary,
+			Status: models.PostSyncJobStatusPending, CreatedAt: now,
+		}
+		c.db.Create(&summaryJob)
+
+		assessmentJob := models.PostSyncJob{
+			SourceID: g.ExternalSourceID, JobType: models.PostSyncJobTypeSummaryAssessment,
+			Status: models.PostSyncJobStatusPending, DependsOn: &summaryJob.ID, CreatedAt: now,
+		}
+		c.db.Create(&assessmentJob)
+		jobCount++
+	}
+
+	log.Printf("[SummaryAssessment] 重新生成 %d 个资源的摘要，创建 %d 组 job", result.RowsAffected, jobCount)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":            "regeneration scheduled",
+		"resources_affected": result.RowsAffected,
+		"jobs_created":       jobCount,
+	})
 }
 
 func formatTextArray(arr models.TextArray) string {
