@@ -345,7 +345,11 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
                   title: '问题详情',
                   dataIndex: 'details',
                   ellipsis: true,
-                  render: (v: string) => <span style={{ fontSize: 12 }}>{v}</span>,
+                  render: (v: string) => (
+                    <Tooltip title={v} placement="leftTop" overlayStyle={{ maxWidth: 500 }}>
+                      <span style={{ fontSize: 12 }}>{v}</span>
+                    </Tooltip>
+                  ),
                 },
                 {
                   title: '摘要',
