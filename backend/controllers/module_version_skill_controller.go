@@ -24,7 +24,17 @@ func NewModuleVersionSkillController(db *gorm.DB) *ModuleVersionSkillController 
 }
 
 // GetSkill 获取版本的 Skill
-// GET /api/v1/module-versions/:id/skill
+// @Summary Get module version skill
+// @Description Get the skill associated with a module version
+// @Tags Module Version Skill
+// @Accept json
+// @Produce json
+// @Param id path string true "Module Version ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/module-versions/{id}/skill [get]
+// @Security BearerAuth
 func (c *ModuleVersionSkillController) GetSkill(ctx *gin.Context) {
 	versionID := ctx.Param("id")
 	if versionID == "" {
@@ -55,7 +65,17 @@ func (c *ModuleVersionSkillController) GetSkill(ctx *gin.Context) {
 }
 
 // GenerateFromSchema 根据 Schema 生成 Skill
-// POST /api/v1/module-versions/:id/skill/generate
+// @Summary Generate skill from schema
+// @Description Generate a skill from the module version's schema
+// @Tags Module Version Skill
+// @Accept json
+// @Produce json
+// @Param id path string true "Module Version ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/module-versions/{id}/skill/generate [post]
+// @Security BearerAuth
 func (c *ModuleVersionSkillController) GenerateFromSchema(ctx *gin.Context) {
 	versionID := ctx.Param("id")
 	if versionID == "" {
@@ -76,7 +96,18 @@ func (c *ModuleVersionSkillController) GenerateFromSchema(ctx *gin.Context) {
 }
 
 // UpdateCustomContent 更新自定义内容
-// PUT /api/v1/module-versions/:id/skill
+// @Summary Update skill custom content
+// @Description Update the custom content of a module version skill
+// @Tags Module Version Skill
+// @Accept json
+// @Produce json
+// @Param id path string true "Module Version ID"
+// @Param request body models.UpdateCustomContentRequest true "Custom content update"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/module-versions/{id}/skill [put]
+// @Security BearerAuth
 func (c *ModuleVersionSkillController) UpdateCustomContent(ctx *gin.Context) {
 	versionID := ctx.Param("id")
 	if versionID == "" {
@@ -103,7 +134,18 @@ func (c *ModuleVersionSkillController) UpdateCustomContent(ctx *gin.Context) {
 }
 
 // InheritFromVersion 从其他版本继承 Skill
-// POST /api/v1/module-versions/:id/skill/inherit
+// @Summary Inherit skill from another version
+// @Description Inherit the skill from another module version
+// @Tags Module Version Skill
+// @Accept json
+// @Produce json
+// @Param id path string true "Target Module Version ID"
+// @Param request body models.InheritSkillRequest true "Inherit request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/module-versions/{id}/skill/inherit [post]
+// @Security BearerAuth
 func (c *ModuleVersionSkillController) InheritFromVersion(ctx *gin.Context) {
 	versionID := ctx.Param("id")
 	if versionID == "" {
@@ -130,7 +172,17 @@ func (c *ModuleVersionSkillController) InheritFromVersion(ctx *gin.Context) {
 }
 
 // DeleteSkill 删除 Skill
-// DELETE /api/v1/module-versions/:id/skill
+// @Summary Delete module version skill
+// @Description Delete the skill associated with a module version
+// @Tags Module Version Skill
+// @Accept json
+// @Produce json
+// @Param id path string true "Module Version ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/module-versions/{id}/skill [delete]
+// @Security BearerAuth
 func (c *ModuleVersionSkillController) DeleteSkill(ctx *gin.Context) {
 	versionID := ctx.Param("id")
 	if versionID == "" {

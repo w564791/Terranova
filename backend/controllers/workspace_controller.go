@@ -57,19 +57,19 @@ func NewWorkspaceController(
 }
 
 // GetWorkspaces 获取工作空间列表
-// @Summary 获取工作空间列表
-// @Description 获取工作空间列表，支持分页和搜索，包含最新任务状态
+// @Summary Get workspace list
+// @Description Get workspace list with pagination and search, including latest task status
 // @Tags Workspace
 // @Accept json
 // @Produce json
-// @Param page query int false "页码" default(1)
-// @Param size query int false "每页数量" default(20)
-// @Param search query string false "搜索关键词（支持name、description、tags）"
-// @Param project_id query int false "项目ID（0=所有，>0=指定项目，-1=未分配项目）"
-// @Success 200 {object} map[string]interface{} "成功返回工作空间列表"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
-// @Router /workspaces [get]
-// @Security Bearer
+// @Param page query int false "Page number" default(1)
+// @Param size query int false "Page size" default(20)
+// @Param search query string false "Search keyword (name, description, tags)"
+// @Param project_id query int false "Project ID (0=all, >0=specific, -1=unassigned)"
+// @Success 200 {object} map[string]interface{} "Workspace list"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/v1/workspaces [get]
+// @Security BearerAuth
 func (wc *WorkspaceController) GetWorkspaces(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
@@ -141,17 +141,17 @@ func (wc *WorkspaceController) GetWorkspaces(c *gin.Context) {
 }
 
 // GetWorkspace 获取单个工作空间
-// @Summary 获取单个工作空间详情
-// @Description 根据ID获取工作空间的详细信息
+// @Summary Get workspace detail
+// @Description Get workspace detail by ID
 // @Tags Workspace
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Success 200 {object} map[string]interface{} "成功返回工作空间详情"
-// @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
-// @Failure 404 {object} map[string]interface{} "工作空间不存在"
-// @Router /workspaces/{id} [get]
-// @Security Bearer
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{} "Workspace detail"
+// @Failure 400 {object} map[string]interface{} "Invalid workspace ID"
+// @Failure 404 {object} map[string]interface{} "Workspace not found"
+// @Router /api/v1/workspaces/{id} [get]
+// @Security BearerAuth
 func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -275,17 +275,17 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 }
 
 // CreateWorkspace 创建工作空间
-// @Summary 创建新的工作空间
-// @Description 创建一个新的工作空间
+// @Summary Create workspace
+// @Description Create a new workspace
 // @Tags Workspace
 // @Accept json
 // @Produce json
-// @Param workspace body object true "工作空间信息"
-// @Success 201 {object} map[string]interface{} "成功创建工作空间"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 500 {object} map[string]interface{} "创建失败"
-// @Router /workspaces [post]
-// @Security Bearer
+// @Param workspace body object true "Workspace configuration"
+// @Success 201 {object} map[string]interface{} "Workspace created"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Creation failed"
+// @Router /api/v1/workspaces [post]
+// @Security BearerAuth
 func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 	var req struct {
 		Name             string                 `json:"name" binding:"required"`
@@ -434,18 +434,19 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 }
 
 // UpdateWorkspace 更新工作空间
-// @Summary 更新工作空间
-// @Description 更新工作空间的配置信息
+// @Summary Update workspace
+// @Description Update workspace configuration (supports both PUT and PATCH)
 // @Tags Workspace
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param workspace body object true "更新的工作空间信息"
-// @Success 200 {object} map[string]interface{} "更新成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 500 {object} map[string]interface{} "更新失败"
-// @Router /workspaces/{id} [put]
-// @Security Bearer
+// @Param id path string true "Workspace ID"
+// @Param workspace body object true "Workspace update fields"
+// @Success 200 {object} map[string]interface{} "Update successful"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Update failed"
+// @Router /api/v1/workspaces/{id} [put]
+// @Router /api/v1/workspaces/{id} [patch]
+// @Security BearerAuth
 func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -598,17 +599,17 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 }
 
 // DeleteWorkspace 删除工作空间
-// @Summary 删除工作空间
-// @Description 删除指定的工作空间
+// @Summary Delete workspace
+// @Description Delete a workspace by ID
 // @Tags Workspace
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Success 200 {object} map[string]interface{} "删除成功"
-// @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
-// @Failure 500 {object} map[string]interface{} "删除失败"
-// @Router /workspaces/{id} [delete]
-// @Security Bearer
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{} "Deletion successful"
+// @Failure 400 {object} map[string]interface{} "Invalid workspace ID"
+// @Failure 500 {object} map[string]interface{} "Deletion failed"
+// @Router /api/v1/workspaces/{id} [delete]
+// @Security BearerAuth
 func (wc *WorkspaceController) DeleteWorkspace(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -637,17 +638,18 @@ func (wc *WorkspaceController) DeleteWorkspace(c *gin.Context) {
 }
 
 // GetWorkspaceOverview 获取Workspace Overview
-// @Summary 获取Workspace Overview
-// @Description 获取Workspace的完整概览信息，包括资源统计、最近运行、配置等
+// @Summary Get workspace overview
+// @Description Get workspace overview including resource stats, recent runs, and configuration
 // @Tags Workspace
 // @Accept json
 // @Produce json
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} services.WorkspaceOverviewResponse
-// @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
-// @Failure 404 {object} map[string]interface{} "工作空间不存在"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Failure 400 {object} map[string]interface{} "Invalid workspace ID"
+// @Failure 404 {object} map[string]interface{} "Workspace not found"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/v1/workspaces/{id}/overview [get]
+// @Security BearerAuth
 func (wc *WorkspaceController) GetWorkspaceOverview(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {

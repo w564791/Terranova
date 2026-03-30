@@ -45,11 +45,15 @@ func generateWorkspaceRunTaskID() (string, error) {
 // @Tags Workspace Run Task
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Param request body models.AddWorkspaceRunTaskRequest true "Run task configuration"
+// @Param id path string true "Workspace ID"
+// @Param request body models.CreateWorkspaceRunTaskRequest true "Run task configuration"
 // @Success 201 {object} models.WorkspaceRunTaskResponse
-// @Failure 400,404,409,500 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/run-tasks [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/run-tasks [post]
+// @Security BearerAuth
 func (h *WorkspaceRunTaskHandler) AddRunTaskToWorkspace(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -152,9 +156,10 @@ func (h *WorkspaceRunTaskHandler) AddRunTaskToWorkspace(c *gin.Context) {
 // @Description Get all run tasks configured for a workspace, including global run tasks
 // @Tags Workspace Run Task
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/run-tasks [get]
+// @Router /api/v1/workspaces/{id}/run-tasks [get]
+// @Security BearerAuth
 func (h *WorkspaceRunTaskHandler) ListWorkspaceRunTasks(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -211,11 +216,14 @@ func (h *WorkspaceRunTaskHandler) ListWorkspaceRunTasks(c *gin.Context) {
 // @Tags Workspace Run Task
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param workspace_run_task_id path string true "Workspace Run Task ID"
 // @Param request body models.UpdateWorkspaceRunTaskRequest true "Updated configuration"
 // @Success 200 {object} models.WorkspaceRunTaskResponse
-// @Router /api/v1/workspaces/{workspace_id}/run-tasks/{workspace_run_task_id} [put]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/run-tasks/{workspace_run_task_id} [put]
+// @Security BearerAuth
 func (h *WorkspaceRunTaskHandler) UpdateWorkspaceRunTask(c *gin.Context) {
 	workspaceID := c.Param("id")
 	wrtID := c.Param("workspace_run_task_id")
@@ -277,10 +285,12 @@ func (h *WorkspaceRunTaskHandler) UpdateWorkspaceRunTask(c *gin.Context) {
 // @Summary Delete workspace run task
 // @Description Remove a run task from a workspace
 // @Tags Workspace Run Task
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param workspace_run_task_id path string true "Workspace Run Task ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/run-tasks/{workspace_run_task_id} [delete]
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/run-tasks/{workspace_run_task_id} [delete]
+// @Security BearerAuth
 func (h *WorkspaceRunTaskHandler) DeleteWorkspaceRunTask(c *gin.Context) {
 	workspaceID := c.Param("id")
 	wrtID := c.Param("workspace_run_task_id")
@@ -304,12 +314,16 @@ func (h *WorkspaceRunTaskHandler) DeleteWorkspaceRunTask(c *gin.Context) {
 // @Tags Workspace Run Task
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param task_id path string true "Task ID"
 // @Param request body map[string]string true "Override request with comment"
 // @Success 200 {object} map[string]interface{}
-// @Failure 400,403,404,500 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/tasks/{task_id}/override-run-tasks [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/override-run-tasks [post]
+// @Security BearerAuth
 func (h *WorkspaceRunTaskHandler) OverrideRunTasks(c *gin.Context) {
 	workspaceID := c.Param("id")
 	taskIDStr := c.Param("task_id")
@@ -439,10 +453,13 @@ func (h *WorkspaceRunTaskHandler) OverrideRunTasks(c *gin.Context) {
 // @Description Get all run task results for a specific workspace task
 // @Tags Workspace Run Task
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/tasks/{task_id}/run-task-results [get]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/run-task-results [get]
+// @Security BearerAuth
 func (h *WorkspaceRunTaskHandler) GetTaskRunTaskResults(c *gin.Context) {
 	workspaceID := c.Param("id")
 	taskIDStr := c.Param("task_id")

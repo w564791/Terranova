@@ -24,8 +24,19 @@ func NewStateHandler(stateService *services.StateService) *StateHandler {
 	}
 }
 
-// UploadState 上传 State
-// POST /api/workspaces/:id/state/upload
+// UploadState uploads state data for a workspace
+// @Summary Upload state
+// @Description Upload state JSON data for a workspace
+// @Tags State
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param request body object true "State upload request (state, force, description)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/upload [post]
+// @Security BearerAuth
 func (h *StateHandler) UploadState(c *gin.Context) {
 	workspaceID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -85,8 +96,19 @@ func (h *StateHandler) UploadState(c *gin.Context) {
 	})
 }
 
-// RollbackState 回滚 State
-// POST /api/workspaces/:id/state/rollback
+// RollbackState rolls back state to a previous version
+// @Summary Rollback state
+// @Description Rollback workspace state to a specified target version
+// @Tags State
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param request body object true "Rollback request (target_version, reason, force)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/rollback [post]
+// @Security BearerAuth
 func (h *StateHandler) RollbackState(c *gin.Context) {
 	workspaceID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -147,8 +169,18 @@ func (h *StateHandler) RollbackState(c *gin.Context) {
 	})
 }
 
-// GetStateVersions 获取 State 版本历史
-// GET /api/workspaces/:id/state/versions
+// GetStateVersions retrieves state version history with pagination
+// @Summary Get state version history
+// @Description Get paginated list of state versions for a workspace
+// @Tags State
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param limit query int false "Limit (default: 50, max: 100)"
+// @Param offset query int false "Offset (default: 0)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/versions [get]
+// @Security BearerAuth
 func (h *StateHandler) GetStateVersions(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -185,9 +217,18 @@ func (h *StateHandler) GetStateVersions(c *gin.Context) {
 	})
 }
 
-// GetStateVersion 获取指定版本的 State 元数据（不含 content）
-// GET /api/workspaces/:id/state/versions/:version
-// 注意：此接口不再返回 content 字段，需要使用 RetrieveStateVersion 获取完整内容
+// GetStateVersion retrieves metadata for a specific state version (no content)
+// @Summary Get state version metadata
+// @Description Get metadata for a specific state version (does not include content)
+// @Tags State
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param version path int true "Version number"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/versions/{version} [get]
+// @Security BearerAuth
 func (h *StateHandler) GetStateVersion(c *gin.Context) {
 	workspaceID := c.Param("id")
 	versionStr := c.Param("version")
@@ -229,9 +270,18 @@ func (h *StateHandler) GetStateVersion(c *gin.Context) {
 	})
 }
 
-// RetrieveStateVersion 获取指定版本的 State 完整内容
-// GET /api/workspaces/:id/state/versions/:version/retrieve
-// 需要 WORKSPACE_STATE_SENSITIVE 权限
+// RetrieveStateVersion retrieves full state content for a specific version
+// @Summary Retrieve state version content
+// @Description Retrieve full state content including sensitive data (requires WORKSPACE_STATE_SENSITIVE permission)
+// @Tags State
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param version path int true "Version number"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/versions/{version}/retrieve [get]
+// @Security BearerAuth
 func (h *StateHandler) RetrieveStateVersion(c *gin.Context) {
 	workspaceID := c.Param("id")
 	versionStr := c.Param("version")
@@ -270,8 +320,19 @@ func (h *StateHandler) RetrieveStateVersion(c *gin.Context) {
 	})
 }
 
-// DownloadStateVersion 下载指定版本的 State 文件
-// GET /api/workspaces/:id/state/versions/:version/download
+// DownloadStateVersion downloads a specific state version as a .tfstate file
+// @Summary Download state version
+// @Description Download a specific state version as a JSON file
+// @Tags State
+// @Produce application/json
+// @Param id path string true "Workspace ID"
+// @Param version path int true "Version number"
+// @Success 200 {file} file "State file"
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/versions/{version}/download [get]
+// @Security BearerAuth
 func (h *StateHandler) DownloadStateVersion(c *gin.Context) {
 	workspaceID := c.Param("id")
 	versionStr := c.Param("version")
@@ -312,8 +373,21 @@ func (h *StateHandler) DownloadStateVersion(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", stateJSON)
 }
 
-// UploadStateFile 上传 State 文件（支持文件上传）
-// POST /api/workspaces/:id/state/upload-file
+// UploadStateFile uploads a state file via multipart form
+// @Summary Upload state file
+// @Description Upload a state file via multipart/form-data
+// @Tags State
+// @Accept multipart/form-data
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param file formData file true "State file (.tfstate)"
+// @Param force formData string false "Force upload (true/false)"
+// @Param description formData string false "Upload description"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/state/upload-file [post]
+// @Security BearerAuth
 func (h *StateHandler) UploadStateFile(c *gin.Context) {
 	workspaceID := c.Param("id")
 	userID := c.GetString("user_id")

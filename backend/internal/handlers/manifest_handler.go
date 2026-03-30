@@ -89,8 +89,8 @@ func generateManifestDeploymentResourceID() string {
 // ListManifests retrieves the list of Manifests
 // @Summary Get Manifest list
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
@@ -172,11 +172,12 @@ func (h *ManifestHandler) ListManifests(c *gin.Context) {
 // GetManifest retrieves Manifest details
 // @Summary Get Manifest details
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Success 200 {object} models.Manifest
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id} [get]
 func (h *ManifestHandler) GetManifest(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -218,9 +219,12 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param body body models.CreateManifestRequest true "Create request"
 // @Success 201 {object} models.Manifest
+// @Failure 400 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests [post]
 func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 	orgIDStr := c.Param("org_id")
@@ -288,10 +292,13 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param body body models.UpdateManifestRequest true "Update request"
 // @Success 200 {object} models.Manifest
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id} [put]
 func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -343,11 +350,13 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 // DeleteManifest deletes a Manifest
 // @Summary Delete Manifest
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Success 204
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id} [delete]
 func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -385,11 +394,12 @@ func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 // ListManifestVersions retrieves the list of versions
 // @Summary Get version list
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Success 200 {object} models.ManifestVersionListResponse
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/versions [get]
 func (h *ManifestHandler) ListManifestVersions(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -437,12 +447,13 @@ func (h *ManifestHandler) ListManifestVersions(c *gin.Context) {
 // GetManifestVersion retrieves version details
 // @Summary Get version details
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param version_id path string true "Version ID"
 // @Success 200 {object} models.ManifestVersion
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/versions/{version_id} [get]
 func (h *ManifestHandler) GetManifestVersion(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -484,10 +495,12 @@ func (h *ManifestHandler) GetManifestVersion(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param body body models.SaveManifestVersionRequest true "Save request"
 // @Success 200 {object} models.ManifestVersion
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/draft [put]
 func (h *ManifestHandler) SaveManifestDraft(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -554,10 +567,13 @@ func (h *ManifestHandler) SaveManifestDraft(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param body body models.PublishManifestVersionRequest true "Publish request"
 // @Success 201 {object} models.ManifestVersion
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/versions [post]
 func (h *ManifestHandler) PublishManifestVersion(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -640,11 +656,12 @@ func (h *ManifestHandler) PublishManifestVersion(c *gin.Context) {
 // ListManifestDeployments retrieves the list of deployments
 // @Summary Get deployment list
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Success 200 {object} models.ManifestDeploymentListResponse
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments [get]
 func (h *ManifestHandler) ListManifestDeployments(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -706,12 +723,13 @@ func (h *ManifestHandler) ListManifestDeployments(c *gin.Context) {
 // GetManifestDeploymentResources retrieves resources associated with a deployment
 // @Summary Get deployment resources
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param deployment_id path string true "Deployment ID"
 // @Success 200 {array} object
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}/resources [get]
 func (h *ManifestHandler) GetManifestDeploymentResources(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -824,12 +842,13 @@ func (h *ManifestHandler) GetManifestDeploymentResources(c *gin.Context) {
 // GetManifestDeployment retrieves deployment details
 // @Summary Get deployment details
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param deployment_id path string true "Deployment ID"
 // @Success 200 {object} models.ManifestDeployment
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id} [get]
 func (h *ManifestHandler) GetManifestDeployment(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -881,10 +900,14 @@ func (h *ManifestHandler) GetManifestDeployment(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param body body models.CreateManifestDeploymentRequest true "Create request"
 // @Success 201 {object} models.ManifestDeployment
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments [post]
 func (h *ManifestHandler) CreateManifestDeployment(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -965,11 +988,14 @@ func (h *ManifestHandler) CreateManifestDeployment(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param deployment_id path string true "Deployment ID"
 // @Param body body models.UpdateManifestDeploymentRequest true "Update request"
 // @Success 200 {object} models.ManifestDeployment
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id} [put]
 func (h *ManifestHandler) UpdateManifestDeployment(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -1041,14 +1067,16 @@ func (h *ManifestHandler) UpdateManifestDeployment(c *gin.Context) {
 // DeleteManifestDeployment deletes/uninstalls a deployment
 // @Summary Delete deployment (supports soft delete and hard delete/uninstall)
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param deployment_id path string true "Deployment ID"
-// @Success 200 {object} models.ManifestDeployment
 // @Param uninstall query bool false "Whether to uninstall (hard delete resources)"
 // @Param force query bool false "Force uninstall (ignore drift warnings, only effective when uninstall=true)"
+// @Success 200 {object} models.ManifestDeployment
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id} [delete]
 func (h *ManifestHandler) DeleteManifestDeployment(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -1178,13 +1206,15 @@ func (h *ManifestHandler) DeleteManifestDeployment(c *gin.Context) {
 // UninstallManifestDeployment uninstalls a deployment (permanently delete resources) - compatible with old API
 // @Summary Uninstall deployment (recommend using DELETE API with uninstall=true parameter)
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param deployment_id path string true "Deployment ID"
 // @Param force query bool false "Force uninstall (ignore drift warnings)"
 // @Success 200 {object} object
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}/uninstall [post]
 func (h *ManifestHandler) UninstallManifestDeployment(c *gin.Context) {
 	// Set uninstall parameter and call DeleteManifestDeployment
@@ -1197,10 +1227,11 @@ func (h *ManifestHandler) UninstallManifestDeployment(c *gin.Context) {
 // GetWorkspaceManifestDeployment retrieves Workspace's Manifest deployment
 // @Summary Get Workspace's Manifest deployment
 // @Tags Manifest
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} models.ManifestDeployment
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{workspace_id}/manifest-deployment [get]
 func (h *ManifestHandler) GetWorkspaceManifestDeployment(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
@@ -1240,10 +1271,12 @@ func (h *ManifestHandler) GetWorkspaceManifestDeployment(c *gin.Context) {
 // @Summary Export Manifest as ZIP
 // @Tags Manifest
 // @Produce application/zip
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param version_id query string false "Version ID (default latest version)"
 // @Success 200 {file} file "ZIP file"
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/export-zip [get]
 func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -1341,9 +1374,12 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param body body object true "Manifest JSON content"
 // @Success 201 {object} models.Manifest
+// @Failure 400 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/import-json [post]
 func (h *ManifestHandler) ImportManifestJSON(c *gin.Context) {
 	orgIDStr := c.Param("org_id")
@@ -1435,12 +1471,13 @@ func (h *ManifestHandler) ImportManifestJSON(c *gin.Context) {
 // ExportManifestHCL exports HCL
 // @Summary Export HCL
 // @Tags Manifest
-// @Accept json
 // @Produce text/plain
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param version_id query string false "Version ID (default latest version)"
 // @Success 200 {string} string "HCL content"
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/export [get]
 func (h *ManifestHandler) ExportManifestHCL(c *gin.Context) {
 	orgID := c.Param("org_id")
@@ -1619,9 +1656,12 @@ func formatHCLValue(value interface{}) string {
 // @Tags Manifest
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param org_id path string true "Organization ID"
 // @Param body body object true "HCL content"
 // @Success 201 {object} models.Manifest
+// @Failure 400 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/import [post]
 func (h *ManifestHandler) ImportManifestHCL(c *gin.Context) {
 	orgIDStr := c.Param("org_id")

@@ -23,12 +23,14 @@ func NewWorkspaceNotificationHandler(db *gorm.DB) *WorkspaceNotificationHandler 
 }
 
 // ListWorkspaceNotifications 获取 Workspace 的通知列表
-// @Summary 获取 Workspace 的通知列表
+// @Summary List workspace notifications
+// @Description Get all notifications configured for a workspace including global notifications
 // @Tags Workspace Notifications
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/notifications [get]
+// @Router /api/v1/workspaces/{id}/notifications [get]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) ListWorkspaceNotifications(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -89,14 +91,19 @@ func (h *WorkspaceNotificationHandler) ListWorkspaceNotifications(c *gin.Context
 }
 
 // AddWorkspaceNotification 为 Workspace 添加通知
-// @Summary 为 Workspace 添加通知
+// @Summary Add notification to workspace
+// @Description Associate a notification configuration with a workspace
 // @Tags Workspace Notifications
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Param request body models.CreateWorkspaceNotificationRequest true "创建请求"
+// @Param id path string true "Workspace ID"
+// @Param request body models.CreateWorkspaceNotificationRequest true "Create request"
 // @Success 201 {object} models.WorkspaceNotificationResponse
-// @Router /api/v1/workspaces/{workspace_id}/notifications [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/notifications [post]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) AddWorkspaceNotification(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -167,15 +174,19 @@ func (h *WorkspaceNotificationHandler) AddWorkspaceNotification(c *gin.Context) 
 }
 
 // UpdateWorkspaceNotification 更新 Workspace 通知配置
-// @Summary 更新 Workspace 通知配置
+// @Summary Update workspace notification
+// @Description Update notification configuration for a workspace
 // @Tags Workspace Notifications
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param workspace_notification_id path string true "Workspace Notification ID"
-// @Param request body models.UpdateWorkspaceNotificationRequest true "更新请求"
+// @Param request body models.UpdateWorkspaceNotificationRequest true "Update request"
 // @Success 200 {object} models.WorkspaceNotificationResponse
-// @Router /api/v1/workspaces/{workspace_id}/notifications/{workspace_notification_id} [put]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/notifications/{workspace_notification_id} [put]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) UpdateWorkspaceNotification(c *gin.Context) {
 	workspaceID := c.Param("id")
 	workspaceNotificationID := c.Param("workspace_notification_id")
@@ -219,12 +230,15 @@ func (h *WorkspaceNotificationHandler) UpdateWorkspaceNotification(c *gin.Contex
 }
 
 // DeleteWorkspaceNotification 删除 Workspace 通知关联
-// @Summary 删除 Workspace 通知关联
+// @Summary Delete workspace notification
+// @Description Remove a notification from a workspace
 // @Tags Workspace Notifications
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param workspace_notification_id path string true "Workspace Notification ID"
-// @Success 204
-// @Router /api/v1/workspaces/{workspace_id}/notifications/{workspace_notification_id} [delete]
+// @Success 204 "No Content"
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/notifications/{workspace_notification_id} [delete]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) DeleteWorkspaceNotification(c *gin.Context) {
 	workspaceID := c.Param("id")
 	workspaceNotificationID := c.Param("workspace_notification_id")
@@ -251,16 +265,18 @@ func (h *WorkspaceNotificationHandler) DeleteWorkspaceNotification(c *gin.Contex
 }
 
 // ListNotificationLogs 获取 Workspace 的通知日志
-// @Summary 获取 Workspace 的通知日志
+// @Summary List notification logs
+// @Description Get notification delivery logs for a workspace
 // @Tags Workspace Notifications
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Param event query string false "事件类型"
-// @Param status query string false "状态"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
+// @Param id path string true "Workspace ID"
+// @Param event query string false "Event type filter"
+// @Param status query string false "Status filter"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/notification-logs [get]
+// @Router /api/v1/workspaces/{id}/notification-logs [get]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) ListNotificationLogs(c *gin.Context) {
 	workspaceID := c.Param("id")
 	event := c.Query("event")
@@ -319,13 +335,15 @@ func (h *WorkspaceNotificationHandler) ListNotificationLogs(c *gin.Context) {
 }
 
 // GetTaskNotificationLogs 获取任务的通知日志
-// @Summary 获取任务的通知日志
+// @Summary Get task notification logs
+// @Description Get notification delivery logs for a specific task
 // @Tags Workspace Notifications
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param task_id path int true "Task ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/tasks/{task_id}/notification-logs [get]
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/notification-logs [get]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) GetTaskNotificationLogs(c *gin.Context) {
 	workspaceID := c.Param("id")
 	taskIDStr := c.Param("task_id")
@@ -358,13 +376,16 @@ func (h *WorkspaceNotificationHandler) GetTaskNotificationLogs(c *gin.Context) {
 }
 
 // GetNotificationLogDetail 获取通知日志详情
-// @Summary 获取通知日志详情
+// @Summary Get notification log detail
+// @Description Get detailed information about a specific notification log entry
 // @Tags Workspace Notifications
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Param log_id path string true "Log ID"
 // @Success 200 {object} models.NotificationLog
-// @Router /api/v1/workspaces/{workspace_id}/notification-logs/{log_id} [get]
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/notification-logs/{log_id} [get]
+// @Security BearerAuth
 func (h *WorkspaceNotificationHandler) GetNotificationLogDetail(c *gin.Context) {
 	workspaceID := c.Param("id")
 	logID := c.Param("log_id")

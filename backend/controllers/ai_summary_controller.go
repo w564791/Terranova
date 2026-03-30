@@ -29,6 +29,19 @@ func NewAISummaryController(db *gorm.DB) *AISummaryController {
 }
 
 // GetPlanSummary 获取 Plan 阶段摘要
+// @Summary Get plan summary
+// @Description Get the AI-generated plan summary for a specific task
+// @Tags AI Summary
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Plan summary"
+// @Success 202 {object} map[string]interface{} "Summary still processing"
+// @Failure 400 {object} map[string]interface{} "Invalid task ID"
+// @Failure 403 {object} map[string]interface{} "Forbidden"
+// @Failure 404 {object} map[string]interface{} "Summary not found"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary [get]
 func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
@@ -58,6 +71,19 @@ func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
 }
 
 // GetApplySummary 获取 Apply 阶段摘要
+// @Summary Get apply summary
+// @Description Get the AI-generated apply summary for a specific task
+// @Tags AI Summary
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Apply summary"
+// @Success 202 {object} map[string]interface{} "Summary still processing"
+// @Failure 400 {object} map[string]interface{} "Invalid task ID"
+// @Failure 403 {object} map[string]interface{} "Forbidden"
+// @Failure 404 {object} map[string]interface{} "Summary not found"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/apply-summary [get]
 func (c *AISummaryController) GetApplySummary(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
@@ -87,6 +113,16 @@ func (c *AISummaryController) GetApplySummary(ctx *gin.Context) {
 }
 
 // RetryPlanSummary 重试 Plan Summary
+// @Summary Retry plan summary generation
+// @Description Retry generating the plan summary for a failed task
+// @Tags AI Summary
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 202 {object} map[string]interface{} "Retry triggered"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/retry [post]
 func (c *AISummaryController) RetryPlanSummary(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
@@ -103,6 +139,16 @@ func (c *AISummaryController) RetryPlanSummary(ctx *gin.Context) {
 }
 
 // RetryApplySummary 重试 Apply Summary
+// @Summary Retry apply summary generation
+// @Description Retry generating the apply summary for a failed task
+// @Tags AI Summary
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 202 {object} map[string]interface{} "Retry triggered"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/apply-summary/retry [post]
 func (c *AISummaryController) RetryApplySummary(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
@@ -119,6 +165,21 @@ func (c *AISummaryController) RetryApplySummary(ctx *gin.Context) {
 }
 
 // ConfirmPlanSummary 提交 Plan Summary 风险决策
+// @Summary Confirm plan summary risk decision
+// @Description Submit a risk decision for a plan summary that requires confirmation
+// @Tags AI Summary
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Param request body object true "Decision with decision_code and optional note"
+// @Success 200 {object} map[string]interface{} "Decision submitted"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 403 {object} map[string]interface{} "Forbidden"
+// @Failure 404 {object} map[string]interface{} "Summary not found"
+// @Failure 409 {object} map[string]interface{} "Decision already submitted"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/confirm [post]
 func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)

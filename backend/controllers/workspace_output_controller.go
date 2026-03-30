@@ -40,7 +40,7 @@ func generateOutputID() string {
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/outputs [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) ListOutputs(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -102,7 +102,7 @@ func (c *WorkspaceOutputController) ListOutputs(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/workspaces/{id}/outputs [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) CreateOutput(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -256,7 +256,7 @@ func (c *WorkspaceOutputController) CreateOutput(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "Output不存在"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/workspaces/{id}/outputs/{output_id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) UpdateOutput(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	outputIDParam := ctx.Param("output_id")
@@ -380,7 +380,7 @@ func (c *WorkspaceOutputController) UpdateOutput(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "Output不存在"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/workspaces/{id}/outputs/{output_id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) DeleteOutput(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	outputIDParam := ctx.Param("output_id")
@@ -444,7 +444,7 @@ func (c *WorkspaceOutputController) DeleteOutput(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "State不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/state-outputs [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) GetStateOutputs(ctx *gin.Context) {
 	c.getStateOutputsInternal(ctx, false)
 }
@@ -461,7 +461,7 @@ func (c *WorkspaceOutputController) GetStateOutputs(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "State不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/state-outputs/full [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) GetStateOutputsFull(ctx *gin.Context) {
 	c.getStateOutputsInternal(ctx, true)
 }
@@ -600,7 +600,7 @@ func (c *WorkspaceOutputController) getStateOutputsInternal(ctx *gin.Context, in
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/outputs/resources [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) GetResourcesForOutputs(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -677,7 +677,7 @@ func (c *WorkspaceOutputController) GetResourcesForOutputs(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/available-outputs [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) GetAvailableOutputs(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -1018,7 +1018,7 @@ func (c *WorkspaceOutputController) extractOutputsFromSchema(schema models.JSONB
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "保存失败"
 // @Router /api/v1/workspaces/{id}/outputs/batch [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceOutputController) BatchSaveOutputs(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {

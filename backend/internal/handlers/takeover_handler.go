@@ -41,6 +41,7 @@ func NewTakeoverHandler(db *gorm.DB, wsHub *websocket.Hub) *TakeoverHandler {
 // @Failure 400 {object} map[string]interface{} "请求参数错误"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/takeover-request [post]
+// @Security BearerAuth
 func (h *TakeoverHandler) RequestTakeover(c *gin.Context) {
 	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -108,6 +109,7 @@ func (h *TakeoverHandler) RequestTakeover(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数错误"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/takeover-response [post]
+// @Security BearerAuth
 func (h *TakeoverHandler) RespondToTakeover(c *gin.Context) {
 	var req struct {
 		RequestID uint `json:"request_id" binding:"required"`
@@ -161,6 +163,7 @@ func (h *TakeoverHandler) RespondToTakeover(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数错误"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/pending-requests [get]
+// @Security BearerAuth
 func (h *TakeoverHandler) GetPendingRequests(c *gin.Context) {
 	targetSession := c.Query("target_session")
 	if targetSession == "" {
@@ -192,6 +195,7 @@ func (h *TakeoverHandler) GetPendingRequests(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "请求不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/request-status/{request_id} [get]
+// @Security BearerAuth
 func (h *TakeoverHandler) GetRequestStatus(c *gin.Context) {
 	requestID, err := strconv.ParseUint(c.Param("request_id"), 10, 32)
 	if err != nil {
@@ -241,6 +245,7 @@ func (h *TakeoverHandler) GetRequestStatus(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数错误"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/force-takeover [post]
+// @Security BearerAuth
 func (h *TakeoverHandler) ForceTakeover(c *gin.Context) {
 	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
 	if err != nil {

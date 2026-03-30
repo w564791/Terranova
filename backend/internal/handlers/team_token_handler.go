@@ -27,14 +27,18 @@ type CreateTeamTokenRequest struct {
 	ExpiresInDays int    `json:"expires_in_days"` // 0表示永不过期
 }
 
-// CreateTeamToken 创建团队Token
-// @Summary 创建团队Token
+// CreateTeamToken creates a team token
+// @Summary Create team token
+// @Description Create a new access token for a team
 // @Tags IAM-Team
 // @Accept json
 // @Produce json
-// @Param id path int true "团队ID"
-// @Param request body CreateTeamTokenRequest true "创建Token请求"
+// @Security BearerAuth
+// @Param id path string true "Team ID"
+// @Param request body CreateTeamTokenRequest true "Create token request"
 // @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/tokens [post]
 func (h *TeamTokenHandler) CreateTeamToken(c *gin.Context) {
 	// 获取团队ID
@@ -67,12 +71,15 @@ func (h *TeamTokenHandler) CreateTeamToken(c *gin.Context) {
 	})
 }
 
-// ListTeamTokens 列出团队的所有Token
-// @Summary 列出团队Token
+// ListTeamTokens lists all tokens for a team
+// @Summary List team tokens
+// @Description Get all tokens for a specific team
 // @Tags IAM-Team
 // @Produce json
-// @Param id path int true "团队ID"
+// @Security BearerAuth
+// @Param id path string true "Team ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/tokens [get]
 func (h *TeamTokenHandler) ListTeamTokens(c *gin.Context) {
 	// 获取团队ID
@@ -90,13 +97,17 @@ func (h *TeamTokenHandler) ListTeamTokens(c *gin.Context) {
 	})
 }
 
-// RevokeTeamToken 吊销团队Token
-// @Summary 吊销团队Token
+// RevokeTeamToken revokes a team token
+// @Summary Revoke team token
+// @Description Revoke a specific token for a team
 // @Tags IAM-Team
 // @Produce json
-// @Param id path int true "团队ID"
+// @Security BearerAuth
+// @Param id path string true "Team ID"
 // @Param token_id path int true "Token ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/tokens/{token_id} [delete]
 func (h *TeamTokenHandler) RevokeTeamToken(c *gin.Context) {
 	// 获取团队ID

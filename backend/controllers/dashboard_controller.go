@@ -26,7 +26,7 @@ func NewDashboardController(db *gorm.DB) *DashboardController {
 // @Produce json
 // @Success 200 {object} map[string]interface{} "成功返回统计信息"
 // @Router /api/v1/dashboard/overview [get]
-// @Security Bearer
+// @Security BearerAuth
 func (ctrl *DashboardController) GetOverviewStats(c *gin.Context) {
 	// 1. Active projects (暂时等同于workspaces)
 	var activeProjects int64
@@ -105,7 +105,7 @@ func (ctrl *DashboardController) GetOverviewStats(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{} "成功返回任务统计"
 // @Router /api/v1/dashboard/compliance [get]
-// @Security Bearer
+// @Security BearerAuth
 func (ctrl *DashboardController) GetComplianceStats(c *gin.Context) {
 	// 1. 成功的任务数
 	var successfulTasks int64

@@ -31,15 +31,17 @@ type CreateUserTokenRequest struct {
 	ExpiresInDays int    `json:"expires_in_days"` // 0表示永不过期
 }
 
-// CreateUserToken 创建用户Token
-// @Summary 创建用户Token
-// @Description 为当前用户创建一个新的访问Token
-// @Tags User Settings
+// CreateUserToken creates a user token
+// @Summary Create user token
+// @Description Create a new access token for the current user
+// @Tags User-Settings
 // @Accept json
 // @Produce json
-// @Param request body CreateUserTokenRequest true "创建Token请求"
+// @Security BearerAuth
+// @Param request body CreateUserTokenRequest true "Create token request"
 // @Success 201 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/user/tokens [post]
 func (h *UserTokenHandler) CreateUserToken(c *gin.Context) {
@@ -76,12 +78,14 @@ func (h *UserTokenHandler) CreateUserToken(c *gin.Context) {
 	})
 }
 
-// ListUserTokens 列出当前用户的所有Token
-// @Summary 列出用户Token
-// @Description 获取当前用户的所有Token列表
-// @Tags User Settings
+// ListUserTokens lists all tokens for the current user
+// @Summary List user tokens
+// @Description Get all tokens for the current user
+// @Tags User-Settings
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/user/tokens [get]
 func (h *UserTokenHandler) ListUserTokens(c *gin.Context) {
@@ -104,13 +108,16 @@ func (h *UserTokenHandler) ListUserTokens(c *gin.Context) {
 	})
 }
 
-// RevokeUserToken 吊销用户Token
-// @Summary 吊销用户Token
-// @Description 吊销当前用户的指定Token（使用token_name作为标识）
-// @Tags User Settings
+// RevokeUserToken revokes a user token
+// @Summary Revoke user token
+// @Description Revoke a specific token for the current user (using token_name as identifier)
+// @Tags User-Settings
+// @Produce json
+// @Security BearerAuth
 // @Param token_name path string true "Token Name"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/user/tokens/{token_name} [delete]
@@ -150,16 +157,18 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=6"`
 }
 
-// ChangePassword 修改密码
-// @Summary 修改密码
-// @Description 修改当前用户的密码
-// @Tags User Settings
+// ChangePassword changes the current user's password
+// @Summary Change password
+// @Description Change the current user's password
+// @Tags User-Settings
 // @Accept json
 // @Produce json
-// @Param request body ChangePasswordRequest true "修改密码请求"
+// @Security BearerAuth
+// @Param request body ChangePasswordRequest true "Change password request"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/user/change-password [post]
 func (h *UserTokenHandler) ChangePassword(c *gin.Context) {

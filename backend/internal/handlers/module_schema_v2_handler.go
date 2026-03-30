@@ -36,6 +36,7 @@ func NewModuleSchemaV2Handler(db *gorm.DB) *ModuleSchemaV2Handler {
 // @Success 200 {object} models.ParseTFResponse
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/parse-tf-v2 [post]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) ParseTF(c *gin.Context) {
 	var req models.ParseTFRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -82,6 +83,7 @@ func (h *ModuleSchemaV2Handler) ParseTF(c *gin.Context) {
 // @Success 200 {object} models.Schema
 // @Failure 404 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/v2 [get]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) GetSchemaV2(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -144,6 +146,7 @@ func (h *ModuleSchemaV2Handler) GetSchemaV2(c *gin.Context) {
 // @Success 201 {object} models.Schema
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/v2 [post]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) CreateSchemaV2(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -273,6 +276,7 @@ func (h *ModuleSchemaV2Handler) CreateSchemaV2(c *gin.Context) {
 // @Success 200 {object} models.Schema
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/v2/{schemaId} [put]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) UpdateSchemaV2(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -374,6 +378,7 @@ func (h *ModuleSchemaV2Handler) UpdateSchemaV2(c *gin.Context) {
 // @Success 200 {object} models.Schema
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/v2/{schemaId}/fields [patch]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) UpdateSchemaField(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -448,6 +453,7 @@ func (h *ModuleSchemaV2Handler) UpdateSchemaField(c *gin.Context) {
 // @Param id path int true "模块ID"
 // @Success 200 {array} models.Schema
 // @Router /api/v1/modules/{id}/schemas/all [get]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) GetAllSchemas(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -474,6 +480,7 @@ func (h *ModuleSchemaV2Handler) GetAllSchemas(c *gin.Context) {
 // @Success 200 {object} models.Schema
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/{schemaId}/migrate-v2 [post]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) MigrateToV2(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -722,6 +729,7 @@ func (h *ModuleSchemaV2Handler) formatLabel(name string) string {
 // @Success 200 {object} models.SchemaDiffResponse
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/compare [get]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) CompareSchemas(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -911,6 +919,7 @@ func (h *ModuleSchemaV2Handler) computeDiff(oldObj, newObj interface{}, path str
 // @Success 200 {object} models.ValidateModuleInputResponse
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/validate [post]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) ValidateModuleInput(c *gin.Context) {
 	moduleID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -1361,6 +1370,7 @@ func (h *ModuleSchemaV2Handler) valuesEqual(a, b interface{}) bool {
 // @Success 200 {object} models.Schema
 // @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/schemas/{schemaId}/activate [post]
+// @Security BearerAuth
 func (h *ModuleSchemaV2Handler) SetActiveSchema(c *gin.Context) {
 	c.JSON(http.StatusGone, gin.H{
 		"error": "此接口已废弃。系统现在自动使用最新的 Schema 版本。",

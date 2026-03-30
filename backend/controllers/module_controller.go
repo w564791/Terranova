@@ -35,7 +35,7 @@ func NewModuleController(moduleService *services.ModuleService) *ModuleControlle
 // @Success 200 {object} map[string]interface{} "成功返回模块列表"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/modules [get]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) GetModules(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
@@ -105,7 +105,7 @@ func (mc *ModuleController) GetModules(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 404 {object} map[string]interface{} "模块不存在"
 // @Router /api/v1/modules/{id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) GetModule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -164,7 +164,7 @@ func (mc *ModuleController) GetModule(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/modules [post]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) CreateModule(c *gin.Context) {
 	var req struct {
 		Name          string `json:"name" binding:"required"`
@@ -240,7 +240,7 @@ func (mc *ModuleController) CreateModule(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "模块不存在"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/modules/{id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) UpdateModule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -341,7 +341,7 @@ func (mc *ModuleController) UpdateModule(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/modules/{id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) DeleteModule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -381,7 +381,7 @@ func (mc *ModuleController) DeleteModule(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 500 {object} map[string]interface{} "同步失败"
 // @Router /api/v1/modules/{id}/sync [post]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) SyncModuleFiles(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -438,7 +438,7 @@ func (mc *ModuleController) SyncModuleFiles(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 404 {object} map[string]interface{} "文件未找到"
 // @Router /api/v1/modules/{id}/files [get]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) GetModuleFiles(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -482,7 +482,7 @@ func (mc *ModuleController) GetModuleFiles(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 404 {object} map[string]interface{} "模块不存在"
 // @Router /api/v1/modules/{id}/prompts [get]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) GetModulePrompts(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -524,7 +524,7 @@ func (mc *ModuleController) GetModulePrompts(c *gin.Context) {
 // @Success 200 {object} map[string]interface{} "解析成功"
 // @Failure 400 {object} map[string]interface{} "解析失败"
 // @Router /api/v1/modules/parse-tf [post]
-// @Security Bearer
+// @Security BearerAuth
 func (mc *ModuleController) ParseTFFile(c *gin.Context) {
 	var req struct {
 		TFContent string `json:"tf_content" binding:"required"`

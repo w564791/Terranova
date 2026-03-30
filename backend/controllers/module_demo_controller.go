@@ -35,7 +35,7 @@ func NewModuleDemoController(db *gorm.DB) *ModuleDemoController {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/modules/{id}/demos [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) CreateDemo(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -103,7 +103,7 @@ func (c *ModuleDemoController) CreateDemo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/modules/{id}/demos [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) GetDemosByModuleID(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -136,7 +136,7 @@ func (c *ModuleDemoController) GetDemosByModuleID(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "导入失败"
 // @Router /api/v1/modules/{id}/versions/{version_id}/import-demos [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) ImportDemos(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -191,7 +191,7 @@ func (c *ModuleDemoController) ImportDemos(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的Demo ID"
 // @Failure 404 {object} map[string]interface{} "Demo不存在"
 // @Router /api/v1/demos/{id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) GetDemoByID(ctx *gin.Context) {
 	demoID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -220,7 +220,7 @@ func (c *ModuleDemoController) GetDemoByID(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/demos/{id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) UpdateDemo(ctx *gin.Context) {
 	demoID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -292,7 +292,7 @@ func (c *ModuleDemoController) UpdateDemo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的Demo ID"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/demos/{id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) DeleteDemo(ctx *gin.Context) {
 	demoID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -319,7 +319,7 @@ func (c *ModuleDemoController) DeleteDemo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的Demo ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/demos/{id}/versions [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) GetVersionsByDemoID(ctx *gin.Context) {
 	demoID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -347,7 +347,7 @@ func (c *ModuleDemoController) GetVersionsByDemoID(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的版本ID"
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Router /api/v1/demo-versions/{versionId} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) GetVersionByID(ctx *gin.Context) {
 	versionID, err := strconv.ParseUint(ctx.Param("versionId"), 10, 32)
 	if err != nil {
@@ -377,7 +377,7 @@ func (c *ModuleDemoController) GetVersionByID(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "对比失败"
 // @Router /api/v1/demos/{id}/compare [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) CompareVersions(ctx *gin.Context) {
 	version1Str := ctx.Query("version1")
 	version2Str := ctx.Query("version2")
@@ -420,7 +420,7 @@ func (c *ModuleDemoController) CompareVersions(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "回滚失败"
 // @Router /api/v1/demos/{id}/rollback [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ModuleDemoController) RollbackToVersion(ctx *gin.Context) {
 	demoID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {

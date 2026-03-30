@@ -27,9 +27,10 @@ type AuditConfig struct {
 }
 
 // GetAuditConfig 获取审计配置
-// @Summary 获取审计配置
+// @Summary Get audit configuration
 // @Tags IAM-Audit
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} AuditConfig
 // @Router /api/v1/iam/audit/config [get]
 func (h *AuditConfigHandler) GetAuditConfig(c *gin.Context) {
@@ -77,12 +78,14 @@ func (h *AuditConfigHandler) GetAuditConfig(c *gin.Context) {
 }
 
 // UpdateAuditConfig 更新审计配置
-// @Summary 更新审计配置
+// @Summary Update audit configuration
 // @Tags IAM-Audit
 // @Accept json
 // @Produce json
-// @Param config body AuditConfig true "审计配置"
+// @Security BearerAuth
+// @Param config body AuditConfig true "Audit configuration"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/config [put]
 func (h *AuditConfigHandler) UpdateAuditConfig(c *gin.Context) {
 	var config AuditConfig

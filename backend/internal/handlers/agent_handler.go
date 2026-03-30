@@ -55,13 +55,13 @@ func (h *AgentHandler) SetTaskQueueManager(qm *services.TaskQueueManager) {
 
 // RegisterAgent handles agent registration
 // @Summary Register a new agent
-// @Description Register a new agent instance with Pool Token
+// @Description Register a new agent instance with Pool Token authentication
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Param request body models.AgentRegisterRequest true "Registration request"
-// @Success 200 {object} models.AgentRegisterResponse
+// @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -211,13 +211,13 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 }
 
 // PingAgent handles agent heartbeat
+// NOTE: This endpoint is currently disabled (commented out in router).
 // @Summary Agent heartbeat
-// @Description Update agent heartbeat and status
+// @Description Update agent heartbeat and status (currently disabled)
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param agent_id path string true "Agent ID"
 // @Param request body models.AgentPingRequest true "Ping request"
 // @Success 200 {object} models.AgentPingResponse
@@ -306,8 +306,7 @@ func (h *AgentHandler) PingAgent(c *gin.Context) {
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param agent_id path string true "Agent ID"
 // @Success 200 {object} models.Agent
 // @Failure 400 {object} map[string]interface{}
@@ -348,8 +347,7 @@ func (h *AgentHandler) GetAgent(c *gin.Context) {
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param agent_id path string true "Agent ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
@@ -389,11 +387,10 @@ func (h *AgentHandler) UnregisterAgent(c *gin.Context) {
 // GetTaskData retrieves all data needed for task execution
 // @Summary Get task execution data
 // @Description Get complete task data including workspace config, resources, variables, and state
-// @Tags Agent
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
@@ -606,16 +603,16 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 // UploadTaskLogChunk handles incremental log upload
 // @Summary Upload task log chunk
 // @Description Upload a chunk of task log data incrementally
-// @Tags Agent
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Log chunk data"
+// @Param request body map[string]interface{} true "Log chunk data with phase, content, offset, checksum"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/logs/chunk [post]
 func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
@@ -719,18 +716,18 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 
 // UpdateTaskStatus updates task status
 // @Summary Update task status
-// @Description Update the status of a running task
-// @Tags Agent
+// @Description Update the status of a running task, triggers run triggers and CMDB sync on completion
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Status update"
+// @Param request body map[string]interface{} true "Status update with status, stage, error_message, changes, duration, etc."
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/status [put]
 func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
@@ -947,14 +944,13 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 
 // SaveTaskState saves task state version
 // @Summary Save task state
-// @Description Save a new state version for the task
-// @Tags Agent
+// @Description Save a new state version for the task and extract resource IDs from state
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "State data"
+// @Param request body map[string]interface{} true "State data with content, checksum, and size"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -1082,15 +1078,15 @@ func (h *AgentHandler) SaveTaskState(c *gin.Context) {
 
 // GetPlanTask retrieves a plan task by ID
 // @Summary Get plan task
-// @Description Get plan task information for agent execution, including plan_data for apply tasks
-// @Tags Agent
+// @Description Get plan task information for agent execution, including plan_data for apply tasks and snapshot resources/variables
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/plan-task [get]
@@ -1286,16 +1282,16 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 
 // UploadPlanData handles plan data upload from agent
 // @Summary Upload plan data
-// @Description Upload base64-encoded plan data from agent after plan execution
-// @Tags Agent
+// @Description Upload base64-encoded plan data from agent after plan execution. Triggers post_plan Run Tasks.
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Plan data (base64 encoded)"
+// @Param request body map[string]interface{} true "Plan data (base64 encoded in plan_data field)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/plan-data [post]
@@ -1404,15 +1400,15 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 // UploadPlanJSON handles plan JSON upload from agent
 // @Summary Upload plan JSON
 // @Description Upload plan JSON from agent after plan execution
-// @Tags Agent
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Plan JSON"
+// @Param request body map[string]interface{} true "Plan JSON in plan_json field"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/plan-json [post]
@@ -1465,16 +1461,16 @@ func (h *AgentHandler) UploadPlanJSON(c *gin.Context) {
 
 // LockWorkspace locks a workspace
 // @Summary Lock workspace
-// @Description Lock a workspace for exclusive access
-// @Tags Agent
+// @Description Lock a workspace for exclusive access during task execution
+// @Tags Agent Workspace
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
-// @Param request body map[string]interface{} true "Lock request"
+// @Param request body map[string]interface{} true "Lock request with user_id and optional reason"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/lock [post]
 func (h *AgentHandler) LockWorkspace(c *gin.Context) {
@@ -1516,15 +1512,15 @@ func (h *AgentHandler) LockWorkspace(c *gin.Context) {
 
 // UnlockWorkspace unlocks a workspace
 // @Summary Unlock workspace
-// @Description Unlock a workspace
-// @Tags Agent
+// @Description Unlock a workspace after task execution completes
+// @Tags Agent Workspace
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/unlock [post]
 func (h *AgentHandler) UnlockWorkspace(c *gin.Context) {
@@ -1554,15 +1550,16 @@ func (h *AgentHandler) UnlockWorkspace(c *gin.Context) {
 // ParsePlanChanges parses plan changes
 // @Summary Parse plan changes
 // @Description Receive parsed resource changes from agent and store in database
-// @Tags Agent
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Parsed resource changes"
+// @Param request body map[string]interface{} true "Parsed resource changes with resource_changes array"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/parse-plan-changes [post]
 func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
@@ -1641,16 +1638,15 @@ func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
 
 // GetTaskLogs retrieves task logs
 // @Summary Get task logs
-// @Description Get all logs for a task
-// @Tags Agent
+// @Description Get all logs for a task ordered by creation time
+// @Tags Agent Task
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/logs [get]
 func (h *AgentHandler) GetTaskLogs(c *gin.Context) {
@@ -1680,14 +1676,14 @@ func (h *AgentHandler) GetTaskLogs(c *gin.Context) {
 // GetMaxStateVersion gets the maximum state version for a workspace
 // @Summary Get max state version
 // @Description Get the maximum state version number for a workspace
-// @Tags Agent
+// @Tags Agent Workspace
 // @Accept json
 // @Produce json
-// @Param X-App-Key header string true "Application Key"
-// @Param X-App-Secret header string true "Application Secret"
+// @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/state/max-version [get]
 func (h *AgentHandler) GetMaxStateVersion(c *gin.Context) {
@@ -1714,11 +1710,12 @@ func (h *AgentHandler) GetMaxStateVersion(c *gin.Context) {
 // GetDefaultTerraformVersion gets the default terraform version
 // @Summary Get default terraform version
 // @Description Get the default terraform version configuration for agent download
-// @Tags Agent
+// @Tags Agent Terraform Version
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/terraform-versions/default [get]
@@ -1740,12 +1737,14 @@ func (h *AgentHandler) GetDefaultTerraformVersion(c *gin.Context) {
 // GetTerraformVersionByVersion gets a specific terraform version by version string
 // @Summary Get terraform version by version string
 // @Description Get terraform version configuration by version string for agent download
-// @Tags Agent
+// @Tags Agent Terraform Version
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Param version path string true "Version string (e.g., 1.5.0)"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/terraform-versions/{version} [get]
@@ -1772,15 +1771,16 @@ func (h *AgentHandler) GetTerraformVersionByVersion(c *gin.Context) {
 
 // UpdateWorkspaceFields updates specific fields of a workspace
 // @Summary Update workspace fields
-// @Description Update specific fields of a workspace (used by agent to update last_init_hash, etc.)
-// @Tags Agent
+// @Description Update specific whitelisted fields of a workspace (last_init_hash, last_init_terraform_version, terraform_lock_hcl)
+// @Tags Agent Workspace
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
-// @Param request body map[string]interface{} true "Fields to update"
+// @Param request body map[string]interface{} true "Fields to update (only whitelisted fields accepted)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/fields [patch]
 func (h *AgentHandler) UpdateWorkspaceFields(c *gin.Context) {
@@ -1834,13 +1834,14 @@ func (h *AgentHandler) UpdateWorkspaceFields(c *gin.Context) {
 // GetTerraformLockHCL gets the terraform lock hcl content for a workspace
 // @Summary Get terraform lock hcl
 // @Description Get the .terraform.lock.hcl file content for a workspace
-// @Tags Agent
+// @Tags Agent Workspace
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/terraform-lock-hcl [get]
@@ -1871,14 +1872,15 @@ func (h *AgentHandler) GetTerraformLockHCL(c *gin.Context) {
 // SaveTerraformLockHCL saves the terraform lock hcl content for a workspace
 // @Summary Save terraform lock hcl
 // @Description Save the .terraform.lock.hcl file content for a workspace
-// @Tags Agent
+// @Tags Agent Workspace
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
-// @Param request body map[string]interface{} true "Lock HCL content"
+// @Param request body map[string]interface{} true "Lock HCL content with terraform_lock_hcl field"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/terraform-lock-hcl [put]
 func (h *AgentHandler) SaveTerraformLockHCL(c *gin.Context) {
@@ -1910,6 +1912,19 @@ func (h *AgentHandler) SaveTerraformLockHCL(c *gin.Context) {
 }
 
 // UpsertTempState handles temp state upsert from agent
+// @Summary Upsert temporary state
+// @Description Create or update a temporary state version for a workspace (used by state file watcher)
+// @Tags Agent Workspace
+// @Accept json
+// @Produce json
+// @Security PoolTokenAuth
+// @Param workspace_id path string true "Workspace ID"
+// @Param request body map[string]interface{} true "Temp state data with content, checksum, size_bytes, version, task_id, created_by"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/agents/workspaces/{workspace_id}/state/temp [put]
 func (h *AgentHandler) UpsertTempState(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
 
@@ -1948,6 +1963,19 @@ func (h *AgentHandler) UpsertTempState(c *gin.Context) {
 }
 
 // PromoteTempState handles temp state promotion from agent
+// @Summary Promote temporary state
+// @Description Promote a temporary state version to a permanent state version
+// @Tags Agent Workspace
+// @Accept json
+// @Produce json
+// @Security PoolTokenAuth
+// @Param workspace_id path string true "Workspace ID"
+// @Param request body map[string]interface{} true "Promotion request with record_id"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/agents/workspaces/{workspace_id}/state/promote [post]
 func (h *AgentHandler) PromoteTempState(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
 
@@ -1970,6 +1998,17 @@ func (h *AgentHandler) PromoteTempState(c *gin.Context) {
 }
 
 // CleanupOrphanedTempStates handles orphaned temp state cleanup from agent
+// @Summary Cleanup orphaned temporary states
+// @Description Delete orphaned temporary state versions for a workspace
+// @Tags Agent Workspace
+// @Accept json
+// @Produce json
+// @Security PoolTokenAuth
+// @Param workspace_id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/agents/workspaces/{workspace_id}/state/temp [delete]
 func (h *AgentHandler) CleanupOrphanedTempStates(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
 

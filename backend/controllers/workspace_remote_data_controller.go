@@ -56,7 +56,7 @@ func generateSecureToken() (string, error) {
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/remote-data [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) ListRemoteData(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -127,7 +127,7 @@ func (c *WorkspaceRemoteDataController) ListRemoteData(ctx *gin.Context) {
 // @Failure 403 {object} map[string]interface{} "无权访问源workspace"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/workspaces/{id}/remote-data [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) CreateRemoteData(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -240,7 +240,7 @@ func (c *WorkspaceRemoteDataController) CreateRemoteData(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "远程数据不存在"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/workspaces/{id}/remote-data/{remote_data_id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) UpdateRemoteData(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	remoteDataIDParam := ctx.Param("remote_data_id")
@@ -325,7 +325,7 @@ func (c *WorkspaceRemoteDataController) UpdateRemoteData(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "远程数据不存在"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/workspaces/{id}/remote-data/{remote_data_id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) DeleteRemoteData(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	remoteDataIDParam := ctx.Param("remote_data_id")
@@ -388,7 +388,7 @@ func (c *WorkspaceRemoteDataController) DeleteRemoteData(ctx *gin.Context) {
 // @Failure 403 {object} map[string]interface{} "无权访问"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/remote-data/source-outputs [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) GetSourceWorkspaceOutputs(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	sourceWorkspaceID := ctx.Query("source_workspace_id")
@@ -585,7 +585,7 @@ func (c *WorkspaceRemoteDataController) GetSourceWorkspaceOutputs(ctx *gin.Conte
 // @Failure 400 {object} map[string]interface{} "无效的参数"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/remote-data/accessible-workspaces [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) GetAccessibleWorkspaces(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 
@@ -663,7 +663,7 @@ func (c *WorkspaceRemoteDataController) GetAccessibleWorkspaces(ctx *gin.Context
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/workspaces/{id}/outputs-sharing [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) UpdateOutputsSharing(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 
@@ -781,7 +781,7 @@ func (c *WorkspaceRemoteDataController) UpdateOutputsSharing(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的参数"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/outputs-sharing [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceRemoteDataController) GetOutputsSharing(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 

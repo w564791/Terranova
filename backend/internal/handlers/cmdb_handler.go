@@ -21,16 +21,17 @@ func NewCMDBHandler(cmdbService *services.CMDBService) *CMDBHandler {
 }
 
 // SearchResources 搜索资源
-// @Summary 搜索资源
-// @Description 根据资源ID、名称或描述搜索资源
+// @Summary Search resources
+// @Description Search resources by resource ID, name, or description
 // @Tags CMDB
-// @Accept json
 // @Produce json
-// @Param q query string true "搜索关键词"
-// @Param workspace_id query string false "限定workspace"
-// @Param resource_type query string false "限定资源类型"
-// @Param limit query int false "返回数量限制" default(20)
+// @Security BearerAuth
+// @Param q query string true "Search keyword"
+// @Param workspace_id query string false "Filter by workspace"
+// @Param resource_type query string false "Filter by resource type"
+// @Param limit query int false "Result limit" default(20)
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/cmdb/search [get]
 func (h *CMDBHandler) SearchResources(c *gin.Context) {
 	query := c.Query("q")
@@ -57,13 +58,14 @@ func (h *CMDBHandler) SearchResources(c *gin.Context) {
 }
 
 // GetWorkspaceResourceTree 获取workspace资源树
-// @Summary 获取workspace资源树
-// @Description 获取指定workspace的资源树状结构
+// @Summary Get workspace resource tree
+// @Description Get the resource tree structure for a specified workspace
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} models.WorkspaceResourceTree
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/cmdb/workspaces/{workspace_id}/tree [get]
 func (h *CMDBHandler) GetWorkspaceResourceTree(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
@@ -82,14 +84,16 @@ func (h *CMDBHandler) GetWorkspaceResourceTree(c *gin.Context) {
 }
 
 // GetResourceDetail 获取资源详情
-// @Summary 获取资源详情
-// @Description 获取指定资源的详细信息
+// @Summary Get resource detail
+// @Description Get detailed information for a specified resource
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param workspace_id path string true "Workspace ID"
-// @Param address query string true "Terraform地址"
+// @Param address query string true "Terraform address"
 // @Success 200 {object} models.ResourceIndex
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/cmdb/workspaces/{workspace_id}/resources [get]
 func (h *CMDBHandler) GetResourceDetail(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
@@ -110,6 +114,13 @@ func (h *CMDBHandler) GetResourceDetail(c *gin.Context) {
 }
 
 // GetCMDBOverview 获取 CMDB 观测面板数据
+// @Summary Get CMDB overview dashboard data
+// @Description Get CMDB observation dashboard data including stats and trends
+// @Tags CMDB
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cmdb/overview [get]
 func (h *CMDBHandler) GetCMDBOverview(c *gin.Context) {
 	overview, err := h.cmdbService.GetCMDBOverview()
 	if err != nil {
@@ -120,6 +131,15 @@ func (h *CMDBHandler) GetCMDBOverview(c *gin.Context) {
 }
 
 // GetSyncHistory 获取同步历史（分页）
+// @Summary Get sync history
+// @Description Get paginated CMDB sync history
+// @Tags CMDB
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" default(1)
+// @Param size query int false "Page size" default(10)
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cmdb/sync-history [get]
 func (h *CMDBHandler) GetSyncHistory(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
@@ -133,6 +153,15 @@ func (h *CMDBHandler) GetSyncHistory(c *gin.Context) {
 }
 
 // GetSearchAnalytics 获取搜索召回质量分析数据
+// @Summary Get search analytics
+// @Description Get search recall quality analysis data
+// @Tags CMDB
+// @Produce json
+// @Security BearerAuth
+// @Param period query string false "Time period" default(7d)
+// @Param source query string false "Search source" default(manual)
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cmdb/search-analytics [get]
 func (h *CMDBHandler) GetSearchAnalytics(c *gin.Context) {
 	period := c.DefaultQuery("period", "7d")
 	source := c.DefaultQuery("source", "manual")
@@ -146,11 +175,11 @@ func (h *CMDBHandler) GetSearchAnalytics(c *gin.Context) {
 }
 
 // GetCMDBStats 获取CMDB统计信息
-// @Summary 获取CMDB统计信息
-// @Description 获取CMDB的整体统计信息
+// @Summary Get CMDB statistics
+// @Description Get overall CMDB statistics
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} models.CMDBStats
 // @Router /api/v1/cmdb/stats [get]
 func (h *CMDBHandler) GetCMDBStats(c *gin.Context) {
@@ -164,13 +193,14 @@ func (h *CMDBHandler) GetCMDBStats(c *gin.Context) {
 }
 
 // SyncWorkspace 同步workspace资源索引
-// @Summary 同步workspace资源索引
-// @Description 手动触发同步指定workspace的资源索引
+// @Summary Sync workspace resource index
+// @Description Manually trigger sync for a specified workspace's resource index
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/cmdb/workspaces/{workspace_id}/sync [post]
 func (h *CMDBHandler) SyncWorkspace(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
@@ -191,11 +221,11 @@ func (h *CMDBHandler) SyncWorkspace(c *gin.Context) {
 }
 
 // SyncAllWorkspaces 同步所有workspace资源索引
-// @Summary 同步所有workspace资源索引
-// @Description 手动触发同步所有workspace的资源索引（异步执行）
+// @Summary Sync all workspace resource indexes
+// @Description Manually trigger sync for all workspace resource indexes (async)
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Success 202 {object} map[string]interface{}
 // @Router /api/v1/cmdb/sync-all [post]
 func (h *CMDBHandler) SyncAllWorkspaces(c *gin.Context) {
@@ -214,11 +244,11 @@ func (h *CMDBHandler) SyncAllWorkspaces(c *gin.Context) {
 }
 
 // GetResourceTypes 获取所有资源类型
-// @Summary 获取所有资源类型
-// @Description 获取CMDB中所有的资源类型列表
+// @Summary Get all resource types
+// @Description Get the list of all resource types in CMDB
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/resource-types [get]
 func (h *CMDBHandler) GetResourceTypes(c *gin.Context) {
@@ -234,11 +264,11 @@ func (h *CMDBHandler) GetResourceTypes(c *gin.Context) {
 }
 
 // GetWorkspaceResourceCounts 获取所有workspace的资源数量
-// @Summary 获取所有workspace的资源数量
-// @Description 获取CMDB中所有workspace的资源数量统计
+// @Summary Get workspace resource counts
+// @Description Get resource count statistics for all workspaces in CMDB
 // @Tags CMDB
-// @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/workspace-counts [get]
 func (h *CMDBHandler) GetWorkspaceResourceCounts(c *gin.Context) {
@@ -254,13 +284,13 @@ func (h *CMDBHandler) GetWorkspaceResourceCounts(c *gin.Context) {
 }
 
 // GetSearchSuggestions 获取搜索建议
-// @Summary 获取搜索建议
-// @Description 根据输入前缀返回匹配的资源ID、名称或描述建议
+// @Summary Get search suggestions
+// @Description Return matching resource ID, name, or description suggestions based on input prefix
 // @Tags CMDB
-// @Accept json
 // @Produce json
-// @Param q query string true "搜索前缀"
-// @Param limit query int false "返回数量限制" default(10)
+// @Security BearerAuth
+// @Param q query string true "Search prefix"
+// @Param limit query int false "Result limit" default(10)
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/suggestions [get]
 func (h *CMDBHandler) GetSearchSuggestions(c *gin.Context) {

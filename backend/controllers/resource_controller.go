@@ -37,7 +37,7 @@ func NewResourceController(db *gorm.DB, streamManager *services.OutputStreamMana
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(10)
 // @Param search query string false "搜索关键词"
@@ -48,7 +48,7 @@ func NewResourceController(db *gorm.DB, streamManager *services.OutputStreamMana
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/resources [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetResources(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -109,13 +109,13 @@ func (c *ResourceController) GetResources(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param request body object true "资源信息"
 // @Success 201 {object} map[string]interface{} "资源添加成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "添加失败"
 // @Router /api/v1/workspaces/{id}/resources [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) AddResource(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -175,13 +175,13 @@ func (c *ResourceController) AddResource(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Success 200 {object} map[string]interface{} "成功返回资源详情"
 // @Failure 400 {object} map[string]interface{} "无效的资源ID"
 // @Failure 404 {object} map[string]interface{} "资源不存在"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetResource(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -206,14 +206,14 @@ func (c *ResourceController) GetResource(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "更新信息"
 // @Success 200 {object} map[string]interface{} "更新成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) UpdateResource(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -260,13 +260,13 @@ func (c *ResourceController) UpdateResource(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Success 200 {object} map[string]interface{} "删除成功"
 // @Failure 400 {object} map[string]interface{} "无效的资源ID"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) DeleteResource(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -293,13 +293,13 @@ func (c *ResourceController) DeleteResource(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Success 200 {object} map[string]interface{} "恢复成功"
 // @Failure 400 {object} map[string]interface{} "无效的资源ID"
 // @Failure 500 {object} map[string]interface{} "恢复失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/restore [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) RestoreResource(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -327,13 +327,13 @@ func (c *ResourceController) RestoreResource(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Success 200 {object} map[string]interface{} "成功返回版本列表"
 // @Failure 400 {object} map[string]interface{} "无效的资源ID"
 // @Failure 500 {object} map[string]interface{} "获取失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetResourceVersions(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -359,14 +359,14 @@ func (c *ResourceController) GetResourceVersions(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param version path int true "版本号"
 // @Success 200 {object} map[string]interface{} "成功返回版本详情"
 // @Failure 400 {object} map[string]interface{} "无效的参数"
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions/{version} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetResourceVersion(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -397,14 +397,14 @@ func (c *ResourceController) GetResourceVersion(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param version path int true "目标版本号"
 // @Success 200 {object} map[string]interface{} "回滚成功"
 // @Failure 400 {object} map[string]interface{} "无效的参数"
 // @Failure 500 {object} map[string]interface{} "回滚失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions/{version}/rollback [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) RollbackResource(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -439,7 +439,7 @@ func (c *ResourceController) RollbackResource(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param from query int true "源版本号"
 // @Param to query int true "目标版本号"
@@ -447,7 +447,7 @@ func (c *ResourceController) RollbackResource(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的参数"
 // @Failure 500 {object} map[string]interface{} "对比失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions/compare [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) CompareVersions(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -486,13 +486,13 @@ func (c *ResourceController) CompareVersions(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param request body object true "快照信息"
 // @Success 201 {object} map[string]interface{} "快照创建成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/workspaces/{id}/snapshots [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) CreateSnapshot(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -546,12 +546,12 @@ func (c *ResourceController) CreateSnapshot(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{} "成功返回快照列表"
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "获取失败"
 // @Router /api/v1/workspaces/{id}/snapshots [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetSnapshots(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -586,13 +586,13 @@ func (c *ResourceController) GetSnapshots(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param snapshot_id path int true "快照ID"
 // @Success 200 {object} map[string]interface{} "成功返回快照详情"
 // @Failure 400 {object} map[string]interface{} "无效的快照ID"
 // @Failure 404 {object} map[string]interface{} "快照不存在"
 // @Router /api/v1/workspaces/{id}/snapshots/{snapshot_id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetSnapshot(ctx *gin.Context) {
 	snapshotID, err := strconv.ParseUint(ctx.Param("snapshot_id"), 10, 32)
 	if err != nil {
@@ -617,13 +617,13 @@ func (c *ResourceController) GetSnapshot(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param snapshot_id path int true "快照ID"
 // @Success 200 {object} map[string]interface{} "恢复成功"
 // @Failure 400 {object} map[string]interface{} "无效的快照ID"
 // @Failure 500 {object} map[string]interface{} "恢复失败"
 // @Router /api/v1/workspaces/{id}/snapshots/{snapshot_id}/restore [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) RestoreSnapshot(ctx *gin.Context) {
 	snapshotID, err := strconv.ParseUint(ctx.Param("snapshot_id"), 10, 32)
 	if err != nil {
@@ -650,13 +650,13 @@ func (c *ResourceController) RestoreSnapshot(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param snapshot_id path int true "快照ID"
 // @Success 200 {object} map[string]interface{} "删除成功"
 // @Failure 400 {object} map[string]interface{} "无效的快照ID"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/workspaces/{id}/snapshots/{snapshot_id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) DeleteSnapshot(ctx *gin.Context) {
 	snapshotID, err := strconv.ParseUint(ctx.Param("snapshot_id"), 10, 32)
 	if err != nil {
@@ -684,13 +684,13 @@ func (c *ResourceController) DeleteSnapshot(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Success 200 {object} map[string]interface{} "成功返回依赖关系"
 // @Failure 400 {object} map[string]interface{} "无效的资源ID"
 // @Failure 500 {object} map[string]interface{} "获取失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/dependencies [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetResourceDependencies(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -713,14 +713,14 @@ func (c *ResourceController) GetResourceDependencies(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "依赖关系配置"
 // @Success 200 {object} map[string]interface{} "更新成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/dependencies [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) UpdateDependencies(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -772,13 +772,13 @@ func (c *ResourceController) UpdateDependencies(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param request body object true "TF代码"
 // @Success 200 {object} map[string]interface{} "导入成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "导入失败"
 // @Router /api/v1/workspaces/{id}/resources/import [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) ImportResources(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -825,13 +825,13 @@ func (c *ResourceController) ImportResources(ctx *gin.Context) {
 // @Tags Resource
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param request body object true "资源ID列表"
 // @Success 201 {object} map[string]interface{} "部署任务创建成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/workspaces/{id}/resources/deploy [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) DeployResources(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -899,14 +899,14 @@ func (c *ResourceController) DeployResources(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "会话信息"
 // @Success 200 {object} map[string]interface{} "开始编辑成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "开始编辑失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/start [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) StartEditing(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -944,14 +944,14 @@ func (c *ResourceController) StartEditing(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "会话信息"
 // @Success 200 {object} map[string]interface{} "心跳更新成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "心跳更新失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/heartbeat [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) Heartbeat(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -995,14 +995,14 @@ func (c *ResourceController) Heartbeat(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "会话信息"
 // @Success 200 {object} map[string]interface{} "结束编辑成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "结束编辑失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/end [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) EndEditing(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -1039,14 +1039,14 @@ func (c *ResourceController) EndEditing(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param session_id query string true "会话ID"
 // @Success 200 {object} map[string]interface{} "成功返回编辑状态"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "获取失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/status [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetEditingStatus(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -1081,14 +1081,14 @@ func (c *ResourceController) GetEditingStatus(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "草稿内容"
 // @Success 200 {object} map[string]interface{} "草稿保存成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "保存失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift/save [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) SaveDrift(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -1131,14 +1131,14 @@ func (c *ResourceController) SaveDrift(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param session_id query string true "会话ID"
 // @Success 200 {object} map[string]interface{} "成功返回草稿"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "获取失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) GetDrift(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -1197,14 +1197,14 @@ func (c *ResourceController) GetDrift(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param session_id query string true "会话ID"
 // @Success 200 {object} map[string]interface{} "删除成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) DeleteDrift(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -1238,14 +1238,14 @@ func (c *ResourceController) DeleteDrift(ctx *gin.Context) {
 // @Tags Resource Editing
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "Workspace ID"
 // @Param resource_id path int true "资源ID"
 // @Param request body object true "接管信息"
 // @Success 200 {object} map[string]interface{} "接管成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "接管失败"
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift/takeover [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) TakeoverEditing(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
@@ -1294,7 +1294,7 @@ func (c *ResourceController) TakeoverEditing(ctx *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "工作空间不存在"
 // @Failure 500 {object} map[string]interface{} "导出失败"
 // @Router /api/v1/workspaces/{id}/resources/export/hcl [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *ResourceController) ExportResourcesHCL(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {

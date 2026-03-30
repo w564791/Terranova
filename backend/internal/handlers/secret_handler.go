@@ -32,14 +32,15 @@ func NewSecretHandler(db *gorm.DB) *SecretHandler {
 }
 
 // CreateSecret 创建密文
-// @Summary 创建密文
-// @Description 为指定资源创建加密密文数据
+// @Summary Create a secret
+// @Description Create an encrypted secret for the specified resource
 // @Tags Secrets
 // @Accept json
 // @Produce json
-// @Param resourceType path string true "资源类型" Enums(agent_pool, workspace, module, system)
-// @Param resourceId path string true "资源ID"
-// @Param request body models.CreateSecretRequest true "创建密文请求"
+// @Security BearerAuth
+// @Param resourceType path string true "Resource type" Enums(agent_pool, workspace, module, system)
+// @Param resourceId path string true "Resource ID"
+// @Param request body models.CreateSecretRequest true "Create secret request"
 // @Success 201 {object} models.CreateSecretResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -136,14 +137,14 @@ func (h *SecretHandler) CreateSecret(c *gin.Context) {
 }
 
 // ListSecrets 列出密文
-// @Summary 列出密文
-// @Description 获取指定资源的所有密文列表（不包含value）
+// @Summary List secrets
+// @Description Get all secrets for the specified resource (values excluded)
 // @Tags Secrets
-// @Accept json
 // @Produce json
-// @Param resourceType path string true "资源类型" Enums(agent_pool, workspace, module, system)
-// @Param resourceId path string true "资源ID"
-// @Param is_active query boolean false "是否仅显示激活的密文"
+// @Security BearerAuth
+// @Param resourceType path string true "Resource type" Enums(agent_pool, workspace, module, system)
+// @Param resourceId path string true "Resource ID"
+// @Param is_active query boolean false "Only show active secrets"
 // @Success 200 {object} models.SecretListResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -184,14 +185,14 @@ func (h *SecretHandler) ListSecrets(c *gin.Context) {
 }
 
 // GetSecret 获取密文详情
-// @Summary 获取密文详情
-// @Description 获取指定密文的详细信息（不包含value）
+// @Summary Get secret details
+// @Description Get detailed information for the specified secret (value excluded)
 // @Tags Secrets
-// @Accept json
 // @Produce json
-// @Param resourceType path string true "资源类型" Enums(agent_pool, workspace, module, system)
-// @Param resourceId path string true "资源ID"
-// @Param secretId path string true "密文ID"
+// @Security BearerAuth
+// @Param resourceType path string true "Resource type" Enums(agent_pool, workspace, module, system)
+// @Param resourceId path string true "Resource ID"
+// @Param secretId path string true "Secret ID"
 // @Success 200 {object} models.SecretResponse
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -216,15 +217,16 @@ func (h *SecretHandler) GetSecret(c *gin.Context) {
 }
 
 // UpdateSecret 更新密文
-// @Summary 更新密文
-// @Description 更新密文的metadata（不允许更新value）
+// @Summary Update a secret
+// @Description Update secret metadata and optionally its value
 // @Tags Secrets
 // @Accept json
 // @Produce json
-// @Param resourceType path string true "资源类型" Enums(agent_pool, workspace, module, system)
-// @Param resourceId path string true "资源ID"
-// @Param secretId path string true "密文ID"
-// @Param request body models.UpdateSecretRequest true "更新密文请求"
+// @Security BearerAuth
+// @Param resourceType path string true "Resource type" Enums(agent_pool, workspace, module, system)
+// @Param resourceId path string true "Resource ID"
+// @Param secretId path string true "Secret ID"
+// @Param request body models.UpdateSecretRequest true "Update secret request"
 // @Success 200 {object} models.SecretResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
@@ -318,14 +320,14 @@ func (h *SecretHandler) UpdateSecret(c *gin.Context) {
 }
 
 // DeleteSecret 删除密文
-// @Summary 删除密文
-// @Description 删除指定的密文
+// @Summary Delete a secret
+// @Description Delete the specified secret
 // @Tags Secrets
-// @Accept json
 // @Produce json
-// @Param resourceType path string true "资源类型" Enums(agent_pool, workspace, module, system)
-// @Param resourceId path string true "资源ID"
-// @Param secretId path string true "密文ID"
+// @Security BearerAuth
+// @Param resourceType path string true "Resource type" Enums(agent_pool, workspace, module, system)
+// @Param resourceId path string true "Resource ID"
+// @Param secretId path string true "Secret ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}

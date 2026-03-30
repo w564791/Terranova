@@ -26,12 +26,13 @@ func NewCMDBExternalSourceHandler(db *gorm.DB) *CMDBExternalSourceHandler {
 }
 
 // CreateExternalSource 创建外部数据源
-// @Summary 创建外部CMDB数据源
-// @Description 创建一个新的外部CMDB数据源配置
+// @Summary Create an external CMDB data source
+// @Description Create a new external CMDB data source configuration
 // @Tags CMDB External Sources
 // @Accept json
 // @Produce json
-// @Param request body models.CreateExternalSourceRequest true "创建请求"
+// @Security BearerAuth
+// @Param request body models.CreateExternalSourceRequest true "Create request"
 // @Success 201 {object} models.ExternalSourceResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -66,10 +67,11 @@ func (h *CMDBExternalSourceHandler) CreateExternalSource(c *gin.Context) {
 }
 
 // ListExternalSources 列出外部数据源
-// @Summary 列出所有外部CMDB数据源
-// @Description 获取所有外部CMDB数据源配置列表
+// @Summary List all external CMDB data sources
+// @Description Get all external CMDB data source configurations
 // @Tags CMDB External Sources
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} models.ExternalSourceListResponse
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/cmdb/external-sources [get]
@@ -97,11 +99,12 @@ func (h *CMDBExternalSourceHandler) ListExternalSources(c *gin.Context) {
 }
 
 // GetExternalSource 获取外部数据源详情
-// @Summary 获取外部CMDB数据源详情
-// @Description 根据ID获取外部CMDB数据源的详细配置
+// @Summary Get external CMDB data source details
+// @Description Get the detailed configuration of an external CMDB data source by ID
 // @Tags CMDB External Sources
 // @Produce json
-// @Param source_id path string true "数据源ID"
+// @Security BearerAuth
+// @Param source_id path string true "Data source ID"
 // @Success 200 {object} models.ExternalSourceResponse
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -130,13 +133,14 @@ func (h *CMDBExternalSourceHandler) GetExternalSource(c *gin.Context) {
 }
 
 // UpdateExternalSource 更新外部数据源
-// @Summary 更新外部CMDB数据源
-// @Description 更新外部CMDB数据源的配置
+// @Summary Update an external CMDB data source
+// @Description Update the configuration of an external CMDB data source
 // @Tags CMDB External Sources
 // @Accept json
 // @Produce json
-// @Param source_id path string true "数据源ID"
-// @Param request body models.UpdateExternalSourceRequest true "更新请求"
+// @Security BearerAuth
+// @Param source_id path string true "Data source ID"
+// @Param request body models.UpdateExternalSourceRequest true "Update request"
 // @Success 200 {object} models.ExternalSourceResponse
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
@@ -178,11 +182,12 @@ func (h *CMDBExternalSourceHandler) UpdateExternalSource(c *gin.Context) {
 }
 
 // DeleteExternalSource 删除外部数据源
-// @Summary 删除外部CMDB数据源
-// @Description 删除指定的外部CMDB数据源及其同步的数据
+// @Summary Delete an external CMDB data source
+// @Description Delete a specified external CMDB data source and its synced data
 // @Tags CMDB External Sources
 // @Produce json
-// @Param source_id path string true "数据源ID"
+// @Security BearerAuth
+// @Param source_id path string true "Data source ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -204,11 +209,12 @@ func (h *CMDBExternalSourceHandler) DeleteExternalSource(c *gin.Context) {
 }
 
 // SyncExternalSource 同步外部数据源
-// @Summary 手动触发外部数据源同步
-// @Description 手动触发指定外部CMDB数据源的数据同步
+// @Summary Manually trigger external data source sync
+// @Description Manually trigger data sync for a specified external CMDB data source
 // @Tags CMDB External Sources
 // @Produce json
-// @Param source_id path string true "数据源ID"
+// @Security BearerAuth
+// @Param source_id path string true "Data source ID"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -230,11 +236,12 @@ func (h *CMDBExternalSourceHandler) SyncExternalSource(c *gin.Context) {
 }
 
 // TestConnection 测试外部数据源连接
-// @Summary 测试外部数据源连接
-// @Description 测试外部CMDB数据源的API连接是否正常
+// @Summary Test external data source connection
+// @Description Test whether the external CMDB data source API connection is working
 // @Tags CMDB External Sources
 // @Produce json
-// @Param source_id path string true "数据源ID"
+// @Security BearerAuth
+// @Param source_id path string true "Data source ID"
 // @Success 200 {object} models.TestConnectionResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -257,12 +264,13 @@ func (h *CMDBExternalSourceHandler) TestConnection(c *gin.Context) {
 }
 
 // GetSyncLogs 获取同步日志
-// @Summary 获取外部数据源同步日志
-// @Description 获取指定外部CMDB数据源的同步历史日志
+// @Summary Get external data source sync logs
+// @Description Get sync history logs for a specified external CMDB data source
 // @Tags CMDB External Sources
 // @Produce json
-// @Param source_id path string true "数据源ID"
-// @Param limit query int false "返回数量限制" default(20)
+// @Security BearerAuth
+// @Param source_id path string true "Data source ID"
+// @Param limit query int false "Result limit" default(20)
 // @Success 200 {object} models.SyncLogListResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string

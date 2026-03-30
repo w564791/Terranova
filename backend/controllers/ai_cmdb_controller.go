@@ -23,17 +23,18 @@ func NewAICMDBController(db *gorm.DB) *AICMDBController {
 }
 
 // GenerateConfigWithCMDB 带 CMDB 查询的配置生成
-// @Summary 带 CMDB 查询的配置生成
-// @Description 根据用户描述自动从 CMDB 查询资源，生成 Terraform 配置
-// @Tags AI
+// @Summary Generate config with CMDB lookup
+// @Description Automatically query CMDB resources based on user description and generate Terraform configuration
+// @Tags AI Form
 // @Accept json
 // @Produce json
-// @Param request body services.GenerateConfigWithCMDBRequest true "请求参数"
+// @Param request body services.GenerateConfigWithCMDBRequest true "Request parameters"
 // @Success 200 {object} services.GenerateConfigWithCMDBResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/ai/form/generate-with-cmdb [post]
+// @Security BearerAuth
+// @Router /api/v1/ai/form/generate-with-cmdb [post]
 func (c *AICMDBController) GenerateConfigWithCMDB(ctx *gin.Context) {
 	// 获取用户 ID
 	userID, exists := ctx.Get("user_id")

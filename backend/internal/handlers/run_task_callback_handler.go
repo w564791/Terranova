@@ -30,14 +30,19 @@ func NewRunTaskCallbackHandler(db *gorm.DB, executor *services.RunTaskExecutor) 
 
 // HandleCallback handles callback from external run task service
 // @Summary Handle run task callback
-// @Description Receive callback from external run task service
+// @Description Receive callback from external run task service (supports both PATCH and POST)
 // @Tags Run Task Callback
 // @Accept json
 // @Produce json
 // @Param result_id path string true "Result ID"
 // @Param request body models.RunTaskCallbackPayload true "Callback data"
 // @Success 200 {object} map[string]interface{}
-// @Failure 400,404,410,500 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 410 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-task-results/{result_id}/callback [patch]
 func (h *RunTaskCallbackHandler) HandleCallback(c *gin.Context) {
 	resultID := c.Param("result_id")

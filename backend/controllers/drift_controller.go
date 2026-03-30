@@ -26,12 +26,15 @@ func NewDriftController(db *gorm.DB, scheduler *services.DriftCheckScheduler) *D
 }
 
 // GetDriftConfig 获取 workspace 的 drift 检测配置
-// @Summary 获取 drift 检测配置
+// @Summary Get drift detection config
+// @Description Get drift detection configuration for a workspace
 // @Tags Drift
 // @Produce json
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} models.DriftConfigResponse
-// @Router /api/workspaces/{id}/drift-config [get]
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/drift-config [get]
+// @Security BearerAuth
 func (c *DriftController) GetDriftConfig(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 
@@ -45,14 +48,18 @@ func (c *DriftController) GetDriftConfig(ctx *gin.Context) {
 }
 
 // UpdateDriftConfig 更新 workspace 的 drift 检测配置
-// @Summary 更新 drift 检测配置
+// @Summary Update drift detection config
+// @Description Update drift detection configuration for a workspace
 // @Tags Drift
 // @Accept json
 // @Produce json
 // @Param id path string true "Workspace ID"
-// @Param config body models.DriftConfigUpdateRequest true "Drift 配置"
+// @Param config body models.DriftConfigUpdateRequest true "Drift config"
 // @Success 200 {object} map[string]string
-// @Router /api/workspaces/{id}/drift-config [put]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/drift-config [put]
+// @Security BearerAuth
 func (c *DriftController) UpdateDriftConfig(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 
@@ -71,12 +78,15 @@ func (c *DriftController) UpdateDriftConfig(ctx *gin.Context) {
 }
 
 // GetDriftStatus 获取 workspace 的 drift 检测状态
-// @Summary 获取 drift 检测状态
+// @Summary Get drift detection status
+// @Description Get drift detection status and latest result for a workspace
 // @Tags Drift
 // @Produce json
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} models.WorkspaceDriftResult
-// @Router /api/workspaces/{id}/drift-status [get]
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/drift-status [get]
+// @Security BearerAuth
 func (c *DriftController) GetDriftStatus(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 
@@ -102,12 +112,15 @@ func (c *DriftController) GetDriftStatus(ctx *gin.Context) {
 }
 
 // TriggerDriftCheck 手动触发 drift 检测
-// @Summary 手动触发 drift 检测
+// @Summary Trigger drift check
+// @Description Manually trigger a drift detection check for a workspace
 // @Tags Drift
 // @Produce json
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]string
-// @Router /api/workspaces/{id}/drift-check [post]
+// @Failure 400 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/drift-check [post]
+// @Security BearerAuth
 func (c *DriftController) TriggerDriftCheck(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 
@@ -121,12 +134,15 @@ func (c *DriftController) TriggerDriftCheck(ctx *gin.Context) {
 }
 
 // GetResourceDriftStatuses 获取 workspace 下所有资源的 drift 状态
-// @Summary 获取资源 drift 状态列表
+// @Summary Get resource drift statuses
+// @Description Get drift statuses for all resources in a workspace
 // @Tags Drift
 // @Produce json
 // @Param id path string true "Workspace ID"
 // @Success 200 {array} models.ResourceDriftStatus
-// @Router /api/workspaces/{id}/resources-drift [get]
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/resources-drift [get]
+// @Security BearerAuth
 func (c *DriftController) GetResourceDriftStatuses(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 
@@ -140,12 +156,15 @@ func (c *DriftController) GetResourceDriftStatuses(ctx *gin.Context) {
 }
 
 // CancelDriftCheck 取消正在进行的 drift 检测
-// @Summary 取消 drift 检测
+// @Summary Cancel drift check
+// @Description Cancel an ongoing drift detection check
 // @Tags Drift
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]string
-// @Router /api/workspaces/{workspace_id}/drift-check [delete]
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/drift-check [delete]
+// @Security BearerAuth
 func (c *DriftController) CancelDriftCheck(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 

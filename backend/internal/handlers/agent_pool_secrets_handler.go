@@ -27,11 +27,11 @@ func NewAgentPoolSecretsHandler(db *gorm.DB) *AgentPoolSecretsHandler {
 // GetPoolSecrets retrieves HCP secrets for the agent's pool
 // This endpoint is called by agents to get credentials for generating credentials.tfrc.json
 // @Summary Get pool HCP secrets
-// @Description Get decrypted HCP secrets for the agent's pool (agent-only endpoint)
+// @Description Get decrypted HCP secrets for the agent's pool to generate credentials.tfrc.json on agent side
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param Authorization header string true "Bearer {pool_token}"
+// @Security PoolTokenAuth
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
