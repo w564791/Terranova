@@ -56,21 +56,20 @@ func NewWorkspaceTaskController(
 }
 
 // CreatePlanTask 创建Plan任务
-// @Summary 创建Plan任务
-// @Description 创建Terraform Plan任务或Plan+Apply任务
+// @Summary Create plan task
+// @Description Create a Terraform Plan task or Plan+Apply task
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param request body object false "任务配置（description和run_type可选）"
-// @Success 201 {object} map[string]interface{} "任务创建成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 404 {object} map[string]interface{} "工作空间不存在"
-// @Failure 423 {object} map[string]interface{} "工作空间已锁定"
-// @Failure 500 {object} map[string]interface{} "创建失败"
+// @Param id path string true "Workspace ID"
+// @Param request body object false "Task configuration (description and run_type optional)"
+// @Success 201 {object} map[string]interface{} "Task created"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "Workspace not found"
+// @Failure 500 {object} map[string]interface{} "Creation failed"
 // @Router /api/v1/workspaces/{id}/tasks/plan [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -239,18 +238,18 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 // func (c *WorkspaceTaskController) CreateApplyTask(ctx *gin.Context) { ... }
 
 // GetTask 获取任务详情
-// @Summary 获取任务详情
-// @Description 根据ID获取任务的详细信息
+// @Summary Get task detail
+// @Description Get task detail by ID
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "成功返回任务详情"
-// @Failure 400 {object} map[string]interface{} "无效的参数"
-// @Failure 404 {object} map[string]interface{} "任务不存在"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Task detail"
+// @Failure 400 {object} map[string]interface{} "Invalid parameters"
+// @Failure 404 {object} map[string]interface{} "Task not found"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -367,24 +366,25 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 }
 
 // GetTasks 获取任务列表
-// @Summary 获取任务列表
-// @Description 获取工作空间的任务列表，支持分页、搜索和过滤
+// @Summary Get task list
+// @Description Get workspace task list with pagination, search and filtering
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(10)
-// @Param search query string false "搜索关键词"
-// @Param status query string false "状态过滤"
-// @Param task_type query string false "任务类型过滤"
-// @Param start_date query string false "开始日期（RFC3339格式）"
-// @Param end_date query string false "结束日期（RFC3339格式）"
-// @Success 200 {object} map[string]interface{} "成功返回任务列表"
-// @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param id path string true "Workspace ID"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(10)
+// @Param search query string false "Search keyword"
+// @Param status query string false "Status filter"
+// @Param task_type query string false "Task type filter"
+// @Param start_date query string false "Start date (RFC3339)"
+// @Param end_date query string false "End date (RFC3339)"
+// @Param show_background query bool false "Include background tasks"
+// @Success 200 {object} map[string]interface{} "Task list"
+// @Failure 400 {object} map[string]interface{} "Invalid workspace ID"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/v1/workspaces/{id}/tasks [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -619,18 +619,18 @@ func applySearchAndTimeFilters(search, startDate, endDate string) func(*gorm.DB)
 }
 
 // GetTaskLogs 获取任务日志
-// @Summary 获取任务日志
-// @Description 获取任务的执行日志
+// @Summary Get task logs
+// @Description Get task execution logs
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "成功返回日志"
-// @Failure 400 {object} map[string]interface{} "无效的任务ID"
-// @Failure 500 {object} map[string]interface{} "获取失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Task logs"
+// @Failure 400 {object} map[string]interface{} "Invalid task ID"
+// @Failure 500 {object} map[string]interface{} "Fetch failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/logs [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
@@ -651,21 +651,21 @@ func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
 }
 
 // ConfirmApply 确认执行Apply
-// @Summary 确认执行Apply
-// @Description 确认执行Plan+Apply任务的Apply阶段
+// @Summary Confirm apply
+// @Description Confirm the apply stage of a Plan+Apply task
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Param request body object true "Apply描述"
-// @Success 200 {object} map[string]interface{} "Apply已加入队列"
-// @Failure 400 {object} map[string]interface{} "请求参数无效或任务状态不正确"
-// @Failure 404 {object} map[string]interface{} "任务不存在"
-// @Failure 409 {object} map[string]interface{} "资源已变更"
-// @Failure 500 {object} map[string]interface{} "更新失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Param request body object true "Apply description"
+// @Success 200 {object} map[string]interface{} "Apply queued"
+// @Failure 400 {object} map[string]interface{} "Invalid request or incorrect task status"
+// @Failure 404 {object} map[string]interface{} "Task not found"
+// @Failure 409 {object} map[string]interface{} "Resources changed since plan"
+// @Failure 500 {object} map[string]interface{} "Update failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -819,19 +819,19 @@ func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
 }
 
 // CancelPreviousTasks 取消当前任务之前的所有等待任务
-// @Summary 取消之前的等待任务
-// @Description 取消当前任务之前的所有等待中的任务
+// @Summary Cancel previous pending tasks
+// @Description Cancel all pending tasks before the specified task
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "取消成功"
-// @Failure 400 {object} map[string]interface{} "无效的参数或任务状态不正确"
-// @Failure 404 {object} map[string]interface{} "任务不存在"
-// @Failure 500 {object} map[string]interface{} "取消失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Cancellation successful"
+// @Failure 400 {object} map[string]interface{} "Invalid parameters or incorrect task status"
+// @Failure 404 {object} map[string]interface{} "Task not found"
+// @Failure 500 {object} map[string]interface{} "Cancellation failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/cancel-previous [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -941,19 +941,21 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 }
 
 // CancelTask 取消任务
-// @Summary 取消任务
-// @Description 取消指定的任务
+// @Summary Cancel task
+// @Description Cancel the specified task
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "取消成功"
-// @Failure 400 {object} map[string]interface{} "无效的任务ID或任务已完成"
-// @Failure 404 {object} map[string]interface{} "任务不存在"
-// @Failure 500 {object} map[string]interface{} "取消失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Param force query bool false "Force cancel during apply stage"
+// @Success 200 {object} map[string]interface{} "Cancellation successful"
+// @Failure 400 {object} map[string]interface{} "Invalid task ID or task already completed"
+// @Failure 404 {object} map[string]interface{} "Task not found"
+// @Failure 409 {object} map[string]interface{} "Task is applying, requires force=true"
+// @Failure 500 {object} map[string]interface{} "Cancellation failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/cancel [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
@@ -1100,19 +1102,19 @@ func timePtr(t time.Time) *time.Time {
 }
 
 // RetryStateSave 重试State保存
-// @Summary 重试State保存
-// @Description 重试保存失败的State文件
+// @Summary Retry state save
+// @Description Retry saving a failed state file from backup
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "State保存成功"
-// @Failure 400 {object} map[string]interface{} "任务不是State保存失败状态"
-// @Failure 404 {object} map[string]interface{} "任务或备份文件不存在"
-// @Failure 500 {object} map[string]interface{} "保存失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "State saved successfully"
+// @Failure 400 {object} map[string]interface{} "Task is not in state save failed status"
+// @Failure 404 {object} map[string]interface{} "Task or backup file not found"
+// @Failure 500 {object} map[string]interface{} "Save failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/retry-state-save [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -1208,18 +1210,18 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 }
 
 // DownloadStateBackup 下载State备份
-// @Summary 下载State备份文件
-// @Description 下载任务的State备份文件
+// @Summary Download state backup
+// @Description Download task state backup file
 // @Tags Workspace Task
 // @Accept json
 // @Produce application/octet-stream
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {file} file "State备份文件"
-// @Failure 400 {object} map[string]interface{} "无法找到备份路径"
-// @Failure 404 {object} map[string]interface{} "任务或备份文件不存在"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {file} file "State backup file"
+// @Failure 400 {object} map[string]interface{} "Backup path not found"
+// @Failure 404 {object} map[string]interface{} "Task or backup file not found"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/state-backup [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) DownloadStateBackup(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -1283,20 +1285,20 @@ func extractBackupPath(errorMessage string) string {
 }
 
 // CreateComment 添加任务评论
-// @Summary 添加任务评论
-// @Description 为任务添加评论
+// @Summary Create task comment
+// @Description Add a comment to a task
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Param request body object true "评论内容"
-// @Success 201 {object} map[string]interface{} "评论创建成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效或评论数量超限"
-// @Failure 404 {object} map[string]interface{} "任务不存在"
-// @Failure 500 {object} map[string]interface{} "创建失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Param request body object true "Comment content"
+// @Success 201 {object} map[string]interface{} "Comment created"
+// @Failure 400 {object} map[string]interface{} "Invalid request or comment limit exceeded"
+// @Failure 404 {object} map[string]interface{} "Task not found"
+// @Failure 500 {object} map[string]interface{} "Creation failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/comments [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) CreateComment(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
@@ -1361,19 +1363,19 @@ func (c *WorkspaceTaskController) CreateComment(ctx *gin.Context) {
 }
 
 // GetComments 获取任务评论列表
-// @Summary 获取任务评论列表
-// @Description 获取任务的所有评论
+// @Summary Get task comments
+// @Description Get all comments for a task
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "成功返回评论列表"
-// @Failure 400 {object} map[string]interface{} "无效的参数"
-// @Failure 404 {object} map[string]interface{} "任务不存在"
-// @Failure 500 {object} map[string]interface{} "获取失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Comment list"
+// @Failure 400 {object} map[string]interface{} "Invalid parameters"
+// @Failure 404 {object} map[string]interface{} "Task not found"
+// @Failure 500 {object} map[string]interface{} "Fetch failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/comments [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *WorkspaceTaskController) GetComments(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {

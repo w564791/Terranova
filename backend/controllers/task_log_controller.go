@@ -35,7 +35,7 @@ func NewTaskLogController(db *gorm.DB) *TaskLogController {
 // @Success 200 {object} map[string]interface{} "成功返回日志"
 // @Failure 404 {object} map[string]interface{} "任务不存在"
 // @Router /api/v1/tasks/{task_id}/logs [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *TaskLogController) GetTaskLogs(ctx *gin.Context) {
 	taskID := ctx.Param("task_id")
 	logType := ctx.DefaultQuery("type", "all")
@@ -138,7 +138,7 @@ func (c *TaskLogController) returnTextLogs(
 // @Success 200 {file} file "日志文件"
 // @Failure 404 {object} map[string]interface{} "任务不存在"
 // @Router /api/v1/tasks/{task_id}/logs/download [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *TaskLogController) DownloadTaskLogs(ctx *gin.Context) {
 	taskID := ctx.Param("task_id")
 	logType := ctx.DefaultQuery("type", "all")

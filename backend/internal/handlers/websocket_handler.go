@@ -64,6 +64,7 @@ func NewWebSocketHandler(hub *websocket.Hub) *WebSocketHandler {
 // @Param session_id path string true "Session ID"
 // @Success 101 {string} string "Switching Protocols"
 // @Router /api/v1/ws/editing/{session_id} [get]
+// @Security BearerAuth
 func (h *WebSocketHandler) HandleConnection(c *gin.Context) {
 	sessionID := c.Param("session_id")
 	if sessionID == "" {
@@ -104,6 +105,7 @@ func (h *WebSocketHandler) HandleConnection(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{} "成功"
 // @Router /api/v1/ws/sessions [get]
+// @Security BearerAuth
 func (h *WebSocketHandler) GetConnectedSessions(c *gin.Context) {
 	sessions := h.hub.GetConnectedSessions()
 	c.JSON(http.StatusOK, gin.H{

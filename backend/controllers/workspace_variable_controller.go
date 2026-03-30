@@ -29,12 +29,12 @@ func NewWorkspaceVariableController(variableService *services.WorkspaceVariableS
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param request body object true "变量信息"
 // @Success 201 {object} map[string]interface{} "变量创建成功"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Router /api/v1/workspaces/{id}/variables [post]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) CreateVariable(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -130,13 +130,13 @@ func (vc *WorkspaceVariableController) CreateVariable(c *gin.Context) {
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param type query string false "变量类型过滤（terraform/env/all）" default(all)
 // @Success 200 {object} map[string]interface{} "成功返回变量列表"
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/variables [get]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) ListVariables(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -195,13 +195,13 @@ func (vc *WorkspaceVariableController) ListVariables(c *gin.Context) {
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param var_id path int true "变量ID"
 // @Success 200 {object} map[string]interface{} "成功返回变量详情"
 // @Failure 400 {object} map[string]interface{} "无效的变量ID"
 // @Failure 404 {object} map[string]interface{} "变量不存在"
 // @Router /api/v1/workspaces/{id}/variables/{var_id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) GetVariable(c *gin.Context) {
 	varID, err := strconv.ParseUint(c.Param("var_id"), 10, 32)
 	if err != nil {
@@ -236,14 +236,14 @@ func (vc *WorkspaceVariableController) GetVariable(c *gin.Context) {
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param var_id path string true "变量ID（支持数字ID或variable_id）"
 // @Param request body object true "更新信息（必须包含version字段）"
 // @Success 200 {object} map[string]interface{} "更新成功，返回版本变更信息"
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 409 {object} map[string]interface{} "版本冲突"
 // @Router /api/v1/workspaces/{id}/variables/{var_id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 	varIDParam := c.Param("var_id")
 
@@ -347,12 +347,12 @@ func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param var_id path string true "变量ID（支持数字ID或variable_id）"
 // @Success 200 {object} map[string]interface{} "删除成功"
 // @Failure 400 {object} map[string]interface{} "无效的变量ID"
 // @Router /api/v1/workspaces/{id}/variables/{var_id} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) DeleteVariable(c *gin.Context) {
 	varIDParam := c.Param("var_id")
 	
@@ -390,13 +390,13 @@ func (vc *WorkspaceVariableController) DeleteVariable(c *gin.Context) {
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param var_id path string true "变量ID（支持数字ID或variable_id）"
 // @Success 200 {object} map[string]interface{} "成功返回版本历史"
 // @Failure 400 {object} map[string]interface{} "无效的变量ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/variables/{var_id}/versions [get]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) GetVariableVersions(c *gin.Context) {
 	varIDParam := c.Param("var_id")
 	
@@ -453,14 +453,14 @@ func (vc *WorkspaceVariableController) GetVariableVersions(c *gin.Context) {
 // @Tags Workspace Variable
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
+// @Param id path string true "工作空间ID"
 // @Param var_id path string true "变量ID（支持数字ID或variable_id）"
 // @Param version path int true "版本号"
 // @Success 200 {object} map[string]interface{} "成功返回版本详情"
 // @Failure 400 {object} map[string]interface{} "无效的参数"
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Router /api/v1/workspaces/{id}/variables/{var_id}/versions/{version} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (vc *WorkspaceVariableController) GetVariableVersion(c *gin.Context) {
 	varIDParam := c.Param("var_id")
 	versionParam := c.Param("version")

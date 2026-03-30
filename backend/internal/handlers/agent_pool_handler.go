@@ -35,9 +35,11 @@ func NewAgentPoolHandler(db *gorm.DB) *AgentPoolHandler {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param request body models.CreateAgentPoolRequest true "Agent pool details"
 // @Success 201 {object} models.AgentPool
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools [post]
 func (h *AgentPoolHandler) CreateAgentPool(c *gin.Context) {
@@ -87,12 +89,14 @@ func (h *AgentPoolHandler) CreateAgentPool(c *gin.Context) {
 
 // ListAgentPools retrieves all agent pools
 // @Summary List agent pools
-// @Description Get list of all agent pools
+// @Description Get list of all agent pools with agent counts
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
-// @Param is_active query boolean false "Filter by active status"
+// @Security BearerAuth
+// @Param status query string false "Filter by status"
 // @Success 200 {object} models.AgentPoolListResponse
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools [get]
 func (h *AgentPoolHandler) ListAgentPools(c *gin.Context) {
@@ -135,14 +139,16 @@ func (h *AgentPoolHandler) ListAgentPools(c *gin.Context) {
 
 // GetAgentPool retrieves a specific agent pool
 // @Summary Get agent pool
-// @Description Get detailed information about a specific agent pool
+// @Description Get detailed information about a specific agent pool including its agents
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param include_offline query boolean false "Include offline agents (default: false)"
 // @Success 200 {object} models.AgentPoolDetailResponse
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id} [get]
@@ -210,10 +216,12 @@ func (h *AgentPoolHandler) GetAgentPool(c *gin.Context) {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param request body models.UpdateAgentPoolRequest true "Updated pool details"
 // @Success 200 {object} models.AgentPool
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id} [put]
@@ -296,9 +304,11 @@ func (h *AgentPoolHandler) UpdateAgentPool(c *gin.Context) {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 409 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -372,10 +382,12 @@ func generatePoolID() (string, error) {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param request body models.CreatePoolTokenRequest true "Token details"
 // @Success 201 {object} models.PoolTokenCreateResponse
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/tokens [post]
@@ -439,9 +451,11 @@ func (h *AgentPoolHandler) CreatePoolToken(c *gin.Context) {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Success 200 {object} models.PoolTokenListResponse
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/tokens [get]
 func (h *AgentPoolHandler) ListPoolTokens(c *gin.Context) {
@@ -474,10 +488,12 @@ func (h *AgentPoolHandler) ListPoolTokens(c *gin.Context) {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param token_name path string true "Token Name"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/tokens/{token_name} [delete]
@@ -571,14 +587,16 @@ func (h *AgentPoolHandler) RevokePoolToken(c *gin.Context) {
 
 // UpdateK8sConfig updates the K8s configuration for a pool
 // @Summary Update K8s config
-// @Description Update K8s Job template configuration for a K8s agent pool
+// @Description Update K8s Job template configuration for a K8s agent pool and rebuild idle pods
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param request body models.UpdateK8sConfigRequest true "K8s configuration"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/k8s-config [put]
@@ -657,9 +675,11 @@ func (h *AgentPoolHandler) UpdateK8sConfig(c *gin.Context) {
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Success 200 {object} models.K8sJobTemplateConfig
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/k8s-config [get]
@@ -696,14 +716,16 @@ func (h *AgentPoolHandler) GetK8sConfig(c *gin.Context) {
 
 // RotatePoolToken rotates a pool token (for K8s pools)
 // @Summary Rotate pool token
-// @Description Rotate a pool token, update K8s secret, and restart deployment
+// @Description Rotate a pool token, update K8s secret, and restart deployment. Only available for K8s pools.
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param token_name path string true "Token Name"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/tokens/{token_name}/rotate [post]
@@ -765,13 +787,15 @@ func (h *AgentPoolHandler) RotatePoolToken(c *gin.Context) {
 
 // SyncDeploymentConfig syncs the Pod configuration with the latest K8s config
 // @Summary Sync Pod config
-// @Description Sync K8s Pods with latest configuration from database
+// @Description Sync K8s Pods with latest configuration from database. Only available for K8s pools.
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/sync-deployment [post]
@@ -825,13 +849,15 @@ func (h *AgentPoolHandler) SyncDeploymentConfig(c *gin.Context) {
 
 // ActivateOneTimeUnfreeze activates a one-time unfreeze for emergency bypass of freeze schedules
 // @Summary Activate one-time unfreeze
-// @Description Temporarily bypass freeze schedules for emergency situations (single-use, expires after current day)
+// @Description Temporarily bypass freeze schedules for emergency situations (single-use, expires at end of current day). Only available for K8s pools.
 // @Tags Agent Pool
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/one-time-unfreeze [post]

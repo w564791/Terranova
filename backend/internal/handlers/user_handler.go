@@ -21,16 +21,18 @@ func NewUserHandler(service *service.UserService) *UserHandler {
 	}
 }
 
-// ListUsers 列出用户
-// @Summary 列出用户
+// ListUsers lists users
+// @Summary List users
+// @Description List users with optional filters for status and search
 // @Tags IAM-User
 // @Produce json
-// @Param role query string false "角色筛选"
-// @Param is_active query bool false "状态筛选"
-// @Param search query string false "搜索关键词"
-// @Param limit query int false "限制数量"
-// @Param offset query int false "偏移量"
+// @Security BearerAuth
+// @Param is_active query bool false "Filter by active status"
+// @Param search query string false "Search keyword"
+// @Param limit query int false "Limit"
+// @Param offset query int false "Offset"
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	req := &service.ListUsersRequest{
@@ -67,12 +69,15 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	})
 }
 
-// GetUser 获取用户详情
-// @Summary 获取用户详情
+// GetUser gets user details
+// @Summary Get user details
+// @Description Get detailed information for a specific user
 // @Tags IAM-User
 // @Produce json
-// @Param id path int true "用户ID"
+// @Security BearerAuth
+// @Param id path string true "User ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
 	userID := c.Param("id")
@@ -86,14 +91,18 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-// UpdateUser 更新用户
-// @Summary 更新用户
+// UpdateUser updates a user
+// @Summary Update user
+// @Description Update user information
 // @Tags IAM-User
 // @Accept json
 // @Produce json
-// @Param id path int true "用户ID"
-// @Param request body service.UpdateUserRequest true "更新用户请求"
+// @Security BearerAuth
+// @Param id path string true "User ID"
+// @Param request body service.UpdateUserRequest true "Update user request"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userID := c.Param("id")
@@ -112,12 +121,15 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
 }
 
-// DeactivateUser 停用用户
-// @Summary 停用用户
+// DeactivateUser deactivates a user
+// @Summary Deactivate user
+// @Description Deactivate a user account
 // @Tags IAM-User
 // @Produce json
-// @Param id path int true "用户ID"
+// @Security BearerAuth
+// @Param id path string true "User ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id}/deactivate [post]
 func (h *UserHandler) DeactivateUser(c *gin.Context) {
 	userID := c.Param("id")
@@ -130,12 +142,15 @@ func (h *UserHandler) DeactivateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User deactivated successfully"})
 }
 
-// ActivateUser 激活用户
-// @Summary 激活用户
+// ActivateUser activates a user
+// @Summary Activate user
+// @Description Activate a user account
 // @Tags IAM-User
 // @Produce json
-// @Param id path int true "用户ID"
+// @Security BearerAuth
+// @Param id path string true "User ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id}/activate [post]
 func (h *UserHandler) ActivateUser(c *gin.Context) {
 	userID := c.Param("id")
@@ -148,11 +163,14 @@ func (h *UserHandler) ActivateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User activated successfully"})
 }
 
-// GetUserStats 获取用户统计
-// @Summary 获取用户统计
+// GetUserStats gets user statistics
+// @Summary Get user statistics
+// @Description Get aggregated user statistics
 // @Tags IAM-User
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/stats [get]
 func (h *UserHandler) GetUserStats(c *gin.Context) {
 	stats, err := h.service.GetUserStats(c.Request.Context())
@@ -164,13 +182,16 @@ func (h *UserHandler) GetUserStats(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
-// CreateUser 创建用户
-// @Summary 创建用户
+// CreateUser creates a new user
+// @Summary Create user
+// @Description Create a new user account
 // @Tags IAM-User
 // @Accept json
 // @Produce json
-// @Param request body service.CreateUserRequest true "创建用户请求"
+// @Security BearerAuth
+// @Param request body service.CreateUserRequest true "Create user request"
 // @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req service.CreateUserRequest
@@ -191,12 +212,15 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	})
 }
 
-// DeleteUser 删除用户
-// @Summary 删除用户
+// DeleteUser deletes a user
+// @Summary Delete user
+// @Description Delete a user account
 // @Tags IAM-User
 // @Produce json
-// @Param id path int true "用户ID"
+// @Security BearerAuth
+// @Param id path string true "User ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userID := c.Param("id")

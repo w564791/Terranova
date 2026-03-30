@@ -45,15 +45,16 @@ func generateNotificationLogID() string {
 }
 
 // ListNotifications 获取通知配置列表
-// @Summary 获取通知配置列表
+// @Summary List notification configurations
 // @Tags Notifications
 // @Produce json
-// @Param organization_id query string false "组织ID"
-// @Param team_id query string false "团队ID"
-// @Param notification_type query string false "通知类型"
-// @Param is_global query bool false "是否全局"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
+// @Security BearerAuth
+// @Param organization_id query string false "Organization ID"
+// @Param team_id query string false "Team ID"
+// @Param notification_type query string false "Notification type"
+// @Param is_global query bool false "Is global"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/notifications [get]
 func (h *NotificationHandler) ListNotifications(c *gin.Context) {
@@ -123,11 +124,13 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 }
 
 // GetNotification 获取单个通知配置
-// @Summary 获取单个通知配置
+// @Summary Get a notification configuration
 // @Tags Notifications
 // @Produce json
-// @Param notification_id path string true "通知配置ID"
+// @Security BearerAuth
+// @Param notification_id path string true "Notification config ID"
 // @Success 200 {object} models.NotificationConfigResponse
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/notifications/{notification_id} [get]
 func (h *NotificationHandler) GetNotification(c *gin.Context) {
 	notificationID := c.Param("notification_id")
@@ -150,12 +153,14 @@ func (h *NotificationHandler) GetNotification(c *gin.Context) {
 }
 
 // CreateNotification 创建通知配置
-// @Summary 创建通知配置
+// @Summary Create a notification configuration
 // @Tags Notifications
 // @Accept json
 // @Produce json
-// @Param request body models.CreateNotificationRequest true "创建请求"
+// @Security BearerAuth
+// @Param request body models.CreateNotificationRequest true "Create request"
 // @Success 201 {object} models.NotificationConfigResponse
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/notifications [post]
 func (h *NotificationHandler) CreateNotification(c *gin.Context) {
 	var req models.CreateNotificationRequest
@@ -266,13 +271,16 @@ func (h *NotificationHandler) CreateNotification(c *gin.Context) {
 }
 
 // UpdateNotification 更新通知配置
-// @Summary 更新通知配置
+// @Summary Update a notification configuration
 // @Tags Notifications
 // @Accept json
 // @Produce json
-// @Param notification_id path string true "通知配置ID"
-// @Param request body models.UpdateNotificationRequest true "更新请求"
+// @Security BearerAuth
+// @Param notification_id path string true "Notification config ID"
+// @Param request body models.UpdateNotificationRequest true "Update request"
 // @Success 200 {object} models.NotificationConfigResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/notifications/{notification_id} [put]
 func (h *NotificationHandler) UpdateNotification(c *gin.Context) {
 	notificationID := c.Param("notification_id")
@@ -377,10 +385,12 @@ func (h *NotificationHandler) UpdateNotification(c *gin.Context) {
 }
 
 // DeleteNotification 删除通知配置
-// @Summary 删除通知配置
+// @Summary Delete a notification configuration
 // @Tags Notifications
-// @Param notification_id path string true "通知配置ID"
+// @Security BearerAuth
+// @Param notification_id path string true "Notification config ID"
 // @Success 204
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/notifications/{notification_id} [delete]
 func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 	notificationID := c.Param("notification_id")
@@ -405,13 +415,15 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 }
 
 // TestNotification 测试通知配置
-// @Summary 测试通知配置
+// @Summary Test a notification configuration
 // @Tags Notifications
 // @Accept json
 // @Produce json
-// @Param notification_id path string true "通知配置ID"
-// @Param request body models.TestNotificationRequest true "测试请求"
+// @Security BearerAuth
+// @Param notification_id path string true "Notification config ID"
+// @Param request body models.TestNotificationRequest true "Test request"
 // @Success 200 {object} models.TestNotificationResponse
+// @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/notifications/{notification_id}/test [post]
 func (h *NotificationHandler) TestNotification(c *gin.Context) {
 	notificationID := c.Param("notification_id")
@@ -460,11 +472,13 @@ func (h *NotificationHandler) getNotificationSender() *services.NotificationSend
 }
 
 // GetAvailableNotifications 获取可用的通知配置（用于 Workspace 添加通知时选择）
-// @Summary 获取可用的通知配置
+// @Summary Get available notification configurations
 // @Tags Notifications
 // @Produce json
+// @Security BearerAuth
 // @Param workspace_id query string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/notifications/available [get]
 func (h *NotificationHandler) GetAvailableNotifications(c *gin.Context) {
 	workspaceID := c.Query("workspace_id")

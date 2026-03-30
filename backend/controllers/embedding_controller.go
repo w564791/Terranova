@@ -32,7 +32,13 @@ func NewEmbeddingController(db *gorm.DB, worker *services.EmbeddingWorker) *Embe
 }
 
 // GetConfigStatus 获取 embedding 配置状态
-// GET /api/ai/embedding/config-status
+// @Summary Get embedding configuration status
+// @Description Check whether embedding service is properly configured
+// @Tags Embedding
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/embedding/config-status [get]
 func (c *EmbeddingController) GetConfigStatus(ctx *gin.Context) {
 	status := c.embeddingService.GetConfigStatus()
 
@@ -43,7 +49,13 @@ func (c *EmbeddingController) GetConfigStatus(ctx *gin.Context) {
 }
 
 // GetWorkerStatus 获取 worker 状态
-// GET /api/admin/embedding/status
+// @Summary Get embedding worker status
+// @Description Get the current status of the embedding worker
+// @Tags Embedding Admin
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding/status [get]
 func (c *EmbeddingController) GetWorkerStatus(ctx *gin.Context) {
 	status := c.worker.GetStatus()
 
@@ -54,7 +66,15 @@ func (c *EmbeddingController) GetWorkerStatus(ctx *gin.Context) {
 }
 
 // GetWorkspaceEmbeddingStatus 获取 Workspace 的 embedding 状态
-// GET /api/workspaces/:id/embedding-status
+// @Summary Get workspace embedding status
+// @Description Get the embedding and CMDB sync status for a specific workspace
+// @Tags Embedding
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/embedding-status [get]
 func (c *EmbeddingController) GetWorkspaceEmbeddingStatus(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	if workspaceID == "" {
@@ -109,7 +129,15 @@ func (c *EmbeddingController) GetWorkspaceEmbeddingStatus(ctx *gin.Context) {
 }
 
 // SyncAllWorkspaces 同步所有 Workspace 的 embedding
-// POST /api/admin/embedding/sync-all
+// @Summary Sync all workspace embeddings
+// @Description Trigger embedding sync for all workspaces (background task)
+// @Tags Embedding Admin
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding/sync-all [post]
 func (c *EmbeddingController) SyncAllWorkspaces(ctx *gin.Context) {
 	// 检查配置状态
 	configStatus := c.embeddingService.GetConfigStatus()
@@ -147,7 +175,17 @@ func (c *EmbeddingController) SyncAllWorkspaces(ctx *gin.Context) {
 }
 
 // SyncWorkspace 同步指定 Workspace 的 embedding
-// POST /api/workspaces/:id/embedding/sync
+// @Summary Sync workspace embedding
+// @Description Trigger embedding sync for a specific workspace (background task)
+// @Tags Embedding
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{} "Sync already in progress"
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/embedding/sync [post]
 func (c *EmbeddingController) SyncWorkspace(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	if workspaceID == "" {
@@ -210,7 +248,17 @@ func (c *EmbeddingController) SyncWorkspace(ctx *gin.Context) {
 }
 
 // RebuildWorkspace 重建指定 Workspace 的 embedding
-// POST /api/workspaces/:id/embedding/rebuild
+// @Summary Rebuild workspace embedding
+// @Description Rebuild all embeddings for a specific workspace (background task)
+// @Tags Embedding
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{} "Sync already in progress"
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/embedding/rebuild [post]
 func (c *EmbeddingController) RebuildWorkspace(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	if workspaceID == "" {
@@ -389,7 +437,17 @@ type SearchResult struct {
 }
 
 // VectorSearch 混合搜索（向量搜索 + 关键词搜索并行，合并去重）
-// POST /api/cmdb/vector-search
+// @Summary Hybrid vector search
+// @Description Search CMDB resources using hybrid approach (vector search + keyword search in parallel, merged and deduplicated)
+// @Tags Embedding
+// @Accept json
+// @Produce json
+// @Param request body VectorSearchRequest true "Search request"
+// @Success 200 {object} map[string]interface{} "Search results"
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/cmdb/vector-search [post]
 func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	start := time.Now()
 

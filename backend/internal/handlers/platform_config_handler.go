@@ -47,8 +47,9 @@ type PlatformConfigResponse struct {
 // @Description Get the current platform configuration settings
 // @Tags Platform Config
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} PlatformConfigResponse
-// @Router /api/v1/admin/platform-config [get]
+// @Router /api/v1/global/settings/platform-config [get]
 func (h *PlatformConfigHandler) GetPlatformConfig(c *gin.Context) {
 	config := PlatformConfigResponse{}
 
@@ -107,9 +108,11 @@ type UpdatePlatformConfigRequest struct {
 // @Tags Platform Config
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param request body UpdatePlatformConfigRequest true "Platform configuration"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/admin/platform-config [put]
+// @Failure 400 {object} map[string]interface{}
+// @Router /api/v1/global/settings/platform-config [put]
 func (h *PlatformConfigHandler) UpdatePlatformConfig(c *gin.Context) {
 	var req UpdatePlatformConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

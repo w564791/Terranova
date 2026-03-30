@@ -33,7 +33,7 @@ func NewSchemaController(schemaService *services.SchemaService) *SchemaControlle
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/modules/{id}/schemas [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *SchemaController) GetSchemas(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -90,7 +90,7 @@ func (c *SchemaController) GetSchemas(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "创建失败"
 // @Router /api/v1/modules/{id}/schemas [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *SchemaController) CreateSchema(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -142,7 +142,7 @@ func (c *SchemaController) CreateSchema(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的Schema ID"
 // @Failure 404 {object} map[string]interface{} "Schema不存在"
 // @Router /api/v1/schemas/{id} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *SchemaController) GetSchema(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -196,7 +196,7 @@ func (c *SchemaController) GetSchema(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 500 {object} map[string]interface{} "更新失败"
 // @Router /api/v1/schemas/{id} [put]
-// @Security Bearer
+// @Security BearerAuth
 func (c *SchemaController) UpdateSchema(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -248,7 +248,7 @@ func (c *SchemaController) UpdateSchema(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的模块ID"
 // @Failure 500 {object} map[string]interface{} "生成失败"
 // @Router /api/v1/modules/{id}/schemas/generate [post]
-// @Security Bearer
+// @Security BearerAuth
 func (c *SchemaController) GenerateSchemaFromModule(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)

@@ -37,8 +37,14 @@ func NewSSOHandler(db *gorm.DB) *SSOHandler {
 // 公开端点（无需认证）
 // ============================================
 
-// GetProviders 获取可用的 SSO Provider 列表（登录页展示用）
-// 同时返回 SSO 全局配置（如是否禁用本地登录）
+// GetProviders returns the list of enabled SSO providers for the login page
+// @Summary Get available SSO providers
+// @Description Get the list of enabled SSO providers and global SSO config (e.g. whether local login is disabled)
+// @Tags SSO
+// @Produce json
+// @Success 200 {object} gin.H "SSO providers list and config"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/auth/sso/providers [get]
 func (h *SSOHandler) GetProviders(c *gin.Context) {
 	providers, err := h.ssoService.GetEnabledProviders()
 	if err != nil {
@@ -61,7 +67,16 @@ func (h *SSOHandler) GetProviders(c *gin.Context) {
 	})
 }
 
-// Login 发起 SSO 登录（重定向到 Provider 授权页面）
+// Login initiates SSO login by returning the provider's authorization URL
+// @Summary Initiate SSO login
+// @Description Generate the OAuth authorization URL for the specified SSO provider. The frontend should redirect the user to this URL.
+// @Tags SSO
+// @Produce json
+// @Param provider path string true "SSO provider key"
+// @Param redirect_url query string false "URL to redirect after login completes"
+// @Success 200 {object} gin.H "Authorization URL"
+// @Failure 400 {object} gin.H "Invalid provider or failed to generate auth URL"
+// @Router /api/v1/auth/sso/{provider}/login [get]
 func (h *SSOHandler) Login(c *gin.Context) {
 	providerKey := c.Param("provider")
 	if providerKey == "" {
@@ -97,7 +112,19 @@ func (h *SSOHandler) Login(c *gin.Context) {
 	})
 }
 
-// Callback 处理 SSO 回调
+// Callback handles the SSO callback (API mode, returns JSON)
+// @Summary Handle SSO callback
+// @Description Process the OAuth callback from the SSO provider. Returns JWT token on success, or MFA challenge if required.
+// @Tags SSO
+// @Produce json
+// @Param provider path string true "SSO provider key"
+// @Param code query string true "OAuth authorization code"
+// @Param state query string true "OAuth state parameter"
+// @Success 200 {object} gin.H "Login successful with JWT token, or MFA required"
+// @Failure 400 {object} gin.H "Missing code/state or SSO error"
+// @Failure 401 {object} gin.H "SSO authentication failed"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/auth/sso/{provider}/callback [get]
 func (h *SSOHandler) Callback(c *gin.Context) {
 	providerKey := c.Param("provider")
 	code := c.Query("code")
@@ -303,8 +330,16 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 	})
 }
 
-// CallbackRedirect 处理 SSO 回调（重定向模式，Provider 直接重定向到此端点）
-// 处理完成后重定向到前端页面，通过 URL 参数传递临时 code（非 JWT token）
+// CallbackRedirect handles the SSO callback in redirect mode
+// @Summary Handle SSO callback (redirect mode)
+// @Description Process the OAuth callback and redirect to the frontend page with token or error in URL parameters
+// @Tags SSO
+// @Param provider path string true "SSO provider key"
+// @Param code query string true "OAuth authorization code"
+// @Param state query string true "OAuth state parameter"
+// @Success 302 "Redirect to frontend with token"
+// @Failure 302 "Redirect to frontend with error"
+// @Router /api/v1/auth/sso/{provider}/callback/redirect [get]
 func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 	providerKey := c.Param("provider")
 	code := c.Query("code")
@@ -421,7 +456,15 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 // 需要认证的端点
 // ============================================
 
-// GetIdentities 获取当前用户绑定的身份列表
+// GetIdentities returns the SSO identities linked to the current user
+// @Summary Get linked SSO identities
+// @Description Get the list of SSO identities linked to the currently authenticated user
+// @Tags SSO
+// @Produce json
+// @Success 200 {object} gin.H "List of linked identities"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/auth/sso/identities [get]
+// @Security BearerAuth
 func (h *SSOHandler) GetIdentities(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
@@ -441,7 +484,17 @@ func (h *SSOHandler) GetIdentities(c *gin.Context) {
 	})
 }
 
-// LinkIdentity 发起绑定新的 SSO 身份
+// LinkIdentity initiates linking a new SSO identity to the current user
+// @Summary Link SSO identity
+// @Description Generate an OAuth authorization URL to link a new SSO identity to the current user
+// @Tags SSO
+// @Accept json
+// @Produce json
+// @Param request body object true "Provider key and optional redirect URL" example({"provider_key": "github", "redirect_url": "/settings"})
+// @Success 200 {object} gin.H "Authorization URL for identity linking"
+// @Failure 400 {object} gin.H "Invalid request or failed to generate auth URL"
+// @Router /api/v1/auth/sso/identities/link [post]
+// @Security BearerAuth
 func (h *SSOHandler) LinkIdentity(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
@@ -479,7 +532,16 @@ func (h *SSOHandler) LinkIdentity(c *gin.Context) {
 	})
 }
 
-// UnlinkIdentity 解绑 SSO 身份
+// UnlinkIdentity removes a linked SSO identity from the current user
+// @Summary Unlink SSO identity
+// @Description Remove a linked SSO identity from the current user's account
+// @Tags SSO
+// @Produce json
+// @Param id path int true "Identity ID"
+// @Success 200 {object} gin.H "Identity unlinked"
+// @Failure 400 {object} gin.H "Invalid identity ID or unlink error"
+// @Router /api/v1/auth/sso/identities/{id} [delete]
+// @Security BearerAuth
 func (h *SSOHandler) UnlinkIdentity(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	identityIDStr := c.Param("id")
@@ -507,7 +569,16 @@ func (h *SSOHandler) UnlinkIdentity(c *gin.Context) {
 	})
 }
 
-// SetPrimaryIdentity 设置主要登录方式
+// SetPrimaryIdentity sets a specific SSO identity as the primary login method
+// @Summary Set primary SSO identity
+// @Description Set a specific linked SSO identity as the primary login method for the current user
+// @Tags SSO
+// @Produce json
+// @Param id path int true "Identity ID"
+// @Success 200 {object} gin.H "Primary identity updated"
+// @Failure 400 {object} gin.H "Invalid identity ID or update error"
+// @Router /api/v1/auth/sso/identities/{id}/primary [put]
+// @Security BearerAuth
 func (h *SSOHandler) SetPrimaryIdentity(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	identityIDStr := c.Param("id")
@@ -539,7 +610,15 @@ func (h *SSOHandler) SetPrimaryIdentity(c *gin.Context) {
 // 管理端点（需要管理员权限）
 // ============================================
 
-// AdminGetProviders 获取所有 Provider 列表（仅摘要信息，不含 oauth_config 等详情）
+// AdminGetProviders returns all SSO providers with summary info (admin only)
+// @Summary List all SSO providers (admin)
+// @Description Get all SSO providers with summary information, excluding sensitive oauth_config details
+// @Tags Admin SSO
+// @Produce json
+// @Success 200 {object} gin.H "List of provider summaries"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/admin/sso/providers [get]
+// @Security BearerAuth
 func (h *SSOHandler) AdminGetProviders(c *gin.Context) {
 	providers, err := h.ssoService.GetAllProviders()
 	if err != nil {
@@ -587,7 +666,17 @@ func (h *SSOHandler) AdminGetProviders(c *gin.Context) {
 	})
 }
 
-// AdminGetProvider 获取单个 Provider 详情（脱敏 client_secret）
+// AdminGetProvider returns a single SSO provider's details with redacted client_secret (admin only)
+// @Summary Get SSO provider details (admin)
+// @Description Get detailed information for a single SSO provider with client_secret redacted
+// @Tags Admin SSO
+// @Produce json
+// @Param id path int true "Provider ID"
+// @Success 200 {object} gin.H "Provider details"
+// @Failure 400 {object} gin.H "Invalid provider ID"
+// @Failure 404 {object} gin.H "Provider not found"
+// @Router /api/v1/admin/sso/providers/{id} [get]
+// @Security BearerAuth
 func (h *SSOHandler) AdminGetProvider(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -636,7 +725,17 @@ func (h *SSOHandler) AdminGetProvider(c *gin.Context) {
 	})
 }
 
-// AdminCreateProvider 创建 Provider 配置
+// AdminCreateProvider creates a new SSO provider configuration (admin only)
+// @Summary Create SSO provider (admin)
+// @Description Create a new SSO provider configuration with OAuth settings
+// @Tags Admin SSO
+// @Accept json
+// @Produce json
+// @Param request body object true "Provider configuration"
+// @Success 201 {object} gin.H "Provider created"
+// @Failure 400 {object} gin.H "Invalid provider data"
+// @Router /api/v1/admin/sso/providers [post]
+// @Security BearerAuth
 func (h *SSOHandler) AdminCreateProvider(c *gin.Context) {
 	// 使用 map 接收，因为 oauth_config 可能是字符串或对象
 	var raw map[string]interface{}
@@ -697,7 +796,19 @@ func (h *SSOHandler) AdminCreateProvider(c *gin.Context) {
 	})
 }
 
-// AdminUpdateProvider 更新 Provider 配置
+// AdminUpdateProvider updates an existing SSO provider configuration (admin only)
+// @Summary Update SSO provider (admin)
+// @Description Update an existing SSO provider configuration. Only whitelisted fields are accepted.
+// @Tags Admin SSO
+// @Accept json
+// @Produce json
+// @Param id path int true "Provider ID"
+// @Param request body object true "Fields to update"
+// @Success 200 {object} gin.H "Provider updated"
+// @Failure 400 {object} gin.H "Invalid request or no valid fields"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/admin/sso/providers/{id} [put]
+// @Security BearerAuth
 func (h *SSOHandler) AdminUpdateProvider(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -769,7 +880,17 @@ func (h *SSOHandler) AdminUpdateProvider(c *gin.Context) {
 	})
 }
 
-// AdminDeleteProvider 删除 Provider 配置
+// AdminDeleteProvider deletes an SSO provider configuration (admin only)
+// @Summary Delete SSO provider (admin)
+// @Description Delete an SSO provider configuration by ID
+// @Tags Admin SSO
+// @Produce json
+// @Param id path int true "Provider ID"
+// @Success 200 {object} gin.H "Provider deleted"
+// @Failure 400 {object} gin.H "Invalid provider ID"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/admin/sso/providers/{id} [delete]
+// @Security BearerAuth
 func (h *SSOHandler) AdminDeleteProvider(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -795,7 +916,14 @@ func (h *SSOHandler) AdminDeleteProvider(c *gin.Context) {
 	})
 }
 
-// AdminGetSSOConfig 获取 SSO 全局配置
+// AdminGetSSOConfig returns the global SSO configuration (admin only)
+// @Summary Get SSO global config (admin)
+// @Description Get the global SSO configuration including local login settings
+// @Tags Admin SSO
+// @Produce json
+// @Success 200 {object} gin.H "SSO global configuration"
+// @Router /api/v1/admin/sso/config [get]
+// @Security BearerAuth
 func (h *SSOHandler) AdminGetSSOConfig(c *gin.Context) {
 	config := h.ssoService.GetSSOConfig()
 	c.JSON(http.StatusOK, gin.H{
@@ -805,7 +933,18 @@ func (h *SSOHandler) AdminGetSSOConfig(c *gin.Context) {
 	})
 }
 
-// AdminUpdateSSOConfig 更新 SSO 全局配置
+// AdminUpdateSSOConfig updates the global SSO configuration (admin only)
+// @Summary Update SSO global config (admin)
+// @Description Update the global SSO configuration settings
+// @Tags Admin SSO
+// @Accept json
+// @Produce json
+// @Param request body sso.SSOConfig true "SSO configuration"
+// @Success 200 {object} gin.H "SSO config updated"
+// @Failure 400 {object} gin.H "Invalid request parameters"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/admin/sso/config [put]
+// @Security BearerAuth
 func (h *SSOHandler) AdminUpdateSSOConfig(c *gin.Context) {
 	var config sso.SSOConfig
 	if err := c.ShouldBindJSON(&config); err != nil {
@@ -832,7 +971,18 @@ func (h *SSOHandler) AdminUpdateSSOConfig(c *gin.Context) {
 	})
 }
 
-// AdminGetLoginLogs 获取 SSO 登录日志
+// AdminGetLoginLogs returns paginated SSO login logs (admin only)
+// @Summary Get SSO login logs (admin)
+// @Description Get paginated SSO login logs with optional provider filter
+// @Tags Admin SSO
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size (max 100)" default(20)
+// @Param provider_key query string false "Filter by provider key"
+// @Success 200 {object} gin.H "Paginated login logs"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/admin/sso/logs [get]
+// @Security BearerAuth
 func (h *SSOHandler) AdminGetLoginLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))

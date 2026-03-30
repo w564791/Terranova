@@ -43,14 +43,19 @@ type CheckPermissionRequest struct {
 	RequiredLevel string `json:"required_level" binding:"required"`
 }
 
-// CheckPermission 检查权限
-// @Summary 检查用户权限
-// @Tags Permission
+// CheckPermission checks user permission
+// @Summary Check user permission
+// @Description Check if the current user has a specific permission in a given scope
+// @Tags IAM-Permission
 // @Accept json
 // @Produce json
-// @Param request body CheckPermissionRequest true "权限检查请求"
+// @Security BearerAuth
+// @Param request body CheckPermissionRequest true "Permission check request"
 // @Success 200 {object} service.CheckPermissionResult
-// @Router /api/v1/permissions/check [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/check [post]
 func (h *PermissionHandler) CheckPermission(c *gin.Context) {
 	var req CheckPermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -114,14 +119,20 @@ type GrantPermissionRequest struct {
 	Reason          string  `json:"reason,omitempty"`
 }
 
-// GrantPermission 授予权限
-// @Summary 授予权限
-// @Tags Permission
+// GrantPermission grants a permission
+// @Summary Grant permission
+// @Description Grant a permission to a principal in a specific scope
+// @Tags IAM-Permission
 // @Accept json
 // @Produce json
-// @Param request body GrantPermissionRequest true "授予权限请求"
+// @Security BearerAuth
+// @Param request body GrantPermissionRequest true "Grant permission request"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/permissions/grant [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/grant [post]
 func (h *PermissionHandler) GrantPermission(c *gin.Context) {
 	var req GrantPermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -223,14 +234,18 @@ type PermissionConflict struct {
 	ErrorMessage   string `json:"error_message"`
 }
 
-// BatchGrantPermissions 批量授予权限
-// @Summary 批量授予权限
-// @Tags Permission
+// BatchGrantPermissions grants permissions in batch
+// @Summary Batch grant permissions
+// @Description Grant multiple permissions to a principal in a specific scope
+// @Tags IAM-Permission
 // @Accept json
 // @Produce json
-// @Param request body BatchGrantPermissionRequest true "批量授予权限请求"
+// @Security BearerAuth
+// @Param request body BatchGrantPermissionRequest true "Batch grant permission request"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/permissions/batch-grant [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/batch-grant [post]
 func (h *PermissionHandler) BatchGrantPermissions(c *gin.Context) {
 	var req BatchGrantPermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -416,14 +431,19 @@ type GrantPresetRequest struct {
 	Reason        string `json:"reason,omitempty"`
 }
 
-// GrantPresetPermissions 授予预设权限
-// @Summary 授予预设权限集
-// @Tags Permission
+// GrantPresetPermissions grants preset permissions
+// @Summary Grant preset permission set
+// @Description Grant a predefined set of permissions (READ/WRITE/ADMIN) to a principal
+// @Tags IAM-Permission
 // @Accept json
 // @Produce json
-// @Param request body GrantPresetRequest true "授予预设权限请求"
+// @Security BearerAuth
+// @Param request body GrantPresetRequest true "Grant preset permission request"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/permissions/grant-preset [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/grant-preset [post]
 func (h *PermissionHandler) GrantPresetPermissions(c *gin.Context) {
 	var req GrantPresetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -470,13 +490,19 @@ func (h *PermissionHandler) GrantPresetPermissions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Preset permissions granted successfully"})
 }
 
-// RevokePermission 撤销权限
-// @Summary 撤销权限
-// @Tags Permission
-// @Param scope_type path string true "作用域类型"
-// @Param id path int true "权限分配ID"
+// RevokePermission revokes a permission
+// @Summary Revoke permission
+// @Description Revoke a permission assignment
+// @Tags IAM-Permission
+// @Produce json
+// @Security BearerAuth
+// @Param scope_type path string true "Scope type"
+// @Param id path int true "Permission assignment ID"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/permissions/{scope_type}/{id} [delete]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/{scope_type}/{id} [delete]
 func (h *PermissionHandler) RevokePermission(c *gin.Context) {
 	scopeTypeStr := c.Param("scope_type")
 	idStr := c.Param("id")
@@ -515,13 +541,18 @@ func (h *PermissionHandler) RevokePermission(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Permission revoked successfully"})
 }
 
-// ListPermissions 列出权限
-// @Summary 列出指定作用域的所有权限
-// @Tags Permission
-// @Param scope_type path string true "作用域类型"
-// @Param scope_id path int true "作用域ID"
-// @Success 200 {array} entity.PermissionGrant
-// @Router /api/v1/permissions/{scope_type}/{scope_id} [get]
+// ListPermissions lists permissions for a scope
+// @Summary List permissions by scope
+// @Description List all permission assignments for a specific scope
+// @Tags IAM-Permission
+// @Produce json
+// @Security BearerAuth
+// @Param scope_type path string true "Scope type"
+// @Param scope_id path int true "Scope ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/{scope_type}/{scope_id} [get]
 func (h *PermissionHandler) ListPermissions(c *gin.Context) {
 	scopeTypeStr := c.Param("scope_type")
 	scopeIDStr := c.Param("scope_id")
@@ -551,11 +582,15 @@ func (h *PermissionHandler) ListPermissions(c *gin.Context) {
 	})
 }
 
-// ListPermissionDefinitions 列出所有权限定义
-// @Summary 列出所有权限定义
-// @Tags Permission
-// @Success 200 {array} entity.PermissionDefinition
-// @Router /api/v1/permissions/definitions [get]
+// ListPermissionDefinitions lists all permission definitions
+// @Summary List permission definitions
+// @Description List all available permission definitions
+// @Tags IAM-Permission
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/permissions/definitions [get]
 func (h *PermissionHandler) ListPermissionDefinitions(c *gin.Context) {
 	definitions, err := h.permissionService.ListPermissionDefinitions(c.Request.Context())
 	if err != nil {
@@ -569,11 +604,17 @@ func (h *PermissionHandler) ListPermissionDefinitions(c *gin.Context) {
 	})
 }
 
-// ListUserPermissions 列出用户的所有权限
-// @Summary 列出用户的所有权限（跨所有作用域）
-// @Tags Permission
-// @Param id path string true "用户ID（语义化ID）"
+// ListUserPermissions lists all permissions for a user
+// @Summary List user permissions
+// @Description List all permissions for a user across all scopes
+// @Tags IAM-User
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID (semantic ID)"
 // @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id}/permissions [get]
 func (h *PermissionHandler) ListUserPermissions(c *gin.Context) {
 	targetUserID := c.Param("id")
@@ -612,11 +653,17 @@ func (h *PermissionHandler) ListUserPermissions(c *gin.Context) {
 	})
 }
 
-// ListTeamPermissions 列出团队的所有权限
-// @Summary 列出团队的所有权限（跨所有作用域）
-// @Tags Permission
-// @Param id path int true "团队ID"
+// ListTeamPermissions lists all permissions for a team
+// @Summary List team permissions
+// @Description List all permissions for a team across all scopes
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/permissions [get]
 func (h *PermissionHandler) ListTeamPermissions(c *gin.Context) {
 	teamID := c.Param("id")

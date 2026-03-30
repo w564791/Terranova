@@ -35,6 +35,7 @@ func NewRunTriggerHandler(db *gorm.DB) *RunTriggerHandler {
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers [get]
+// @Security BearerAuth
 func (h *RunTriggerHandler) ListRunTriggers(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -63,6 +64,7 @@ func (h *RunTriggerHandler) ListRunTriggers(c *gin.Context) {
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers/inbound [get]
+// @Security BearerAuth
 func (h *RunTriggerHandler) ListInboundTriggers(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -86,6 +88,7 @@ func (h *RunTriggerHandler) ListInboundTriggers(c *gin.Context) {
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers/available-targets [get]
+// @Security BearerAuth
 func (h *RunTriggerHandler) GetAvailableTargets(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -109,6 +112,7 @@ func (h *RunTriggerHandler) GetAvailableTargets(c *gin.Context) {
 // @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers/available-sources [get]
+// @Security BearerAuth
 func (h *RunTriggerHandler) GetAvailableSources(c *gin.Context) {
 	workspaceID := c.Param("id")
 
@@ -133,6 +137,7 @@ func (h *RunTriggerHandler) GetAvailableSources(c *gin.Context) {
 // @Param request body object true "触发器配置"
 // @Success 201 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers/inbound [post]
+// @Security BearerAuth
 func (h *RunTriggerHandler) CreateInboundTrigger(c *gin.Context) {
 	targetWorkspaceID := c.Param("id")
 
@@ -210,6 +215,7 @@ func (h *RunTriggerHandler) CreateInboundTrigger(c *gin.Context) {
 // @Param request body object true "触发器配置"
 // @Success 201 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers [post]
+// @Security BearerAuth
 func (h *RunTriggerHandler) CreateRunTrigger(c *gin.Context) {
 	sourceWorkspaceID := c.Param("id")
 
@@ -281,6 +287,7 @@ func (h *RunTriggerHandler) CreateRunTrigger(c *gin.Context) {
 // @Param request body object true "更新内容"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers/{trigger_id} [put]
+// @Security BearerAuth
 func (h *RunTriggerHandler) UpdateRunTrigger(c *gin.Context) {
 	triggerID, err := strconv.ParseUint(c.Param("trigger_id"), 10, 32)
 	if err != nil {
@@ -325,6 +332,7 @@ func (h *RunTriggerHandler) UpdateRunTrigger(c *gin.Context) {
 // @Param trigger_id path int true "Trigger ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/run-triggers/{trigger_id} [delete]
+// @Security BearerAuth
 func (h *RunTriggerHandler) DeleteRunTrigger(c *gin.Context) {
 	triggerID, err := strconv.ParseUint(c.Param("trigger_id"), 10, 32)
 	if err != nil {
@@ -352,6 +360,7 @@ func (h *RunTriggerHandler) DeleteRunTrigger(c *gin.Context) {
 // @Param task_id path int true "Task ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/trigger-executions [get]
+// @Security BearerAuth
 func (h *RunTriggerHandler) GetTaskTriggerExecutions(c *gin.Context) {
 	workspaceID := c.Param("id")
 	taskID, err := strconv.ParseUint(c.Param("task_id"), 10, 32)
@@ -414,6 +423,7 @@ func (h *RunTriggerHandler) GetTaskTriggerExecutions(c *gin.Context) {
 // @Param request body object true "启用/禁用状态"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/trigger-executions/{execution_id}/toggle [post]
+// @Security BearerAuth
 func (h *RunTriggerHandler) ToggleTriggerExecution(c *gin.Context) {
 	executionID, err := strconv.ParseUint(c.Param("execution_id"), 10, 32)
 	if err != nil {

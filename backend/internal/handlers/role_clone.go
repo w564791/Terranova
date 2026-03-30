@@ -19,15 +19,20 @@ type CloneRoleRequest struct {
 	Description string `json:"description"`
 }
 
-// CloneRole 克隆角色
-// @Summary 克隆角色
-// @Description 克隆一个现有角色，包括其所有权限策略
-// @Tags IAM-Roles
+// CloneRole clones a role
+// @Summary Clone role
+// @Description Clone an existing role including all its permission policies
+// @Tags IAM-Role
 // @Accept json
 // @Produce json
-// @Param id path int true "源角色ID"
-// @Param request body CloneRoleRequest true "新角色信息"
-// @Success 201 {object} entity.Role
+// @Security BearerAuth
+// @Param id path int true "Source role ID"
+// @Param request body CloneRoleRequest true "New role information"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id}/clone [post]
 func (h *RoleHandler) CloneRole(c *gin.Context) {
 	sourceIDStr := c.Param("id")

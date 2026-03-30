@@ -73,6 +73,17 @@ func NewAgentCCHandler(db *gorm.DB) *AgentCCHandler {
 }
 
 // HandleCCConnection handles C&C WebSocket connection
+// @Summary Agent C&C WebSocket connection
+// @Description Establish a WebSocket connection for Agent Command & Control. This is a WebSocket upgrade endpoint, not a regular HTTP endpoint. The agent sends heartbeats and receives task assignments via this channel.
+// @Tags Agent C&C
+// @Produce json
+// @Security PoolTokenAuth
+// @Param agent_id query string true "Agent ID"
+// @Success 101 {string} string "WebSocket upgrade successful"
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/agents/control [get]
 func (h *AgentCCHandler) HandleCCConnection(c *gin.Context) {
 	agentID := c.Query("agent_id")
 	if agentID == "" {
@@ -632,13 +643,16 @@ func (h *AgentCCHandler) BroadcastToAgent(agentID string, messageType string, pa
 }
 
 // GetAgentStatusAPI returns agent status via HTTP API (for debugging)
-// @Summary Get agent C&C status
-// @Description Get current C&C connection status of an agent
-// @Tags Agent
+// NOTE: This endpoint is currently deprecated and not registered in the router.
+// @Summary Get agent C&C status (deprecated)
+// @Description Get current C&C connection status of an agent. This endpoint is deprecated - C&C is now handled by the standalone WebSocket server.
+// @Tags Agent C&C
 // @Accept json
 // @Produce json
+// @Security PoolTokenAuth
 // @Param agent_id path string true "Agent ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/agents/{agent_id}/cc-status [get]
 func (h *AgentCCHandler) GetAgentStatusAPI(c *gin.Context) {

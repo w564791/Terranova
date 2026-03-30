@@ -17,16 +17,18 @@ func NewAIFormController(service *services.AIFormService) *AIFormController {
 }
 
 // GenerateConfig 生成表单配置
-// @Summary 生成表单配置
-// @Description 根据用户描述和 Module Schema 生成表单配置
-// @Tags AI
+// @Summary Generate form configuration
+// @Description Generate form configuration based on user description and Module Schema
+// @Tags AI Form
 // @Accept json
 // @Produce json
-// @Param request body GenerateConfigRequest true "生成配置请求"
+// @Param request body GenerateConfigRequest true "Generate config request"
 // @Success 200 {object} services.GenerateConfigResponse
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/ai/form/generate [post]
+// @Security BearerAuth
+// @Router /api/v1/ai/form/generate [post]
 func (c *AIFormController) GenerateConfig(ctx *gin.Context) {
 	var req GenerateConfigRequest
 

@@ -68,6 +68,7 @@ func generateRunTaskID() (string, error) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks [post]
+// @Security BearerAuth
 func (h *RunTaskHandler) CreateRunTask(c *gin.Context) {
 	var req models.CreateRunTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -192,6 +193,7 @@ func (h *RunTaskHandler) CreateRunTask(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks [get]
+// @Security BearerAuth
 func (h *RunTaskHandler) ListRunTasks(c *gin.Context) {
 	query := h.db.Model(&models.RunTask{})
 
@@ -277,6 +279,7 @@ func (h *RunTaskHandler) ListRunTasks(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks/{run_task_id} [get]
+// @Security BearerAuth
 func (h *RunTaskHandler) GetRunTask(c *gin.Context) {
 	runTaskID := c.Param("run_task_id")
 	if runTaskID == "" {
@@ -320,6 +323,7 @@ func (h *RunTaskHandler) GetRunTask(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks/{run_task_id} [put]
+// @Security BearerAuth
 func (h *RunTaskHandler) UpdateRunTask(c *gin.Context) {
 	runTaskID := c.Param("run_task_id")
 	if runTaskID == "" {
@@ -458,6 +462,7 @@ func (h *RunTaskHandler) UpdateRunTask(c *gin.Context) {
 // @Failure 409 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks/{run_task_id} [delete]
+// @Security BearerAuth
 func (h *RunTaskHandler) DeleteRunTask(c *gin.Context) {
 	runTaskID := c.Param("run_task_id")
 	if runTaskID == "" {
@@ -531,6 +536,7 @@ type TestRunTaskRequest struct {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks/test [post]
+// @Security BearerAuth
 func (h *RunTaskHandler) TestRunTask(c *gin.Context) {
 	var req TestRunTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -656,6 +662,7 @@ func (h *RunTaskHandler) TestRunTask(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-tasks/{run_task_id}/test [post]
+// @Security BearerAuth
 func (h *RunTaskHandler) TestExistingRunTask(c *gin.Context) {
 	runTaskID := c.Param("run_task_id")
 	if runTaskID == "" {

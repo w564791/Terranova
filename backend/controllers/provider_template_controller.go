@@ -32,7 +32,8 @@ func NewProviderTemplateController(db *gorm.DB) *ProviderTemplateController {
 // @Param type query string false "Provider类型"
 // @Success 200 {object} models.ProviderTemplateListResponse
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/provider-templates [get]
+// @Router /api/v1/global/settings/provider-templates [get]
+// @Security BearerAuth
 func (c *ProviderTemplateController) ListProviderTemplates(ctx *gin.Context) {
 	var enabled *bool
 
@@ -68,7 +69,8 @@ func (c *ProviderTemplateController) ListProviderTemplates(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/provider-templates/{id} [get]
+// @Router /api/v1/global/settings/provider-templates/{id} [get]
+// @Security BearerAuth
 func (c *ProviderTemplateController) GetProviderTemplate(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -102,7 +104,8 @@ func (c *ProviderTemplateController) GetProviderTemplate(ctx *gin.Context) {
 // @Success 201 {object} models.ProviderTemplate
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/provider-templates [post]
+// @Router /api/v1/global/settings/provider-templates [post]
+// @Security BearerAuth
 func (c *ProviderTemplateController) CreateProviderTemplate(ctx *gin.Context) {
 	var req models.CreateProviderTemplateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -131,7 +134,8 @@ func (c *ProviderTemplateController) CreateProviderTemplate(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/provider-templates/{id} [put]
+// @Router /api/v1/global/settings/provider-templates/{id} [put]
+// @Security BearerAuth
 func (c *ProviderTemplateController) UpdateProviderTemplate(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -169,7 +173,8 @@ func (c *ProviderTemplateController) UpdateProviderTemplate(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/provider-templates/{id}/set-default [post]
+// @Router /api/v1/global/settings/provider-templates/{id}/set-default [post]
+// @Security BearerAuth
 func (c *ProviderTemplateController) SetDefaultTemplate(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -203,7 +208,8 @@ func (c *ProviderTemplateController) SetDefaultTemplate(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/provider-templates/{id} [delete]
+// @Router /api/v1/global/settings/provider-templates/{id} [delete]
+// @Security BearerAuth
 func (c *ProviderTemplateController) DeleteProviderTemplate(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {

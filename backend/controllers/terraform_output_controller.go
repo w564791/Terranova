@@ -68,7 +68,7 @@ func NewTerraformOutputController(streamManager *services.OutputStreamManager) *
 // @Success 101 {object} map[string]interface{} "WebSocket连接建立"
 // @Failure 400 {object} map[string]interface{} "无效的任务ID"
 // @Router /api/v1/tasks/{task_id}/output/stream [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *TerraformOutputController) StreamTaskOutput(ctx *gin.Context) {
 	taskIDStr := ctx.Param("task_id")
 	taskID, err := strconv.ParseUint(taskIDStr, 10, 32)
@@ -158,7 +158,7 @@ func (c *TerraformOutputController) StreamTaskOutput(ctx *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{} "成功返回统计信息"
 // @Router /api/v1/terraform/streams/stats [get]
-// @Security Bearer
+// @Security BearerAuth
 func (c *TerraformOutputController) GetStreamStats(ctx *gin.Context) {
 	stats := c.streamManager.GetAllStats()
 	ctx.JSON(200, gin.H{

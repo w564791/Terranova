@@ -24,16 +24,16 @@ func NewEmbeddingCacheController(db *gorm.DB) *EmbeddingCacheController {
 }
 
 // WarmUp 预热缓存
-// @Summary 预热向量缓存
-// @Description 预热常用关键词的向量缓存，提升搜索性能
-// @Tags AI-Cache
+// @Summary Warm up embedding cache
+// @Description Pre-generate vector embeddings for common keywords to improve search performance
+// @Tags Embedding Cache
 // @Accept json
 // @Produce json
-// @Param force query bool false "是否强制重新生成所有向量" default(false)
+// @Param force query bool false "Force regenerate all vectors" default(false)
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/ai/embedding-cache/warmup [post]
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding-cache/warmup [post]
 func (c *EmbeddingCacheController) WarmUp(ctx *gin.Context) {
 	// 检查是否已在运行
 	if c.cacheService.IsWarmupRunning() {
@@ -63,13 +63,13 @@ func (c *EmbeddingCacheController) WarmUp(ctx *gin.Context) {
 }
 
 // GetWarmupProgress 获取预热进度
-// @Summary 获取预热进度
-// @Description 获取当前预热任务的进度信息
-// @Tags AI-Cache
-// @Accept json
+// @Summary Get warmup progress
+// @Description Get the current warmup task progress
+// @Tags Embedding Cache
 // @Produce json
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/ai/embedding-cache/warmup/progress [get]
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding-cache/warmup/progress [get]
 func (c *EmbeddingCacheController) GetWarmupProgress(ctx *gin.Context) {
 	progress := c.cacheService.GetWarmupProgress()
 
@@ -80,14 +80,14 @@ func (c *EmbeddingCacheController) GetWarmupProgress(ctx *gin.Context) {
 }
 
 // GetStats 获取缓存统计
-// @Summary 获取向量缓存统计
-// @Description 获取向量缓存的统计信息，包括缓存数量、命中率等
-// @Tags AI-Cache
-// @Accept json
+// @Summary Get embedding cache statistics
+// @Description Get statistics for the embedding cache including count and hit rate
+// @Tags Embedding Cache
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/ai/embedding-cache/stats [get]
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding-cache/stats [get]
 func (c *EmbeddingCacheController) GetStats(ctx *gin.Context) {
 	stats, err := c.cacheService.GetStats()
 	if err != nil {
@@ -105,14 +105,14 @@ func (c *EmbeddingCacheController) GetStats(ctx *gin.Context) {
 }
 
 // ClearCache 清空缓存
-// @Summary 清空向量缓存
-// @Description 清空所有向量缓存（谨慎使用）
-// @Tags AI-Cache
-// @Accept json
+// @Summary Clear embedding cache
+// @Description Clear all embedding cache entries (use with caution)
+// @Tags Embedding Cache
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/ai/embedding-cache/clear [delete]
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding-cache/clear [delete]
 func (c *EmbeddingCacheController) ClearCache(ctx *gin.Context) {
 	if err := c.cacheService.ClearCache(); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -129,16 +129,16 @@ func (c *EmbeddingCacheController) ClearCache(ctx *gin.Context) {
 }
 
 // CleanupLowHit 清理低命中缓存
-// @Summary 清理低命中率缓存
-// @Description 清理命中次数低于阈值的缓存条目
-// @Tags AI-Cache
-// @Accept json
+// @Summary Clean up low-hit cache entries
+// @Description Remove cache entries with hit count below threshold and older than specified days
+// @Tags Embedding Cache
 // @Produce json
-// @Param min_hit_count query int false "最小命中次数" default(5)
-// @Param older_than_days query int false "创建时间超过多少天" default(30)
+// @Param min_hit_count query int false "Minimum hit count threshold" default(5)
+// @Param older_than_days query int false "Older than days" default(30)
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/ai/embedding-cache/cleanup [post]
+// @Security BearerAuth
+// @Router /api/v1/admin/embedding-cache/cleanup [post]
 func (c *EmbeddingCacheController) CleanupLowHit(ctx *gin.Context) {
 	minHitCount := 5
 	olderThanDays := 30

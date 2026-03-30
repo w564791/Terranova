@@ -29,6 +29,7 @@ func NewApplicationHandler(service *service.ApplicationService) *ApplicationHand
 // @Param request body service.CreateApplicationRequest true "创建应用请求"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/applications [post]
+// @Security BearerAuth
 func (h *ApplicationHandler) CreateApplication(c *gin.Context) {
 	var req service.CreateApplicationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -64,6 +65,7 @@ func (h *ApplicationHandler) CreateApplication(c *gin.Context) {
 // @Param is_active query bool false "是否启用"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/applications [get]
+// @Security BearerAuth
 func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 	orgIDStr := c.Query("org_id")
 	if orgIDStr == "" {
@@ -102,6 +104,7 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 // @Param id path int true "应用ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/applications/{id} [get]
+// @Security BearerAuth
 func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -128,6 +131,7 @@ func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 // @Param request body service.UpdateApplicationRequest true "更新应用请求"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/applications/{id} [put]
+// @Security BearerAuth
 func (h *ApplicationHandler) UpdateApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -157,6 +161,7 @@ func (h *ApplicationHandler) UpdateApplication(c *gin.Context) {
 // @Param id path int true "应用ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/applications/{id} [delete]
+// @Security BearerAuth
 func (h *ApplicationHandler) DeleteApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -180,6 +185,7 @@ func (h *ApplicationHandler) DeleteApplication(c *gin.Context) {
 // @Param id path int true "应用ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/applications/{id}/regenerate-secret [post]
+// @Security BearerAuth
 func (h *ApplicationHandler) RegenerateSecret(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

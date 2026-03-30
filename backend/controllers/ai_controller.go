@@ -27,15 +27,15 @@ func NewAIController(db *gorm.DB) *AIController {
 }
 
 // ListConfigs 获取 AI 配置列表
-// @Summary 获取 AI 配置列表
-// @Description 获取所有AI配置
-// @Tags AI
+// @Summary List AI configurations
+// @Description Get all AI configurations
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "成功返回配置列表"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
-// @Router /api/v1/admin/ai-configs [get]
-// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Configuration list"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs [get]
 func (c *AIController) ListConfigs(ctx *gin.Context) {
 	configs, err := c.configService.ListConfigs()
 	if err != nil {
@@ -54,17 +54,17 @@ func (c *AIController) ListConfigs(ctx *gin.Context) {
 }
 
 // GetConfig 获取单个 AI 配置
-// @Summary 获取AI配置详情
-// @Description 根据ID获取AI配置详情
-// @Tags AI
+// @Summary Get AI configuration detail
+// @Description Get AI configuration detail by ID
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Param id path int true "配置ID"
-// @Success 200 {object} map[string]interface{} "成功返回配置详情"
-// @Failure 400 {object} map[string]interface{} "无效的配置ID"
-// @Failure 404 {object} map[string]interface{} "配置不存在"
-// @Router /api/v1/admin/ai-configs/{id} [get]
-// @Security Bearer
+// @Param id path int true "Configuration ID"
+// @Success 200 {object} map[string]interface{} "Configuration detail"
+// @Failure 400 {object} map[string]interface{} "Invalid configuration ID"
+// @Failure 404 {object} map[string]interface{} "Configuration not found"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs/{id} [get]
 func (c *AIController) GetConfig(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -93,18 +93,18 @@ func (c *AIController) GetConfig(ctx *gin.Context) {
 }
 
 // CreateConfig 创建 AI 配置
-// @Summary 创建AI配置
-// @Description 创建新的AI配置
-// @Tags AI
+// @Summary Create AI configuration
+// @Description Create a new AI configuration
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Param config body models.AIConfig true "AI配置信息"
-// @Param force_update query bool false "强制更新（禁用其他配置）"
-// @Success 200 {object} map[string]interface{} "配置创建成功"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 500 {object} map[string]interface{} "创建失败"
-// @Router /api/v1/admin/ai-configs [post]
-// @Security Bearer
+// @Param config body models.AIConfig true "AI configuration"
+// @Param force_update query bool false "Force update (disable other configs)"
+// @Success 200 {object} map[string]interface{} "Configuration created"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Creation failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs [post]
 func (c *AIController) CreateConfig(ctx *gin.Context) {
 	var config models.AIConfig
 	if err := ctx.ShouldBindJSON(&config); err != nil {
@@ -134,19 +134,19 @@ func (c *AIController) CreateConfig(ctx *gin.Context) {
 }
 
 // UpdateConfig 更新 AI 配置
-// @Summary 更新AI配置
-// @Description 更新AI配置信息
-// @Tags AI
+// @Summary Update AI configuration
+// @Description Update AI configuration by ID
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Param id path int true "配置ID"
-// @Param config body models.AIConfig true "AI配置信息"
-// @Param force_update query bool false "强制更新（禁用其他配置）"
-// @Success 200 {object} map[string]interface{} "更新成功"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 500 {object} map[string]interface{} "更新失败"
-// @Router /api/v1/admin/ai-configs/{id} [put]
-// @Security Bearer
+// @Param id path int true "Configuration ID"
+// @Param config body models.AIConfig true "AI configuration"
+// @Param force_update query bool false "Force update (disable other configs)"
+// @Success 200 {object} map[string]interface{} "Update successful"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Update failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs/{id} [put]
 func (c *AIController) UpdateConfig(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -188,17 +188,17 @@ func (c *AIController) UpdateConfig(ctx *gin.Context) {
 }
 
 // DeleteConfig 删除 AI 配置
-// @Summary 删除AI配置
-// @Description 删除指定的AI配置
-// @Tags AI
+// @Summary Delete AI configuration
+// @Description Delete an AI configuration by ID
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Param id path int true "配置ID"
-// @Success 200 {object} map[string]interface{} "删除成功"
-// @Failure 400 {object} map[string]interface{} "无效的配置ID"
-// @Failure 500 {object} map[string]interface{} "删除失败"
-// @Router /api/v1/admin/ai-configs/{id} [delete]
-// @Security Bearer
+// @Param id path int true "Configuration ID"
+// @Success 200 {object} map[string]interface{} "Deletion successful"
+// @Failure 400 {object} map[string]interface{} "Invalid configuration ID"
+// @Failure 500 {object} map[string]interface{} "Deletion failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs/{id} [delete]
 func (c *AIController) DeleteConfig(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -225,17 +225,17 @@ func (c *AIController) DeleteConfig(ctx *gin.Context) {
 }
 
 // GetAvailableModels 获取可用模型列表
-// @Summary 获取可用AI模型列表
-// @Description 根据AWS区域获取可用的AI模型列表
-// @Tags AI
+// @Summary Get available AI models
+// @Description Get available AI models for a given AWS region
+// @Tags AI Config
 // @Accept json
 // @Produce json
 // @Param region query string true "AWS Region"
-// @Success 200 {object} map[string]interface{} "成功返回模型列表"
-// @Failure 400 {object} map[string]interface{} "缺少region参数"
-// @Failure 500 {object} map[string]interface{} "获取失败"
-// @Router /api/v1/admin/ai-config/models [get]
-// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Model list"
+// @Failure 400 {object} map[string]interface{} "Missing region parameter"
+// @Failure 500 {object} map[string]interface{} "Fetch failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-config/models [get]
 func (c *AIController) GetAvailableModels(ctx *gin.Context) {
 	region := ctx.Query("region")
 	if region == "" {
@@ -266,7 +266,17 @@ func (c *AIController) GetAvailableModels(ctx *gin.Context) {
 }
 
 // ListOpenAIModels 获取 OpenAI 兼容 API 的模型列表（POST，避免 API Key 暴露在 URL）
-// API Key 优先级：请求体 api_key > DB 已存（config_id） > DASHSCOPE_API_KEY 环境变量
+// @Summary List OpenAI-compatible models
+// @Description List available models from an OpenAI-compatible API endpoint. API Key priority: request body > DB config > DASHSCOPE_API_KEY env var.
+// @Tags AI Config
+// @Accept json
+// @Produce json
+// @Param request body object true "Request with base_url, api_key, config_id"
+// @Success 200 {object} map[string]interface{} "Model list"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Fetch failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-config/openai-models [post]
 func (c *AIController) ListOpenAIModels(ctx *gin.Context) {
 	var req struct {
 		BaseURL  string `json:"base_url"`
@@ -319,14 +329,14 @@ func (c *AIController) ListOpenAIModels(ctx *gin.Context) {
 }
 
 // GetAvailableRegions 获取可用区域列表
-// @Summary 获取可用AWS区域列表
-// @Description 获取支持AI服务的AWS区域列表
-// @Tags AI
+// @Summary Get available AWS regions
+// @Description Get AWS regions that support AI services
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "成功返回区域列表"
-// @Router /api/v1/admin/ai-config/regions [get]
-// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Region list"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-config/regions [get]
 func (c *AIController) GetAvailableRegions(ctx *gin.Context) {
 	regions := c.configService.GetAvailableRegions()
 	ctx.JSON(http.StatusOK, gin.H{
@@ -345,20 +355,20 @@ type AnalyzeErrorRequest struct {
 }
 
 // AnalyzeError 分析错误
-// @Summary AI分析错误
-// @Description 使用AI分析Terraform任务错误并提供解决方案。安全说明：错误信息从数据库获取，不信任客户端输入，防止 prompt injection 攻击
-// @Tags AI
+// @Summary Analyze task error with AI
+// @Description Use AI to analyze Terraform task errors and provide solutions. Error messages are fetched from DB, not from client input, to prevent prompt injection.
+// @Tags AI Analysis
 // @Accept json
 // @Produce json
-// @Param request body AnalyzeErrorRequest true "错误分析请求"
-// @Success 200 {object} map[string]interface{} "分析完成"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 404 {object} map[string]interface{} "任务不存在或无错误信息"
-// @Failure 429 {object} map[string]interface{} "请求过于频繁"
-// @Failure 500 {object} map[string]interface{} "分析失败"
+// @Param request body AnalyzeErrorRequest true "Error analysis request"
+// @Success 200 {object} map[string]interface{} "Analysis complete"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 404 {object} map[string]interface{} "Task not found or no error"
+// @Failure 429 {object} map[string]interface{} "Too many requests"
+// @Failure 500 {object} map[string]interface{} "Analysis failed"
+// @Security BearerAuth
 // @Router /api/v1/ai/analyze-error [post]
-// @Security Bearer
 func (c *AIController) AnalyzeError(ctx *gin.Context) {
 	var req AnalyzeErrorRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -447,19 +457,19 @@ func (c *AIController) AnalyzeError(ctx *gin.Context) {
 }
 
 // GetTaskAnalysis 获取任务的分析结果
-// @Summary 获取任务错误分析结果
-// @Description 获取指定任务的AI错误分析结果
-// @Tags AI
+// @Summary Get task error analysis result
+// @Description Get AI error analysis result for a specific task
+// @Tags AI Analysis
 // @Accept json
 // @Produce json
-// @Param id path int true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "成功返回分析结果"
-// @Failure 400 {object} map[string]interface{} "无效的任务ID"
-// @Failure 404 {object} map[string]interface{} "未找到分析结果"
-// @Failure 500 {object} map[string]interface{} "解析失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Analysis result"
+// @Failure 400 {object} map[string]interface{} "Invalid task ID"
+// @Failure 404 {object} map[string]interface{} "Analysis not found"
+// @Failure 500 {object} map[string]interface{} "Parse failed"
+// @Security BearerAuth
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/error-analysis [get]
-// @Security Bearer
 func (c *AIController) GetTaskAnalysis(ctx *gin.Context) {
 	taskIDStr := ctx.Param("task_id")
 	taskID, err := strconv.ParseUint(taskIDStr, 10, 32)
@@ -519,17 +529,17 @@ func (c *AIController) extractRetryAfter(errMsg string) int {
 }
 
 // BatchUpdatePriorities 批量更新配置优先级
-// @Summary 批量更新AI配置优先级
-// @Description 批量更新多个AI配置的优先级
-// @Tags AI
+// @Summary Batch update AI configuration priorities
+// @Description Batch update priorities for multiple AI configurations
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Param updates body []services.PriorityUpdate true "优先级更新列表"
-// @Success 200 {object} map[string]interface{} "更新成功"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 500 {object} map[string]interface{} "更新失败"
-// @Router /api/v1/admin/ai-configs/priorities [put]
-// @Security Bearer
+// @Param updates body []services.PriorityUpdate true "Priority update list"
+// @Success 200 {object} map[string]interface{} "Update successful"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Update failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs/priorities [put]
 func (c *AIController) BatchUpdatePriorities(ctx *gin.Context) {
 	var updates []services.PriorityUpdate
 	if err := ctx.ShouldBindJSON(&updates); err != nil {
@@ -555,17 +565,17 @@ func (c *AIController) BatchUpdatePriorities(ctx *gin.Context) {
 }
 
 // SetAsDefault 设置为默认配置
-// @Summary 设置为默认AI配置
-// @Description 将指定配置设置为默认配置（支持所有场景）
-// @Tags AI
+// @Summary Set default AI configuration
+// @Description Set a configuration as the default for all scenarios
+// @Tags AI Config
 // @Accept json
 // @Produce json
-// @Param id path int true "配置ID"
-// @Success 200 {object} map[string]interface{} "设置成功"
-// @Failure 400 {object} map[string]interface{} "无效的配置ID"
-// @Failure 500 {object} map[string]interface{} "设置失败"
-// @Router /api/v1/admin/ai-configs/{id}/set-default [put]
-// @Security Bearer
+// @Param id path int true "Configuration ID"
+// @Success 200 {object} map[string]interface{} "Set successful"
+// @Failure 400 {object} map[string]interface{} "Invalid configuration ID"
+// @Failure 500 {object} map[string]interface{} "Set failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-configs/{id}/set-default [put]
 func (c *AIController) SetAsDefault(ctx *gin.Context) {
 	idStr := ctx.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

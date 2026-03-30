@@ -27,11 +27,14 @@ func NewWorkspaceProjectHandler(db *gorm.DB) *WorkspaceProjectHandler {
 }
 
 // GetWorkspaceProject 获取工作空间所属的项目
-// @Summary 获取工作空间所属的项目
+// @Summary Get workspace project
+// @Description Get the project that a workspace belongs to
 // @Tags Workspace Project
-// @Param workspace_id path string true "工作空间ID"
+// @Produce json
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/project [get]
+// @Router /api/v1/workspaces/{id}/project [get]
+// @Security BearerAuth
 func (h *WorkspaceProjectHandler) GetWorkspaceProject(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -70,14 +73,16 @@ type SetWorkspaceProjectRequest struct {
 }
 
 // SetWorkspaceProject 设置工作空间所属的项目
-// @Summary 设置工作空间所属的项目
+// @Summary Set workspace project
+// @Description Assign a workspace to a project
 // @Tags Workspace Project
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "工作空间ID"
-// @Param request body SetWorkspaceProjectRequest true "设置项目请求"
+// @Param id path string true "Workspace ID"
+// @Param request body SetWorkspaceProjectRequest true "Set project request"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/project [put]
+// @Router /api/v1/workspaces/{id}/project [put]
+// @Security BearerAuth
 func (h *WorkspaceProjectHandler) SetWorkspaceProject(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -111,11 +116,14 @@ func (h *WorkspaceProjectHandler) SetWorkspaceProject(c *gin.Context) {
 }
 
 // RemoveWorkspaceFromProject 从项目中移除工作空间
-// @Summary 从项目中移除工作空间
+// @Summary Remove workspace from project
+// @Description Remove a workspace from its current project
 // @Tags Workspace Project
-// @Param workspace_id path string true "工作空间ID"
+// @Produce json
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/project [delete]
+// @Router /api/v1/workspaces/{id}/project [delete]
+// @Security BearerAuth
 func (h *WorkspaceProjectHandler) RemoveWorkspaceFromProject(c *gin.Context) {
 	workspaceID := c.Param("id")
 	if workspaceID == "" {
@@ -134,11 +142,14 @@ func (h *WorkspaceProjectHandler) RemoveWorkspaceFromProject(c *gin.Context) {
 }
 
 // ListProjectWorkspaces 列出项目下的所有工作空间
-// @Summary 列出项目下的所有工作空间
+// @Summary List project workspaces
+// @Description List all workspaces belonging to a project
 // @Tags Project
-// @Param id path int true "项目ID"
+// @Produce json
+// @Param id path int true "Project ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/projects/{id}/workspaces [get]
+// @Security BearerAuth
 func (h *WorkspaceProjectHandler) ListProjectWorkspaces(c *gin.Context) {
 	projectIDStr := c.Param("id")
 	projectID, err := strconv.ParseUint(projectIDStr, 10, 32)
@@ -199,11 +210,14 @@ func (h *WorkspaceProjectHandler) ListProjectWorkspaces(c *gin.Context) {
 }
 
 // ListProjectsWithWorkspaceCount 列出所有项目及其工作空间数量
-// @Summary 列出所有项目及其工作空间数量
+// @Summary List projects with workspace count
+// @Description List all projects with their workspace counts
 // @Tags Project
-// @Param org_id query int false "组织ID，默认为1"
+// @Produce json
+// @Param org_id query int false "Organization ID (default: 1)"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/projects [get]
+// @Security BearerAuth
 func (h *WorkspaceProjectHandler) ListProjectsWithWorkspaceCount(c *gin.Context) {
 	orgIDStr := c.DefaultQuery("org_id", "1")
 	orgID, err := strconv.ParseUint(orgIDStr, 10, 32)

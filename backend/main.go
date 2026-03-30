@@ -46,6 +46,11 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 
+// @securityDefinitions.apikey PoolTokenAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and the pool token.
+
 func main() {
 	// 设置时区为本地时区
 	loc, err := time.LoadLocation("Asia/Singapore")

@@ -30,14 +30,19 @@ type CreateTeamRequest struct {
 	Description string `json:"description"`
 }
 
-// CreateTeam 创建团队
-// @Summary 创建团队
-// @Tags Team
+// CreateTeam creates a team
+// @Summary Create team
+// @Description Create a new team within an organization
+// @Tags IAM-Team
 // @Accept json
 // @Produce json
-// @Param request body CreateTeamRequest true "创建团队请求"
+// @Security BearerAuth
+// @Param request body CreateTeamRequest true "Create team request"
 // @Success 200 {object} entity.Team
-// @Router /api/v1/teams [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/teams [post]
 func (h *TeamHandler) CreateTeam(c *gin.Context) {
 	var req CreateTeamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -70,12 +75,16 @@ func (h *TeamHandler) CreateTeam(c *gin.Context) {
 	c.JSON(http.StatusOK, team)
 }
 
-// GetTeam 获取团队详情
-// @Summary 获取团队详情
-// @Tags Team
-// @Param id path string true "团队ID"
+// GetTeam gets team details
+// @Summary Get team details
+// @Description Get detailed information for a specific team
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
 // @Success 200 {object} entity.Team
-// @Router /api/v1/teams/{id} [get]
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/iam/teams/{id} [get]
 func (h *TeamHandler) GetTeam(c *gin.Context) {
 	teamID := c.Param("id")
 
@@ -88,12 +97,17 @@ func (h *TeamHandler) GetTeam(c *gin.Context) {
 	c.JSON(http.StatusOK, team)
 }
 
-// ListTeamsByOrg 列出组织的所有团队
-// @Summary 列出组织的所有团队
-// @Tags Team
-// @Param org_id query int true "组织ID"
-// @Success 200 {array} entity.Team
-// @Router /api/v1/teams [get]
+// ListTeamsByOrg lists all teams in an organization
+// @Summary List teams by organization
+// @Description List all teams belonging to a specific organization
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param org_id query int true "Organization ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/teams [get]
 func (h *TeamHandler) ListTeamsByOrg(c *gin.Context) {
 	orgIDStr := c.Query("org_id")
 	if orgIDStr == "" {
@@ -119,12 +133,17 @@ func (h *TeamHandler) ListTeamsByOrg(c *gin.Context) {
 	})
 }
 
-// DeleteTeam 删除团队
-// @Summary 删除团队
-// @Tags Team
-// @Param id path string true "团队ID"
+// DeleteTeam deletes a team
+// @Summary Delete team
+// @Description Delete a team
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/teams/{id} [delete]
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/teams/{id} [delete]
 func (h *TeamHandler) DeleteTeam(c *gin.Context) {
 	teamID := c.Param("id")
 
@@ -149,13 +168,20 @@ type AddTeamMemberRequest struct {
 	Role   string `json:"role" binding:"required"` // MEMBER/MAINTAINER
 }
 
-// AddTeamMember 添加团队成员
-// @Summary 添加团队成员
-// @Tags Team
-// @Param id path int true "团队ID"
-// @Param request body AddTeamMemberRequest true "添加成员请求"
+// AddTeamMember adds a member to a team
+// @Summary Add team member
+// @Description Add a user as a member to a team
+// @Tags IAM-Team
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
+// @Param request body AddTeamMemberRequest true "Add member request"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/teams/{id}/members [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/teams/{id}/members [post]
 func (h *TeamHandler) AddTeamMember(c *gin.Context) {
 	teamID := c.Param("id")
 
@@ -195,13 +221,18 @@ func (h *TeamHandler) AddTeamMember(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Team member added successfully"})
 }
 
-// RemoveTeamMember 移除团队成员
-// @Summary 移除团队成员
-// @Tags Team
-// @Param id path int true "团队ID"
-// @Param user_id path int true "用户ID"
+// RemoveTeamMember removes a member from a team
+// @Summary Remove team member
+// @Description Remove a user from a team
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
+// @Param user_id path string true "User ID"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/teams/{id}/members/{user_id} [delete]
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/teams/{id}/members/{user_id} [delete]
 func (h *TeamHandler) RemoveTeamMember(c *gin.Context) {
 	teamID := c.Param("id")
 	memberUserID := c.Param("user_id")
@@ -221,12 +252,16 @@ func (h *TeamHandler) RemoveTeamMember(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Team member removed successfully"})
 }
 
-// ListTeamMembers 列出团队成员
-// @Summary 列出团队成员
-// @Tags Team
-// @Param id path string true "团队ID"
-// @Success 200 {array} entity.TeamMember
-// @Router /api/v1/teams/{id}/members [get]
+// ListTeamMembers lists team members
+// @Summary List team members
+// @Description List all members of a team
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/teams/{id}/members [get]
 func (h *TeamHandler) ListTeamMembers(c *gin.Context) {
 	teamID := c.Param("id")
 

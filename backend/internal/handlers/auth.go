@@ -47,17 +47,18 @@ type RegisterRequest struct {
 	Password string `json:"password" binding:"required,min=6"`
 }
 
-// Login 用户登录
-// @Summary 用户登录
-// @Description 使用用户名和密码登录系统
+// Login handles user login with username and password
+// @Summary User login
+// @Description Authenticate with username and password. Returns JWT token on success, or MFA challenge if MFA is enabled.
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body LoginRequest true "登录信息"
-// @Success 200 {object} map[string]interface{} "登录成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 401 {object} map[string]interface{} "用户名或密码错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} gin.H "Login successful or MFA required"
+// @Failure 400 {object} gin.H "Invalid request parameters"
+// @Failure 401 {object} gin.H "Invalid credentials"
+// @Failure 403 {object} gin.H "Local login disabled"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
@@ -259,17 +260,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// Register 用户注册
-// @Summary 用户注册
-// @Description 注册新用户账号
+// Register handles new user registration
+// @Summary User registration (currently disabled)
+// @Description Register a new user account. Note: this endpoint is currently commented out in the router.
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body RegisterRequest true "注册信息"
-// @Success 201 {object} map[string]interface{} "注册成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 409 {object} map[string]interface{} "用户名或邮箱已存在"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param request body RegisterRequest true "Registration info"
+// @Success 201 {object} gin.H "User created successfully"
+// @Failure 400 {object} gin.H "Invalid request parameters"
+// @Failure 409 {object} gin.H "Username or email already exists"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -326,20 +327,20 @@ type ResetPasswordRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=6"`
 }
 
-// ResetPassword 重置密码
-// @Summary 重置密码
-// @Description 用户重置自己的密码
-// @Tags Auth
+// ResetPassword handles password reset for the current user
+// @Summary Reset password
+// @Description Reset the current user's password by verifying the current password and setting a new one
+// @Tags User
 // @Accept json
 // @Produce json
-// @Param request body ResetPasswordRequest true "密码重置信息"
-// @Success 200 {object} map[string]interface{} "密码重置成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效或当前密码错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 404 {object} map[string]interface{} "用户不存在"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param request body ResetPasswordRequest true "Password reset info"
+// @Success 200 {object} gin.H "Password updated successfully"
+// @Failure 400 {object} gin.H "Invalid request or incorrect current password"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 404 {object} gin.H "User not found"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/user/reset-password [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -410,17 +411,16 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	})
 }
 
-// RefreshToken 刷新Token
-// @Summary 刷新访问令牌
-// @Description 使用当前有效的token获取新的token
+// RefreshToken refreshes the current JWT token
+// @Summary Refresh access token
+// @Description Use a valid JWT token to obtain a new token with extended expiration
 // @Tags Auth
-// @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "Token刷新成功"
-// @Failure 401 {object} map[string]interface{} "未授权或用户不存在"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Success 200 {object} gin.H "Token refreshed successfully"
+// @Failure 401 {object} gin.H "Unauthorized or user not found"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/refresh [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	// 从JWT中获取用户信息
 	userID, exists := c.Get("user_id")
@@ -472,17 +472,16 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	})
 }
 
-// GetMe 获取当前用户信息
-// @Summary 获取当前用户信息
-// @Description 获取当前登录用户的详细信息
+// GetMe returns the current authenticated user's information
+// @Summary Get current user info
+// @Description Get the profile details of the currently authenticated user
 // @Tags Auth
-// @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "获取成功"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 404 {object} map[string]interface{} "用户不存在"
+// @Success 200 {object} gin.H "User info retrieved successfully"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 404 {object} gin.H "User not found"
 // @Router /api/v1/auth/me [get]
-// @Security Bearer
+// @Security BearerAuth
 func (h *AuthHandler) GetMe(c *gin.Context) {
 	// 从JWT中获取用户ID
 	userID, exists := c.Get("user_id")
@@ -520,14 +519,14 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	})
 }
 
-// Logout 用户登出
-// @Summary 用户登出
-// @Description 用户登出系统，吊销当前session和所有user token
+// Logout handles user logout by revoking the current login session
+// @Summary User logout
+// @Description Log out the current user and revoke the active login session
 // @Tags Auth
-// @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "登出成功"
+// @Success 200 {object} gin.H "Logged out successfully"
 // @Router /api/v1/auth/logout [post]
+// @Security BearerAuth
 func (h *AuthHandler) Logout(c *gin.Context) {
 	now := time.Now()
 

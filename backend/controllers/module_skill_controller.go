@@ -36,8 +36,11 @@ func NewModuleSkillController(db *gorm.DB) *ModuleSkillController {
 // @Produce json
 // @Param module_id path int true "Module ID"
 // @Success 200 {object} models.Skill
+// @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
-// @Router /api/v1/modules/{module_id}/skill [get]
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/modules/{module_id}/skill [get]
+// @Security BearerAuth
 func (c *ModuleSkillController) GetModuleSkill(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("module_id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -77,7 +80,10 @@ func (c *ModuleSkillController) GetModuleSkill(ctx *gin.Context) {
 // @Param force query bool false "是否强制重新生成"
 // @Success 200 {object} models.Skill
 // @Failure 400 {object} map[string]string
-// @Router /api/v1/modules/{module_id}/skill/generate [post]
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/modules/{module_id}/skill/generate [post]
+// @Security BearerAuth
 func (c *ModuleSkillController) GenerateModuleSkill(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("module_id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -146,7 +152,9 @@ func (c *ModuleSkillController) GenerateModuleSkill(ctx *gin.Context) {
 // @Param module_id path int true "Module ID"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
-// @Router /api/v1/modules/{module_id}/skill/preview [get]
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/modules/{module_id}/skill/preview [get]
+// @Security BearerAuth
 func (c *ModuleSkillController) PreviewModuleSkill(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("module_id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -189,7 +197,9 @@ type UpdateModuleSkillRequest struct {
 // @Success 200 {object} models.Skill
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
-// @Router /api/v1/modules/{module_id}/skill [put]
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/modules/{module_id}/skill [put]
+// @Security BearerAuth
 func (c *ModuleSkillController) UpdateModuleSkill(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("module_id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -255,8 +265,11 @@ func (c *ModuleSkillController) UpdateModuleSkill(ctx *gin.Context) {
 // @Produce json
 // @Param module_id path int true "Module ID"
 // @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
-// @Router /api/v1/modules/{module_id}/skill [delete]
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/admin/modules/{module_id}/skill [delete]
+// @Security BearerAuth
 func (c *ModuleSkillController) DeleteModuleSkill(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("module_id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)
@@ -293,13 +306,14 @@ func (c *ModuleSkillController) DeleteModuleSkill(ctx *gin.Context) {
 
 // BatchGenerateModuleSkills 批量生成 Module Skills
 // @Summary 批量生成 Module Skills
-// @Description 为所有有活跃 Schema 的 Module 生成 Skill
+// @Description 为所有有活跃 Schema 的 Module 生成 Skill，此方法未注册到路由
 // @Tags Module Skill
 // @Accept json
 // @Produce json
 // @Param force query bool false "是否强制重新生成已存在的"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/v1/admin/modules/skills/batch-generate [post]
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
 func (c *ModuleSkillController) BatchGenerateModuleSkills(ctx *gin.Context) {
 	force := ctx.Query("force") == "true"
 

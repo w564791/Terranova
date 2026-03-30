@@ -33,10 +33,12 @@ func NewPoolAuthorizationHandler(db *gorm.DB) *PoolAuthorizationHandler {
 // @Tags Pool Authorization
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param request body models.PoolAllowWorkspacesRequest true "Workspace IDs to allow"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/allow-workspaces [post]
@@ -126,14 +128,16 @@ func (h *PoolAuthorizationHandler) AllowWorkspaces(c *gin.Context) {
 
 // GetAllowedWorkspaces retrieves workspaces allowed by a pool
 // @Summary Get pool's allowed workspaces
-// @Description Get list of workspaces that this pool has granted access to
+// @Description Get list of workspaces that this pool has granted access to, with workspace names and user names
 // @Tags Pool Authorization
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param status query string false "Filter by status (active/revoked)"
-// @Success 200 {object} models.PoolAllowedWorkspacesResponse
+// @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/allowed-workspaces [get]
@@ -196,10 +200,12 @@ func (h *PoolAuthorizationHandler) GetAllowedWorkspaces(c *gin.Context) {
 // @Tags Pool Authorization
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param pool_id path string true "Pool ID"
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agent-pools/{pool_id}/allowed-workspaces/{workspace_id} [delete]
@@ -254,16 +260,18 @@ func (h *PoolAuthorizationHandler) RevokeWorkspaceAccess(c *gin.Context) {
 
 // GetAvailablePools retrieves pools available to a workspace
 // @Summary Get available pools for workspace
-// @Description Get list of pools that have granted access to this workspace
+// @Description Get list of pools that have granted access to this workspace, with agent counts
 // @Tags Workspace Pool Authorization
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Security BearerAuth
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/available-pools [get]
+// @Router /api/v1/workspaces/{id}/available-pools [get]
 func (h *PoolAuthorizationHandler) GetAvailablePools(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
 	if workspaceID == "" {
@@ -323,13 +331,15 @@ func (h *PoolAuthorizationHandler) GetAvailablePools(c *gin.Context) {
 // @Tags Workspace Pool Authorization
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Param request body map[string]string true "Pool ID to set as current"
+// @Security BearerAuth
+// @Param id path string true "Workspace ID"
+// @Param request body map[string]string true "Pool ID to set as current (pool_id field required)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/set-current-pool [post]
+// @Router /api/v1/workspaces/{id}/set-current-pool [post]
 func (h *PoolAuthorizationHandler) SetCurrentPool(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
 	if workspaceID == "" {
@@ -382,16 +392,18 @@ func (h *PoolAuthorizationHandler) SetCurrentPool(c *gin.Context) {
 
 // GetCurrentPool retrieves the current pool for a workspace
 // @Summary Get current pool
-// @Description Get the current pool assigned to this workspace
+// @Description Get the current pool assigned to this workspace with agent counts
 // @Tags Workspace Pool Authorization
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Security BearerAuth
+// @Param id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/current-pool [get]
+// @Router /api/v1/workspaces/{id}/current-pool [get]
 func (h *PoolAuthorizationHandler) GetCurrentPool(c *gin.Context) {
 	workspaceID := c.Param("workspace_id")
 	if workspaceID == "" {

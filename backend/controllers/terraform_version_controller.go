@@ -32,7 +32,8 @@ func NewTerraformVersionController(db *gorm.DB) *TerraformVersionController {
 // @Param deprecated query boolean false "是否弃用"
 // @Success 200 {object} models.TerraformVersionListResponse
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions [get]
+// @Router /api/v1/global/settings/terraform-versions [get]
+// @Security BearerAuth
 func (c *TerraformVersionController) ListTerraformVersions(ctx *gin.Context) {
 	var enabled *bool
 	var deprecated *bool
@@ -70,7 +71,8 @@ func (c *TerraformVersionController) ListTerraformVersions(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions/{id} [get]
+// @Router /api/v1/global/settings/terraform-versions/{id} [get]
+// @Security BearerAuth
 func (c *TerraformVersionController) GetTerraformVersion(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
@@ -101,7 +103,8 @@ func (c *TerraformVersionController) GetTerraformVersion(ctx *gin.Context) {
 // @Success 201 {object} models.TerraformVersion
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions [post]
+// @Router /api/v1/global/settings/terraform-versions [post]
+// @Security BearerAuth
 func (c *TerraformVersionController) CreateTerraformVersion(ctx *gin.Context) {
 	var req models.CreateTerraformVersionRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -130,7 +133,8 @@ func (c *TerraformVersionController) CreateTerraformVersion(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions/{id} [put]
+// @Router /api/v1/global/settings/terraform-versions/{id} [put]
+// @Security BearerAuth
 func (c *TerraformVersionController) UpdateTerraformVersion(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
@@ -166,7 +170,8 @@ func (c *TerraformVersionController) UpdateTerraformVersion(ctx *gin.Context) {
 // @Success 200 {object} models.TerraformVersion
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions/default [get]
+// @Router /api/v1/global/settings/terraform-versions/default [get]
+// @Security BearerAuth
 func (c *TerraformVersionController) GetDefaultVersion(ctx *gin.Context) {
 	version, err := c.service.GetDefault()
 	if err != nil {
@@ -192,7 +197,8 @@ func (c *TerraformVersionController) GetDefaultVersion(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions/{id}/set-default [post]
+// @Router /api/v1/global/settings/terraform-versions/{id}/set-default [post]
+// @Security BearerAuth
 func (c *TerraformVersionController) SetDefaultVersion(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
@@ -226,7 +232,8 @@ func (c *TerraformVersionController) SetDefaultVersion(ctx *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/terraform-versions/{id} [delete]
+// @Router /api/v1/global/settings/terraform-versions/{id} [delete]
+// @Security BearerAuth
 func (c *TerraformVersionController) DeleteTerraformVersion(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {

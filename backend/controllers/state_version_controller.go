@@ -35,7 +35,7 @@ func NewStateVersionController(db *gorm.DB) *StateVersionController {
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/state-versions [get]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) GetStateVersions(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -196,7 +196,7 @@ func (svc *StateVersionController) GetStateVersions(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/state-versions/{version}/metadata [get]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) GetStateVersionMetadata(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -306,7 +306,7 @@ func (svc *StateVersionController) GetStateVersionMetadata(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/state-versions/{version} [get]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) GetStateVersion(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -397,7 +397,7 @@ func (svc *StateVersionController) GetStateVersion(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "State不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/current-state [get]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) GetCurrentState(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -490,7 +490,7 @@ func (svc *StateVersionController) GetCurrentState(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Failure 500 {object} map[string]interface{} "回滚失败"
 // @Router /api/v1/workspaces/{id}/state-versions/{version}/rollback [post]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) RollbackState(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -592,7 +592,7 @@ func (svc *StateVersionController) RollbackState(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "版本不存在"
 // @Failure 500 {object} map[string]interface{} "对比失败"
 // @Router /api/v1/workspaces/{id}/state-versions/compare [get]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) CompareVersions(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {
@@ -693,7 +693,7 @@ func (svc *StateVersionController) CompareVersions(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "无效的参数或不能删除最新版本"
 // @Failure 500 {object} map[string]interface{} "删除失败"
 // @Router /api/v1/workspaces/{id}/state-versions/{version} [delete]
-// @Security Bearer
+// @Security BearerAuth
 func (svc *StateVersionController) DeleteStateVersion(c *gin.Context) {
 	workspaceIDParam := c.Param("id")
 	if workspaceIDParam == "" {

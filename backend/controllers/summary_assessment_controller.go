@@ -89,6 +89,14 @@ type ResourceTypeStats struct {
 }
 
 // GetOverview returns summary assessment dashboard data
+// @Summary Get summary assessment overview
+// @Description Get dashboard data for summary assessment including coverage, pass rates, security tag stats, issue distribution, daily trend, and per-resource-type stats
+// @Tags Summary Assessment
+// @Produce json
+// @Param days query int false "Number of days" default(7)
+// @Success 200 {object} SummaryAssessmentOverview
+// @Security BearerAuth
+// @Router /api/v1/admin/summary-assessment/overview [get]
 func (c *SummaryAssessmentController) GetOverview(ctx *gin.Context) {
 	days, _ := strconv.Atoi(ctx.DefaultQuery("days", "7"))
 	if days < 1 || days > 365 {
@@ -319,9 +327,16 @@ type IssueResource struct {
 }
 
 // GetIssueResources 查询指定问题类型的受影响资源
-// GET /admin/summary-assessment/issue-resources?type=over_length&days=7
-// type: format violation type (over_length, markdown_syntax, first_line_format, empty_summary)
-//       or "hallucination" or "security_miss" or "security_miss:{rule_name}"
+// @Summary Get issue resources
+// @Description Query resources affected by a specific issue type (format violation, hallucination, security_miss, etc.)
+// @Tags Summary Assessment
+// @Produce json
+// @Param type query string true "Issue type: over_length, markdown_syntax, first_line_format, empty_summary, hallucination, security_miss, security_miss:{rule_name}"
+// @Param days query int false "Number of days" default(7)
+// @Success 200 {array} IssueResource
+// @Failure 400 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/admin/summary-assessment/issue-resources [get]
 func (c *SummaryAssessmentController) GetIssueResources(ctx *gin.Context) {
 	issueType := ctx.Query("type")
 	if issueType == "" {
@@ -415,8 +430,17 @@ func (c *SummaryAssessmentController) GetIssueResources(ctx *gin.Context) {
 }
 
 // RegenerateSummaries 重新生成指定资源的摘要
-// POST /admin/summary-assessment/regenerate
-// Body: {"resource_ids": [1, 2, 3]}
+// @Summary Regenerate resource summaries
+// @Description Schedule regeneration of AI summaries for specified resources (max 100 per request)
+// @Tags Summary Assessment
+// @Accept json
+// @Produce json
+// @Param request body object true "Resource IDs to regenerate"
+// @Success 200 {object} map[string]interface{} "Regeneration scheduled"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Security BearerAuth
+// @Router /api/v1/admin/summary-assessment/regenerate [post]
 func (c *SummaryAssessmentController) RegenerateSummaries(ctx *gin.Context) {
 	var req struct {
 		ResourceIDs []uint `json:"resource_ids" binding:"required"`

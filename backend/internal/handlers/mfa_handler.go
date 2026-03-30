@@ -28,15 +28,16 @@ func NewMFAHandler(db *gorm.DB) *MFAHandler {
 	}
 }
 
-// GetMFAStatus 获取当前用户MFA状态
-// @Summary 获取MFA状态
-// @Description 获取当前登录用户的MFA设置状态
+// GetMFAStatus returns the MFA status for the current user
+// @Summary Get current user MFA status
+// @Description Get the MFA configuration status for the currently authenticated user
 // @Tags MFA
 // @Produce json
-// @Success 200 {object} models.MFAStatus
-// @Failure 401 {object} map[string]interface{}
+// @Success 200 {object} gin.H "MFA status retrieved"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/user/mfa/status [get]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) GetMFAStatus(c *gin.Context) {
 	user, err := h.getCurrentUser(c)
 	if err != nil {
@@ -53,16 +54,17 @@ func (h *MFAHandler) GetMFAStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "data": status})
 }
 
-// SetupMFA 初始化MFA设置
-// @Summary 初始化MFA设置
-// @Description 生成TOTP密钥和二维码，开始MFA设置流程
+// SetupMFA initializes MFA setup for the current user
+// @Summary Initialize MFA setup
+// @Description Generate TOTP secret key and QR code to begin MFA setup
 // @Tags MFA
 // @Produce json
-// @Success 200 {object} models.MFASetupResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
+// @Success 200 {object} gin.H "MFA setup data with QR code"
+// @Failure 400 {object} gin.H "MFA already enabled"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/user/mfa/setup [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) SetupMFA(c *gin.Context) {
 	user, err := h.getCurrentUser(c)
 	if err != nil {
@@ -89,18 +91,18 @@ type VerifyMFARequest struct {
 	Code string `json:"code" binding:"required"`
 }
 
-// VerifyAndEnableMFA 验证并启用MFA
-// @Summary 验证并启用MFA
-// @Description 验证TOTP码并启用MFA
+// VerifyAndEnableMFA verifies the TOTP code and enables MFA
+// @Summary Verify and enable MFA
+// @Description Verify the TOTP code from authenticator app and enable MFA for the current user
 // @Tags MFA
 // @Accept json
 // @Produce json
-// @Param request body VerifyMFARequest true "验证码"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
+// @Param request body VerifyMFARequest true "TOTP verification code"
+// @Success 200 {object} gin.H "MFA enabled successfully"
+// @Failure 400 {object} gin.H "Invalid verification code"
+// @Failure 401 {object} gin.H "Unauthorized"
 // @Router /api/v1/user/mfa/verify [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) VerifyAndEnableMFA(c *gin.Context) {
 	var req VerifyMFARequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -135,19 +137,19 @@ type DisableMFARequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// DisableMFA 禁用MFA
-// @Summary 禁用MFA
-// @Description 禁用MFA（需要验证密码和TOTP码）
+// DisableMFA disables MFA for the current user
+// @Summary Disable MFA
+// @Description Disable MFA after verifying password and TOTP code
 // @Tags MFA
 // @Accept json
 // @Produce json
-// @Param request body DisableMFARequest true "验证信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 403 {object} map[string]interface{}
+// @Param request body DisableMFARequest true "Password and TOTP code for verification"
+// @Success 200 {object} gin.H "MFA disabled"
+// @Failure 400 {object} gin.H "Invalid password or verification code"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 403 {object} gin.H "Cannot disable MFA due to security policy"
 // @Router /api/v1/user/mfa/disable [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) DisableMFA(c *gin.Context) {
 	var req DisableMFARequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -179,18 +181,18 @@ func (h *MFAHandler) DisableMFA(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "MFA已禁用"})
 }
 
-// RegenerateBackupCodes 重新生成备用恢复码
-// @Summary 重新生成备用恢复码
-// @Description 重新生成备用恢复码（需要验证TOTP码）
+// RegenerateBackupCodes regenerates MFA backup recovery codes
+// @Summary Regenerate backup codes
+// @Description Regenerate MFA backup recovery codes after verifying TOTP code
 // @Tags MFA
 // @Accept json
 // @Produce json
-// @Param request body VerifyMFARequest true "验证码"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
+// @Param request body VerifyMFARequest true "TOTP verification code"
+// @Success 200 {object} gin.H "New backup codes generated"
+// @Failure 400 {object} gin.H "Invalid verification code"
+// @Failure 401 {object} gin.H "Unauthorized"
 // @Router /api/v1/user/mfa/backup-codes/regenerate [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) RegenerateBackupCodes(c *gin.Context) {
 	var req VerifyMFARequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -224,16 +226,17 @@ type MFAVerifyRequest struct {
 	Code     string `json:"code" binding:"required"`
 }
 
-// VerifyMFALogin 登录时验证MFA
-// @Summary 登录MFA验证
-// @Description 登录时验证TOTP码或备用恢复码
+// VerifyMFALogin verifies MFA code during the login flow
+// @Summary Verify MFA during login
+// @Description Verify TOTP code or backup recovery code to complete MFA-protected login. Uses mfa_token from login response, not JWT.
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body MFAVerifyRequest true "MFA验证信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
+// @Param request body MFAVerifyRequest true "MFA token and verification code"
+// @Success 200 {object} gin.H "MFA verified, JWT token returned"
+// @Failure 400 {object} gin.H "Invalid request parameters"
+// @Failure 401 {object} gin.H "Invalid MFA token or verification code"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/mfa/verify [post]
 func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 	var req MFAVerifyRequest
@@ -331,15 +334,16 @@ func (h *MFAHandler) VerifyMFALogin(c *gin.Context) {
 
 // 管理员API
 
-// GetMFAConfig 获取MFA全局配置
-// @Summary 获取MFA全局配置
-// @Description 获取MFA全局配置和统计信息
+// GetMFAConfig returns the global MFA configuration and statistics
+// @Summary Get global MFA configuration
+// @Description Get the global MFA configuration and usage statistics (admin only)
 // @Tags Admin MFA
 // @Produce json
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Router /api/v1/admin/settings/mfa [get]
-// @Security Bearer
+// @Success 200 {object} gin.H "MFA config and statistics"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/global/settings/mfa [get]
+// @Security BearerAuth
 func (h *MFAHandler) GetMFAConfig(c *gin.Context) {
 	config, err := h.mfaService.GetMFAConfig()
 	if err != nil {
@@ -373,18 +377,19 @@ type UpdateMFAConfigRequest struct {
 	RequiredBackupCodes    *int    `json:"required_backup_codes"`
 }
 
-// UpdateMFAConfig 更新MFA全局配置
-// @Summary 更新MFA全局配置
-// @Description 更新MFA全局配置
+// UpdateMFAConfig updates the global MFA configuration
+// @Summary Update global MFA configuration
+// @Description Update the global MFA configuration settings (admin only)
 // @Tags Admin MFA
 // @Accept json
 // @Produce json
-// @Param request body UpdateMFAConfigRequest true "MFA配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Router /api/v1/admin/settings/mfa [put]
-// @Security Bearer
+// @Param request body UpdateMFAConfigRequest true "MFA configuration"
+// @Success 200 {object} gin.H "MFA config updated"
+// @Failure 400 {object} gin.H "Invalid request parameters"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 500 {object} gin.H "Internal server error"
+// @Router /api/v1/global/settings/mfa [put]
+// @Security BearerAuth
 func (h *MFAHandler) UpdateMFAConfig(c *gin.Context) {
 	var req UpdateMFAConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -430,17 +435,18 @@ func (h *MFAHandler) UpdateMFAConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "MFA配置已更新"})
 }
 
-// ResetUserMFA 重置用户MFA
-// @Summary 重置用户MFA
-// @Description 管理员重置指定用户的MFA设置
+// ResetUserMFA resets MFA for a specific user (admin only)
+// @Summary Reset user MFA
+// @Description Admin resets MFA settings for a specific user, requiring them to set up MFA again on next login
 // @Tags Admin MFA
 // @Produce json
-// @Param user_id path string true "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
+// @Param user_id path string true "User ID"
+// @Success 200 {object} gin.H "User MFA reset"
+// @Failure 400 {object} gin.H "Missing user_id"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/admin/users/{user_id}/mfa/reset [post]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) ResetUserMFA(c *gin.Context) {
 	userID := c.Param("user_id")
 	if userID == "" {
@@ -456,17 +462,19 @@ func (h *MFAHandler) ResetUserMFA(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "用户MFA已重置，用户下次登录需要重新设置MFA"})
 }
 
-// GetUserMFAStatus 获取指定用户MFA状态
-// @Summary 获取用户MFA状态
-// @Description 管理员获取指定用户的MFA状态
+// GetUserMFAStatus returns MFA status for a specific user (admin only)
+// @Summary Get user MFA status
+// @Description Admin retrieves MFA status for a specific user
 // @Tags Admin MFA
 // @Produce json
-// @Param user_id path string true "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
+// @Param user_id path string true "User ID"
+// @Success 200 {object} gin.H "User MFA status"
+// @Failure 400 {object} gin.H "Missing user_id"
+// @Failure 401 {object} gin.H "Unauthorized"
+// @Failure 404 {object} gin.H "User not found"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/admin/users/{user_id}/mfa/status [get]
-// @Security Bearer
+// @Security BearerAuth
 func (h *MFAHandler) GetUserMFAStatus(c *gin.Context) {
 	userID := c.Param("user_id")
 	if userID == "" {
@@ -489,15 +497,17 @@ func (h *MFAHandler) GetUserMFAStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "data": status})
 }
 
-// SetupMFAWithToken 使用 mfa_token 认证的 MFA 初始设置（用于首次登录强制设置 MFA）
-// @Summary 初始化MFA设置（mfa_token认证）
-// @Description 用户首次登录时通过 mfa_token 认证，初始化 MFA 设置
+// SetupMFAWithToken initializes MFA setup using mfa_token authentication (for forced MFA setup on first login)
+// @Summary Initialize MFA setup (mfa_token auth)
+// @Description Initialize MFA setup during login flow using mfa_token instead of JWT. Used when MFA is required for first-time login.
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body SetupMFAWithTokenRequest true "MFA Token"
-// @Success 200 {object} models.MFASetupResponse
-// @Failure 401 {object} map[string]interface{}
+// @Param request body SetupMFAWithTokenRequest true "MFA token"
+// @Success 200 {object} gin.H "MFA setup data with QR code"
+// @Failure 400 {object} gin.H "MFA already enabled"
+// @Failure 401 {object} gin.H "Invalid or expired MFA token"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/mfa/setup [post]
 func (h *MFAHandler) SetupMFAWithToken(c *gin.Context) {
 	var req SetupMFAWithTokenRequest
@@ -539,13 +549,17 @@ type SetupMFAWithTokenRequest struct {
 	MFAToken string `json:"mfa_token" binding:"required"`
 }
 
-// VerifyAndEnableMFAWithToken 使用 mfa_token 认证验证并启用 MFA
-// @Summary 验证并启用MFA（mfa_token认证）
+// VerifyAndEnableMFAWithToken verifies TOTP code and enables MFA using mfa_token authentication
+// @Summary Verify and enable MFA (mfa_token auth)
+// @Description Verify TOTP code and enable MFA during login flow. On success, returns JWT token to complete login.
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param request body VerifyMFAWithTokenRequest true "MFA Token + 验证码"
-// @Success 200 {object} map[string]interface{}
+// @Param request body VerifyMFAWithTokenRequest true "MFA token and TOTP verification code"
+// @Success 200 {object} gin.H "MFA enabled and JWT token returned"
+// @Failure 400 {object} gin.H "Invalid verification code"
+// @Failure 401 {object} gin.H "Invalid or expired MFA token"
+// @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/mfa/enable [post]
 func (h *MFAHandler) VerifyAndEnableMFAWithToken(c *gin.Context) {
 	var req VerifyMFAWithTokenRequest

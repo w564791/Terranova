@@ -34,18 +34,19 @@ func NewSkillController(db *gorm.DB, opts ...interface{}) *SkillController {
 }
 
 // ListSkills 获取 Skill 列表
-// @Summary 获取 Skill 列表
-// @Description 分页获取 Skill 列表，支持按层级、状态过滤和关键词搜索
-// @Tags Skill
+// @Summary List skills
+// @Description List skills with pagination, filter by layer, status, source type, and keyword search
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
-// @Param layer query string false "层级过滤: foundation, domain, task"
-// @Param is_active query bool false "是否激活"
-// @Param source_type query string false "来源类型: manual, module_auto, hybrid"
-// @Param search query string false "搜索关键词（匹配名称、显示名称、内容）"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页数量" default(20)
+// @Param layer query string false "Layer filter: foundation, domain, task"
+// @Param is_active query bool false "Active status filter"
+// @Param source_type query string false "Source type: manual, module_auto, hybrid"
+// @Param search query string false "Search keyword (matches name, display_name, content)"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} models.SkillListResponse
+// @Security BearerAuth
 // @Router /api/v1/admin/skills [get]
 func (c *SkillController) ListSkills(ctx *gin.Context) {
 	// 解析查询参数
@@ -114,14 +115,15 @@ func (c *SkillController) ListSkills(ctx *gin.Context) {
 }
 
 // GetSkill 获取单个 Skill
-// @Summary 获取单个 Skill
-// @Description 根据 ID 或名称获取 Skill 详情
-// @Tags Skill
+// @Summary Get a skill
+// @Description Get skill detail by ID or name
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
-// @Param id path string true "Skill ID 或名称"
+// @Param id path string true "Skill ID or name"
 // @Success 200 {object} models.Skill
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/admin/skills/{id} [get]
 func (c *SkillController) GetSkill(ctx *gin.Context) {
 	idOrName := ctx.Param("id")
@@ -145,14 +147,15 @@ func (c *SkillController) GetSkill(ctx *gin.Context) {
 }
 
 // CreateSkill 创建 Skill
-// @Summary 创建 Skill
-// @Description 创建新的 Skill
-// @Tags Skill
+// @Summary Create a skill
+// @Description Create a new skill
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
-// @Param request body models.CreateSkillRequest true "Skill 信息"
+// @Param request body models.CreateSkillRequest true "Skill information"
 // @Success 201 {object} models.Skill
 // @Failure 400 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/admin/skills [post]
 func (c *SkillController) CreateSkill(ctx *gin.Context) {
 	var req models.CreateSkillRequest
@@ -220,16 +223,17 @@ func (c *SkillController) CreateSkill(ctx *gin.Context) {
 }
 
 // UpdateSkill 更新 Skill
-// @Summary 更新 Skill
-// @Description 更新 Skill 信息
-// @Tags Skill
+// @Summary Update a skill
+// @Description Update skill information
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
 // @Param id path string true "Skill ID"
-// @Param request body models.UpdateSkillRequest true "更新信息"
+// @Param request body models.UpdateSkillRequest true "Update information"
 // @Success 200 {object} models.Skill
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/admin/skills/{id} [put]
 func (c *SkillController) UpdateSkill(ctx *gin.Context) {
 	skillID := ctx.Param("id")
@@ -299,16 +303,17 @@ func (c *SkillController) UpdateSkill(ctx *gin.Context) {
 }
 
 // DeactivateSkill 停用 Skill
-// @Summary 停用 Skill
-// @Description 停用指定的 Skill（软删除）
-// @Tags AI Skills
+// @Summary Deactivate a skill
+// @Description Deactivate a skill (soft delete)
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
 // @Param id path string true "Skill ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/ai/skills/{id}/deactivate [post]
+// @Security BearerAuth
+// @Router /api/v1/admin/skills/{id}/deactivate [post]
 func (c *SkillController) DeactivateSkill(ctx *gin.Context) {
 	skillID := ctx.Param("id")
 
@@ -331,16 +336,18 @@ func (c *SkillController) DeactivateSkill(ctx *gin.Context) {
 }
 
 // DeleteSkill 删除 Skill
-// @Summary 删除 Skill
-// @Description 删除指定的 Skill
-// @Tags AI Skills
+// @Summary Delete a skill
+// @Description Delete a skill by ID (supports hard delete via ?hard=true)
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
 // @Param id path string true "Skill ID"
+// @Param hard query bool false "Hard delete flag"
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/ai/skills/{id} [delete]
+// @Security BearerAuth
+// @Router /api/v1/admin/skills/{id} [delete]
 func (c *SkillController) DeleteSkill(ctx *gin.Context) {
 	skillID := ctx.Param("id")
 	hardDelete := ctx.Query("hard") == "true"
@@ -387,14 +394,15 @@ func (c *SkillController) DeleteSkill(ctx *gin.Context) {
 }
 
 // ActivateSkill 激活 Skill
-// @Summary 激活 Skill
-// @Description 激活已停用的 Skill
-// @Tags Skill
+// @Summary Activate a skill
+// @Description Activate a previously deactivated skill
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
 // @Param id path string true "Skill ID"
 // @Success 200 {object} models.Skill
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/admin/skills/{id}/activate [post]
 func (c *SkillController) ActivateSkill(ctx *gin.Context) {
 	skillID := ctx.Param("id")
@@ -428,14 +436,16 @@ func (c *SkillController) ActivateSkill(ctx *gin.Context) {
 }
 
 // PreviewDomainSkillDiscovery 预览 Domain Skill 自动发现结果
-// @Summary 预览 Domain Skill 自动发现
-// @Description 根据 Task Skill 的 domain_tags 预览将会自动发现的 Domain Skills
-// @Tags Skill
+// @Summary Preview domain skill discovery
+// @Description Preview which domain skills would be auto-discovered based on a task skill's domain_tags
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
-// @Param task_skill query string true "Task Skill 名称"
+// @Param task_skill query string true "Task skill name"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/admin/skills/preview-discovery [get]
 func (c *SkillController) PreviewDomainSkillDiscovery(ctx *gin.Context) {
 	taskSkillName := ctx.Query("task_skill")
@@ -520,15 +530,16 @@ func (c *SkillController) PreviewDomainSkillDiscovery(ctx *gin.Context) {
 }
 
 // GetSkillUsageStats 获取 Skill 使用统计
-// @Summary 获取 Skill 使用统计
-// @Description 获取 Skill 的使用次数、平均评分等统计信息
-// @Tags Skill
+// @Summary Get skill usage statistics
+// @Description Get usage count, average rating, and other statistics for a skill
+// @Tags Skill Admin
 // @Accept json
 // @Produce json
 // @Param id path string true "Skill ID"
-// @Success 200 {object} models.SkillUsageStats
+// @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]string
-// @Router /api/v1/admin/skills/{id}/stats [get]
+// @Security BearerAuth
+// @Router /api/v1/admin/skills/{id}/usage-stats [get]
 func (c *SkillController) GetSkillUsageStats(ctx *gin.Context) {
 	skillID := ctx.Param("id")
 
@@ -588,7 +599,19 @@ func (c *SkillController) GetSkillUsageStats(ctx *gin.Context) {
 }
 
 // UpdateSkillUsageAction 更新用户对 Skill 输出的操作
-// PUT /api/v1/ai/skill-usage/:id/action
+// @Summary Update skill usage action
+// @Description Update user action (accepted/modified/aborted) or feedback for a skill usage log
+// @Tags Skill Usage
+// @Accept json
+// @Produce json
+// @Param id path string true "Usage log ID"
+// @Param request body object true "Action and/or feedback"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/skill-usage/{id}/action [put]
 func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 	logID := ctx.Param("id")
 	var req struct {
@@ -648,8 +671,18 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 }
 
 // UpdateSkillUsageByCapability 按 capability + 关联 ID 更新 user_action / feedback
-// PUT /api/v1/ai/skill-usage/by-capability
-// 用于 plan_summary 等无法在前端获取 usage_log_id 的场景
+// @Summary Update skill usage by capability
+// @Description Update user action or feedback by capability and associated ID (for scenarios where usage_log_id is not available in frontend)
+// @Tags Skill Usage
+// @Accept json
+// @Produce json
+// @Param request body object true "Capability, task_id, action, feedback"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/skill-usage/by-capability [put]
 func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 	var req struct {
 		Capability string `json:"capability" binding:"required"`
@@ -701,7 +734,13 @@ func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 }
 
 // GetPendingFeedback 获取当前用户待评分的 usage logs
-// GET /api/v1/ai/skill-usage/pending-feedback
+// @Summary Get pending feedback items
+// @Description Get skill usage logs that are pending user feedback (last 24 hours, max 10)
+// @Tags Skill Usage
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Pending feedback items"
+// @Security BearerAuth
+// @Router /api/v1/ai/skill-usage/pending-feedback [get]
 func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 	userID, _ := ctx.Get("user_id")
 	uid, _ := userID.(string)
@@ -742,7 +781,18 @@ func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 }
 
 // SubmitFeedback 提交评分（通过 usage_log_id）
-// PUT /api/v1/ai/skill-usage/:id/feedback
+// @Summary Submit feedback for skill usage
+// @Description Submit a rating (1-5) for a skill usage log
+// @Tags Skill Usage
+// @Accept json
+// @Produce json
+// @Param id path string true "Usage log ID"
+// @Param request body object true "Feedback rating (1-5)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/skill-usage/{id}/feedback [put]
 func (c *SkillController) SubmitFeedback(ctx *gin.Context) {
 	logID := ctx.Param("id")
 	var req struct {

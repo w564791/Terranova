@@ -25,15 +25,17 @@ func NewAuditHandler(service *service.AuditService) *AuditHandler {
 }
 
 // QueryPermissionHistory 查询权限变更历史
-// @Summary 查询权限变更历史
+// @Summary Query permission change history
 // @Tags IAM-Audit
 // @Produce json
-// @Param scope_type query string true "作用域类型"
-// @Param scope_id query int true "作用域ID"
-// @Param start_time query string false "开始时间"
-// @Param end_time query string false "结束时间"
-// @Param limit query int false "限制数量"
+// @Security BearerAuth
+// @Param scope_type query string true "Scope type"
+// @Param scope_id query int true "Scope ID"
+// @Param start_time query string false "Start time (RFC3339)"
+// @Param end_time query string false "End time (RFC3339)"
+// @Param limit query int false "Result limit"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/permission-history [get]
 func (h *AuditHandler) QueryPermissionHistory(c *gin.Context) {
 	scopeTypeStr := c.Query("scope_type")
@@ -85,17 +87,18 @@ func (h *AuditHandler) QueryPermissionHistory(c *gin.Context) {
 }
 
 // QueryAccessHistory 查询资源访问历史
-// @Summary 查询资源访问历史
+// @Summary Query resource access history
 // @Tags IAM-Audit
 // @Produce json
-// @Param user_id query int false "用户ID"
-// @Param resource_type query string false "资源类型"
-// @Param method query string false "请求方法"
-// @Param http_code_operator query string false "HTTP状态码运算符"
-// @Param http_code_value query int false "HTTP状态码值"
-// @Param start_time query string false "开始时间"
-// @Param end_time query string false "结束时间"
-// @Param limit query int false "限制数量"
+// @Security BearerAuth
+// @Param user_id query int false "User ID"
+// @Param resource_type query string false "Resource type"
+// @Param method query string false "HTTP method"
+// @Param http_code_operator query string false "HTTP status code operator"
+// @Param http_code_value query int false "HTTP status code value"
+// @Param start_time query string false "Start time (RFC3339)"
+// @Param end_time query string false "End time (RFC3339)"
+// @Param limit query int false "Result limit"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/access-history [get]
 func (h *AuditHandler) QueryAccessHistory(c *gin.Context) {
@@ -155,12 +158,13 @@ func (h *AuditHandler) QueryAccessHistory(c *gin.Context) {
 }
 
 // QueryDeniedAccess 查询被拒绝的访问记录
-// @Summary 查询被拒绝的访问记录
+// @Summary Query denied access records
 // @Tags IAM-Audit
 // @Produce json
-// @Param start_time query string false "开始时间"
-// @Param end_time query string false "结束时间"
-// @Param limit query int false "限制数量"
+// @Security BearerAuth
+// @Param start_time query string false "Start time (RFC3339)"
+// @Param end_time query string false "End time (RFC3339)"
+// @Param limit query int false "Result limit"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/denied-access [get]
 func (h *AuditHandler) QueryDeniedAccess(c *gin.Context) {
@@ -199,15 +203,17 @@ func (h *AuditHandler) QueryDeniedAccess(c *gin.Context) {
 }
 
 // QueryPermissionChangesByPrincipal 查询指定主体的权限变更历史
-// @Summary 查询指定主体的权限变更历史
+// @Summary Query permission changes by principal
 // @Tags IAM-Audit
 // @Produce json
-// @Param principal_type query string true "主体类型"
-// @Param principal_id query int true "主体ID"
-// @Param start_time query string false "开始时间"
-// @Param end_time query string false "结束时间"
-// @Param limit query int false "限制数量"
+// @Security BearerAuth
+// @Param principal_type query string true "Principal type"
+// @Param principal_id query int true "Principal ID"
+// @Param start_time query string false "Start time (RFC3339)"
+// @Param end_time query string false "End time (RFC3339)"
+// @Param limit query int false "Result limit"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/permission-changes-by-principal [get]
 func (h *AuditHandler) QueryPermissionChangesByPrincipal(c *gin.Context) {
 	principalTypeStr := c.Query("principal_type")
@@ -262,14 +268,16 @@ func (h *AuditHandler) QueryPermissionChangesByPrincipal(c *gin.Context) {
 }
 
 // QueryPermissionChangesByPerformer 查询指定操作人的权限变更历史
-// @Summary 查询指定操作人的权限变更历史
+// @Summary Query permission changes by performer
 // @Tags IAM-Audit
 // @Produce json
-// @Param performer_id query int true "操作人ID"
-// @Param start_time query string false "开始时间"
-// @Param end_time query string false "结束时间"
-// @Param limit query int false "限制数量"
+// @Security BearerAuth
+// @Param performer_id query int true "Performer ID"
+// @Param start_time query string false "Start time (RFC3339)"
+// @Param end_time query string false "End time (RFC3339)"
+// @Param limit query int false "Result limit"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/permission-changes-by-performer [get]
 func (h *AuditHandler) QueryPermissionChangesByPerformer(c *gin.Context) {
 	performerIDStr := c.Query("performer_id")

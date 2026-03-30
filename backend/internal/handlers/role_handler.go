@@ -70,13 +70,15 @@ type AddRolePolicyRequest struct {
 	ScopeType       string `json:"scope_type" binding:"required"`
 }
 
-// ListRoles 列出所有角色
-// @Summary 列出所有角色
-// @Description 获取所有IAM角色列表，包括系统预定义角色和自定义角色
-// @Tags IAM-Roles
+// ListRoles lists all roles
+// @Summary List all roles
+// @Description Get all IAM roles including system predefined and custom roles
+// @Tags IAM-Role
 // @Produce json
-// @Param is_active query bool false "是否只显示激活的角色"
+// @Security BearerAuth
+// @Param is_active query bool false "Filter by active status"
 // @Success 200 {object} ListRolesResponse
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles [get]
 func (h *RoleHandler) ListRoles(c *gin.Context) {
 	isActiveStr := c.Query("is_active")
@@ -116,13 +118,17 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 	})
 }
 
-// GetRole 获取角色详情
-// @Summary 获取角色详情
-// @Description 获取指定角色的详细信息，包括所有权限策略
-// @Tags IAM-Roles
+// GetRole gets role details
+// @Summary Get role details
+// @Description Get detailed information for a specific role including all permission policies
+// @Tags IAM-Role
 // @Produce json
-// @Param id path int true "角色ID"
+// @Security BearerAuth
+// @Param id path int true "Role ID"
 // @Success 200 {object} RoleDetailResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id} [get]
 func (h *RoleHandler) GetRole(c *gin.Context) {
 	idStr := c.Param("id")
@@ -183,14 +189,18 @@ func (h *RoleHandler) GetRole(c *gin.Context) {
 	})
 }
 
-// CreateRole 创建自定义角色
-// @Summary 创建自定义角色
-// @Description 创建一个新的自定义角色（系统角色不能通过API创建）
-// @Tags IAM-Roles
+// CreateRole creates a custom role
+// @Summary Create custom role
+// @Description Create a new custom role (system roles cannot be created via API)
+// @Tags IAM-Role
 // @Accept json
 // @Produce json
-// @Param request body CreateRoleRequest true "角色信息"
+// @Security BearerAuth
+// @Param request body CreateRoleRequest true "Role information"
 // @Success 201 {object} entity.Role
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles [post]
 func (h *RoleHandler) CreateRole(c *gin.Context) {
 	var req CreateRoleRequest
@@ -246,15 +256,19 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 	c.JSON(http.StatusCreated, role)
 }
 
-// UpdateRole 更新角色
-// @Summary 更新角色
-// @Description 更新角色信息（系统角色的某些字段不能修改）
-// @Tags IAM-Roles
+// UpdateRole updates a role
+// @Summary Update role
+// @Description Update role information (some fields of system roles cannot be modified)
+// @Tags IAM-Role
 // @Accept json
 // @Produce json
-// @Param id path int true "角色ID"
-// @Param request body UpdateRoleRequest true "角色信息"
+// @Security BearerAuth
+// @Param id path int true "Role ID"
+// @Param request body UpdateRoleRequest true "Role information"
 // @Success 200 {object} entity.Role
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id} [put]
 func (h *RoleHandler) UpdateRole(c *gin.Context) {
 	idStr := c.Param("id")
@@ -326,12 +340,18 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 	c.JSON(http.StatusOK, role)
 }
 
-// DeleteRole 删除角色
-// @Summary 删除角色
-// @Description 删除自定义角色（系统角色不能删除）
-// @Tags IAM-Roles
-// @Param id path int true "角色ID"
+// DeleteRole deletes a role
+// @Summary Delete role
+// @Description Delete a custom role (system roles cannot be deleted)
+// @Tags IAM-Role
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Role ID"
 // @Success 204
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id} [delete]
 func (h *RoleHandler) DeleteRole(c *gin.Context) {
 	idStr := c.Param("id")
@@ -387,15 +407,21 @@ func (h *RoleHandler) DeleteRole(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// AssignRole 为用户分配角色
-// @Summary 为用户分配角色
-// @Description 在指定作用域为用户分配角色
-// @Tags IAM-Roles
+// AssignRole assigns a role to a user
+// @Summary Assign role to user
+// @Description Assign a role to a user within a specific scope
+// @Tags IAM-User
 // @Accept json
 // @Produce json
-// @Param id path string true "用户ID（语义化ID）"
-// @Param request body AssignRoleRequest true "分配信息"
-// @Success 200 {object} entity.UserRole
+// @Security BearerAuth
+// @Param id path string true "User ID (semantic ID)"
+// @Param request body AssignRoleRequest true "Assignment information"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id}/roles [post]
 func (h *RoleHandler) AssignRole(c *gin.Context) {
 	userID := c.Param("id")
@@ -535,13 +561,18 @@ func (h *RoleHandler) AssignRole(c *gin.Context) {
 	})
 }
 
-// RevokeRole 撤销用户角色
-// @Summary 撤销用户角色
-// @Description 撤销用户在指定作用域的角色分配
-// @Tags IAM-Roles
-// @Param id path string true "用户ID（语义化ID）"
-// @Param assignment_id path int true "角色分配ID"
+// RevokeRole revokes a user's role
+// @Summary Revoke user role
+// @Description Revoke a user's role assignment in a specific scope
+// @Tags IAM-User
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID (semantic ID)"
+// @Param assignment_id path int true "Role assignment ID"
 // @Success 204
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id}/roles/{assignment_id} [delete]
 func (h *RoleHandler) RevokeRole(c *gin.Context) {
 	userID := c.Param("id")
@@ -590,13 +621,15 @@ func (h *RoleHandler) RevokeRole(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// ListUserRoles 列出用户的所有角色
-// @Summary 列出用户的所有角色
-// @Description 获取用户在所有作用域的角色分配
-// @Tags IAM-Roles
+// ListUserRoles lists all roles for a user
+// @Summary List user roles
+// @Description Get all role assignments for a user across all scopes
+// @Tags IAM-User
 // @Produce json
-// @Param id path string true "用户ID（语义化ID）"
+// @Security BearerAuth
+// @Param id path string true "User ID (semantic ID)"
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/users/{id}/roles [get]
 func (h *RoleHandler) ListUserRoles(c *gin.Context) {
 	userID := c.Param("id")
@@ -640,15 +673,19 @@ func (h *RoleHandler) ListUserRoles(c *gin.Context) {
 	})
 }
 
-// AddRolePolicy 为角色添加权限策略
-// @Summary 为角色添加权限策略
-// @Description 为指定角色添加一个权限策略
-// @Tags IAM-Roles
+// AddRolePolicy adds a permission policy to a role
+// @Summary Add role policy
+// @Description Add a permission policy to a specific role
+// @Tags IAM-Role
 // @Accept json
 // @Produce json
-// @Param id path int true "角色ID"
-// @Param request body AddRolePolicyRequest true "策略信息"
-// @Success 200 {object} entity.RolePolicy
+// @Security BearerAuth
+// @Param id path int true "Role ID"
+// @Param request body AddRolePolicyRequest true "Policy information"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id}/policies [post]
 func (h *RoleHandler) AddRolePolicy(c *gin.Context) {
 	roleIDStr := c.Param("id")
@@ -767,13 +804,18 @@ func (h *RoleHandler) AddRolePolicy(c *gin.Context) {
 	})
 }
 
-// RemoveRolePolicy 移除角色的权限策略
-// @Summary 移除角色的权限策略
-// @Description 从指定角色移除一个权限策略
-// @Tags IAM-Roles
-// @Param id path int true "角色ID"
-// @Param policy_id path int true "策略ID"
+// RemoveRolePolicy removes a permission policy from a role
+// @Summary Remove role policy
+// @Description Remove a permission policy from a specific role
+// @Tags IAM-Role
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Role ID"
+// @Param policy_id path int true "Policy ID"
 // @Success 204
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id}/policies/{policy_id} [delete]
 func (h *RoleHandler) RemoveRolePolicy(c *gin.Context) {
 	roleIDStr := c.Param("id")
@@ -831,15 +873,21 @@ func (h *RoleHandler) RemoveRolePolicy(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// AssignTeamRole 为团队分配角色
-// @Summary 为团队分配角色
-// @Description 在指定作用域为团队分配角色
-// @Tags IAM-Roles
+// AssignTeamRole assigns a role to a team
+// @Summary Assign role to team
+// @Description Assign a role to a team within a specific scope
+// @Tags IAM-Team
 // @Accept json
 // @Produce json
-// @Param id path int true "团队ID"
-// @Param request body AssignRoleRequest true "分配信息"
+// @Security BearerAuth
+// @Param id path string true "Team ID"
+// @Param request body AssignRoleRequest true "Assignment information"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/roles [post]
 func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 	teamID := c.Param("id")
@@ -977,13 +1025,15 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 	})
 }
 
-// ListTeamRoles 列出团队的所有角色
-// @Summary 列出团队的所有角色
-// @Description 获取团队在所有作用域的角色分配
-// @Tags IAM-Roles
+// ListTeamRoles lists all roles for a team
+// @Summary List team roles
+// @Description Get all role assignments for a team across all scopes
+// @Tags IAM-Team
 // @Produce json
-// @Param id path int true "团队ID"
+// @Security BearerAuth
+// @Param id path string true "Team ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/roles [get]
 func (h *RoleHandler) ListTeamRoles(c *gin.Context) {
 	teamID := c.Param("id")
@@ -1016,13 +1066,18 @@ func (h *RoleHandler) ListTeamRoles(c *gin.Context) {
 	})
 }
 
-// RevokeTeamRole 撤销团队角色
-// @Summary 撤销团队角色
-// @Description 撤销团队在指定作用域的角色分配
-// @Tags IAM-Roles
-// @Param id path int true "团队ID"
-// @Param assignment_id path int true "角色分配ID"
+// RevokeTeamRole revokes a team's role
+// @Summary Revoke team role
+// @Description Revoke a team's role assignment in a specific scope
+// @Tags IAM-Team
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Team ID"
+// @Param assignment_id path int true "Role assignment ID"
 // @Success 204
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/teams/{id}/roles/{assignment_id} [delete]
 func (h *RoleHandler) RevokeTeamRole(c *gin.Context) {
 	teamID := c.Param("id")

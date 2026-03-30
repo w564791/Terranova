@@ -23,14 +23,17 @@ func NewModuleVersionController(db *gorm.DB) *ModuleVersionController {
 
 // ListVersions 获取模块的所有版本
 // @Summary 获取模块版本列表
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
 // @Success 200 {object} services.ModuleVersionListResponse
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions [get]
+// @Security BearerAuth
 func (c *ModuleVersionController) ListVersions(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -52,13 +55,17 @@ func (c *ModuleVersionController) ListVersions(ctx *gin.Context) {
 
 // GetVersion 获取版本详情
 // @Summary 获取模块版本详情
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param version_id path string true "Version ID"
 // @Success 200 {object} models.ModuleVersion
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/{version_id} [get]
+// @Security BearerAuth
 func (c *ModuleVersionController) GetVersion(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -87,12 +94,16 @@ func (c *ModuleVersionController) GetVersion(ctx *gin.Context) {
 
 // GetDefaultVersion 获取默认版本
 // @Summary 获取模块的默认版本
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Success 200 {object} models.ModuleVersion
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/default-version [get]
+// @Security BearerAuth
 func (c *ModuleVersionController) GetDefaultVersion(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -115,13 +126,16 @@ func (c *ModuleVersionController) GetDefaultVersion(ctx *gin.Context) {
 
 // CreateVersion 创建新版本
 // @Summary 创建模块新版本
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param body body services.CreateModuleVersionRequest true "创建请求"
 // @Success 201 {object} models.ModuleVersion
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions [post]
+// @Security BearerAuth
 func (c *ModuleVersionController) CreateVersion(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -147,14 +161,18 @@ func (c *ModuleVersionController) CreateVersion(ctx *gin.Context) {
 
 // UpdateVersion 更新版本信息
 // @Summary 更新模块版本信息
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param version_id path string true "Version ID"
 // @Param body body services.UpdateModuleVersionRequest true "更新请求"
 // @Success 200 {object} models.ModuleVersion
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/{version_id} [put]
+// @Security BearerAuth
 func (c *ModuleVersionController) UpdateVersion(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -189,13 +207,16 @@ func (c *ModuleVersionController) UpdateVersion(ctx *gin.Context) {
 
 // DeleteVersion 删除版本
 // @Summary 删除模块版本
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param version_id path string true "Version ID"
 // @Success 204
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/{version_id} [delete]
+// @Security BearerAuth
 func (c *ModuleVersionController) DeleteVersion(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -223,13 +244,15 @@ func (c *ModuleVersionController) DeleteVersion(ctx *gin.Context) {
 
 // SetDefaultVersion 设置默认版本
 // @Summary 设置模块的默认版本
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param body body services.SetDefaultVersionRequest true "设置请求"
-// @Success 200 {object} gin.H
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/default-version [put]
+// @Security BearerAuth
 func (c *ModuleVersionController) SetDefaultVersion(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -253,14 +276,16 @@ func (c *ModuleVersionController) SetDefaultVersion(ctx *gin.Context) {
 
 // InheritDemos 继承 Demos
 // @Summary 从其他版本继承 Demos
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param version_id path string true "Target Version ID"
 // @Param body body services.InheritDemosRequest true "继承请求"
-// @Success 200 {object} gin.H
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/{version_id}/inherit-demos [post]
+// @Security BearerAuth
 func (c *ModuleVersionController) InheritDemos(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -295,13 +320,16 @@ func (c *ModuleVersionController) InheritDemos(ctx *gin.Context) {
 
 // GetVersionSchemas 获取版本的所有 Schema
 // @Summary 获取版本的所有 Schema
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param version_id path string true "Version ID"
 // @Success 200 {array} models.Schema
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/{version_id}/schemas [get]
+// @Security BearerAuth
 func (c *ModuleVersionController) GetVersionSchemas(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -326,13 +354,16 @@ func (c *ModuleVersionController) GetVersionSchemas(ctx *gin.Context) {
 
 // GetVersionDemos 获取版本的所有 Demo
 // @Summary 获取版本的所有 Demo
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param version_id path string true "Version ID"
 // @Success 200 {array} models.ModuleDemo
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/{version_id}/demos [get]
+// @Security BearerAuth
 func (c *ModuleVersionController) GetVersionDemos(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -357,14 +388,16 @@ func (c *ModuleVersionController) GetVersionDemos(ctx *gin.Context) {
 
 // CompareVersions 比较两个版本的 Schema 差异
 // @Summary 比较两个版本的 Schema 差异
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
 // @Param id path int true "Module ID"
 // @Param from query string true "源版本 ID"
 // @Param to query string true "目标版本 ID"
 // @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
 // @Router /api/v1/modules/{id}/versions/compare [get]
+// @Security BearerAuth
 func (c *ModuleVersionController) CompareVersions(ctx *gin.Context) {
 	moduleID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -391,11 +424,13 @@ func (c *ModuleVersionController) CompareVersions(ctx *gin.Context) {
 
 // MigrateExistingModules 迁移现有模块数据
 // @Summary 迁移现有模块数据到多版本结构（管理员操作）
-// @Tags ModuleVersion
+// @Tags Module Version
 // @Accept json
 // @Produce json
-// @Success 200 {object} gin.H
+// @Success 200 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Router /api/v1/modules/migrate-versions [post]
+// @Security BearerAuth
 func (c *ModuleVersionController) MigrateExistingModules(ctx *gin.Context) {
 	if err := c.service.MigrateExistingModules(); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

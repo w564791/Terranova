@@ -34,14 +34,19 @@ type CreateOrganizationRequest struct {
 	Settings    map[string]interface{} `json:"settings"`
 }
 
-// CreateOrganization 创建组织
-// @Summary 创建组织
-// @Tags Organization
+// CreateOrganization creates an organization
+// @Summary Create organization
+// @Description Create a new organization
+// @Tags IAM-Organization
 // @Accept json
 // @Produce json
-// @Param request body CreateOrganizationRequest true "创建组织请求"
+// @Security BearerAuth
+// @Param request body CreateOrganizationRequest true "Create organization request"
 // @Success 200 {object} entity.Organization
-// @Router /api/v1/organizations [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/organizations [post]
 func (h *OrganizationHandler) CreateOrganization(c *gin.Context) {
 	var req CreateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,12 +79,17 @@ func (h *OrganizationHandler) CreateOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, org)
 }
 
-// GetOrganization 获取组织详情
-// @Summary 获取组织详情
-// @Tags Organization
-// @Param id path int true "组织ID"
+// GetOrganization gets organization details
+// @Summary Get organization details
+// @Description Get detailed information for a specific organization
+// @Tags IAM-Organization
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Organization ID"
 // @Success 200 {object} entity.Organization
-// @Router /api/v1/organizations/{id} [get]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/iam/organizations/{id} [get]
 func (h *OrganizationHandler) GetOrganization(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -97,12 +107,16 @@ func (h *OrganizationHandler) GetOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, org)
 }
 
-// ListOrganizations 列出所有组织
-// @Summary 列出所有组织
-// @Tags Organization
-// @Param is_active query boolean false "是否启用"
-// @Success 200 {array} entity.Organization
-// @Router /api/v1/organizations [get]
+// ListOrganizations lists all organizations
+// @Summary List organizations
+// @Description List all organizations with optional active status filter
+// @Tags IAM-Organization
+// @Produce json
+// @Security BearerAuth
+// @Param is_active query boolean false "Filter by active status"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/organizations [get]
 func (h *OrganizationHandler) ListOrganizations(c *gin.Context) {
 	var isActive *bool
 	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
@@ -130,13 +144,19 @@ type UpdateOrganizationRequest struct {
 	Settings    map[string]interface{} `json:"settings"`
 }
 
-// UpdateOrganization 更新组织
-// @Summary 更新组织
-// @Tags Organization
-// @Param id path int true "组织ID"
-// @Param request body UpdateOrganizationRequest true "更新组织请求"
+// UpdateOrganization updates an organization
+// @Summary Update organization
+// @Description Update organization information
+// @Tags IAM-Organization
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Organization ID"
+// @Param request body UpdateOrganizationRequest true "Update organization request"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/organizations/{id} [put]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/organizations/{id} [put]
 func (h *OrganizationHandler) UpdateOrganization(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -168,12 +188,17 @@ func (h *OrganizationHandler) UpdateOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Organization updated successfully"})
 }
 
-// DeleteOrganization 删除组织
-// @Summary 删除组织
-// @Tags Organization
-// @Param id path int true "组织ID"
+// DeleteOrganization deletes an organization
+// @Summary Delete organization
+// @Description Delete an organization
+// @Tags IAM-Organization
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Organization ID"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/organizations/{id} [delete]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/organizations/{id} [delete]
 func (h *OrganizationHandler) DeleteOrganization(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -199,14 +224,19 @@ type CreateProjectRequest struct {
 	Settings    map[string]interface{} `json:"settings"`
 }
 
-// CreateProject 创建项目
-// @Summary 创建项目
-// @Tags Project
+// CreateProject creates a project
+// @Summary Create project
+// @Description Create a new project within an organization
+// @Tags IAM-Project
 // @Accept json
 // @Produce json
-// @Param request body CreateProjectRequest true "创建项目请求"
+// @Security BearerAuth
+// @Param request body CreateProjectRequest true "Create project request"
 // @Success 200 {object} entity.Project
-// @Router /api/v1/projects [post]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/projects [post]
 func (h *OrganizationHandler) CreateProject(c *gin.Context) {
 	var req CreateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -240,12 +270,17 @@ func (h *OrganizationHandler) CreateProject(c *gin.Context) {
 	c.JSON(http.StatusOK, project)
 }
 
-// GetProject 获取项目详情
-// @Summary 获取项目详情
-// @Tags Project
-// @Param id path int true "项目ID"
+// GetProject gets project details
+// @Summary Get project details
+// @Description Get detailed information for a specific project
+// @Tags IAM-Project
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Project ID"
 // @Success 200 {object} entity.Project
-// @Router /api/v1/projects/{id} [get]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/iam/projects/{id} [get]
 func (h *OrganizationHandler) GetProject(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -263,12 +298,17 @@ func (h *OrganizationHandler) GetProject(c *gin.Context) {
 	c.JSON(http.StatusOK, project)
 }
 
-// ListProjects 列出组织的所有项目
-// @Summary 列出组织的所有项目
-// @Tags Project
-// @Param org_id query int true "组织ID"
-// @Success 200 {array} entity.Project
-// @Router /api/v1/projects [get]
+// ListProjects lists all projects for an organization
+// @Summary List projects
+// @Description List all projects belonging to a specific organization
+// @Tags IAM-Project
+// @Produce json
+// @Security BearerAuth
+// @Param org_id query int true "Organization ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/projects [get]
 func (h *OrganizationHandler) ListProjects(c *gin.Context) {
 	orgIDStr := c.Query("org_id")
 	if orgIDStr == "" {
@@ -302,13 +342,19 @@ type UpdateProjectRequest struct {
 	Settings    map[string]interface{} `json:"settings"`
 }
 
-// UpdateProject 更新项目
-// @Summary 更新项目
-// @Tags Project
-// @Param id path int true "项目ID"
-// @Param request body UpdateProjectRequest true "更新项目请求"
+// UpdateProject updates a project
+// @Summary Update project
+// @Description Update project information
+// @Tags IAM-Project
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Project ID"
+// @Param request body UpdateProjectRequest true "Update project request"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/projects/{id} [put]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/projects/{id} [put]
 func (h *OrganizationHandler) UpdateProject(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -340,12 +386,17 @@ func (h *OrganizationHandler) UpdateProject(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Project updated successfully"})
 }
 
-// DeleteProject 删除项目
-// @Summary 删除项目
-// @Tags Project
-// @Param id path int true "项目ID"
+// DeleteProject deletes a project
+// @Summary Delete project
+// @Description Delete a project
+// @Tags IAM-Project
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Project ID"
 // @Success 200 {object} map[string]string
-// @Router /api/v1/projects/{id} [delete]
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/iam/projects/{id} [delete]
 func (h *OrganizationHandler) DeleteProject(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

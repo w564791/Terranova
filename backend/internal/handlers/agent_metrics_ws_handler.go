@@ -34,7 +34,9 @@ func NewAgentMetricsWSHandler(hub *websocket.AgentMetricsHub) *AgentMetricsWSHan
 // @Description WebSocket endpoint for real-time agent metrics updates
 // @Tags WebSocket
 // @Param pool_id path string true "Pool ID"
-// @Router /ws/agent-pools/{pool_id}/metrics [get]
+// @Success 101 {string} string "Switching Protocols"
+// @Router /api/v1/ws/agent-pools/{pool_id}/metrics [get]
+// @Security BearerAuth
 func (h *AgentMetricsWSHandler) HandleAgentMetricsWS(c *gin.Context) {
 	poolID := c.Param("pool_id")
 	if poolID == "" {

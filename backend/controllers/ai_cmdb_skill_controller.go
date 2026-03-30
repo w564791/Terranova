@@ -49,15 +49,17 @@ type GenerateConfigWithCMDBSkillRequest struct {
 }
 
 // GenerateConfigWithCMDBSkill 使用 Skill 模式生成配置
-// @Summary 使用 Skill 模式生成配置
-// @Description 使用 Skill 组合模式 + CMDB 查询生成 Terraform 配置
-// @Tags AI
+// @Summary Generate config with CMDB + Skill mode
+// @Description Generate Terraform configuration using Skill composition mode + CMDB query
+// @Tags AI Form
 // @Accept json
 // @Produce json
-// @Param request body GenerateConfigWithCMDBSkillRequest true "请求参数"
+// @Param request body GenerateConfigWithCMDBSkillRequest true "Request parameters"
 // @Success 200 {object} services.GenerateConfigWithCMDBResponse
 // @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/ai/form/generate-with-cmdb-skill [post]
 func (c *AICMDBSkillController) GenerateConfigWithCMDBSkill(ctx *gin.Context) {
 	var req GenerateConfigWithCMDBSkillRequest
@@ -139,13 +141,14 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkill(ctx *gin.Context) {
 }
 
 // GenerateConfigWithCMDBSkillSSE 使用 SSE 实时推送进度的配置生成
-// @Summary 使用 SSE 实时推送进度的配置生成
-// @Description 使用 Skill 组合模式 + CMDB 查询生成 Terraform 配置，通过 SSE 实时推送进度
-// @Tags AI
+// @Summary Generate config with CMDB + Skill mode via SSE
+// @Description Generate Terraform configuration using Skill composition mode + CMDB query, with real-time SSE progress events
+// @Tags AI Form
 // @Accept json
 // @Produce text/event-stream
-// @Param request body GenerateConfigWithCMDBSkillRequest true "请求参数"
+// @Param request body GenerateConfigWithCMDBSkillRequest true "Request parameters"
 // @Success 200 {object} services.ProgressEvent
+// @Security BearerAuth
 // @Router /api/v1/ai/form/generate-with-cmdb-skill-sse [post]
 func (c *AICMDBSkillController) GenerateConfigWithCMDBSkillSSE(ctx *gin.Context) {
 	// 设置 SSE 响应头
@@ -309,15 +312,16 @@ type PreviewAssembledPromptRequest struct {
 }
 
 // PreviewAssembledPrompt 预览组装后的 Prompt
-// @Summary 预览组装后的 Prompt
-// @Description 预览 Skill 组装后的完整 Prompt（用于调试）
-// @Tags AI
+// @Summary Preview assembled prompt
+// @Description Preview the full prompt assembled from Skills (for debugging)
+// @Tags AI Form
 // @Accept json
 // @Produce json
-// @Param request body PreviewAssembledPromptRequest true "请求参数"
+// @Param request body PreviewAssembledPromptRequest true "Request parameters"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /api/v1/ai/skill/preview-prompt [post]
 func (c *AICMDBSkillController) PreviewAssembledPrompt(ctx *gin.Context) {
 	var req PreviewAssembledPromptRequest

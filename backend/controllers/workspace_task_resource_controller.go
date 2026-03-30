@@ -10,18 +10,18 @@ import (
 )
 
 // GetTaskResourceChangesWithDB 获取任务的资源变更列表（带DB参数）
-// @Summary 获取任务资源变更列表
-// @Description 获取任务的资源变更详情和摘要
+// @Summary Get task resource changes
+// @Description Get task resource change details and summary
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Success 200 {object} map[string]interface{} "成功返回资源变更列表"
-// @Failure 400 {object} map[string]interface{} "无效的参数"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Resource changes list"
+// @Failure 400 {object} map[string]interface{} "Invalid parameters"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/resource-changes [get]
-// @Security Bearer
+// @Security BearerAuth
 func GetTaskResourceChangesWithDB(c *gin.Context, db *gorm.DB) {
 
 	workspaceIDParam := c.Param("id")
@@ -93,21 +93,21 @@ func GetTaskResourceChangesWithDB(c *gin.Context, db *gorm.DB) {
 }
 
 // UpdateResourceApplyStatusWithDB 更新资源的Apply状态（带DB参数）
-// @Summary 更新资源Apply状态
-// @Description 更新资源的Apply执行状态
+// @Summary Update resource apply status
+// @Description Update the apply execution status of a resource change
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
-// @Param id path string true "工作空间ID"
-// @Param task_id path int true "任务ID"
-// @Param resource_id path int true "资源ID"
-// @Param request body object true "状态更新信息"
-// @Success 200 {object} models.WorkspaceTaskResourceChange "更新成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 404 {object} map[string]interface{} "资源不存在"
-// @Failure 500 {object} map[string]interface{} "更新失败"
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Param resource_id path int true "Resource change ID"
+// @Param request body object true "Status update info"
+// @Success 200 {object} models.WorkspaceTaskResourceChange "Update successful"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 404 {object} map[string]interface{} "Resource not found"
+// @Failure 500 {object} map[string]interface{} "Update failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/resource-changes/{resource_id} [patch]
-// @Security Bearer
+// @Security BearerAuth
 func UpdateResourceApplyStatusWithDB(c *gin.Context, db *gorm.DB) {
 
 	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
