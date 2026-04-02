@@ -4,6 +4,13 @@ Extended Thinking 支持 + Qwen/DashScope 接入 + CMDB 观测面板 + Summary �
 
 ### Features
 
+#### Bedrock Inference Profile 动态发现
+
+- **新增** `GET /ai-config/inference-profiles` API，使用 AWS `ListInferenceProfiles` SDK 动态获取可用 inference profiles
+- **改进** Bedrock 模型选择 UI：新增「基础模型」/「Inference Profile」切换，支持选择 global/apac/us/eu 等所有类型的 inference profile
+- **移除** 硬编码的区域前缀拼接逻辑（`us.`/`eu.`/`apac.`），model_id 现在存储用户选择的完整 ID
+- **修复** ap-southeast-1 区域无法使用 global inference profile 的问题
+
 #### CMDB 观测面板
 
 - **Dashboard 新增 "CMDB 概览" Tab** — 在首页 Dashboard 增加第三个 Tab，集中展示 CMDB 系统运行状态 (`Dashboard.tsx`, `CMDBOverviewDashboard.tsx`)
