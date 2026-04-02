@@ -37,7 +37,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 **工具入参说明：**
 
 - `query_module_resources`: workspace_id, module_path
-- `query_cmdb_dependencies`: resource_id, dependency_field（全局搜索，自动含外部 CMDB）
+- `query_cmdb_dependencies`: resource_id, dependency_field（全局搜索，自动含外部 CMDB）。变更子资源（如 security_group_rule）时，应查询其父资源（如对应的 security_group）的依赖关系
   - 安全组: `security_group_ids` 或 `vpc_security_group_ids`
   - VPC: `vpc_id`
   - 子网: `subnet_id` 或 `subnet_ids`
@@ -51,8 +51,11 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 ## 三、工具调用规则（强制）
 
 ```yaml
+action 映射规则:
+  - replace（delete + create）：工具调用和 blast_radius 按 update 规则执行；risk_factors 中不标记 resource_deletion（因为资源会被重建）
+
 mandatory_calls:
-  - condition: action in ["update", "delete"]
+  - condition: action in ["update", "delete", "replace"]
     tool: query_cmdb_dependencies
     rule: MUST_CALL
     description: 所有 update/delete 资源必须查询依赖关系，禁止跳过
@@ -78,13 +81,12 @@ mandatory_calls:
       以获取 resource_summary，用于：
       1. 在 affected_resources.impact 中写出具体影响（如"S3 VPC Endpoint 不可达将导致应用无法访问 S3"）
       2. 评估实际业务影响严重程度
-      3. 禁止对所有依赖方使用相同的模板化 impact 描述
 
 禁止：
   - 禁止编造依赖关系
   - 禁止在未调用工具的情况下填写 direct_dependencies 非零值
   - 工具未返回依赖时，affected_resources 为空数组，不得填写任何数据
-  - 禁止对多个 affected_resources 使用完全相同的 impact 描述，每个资源的 impact 必须基于其实际用途
+  - 不同类型的 affected_resources 应有不同的 impact 描述；同类型资源（如多个 VPC Endpoint）若影响相同，可使用相同描述
 ```
 
 -----
@@ -113,7 +115,7 @@ mandatory_calls:
 |`configuration_drift`      |配置偏移（与预期/基线不符）        |
 |`high_blast_radius`        |变更影响面大                |
 |`sensitive_resource_change`|涉及敏感资源（生产环境、核心基础设施）   |
-|`service_disruption`       |变更可能导致依赖方服务中断（如端口变更导致 VPC Endpoint 不可达、安全组规则删除导致连接丢失）。判定依据：通过第二轮查询获取的依赖方 resource_summary 和 tags，确认依赖方为生产环境（Environment=production）的运行中服务 |
+|`service_disruption`       |变更可能导致依赖方服务中断（如端口变更导致 VPC Endpoint 不可达、安全组规则删除导致连接丢失）。判定依据：通过第二轮查询获取的依赖方 resource_summary 和 tags，确认依赖方为生产环境（Environment=production）且处于活跃状态的资源（如 running、available、Active，已停止或已删除的不计入） |
 
 -----
 
@@ -148,7 +150,7 @@ blast_radius_level 判定（按优先级从高到低匹配）:
 
   high:
     - direct_dependencies >= 3
-    - OR resource_type in [vpc, security_group, subnet, iam_role, nat_gateway, internet_gateway]
+    - OR resource_type in [vpc, security_group, security_group_rule, subnet, iam_role, iam_policy, nat_gateway, internet_gateway]
 
   medium:
     - direct_dependencies in [1, 2]
@@ -223,7 +225,8 @@ medium:
 
 ```yaml
 requires_human_confirmation_rules:
-  - risk_level in ["high", "critical"] AND confidence == "low"
+  - risk_level == "critical"
+  - risk_level == "high" AND confidence == "low"
   - uncertainty.level == "high"
   - risk_factors 包含 external_exposure_change
   - risk_factors 包含 resource_deletion AND direct_dependencies > 0
@@ -293,7 +296,7 @@ affected_resources_schema:
 
 ```
 1.  验证 stage == "plan"，否则返回 INVALID_STAGE_CONTEXT
-2.  解析变更资源列表（resource、action、type）
+2.  解析变更资源列表（resource、action、type）。若包含第十二节所列资源类型，步骤 3 中必须包含 query_cmdb_dependencies 调用
 3.  第一轮工具调用：一次性发起所有变更资源的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止对同类查询分多轮逐个调用
 4.  第二轮工具调用（依赖方深入查询）：如果 query_cmdb_dependencies 返回依赖方 >= 3 个，必须对依赖方抽样调用 query_resource_attributes（至少 3 个、最多 5 个），获取 resource_summary 用于具体影响描述。此步骤不可跳过。
 5.  根据查询结果记录 direct_dependencies（禁止估算）
@@ -306,7 +309,6 @@ affected_resources_schema:
 7.  按第七节聚合规则生成全局 risk_evaluation
 8.  按第八节规则判断 requires_human_confirmation
 9.  若 true → 按第九节规则生成 decision_hints（title、risk_highlights、recommended_actions）
-10. 如果包任何在`十二、 必须查询CMDB的资源列表`中的资源变更,必须查询CMDB
 ```
 
 ### Apply 阶段
@@ -435,7 +437,7 @@ affected_resources_schema:
 ## 十四、全局输出规则（严格执行）
 
 ```yaml
-- 只输出 JSON，禁止输出任何解释文字和 markdown 代码块标记
+- 最终响应只输出 JSON，禁止输出任何解释文字和 markdown 代码块标记（工具调用轮次正常发起 tool call）
 - 禁止编造依赖数据，所有 direct_dependencies 必须来自工具查询
 - 所有枚举字段必须使用规定值，禁止自造值
 - decision_hints 的 title、risk_highlights、recommended_actions 必须按第九节规则生成，必须包含具体资源信息
