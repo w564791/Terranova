@@ -7,9 +7,11 @@ import {
   deleteAIConfig,
   getAvailableRegions,
   getAvailableModels,
+  getAvailableInferenceProfiles,
   listOpenAIModels,
   type AIConfig as AIConfigType,
   type BedrockModel,
+  type InferenceProfile,
   type OpenAIModel,
   CAPABILITIES,
   CAPABILITY_LABELS,
@@ -50,6 +52,10 @@ const AIConfigForm = () => {
   // OpenAI 兼容 API 模型列表
   const [openaiModels, setOpenaiModels] = useState<OpenAIModel[]>([]);
   const [loadingOpenaiModels, setLoadingOpenaiModels] = useState(false);
+  // Inference Profile 相关状态
+  const [inferenceProfiles, setInferenceProfiles] = useState<InferenceProfile[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [modelSource, setModelSource] = useState<'foundation' | 'inference_profile'>('foundation');
 
   // Skill 相关状态
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
@@ -133,6 +139,7 @@ const AIConfigForm = () => {
   useEffect(() => {
     if (formData.aws_region) {
       loadModels(formData.aws_region);
+      loadInferenceProfiles(formData.aws_region);
     }
   }, [formData.aws_region]);
 
@@ -196,6 +203,12 @@ const AIConfigForm = () => {
           thinking_budget_tokens: configData.thinking_budget_tokens || 10000,
         });
 
+        if (configData.use_inference_profile) {
+          setModelSource('inference_profile');
+        } else {
+          setModelSource('foundation');
+        }
+
         // 加载已保存的 skill_composition
         if (configData.skill_composition && typeof configData.skill_composition === 'object') {
           const sc = configData.skill_composition as unknown as Record<string, unknown>;
@@ -210,7 +223,10 @@ const AIConfigForm = () => {
         }
 
         if (configData.aws_region) {
-          await loadModels(configData.aws_region);
+          await Promise.all([
+            loadModels(configData.aws_region),
+            loadInferenceProfiles(configData.aws_region),
+          ]);
         }
       }
     } catch (error: any) {
@@ -236,6 +252,21 @@ const AIConfigForm = () => {
       });
     } finally {
       setLoadingModels(false);
+    }
+  };
+
+  const loadInferenceProfiles = async (region: string) => {
+    try {
+      setLoadingProfiles(true);
+      const profiles = await getAvailableInferenceProfiles(region);
+      setInferenceProfiles(profiles);
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.message || '加载 Inference Profiles 失败',
+      });
+    } finally {
+      setLoadingProfiles(false);
     }
   };
 
@@ -395,8 +426,10 @@ const AIConfigForm = () => {
     setFormData({
       ...formData,
       aws_region: region,
-      model_id: '', // 重置模型选择
+      model_id: '',
+      use_inference_profile: false,
     });
+    setModelSource('foundation');
   };
 
   const handleDelete = async () => {
@@ -444,6 +477,39 @@ const AIConfigForm = () => {
         {groupedModels[provider].map((model) => (
           <option key={model.id} value={model.id}>
             {model.name} ({model.id})
+          </option>
+        ))}
+      </optgroup>
+    ));
+  };
+
+  const renderInferenceProfileOptions = () => {
+    const grouped: Record<string, InferenceProfile[]> = {};
+    inferenceProfiles.forEach((profile) => {
+      const prefix = profile.id.split('.')[0] || 'other';
+      const groupLabel = prefix === 'global' ? 'Global (全局路由)'
+        : prefix === 'us' ? 'US (美国区域)'
+        : prefix === 'eu' ? 'EU (欧洲区域)'
+        : prefix === 'apac' ? 'APAC (亚太区域)'
+        : prefix;
+      if (!grouped[groupLabel]) {
+        grouped[groupLabel] = [];
+      }
+      grouped[groupLabel].push(profile);
+    });
+
+    const sortOrder = ['Global (全局路由)', 'APAC (亚太区域)', 'US (美国区域)', 'EU (欧洲区域)'];
+    const sortedKeys = Object.keys(grouped).sort((a, b) => {
+      const ai = sortOrder.indexOf(a);
+      const bi = sortOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    return sortedKeys.map((group) => (
+      <optgroup key={group} label={group}>
+        {grouped[group].map((profile) => (
+          <option key={profile.id} value={profile.id}>
+            {profile.name} ({profile.id})
           </option>
         ))}
       </optgroup>
@@ -515,24 +581,84 @@ const AIConfigForm = () => {
                 </select>
               </div>
 
-              <div className={styles.formGroup}>
-                <label className={styles.label}>模型</label>
-                <select
-                  className={styles.select}
-                  value={formData.model_id}
-                  onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
-                  disabled={!formData.aws_region || loadingModels}
-                  required
-                >
-                  <option value="">
-                    {loadingModels ? '加载中...' : '请选择模型'}
-                  </option>
-                  {renderModelOptions()}
-                </select>
-                <div className={styles.hint}>
-                  推荐：Claude 3.5 Sonnet（稳定可靠）。部分新模型可能需要额外配置。
+              {formData.aws_region && (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>模型来源</label>
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="model_source"
+                        checked={modelSource === 'foundation'}
+                        onChange={() => {
+                          setModelSource('foundation');
+                          setFormData({ ...formData, model_id: '', use_inference_profile: false });
+                        }}
+                      />
+                      <span>基础模型</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="model_source"
+                        checked={modelSource === 'inference_profile'}
+                        onChange={() => {
+                          setModelSource('inference_profile');
+                          setFormData({ ...formData, model_id: '', use_inference_profile: true });
+                        }}
+                      />
+                      <span>Inference Profile (Cross-Region)</span>
+                    </label>
+                  </div>
+                  <div className={styles.hint}>
+                    {modelSource === 'foundation'
+                      ? '直接调用指定区域的基础模型'
+                      : '使用 Inference Profile 跨区域路由（支持 global/regional 级别），推荐用于新模型'}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {modelSource === 'foundation' && (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>模型</label>
+                  <select
+                    className={styles.select}
+                    value={formData.model_id}
+                    onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+                    disabled={!formData.aws_region || loadingModels}
+                    required
+                  >
+                    <option value="">
+                      {loadingModels ? '加载中...' : '请选择模型'}
+                    </option>
+                    {renderModelOptions()}
+                  </select>
+                  <div className={styles.hint}>
+                    推荐：Claude 3.5 Sonnet（稳定可靠）。部分新模型可能需要额外配置。
+                  </div>
+                </div>
+              )}
+
+              {modelSource === 'inference_profile' && (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Inference Profile</label>
+                  <select
+                    className={styles.select}
+                    value={formData.model_id}
+                    onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+                    disabled={!formData.aws_region || loadingProfiles}
+                    required
+                  >
+                    <option value="">
+                      {loadingProfiles ? '加载中...' : '请选择 Inference Profile'}
+                    </option>
+                    {renderInferenceProfileOptions()}
+                  </select>
+                  <div className={styles.hint}>
+                    显示当前区域可用的所有 Inference Profiles。global.* 为全局路由，apac.*/us.*/eu.* 为区域路由。
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -718,55 +844,42 @@ const AIConfigForm = () => {
             </div>
           </div>
 
-          {/* Bedrock 特有选项 */}
-          {formData.service_type === 'bedrock' && (
-            <div className={styles.formGroup}>
-              <label className={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={formData.use_inference_profile}
-                  onChange={(e) => setFormData({ ...formData, use_inference_profile: e.target.checked })}
-                />
-                <span>使用 Cross-Region Inference Profile</span>
-              </label>
-              <div className={styles.hint}>
-                某些新模型（如 Claude Sonnet 4）需要启用此选项。启用后会减少请求次数，避免 503 错误。
+          {/* Extended Thinking 配置（GLM 模型不支持） */}
+          {!(formData.service_type === 'bedrock' && formData.model_id.startsWith('zai.')) && (
+            <>
+              <div className={styles.formGroup}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={formData.thinking_enabled}
+                    onChange={(e) => setFormData({ ...formData, thinking_enabled: e.target.checked })}
+                  />
+                  <span>Extended Thinking</span>
+                </label>
+                <div className={styles.hint}>
+                  启用后，AI 会在输出前进行深度推理。适合复杂分析场景（如风险评估），但会增加延迟和 token 消耗。
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Extended Thinking 配置（Bedrock + OpenAI 都支持） */}
-          <div className={styles.formGroup}>
-            <label className={styles.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={formData.thinking_enabled}
-                onChange={(e) => setFormData({ ...formData, thinking_enabled: e.target.checked })}
-              />
-              <span>Extended Thinking</span>
-            </label>
-            <div className={styles.hint}>
-              启用后，AI 会在输出前进行深度推理。适合复杂分析场景（如风险评估），但会增加延迟和 token 消耗。
-            </div>
-          </div>
-
-          {formData.thinking_enabled && (
-            <div className={styles.formGroup}>
-              <label className={styles.label}>Thinking Budget (tokens)</label>
-              <input
-                type="number"
-                className={styles.select}
-                value={formData.thinking_budget_tokens}
-                onChange={(e) => setFormData({ ...formData, thinking_budget_tokens: parseInt(e.target.value) || 10000 })}
-                min="1024"
-                max="50000"
-                step="1024"
-                required
-              />
-              <div className={styles.hint}>
-                thinking token 预算（最小 1024，建议 5000-20000）。越大推理越深但延迟越高。
-              </div>
-            </div>
+              {formData.thinking_enabled && (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Thinking Budget (tokens)</label>
+                  <input
+                    type="number"
+                    className={styles.select}
+                    value={formData.thinking_budget_tokens}
+                    onChange={(e) => setFormData({ ...formData, thinking_budget_tokens: parseInt(e.target.value) || 10000 })}
+                    min="1024"
+                    max="50000"
+                    step="1024"
+                    required
+                  />
+                  <div className={styles.hint}>
+                    thinking token 预算（最小 1024，建议 5000-20000）。越大推理越深但延迟越高。
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <div className={styles.formGroup}>
