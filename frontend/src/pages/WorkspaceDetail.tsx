@@ -212,11 +212,11 @@ const WorkspaceDetail: React.FC = () => {
       if (data && data.tasks && data.tasks.length > 0) {
         const allTasks = data.tasks;
         
-        // 优先级：1. Needs Attention任务 2. Running任务 3. 最新任务
-        const needsAttentionTask = allTasks.find((t: any) => 
-          t.status === 'requires_approval' || t.status === 'plan_completed'
+        // 优先级：1. Needs Attention任务(会卡住后续任务) 2. Running任务 3. 已完成任务 4. Pending/Waiting
+        const needsAttentionTask = allTasks.find((t: any) =>
+          t.status === 'apply_pending' || t.status === 'decision_required'
         );
-        
+
         if (needsAttentionTask) {
           const prev = prevGlobalLatestRunRef.current;
           if (!prev || prev.id !== needsAttentionTask.id || prev.status !== needsAttentionTask.status) {
@@ -226,7 +226,7 @@ const WorkspaceDetail: React.FC = () => {
           }
           return;
         }
-        
+
         const runningTask = allTasks.find((t: any) => t.status === 'running');
         if (runningTask) {
           const prev = prevGlobalLatestRunRef.current;
@@ -237,9 +237,12 @@ const WorkspaceDetail: React.FC = () => {
           }
           return;
         }
-        
-        // 使用最新任务
-        const latestTask = allTasks[0];
+
+        // 优先选择非 pending/waiting 的最新任务
+        const completedTask = allTasks.find((t: any) =>
+          t.status !== 'pending' && t.status !== 'waiting'
+        );
+        const latestTask = completedTask || allTasks[0];
         const prev = prevGlobalLatestRunRef.current;
         if (!prev || prev.id !== latestTask.id || prev.status !== latestTask.status) {
           console.log('[Global] Updating Latest Run to latest task:', latestTask.id);

@@ -282,13 +282,21 @@ func (ws *WorkspaceService) SearchWorkspacesWithStatus(search string, page, size
 
 	// 使用 DISTINCT ON 获取每个工作空间的最新任务（PostgreSQL 特性）
 	// 排除 drift_check 任务，因为它是后台静默运行的，不应影响 workspace 状态显示
+	// 优先级：1. Needs Attention(会卡住后续任务) 2. Running 3. 已完成 4. Pending/Waiting(仅当无其他任务时)
 	subQuery := `
-		SELECT DISTINCT ON (workspace_id) 
+		SELECT DISTINCT ON (workspace_id)
 			workspace_id, id, status, task_type, completed_at
-		FROM workspace_tasks 
+		FROM workspace_tasks
 		WHERE workspace_id IN (?)
 			AND task_type != 'drift_check'
-		ORDER BY workspace_id, created_at DESC
+		ORDER BY workspace_id,
+			CASE
+				WHEN status IN ('apply_pending', 'decision_required') THEN 0
+				WHEN status = 'running' THEN 1
+				WHEN status IN ('pending', 'waiting') THEN 3
+				ELSE 2
+			END,
+			created_at DESC
 	`
 	ws.db.Raw(subQuery, workspaceIDs).Scan(&latestTasks)
 

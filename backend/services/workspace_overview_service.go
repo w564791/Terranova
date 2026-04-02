@@ -149,53 +149,23 @@ func (s *WorkspaceOverviewService) GetWorkspaceOverview(workspaceID string) (*Wo
 }
 
 // getLatestRun 获取最近运行
-// 优先级：1. Needs Attention任务 2. Running任务 3. 最新任务
+// 优先级：1. Needs Attention任务(会卡住后续任务) 2. Running任务 3. 已完成 4. Pending/Waiting
+// 排除 drift_check 任务，因为它是后台静默运行的，不应影响 workspace 状态显示
 func (s *WorkspaceOverviewService) getLatestRun(workspaceID string) (*LatestRunInfo, error) {
 	var task models.WorkspaceTask
 
-	// 1. 优先查找Needs Attention任务（apply_pending）
-	// 使用 Take 而不是 First 来避免 record not found 日志
-	err := s.db.Where("workspace_id = ? AND status = ?",
-		workspaceID,
-		models.TaskStatusApplyPending).
-		Order("created_at DESC").
-		Take(&task).Error
-
-	if err == nil {
-		// 找到Needs Attention任务
-		goto buildResponse
-	}
-
-	if err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
-
-	// 2. 查找running任务
-	// 使用 Take 而不是 First 来避免 record not found 日志
-	err = s.db.Where("workspace_id = ? AND status = ?", workspaceID, models.TaskStatusRunning).
-		Order("created_at DESC").
-		Take(&task).Error
-
-	if err == nil {
-		// 找到running任务
-		goto buildResponse
-	}
-
-	if err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
-
-	// 3. 获取最新任务
-	// 使用 Take 而不是 First 来避免 record not found 日志
-	err = s.db.Where("workspace_id = ?", workspaceID).
-		Order("created_at DESC").
+	err := s.db.Where("workspace_id = ? AND task_type != ?", workspaceID, models.TaskTypeDriftCheck).
+		Order(`CASE
+			WHEN status IN ('apply_pending', 'decision_required') THEN 0
+			WHEN status = 'running' THEN 1
+			WHEN status IN ('pending', 'waiting') THEN 3
+			ELSE 2
+		END, created_at DESC`).
 		Take(&task).Error
 
 	if err != nil {
 		return nil, err
 	}
-
-buildResponse:
 
 	// 计算持续时间
 	planDuration := 0
