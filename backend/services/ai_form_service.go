@@ -716,15 +716,6 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 	}
 
 	finalModelID := modelID
-	if useInferenceProfile {
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", modelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", modelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", modelID)
-		}
-	}
 
 	input := &bedrockruntime.InvokeModelInput{
 		ModelId:     aws.String(finalModelID),

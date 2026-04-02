@@ -362,18 +362,7 @@ func (s *AIAnalysisService) callBedrock(region, modelID, prompt string, useInfer
 		return nil, fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID
 	finalModelID := modelID
-	if useInferenceProfile {
-		// 如果配置了使用 inference profile，直接使用 cross-region inference profile
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", modelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", modelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", modelID)
-		}
-	}
 
 	// 调用模型（只调用一次，不重试）
 	input := &bedrockruntime.InvokeModelInput{

@@ -178,18 +178,7 @@ func (s *ModuleSkillAIService) callBedrock(aiConfig *models.AIConfig, prompt str
 		return "", fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID
 	finalModelID := aiConfig.ModelID
-	if aiConfig.UseInferenceProfile {
-		region := aiConfig.AWSRegion
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", aiConfig.ModelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", aiConfig.ModelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", aiConfig.ModelID)
-		}
-	}
 
 	input := &bedrockruntime.InvokeModelInput{
 		ModelId:     aws.String(finalModelID),

@@ -277,18 +277,7 @@ func (s *EmbeddingService) callBedrockEmbeddingBatch(aiConfig *models.AIConfig, 
 		return nil, fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID（支持 inference profile）
 	finalModelID := modelID
-	if aiConfig.UseInferenceProfile {
-		region := aiConfig.AWSRegion
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", modelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", modelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", modelID)
-		}
-	}
 
 	log.Printf("[EmbeddingService] 批量调用 Bedrock embedding: model=%s, region=%s, count=%d",
 		finalModelID, aiConfig.AWSRegion, len(texts))
@@ -347,18 +336,7 @@ func (s *EmbeddingService) callCohereEmbeddingBatch(aiConfig *models.AIConfig, t
 		return nil, fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID（支持 inference profile）
 	finalModelID := modelID
-	if aiConfig.UseInferenceProfile {
-		region := aiConfig.AWSRegion
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", modelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", modelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", modelID)
-		}
-	}
 
 	log.Printf("[EmbeddingService] 批量调用 Cohere embedding: model=%s, region=%s, count=%d",
 		finalModelID, aiConfig.AWSRegion, len(texts))
@@ -470,18 +448,7 @@ func (s *EmbeddingService) callBedrockEmbedding(aiConfig *models.AIConfig, text 
 		return nil, fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID（支持 inference profile）
 	finalModelID := modelID
-	if aiConfig.UseInferenceProfile {
-		region := aiConfig.AWSRegion
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", modelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", modelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", modelID)
-		}
-	}
 
 	log.Printf("[EmbeddingService] 调用 Bedrock embedding: model=%s, region=%s", finalModelID, aiConfig.AWSRegion)
 

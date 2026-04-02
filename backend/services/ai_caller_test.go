@@ -249,8 +249,8 @@ func TestResolveModelID(t *testing.T) {
 		modelID  string
 		expected string
 	}{
-		{"us-east-1", true, "anthropic.claude-3", "us.anthropic.claude-3"},
-		{"ap-southeast-1", true, "anthropic.claude-3", "apac.anthropic.claude-3"},
+		{"us-east-1", true, "anthropic.claude-3", "anthropic.claude-3"},
+		{"ap-southeast-1", true, "anthropic.claude-3", "anthropic.claude-3"},
 		{"us-east-1", false, "anthropic.claude-3", "anthropic.claude-3"},
 	}
 

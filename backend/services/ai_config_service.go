@@ -479,7 +479,7 @@ func (s *AIConfigService) TestConfig(cfg *models.AIConfig) error {
 	// 根据服务类型调用不同的 API
 	switch cfg.ServiceType {
 	case "bedrock":
-		return s.testBedrock(cfg.AWSRegion, cfg.ModelID, testPrompt, cfg.UseInferenceProfile)
+		return s.testBedrock(cfg.AWSRegion, cfg.ModelID, testPrompt)
 	case "openai", "azure_openai", "qwen", "ollama":
 		return s.testOpenAICompatible(cfg.BaseURL, cfg.APIKey, cfg.ModelID, testPrompt)
 	default:
@@ -488,7 +488,7 @@ func (s *AIConfigService) TestConfig(cfg *models.AIConfig) error {
 }
 
 // testBedrock 测试 Bedrock 配置
-func (s *AIConfigService) testBedrock(region, modelID, prompt string, useInferenceProfile bool) error {
+func (s *AIConfigService) testBedrock(region, modelID, prompt string) error {
 	// 加载 AWS 配置
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
