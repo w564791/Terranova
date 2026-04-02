@@ -36,6 +36,14 @@ export interface BedrockModel {
   provider: string;
 }
 
+export interface InferenceProfile {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  status: string;
+}
+
 export interface AnalysisResult {
   error_type: string;
   root_cause: string;
@@ -103,6 +111,11 @@ export const getAvailableRegions = async (): Promise<string[]> => {
 export const getAvailableModels = async (region: string): Promise<BedrockModel[]> => {
   const response = await api.get(`/global/settings/ai-config/models?region=${region}`);
   return response.data?.models || [];
+};
+
+export const getAvailableInferenceProfiles = async (region: string): Promise<InferenceProfile[]> => {
+  const response = await api.get(`/global/settings/ai-config/inference-profiles?region=${region}`);
+  return response.data?.profiles || [];
 };
 
 export interface OpenAIModel {
