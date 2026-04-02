@@ -143,6 +143,11 @@ func setupGlobalRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *m
 			aiController.GetAvailableModels,
 		)
 
+		globalSettings.GET("/ai-config/inference-profiles",
+			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
+			aiController.GetAvailableInferenceProfiles,
+		)
+
 		globalSettings.POST("/ai-config/openai-models",
 			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
 			aiController.ListOpenAIModels,

@@ -348,6 +348,47 @@ func (c *AIController) GetAvailableRegions(ctx *gin.Context) {
 	})
 }
 
+// GetAvailableInferenceProfiles 获取可用的 Inference Profiles
+// @Summary Get available inference profiles
+// @Description Get available Bedrock inference profiles for a given AWS region (includes global and regional profiles)
+// @Tags AI Config
+// @Accept json
+// @Produce json
+// @Param region query string true "AWS Region"
+// @Success 200 {object} map[string]interface{} "Inference profile list"
+// @Failure 400 {object} map[string]interface{} "Missing region parameter"
+// @Failure 500 {object} map[string]interface{} "Fetch failed"
+// @Security BearerAuth
+// @Router /api/v1/global/settings/ai-config/inference-profiles [get]
+func (c *AIController) GetAvailableInferenceProfiles(ctx *gin.Context) {
+	region := ctx.Query("region")
+	if region == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "缺少 region 参数",
+		})
+		return
+	}
+
+	profiles, err := c.configService.GetAvailableInferenceProfiles(region)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取 Inference Profiles 失败: " + err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "Success",
+		"data": gin.H{
+			"region":   region,
+			"profiles": profiles,
+		},
+	})
+}
+
 // AnalyzeErrorRequest 分析错误请求
 // 安全说明：error_message 从数据库获取，不信任客户端输入，防止 prompt injection 攻击
 type AnalyzeErrorRequest struct {
