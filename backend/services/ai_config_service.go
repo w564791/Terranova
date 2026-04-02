@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
+	bedrockTypes "github.com/aws/aws-sdk-go-v2/service/bedrock/types"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"gorm.io/gorm"
 )
@@ -348,6 +349,52 @@ func (s *AIConfigService) GetAvailableModels(region string) ([]models.BedrockMod
 	return availableModels, nil
 }
 
+// GetAvailableInferenceProfiles 获取指定 Region 的可用 Inference Profiles
+func (s *AIConfigService) GetAvailableInferenceProfiles(region string) ([]models.InferenceProfile, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("无法加载 AWS 配置: %w", err)
+	}
+
+	client := bedrock.NewFromConfig(cfg)
+
+	input := &bedrock.ListInferenceProfilesInput{
+		TypeEquals: bedrockTypes.InferenceProfileTypeSystemDefined,
+		MaxResults: aws.Int32(200),
+	}
+
+	var profiles []models.InferenceProfile
+
+	for {
+		result, err := client.ListInferenceProfiles(context.TODO(), input)
+		if err != nil {
+			return nil, fmt.Errorf("无法获取 Inference Profiles: %w", err)
+		}
+
+		for _, p := range result.InferenceProfileSummaries {
+			if p.Status != bedrockTypes.InferenceProfileStatusActive {
+				continue
+			}
+			profiles = append(profiles, models.InferenceProfile{
+				ID:          aws.ToString(p.InferenceProfileId),
+				Name:        aws.ToString(p.InferenceProfileName),
+				Description: aws.ToString(p.Description),
+				Type:        string(p.Type),
+				Status:      string(p.Status),
+			})
+		}
+
+		if result.NextToken == nil {
+			break
+		}
+		input.NextToken = result.NextToken
+	}
+
+	return profiles, nil
+}
+
 // sanitizeConfig 清除配置中的敏感信息（API Key）
 func (s *AIConfigService) sanitizeConfig(cfg *models.AIConfig) {
 	// 清除 API Key，不返回给前端
@@ -467,6 +514,18 @@ func (s *AIConfigService) testBedrock(region, modelID, prompt string, useInferen
 			"texts":      []string{"This is a test for embedding model."},
 			"input_type": "search_document",
 		}
+	} else if strings.HasPrefix(modelID, "zai.") {
+		// GLM (Z.AI) 模型 — OpenAI 兼容格式
+		requestBody = map[string]interface{}{
+			"model":      modelID,
+			"max_tokens": 100,
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": prompt,
+				},
+			},
+		}
 	} else {
 		// Claude 等对话模型
 		requestBody = map[string]interface{}{
@@ -486,9 +545,9 @@ func (s *AIConfigService) testBedrock(region, modelID, prompt string, useInferen
 		return fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID
+	// 根据配置决定使用哪个 model ID（GLM 不使用 inference profile）
 	finalModelID := modelID
-	if useInferenceProfile {
+	if useInferenceProfile && !strings.HasPrefix(modelID, "zai.") {
 		if region == "us-east-1" || region == "us-west-2" {
 			finalModelID = fmt.Sprintf("us.%s", modelID)
 		} else if region == "eu-west-1" || region == "eu-central-1" {

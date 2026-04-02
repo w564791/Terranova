@@ -133,3 +133,12 @@ type BedrockModel struct {
 	Name     string `json:"name"`
 	Provider string `json:"provider"`
 }
+
+// InferenceProfile Bedrock Inference Profile 信息
+type InferenceProfile struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Type        string `json:"type"`
+	Status      string `json:"status"`
+}
