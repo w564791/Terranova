@@ -545,17 +545,8 @@ func (s *AIConfigService) testBedrock(region, modelID, prompt string, useInferen
 		return fmt.Errorf("无法序列化请求: %w", err)
 	}
 
-	// 根据配置决定使用哪个 model ID（GLM 不使用 inference profile）
+	// model_id 已经是用户选择的完整 ID（基础模型 ID 或 inference profile ID），直接使用
 	finalModelID := modelID
-	if useInferenceProfile && !strings.HasPrefix(modelID, "zai.") {
-		if region == "us-east-1" || region == "us-west-2" {
-			finalModelID = fmt.Sprintf("us.%s", modelID)
-		} else if region == "eu-west-1" || region == "eu-central-1" {
-			finalModelID = fmt.Sprintf("eu.%s", modelID)
-		} else if region == "ap-southeast-1" || region == "ap-northeast-1" {
-			finalModelID = fmt.Sprintf("apac.%s", modelID)
-		}
-	}
 
 	// 调用模型
 	input := &bedrockruntime.InvokeModelInput{

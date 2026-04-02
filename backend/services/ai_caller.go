@@ -70,7 +70,12 @@ type BedrockCaller struct {
 	thinkingBudgetTokens int
 }
 
-// ChatWithTools 调用 Bedrock Claude（支持 tool_use）
+// isGLMModel 判断是否为 GLM 模型（Z.AI on Bedrock）
+func (c *BedrockCaller) isGLMModel() bool {
+	return strings.HasPrefix(c.modelID, "zai.")
+}
+
+// ChatWithTools 调用 Bedrock（自动识别 Claude / GLM 格式）
 func (c *BedrockCaller) ChatWithTools(ctx context.Context, messages []AgentMessage, tools []AgentToolDef) (*AgentAIResponse, error) {
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(c.region))
 	if err != nil {
@@ -79,15 +84,20 @@ func (c *BedrockCaller) ChatWithTools(ctx context.Context, messages []AgentMessa
 	awsCfg.RetryMaxAttempts = 1
 	client := bedrockruntime.NewFromConfig(awsCfg)
 
-	// 构建请求体
-	requestBody := c.buildBedrockRequest(messages, tools)
+	// 根据模型类型构建不同格式的请求体
+	var requestBody map[string]interface{}
+	if c.isGLMModel() {
+		requestBody = c.buildGLMRequest(messages, tools)
+	} else {
+		requestBody = c.buildBedrockRequest(messages, tools)
+	}
 
 	requestJSON, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// 确定 model ID
+	// 确定 model ID（GLM 不使用 inference profile）
 	finalModelID := c.resolveModelID()
 
 	input := &bedrockruntime.InvokeModelInput{
@@ -101,6 +111,9 @@ func (c *BedrockCaller) ChatWithTools(ctx context.Context, messages []AgentMessa
 		return nil, fmt.Errorf("bedrock invocation failed: %w", err)
 	}
 
+	if c.isGLMModel() {
+		return c.parseGLMResponse(output.Body)
+	}
 	return c.parseBedrockResponse(output.Body)
 }
 
@@ -221,21 +234,11 @@ func (c *BedrockCaller) buildBedrockRequest(messages []AgentMessage, tools []Age
 	return body
 }
 
-// resolveModelID 处理 inference profile
+// resolveModelID 返回最终的 model ID
+// use_inference_profile=true 时，modelID 已是用户选择的完整 inference profile ID，直接返回
+// use_inference_profile=false 时，modelID 是基础模型 ID，直接返回
 func (c *BedrockCaller) resolveModelID() string {
-	if !c.useInferenceProfile {
-		return c.modelID
-	}
-	switch {
-	case c.region == "us-east-1" || c.region == "us-west-2":
-		return fmt.Sprintf("us.%s", c.modelID)
-	case c.region == "eu-west-1" || c.region == "eu-central-1":
-		return fmt.Sprintf("eu.%s", c.modelID)
-	case c.region == "ap-southeast-1" || c.region == "ap-northeast-1":
-		return fmt.Sprintf("apac.%s", c.modelID)
-	default:
-		return c.modelID
-	}
+	return c.modelID
 }
 
 // parseBedrockResponse 解析 Bedrock 响应
@@ -297,6 +300,139 @@ func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, err
 
 	result.Content = strings.Join(textParts, "\n")
 	log.Printf("[AICaller/Bedrock] Response block types: %v, thinking=%d chars", blockTypes, len(result.ThinkingContent))
+	return result, nil
+}
+
+// ========== Bedrock GLM (Z.AI) — OpenAI 兼容格式通过 Bedrock InvokeModel ==========
+
+// buildGLMRequest 构建 GLM 请求体（OpenAI chat completion 格式）
+func (c *BedrockCaller) buildGLMRequest(messages []AgentMessage, tools []AgentToolDef) map[string]interface{} {
+	body := map[string]interface{}{
+		"model":       c.modelID,
+		"max_tokens":  4096,
+		"temperature": 0.7,
+	}
+
+	// 构建 messages（OpenAI 格式，system 作为 message role）
+	var glmMessages []interface{}
+	for _, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			toolCalls := make([]interface{}, 0, len(msg.ToolCalls))
+			for _, tc := range msg.ToolCalls {
+				paramsJSON, _ := json.Marshal(tc.Params)
+				toolCalls = append(toolCalls, map[string]interface{}{
+					"id":   tc.ID,
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":      tc.Name,
+						"arguments": string(paramsJSON),
+					},
+				})
+			}
+			glmMessages = append(glmMessages, map[string]interface{}{
+				"role":       "assistant",
+				"content":    msg.Content,
+				"tool_calls": toolCalls,
+			})
+		} else if msg.Role == "tool" {
+			glmMessages = append(glmMessages, map[string]interface{}{
+				"role":         "tool",
+				"tool_call_id": msg.ToolCallID,
+				"content":      msg.Content,
+			})
+		} else {
+			glmMessages = append(glmMessages, map[string]interface{}{
+				"role":    msg.Role,
+				"content": msg.Content,
+			})
+		}
+	}
+	body["messages"] = glmMessages
+
+	// 工具定义（OpenAI function calling 格式）
+	if len(tools) > 0 {
+		var toolDefs []interface{}
+		for _, t := range tools {
+			schema := t.InputSchema
+			if schema == nil {
+				schema = map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}
+			}
+			if _, ok := schema["type"]; !ok {
+				schema = map[string]interface{}{
+					"type":       "object",
+					"properties": schema,
+				}
+			}
+			toolDefs = append(toolDefs, map[string]interface{}{
+				"type": "function",
+				"function": map[string]interface{}{
+					"name":        t.Name,
+					"description": t.Description,
+					"parameters":  schema,
+				},
+			})
+		}
+		body["tools"] = toolDefs
+		body["tool_choice"] = "auto"
+	}
+
+	return body
+}
+
+// parseGLMResponse 解析 GLM 响应（OpenAI choices 格式）
+func (c *BedrockCaller) parseGLMResponse(body []byte) (*AgentAIResponse, error) {
+	var response struct {
+		Choices []struct {
+			Message struct {
+				Content   string `json:"content"`
+				ToolCalls []struct {
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse GLM response: %w", err)
+	}
+
+	if response.Usage.PromptTokens > 0 || response.Usage.CompletionTokens > 0 {
+		metrics.IncAITokens("bedrock-glm", "prompt", float64(response.Usage.PromptTokens))
+		metrics.IncAITokens("bedrock-glm", "completion", float64(response.Usage.CompletionTokens))
+		log.Printf("[AICaller/BedrockGLM] tokens: prompt=%d, completion=%d", response.Usage.PromptTokens, response.Usage.CompletionTokens)
+	}
+
+	if len(response.Choices) == 0 {
+		return nil, fmt.Errorf("empty response from GLM API")
+	}
+
+	msg := response.Choices[0].Message
+	result := &AgentAIResponse{Content: msg.Content}
+
+	for _, tc := range msg.ToolCalls {
+		var params map[string]interface{}
+		if tc.Function.Arguments != "" {
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
+				log.Printf("[AICaller/BedrockGLM] failed to parse tool arguments for %s: %v", tc.Function.Name, err)
+			}
+		}
+		result.ToolCalls = append(result.ToolCalls, AgentToolCall{
+			ID:     tc.ID,
+			Name:   tc.Function.Name,
+			Params: params,
+		})
+	}
+
+	log.Printf("[AICaller/BedrockGLM] Response: content=%d chars, tool_calls=%d", len(result.Content), len(result.ToolCalls))
 	return result, nil
 }
 
