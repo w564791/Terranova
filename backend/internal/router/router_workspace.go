@@ -544,6 +544,24 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			}),
 			variableController.GetVariableVersion,
 		)
+		// Effective variables (merged from variable sets + workspace variables)
+		resolutionService := services.NewVariableResolutionService(db)
+		workspaces.GET("/:id/effective-variables",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+			}),
+			func(ctx *gin.Context) {
+				workspaceID := ctx.Param("id")
+				result, err := resolutionService.ResolveDisplay(workspaceID)
+				if err != nil {
+					ctx.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+				ctx.JSON(200, result)
+			},
+		)
+
 		// Resource operations - READ level (精细化权限优先)
 		workspaces.GET("/:id/resources",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
