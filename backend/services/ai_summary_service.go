@@ -7,6 +7,7 @@ import (
 	"iac-platform/internal/infrastructure"
 	"iac-platform/internal/models"
 	"log"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -17,6 +18,7 @@ type AISummaryService struct {
 	db             *gorm.DB
 	configService  *AIConfigService
 	skillAssembler *SkillAssembler
+	streamManager  *OutputStreamManager // 新增
 }
 
 // NewAISummaryService 创建摘要服务
@@ -25,6 +27,16 @@ func NewAISummaryService(db *gorm.DB) *AISummaryService {
 		db:             db,
 		configService:  NewAIConfigService(db),
 		skillAssembler: NewSkillAssembler(db),
+	}
+}
+
+// NewAISummaryServiceWithStream 创建带 stream 支持的摘要服务
+func NewAISummaryServiceWithStream(db *gorm.DB, streamManager *OutputStreamManager) *AISummaryService {
+	return &AISummaryService{
+		db:             db,
+		configService:  NewAIConfigService(db),
+		skillAssembler: NewSkillAssembler(db),
+		streamManager:  streamManager,
 	}
 }
 
@@ -144,17 +156,29 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
 	loop.SetOutputValidator(planSummaryValidator)
 
+	var processLog strings.Builder
+	loop.SetObserver(s.buildObserver(taskID, &processLog))
+
+	s.streamStageMarker(taskID, "post_plan_summary", "begin")
+	writeStageMarkerToLog(&processLog, "post_plan_summary", "begin")
+
 	// 运行
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
 
 	result, err := loop.Run(ctx, systemPrompt, userPrompt)
 	if err != nil {
+		s.streamLog(taskID, fmt.Sprintf("Plan summary failed: %v", err))
+		writeStageMarkerToLog(&processLog, "post_plan_summary", "end")
+		s.streamStageMarker(taskID, "post_plan_summary", "end")
+		summary.ProcessLog = processLog.String()
 		s.failSummary(&summary, err, startTime)
 		return
 	}
 
-	// 解析 AI 输出（extractJSON 后再记录日志，确保 output_snapshot 是结构化 JSON）
+	writeStageMarkerToLog(&processLog, "post_plan_summary", "end")
+	s.streamStageMarker(taskID, "post_plan_summary", "end")
+	summary.ProcessLog = processLog.String()
 	s.completePlanSummary(&summary, result, planChangesJSON, startTime, cfg, task.WorkspaceID, taskID, userPrompt)
 }
 
@@ -228,15 +252,28 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 	loop.RegisterTool(NewQueryPlanSummaryTool(s.db))
 	loop.SetOutputValidator(applySummaryValidator)
 
+	var processLog strings.Builder
+	loop.SetObserver(s.buildObserver(taskID, &processLog))
+
+	s.streamStageMarker(taskID, "post_apply_summary", "begin")
+	writeStageMarkerToLog(&processLog, "post_apply_summary", "begin")
+
 	ctx, cancel := contextWithTimeout()
 	defer cancel()
 
 	result, err := loop.Run(ctx, systemPrompt, applyContext)
 	if err != nil {
+		s.streamLog(taskID, fmt.Sprintf("Apply summary failed: %v", err))
+		writeStageMarkerToLog(&processLog, "post_apply_summary", "end")
+		s.streamStageMarker(taskID, "post_apply_summary", "end")
+		summary.ProcessLog = processLog.String()
 		s.failApplySummary(&summary, err, startTime)
 		return
 	}
 
+	writeStageMarkerToLog(&processLog, "post_apply_summary", "end")
+	s.streamStageMarker(taskID, "post_apply_summary", "end")
+	summary.ProcessLog = processLog.String()
 	s.completeApplySummary(&summary, result, startTime, cfg, task.WorkspaceID, taskID, applyContext)
 }
 
@@ -685,6 +722,81 @@ func (s *AISummaryService) logSummarySkillUsage(cfg *models.AIConfig, capability
 		TaskSkillContent: taskSkillContent,
 	}); err != nil {
 		log.Printf("[AISummaryService] Failed to log skill usage for %s task %d: %v", capability, taskID, err)
+	}
+}
+
+func (s *AISummaryService) streamLog(taskID uint, line string) {
+	if s.streamManager == nil {
+		return
+	}
+	stream := s.streamManager.Get(taskID)
+	if stream == nil {
+		return
+	}
+	stream.Broadcast(OutputMessage{
+		Type:      "output",
+		Line:      line,
+		Timestamp: time.Now(),
+	})
+}
+
+func (s *AISummaryService) streamStageMarker(taskID uint, stage string, status string) {
+	if s.streamManager == nil {
+		return
+	}
+	stream := s.streamManager.Get(taskID)
+	if stream == nil {
+		return
+	}
+	timestamp := time.Now()
+	marker := fmt.Sprintf("========== %s %s at %s ==========",
+		strings.ToUpper(stage),
+		strings.ToUpper(status),
+		timestamp.Format("2006-01-02 15:04:05.000"))
+	stream.Broadcast(OutputMessage{
+		Type:      "stage_marker",
+		Line:      marker,
+		Timestamp: timestamp,
+		Stage:     stage,
+		Status:    status,
+	})
+}
+
+func writeStageMarkerToLog(processLog *strings.Builder, stage string, status string) {
+	processLog.WriteString(fmt.Sprintf("========== %s %s at %s ==========\n",
+		strings.ToUpper(stage),
+		strings.ToUpper(status),
+		time.Now().Format("2006-01-02 15:04:05.000")))
+}
+
+func (s *AISummaryService) buildObserver(taskID uint, processLog *strings.Builder) AgentLoopObserver {
+	return func(event AgentLoopEvent) {
+		var line string
+		switch event.Type {
+		case "thinking":
+			content := event.Content
+			if len(content) > 500 {
+				content = content[:500] + "..."
+			}
+			line = fmt.Sprintf("[Step %d] Thinking: %s", event.Step, content)
+		case "tool_call":
+			line = fmt.Sprintf("[Step %d] Tool call: %s", event.Step, event.ToolName)
+		case "tool_result":
+			if event.Error != "" {
+				line = fmt.Sprintf("[Step %d] Tool result: %s failed (%dms): %s", event.Step, event.ToolName, event.Duration, event.Error)
+			} else {
+				line = fmt.Sprintf("[Step %d] Tool result: %s ok (%dms)", event.Step, event.ToolName, event.Duration)
+			}
+		case "output":
+			line = fmt.Sprintf("[Step %d] AI output generated", event.Step)
+		case "retry":
+			line = fmt.Sprintf("[Step %d] Output validation failed, retrying: %s", event.Step, event.Content)
+		default:
+			return
+		}
+		processLog.WriteString(line)
+		processLog.WriteString("\n")
+		s.streamLog(taskID, line)
 	}
 }
 
