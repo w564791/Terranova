@@ -694,7 +694,12 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	// 创建输出流和日志记录器
 	stream := s.streamManager.GetOrCreate(task.ID)
-	defer s.streamManager.Close(task.ID)
+	var summaryDone sync.WaitGroup
+	defer func() {
+		summaryDone.Wait()
+		stream.Broadcast(OutputMessage{Type: "completed", Timestamp: time.Now()})
+		s.streamManager.Close(task.ID)
+	}()
 
 	// 检测是否为 Agent 模式
 	isAgentMode := (s.db == nil)
@@ -1228,12 +1233,6 @@ func (s *TerraformExecutor) ExecutePlan(
 	logger.Info("✓ Post-plan Run Tasks completed (no mandatory failures)")
 	logger.StageEnd("post_plan_run_tasks")
 
-	// 发送完成消息
-	stream.Broadcast(OutputMessage{
-		Type:      "completed",
-		Timestamp: time.Now(),
-	})
-
 	// 在所有阶段完成后获取完整输出（包含Fetching/Init/Planning/Saving Plan所有阶段）
 	planOutput := logger.GetFullOutput()
 
@@ -1393,16 +1392,18 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	log.Printf("Task %d plan output saved (%d bytes)", task.ID, len(planOutput))
 
-	// 异步触发 Plan Summary（不阻塞主流程）
+	// 异步触发 Plan Summary（不阻塞主流程，但 stream 生命周期等待其完成）
 	// 注意：必须在 task changes 字段保存到 DB 之后触发，否则 summary 服务查到的 changes 为 0
 	if s.db != nil && (task.ChangesAdd+task.ChangesChange+task.ChangesDestroy) > 0 {
+		summaryDone.Add(1)
 		go func() {
+			defer summaryDone.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("[PANIC] Plan summary generation panicked for task %d: %v", task.ID, r)
 				}
 			}()
-			summaryService := NewAISummaryService(s.db)
+			summaryService := NewAISummaryServiceWithStream(s.db, s.streamManager)
 			summaryService.GeneratePlanSummary(task.ID)
 		}()
 	}
@@ -1958,7 +1959,12 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	// 创建输出流和日志记录器
 	stream := s.streamManager.GetOrCreate(task.ID)
-	defer s.streamManager.Close(task.ID)
+	var summaryDone sync.WaitGroup
+	defer func() {
+		summaryDone.Wait()
+		stream.Broadcast(OutputMessage{Type: "completed", Timestamp: time.Now()})
+		s.streamManager.Close(task.ID)
+	}()
 
 	// 检测是否为 Agent 模式
 	isAgentMode := (s.db == nil)
@@ -2624,12 +2630,6 @@ func (s *TerraformExecutor) ExecuteApply(
 	logger.Info("State save completed successfully")
 	logger.StageEnd("saving_state")
 
-	// 发送完成消息
-	stream.Broadcast(OutputMessage{
-		Type:      "completed",
-		Timestamp: time.Now(),
-	})
-
 	// 更新任务状态为Applied（Apply成功完成）
 	task.Status = models.TaskStatusApplied
 	task.Stage = "applied"
@@ -2678,16 +2678,17 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	log.Printf("Task %d applied successfully", task.ID)
 
-	// 异步触发 Apply Summary（不阻塞主流程）
-	// 注意：仅在成功路径触发，saving_state 错误路径不触发
+	// 异步触发 Apply Summary（不阻塞主流程，但 stream 生命周期等待其完成）
 	if s.db != nil {
+		summaryDone.Add(1)
 		go func() {
+			defer summaryDone.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("[PANIC] Apply summary generation panicked for task %d: %v", task.ID, r)
 				}
 			}()
-			summaryService := NewAISummaryService(s.db)
+			summaryService := NewAISummaryServiceWithStream(s.db, s.streamManager)
 			summaryService.GenerateApplySummary(task.ID)
 		}()
 	}
