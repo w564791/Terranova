@@ -499,6 +499,9 @@ func (h *RawAgentCCHandler) handleTaskCompleted(agentConn *RawAgentConnection, p
 	// 发送任务完成通知
 	go h.sendTaskCompletedNotification(uint(taskID))
 
+	// 触发 AI Summary（服务端执行，agent 端没有 DB）
+	go h.triggerAISummary(uint(taskID))
+
 	// Apply 完成后的 Server 端处理（CMDB 同步 + Run Triggers）
 	go h.postApplyCompletionTasks(uint(taskID))
 
@@ -643,6 +646,36 @@ func (h *RawAgentCCHandler) sendTaskCompletedNotification(taskID uint) {
 
 	default:
 		log.Printf("[Notification] Task %d has status %s, no notification sent", taskID, task.Status)
+	}
+}
+
+// triggerAISummary 在服务端触发 AI Summary（Agent 模式下 agent 端没有 DB，由服务端执行）
+func (h *RawAgentCCHandler) triggerAISummary(taskID uint) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[PANIC] AI summary generation panicked for task %d: %v", taskID, r)
+		}
+	}()
+
+	var task models.WorkspaceTask
+	if err := h.db.First(&task, taskID).Error; err != nil {
+		log.Printf("[AISummary] Task %d not found for summary trigger: %v", taskID, err)
+		return
+	}
+
+	summaryService := services.NewAISummaryServiceWithStream(h.db, h.streamManager)
+
+	switch task.Status {
+	case models.TaskStatusApplyPending:
+		if task.ChangesAdd+task.ChangesChange+task.ChangesDestroy > 0 {
+			log.Printf("[AISummary] Triggering plan summary for agent task %d", taskID)
+			summaryService.GeneratePlanSummary(taskID)
+		}
+	case models.TaskStatusApplied:
+		log.Printf("[AISummary] Triggering apply summary for agent task %d", taskID)
+		summaryService.GenerateApplySummary(taskID)
+	default:
+		log.Printf("[AISummary] Task %d status %s, no summary needed", taskID, task.Status)
 	}
 }
 
