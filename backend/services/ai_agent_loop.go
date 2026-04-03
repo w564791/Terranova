@@ -82,6 +82,19 @@ type AgentLoopResult struct {
 // 返回 nil 表示通过，返回 error 表示需要 AI 重试（error message 会反馈给 AI）
 type OutputValidator func(output string) error
 
+// AgentLoopEvent Agent Loop 中间事件（用于实时日志推送）
+type AgentLoopEvent struct {
+	Type     string // "thinking", "tool_call", "tool_result", "output", "retry"
+	Step     int
+	Content  string
+	ToolName string
+	Duration int64  // ms, 仅 tool_result 有值
+	Error    string
+}
+
+// AgentLoopObserver 观察者回调，Agent Loop 每个关键节点触发
+type AgentLoopObserver func(event AgentLoopEvent)
+
 // AIAgentLoop 通用 AI Agent 循环
 type AIAgentLoop struct {
 	aiCaller        AICaller
@@ -89,6 +102,7 @@ type AIAgentLoop struct {
 	maxIterations   int
 	outputValidator OutputValidator
 	maxRetries      int // 输出验证失败时的最大重试次数
+	observer        AgentLoopObserver
 }
 
 // NewAIAgentLoop 创建 Agent Loop
@@ -113,6 +127,18 @@ func (loop *AIAgentLoop) SetOutputValidator(validator OutputValidator) {
 func (loop *AIAgentLoop) SetMaxRetries(n int) {
 	if n > 0 && n <= 5 {
 		loop.maxRetries = n
+	}
+}
+
+// SetObserver 设置观察者回调（实时日志推送等）
+func (loop *AIAgentLoop) SetObserver(observer AgentLoopObserver) {
+	loop.observer = observer
+}
+
+// notify 内部方法：触发观察者（nil-safe）
+func (loop *AIAgentLoop) notify(event AgentLoopEvent) {
+	if loop.observer != nil {
+		loop.observer(event)
 	}
 }
 
@@ -149,6 +175,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 		// 收集 thinking content（调试用）
 		if response.ThinkingContent != "" {
 			allThinking = append(allThinking, response.ThinkingContent)
+			loop.notify(AgentLoopEvent{Type: "thinking", Step: i + 1, Content: response.ThinkingContent})
 		}
 
 		stepType := "tool_call"
@@ -160,12 +187,14 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 		// AI 返回纯文本 = 决定结束
 		if len(response.ToolCalls) == 0 {
+			loop.notify(AgentLoopEvent{Type: "output", Step: i + 1, Content: response.Content})
 			// 如果设置了输出验证器，验证输出格式
 			if loop.outputValidator != nil {
 				if validationErr := loop.outputValidator(response.Content); validationErr != nil {
 					retryCount++
 					if retryCount <= loop.maxRetries {
 						log.Printf("[AIAgentLoop] Output validation failed (retry %d/%d): %v", retryCount, loop.maxRetries, validationErr)
+						loop.notify(AgentLoopEvent{Type: "retry", Step: i + 1, Content: validationErr.Error()})
 						// 把验证错误反馈给 AI，让它修正
 						messages = append(messages, AgentMessage{
 							Role:    "assistant",
@@ -199,6 +228,10 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 			ThinkingContent:   response.ThinkingContent,
 			ThinkingSignature: response.ThinkingSignature,
 		})
+
+		for _, tc := range response.ToolCalls {
+			loop.notify(AgentLoopEvent{Type: "tool_call", Step: i + 1, ToolName: tc.Name, Content: fmt.Sprintf("%v", tc.Params)})
+		}
 
 		// 并发执行所有 tool calls
 		type toolResult struct {
@@ -276,6 +309,7 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 		for _, r := range results {
 			allToolCalls = append(allToolCalls, r.record)
 			messages = append(messages, r.message)
+			loop.notify(AgentLoopEvent{Type: "tool_result", Step: i + 1, ToolName: r.record.ToolName, Duration: r.record.DurationMs, Error: r.record.Error})
 		}
 	}
 
