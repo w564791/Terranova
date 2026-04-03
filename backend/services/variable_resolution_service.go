@@ -12,6 +12,7 @@ type EffectiveVariable struct {
 	VariableID   string              `json:"variable_id"`
 	Key          string              `json:"key"`
 	Value        string              `json:"value"`
+	Version      int                 `json:"version"`
 	VariableType models.VariableType `json:"variable_type"`
 	ValueFormat  models.ValueFormat  `json:"value_format"`
 	Sensitive    bool                `json:"sensitive"`
@@ -46,6 +47,7 @@ type variableCandidate struct {
 	VariableID   string
 	Key          string
 	Value        string
+	Version      int
 	VariableType models.VariableType
 	ValueFormat  models.ValueFormat
 	Sensitive    bool
@@ -99,6 +101,7 @@ func (s *VariableResolutionService) ResolveDisplay(workspaceID string) ([]Effect
 			ev := EffectiveVariable{
 				VariableID:   c.VariableID,
 				Key:          c.Key,
+				Version:      c.Version,
 				VariableType: c.VariableType,
 				ValueFormat:  c.ValueFormat,
 				Sensitive:    c.Sensitive,
@@ -229,6 +232,7 @@ func (s *VariableResolutionService) collectGlobalVarsets() ([]variableCandidate,
 				VariableID:   v.VariableID,
 				Key:          v.Key,
 				Value:        v.Value,
+				Version:      v.Version,
 				VariableType: v.VariableType,
 				ValueFormat:  v.ValueFormat,
 				Sensitive:    v.Sensitive,
@@ -274,6 +278,7 @@ func (s *VariableResolutionService) collectProjectVarsets(projectID uint) ([]var
 				VariableID:   v.VariableID,
 				Key:          v.Key,
 				Value:        v.Value,
+				Version:      v.Version,
 				VariableType: v.VariableType,
 				ValueFormat:  v.ValueFormat,
 				Sensitive:    v.Sensitive,
@@ -319,6 +324,7 @@ func (s *VariableResolutionService) collectWorkspaceVarsets(workspaceID string) 
 				VariableID:   v.VariableID,
 				Key:          v.Key,
 				Value:        v.Value,
+				Version:      v.Version,
 				VariableType: v.VariableType,
 				ValueFormat:  v.ValueFormat,
 				Sensitive:    v.Sensitive,
@@ -355,6 +361,7 @@ func (s *VariableResolutionService) collectWorkspaceOwnVariables(workspaceID str
 			VariableID:   v.VariableID,
 			Key:          v.Key,
 			Value:        v.Value,
+			Version:      v.Version,
 			VariableType: v.VariableType,
 			ValueFormat:  v.ValueFormat,
 			Sensitive:    v.Sensitive,
@@ -368,14 +375,23 @@ func (s *VariableResolutionService) collectWorkspaceOwnVariables(workspaceID str
 	return candidates, nil
 }
 
-// batchLoadVarsetVariables loads variables for multiple varsets in a single query.
+// batchLoadVarsetVariables loads latest version of variables for multiple varsets in a single query.
 func (s *VariableResolutionService) batchLoadVarsetVariables(varsetIDs []string) (map[string][]models.VarsetVariable, error) {
 	result := make(map[string][]models.VarsetVariable)
 	if len(varsetIDs) == 0 {
 		return result, nil
 	}
+
+	// Get latest version per variable_id across the requested varsets
+	subQuery := s.db.Table("varset_variables").
+		Select("variable_id, MAX(version) as max_version").
+		Where("varset_id IN ? AND is_deleted = false", varsetIDs).
+		Group("variable_id")
+
 	var allVars []models.VarsetVariable
-	if err := s.db.Where("varset_id IN ? AND is_deleted = false", varsetIDs).
+	if err := s.db.Table("varset_variables").
+		Joins("INNER JOIN (?) AS latest ON varset_variables.variable_id = latest.variable_id AND varset_variables.version = latest.max_version", subQuery).
+		Where("varset_variables.varset_id IN ? AND varset_variables.is_deleted = false", varsetIDs).
 		Find(&allVars).Error; err != nil {
 		return nil, fmt.Errorf("batch loading varset variables: %w", err)
 	}

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"iac-platform/internal/application/service"
-	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
@@ -454,29 +453,31 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 		}
 	}
 
-	// Get workspace variables (只获取每个变量的最新版本)
-	var variables []models.WorkspaceVariable
-	h.db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		INNER JOIN (
-			SELECT variable_id, MAX(version) as max_version
-			FROM workspace_variables
-			WHERE workspace_id = ? AND is_deleted = false
-			GROUP BY variable_id
-		) latest ON wv.variable_id = latest.variable_id AND wv.version = latest.max_version
-		WHERE wv.workspace_id = ? AND wv.is_deleted = false
-	`, workspace.WorkspaceID, workspace.WorkspaceID).Scan(&variables)
+	// Get effective variables (workspace + variable sets merged)
+	resolver := services.NewVariableResolutionService(h.db)
+	effectiveVars, err := resolver.ResolveDisplay(workspace.WorkspaceID)
+	if err != nil {
+		log.Printf("[Agent] Failed to resolve effective variables: %v", err)
+	}
 
-	// Raw SQL bypasses GORM AfterFind hook, manually decrypt sensitive variables
-	for i := range variables {
-		if variables[i].Sensitive && variables[i].Value != "" && crypto.IsEncrypted(variables[i].Value) {
-			decrypted, err := crypto.DecryptValue(variables[i].Value)
-			if err != nil {
-				log.Printf("[Agent] Failed to decrypt variable %s: %v", variables[i].Key, err)
+	// Convert to WorkspaceVariable format for agent compatibility
+	var variables []models.WorkspaceVariable
+	if effectiveVars != nil {
+		for _, ev := range effectiveVars {
+			if ev.IsOverridden {
 				continue
 			}
-			variables[i].Value = decrypted
+			variables = append(variables, models.WorkspaceVariable{
+				VariableID:   ev.VariableID,
+				WorkspaceID:  workspace.WorkspaceID,
+				Key:          ev.Key,
+				Value:        ev.Value,
+				VariableType: ev.VariableType,
+				ValueFormat:  ev.ValueFormat,
+				Sensitive:    ev.Sensitive,
+				Description:  ev.Description,
+				Version:      ev.Version,
+			})
 		}
 	}
 
@@ -530,7 +531,7 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 
 	// Get latest state version
 	var stateVersion models.WorkspaceStateVersion
-	err := h.db.Where("workspace_id = ?", workspace.WorkspaceID).
+	err = h.db.Where("workspace_id = ?", workspace.WorkspaceID).
 		Order("version DESC").
 		First(&stateVersion).Error
 
@@ -1208,8 +1209,9 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 				for _, snapVar := range snapshotVars {
 					varID, _ := snapVar["variable_id"].(string)
 					version, _ := snapVar["version"].(float64)
+					workspaceID, _ := snapVar["workspace_id"].(string)
 
-					// 从数据库查询完整变量数据
+					// 从 workspace_variables 查询完整变量数据
 					var variable models.WorkspaceVariable
 					if err := h.db.Where("variable_id = ? AND version = ?", varID, int(version)).
 						First(&variable).Error; err == nil {
@@ -1224,6 +1226,23 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 							"description":   variable.Description,
 							"value_format":  variable.ValueFormat,
 						})
+					} else {
+						// Fallback: 尝试从 varset_variables 查询（varset 变量也可能在快照中）
+						var varsetVar models.VarsetVariable
+						if err2 := h.db.Where("variable_id = ? AND version = ?", varID, int(version)).
+							First(&varsetVar).Error; err2 == nil {
+							fullVariables = append(fullVariables, gin.H{
+								"workspace_id":  workspaceID,
+								"variable_id":   varsetVar.VariableID,
+								"version":       varsetVar.Version,
+								"variable_type": varsetVar.VariableType,
+								"key":           varsetVar.Key,
+								"value":         varsetVar.Value,
+								"sensitive":     varsetVar.Sensitive,
+								"description":   varsetVar.Description,
+								"value_format":  varsetVar.ValueFormat,
+							})
+						}
 					}
 				}
 				taskResponse["snapshot_variables"] = fullVariables

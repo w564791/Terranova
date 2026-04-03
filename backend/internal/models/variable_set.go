@@ -43,7 +43,7 @@ func (v *VariableSet) BeforeCreate(tx *gorm.DB) error {
 // VarsetVariable 变量集变量模型
 type VarsetVariable struct {
 	ID           uint         `json:"id" gorm:"primaryKey"`
-	VariableID   string       `json:"variable_id" gorm:"type:varchar(20);not null;uniqueIndex"`
+	VariableID   string       `json:"variable_id" gorm:"type:varchar(20);not null"`
 	VarsetID     string       `json:"varset_id" gorm:"column:varset_id;type:varchar(30);not null;index"`
 	Key          string       `json:"key" gorm:"not null;size:100"`
 	Value        string       `json:"value,omitempty" gorm:"type:text"`
@@ -52,6 +52,7 @@ type VarsetVariable struct {
 	Sensitive    bool         `json:"sensitive" gorm:"default:false"`
 	Description  string       `json:"description" gorm:"type:text"`
 	IsDeleted    bool         `json:"is_deleted" gorm:"default:false"`
+	Version      int          `json:"version" gorm:"not null;default:1"`
 	CreatedAt    time.Time    `json:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 	CreatedBy    *string      `json:"created_by" gorm:"type:varchar(20)"`
@@ -124,6 +125,7 @@ func (v *VarsetVariable) ToResponse() map[string]interface{} {
 		"value_format":  v.ValueFormat,
 		"sensitive":     v.Sensitive,
 		"description":   v.Description,
+		"version":       v.Version,
 		"is_deleted":    v.IsDeleted,
 		"created_at":    v.CreatedAt,
 		"updated_at":    v.UpdatedAt,

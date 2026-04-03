@@ -1441,34 +1441,24 @@ func createTaskSnapshot(db *gorm.DB, task *models.WorkspaceTask, workspace *mode
 		}
 	}
 
-	// 2. 快照变量（只保存variable_id和version引用）
-	// 只获取最新版本为未删除状态的变量
-	var variables []models.WorkspaceVariable
-	if err := db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		WHERE wv.workspace_id = ? 
-		  AND wv.is_deleted = false
-		  AND wv.version = (
-			SELECT MAX(version)
-			FROM workspace_variables
-			WHERE workspace_id = wv.workspace_id 
-			  AND variable_id = wv.variable_id
-			  AND is_deleted = false
-		  )
-	`, workspace.WorkspaceID).Scan(&variables).Error; err != nil {
-		return fmt.Errorf("failed to get latest non-deleted variables: %w", err)
+	// 2. 快照变量（使用 ResolutionService 获取所有有效变量，包括 varset 变量）
+	resolver := services.NewVariableResolutionService(db)
+	effectiveVars, err := resolver.ResolveDisplay(workspace.WorkspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve effective variables: %w", err)
 	}
 
-	// 构建变量快照：只保存必要字段（workspace_id, variable_id, version, variable_type）
-	// 使用 map 而不是结构体，避免 JSON 序列化包含零值字段
-	variableSnapshots := make([]map[string]interface{}, 0, len(variables))
-	for _, v := range variables {
+	// 构建变量快照：只保存非被覆盖的有效变量
+	variableSnapshots := make([]map[string]interface{}, 0)
+	for _, ev := range effectiveVars {
+		if ev.IsOverridden {
+			continue // Only snapshot effective (winning) variables
+		}
 		variableSnapshots = append(variableSnapshots, map[string]interface{}{
-			"workspace_id":  v.WorkspaceID,
-			"variable_id":   v.VariableID,
-			"version":       v.Version,
-			"variable_type": string(v.VariableType),
+			"workspace_id":  workspace.WorkspaceID,
+			"variable_id":   ev.VariableID,
+			"version":       ev.Version,
+			"variable_type": string(ev.VariableType),
 		})
 	}
 

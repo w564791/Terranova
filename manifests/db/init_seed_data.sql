@@ -6229,7 +6229,8 @@ CREATE TABLE public.varset_variables (
     is_deleted boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    created_by character varying(20)
+    created_by character varying(20),
+    version integer DEFAULT 1 NOT NULL
 );
 
 
@@ -11671,8 +11672,7 @@ ALTER TABLE ONLY public.varset_variables
 -- Name: varset_variables varset_variables_variable_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.varset_variables
-    ADD CONSTRAINT varset_variables_variable_id_key UNIQUE (variable_id);
+-- variable_id is no longer unique (multiple versions per variable_id)
 
 
 --
@@ -14005,7 +14005,14 @@ CREATE INDEX idx_varset_assignments_workspace_id ON public.varset_assignments US
 -- Name: idx_varset_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_varset_key ON public.varset_variables USING btree (varset_id, key) WHERE (is_deleted = false);
+CREATE UNIQUE INDEX idx_varset_key_version ON public.varset_variables USING btree (varset_id, key, version) WHERE (is_deleted = false);
+
+
+--
+-- Name: idx_varset_key_latest; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_varset_key_latest ON public.varset_variables USING btree (varset_id, key, version DESC) WHERE (is_deleted = false);
 
 
 --

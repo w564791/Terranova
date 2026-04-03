@@ -2517,31 +2517,23 @@ func (h *ManifestHandler) createTaskSnapshot(task *models.WorkspaceTask, workspa
 		}
 	}
 
-	// 2. Snapshot variables
-	var variables []models.WorkspaceVariable
-	if err := h.db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		WHERE wv.workspace_id = ? 
-		  AND wv.is_deleted = false
-		  AND wv.version = (
-			SELECT MAX(version)
-			FROM workspace_variables
-			WHERE workspace_id = wv.workspace_id 
-			  AND variable_id = wv.variable_id
-			  AND is_deleted = false
-		  )
-	`, workspace.WorkspaceID).Scan(&variables).Error; err != nil {
-		return fmt.Errorf("failed to get variables: %w", err)
+	// 2. Snapshot variables（使用 ResolutionService 获取所有有效变量，包括 varset 变量）
+	resolver := services.NewVariableResolutionService(h.db)
+	effectiveVars, resolveErr := resolver.ResolveDisplay(workspace.WorkspaceID)
+	if resolveErr != nil {
+		return fmt.Errorf("failed to resolve effective variables: %w", resolveErr)
 	}
 
-	variableSnapshots := make([]map[string]interface{}, 0, len(variables))
-	for _, v := range variables {
+	variableSnapshots := make([]map[string]interface{}, 0)
+	for _, ev := range effectiveVars {
+		if ev.IsOverridden {
+			continue
+		}
 		variableSnapshots = append(variableSnapshots, map[string]interface{}{
-			"workspace_id":  v.WorkspaceID,
-			"variable_id":   v.VariableID,
-			"version":       v.Version,
-			"variable_type": string(v.VariableType),
+			"workspace_id":  workspace.WorkspaceID,
+			"variable_id":   ev.VariableID,
+			"version":       ev.Version,
+			"variable_type": string(ev.VariableType),
 		})
 	}
 

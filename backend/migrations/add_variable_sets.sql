@@ -27,7 +27,7 @@ COMMENT ON COLUMN public.variable_sets.scope IS 'global: applies to all workspac
 -- 2. varset_variables table
 CREATE TABLE IF NOT EXISTS public.varset_variables (
     id              SERIAL PRIMARY KEY,
-    variable_id     VARCHAR(20) NOT NULL UNIQUE,
+    variable_id     VARCHAR(20) NOT NULL,
     varset_id       VARCHAR(30) NOT NULL,
     key             VARCHAR(100) NOT NULL,
     value           TEXT,
@@ -39,12 +39,15 @@ CREATE TABLE IF NOT EXISTS public.varset_variables (
     created_at      TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by      VARCHAR(20),
+    version         INTEGER NOT NULL DEFAULT 1,
     CONSTRAINT fk_varset_variables_varset
         FOREIGN KEY (varset_id) REFERENCES variable_sets(varset_id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_varset_key
-    ON public.varset_variables USING btree (varset_id, key) WHERE is_deleted = false;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_varset_key_version
+    ON public.varset_variables USING btree (varset_id, key, version) WHERE is_deleted = false;
+CREATE INDEX IF NOT EXISTS idx_varset_key_latest
+    ON public.varset_variables USING btree (varset_id, key, version DESC) WHERE is_deleted = false;
 CREATE INDEX IF NOT EXISTS idx_varset_variables_varset_id
     ON public.varset_variables USING btree (varset_id);
 CREATE INDEX IF NOT EXISTS idx_varset_variables_is_deleted
