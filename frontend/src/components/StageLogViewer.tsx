@@ -46,8 +46,20 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
         logText = task.apply_output || '';
       }
       
+      // 获取 AI summary 的 process_log 并追加到日志末尾
+      try {
+        const summaryEndpoint = taskType === 'plan' ? 'plan-summary' : 'apply-summary';
+        const summaryData: any = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/${summaryEndpoint}`);
+        const processLog = summaryData?.process_log || '';
+        if (processLog) {
+          logText = logText + '\n' + processLog;
+        }
+      } catch {
+        // summary 不存在或未完成，忽略
+      }
+
       console.log('[StageLogViewer] Task type:', taskType, 'Log length:', logText.length);
-      
+
       if (!logText) {
         console.log('[StageLogViewer] No logs found, task:', task);
         // 如果任务被取消且没有日志，说明是在pending状态取消的
