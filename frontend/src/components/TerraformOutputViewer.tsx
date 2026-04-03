@@ -104,8 +104,12 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       // 2. 如果用户选择了具体阶段，自动跟随当前阶段切换
       // 3. 如果用户没有操作（filterStage === 'all' 且 !userSelectedAll），自动切换
       if (!userSelectedAll) {
-        console.log('[TerraformOutputViewer] Auto-switching to stage:', latestActiveStage);
-        setFilterStage(latestActiveStage);
+        // summary 阶段默认折叠，不自动跳转
+        const collapsedStages = ['post_plan_summary', 'post_apply_summary'];
+        if (!collapsedStages.includes(latestActiveStage)) {
+          console.log('[TerraformOutputViewer] Auto-switching to stage:', latestActiveStage);
+          setFilterStage(latestActiveStage);
+        }
       }
     }
   }, [lines, currentStage, userSelectedAll, onStageChange, currentTaskStage]);
@@ -204,6 +208,8 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       'post_apply': 'Post-Apply',
       'saving_plan': 'Saving Plan',
       'saving_state': 'Saving State',
+      'post_plan_summary': 'Plan Summary',
+      'post_apply_summary': 'Apply Summary',
     };
     return nameMap[stageName] || stageName;
   };
@@ -223,6 +229,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       'cost_estimation',
       'policy_check',
       'saving_plan',
+      'post_plan_summary',
     ];
   };
 

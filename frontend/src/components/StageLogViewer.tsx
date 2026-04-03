@@ -151,6 +151,8 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
       'post_apply': 'Post-Apply',
       'saving_plan': 'Saving Plan',
       'saving_state': 'Saving State',
+      'post_plan_summary': 'Plan Summary',
+      'post_apply_summary': 'Apply Summary',
     };
     return nameMap[stageName] || stageName;
   };
@@ -168,6 +170,7 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
         'cost_estimation',
         'policy_check',
         'saving_plan',
+        'post_plan_summary',
       ];
     } else {
       return [
@@ -179,6 +182,7 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
         'applying',
         'post_apply',
         'saving_state',
+        'post_apply_summary',
       ];
     }
   };
