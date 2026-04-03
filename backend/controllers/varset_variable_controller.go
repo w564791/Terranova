@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
+	"strings"
 
 	"iac-platform/internal/models"
 	"iac-platform/services"
@@ -54,7 +56,13 @@ func (c *VarsetVariableController) Create(ctx *gin.Context) {
 
 	v, err := c.service.Create(varsetID, req.Key, req.Value, req.Description, req.VariableType, req.ValueFormat, req.Sensitive, &userID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "not found") {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		} else {
+			log.Printf("Failed to create varset variable: %v", err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create variable"})
+		}
 		return
 	}
 
@@ -68,7 +76,8 @@ func (c *VarsetVariableController) List(ctx *gin.Context) {
 
 	variables, err := c.service.List(varsetID, varType)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("Failed to list varset variables: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list variables"})
 		return
 	}
 
@@ -112,7 +121,15 @@ func (c *VarsetVariableController) Update(ctx *gin.Context) {
 
 	v, err := c.service.Update(varsetID, varID, req.Value, req.Description, req.Sensitive)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
+		} else if strings.Contains(errMsg, "cannot") || strings.Contains(errMsg, "invalid") {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		} else {
+			log.Printf("Failed to update varset variable: %v", err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update variable"})
+		}
 		return
 	}
 
@@ -125,7 +142,13 @@ func (c *VarsetVariableController) Delete(ctx *gin.Context) {
 	varID := ctx.Param("var_id")
 
 	if err := c.service.Delete(varsetID, varID); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
+		} else {
+			log.Printf("Failed to delete varset variable: %v", err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete variable"})
+		}
 		return
 	}
 

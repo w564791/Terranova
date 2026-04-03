@@ -212,13 +212,19 @@ func (s *VariableResolutionService) collectGlobalVarsets() ([]variableCandidate,
 		return nil, err
 	}
 
+	// Collect varset IDs and batch load variables
+	varsetIDs := make([]string, len(varsets))
+	for i, vs := range varsets {
+		varsetIDs[i] = vs.VarsetID
+	}
+	varsMap, err := s.batchLoadVarsetVariables(varsetIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	var candidates []variableCandidate
 	for _, vs := range varsets {
-		vars, err := s.loadVarsetVariables(vs.VarsetID)
-		if err != nil {
-			return nil, err
-		}
-		for _, v := range vars {
+		for _, v := range varsMap[vs.VarsetID] {
 			candidates = append(candidates, variableCandidate{
 				VariableID:   v.VariableID,
 				Key:          v.Key,
@@ -247,17 +253,23 @@ func (s *VariableResolutionService) collectProjectVarsets(projectID uint) ([]var
 		return nil, err
 	}
 
+	// Collect varset IDs and batch load names + variables
+	varsetIDs := make([]string, len(assignments))
+	for i, a := range assignments {
+		varsetIDs[i] = a.VarsetID
+	}
+	namesMap, err := s.batchLoadVarsetNames(varsetIDs)
+	if err != nil {
+		return nil, err
+	}
+	varsMap, err := s.batchLoadVarsetVariables(varsetIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	var candidates []variableCandidate
 	for _, a := range assignments {
-		vs, err := s.getVarsetName(a.VarsetID)
-		if err != nil {
-			return nil, err
-		}
-		vars, err := s.loadVarsetVariables(a.VarsetID)
-		if err != nil {
-			return nil, err
-		}
-		for _, v := range vars {
+		for _, v := range varsMap[a.VarsetID] {
 			candidates = append(candidates, variableCandidate{
 				VariableID:   v.VariableID,
 				Key:          v.Key,
@@ -268,7 +280,7 @@ func (s *VariableResolutionService) collectProjectVarsets(projectID uint) ([]var
 				Description:  v.Description,
 				SourceType:   "varset",
 				SourceID:     a.VarsetID,
-				SourceName:   vs,
+				SourceName:   namesMap[a.VarsetID],
 				ScopeLevel:   "project",
 			})
 		}
@@ -286,17 +298,23 @@ func (s *VariableResolutionService) collectWorkspaceVarsets(workspaceID string) 
 		return nil, err
 	}
 
+	// Collect varset IDs and batch load names + variables
+	varsetIDs := make([]string, len(assignments))
+	for i, a := range assignments {
+		varsetIDs[i] = a.VarsetID
+	}
+	namesMap, err := s.batchLoadVarsetNames(varsetIDs)
+	if err != nil {
+		return nil, err
+	}
+	varsMap, err := s.batchLoadVarsetVariables(varsetIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	var candidates []variableCandidate
 	for _, a := range assignments {
-		vs, err := s.getVarsetName(a.VarsetID)
-		if err != nil {
-			return nil, err
-		}
-		vars, err := s.loadVarsetVariables(a.VarsetID)
-		if err != nil {
-			return nil, err
-		}
-		for _, v := range vars {
+		for _, v := range varsMap[a.VarsetID] {
 			candidates = append(candidates, variableCandidate{
 				VariableID:   v.VariableID,
 				Key:          v.Key,
@@ -307,7 +325,7 @@ func (s *VariableResolutionService) collectWorkspaceVarsets(workspaceID string) 
 				Description:  v.Description,
 				SourceType:   "varset",
 				SourceID:     a.VarsetID,
-				SourceName:   vs,
+				SourceName:   namesMap[a.VarsetID],
 				ScopeLevel:   "workspace-specific",
 			})
 		}
@@ -350,21 +368,37 @@ func (s *VariableResolutionService) collectWorkspaceOwnVariables(workspaceID str
 	return candidates, nil
 }
 
-// loadVarsetVariables loads active (non-deleted) variables for a variable set.
-func (s *VariableResolutionService) loadVarsetVariables(varsetID string) ([]models.VarsetVariable, error) {
-	var vars []models.VarsetVariable
-	if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).
-		Find(&vars).Error; err != nil {
-		return nil, err
+// batchLoadVarsetVariables loads variables for multiple varsets in a single query.
+func (s *VariableResolutionService) batchLoadVarsetVariables(varsetIDs []string) (map[string][]models.VarsetVariable, error) {
+	result := make(map[string][]models.VarsetVariable)
+	if len(varsetIDs) == 0 {
+		return result, nil
 	}
-	return vars, nil
+	var allVars []models.VarsetVariable
+	if err := s.db.Where("varset_id IN ? AND is_deleted = false", varsetIDs).
+		Find(&allVars).Error; err != nil {
+		return nil, fmt.Errorf("batch loading varset variables: %w", err)
+	}
+	for _, v := range allVars {
+		result[v.VarsetID] = append(result[v.VarsetID], v)
+	}
+	return result, nil
 }
 
-// getVarsetName returns the name of a variable set by its varset_id.
-func (s *VariableResolutionService) getVarsetName(varsetID string) (string, error) {
-	var vs models.VariableSet
-	if err := s.db.Where("varset_id = ?", varsetID).First(&vs).Error; err != nil {
-		return "", fmt.Errorf("varset %s not found: %w", varsetID, err)
+// batchLoadVarsetNames loads names for multiple varsets in a single query.
+func (s *VariableResolutionService) batchLoadVarsetNames(varsetIDs []string) (map[string]string, error) {
+	result := make(map[string]string)
+	if len(varsetIDs) == 0 {
+		return result, nil
 	}
-	return vs.Name, nil
+	var varsets []models.VariableSet
+	if err := s.db.Select("varset_id, name").
+		Where("varset_id IN ? AND is_deleted = false", varsetIDs).
+		Find(&varsets).Error; err != nil {
+		return nil, fmt.Errorf("batch loading varset names: %w", err)
+	}
+	for _, vs := range varsets {
+		result[vs.VarsetID] = vs.Name
+	}
+	return result, nil
 }

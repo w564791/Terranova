@@ -233,6 +233,54 @@ func (s *VariableSetService) DeleteAssignment(varsetID string, assignmentID uint
 	return nil
 }
 
+// GetVariableCounts 批量获取变量数量
+func (s *VariableSetService) GetVariableCounts(varsetIDs []string) (map[string]int64, error) {
+	type countResult struct {
+		VarsetID string
+		Count    int64
+	}
+	counts := make(map[string]int64)
+	if len(varsetIDs) == 0 {
+		return counts, nil
+	}
+	var results []countResult
+	if err := s.db.Model(&models.VarsetVariable{}).
+		Select("varset_id, COUNT(*) as count").
+		Where("varset_id IN ? AND is_deleted = false", varsetIDs).
+		Group("varset_id").
+		Find(&results).Error; err != nil {
+		return nil, err
+	}
+	for _, r := range results {
+		counts[r.VarsetID] = r.Count
+	}
+	return counts, nil
+}
+
+// GetAssignmentCounts 批量获取分配数量
+func (s *VariableSetService) GetAssignmentCounts(varsetIDs []string) (map[string]int64, error) {
+	type countResult struct {
+		VarsetID string
+		Count    int64
+	}
+	counts := make(map[string]int64)
+	if len(varsetIDs) == 0 {
+		return counts, nil
+	}
+	var results []countResult
+	if err := s.db.Model(&models.VarsetAssignment{}).
+		Select("varset_id, COUNT(*) as count").
+		Where("varset_id IN ?", varsetIDs).
+		Group("varset_id").
+		Find(&results).Error; err != nil {
+		return nil, err
+	}
+	for _, r := range results {
+		counts[r.VarsetID] = r.Count
+	}
+	return counts, nil
+}
+
 // GetVariableCount 获取变量集中活跃变量数量
 func (s *VariableSetService) GetVariableCount(varsetID string) (int64, error) {
 	var count int64

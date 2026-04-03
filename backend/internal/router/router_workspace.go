@@ -7,6 +7,7 @@ import (
 	"iac-platform/internal/middleware"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
+	"log"
 	"net/http"
 	"time"
 
@@ -555,10 +556,11 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 				workspaceID := ctx.Param("id")
 				result, err := resolutionService.ResolveDisplay(workspaceID)
 				if err != nil {
-					ctx.JSON(500, gin.H{"error": err.Error()})
+					log.Printf("Failed to resolve effective variables for workspace %s: %v", workspaceID, err)
+					ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve effective variables"})
 					return
 				}
-				ctx.JSON(200, result)
+				ctx.JSON(http.StatusOK, result)
 			},
 		)
 
