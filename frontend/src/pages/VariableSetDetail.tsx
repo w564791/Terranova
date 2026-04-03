@@ -232,7 +232,7 @@ const VariableSetDetail: React.FC = () => {
       </div>
 
       {/* ====== Variables Section ====== */}
-      <div style={{ marginBottom: '32px' }}>
+      <div style={{ marginBottom: '32px', background: 'var(--color-white)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-gray-900)', margin: 0 }}>Variables ({variables.length})</h2>
           {!showVarForm && <button className={styles.addButton} onClick={handleAddVar}>+ Add variable</button>}
@@ -357,11 +357,14 @@ const VariableSetDetail: React.FC = () => {
 
       {/* ====== Assignments Section ====== */}
       {varset.scope === 'global' ? (
-        <div style={{ padding: '16px 20px', background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: '8px', color: '#1E40AF', fontSize: '14px', lineHeight: '1.6' }}>
-          This variable set applies to all workspaces globally. No manual assignments needed.
+        <div style={{ background: 'var(--color-white)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-gray-900)', margin: '0 0 12px 0' }}>Assignments</h2>
+          <div style={{ padding: '12px 16px', background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: '6px', color: '#1E40AF', fontSize: '14px', lineHeight: '1.6' }}>
+            This variable set applies to all workspaces globally. No manual assignments needed.
+          </div>
         </div>
       ) : (
-        <div>
+        <div style={{ background: 'var(--color-white)', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-gray-900)', margin: 0 }}>Assignments ({assignments.length})</h2>
             {!showAssignForm && <button className={styles.addButton} onClick={handleAddAssign}>+ Add assignment</button>}

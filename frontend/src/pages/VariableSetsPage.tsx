@@ -246,7 +246,7 @@ const VariableSetsPage: React.FC = () => {
       )}
 
       {/* 变量集列表 */}
-      <div className={styles.versionsList}>
+      <div className={styles.versionsList} style={{ border: '1px solid #e5e7eb' }}>
         {loading ? (
           <div className={styles.loading}>加载中...</div>
         ) : varsets.length === 0 ? (
@@ -268,12 +268,13 @@ const VariableSetsPage: React.FC = () => {
             </thead>
             <tbody>
               {varsets.map((varset) => (
-                <tr key={varset.varset_id}>
+                <tr
+                  key={varset.varset_id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/variable-sets/${varset.varset_id}`)}
+                >
                   <td>
-                    <span
-                      style={{ fontWeight: 500, color: 'var(--color-blue-600)', cursor: 'pointer' }}
-                      onClick={() => navigate(`/variable-sets/${varset.varset_id}`)}
-                    >
+                    <span style={{ fontWeight: 500, color: 'var(--color-blue-600)' }}>
                       {varset.name}
                     </span>
                   </td>
