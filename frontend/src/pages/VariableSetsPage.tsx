@@ -10,7 +10,6 @@ const VariableSetsPage: React.FC = () => {
   const [varsets, setVarsets] = useState<VariableSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingVarset, setEditingVarset] = useState<VariableSet | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<VariableSet | null>(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -45,25 +44,12 @@ const VariableSetsPage: React.FC = () => {
   };
 
   const handleAdd = () => {
-    setEditingVarset(null);
     resetForm();
-    setShowForm(true);
-  };
-
-  const handleEdit = (varset: VariableSet) => {
-    setEditingVarset(varset);
-    setFormData({
-      name: varset.name,
-      description: varset.description || '',
-      scope: varset.scope,
-    });
-    setFormErrors({});
     setShowForm(true);
   };
 
   const handleCancel = () => {
     setShowForm(false);
-    setEditingVarset(null);
     resetForm();
   };
 
@@ -81,28 +67,15 @@ const VariableSetsPage: React.FC = () => {
     if (!validateForm()) return;
 
     try {
-      if (editingVarset) {
-        await variableSetService.update(editingVarset.varset_id, {
-          name: formData.name,
-          description: formData.description,
-        });
-        showToast('变量集更新成功', 'success');
-      } else {
-        const created = await variableSetService.create({
-          name: formData.name,
-          description: formData.description,
-          scope: formData.scope,
-        });
-        showToast('变量集创建成功，请继续添加变量和分配', 'success');
-        // 创建后自动跳转到详情页，方便立即添加变量和 assignment
-        navigate(`/variable-sets/${created.varset_id}`);
-        return;
-      }
-      setShowForm(false);
-      setEditingVarset(null);
-      loadVarsets();
+      const created = await variableSetService.create({
+        name: formData.name,
+        description: formData.description,
+        scope: formData.scope,
+      });
+      showToast('变量集创建成功，请继续添加变量和分配', 'success');
+      navigate(`/variable-sets/${created.varset_id}`);
     } catch (error: any) {
-      showToast(error.response?.data?.error || '操作失败', 'error');
+      showToast(error.response?.data?.error || '创建失败', 'error');
     }
   };
 
@@ -146,6 +119,23 @@ const VariableSetsPage: React.FC = () => {
     });
   };
 
+  // 按钮样式（带边框）
+  const btnStyle: React.CSSProperties = {
+    padding: '5px 12px',
+    border: '1px solid var(--color-gray-300)',
+    background: 'var(--color-white)',
+    color: 'var(--color-gray-700)',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+  };
+  const btnDeleteStyle: React.CSSProperties = {
+    ...btnStyle,
+    color: 'var(--color-red-500)',
+    borderColor: 'var(--color-red-200)',
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -165,15 +155,13 @@ const VariableSetsPage: React.FC = () => {
         )}
       </div>
 
-      {/* 内联编辑表单 */}
+      {/* 创建表单（仅创建，编辑在详情页） */}
       {showForm && (
         <div className={styles.inlineForm}>
           <div className={styles.inlineFormHeader}>
-            <h3 className={styles.inlineFormTitle}>
-              {editingVarset ? '编辑变量集' : '创建变量集'}
-            </h3>
+            <h3 className={styles.inlineFormTitle}>创建变量集</h3>
             <button className={styles.inlineFormClose} onClick={handleCancel}>
-              ×
+              x
             </button>
           </div>
 
@@ -195,39 +183,37 @@ const VariableSetsPage: React.FC = () => {
                   {formErrors.name && <span className={styles.errorText}>{formErrors.name}</span>}
                 </div>
 
-                {/* Scope（仅创建时可选） */}
-                {!editingVarset && (
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>
-                      作用域<span className={styles.required}>*</span>
+                {/* Scope */}
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    作用域<span className={styles.required}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
+                      <input
+                        type="radio"
+                        name="scope"
+                        value="global"
+                        checked={formData.scope === 'global'}
+                        onChange={() => setFormData({ ...formData, scope: 'global' })}
+                      />
+                      Global
                     </label>
-                    <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
-                        <input
-                          type="radio"
-                          name="scope"
-                          value="global"
-                          checked={formData.scope === 'global'}
-                          onChange={() => setFormData({ ...formData, scope: 'global' })}
-                        />
-                        Global
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
-                        <input
-                          type="radio"
-                          name="scope"
-                          value="specific"
-                          checked={formData.scope === 'specific'}
-                          onChange={() => setFormData({ ...formData, scope: 'specific' })}
-                        />
-                        Specific
-                      </label>
-                    </div>
-                    <span className={styles.hint}>
-                      Global 变量集自动应用到所有 Workspace，Specific 需要手动分配
-                    </span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
+                      <input
+                        type="radio"
+                        name="scope"
+                        value="specific"
+                        checked={formData.scope === 'specific'}
+                        onChange={() => setFormData({ ...formData, scope: 'specific' })}
+                      />
+                      Specific
+                    </label>
                   </div>
-                )}
+                  <span className={styles.hint}>
+                    Global 变量集自动应用到所有 Workspace，Specific 需要手动分配
+                  </span>
+                </div>
 
                 {/* 描述 */}
                 <div className={`${styles.formGroup} ${styles.inlineFormFull}`}>
@@ -252,7 +238,7 @@ const VariableSetsPage: React.FC = () => {
                 取消
               </button>
               <button type="submit" className={`${styles.button} ${styles.primary}`}>
-                {editingVarset ? '保存' : '创建'}
+                创建
               </button>
             </div>
           </form>
@@ -299,7 +285,7 @@ const VariableSetsPage: React.FC = () => {
                   </td>
                   <td>
                     <span style={{ color: 'var(--color-gray-600)' }}>
-                      {varset.assignment_count ?? 0}
+                      {varset.scope === 'global' ? 'All' : (varset.assignment_count ?? 0)}
                     </span>
                   </td>
                   <td>
@@ -308,17 +294,12 @@ const VariableSetsPage: React.FC = () => {
                     </span>
                   </td>
                   <td>
-                    <div className={styles.actionButtons}>
-                      <button className={styles.actionButton} onClick={() => handleEdit(varset)}>
-                        编辑
-                      </button>
-                      <button
-                        className={`${styles.actionButton} ${styles.delete}`}
-                        onClick={() => handleDelete(varset)}
-                      >
-                        删除
-                      </button>
-                    </div>
+                    <button
+                      style={btnDeleteStyle}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(varset); }}
+                    >
+                      删除
+                    </button>
                   </td>
                 </tr>
               ))}
