@@ -7,7 +7,6 @@ import { getProjects, type Project } from '../services/projects';
 import { workspaceService, type Workspace } from '../services/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './Admin.module.css';
-import wsStyles from './WorkspaceDetail.module.css';
 
 type TabType = 'variables' | 'assignments';
 
@@ -37,9 +36,6 @@ const VariableSetDetail: React.FC = () => {
   // Variable delete state
   const [deleteVarDialog, setDeleteVarDialog] = useState(false);
   const [varToDelete, setVarToDelete] = useState<VarsetVariable | null>(null);
-
-  // Variable action menu
-  const [showVarMenu, setShowVarMenu] = useState<number | null>(null);
 
   // Assignment form state
   const [showAssignForm, setShowAssignForm] = useState(false);
@@ -73,8 +69,9 @@ const VariableSetDetail: React.FC = () => {
       setVariables(Array.isArray(varsData) ? varsData : []);
       setAssignments(assignData.items || []);
       setProjects(projectList || []);
-      const wsList = (wsResponse as any)?.data || wsResponse || [];
-      setWorkspaces(Array.isArray(wsList) ? wsList : []);
+      const wsRaw = wsResponse as any;
+      const wsItems = wsRaw?.data?.items || wsRaw?.items || wsRaw?.data || wsRaw || [];
+      setWorkspaces(Array.isArray(wsItems) ? wsItems : []);
     } catch (error: any) {
       showToast(error.response?.data?.error || 'Failed to load variable set', 'error');
     } finally {
@@ -108,7 +105,6 @@ const VariableSetDetail: React.FC = () => {
   const handleEditVar = (v: VarsetVariable) => {
     setEditingVar(v);
     setShowVarForm(true);
-    setShowVarMenu(null);
     setVarFormData({
       key: v.key,
       value: v.sensitive ? '' : v.value,
@@ -163,7 +159,6 @@ const VariableSetDetail: React.FC = () => {
   };
 
   const handleDeleteVarClick = (v: VarsetVariable) => {
-    setShowVarMenu(null);
     setVarToDelete(v);
     setDeleteVarDialog(true);
   };
@@ -191,8 +186,9 @@ const VariableSetDetail: React.FC = () => {
         workspaceService.getWorkspaces(),
       ]);
       setProjects(projectList || []);
-      const wsList = (wsResponse as any)?.data || wsResponse || [];
-      setWorkspaces(Array.isArray(wsList) ? wsList : []);
+      const wsRaw = wsResponse as any;
+      const wsItems = wsRaw?.data?.items || wsRaw?.items || wsRaw?.data || wsRaw || [];
+      setWorkspaces(Array.isArray(wsItems) ? wsItems : []);
     } catch (error: any) {
       showToast('Failed to load projects/workspaces', 'error');
     } finally {
@@ -407,23 +403,16 @@ const VariableSetDetail: React.FC = () => {
                         {v.description || '-'}
                       </td>
                       <td>
-                        <div className={wsStyles.menuContainer}>
-                          <button
-                            onClick={() => setShowVarMenu(showVarMenu === v.id ? null : v.id)}
-                            className={wsStyles.deleteButton}
-                          >
-                            ⋯
+                        <div className={styles.actionButtons}>
+                          <button className={styles.actionButton} onClick={() => handleEditVar(v)}>
+                            编辑
                           </button>
-                          {showVarMenu === v.id && (
-                            <div className={wsStyles.dropdownMenu}>
-                              <button onClick={() => handleEditVar(v)} className={wsStyles.menuItem}>
-                                Edit variable
-                              </button>
-                              <button onClick={() => handleDeleteVarClick(v)} className={wsStyles.menuItemDanger}>
-                                Delete
-                              </button>
-                            </div>
-                          )}
+                          <button
+                            className={`${styles.actionButton} ${styles.delete}`}
+                            onClick={() => handleDeleteVarClick(v)}
+                          >
+                            删除
+                          </button>
                         </div>
                       </td>
                     </tr>
