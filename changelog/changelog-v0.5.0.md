@@ -42,28 +42,42 @@ Variable Set -- 组织级变量集管理，支持 Global/Specific 作用域，�
 - **改进** 被覆盖的变量显示 "Overridden {key}" 超链接，点击跳转到覆盖方变量
 - **改进** 创建变量集后自动跳转到详情页，方便立即添加变量和分配
 
-### Bug Fixes
-
-- **修复** Assignment 删除未校验 varset 归属，可跨变量集删除 assignment 的授权漏洞
-- **修复** `VarsetVariableService.Update()` 使用 map-based Updates 绕过 GORM hooks 导致 sensitive 变量明文存储
-- **修复** 错误信息直接暴露给客户端（包含 DB 细节），改为分类返回 400/404/500 + 日志记录
-- **修复** List 接口 N+1 查询（每个 varset 2 次 count 查询），改为批量 GROUP BY
-- **修复** Resolution Service N+1 查询（每个 varset 2 次查询），改为批量加载
-- **修复** Toast 通知不显示：useToast 误导入 hooks/useToast（本地状态）而非 contexts/ToastContext（全局渲染）
-- **修复** 变量操作按钮显示不完整，改为直接显示"编辑"/"删除"按钮
-- **修复** Workspace 列表 API 响应数据解析错误（未正确处理 `{code, data: {items}}` 格式）
-- **修复** Effective variables 默认折叠，改为页面加载时自动显示并在变量 CRUD 后刷新
-- **修复** Overridden 超链接跳转失效（workspace 变量行缺少 anchor ID）
-- **修复** 删除确认弹窗不符合 ConfirmDialog 规范，从 toast 风格改为 type="danger" 弹窗
-- **修复** 数据库残留旧索引 idx_varset_key_type，migration 增加 DROP 保证幂等
-- **修复** snapshot_variables 在 GetTask 查询中被 Omit，导致任务详情无法展示快照变量
-
 ### Tests
 
 - **新增** 9 个集成测试，覆盖版本控制、键唯一性、sensitive 约束、全局解析、覆盖优先级、版本传播
 - **新增** TestMain 自动管理测试库生命周期（创建 iac_platform_test -> 初始化 schema -> 执行测试 -> 清理）
 
+### AI Plan Summary 实时日志流
+
+#### 后端
+
+- **新增** `AIAgentLoop` observer callback 机制，支持 thinking/tool_call/tool_result/output/retry 五类中间事件实时推送
+- **新增** `AISummaryService` 接入 WebSocket stream，AI 分析过程实时广播到前端（`post_plan_summary`/`post_apply_summary` 阶段）
+- **新增** `process_log` 字段持久化 AI 分析过程日志，支持刷新后回看
+- **新增** process log 行格式统一为 `[timestamp] [LEVEL] [Step N] message`，与 Terraform 日志风格一致
+- **修复** `completed` WebSocket 消息在 AI summary 完成前发送，导致前端提前显示 Completed 且断连后不重连
+- **修复** stream 生命周期：使用 WaitGroup 延迟 stream 关闭和 `completed` 广播，等待 AI summary 完成
+- **修复** thinking content 截断使用 rune 安全截取，避免中文 UTF-8 字符被截断
+- **新增** Agent/K8s 模式：`RawAgentCCHandler.handleTaskCompleted` 服务端触发 AI summary（agent 端无 DB）
+
+#### 前端
+
+- **新增** `TerraformOutputViewer`（实时）和 `StageLogViewer`（历史）同步支持 Plan Summary / Apply Summary 阶段 tab
+- **新增** summary 阶段默认折叠，不自动跳转
+- **改进** `StageLogViewer` 渲染风格统一为逐行 div + 行号 + stage marker 特殊样式，与 `TerraformOutputViewer` 一致
+- **新增** `StageLogViewer` 从 summary API 获取 `process_log` 拼接到日志末尾，支持历史回看 AI 分析过程
+- **新增** `TerraformOutputViewer` 空 stream 检测：连接 3 秒无数据自动降级到 HTTP 历史日志（解决刷新后空白问题）
+
 ### Database
+
+- **新字段** `ai_plan_summaries.process_log text` -- AI Plan 分析过程日志
+- **新字段** `ai_apply_summaries.process_log text` -- AI Apply 分析过程日志
+- **Migration**: `manifests/migrations/add_process_log_to_ai_summaries.sql`
+- **Seed SQL**: `manifests/db/init_seed_data.sql` 同步更新建表语句
+
+---
+
+### Variable Set Database
 
 - **新表** `variable_sets` -- 变量集元数据（varset_id, name, scope, is_deleted）
 - **新表** `varset_variables` -- 变量集内变量（variable_id, key, value, version, sensitive, 加密存储）
