@@ -128,6 +128,12 @@ func GenerateVariableID() (string, error) {
 	return generateRandomID("var", 16)
 }
 
+// GenerateVarsetID 生成Variable Set ID
+// 格式: varset-{16位随机小写字母+数字}
+func GenerateVarsetID() (string, error) {
+	return generateRandomID("varset", 16)
+}
+
 // GeneratePlanSummaryID 生成Plan Summary ID
 // 格式: plsm-{16位随机小写字母+数字}
 func GeneratePlanSummaryID() (string, error) {

@@ -55,6 +55,8 @@ const (
 	ResourceTypeSystemSettings ResourceType = "SYSTEM_SETTINGS"
 	// ResourceTypeRunTasks Run Task管理
 	ResourceTypeRunTasks ResourceType = "RUN_TASKS"
+	// ResourceTypeVariableSets 变量集管理
+	ResourceTypeVariableSets ResourceType = "VARIABLE_SETS"
 )
 
 // 项目级资源
@@ -102,7 +104,7 @@ func (r ResourceType) IsValid() bool {
 		ResourceTypeIAMProjects, ResourceTypeIAMApplications, ResourceTypeIAMAudit,
 		ResourceTypeIAMUsers, ResourceTypeIAMRoles,
 		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis,
-		ResourceTypeSystemSettings, ResourceTypeRunTasks,
+		ResourceTypeSystemSettings, ResourceTypeRunTasks, ResourceTypeVariableSets,
 		// 项目级
 		ResourceTypeProjectSettings, ResourceTypeProjectTeams,
 		ResourceTypeProjectWorkspaces,
@@ -128,7 +130,7 @@ func (r ResourceType) GetScopeLevel() ScopeType {
 		ResourceTypeIAMProjects, ResourceTypeIAMApplications, ResourceTypeIAMAudit,
 		ResourceTypeIAMUsers, ResourceTypeIAMRoles,
 		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis,
-		ResourceTypeSystemSettings, ResourceTypeRunTasks:
+		ResourceTypeSystemSettings, ResourceTypeRunTasks, ResourceTypeVariableSets:
 		return ScopeTypeOrganization
 
 	// 项目级资源
