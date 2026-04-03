@@ -774,9 +774,10 @@ func (s *AISummaryService) buildObserver(taskID uint, processLog *strings.Builde
 		var line string
 		switch event.Type {
 		case "thinking":
+			runes := []rune(event.Content)
 			content := event.Content
-			if len(content) > 500 {
-				content = content[:500] + "..."
+			if len(runes) > 500 {
+				content = string(runes[:500]) + "..."
 			}
 			line = fmt.Sprintf("[Step %d] Thinking: %s", event.Step, content)
 		case "tool_call":
