@@ -374,7 +374,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
               </div>
             ) : (
               // 变量行
-              <div className={styles.variableRow}>
+              <div className={styles.variableRow} id={`var-${variable.variable_id}`}>
                 <div className={styles.variableKeyCell}>
                   <div className={styles.variableKey}>
                     {variable.key}
