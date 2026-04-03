@@ -771,7 +771,9 @@ func writeStageMarkerToLog(processLog *strings.Builder, stage string, status str
 
 func (s *AISummaryService) buildObserver(taskID uint, processLog *strings.Builder) AgentLoopObserver {
 	return func(event AgentLoopEvent) {
-		var line string
+		now := time.Now().Format("15:04:05.000")
+		var msg string
+		level := "INFO"
 		switch event.Type {
 		case "thinking":
 			runes := []rune(event.Content)
@@ -779,22 +781,25 @@ func (s *AISummaryService) buildObserver(taskID uint, processLog *strings.Builde
 			if len(runes) > 500 {
 				content = string(runes[:500]) + "..."
 			}
-			line = fmt.Sprintf("[Step %d] Thinking: %s", event.Step, content)
+			msg = fmt.Sprintf("[Step %d] Thinking: %s", event.Step, content)
 		case "tool_call":
-			line = fmt.Sprintf("[Step %d] Tool call: %s", event.Step, event.ToolName)
+			msg = fmt.Sprintf("[Step %d] Tool call: %s", event.Step, event.ToolName)
 		case "tool_result":
 			if event.Error != "" {
-				line = fmt.Sprintf("[Step %d] Tool result: %s failed (%dms): %s", event.Step, event.ToolName, event.Duration, event.Error)
+				level = "WARN"
+				msg = fmt.Sprintf("[Step %d] Tool result: %s failed (%dms): %s", event.Step, event.ToolName, event.Duration, event.Error)
 			} else {
-				line = fmt.Sprintf("[Step %d] Tool result: %s ok (%dms)", event.Step, event.ToolName, event.Duration)
+				msg = fmt.Sprintf("[Step %d] Tool result: %s ok (%dms)", event.Step, event.ToolName, event.Duration)
 			}
 		case "output":
-			line = fmt.Sprintf("[Step %d] AI output generated", event.Step)
+			msg = fmt.Sprintf("[Step %d] AI output generated", event.Step)
 		case "retry":
-			line = fmt.Sprintf("[Step %d] Output validation failed, retrying: %s", event.Step, event.Content)
+			level = "WARN"
+			msg = fmt.Sprintf("[Step %d] Output validation failed, retrying: %s", event.Step, event.Content)
 		default:
 			return
 		}
+		line := fmt.Sprintf("[%s] [%s] %s", now, level, msg)
 		processLog.WriteString(line)
 		processLog.WriteString("\n")
 		s.streamLog(taskID, line)
