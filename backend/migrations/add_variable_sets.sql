@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS public.varset_variables (
         FOREIGN KEY (varset_id) REFERENCES variable_sets(varset_id) ON DELETE CASCADE
 );
 
+-- Drop legacy indexes if they exist (from earlier versions of this migration)
+DROP INDEX IF EXISTS idx_varset_key_type;
+DROP INDEX IF EXISTS idx_varset_key;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_varset_key_version
     ON public.varset_variables USING btree (varset_id, key, version) WHERE is_deleted = false;
 CREATE INDEX IF NOT EXISTS idx_varset_key_latest
