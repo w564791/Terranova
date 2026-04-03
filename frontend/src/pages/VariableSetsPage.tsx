@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useToast } from '../hooks/useToast';
+import { useToast } from '../contexts/ToastContext';
 import { variableSetService } from '../services/variableSets';
 import type { VariableSet } from '../services/variableSets';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -88,12 +88,15 @@ const VariableSetsPage: React.FC = () => {
         });
         showToast('变量集更新成功', 'success');
       } else {
-        await variableSetService.create({
+        const created = await variableSetService.create({
           name: formData.name,
           description: formData.description,
           scope: formData.scope,
         });
-        showToast('变量集创建成功', 'success');
+        showToast('变量集创建成功，请继续添加变量和分配', 'success');
+        // 创建后自动跳转到详情页，方便立即添加变量和 assignment
+        navigate(`/variable-sets/${created.varset_id}`);
+        return;
       }
       setShowForm(false);
       setEditingVarset(null);

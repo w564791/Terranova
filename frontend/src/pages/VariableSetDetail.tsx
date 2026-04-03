@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useToast } from '../hooks/useToast';
+import { useToast } from '../contexts/ToastContext';
 import { variableSetService } from '../services/variableSets';
 import type { VariableSet, VarsetVariable, VarsetAssignment } from '../services/variableSets';
 import { getProjects, type Project } from '../services/projects';
 import { workspaceService, type Workspace } from '../services/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './Admin.module.css';
+import wsStyles from './WorkspaceDetail.module.css';
 
 type TabType = 'variables' | 'assignments';
 
@@ -406,60 +407,19 @@ const VariableSetDetail: React.FC = () => {
                         {v.description || '-'}
                       </td>
                       <td>
-                        <div className={styles.actionButtons} style={{ position: 'relative' }}>
+                        <div className={wsStyles.menuContainer}>
                           <button
-                            className={styles.actionButton}
                             onClick={() => setShowVarMenu(showVarMenu === v.id ? null : v.id)}
+                            className={wsStyles.deleteButton}
                           >
-                            ...
+                            ⋯
                           </button>
                           {showVarMenu === v.id && (
-                            <div style={{
-                              position: 'absolute',
-                              right: 0,
-                              top: '100%',
-                              background: 'white',
-                              border: '1px solid var(--color-gray-200)',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                              zIndex: 10,
-                              minWidth: '120px',
-                              overflow: 'hidden',
-                            }}>
-                              <button
-                                onClick={() => handleEditVar(v)}
-                                style={{
-                                  display: 'block',
-                                  width: '100%',
-                                  padding: '8px 16px',
-                                  border: 'none',
-                                  background: 'none',
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                  color: 'var(--color-gray-700)',
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-gray-50)')}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                              >
-                                Edit
+                            <div className={wsStyles.dropdownMenu}>
+                              <button onClick={() => handleEditVar(v)} className={wsStyles.menuItem}>
+                                Edit variable
                               </button>
-                              <button
-                                onClick={() => handleDeleteVarClick(v)}
-                                style={{
-                                  display: 'block',
-                                  width: '100%',
-                                  padding: '8px 16px',
-                                  border: 'none',
-                                  background: 'none',
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                  color: 'var(--color-red-500)',
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-red-50)')}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                              >
+                              <button onClick={() => handleDeleteVarClick(v)} className={wsStyles.menuItemDanger}>
                                 Delete
                               </button>
                             </div>
