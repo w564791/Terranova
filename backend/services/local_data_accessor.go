@@ -76,7 +76,6 @@ func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType mo
 
 	// 过滤：只要指定类型、非覆盖（最终生效）的变量
 	var variables []models.WorkspaceVariable
-	var varKeys []string
 	for _, ev := range display {
 		if ev.IsOverridden {
 			continue
@@ -94,18 +93,7 @@ func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType mo
 			Sensitive:    ev.Sensitive,
 			Description:  ev.Description,
 		})
-		source := "workspace"
-		if ev.SourceType == "varset" {
-			source = fmt.Sprintf("varset(%s)", ev.SourceName)
-		}
-		sensitive := ""
-		if ev.Sensitive {
-			sensitive = " [sensitive]"
-		}
-		varKeys = append(varKeys, fmt.Sprintf("%s (source=%s%s)", ev.Key, source, sensitive))
 	}
-
-	log.Printf("[INFO] Workspace %s loaded %d %s variables: %v", workspaceID, len(variables), varType, varKeys)
 
 	return variables, nil
 }

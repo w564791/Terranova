@@ -803,25 +803,46 @@ func (s *TerraformExecutor) ExecutePlan(
 		}
 	}
 
-	// 1.4 获取变量（使用 DataAccessor）
-	logger.Info("Fetching workspace variables...")
+	// 1.4 获取变量（使用 DataAccessor，含 Variable Set 合并）
+	logger.Info("Fetching terraform variables (workspace + variable sets)...")
 	variables, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform)
 	if err != nil {
-		logger.Warn("Failed to fetch variables: %v", err)
+		logger.Warn("Failed to fetch terraform variables: %v", err)
 	} else {
 		normalCount := 0
 		sensitiveCount := 0
 		for _, v := range variables {
 			if v.Sensitive {
-				logger.Info("✓ Variable: %s = ***SENSITIVE***", v.Key)
+				logger.Info("✓ Terraform variable: %s = ***SENSITIVE***", v.Key)
 				sensitiveCount++
 			} else {
-				logger.Info("✓ Variable: %s = %s", v.Key, v.Value)
+				logger.Info("✓ Terraform variable: %s = %s", v.Key, v.Value)
 				normalCount++
 			}
 		}
-		logger.Info("Total: %d variables loaded (%d normal, %d sensitive)",
+		logger.Info("Total: %d terraform variables loaded (%d normal, %d sensitive)",
 			len(variables), normalCount, sensitiveCount)
+	}
+
+	// 1.4.1 获取环境变量
+	logger.Info("Fetching environment variables (workspace + variable sets)...")
+	envVariables, envErr := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeEnvironment)
+	if envErr != nil {
+		logger.Warn("Failed to fetch environment variables: %v", envErr)
+	} else {
+		envNormal := 0
+		envSensitive := 0
+		for _, v := range envVariables {
+			if v.Sensitive {
+				logger.Info("✓ Environment variable: %s = ***SENSITIVE***", v.Key)
+				envSensitive++
+			} else {
+				logger.Info("✓ Environment variable: %s", v.Key)
+				envNormal++
+			}
+		}
+		logger.Info("Total: %d environment variables loaded (%d normal, %d sensitive)",
+			len(envVariables), envNormal, envSensitive)
 	}
 
 	// 1.5 获取Provider配置
