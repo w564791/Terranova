@@ -190,11 +190,12 @@ const VariableSetDetail: React.FC = () => {
   const btnStyle: React.CSSProperties = { padding: '5px 12px', border: '1px solid var(--color-gray-300)', background: 'var(--color-white)', color: 'var(--color-gray-700)', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' };
   const btnDeleteStyle: React.CSSProperties = { ...btnStyle, color: 'var(--color-red-500)', borderColor: 'var(--color-red-200)' };
 
-  if (loading && !varset) return <div className={styles.container}><div className={styles.loading}>Loading...</div></div>;
-  if (!varset) return <div className={styles.container}><div className={styles.empty}><div className={styles.emptyText}>Variable set not found</div></div></div>;
+  const outerStyle: React.CSSProperties = { margin: '12px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+  if (loading && !varset) return <div className={styles.container} style={outerStyle}><div className={styles.loading}>Loading...</div></div>;
+  if (!varset) return <div className={styles.container} style={outerStyle}><div className={styles.empty}><div className={styles.emptyText}>Variable set not found</div></div></div>;
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} style={{ margin: '12px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
       {/* Header */}
       <div className={styles.header}>
         <div style={{ marginBottom: '8px' }}>

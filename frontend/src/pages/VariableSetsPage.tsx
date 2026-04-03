@@ -137,7 +137,7 @@ const VariableSetsPage: React.FC = () => {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} style={{ margin: '12px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
       <div className={styles.header}>
         <h1 className={styles.title}>Variable Sets</h1>
         <p className={styles.description}>
