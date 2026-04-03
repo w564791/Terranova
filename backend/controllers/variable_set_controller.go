@@ -221,7 +221,8 @@ func (c *VariableSetController) DeleteAssignment(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.service.DeleteAssignment(uint(assignmentID)); err != nil {
+	varsetID := ctx.Param("varset_id")
+	if err := c.service.DeleteAssignment(varsetID, uint(assignmentID)); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

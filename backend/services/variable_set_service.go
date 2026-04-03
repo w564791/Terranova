@@ -221,9 +221,9 @@ func (s *VariableSetService) ListAssignments(varsetID string) ([]models.VarsetAs
 	return assignments, nil
 }
 
-// DeleteAssignment 删除分配（硬删除）
-func (s *VariableSetService) DeleteAssignment(assignmentID uint) error {
-	result := s.db.Delete(&models.VarsetAssignment{}, assignmentID)
+// DeleteAssignment 删除分配（硬删除，验证所属 varset）
+func (s *VariableSetService) DeleteAssignment(varsetID string, assignmentID uint) error {
+	result := s.db.Where("id = ? AND varset_id = ?", assignmentID, varsetID).Delete(&models.VarsetAssignment{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete assignment: %w", result.Error)
 	}
