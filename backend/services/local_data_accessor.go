@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"iac-platform/internal/crypto"
 	"iac-platform/internal/database"
 	"iac-platform/internal/models"
 	"log"
@@ -64,37 +63,36 @@ func (a *LocalDataAccessor) GetWorkspaceResources(workspaceID string) ([]models.
 	return resources, nil
 }
 
-// GetWorkspaceVariables 获取 Workspace 变量列表（只返回每个变量的最新版本）
+// GetWorkspaceVariables 获取 Workspace 变量列表（含 Variable Set 合并，优先级解析后的最终结果）
 func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error) {
-	var variables []models.WorkspaceVariable
 	db := a.getDB()
 
-	// 使用子查询只获取每个变量的最新版本
-	err := db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		INNER JOIN (
-			SELECT variable_id, MAX(version) as max_version
-			FROM workspace_variables
-			WHERE workspace_id = ? AND variable_type = ? AND is_deleted = false
-			GROUP BY variable_id
-		) latest ON wv.variable_id = latest.variable_id AND wv.version = latest.max_version
-		WHERE wv.workspace_id = ? AND wv.variable_type = ? AND wv.is_deleted = false
-	`, workspaceID, varType, workspaceID, varType).Scan(&variables).Error
-
+	// 使用 VariableResolutionService 获取合并后的完整变量集
+	resolver := NewVariableResolutionService(db)
+	display, err := resolver.ResolveDisplay(workspaceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace variables: %w", err)
+		return nil, fmt.Errorf("failed to resolve effective variables: %w", err)
 	}
 
-	// Raw SQL bypasses GORM AfterFind hook, manually decrypt sensitive variables
-	for i := range variables {
-		if variables[i].Sensitive && variables[i].Value != "" && crypto.IsEncrypted(variables[i].Value) {
-			decrypted, err := crypto.DecryptValue(variables[i].Value)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decrypt variable %s: %w", variables[i].Key, err)
-			}
-			variables[i].Value = decrypted
+	// 过滤：只要指定类型、非覆盖（最终生效）的变量
+	var variables []models.WorkspaceVariable
+	for _, ev := range display {
+		if ev.IsOverridden {
+			continue
 		}
+		if ev.VariableType != varType {
+			continue
+		}
+		variables = append(variables, models.WorkspaceVariable{
+			VariableID:   ev.VariableID,
+			WorkspaceID:  workspaceID,
+			Key:          ev.Key,
+			Value:        ev.Value,
+			VariableType: ev.VariableType,
+			ValueFormat:  ev.ValueFormat,
+			Sensitive:    ev.Sensitive,
+			Description:  ev.Description,
+		})
 	}
 
 	return variables, nil
