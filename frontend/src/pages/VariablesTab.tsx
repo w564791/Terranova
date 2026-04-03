@@ -536,17 +536,17 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
       {/* Effective Variables Section */}
       <div className={styles.section}>
         <h3 className={styles.sectionTitle} style={{ marginBottom: '12px' }}>
-          Effective Variables (including Variable Sets)
+          Variable Set Variables
         </h3>
         <div>
             {effectiveLoading ? (
               <div className={styles.loading}>Loading effective variables...</div>
-            ) : effectiveVars.length === 0 ? (
-              <p className={styles.infoText}>No effective variables found. This workspace has no variables or attached variable sets.</p>
+            ) : effectiveVars.filter(ev => ev.source_type === 'varset').length === 0 ? (
+              <p className={styles.infoText}>No variable set variables attached to this workspace.</p>
             ) : (
               <>
                 <p className={styles.infoText} style={{ marginBottom: '12px' }}>
-                  Showing all variables from workspace and attached variable sets, merged by precedence rules.
+                  以下为通过 Variable Set 注入的变量。被 Workspace 自身变量覆盖的会标记为 Overridden。
                 </p>
                 {/* Effective variables table header */}
                 <div style={{
@@ -570,7 +570,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                 </div>
 
                 {/* Effective variables rows */}
-                {effectiveVars.map((ev) => (
+                {effectiveVars.filter(ev => ev.source_type === 'varset').map((ev) => (
                   <div
                     key={`${ev.variable_id}-${ev.source_id}`}
                     id={`var-${ev.variable_id}`}
