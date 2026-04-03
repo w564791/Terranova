@@ -1202,6 +1202,7 @@ CREATE TABLE public.ai_plan_summaries (
     status character varying(20) NOT NULL DEFAULT 'pending'::character varying,
     error_message text,
     duration bigint DEFAULT 0,
+    process_log text,
     created_at timestamp without time zone,
     requires_confirmation boolean DEFAULT false,
     decision_scenario character varying(50),
@@ -1234,6 +1235,7 @@ CREATE TABLE public.ai_apply_summaries (
     status character varying(20) NOT NULL DEFAULT 'pending'::character varying,
     error_message text,
     duration bigint DEFAULT 0,
+    process_log text,
     created_at timestamp without time zone
 );
 
