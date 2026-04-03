@@ -7,9 +7,10 @@ interface Props {
   taskId: number;
   onStageChange?: (stage: string) => void; // 新增：通知父组件当前阶段变化
   currentTaskStage?: string; // 从父组件接收当前任务阶段（来自API）
+  onEmpty?: () => void; // WebSocket 连接后无数据时回调（用于降级到 HTTP）
 }
 
-const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, currentTaskStage }) => {
+const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, currentTaskStage, onEmpty }) => {
   const { lines, isConnected, isCompleted, error } = useTerraformOutput(taskId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,6 +22,18 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
   const [currentStage, setCurrentStage] = useState<string>('fetching');
   const [availableStages, setAvailableStages] = useState<Set<string>>(new Set(['fetching']));
   const [userSelectedAll, setUserSelectedAll] = useState(false); // 用户是否手动选择了"全部"
+
+  // 检测空 stream：连接成功但 3 秒内无任何数据，触发 onEmpty 降级到 HTTP
+  useEffect(() => {
+    if (!onEmpty || !isConnected || lines.length > 0) return;
+    const timer = setTimeout(() => {
+      if (lines.length === 0) {
+        console.log('[TerraformOutputViewer] Connected but no data after 3s, triggering onEmpty');
+        onEmpty();
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isConnected, lines.length, onEmpty]);
 
   // 获取任务状态
   useEffect(() => {
