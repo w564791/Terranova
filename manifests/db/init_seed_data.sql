@@ -6099,6 +6099,175 @@ ALTER SEQUENCE public.vcs_providers_id_seq OWNED BY public.vcs_providers.id;
 
 
 --
+-- Name: variable_sets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.variable_sets (
+    id integer NOT NULL,
+    varset_id character varying(30) NOT NULL,
+    name character varying(100) NOT NULL,
+    description text,
+    scope character varying(20) DEFAULT 'specific'::character varying NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    created_by character varying(20)
+);
+
+
+--
+-- Name: TABLE variable_sets; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.variable_sets IS 'Organization-level variable set collections';
+
+
+--
+-- Name: COLUMN variable_sets.varset_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.variable_sets.varset_id IS 'Semantic ID: varset-{16 random alphanumeric}';
+
+
+--
+-- Name: COLUMN variable_sets.scope; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.variable_sets.scope IS 'global: applies to all workspaces; specific: manually assigned';
+
+
+--
+-- Name: variable_sets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.variable_sets_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: variable_sets_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.variable_sets_id_seq OWNED BY public.variable_sets.id;
+
+
+--
+-- Name: varset_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.varset_assignments (
+    id integer NOT NULL,
+    varset_id character varying(30) NOT NULL,
+    scope_type character varying(20) NOT NULL,
+    project_id integer,
+    workspace_id character varying(50),
+    attached_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    attached_by character varying(20)
+);
+
+
+--
+-- Name: TABLE varset_assignments; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.varset_assignments IS 'Soft-link assignments between variable sets and projects/workspaces';
+
+
+--
+-- Name: COLUMN varset_assignments.scope_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.varset_assignments.scope_type IS 'project or workspace';
+
+
+--
+-- Name: COLUMN varset_assignments.attached_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.varset_assignments.attached_at IS 'Determines priority within same scope level (later = higher)';
+
+
+--
+-- Name: varset_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.varset_assignments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: varset_assignments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.varset_assignments_id_seq OWNED BY public.varset_assignments.id;
+
+
+--
+-- Name: varset_variables; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.varset_variables (
+    id integer NOT NULL,
+    variable_id character varying(20) NOT NULL,
+    varset_id character varying(30) NOT NULL,
+    key character varying(100) NOT NULL,
+    value text,
+    variable_type character varying(20) DEFAULT 'terraform'::character varying NOT NULL,
+    value_format character varying(20) DEFAULT 'string'::character varying NOT NULL,
+    sensitive boolean DEFAULT false NOT NULL,
+    description text,
+    is_deleted boolean DEFAULT false NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    created_by character varying(20)
+);
+
+
+--
+-- Name: TABLE varset_variables; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.varset_variables IS 'Variables within a variable set';
+
+
+--
+-- Name: COLUMN varset_variables.variable_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.varset_variables.variable_id IS 'Semantic ID: var-{16 random alphanumeric}';
+
+
+--
+-- Name: varset_variables_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.varset_variables_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: varset_variables_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.varset_variables_id_seq OWNED BY public.varset_variables.id;
+
+
+--
 -- Name: webhook_configs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -8036,6 +8205,27 @@ ALTER TABLE ONLY public.user_organizations ALTER COLUMN id SET DEFAULT nextval('
 --
 
 ALTER TABLE ONLY public.vcs_providers ALTER COLUMN id SET DEFAULT nextval('public.vcs_providers_id_seq'::regclass);
+
+
+--
+-- Name: variable_sets id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.variable_sets ALTER COLUMN id SET DEFAULT nextval('public.variable_sets_id_seq'::regclass);
+
+
+--
+-- Name: varset_assignments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_assignments ALTER COLUMN id SET DEFAULT nextval('public.varset_assignments_id_seq'::regclass);
+
+
+--
+-- Name: varset_variables id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_variables ALTER COLUMN id SET DEFAULT nextval('public.varset_variables_id_seq'::regclass);
 
 
 --
@@ -11436,6 +11626,56 @@ ALTER TABLE ONLY public.vcs_providers
 
 
 --
+-- Name: variable_sets variable_sets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.variable_sets
+    ADD CONSTRAINT variable_sets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: variable_sets variable_sets_varset_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.variable_sets
+    ADD CONSTRAINT variable_sets_varset_id_key UNIQUE (varset_id);
+
+
+--
+-- Name: varset_assignments varset_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_assignments
+    ADD CONSTRAINT varset_assignments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: varset_assignments chk_scope_target; Type: CHECK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE public.varset_assignments
+    ADD CONSTRAINT chk_scope_target CHECK (
+        ((((scope_type)::text = 'project'::text) AND (project_id IS NOT NULL) AND (workspace_id IS NULL)) OR (((scope_type)::text = 'workspace'::text) AND (workspace_id IS NOT NULL) AND (project_id IS NULL)))
+    );
+
+
+--
+-- Name: varset_variables varset_variables_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_variables
+    ADD CONSTRAINT varset_variables_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: varset_variables varset_variables_variable_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_variables
+    ADD CONSTRAINT varset_variables_variable_id_key UNIQUE (variable_id);
+
+
+--
 -- Name: webhook_configs webhook_configs_org_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13706,6 +13946,83 @@ CREATE UNIQUE INDEX idx_variable_id_version ON public.workspace_variables USING 
 
 
 --
+-- Name: idx_variable_sets_is_deleted; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_variable_sets_is_deleted ON public.variable_sets USING btree (is_deleted);
+
+
+--
+-- Name: idx_variable_sets_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_variable_sets_name ON public.variable_sets USING btree (name) WHERE (is_deleted = false);
+
+
+--
+-- Name: idx_variable_sets_scope; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_variable_sets_scope ON public.variable_sets USING btree (scope);
+
+
+--
+-- Name: idx_varset_assignment_project; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_varset_assignment_project ON public.varset_assignments USING btree (varset_id, project_id) WHERE (project_id IS NOT NULL);
+
+
+--
+-- Name: idx_varset_assignment_workspace; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_varset_assignment_workspace ON public.varset_assignments USING btree (varset_id, workspace_id) WHERE (workspace_id IS NOT NULL);
+
+
+--
+-- Name: idx_varset_assignments_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_varset_assignments_project_id ON public.varset_assignments USING btree (project_id) WHERE (project_id IS NOT NULL);
+
+
+--
+-- Name: idx_varset_assignments_varset_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_varset_assignments_varset_id ON public.varset_assignments USING btree (varset_id);
+
+
+--
+-- Name: idx_varset_assignments_workspace_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_varset_assignments_workspace_id ON public.varset_assignments USING btree (workspace_id) WHERE (workspace_id IS NOT NULL);
+
+
+--
+-- Name: idx_varset_key_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_varset_key_type ON public.varset_variables USING btree (varset_id, key, variable_type) WHERE (is_deleted = false);
+
+
+--
+-- Name: idx_varset_variables_is_deleted; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_varset_variables_is_deleted ON public.varset_variables USING btree (is_deleted);
+
+
+--
+-- Name: idx_varset_variables_varset_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_varset_variables_varset_id ON public.varset_variables USING btree (varset_id);
+
+
+--
 -- Name: idx_webhook_configs_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14453,6 +14770,38 @@ ALTER TABLE ONLY public.run_task_results
 
 ALTER TABLE ONLY public.skills
     ADD CONSTRAINT fk_skills_source_module FOREIGN KEY (source_module_id) REFERENCES public.modules(id) ON DELETE SET NULL;
+
+
+--
+-- Name: varset_assignments fk_varset_assignments_project; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_assignments
+    ADD CONSTRAINT fk_varset_assignments_project FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: varset_assignments fk_varset_assignments_varset; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_assignments
+    ADD CONSTRAINT fk_varset_assignments_varset FOREIGN KEY (varset_id) REFERENCES public.variable_sets(varset_id) ON DELETE CASCADE;
+
+
+--
+-- Name: varset_assignments fk_varset_assignments_workspace; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_assignments
+    ADD CONSTRAINT fk_varset_assignments_workspace FOREIGN KEY (workspace_id) REFERENCES public.workspaces(workspace_id) ON DELETE CASCADE;
+
+
+--
+-- Name: varset_variables fk_varset_variables_varset; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.varset_variables
+    ADD CONSTRAINT fk_varset_variables_varset FOREIGN KEY (varset_id) REFERENCES public.variable_sets(varset_id) ON DELETE CASCADE;
 
 
 --
