@@ -349,15 +349,73 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 		"apply_confirmed_at": task.ApplyConfirmedAt,
 	}
 
-	// 只在ShowUnchangedResources为true时包含plan_json
+	// 只在ShowUnchangedResources为true时包含plan_json等大字段
 	if workspace.ShowUnchangedResources {
 		taskResponse["plan_json"] = task.PlanJSON
 		taskResponse["outputs"] = task.Outputs
 		taskResponse["context"] = task.Context
 		taskResponse["snapshot_resource_versions"] = task.SnapshotResourceVersions
-		taskResponse["snapshot_variables"] = task.SnapshotVariables
 		taskResponse["snapshot_provider_config"] = task.SnapshotProviderConfig
-		taskResponse["snapshot_created_at"] = task.SnapshotCreatedAt
+	}
+
+	// snapshot_variables 始终返回（数据量小，且任务详情页需要展示）
+	// 展开引用为完整变量信息
+	taskResponse["snapshot_created_at"] = task.SnapshotCreatedAt
+	if task.SnapshotVariables != nil {
+		snapshotVarsJSON, err := task.SnapshotVariables.UnwrapArray()
+		if err == nil {
+			var snapshotRefs []map[string]interface{}
+			if err := json.Unmarshal(snapshotVarsJSON, &snapshotRefs); err == nil {
+				expandedVars := make([]map[string]interface{}, 0, len(snapshotRefs))
+				for _, ref := range snapshotRefs {
+					varID, _ := ref["variable_id"].(string)
+					version, _ := ref["version"].(float64)
+					varType, _ := ref["variable_type"].(string)
+
+					expanded := map[string]interface{}{
+						"variable_id":   varID,
+						"version":       int(version),
+						"variable_type": varType,
+						"source":        "unknown",
+					}
+
+					// 先查 workspace_variables
+					var wsVar models.WorkspaceVariable
+					if err := c.db.Where("variable_id = ? AND version = ?", varID, int(version)).
+						First(&wsVar).Error; err == nil {
+						expanded["key"] = wsVar.Key
+						expanded["sensitive"] = wsVar.Sensitive
+						expanded["value_format"] = wsVar.ValueFormat
+						expanded["source"] = "workspace"
+						if !wsVar.Sensitive {
+							expanded["value"] = wsVar.Value
+						}
+					} else {
+						// 再查 varset_variables
+						var vsetVar models.VarsetVariable
+						if err := c.db.Where("variable_id = ? AND version = ?", varID, int(version)).
+							First(&vsetVar).Error; err == nil {
+							expanded["key"] = vsetVar.Key
+							expanded["sensitive"] = vsetVar.Sensitive
+							expanded["value_format"] = vsetVar.ValueFormat
+							expanded["source"] = "varset"
+							expanded["varset_id"] = vsetVar.VarsetID
+							if !vsetVar.Sensitive {
+								expanded["value"] = vsetVar.Value
+							}
+							// 查 varset name
+							var vs models.VariableSet
+							if err := c.db.Where("varset_id = ?", vsetVar.VarsetID).First(&vs).Error; err == nil {
+								expanded["varset_name"] = vs.Name
+							}
+						}
+					}
+
+					expandedVars = append(expandedVars, expanded)
+				}
+				taskResponse["snapshot_variables"] = expandedVars
+			}
+		}
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
