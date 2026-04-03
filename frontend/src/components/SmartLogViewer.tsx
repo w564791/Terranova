@@ -98,7 +98,8 @@ const SmartLogViewer: React.FC<Props> = ({ taskId, viewMode = 'plan', onStageCha
   console.log('[SmartLogViewer] Rendering decision - status:', taskStatus, 'type:', taskType);
   
   // 如果任务正在运行或等待中，使用WebSocket实时查看
-  if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting' || taskStatus === 'apply_pending') {
+  // 注意：apply_pending 表示 plan 已完成，不需要 WebSocket（stream 已关闭）
+  if (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting') {
     console.log('[SmartLogViewer] Using TerraformOutputViewer (WebSocket)');
     return <TerraformOutputViewer taskId={taskId} onStageChange={onStageChange} currentTaskStage={currentTaskStage} />;
   }
