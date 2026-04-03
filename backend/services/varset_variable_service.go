@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
 	"time"
 
@@ -107,14 +108,36 @@ func (s *VarsetVariableService) Update(varsetID, variableID string, value, descr
 	updates := map[string]interface{}{
 		"updated_at": time.Now(),
 	}
-	if value != nil {
-		updates["value"] = *value
-	}
 	if description != nil {
 		updates["description"] = *description
 	}
 	if sensitive != nil {
 		updates["sensitive"] = *sensitive
+	}
+
+	// 判断更新后是否为 sensitive（当前已 sensitive，或本次设为 sensitive）
+	willBeSensitive := existing.Sensitive || (sensitive != nil && *sensitive)
+
+	if value != nil {
+		val := *value
+		// map-based Updates 绕过 GORM hooks，需手动加密
+		if willBeSensitive && val != "" {
+			encrypted, encErr := crypto.EncryptValue(val)
+			if encErr != nil {
+				return nil, fmt.Errorf("加密变量失败: %w", encErr)
+			}
+			val = encrypted
+		}
+		updates["value"] = val
+	} else if !existing.Sensitive && (sensitive != nil && *sensitive) {
+		// 未提供新值但切换为 sensitive：加密现有值
+		if existing.Value != "" {
+			encrypted, encErr := crypto.EncryptValue(existing.Value)
+			if encErr != nil {
+				return nil, fmt.Errorf("加密变量失败: %w", encErr)
+			}
+			updates["value"] = encrypted
+		}
 	}
 
 	if err := s.db.Model(existing).Updates(updates).Error; err != nil {
