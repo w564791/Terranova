@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS public.varset_variables (
         FOREIGN KEY (varset_id) REFERENCES variable_sets(varset_id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_varset_key_type
-    ON public.varset_variables USING btree (varset_id, key, variable_type) WHERE is_deleted = false;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_varset_key
+    ON public.varset_variables USING btree (varset_id, key) WHERE is_deleted = false;
 CREATE INDEX IF NOT EXISTS idx_varset_variables_varset_id
     ON public.varset_variables USING btree (varset_id);
 CREATE INDEX IF NOT EXISTS idx_varset_variables_is_deleted

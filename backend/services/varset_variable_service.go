@@ -27,10 +27,10 @@ func (s *VarsetVariableService) Create(varsetID, key, value, description string,
 		return nil, fmt.Errorf("变量集不存在: %w", err)
 	}
 
-	// 检查是否存在同名的活跃变量（varset_id + key + variable_type）
+	// 检查是否存在同名的活跃变量（varset_id + key，不区分类型）
 	var existing models.VarsetVariable
-	err := s.db.Where("varset_id = ? AND key = ? AND variable_type = ? AND is_deleted = ?",
-		varsetID, key, varType, false).
+	err := s.db.Where("varset_id = ? AND key = ? AND is_deleted = ?",
+		varsetID, key, false).
 		First(&existing).Error
 	if err == nil {
 		return nil, fmt.Errorf("变量 %s 已存在", key)

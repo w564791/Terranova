@@ -14002,10 +14002,10 @@ CREATE INDEX idx_varset_assignments_workspace_id ON public.varset_assignments US
 
 
 --
--- Name: idx_varset_key_type; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_varset_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_varset_key_type ON public.varset_variables USING btree (varset_id, key, variable_type) WHERE (is_deleted = false);
+CREATE UNIQUE INDEX idx_varset_key ON public.varset_variables USING btree (varset_id, key) WHERE (is_deleted = false);
 
 
 --

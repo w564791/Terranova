@@ -45,12 +45,12 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
   });
 
   // Effective variables state
-  const [showEffective, setShowEffective] = useState(false);
   const [effectiveVars, setEffectiveVars] = useState<EffectiveVariable[]>([]);
   const [effectiveLoading, setEffectiveLoading] = useState(false);
 
   useEffect(() => {
     fetchVariables();
+    fetchEffectiveVariables();
   }, []);
 
   const fetchEffectiveVariables = useCallback(async () => {
@@ -73,12 +73,9 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
     }
   }, [workspaceId, showToast]);
 
-  const handleToggleEffective = () => {
-    const next = !showEffective;
-    setShowEffective(next);
-    if (next && effectiveVars.length === 0) {
-      fetchEffectiveVariables();
-    }
+  // Refresh effective variables after workspace variable changes
+  const refreshEffective = () => {
+    fetchEffectiveVariables();
   };
 
   const formatSource = (ev: EffectiveVariable): string => {
@@ -136,6 +133,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
       setDeleteDialogOpen(false);
       setVariableToDelete(null);
       fetchVariables();
+      refreshEffective();
     } catch (error) {
       const message = extractErrorMessage(error);
       showToast(message, 'error');
@@ -198,6 +196,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
             showToast('版本冲突：变量已被其他用户修改，请刷新后重试', 'error');
             // 自动刷新变量列表
             await fetchVariables();
+            refreshEffective();
           } else {
             throw error;
           }
@@ -220,6 +219,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
         value_format: 'string'
       });
       fetchVariables();
+      refreshEffective();
     } catch (error) {
       const message = extractErrorMessage(error);
       showToast(message, 'error');
@@ -535,31 +535,10 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
 
       {/* Effective Variables Section */}
       <div className={styles.section}>
-        <button
-          onClick={handleToggleEffective}
-          style={{
-            background: 'none',
-            border: '1px solid var(--color-gray-300)',
-            borderRadius: 'var(--radius-md)',
-            padding: '8px 16px',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: 'var(--color-gray-700)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s',
-          }}
-        >
-          <span style={{ transform: showEffective ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>
-            &#9654;
-          </span>
-          Show Effective Variables (including Variable Sets)
-        </button>
-
-        {showEffective && (
-          <div style={{ marginTop: '16px' }}>
+        <h3 className={styles.sectionTitle} style={{ marginBottom: '12px' }}>
+          Effective Variables (including Variable Sets)
+        </h3>
+        <div>
             {effectiveLoading ? (
               <div className={styles.loading}>Loading effective variables...</div>
             ) : effectiveVars.length === 0 ? (
@@ -673,7 +652,6 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
               </>
             )}
           </div>
-        )}
       </div>
 
       {/* Delete Confirmation Dialog */}
