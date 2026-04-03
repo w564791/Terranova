@@ -291,7 +291,7 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 	} else {
 		// 排除plan_json和快照字段以减少响应大小
 		if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
-			Omit("plan_json", "snapshot_variables", "snapshot_resource_versions", "snapshot_provider_config").
+			Omit("plan_json", "snapshot_resource_versions", "snapshot_provider_config").
 			First(&task).Error; err != nil {
 			log.Printf("[ERROR] GetTask query failed: id=%d, workspace_id=%s, error=%v",
 				taskID, workspace.WorkspaceID, err)
