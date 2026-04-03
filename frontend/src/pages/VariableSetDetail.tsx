@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/useToast';
 import { variableSetService } from '../services/variableSets';
 import type { VariableSet, VarsetVariable, VarsetAssignment } from '../services/variableSets';
+import { getProjects, type Project } from '../services/projects';
+import { workspaceService, type Workspace } from '../services/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './Admin.module.css';
 
@@ -42,9 +44,14 @@ const VariableSetDetail: React.FC = () => {
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [assignFormData, setAssignFormData] = useState({
     scope_type: 'workspace' as 'project' | 'workspace',
-    project_id: '',
+    project_id: '' as string | number,
     workspace_id: '',
   });
+
+  // Project and workspace lists for assignment picker
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
 
   // Assignment delete state
   const [deleteAssignDialog, setDeleteAssignDialog] = useState(false);
@@ -54,14 +61,19 @@ const VariableSetDetail: React.FC = () => {
     if (!varsetId) return;
     try {
       setLoading(true);
-      const [vsData, varsData, assignData] = await Promise.all([
+      const [vsData, varsData, assignData, projectList, wsResponse] = await Promise.all([
         variableSetService.get(varsetId),
         variableSetService.listVariables(varsetId),
         variableSetService.listAssignments(varsetId),
+        getProjects().catch(() => []),
+        workspaceService.getWorkspaces().catch(() => ({ data: [] })),
       ]);
       setVarset(vsData);
       setVariables(Array.isArray(varsData) ? varsData : []);
       setAssignments(assignData.items || []);
+      setProjects(projectList || []);
+      const wsList = (wsResponse as any)?.data || wsResponse || [];
+      setWorkspaces(Array.isArray(wsList) ? wsList : []);
     } catch (error: any) {
       showToast(error.response?.data?.error || 'Failed to load variable set', 'error');
     } finally {
@@ -170,9 +182,27 @@ const VariableSetDetail: React.FC = () => {
 
   // --- Assignment handlers ---
 
+  const loadPickerData = useCallback(async () => {
+    setPickerLoading(true);
+    try {
+      const [projectList, wsResponse] = await Promise.all([
+        getProjects(),
+        workspaceService.getWorkspaces(),
+      ]);
+      setProjects(projectList || []);
+      const wsList = (wsResponse as any)?.data || wsResponse || [];
+      setWorkspaces(Array.isArray(wsList) ? wsList : []);
+    } catch (error: any) {
+      showToast('Failed to load projects/workspaces', 'error');
+    } finally {
+      setPickerLoading(false);
+    }
+  }, [showToast]);
+
   const handleAddAssign = () => {
     setAssignFormData({ scope_type: 'workspace', project_id: '', workspace_id: '' });
     setShowAssignForm(true);
+    loadPickerData();
   };
 
   const handleCancelAssign = () => {
@@ -185,18 +215,14 @@ const VariableSetDetail: React.FC = () => {
 
     const data: any = { scope_type: assignFormData.scope_type };
     if (assignFormData.scope_type === 'project') {
-      if (!assignFormData.project_id.trim()) {
-        showToast('Project ID is required', 'error');
+      if (!assignFormData.project_id) {
+        showToast('请选择一个 Project', 'error');
         return;
       }
-      data.project_id = parseInt(assignFormData.project_id, 10);
-      if (isNaN(data.project_id)) {
-        showToast('Project ID must be a number', 'error');
-        return;
-      }
+      data.project_id = Number(assignFormData.project_id);
     } else {
-      if (!assignFormData.workspace_id.trim()) {
-        showToast('Workspace ID is required', 'error');
+      if (!assignFormData.workspace_id) {
+        showToast('请选择一个 Workspace', 'error');
         return;
       }
       data.workspace_id = assignFormData.workspace_id;
@@ -672,8 +698,8 @@ const VariableSetDetail: React.FC = () => {
                           </td>
                           <td style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
                             {a.scope_type === 'project'
-                              ? `Project #${a.project_id}`
-                              : a.workspace_id || '-'}
+                              ? (projects.find(p => p.id === a.project_id)?.display_name || projects.find(p => p.id === a.project_id)?.name || `Project #${a.project_id}`)
+                              : (workspaces.find(w => w.workspace_id === a.workspace_id)?.name || a.workspace_id || '-')}
                           </td>
                           <td style={{ color: 'var(--color-gray-500)', fontSize: '13px' }}>
                             {a.attached_at ? formatDate(a.attached_at) : '-'}
@@ -733,31 +759,51 @@ const VariableSetDetail: React.FC = () => {
                         </div>
 
                         <div className={styles.formGroup}>
-                          {assignFormData.scope_type === 'project' ? (
+                          {pickerLoading ? (
+                            <div style={{ padding: '8px 0', color: 'var(--color-gray-500)', fontSize: '14px' }}>
+                              加载中...
+                            </div>
+                          ) : assignFormData.scope_type === 'project' ? (
                             <>
                               <label className={styles.label}>
-                                Project ID<span className={styles.required}>*</span>
+                                Project<span className={styles.required}>*</span>
                               </label>
-                              <input
-                                type="number"
+                              <select
                                 className={styles.input}
                                 value={assignFormData.project_id}
                                 onChange={(e) => setAssignFormData({ ...assignFormData, project_id: e.target.value })}
-                                placeholder="e.g. 1"
-                              />
+                              >
+                                <option value="">-- 选择 Project --</option>
+                                {projects.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.display_name || p.name} (ID: {p.id})
+                                  </option>
+                                ))}
+                              </select>
+                              {projects.length === 0 && (
+                                <span className={styles.hint}>暂无可用 Project</span>
+                              )}
                             </>
                           ) : (
                             <>
                               <label className={styles.label}>
-                                Workspace ID<span className={styles.required}>*</span>
+                                Workspace<span className={styles.required}>*</span>
                               </label>
-                              <input
-                                type="text"
+                              <select
                                 className={styles.input}
                                 value={assignFormData.workspace_id}
                                 onChange={(e) => setAssignFormData({ ...assignFormData, workspace_id: e.target.value })}
-                                placeholder="e.g. ws-abc123"
-                              />
+                              >
+                                <option value="">-- 选择 Workspace --</option>
+                                {workspaces.map((w) => (
+                                  <option key={w.workspace_id || w.id} value={w.workspace_id || ''}>
+                                    {w.name} ({w.workspace_id})
+                                  </option>
+                                ))}
+                              </select>
+                              {workspaces.length === 0 && (
+                                <span className={styles.hint}>暂无可用 Workspace</span>
+                              )}
                             </>
                           )}
                         </div>

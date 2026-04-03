@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../hooks/useToast';
 import { variableSetService } from '../services/variableSets';
 import type { VariableSet } from '../services/variableSets';
+import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './Admin.module.css';
 
 const VariableSetsPage: React.FC = () => {
@@ -323,29 +324,25 @@ const VariableSetsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Toast风格删除确认 */}
-      {deleteConfirm && (
-        <div className={styles.toastConfirm}>
-          <span className={styles.toastConfirmIcon}>!</span>
-          <span className={styles.toastConfirmMessage}>
-            确定删除变量集 &quot;{deleteConfirm.name}&quot; ?
-          </span>
-          <div className={styles.toastConfirmActions}>
-            <button
-              className={`${styles.toastConfirmBtn} ${styles.toastConfirmBtnCancel}`}
-              onClick={() => setDeleteConfirm(null)}
-            >
-              取消
-            </button>
-            <button
-              className={`${styles.toastConfirmBtn} ${styles.toastConfirmBtnConfirm}`}
-              onClick={confirmDelete}
-            >
-              删除
-            </button>
-          </div>
+      {/* 删除确认弹窗 */}
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        title={`删除变量集 "${deleteConfirm?.name}"`}
+        confirmText="确认删除"
+        cancelText="取消"
+        type="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      >
+        <div style={{ marginBottom: '16px' }}>
+          <p style={{ margin: '0 0 12px 0', color: 'var(--color-gray-700)', fontSize: '14px', lineHeight: '1.5' }}>
+            删除变量集 <strong>{deleteConfirm?.name}</strong> 将永久移除其所有变量和分配关系。
+          </p>
+          <p style={{ margin: 0, color: 'var(--color-gray-700)', fontSize: '14px', lineHeight: '1.5' }}>
+            此操作<strong>不可撤销</strong>，确定要继续吗？
+          </p>
         </div>
-      )}
+      </ConfirmDialog>
     </div>
   );
 };
