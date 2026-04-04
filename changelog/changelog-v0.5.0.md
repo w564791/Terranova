@@ -77,6 +77,18 @@ Variable Set -- 组织级变量集管理，支持 Global/Specific 作用域，�
 
 ---
 
+### Variable Snapshot (执行路径改造)
+
+- **新表** `variable_snapshots` -- 变量快照引用（vsnap_id, variable_id, version, source_type），替代旧 workspace_tasks.snapshot_variables JSONB
+- **新增** POST `/workspaces/:id/variable-snapshots` API，创建变量快照，返回 vsnap_id
+- **新增** DELETE `/workspaces/:id/variable-snapshots/:vsnap_id` API，删除快照
+- **改造** 任务创建流程：强制先创建 variable snapshot 再创建 task（保证变量一致性）
+- **改造** Local 模式执行：ExecutePlan/ExecuteApply 开始时通过 LoadSnapshot 加载快照变量到 DataAccessor 缓存
+- **改造** Agent/K8s 模式：GetTaskData 和 GetPlanTask 从 snapshot 表加载变量返回给 agent
+- **改造** DataAccessor 接口新增 LoadSnapshot 方法，LocalDataAccessor 实现缓存机制
+- **删除** workspace_tasks.snapshot_variables JSONB 列，改为 variable_snapshot_id 关联
+- **测试** 7 个集成测试覆盖 snapshot 创建/加载/隔离/缓存/null/删除
+
 ### Variable Set Database
 
 - **新表** `variable_sets` -- 变量集元数据（varset_id, name, scope, is_deleted）
