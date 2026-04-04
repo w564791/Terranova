@@ -166,7 +166,6 @@ const VariableSetDetail: React.FC = () => {
                 </div>
                 {varset.description && <p style={{ ...subText, margin: '4px 0 0 0' }}>{varset.description}</p>}
               </div>
-              <button style={{ padding: '8px 20px', background: '#fff', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', fontWeight: 500, fontSize: '14px', cursor: 'pointer' }} onClick={startEdit}>Edit</button>
             </div>
           </div>
         )}
@@ -357,6 +356,18 @@ const VariableSetDetail: React.FC = () => {
             </button>
           )}
         </div>
+
+        {/* Edit button at bottom */}
+        {!editingInfo && (
+          <div style={{ display: 'flex', gap: '12px', paddingTop: '24px', borderTop: '1px solid #e5e7eb', marginTop: '8px' }}>
+            <button
+              style={{ padding: '10px 24px', border: 'none', background: '#3b82f6', color: '#fff', borderRadius: '6px', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}
+              onClick={startEdit}
+            >
+              Edit variable set
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Dialogs */}
