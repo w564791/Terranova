@@ -14067,17 +14067,17 @@ CREATE INDEX idx_webhook_logs_task ON public.webhook_logs USING btree (task_id);
 
 
 --
--- Name: idx_workspace_key_type_version; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX idx_workspace_key_type_version ON public.workspace_variables USING btree (workspace_id, key, variable_type, version);
-
-
---
 -- Name: idx_workspace_key_version; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_workspace_key_version ON public.workspace_variables USING btree (workspace_id, key, variable_type, version DESC);
+CREATE UNIQUE INDEX idx_workspace_key_version ON public.workspace_variables USING btree (workspace_id, key, version) WHERE (is_deleted = false);
+
+
+--
+-- Name: idx_workspace_key_version_desc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workspace_key_version_desc ON public.workspace_variables USING btree (workspace_id, key, version DESC) WHERE (is_deleted = false);
 
 
 --

@@ -59,8 +59,9 @@ type variableCandidate struct {
 }
 
 // compositeKey returns the merge key for a variable candidate.
+// Uses key only (not type) — same key always conflicts regardless of variable_type.
 func (c *variableCandidate) compositeKey() string {
-	return string(c.VariableType) + ":" + c.Key
+	return c.Key
 }
 
 // ResolveDisplay returns the full list of effective variables with override markers for the frontend.

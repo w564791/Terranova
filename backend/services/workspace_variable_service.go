@@ -32,10 +32,10 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 		return fmt.Errorf("workspace不存在: %w", err)
 	}
 
-	// 检查是否存在同名的活跃变量
+	// 检查是否存在同名的活跃变量（不区分类型，同名 key 只能有一个）
 	var existing models.WorkspaceVariable
-	err := s.db.Where("workspace_id = ? AND key = ? AND variable_type = ? AND is_deleted = ?",
-		variable.WorkspaceID, variable.Key, variable.VariableType, false).
+	err := s.db.Where("workspace_id = ? AND key = ? AND is_deleted = ?",
+		variable.WorkspaceID, variable.Key, false).
 		First(&existing).Error
 
 	if err == nil {
