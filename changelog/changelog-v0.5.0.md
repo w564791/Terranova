@@ -1,6 +1,6 @@
 ## v0.5.0
 
-Variable Set -- 组织级变量集管理，支持 Global/Specific 作用域，软连接 attach 到 Workspace，优先级解析，版本控制，Terraform 执行路径集成。
+Variable Set + Variable Snapshot -- 组织级变量集管理，支持 Global/Specific 作用域，软连接 attach 到 Workspace，优先级解析，版本控制，独立变量快照机制，全模式（Local/Agent/K8s）Terraform 执行路径集成。
 
 ### Features
 
@@ -16,7 +16,7 @@ Variable Set -- 组织级变量集管理，支持 Global/Specific 作用域，�
 
 - **新增** varset_variables 版本控制：更新变量创建新版本行，旧版本保留供任务快照引用
 - **约束** 变量 key、variable_type、value_format 创建后不可修改；sensitive 只能 false->true
-- **约束** 同一变量集内 key 唯一（不区分 variable_type）
+- **约束** 同一变量集内及同一 workspace 内 key 唯一（不区分 variable_type）
 
 #### 变量优先级解析
 
@@ -24,27 +24,37 @@ Variable Set -- 组织级变量集管理，支持 Global/Specific 作用域，�
 - **优先级** Workspace 变量 > Workspace 级 VarSet > Project 级 VarSet > Global VarSet
 - **同层级** 后 attach 的变量集覆盖先 attach 的；Global 按创建时间排序
 
+#### Variable Snapshot（执行路径改造）
+
+- **新增** `variable_snapshots` 表，存储变量快照引用（vsnap_id, variable_id, version, source_type），替代旧 workspace_tasks.snapshot_variables JSONB
+- **新增** POST `/workspaces/:id/variable-snapshots` API，创建变量快照，返回 vsnap_id（无变量时返回 null）
+- **新增** DELETE `/workspaces/:id/variable-snapshots/:vsnap_id` API，删除快照
+- **改造** 任务创建流程：强制先创建 variable snapshot 再创建 task（保证变量一致性）
+- **改造** Local 模式：ExecutePlan/ExecuteApply 开始时通过 LoadSnapshot 加载快照变量到 DataAccessor 缓存
+- **改造** Agent/K8s 模式：GetTaskData 和 GetPlanTask 从 snapshot 表加载变量返回给 agent
+- **改造** DataAccessor 接口新增 LoadSnapshot 方法，LocalDataAccessor 实现缓存机制
+- **删除** workspace_tasks.snapshot_variables JSONB 列，改为 variable_snapshot_id 关联
+- **优化** LoadFromSnapshot 按 source_type 批量查询（2 次查询代替 N 次），未找到引用时打 WARN 日志
+
 #### Terraform 执行路径集成
 
-- **改造** `LocalDataAccessor.GetWorkspaceVariables()` 使用 VariableResolutionService 合并变量集变量
-- **改造** `createTaskSnapshot()` 通过 ResolutionService 获取合并变量，varset 变量也纳入快照（variable_id + version）
-- **改造** Agent/K8s `GetTaskData` API 返回合并后的变量（含变量集）
-- **改造** Agent `GetPlanTask` 快照重建时 fallback 查询 varset_variables 表
+- **改造** `LocalDataAccessor.GetWorkspaceVariables()` 优先从 snapshot 缓存读取，fallback 到实时解析
+- **改造** TF_LOG 读取从直接 DB 查询改为通过 DataAccessor（使用 snapshot 缓存）
 - **新增** 任务执行日志打印已加载的 terraform/environment 变量 key（INFO 级别，不打印 value）
 
 #### 前端
 
-- **新增** Variable Sets 列表页（`/variable-sets`），支持创建、编辑、删除变量集
-- **新增** Variable Set 详情页（`/variable-sets/:varsetId`），Variables Tab + Assignments Tab
+- **新增** Variable Sets 列表页（`/variable-sets`），一站式创建：名称 + 作用域 + 变量 + 分配全部 inline 完成
+- **新增** Variable Set 详情页（`/variable-sets/:varsetId`），直接编辑名称/描述 + 变量管理 + 分配管理
 - **新增** Sidebar 导航 "Variable Sets" 项（Workspaces 下方），带 VARIABLE_SETS 权限检查
-- **新增** Assignment 选择器：下拉选择 Project/Workspace（从 API 加载列表）
-- **改进** Workspace 变量页面增加 "Variable Set Variables" 区域，展示来自变量集的变量
-- **改进** 被覆盖的变量显示 "Overridden {key}" 超链接，点击跳转到覆盖方变量
-- **改进** 创建变量集后自动跳转到详情页，方便立即添加变量和分配
+- **新增** Workspace 变量页面 "Variable Set Variables" 区域，展示来自变量集的变量及覆盖状态
+- **新增** 被覆盖的变量显示 "Overridden {key}" 超链接，点击跳转到覆盖方变量
+- **设计** 参考 HCP Terraform Variable Set UI：垂直布局、scope radio 带描述、project/workspace 同时选择、变量表格（KEY/VALUE/CATEGORY）
 
 ### Tests
 
-- **新增** 9 个集成测试，覆盖版本控制、键唯一性、sensitive 约束、全局解析、覆盖优先级、版本传播
+- **新增** 16 个集成测试（9 个 Variable Set + 7 个 Variable Snapshot）
+- 覆盖：版本控制、键唯一性、sensitive 约束、优先级解析、覆盖优先级、快照创建/加载/隔离/缓存/null/删除
 - **新增** TestMain 自动管理测试库生命周期（创建 iac_platform_test -> 初始化 schema -> 执行测试 -> 清理）
 
 ### AI Plan Summary 实时日志流
@@ -70,29 +80,26 @@ Variable Set -- 组织级变量集管理，支持 Global/Specific 作用域，�
 
 ### Database
 
-- **新字段** `ai_plan_summaries.process_log text` -- AI Plan 分析过程日志
-- **新字段** `ai_apply_summaries.process_log text` -- AI Apply 分析过程日志
-- **Migration**: `manifests/migrations/add_process_log_to_ai_summaries.sql`
-- **Seed SQL**: `manifests/db/init_seed_data.sql` 同步更新建表语句
+#### 新表
 
----
+- `variable_sets` -- 变量集元数据（varset_id, name, scope, is_deleted）
+- `varset_variables` -- 变量集内变量（variable_id, key, value, version, sensitive, 加密存储）
+- `varset_assignments` -- 软连接分配（scope_type, project_id/workspace_id, attached_at）
+- `variable_snapshots` -- 变量快照引用（vsnap_id, variable_id, version, variable_type, source_type）
 
-### Variable Snapshot (执行路径改造)
+#### 表变更
 
-- **新表** `variable_snapshots` -- 变量快照引用（vsnap_id, variable_id, version, source_type），替代旧 workspace_tasks.snapshot_variables JSONB
-- **新增** POST `/workspaces/:id/variable-snapshots` API，创建变量快照，返回 vsnap_id
-- **新增** DELETE `/workspaces/:id/variable-snapshots/:vsnap_id` API，删除快照
-- **改造** 任务创建流程：强制先创建 variable snapshot 再创建 task（保证变量一致性）
-- **改造** Local 模式执行：ExecutePlan/ExecuteApply 开始时通过 LoadSnapshot 加载快照变量到 DataAccessor 缓存
-- **改造** Agent/K8s 模式：GetTaskData 和 GetPlanTask 从 snapshot 表加载变量返回给 agent
-- **改造** DataAccessor 接口新增 LoadSnapshot 方法，LocalDataAccessor 实现缓存机制
-- **删除** workspace_tasks.snapshot_variables JSONB 列，改为 variable_snapshot_id 关联
-- **测试** 7 个集成测试覆盖 snapshot 创建/加载/隔离/缓存/null/删除
+- `workspace_tasks` -- 新增 `variable_snapshot_id VARCHAR(30)`，删除 `snapshot_variables JSONB`
+- `workspace_variables` -- 唯一索引去掉 variable_type（同名 key 不区分类型）
 
-### Variable Set Database
+#### 新字段
 
-- **新表** `variable_sets` -- 变量集元数据（varset_id, name, scope, is_deleted）
-- **新表** `varset_variables` -- 变量集内变量（variable_id, key, value, version, sensitive, 加密存储）
-- **新表** `varset_assignments` -- 软连接分配（scope_type, project_id/workspace_id, attached_at）
-- **索引** partial unique `(varset_id, key, version) WHERE is_deleted=false`、partial unique `(name) WHERE is_deleted=false`
-- **约束** CHECK scope_type 互斥、FK CASCADE 到 variable_sets/projects/workspaces
+- `ai_plan_summaries.process_log text` -- AI Plan 分析过程日志
+- `ai_apply_summaries.process_log text` -- AI Apply 分析过程日志
+
+#### Migration 文件
+
+- `backend/migrations/add_variable_sets.sql`
+- `backend/migrations/add_variable_snapshots.sql`
+- `manifests/migrations/add_process_log_to_ai_summaries.sql`
+- `manifests/db/init_seed_data.sql` 同步更新
