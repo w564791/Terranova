@@ -77,6 +77,33 @@ Variable Set + Variable Snapshot -- 组织级变量集管理，支持 Global/Spe
 - **改进** `StageLogViewer` 渲染风格统一为逐行 div + 行号 + stage marker 特殊样式，与 `TerraformOutputViewer` 一致
 - **新增** `StageLogViewer` 从 summary API 获取 `process_log` 拼接到日志末尾，支持历史回看 AI 分析过程
 - **新增** `TerraformOutputViewer` 空 stream 检测：连接 3 秒无数据自动降级到 HTTP 历史日志（解决刷新后空白问题）
+- **修复** Classic View 日志重复：WebSocket 重连时清空旧行，避免服务端回放历史消息导致 stage 重复显示
+- **修复** Classic View 阶段过滤：切换 stage tab 时只显示选中阶段的 marker，不再显示所有阶段的 marker
+- **修复** Classic View 历史回看默认显示全部日志，自动切换 tab 仅在实时运行中生效
+
+### AI 错误分析 Agent Loop 改造
+
+#### 后端
+
+- **改造** `AnalyzeErrorByTaskID` 从单次 API 调用改为 `AIAgentLoop` 多轮工具调用模式，AI 自主决定查询哪些上下文
+- **新增** `QueryModuleInputsTool` -- 从 plan_json 的 `configuration.root_module.module_calls.expressions` 提取用户传入模块的原始参数值（含 plan 阶段 `(known after apply)` 字段的实际输入，如 bucket policy JSON）
+- **新增** `QueryTaskResourceChangesTool` -- 查询任务的资源变更记录，支持按 apply_status 过滤（all/failed/completed）
+- **复用** `QueryResourceAttributesTool` -- CMDB 资源属性搜索，错误分析场景可按需查询
+- **新增** `errorAnalysisValidator` 输出验证器，确保 AI 返回合法 JSON（error_type/root_cause/solutions 必填）
+- **新增** `process_log` 字段持久化 Agent Loop 过程日志（工具调用、thinking、结果），支持事后审计
+- **删除** 旧的 `AnalyzeError` 单次调用方法及 `callBedrock`/`callOpenAICompatible` 直接调用路径，统一走 `AICaller` 抽象
+- **效果** 以 S3 bucket policy ARN 不匹配为例：旧版只能给出"ARN 格式可能错误"的泛化建议，新版精准定位"policy 中写的 `ken-test-2026` 与实际 bucket 名 `ken-test-2026-02-190344de-0223-0404` 不匹配"
+
+### Assessment 补偿机制
+
+- **新增** `partial` 评估状态：L1 完成但 L2/L3 LLM 评估失败时标记为 `partial`，而非直接标记 `assessed`
+- **修复** Summary Assessment：L2/L3 调用失败后资源被标记为 `assessed`，补偿任务无法捡到，导致前端显示 0/0/0
+- **修复** Skill Assessment Worker：同上，L2/L3 error 后 scanner 不再重试
+- **改进** `compensatePendingAssessments` 同时查询 `pending` 和 `partial` 状态的资源
+- **改进** `AssessSource` 同时处理 `pending` 和 `partial` 状态的资源
+- **改进** Skill Assessment Worker scanner 和 CAS 同时接受 `partial` 状态
+- **修复** Resource Summary 生成：attributes 变更时先清旧 `summary_hash`，确保 AI 失败后启动补偿能捡到过期摘要
+- **新增** CMDB Overview 任务队列增加 "L2/L3 待补偿" 指标，显示 `partial` 状态的资源数量
 
 ### Database
 
@@ -96,10 +123,12 @@ Variable Set + Variable Snapshot -- 组织级变量集管理，支持 Global/Spe
 
 - `ai_plan_summaries.process_log text` -- AI Plan 分析过程日志
 - `ai_apply_summaries.process_log text` -- AI Apply 分析过程日志
+- `ai_error_analyses.process_log text` -- AI 错误分析 Agent Loop 过程日志
 
 #### Migration 文件
 
 - `backend/migrations/add_variable_sets.sql`
 - `backend/migrations/add_variable_snapshots.sql`
-- `manifests/migrations/add_process_log_to_ai_summaries.sql`
+- `backend/migrations/add_process_log_to_ai_summaries.sql`
+- `backend/migrations/add_process_log_to_ai_error_analyses.sql`
 - `manifests/db/init_seed_data.sql` 同步更新

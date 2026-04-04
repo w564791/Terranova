@@ -107,6 +107,7 @@ type AIErrorAnalysis struct {
 	Prevention       string    `gorm:"type:text" json:"prevention"`
 	Severity         string    `gorm:"type:varchar(20)" json:"severity"`
 	AnalysisDuration int       `json:"analysis_duration"` // 毫秒
+	ProcessLog       string    `gorm:"type:text" json:"process_log"` // Agent Loop 过程日志
 	CreatedAt        time.Time `json:"created_at"`
 }
 

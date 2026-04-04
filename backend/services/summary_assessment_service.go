@@ -32,18 +32,20 @@ func NewSummaryAssessmentService(db *gorm.DB) *SummaryAssessmentService {
 	}
 }
 
-// AssessSource runs assessment for all pending resources of a given source
+// AssessSource runs assessment for all pending/partial resources of a given source
 func (s *SummaryAssessmentService) AssessSource(ctx context.Context, sourceID string) error {
 	var resources []models.ResourceIndex
-	s.db.Where("external_source_id = ? AND summary_assessment_status = ?", sourceID, "pending").
-		Find(&resources)
+	s.db.Where("external_source_id = ? AND summary_assessment_status IN ?", sourceID, []string{
+		string(models.AssessmentStatusPending),
+		string(models.AssessmentStatusPartial),
+	}).Find(&resources)
 
 	if len(resources) == 0 {
-		log.Printf("[SummaryAssessment] source %s: no pending resources", sourceID)
+		log.Printf("[SummaryAssessment] source %s: no pending/partial resources", sourceID)
 		return nil
 	}
 
-	log.Printf("[SummaryAssessment] source %s: assessing %d resources", sourceID, len(resources))
+	log.Printf("[SummaryAssessment] source %s: assessing %d resources (pending/partial)", sourceID, len(resources))
 
 	configChanged := s.detectConfigChange()
 	assessed := 0
@@ -106,6 +108,7 @@ func (s *SummaryAssessmentService) assessOne(ctx context.Context, resource *mode
 	decision := s.sampler.Decide(resource.ResourceType, l1Passed, configChanged)
 
 	// L2: Prompt compliance (LLM)
+	hasLLMError := false
 	if decision.ShouldEvalRule {
 		evalCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		ruleResult, err := s.evaluator.EvaluateRule(evalCtx, resource.ResourceSummary, resource.ResourceType, resource.Attributes)
@@ -113,6 +116,7 @@ func (s *SummaryAssessmentService) assessOne(ctx context.Context, resource *mode
 
 		if err != nil {
 			log.Printf("[SummaryAssessment] L2 error for resource %d: %v", resource.ID, err)
+			hasLLMError = true
 		} else {
 			latency := ruleResult.LatencyMs
 			ruleViolations := ruleResult.RuleViolations
@@ -145,6 +149,7 @@ func (s *SummaryAssessmentService) assessOne(ctx context.Context, resource *mode
 
 		if err != nil {
 			log.Printf("[SummaryAssessment] L3 error for resource %d: %v", resource.ID, err)
+			hasLLMError = true
 		} else {
 			latency := semanticResult.LatencyMs
 			qualityIssues := semanticResult.QualityIssues
@@ -169,9 +174,14 @@ func (s *SummaryAssessmentService) assessOne(ctx context.Context, resource *mode
 		}
 	}
 
-	// Mark resource as assessed
-	s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).
-		Update("summary_assessment_status", "assessed")
+	// Mark resource status: partial if LLM failed, assessed if all succeeded
+	if hasLLMError {
+		s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).
+			Update("summary_assessment_status", string(models.AssessmentStatusPartial))
+	} else {
+		s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).
+			Update("summary_assessment_status", string(models.AssessmentStatusAssessed))
+	}
 }
 
 // detectConfigChange checks if the AI config for cmdb_resource_summary has changed

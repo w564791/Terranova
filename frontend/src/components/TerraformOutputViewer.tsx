@@ -114,9 +114,9 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       
       // 自动切换逻辑：
       // 1. 如果用户手动选择了"全部"，不自动切换
-      // 2. 如果用户选择了具体阶段，自动跟随当前阶段切换
-      // 3. 如果用户没有操作（filterStage === 'all' 且 !userSelectedAll），自动切换
-      if (!userSelectedAll) {
+      // 2. 只在实时运行中（isConnected 且未完成）自动跟随当前阶段
+      // 3. 历史回放（已完成的任务）默认保持"全部"
+      if (!userSelectedAll && isConnected && !isCompleted) {
         // summary 阶段默认折叠，不自动跳转
         const collapsedStages = ['post_plan_summary', 'post_apply_summary'];
         if (!collapsedStages.includes(latestActiveStage)) {
@@ -125,7 +125,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
         }
       }
     }
-  }, [lines, currentStage, userSelectedAll, onStageChange, currentTaskStage]);
+  }, [lines, currentStage, userSelectedAll, isConnected, isCompleted, onStageChange, currentTaskStage]);
 
   // 检测用户是否手动滚动
   const handleScroll = () => {
@@ -253,9 +253,11 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
 
   // 过滤日志行
   const filteredLines = filterStage === 'all' ? lines : lines.filter((line, index) => {
-    // 如果是stage_marker，总是显示
-    if (line.type === 'stage_marker') return true;
-    
+    // 阶段标记只显示选中阶段的
+    if (line.type === 'stage_marker') {
+      return line.stage?.toLowerCase() === filterStage;
+    }
+
     // 找到当前行所属的阶段
     let currentPhase = 'fetching'; // 默认阶段
     for (let i = index; i >= 0; i--) {
@@ -264,7 +266,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
         break;
       }
     }
-    
+
     return currentPhase === filterStage;
   });
 

@@ -33,6 +33,7 @@ type AssessmentStatus string
 const (
 	AssessmentStatusPending  AssessmentStatus = "pending"  // 待评估
 	AssessmentStatusAssessed AssessmentStatus = "assessed" // 已评估
+	AssessmentStatusPartial  AssessmentStatus = "partial"  // L1 完成，L2/L3 失败待补偿
 )
 
 // UserAction 用户操作

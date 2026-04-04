@@ -35,6 +35,7 @@ export const useTerraformOutput = (taskId: number) => {
 
     ws.onopen = () => {
       console.log('[useTerraformOutput] Connected to terraform output stream');
+      setLines([]); // Clear old lines; server replays all historical messages on reconnect
       setIsConnected(true);
       setError(null);
       reconnectAttemptsRef.current = 0;

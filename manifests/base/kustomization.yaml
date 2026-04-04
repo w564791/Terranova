@@ -15,7 +15,7 @@ secretGenerator:
   - name: iac-jwt
     namespace: terraform
     literals:
-      - JWT_SECRET=IcVefRGg2bW9+UGc5hfrOHsWmrUWgdrYn99nyzyNJ4s=
+      - JWT_SECRET=Q29P7oZt7MoYbAZezyb/AvFqkpRJJK98hcXsnp7v+M4=
     options:
       disableNameSuffixHash: true
       labels:

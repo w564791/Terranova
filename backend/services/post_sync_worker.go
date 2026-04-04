@@ -92,9 +92,9 @@ func (w *PostSyncWorker) recoverProcessingJobs() {
 	}
 }
 
-// compensatePendingAssessments 启动补偿：为滞留在 pending 的摘要评估资源创建 assessment job
+// compensatePendingAssessments 启动补偿：为滞留在 pending/partial 的摘要评估资源创建 assessment job
 func (w *PostSyncWorker) compensatePendingAssessments() {
-	// 按 external_source_id 分组，找出有 pending 评估资源但没有活跃 assessment job 的 source
+	// 按 external_source_id 分组，找出有 pending/partial 评估资源但没有活跃 assessment job 的 source
 	type sourceGroup struct {
 		ExternalSourceID string
 		Count            int64
@@ -102,7 +102,10 @@ func (w *PostSyncWorker) compensatePendingAssessments() {
 	var groups []sourceGroup
 	w.db.Model(&models.ResourceIndex{}).
 		Select("external_source_id, COUNT(*) as count").
-		Where("summary_assessment_status = ? AND external_source_id != ''", "pending").
+		Where("summary_assessment_status IN ? AND external_source_id != ''", []string{
+			string(models.AssessmentStatusPending),
+			string(models.AssessmentStatusPartial),
+		}).
 		Group("external_source_id").
 		Scan(&groups)
 
@@ -123,7 +126,7 @@ func (w *PostSyncWorker) compensatePendingAssessments() {
 				CreatedAt: time.Now(),
 			}
 			w.db.Create(&job)
-			log.Printf("[PostSyncWorker] 补偿：source %s 有 %d 条待评估资源，创建 assessment job %d",
+			log.Printf("[PostSyncWorker] 补偿：source %s 有 %d 条待评估/部分评估资源，创建 assessment job %d",
 				g.ExternalSourceID, g.Count, job.ID)
 		}
 	}
