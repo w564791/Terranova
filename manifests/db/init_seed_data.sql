@@ -6271,6 +6271,43 @@ ALTER SEQUENCE public.varset_variables_id_seq OWNED BY public.varset_variables.i
 
 
 --
+-- Name: variable_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.variable_snapshots (
+    id integer NOT NULL,
+    vsnap_id character varying(30) NOT NULL,
+    workspace_id character varying(50) NOT NULL,
+    variable_id character varying(20) NOT NULL,
+    version integer NOT NULL,
+    variable_type character varying(20) NOT NULL,
+    source_type character varying(20) NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    created_by character varying(20)
+);
+
+
+--
+-- Name: variable_snapshots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.variable_snapshots_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: variable_snapshots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.variable_snapshots_id_seq OWNED BY public.variable_snapshots.id;
+
+
+--
 -- Name: webhook_configs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7324,7 +7361,7 @@ CREATE TABLE public.workspace_tasks (
     apply_description text,
     workspace_id character varying(50) NOT NULL,
     snapshot_resource_versions jsonb,
-    snapshot_variables jsonb,
+    variable_snapshot_id character varying(30),
     snapshot_provider_config jsonb,
     snapshot_created_at timestamp without time zone,
     plan_hash character varying(64),
@@ -7405,10 +7442,10 @@ COMMENT ON COLUMN public.workspace_tasks.snapshot_resource_versions IS 'Plan阶�
 
 
 --
--- Name: COLUMN workspace_tasks.snapshot_variables; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN workspace_tasks.variable_snapshot_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.workspace_tasks.snapshot_variables IS 'Plan阶段的变量完整快照（变量不支持版本控制，需要保存完整数据）';
+COMMENT ON COLUMN public.workspace_tasks.variable_snapshot_id IS '变量快照ID（关联variable_snapshots表的vsnap_id）';
 
 
 --
@@ -8229,6 +8266,13 @@ ALTER TABLE ONLY public.varset_assignments ALTER COLUMN id SET DEFAULT nextval('
 --
 
 ALTER TABLE ONLY public.varset_variables ALTER COLUMN id SET DEFAULT nextval('public.varset_variables_id_seq'::regclass);
+
+
+--
+-- Name: variable_snapshots id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.variable_snapshots ALTER COLUMN id SET DEFAULT nextval('public.variable_snapshots_id_seq'::regclass);
 
 
 --
@@ -10020,10 +10064,18 @@ COPY public.workspace_task_resource_changes (id, task_id, resource_address, reso
 
 
 --
+-- Data for Name: variable_snapshots; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.variable_snapshots (id, vsnap_id, workspace_id, variable_id, version, variable_type, source_type, created_at, created_by) FROM stdin;
+\.
+
+
+--
 -- Data for Name: workspace_tasks; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.workspace_tasks (id, task_type, status, execution_mode, agent_id, k8s_pod_name, k8s_namespace, plan_output, apply_output, error_message, started_at, completed_at, duration, retry_count, max_retries, created_by, created_at, updated_at, changes_add, changes_change, changes_destroy, k8s_config_id, execution_node, plan_task_id, plan_data, plan_json, outputs, stage, context, locked_by, locked_at, lock_expires_at, description, snapshot_id, apply_description, workspace_id, snapshot_resource_versions, snapshot_variables, snapshot_provider_config, snapshot_created_at, plan_hash, apply_confirmed_by, apply_confirmed_at, is_background) FROM stdin;
+COPY public.workspace_tasks (id, task_type, status, execution_mode, agent_id, k8s_pod_name, k8s_namespace, plan_output, apply_output, error_message, started_at, completed_at, duration, retry_count, max_retries, created_by, created_at, updated_at, changes_add, changes_change, changes_destroy, k8s_config_id, execution_node, plan_task_id, plan_data, plan_json, outputs, stage, context, locked_by, locked_at, lock_expires_at, description, snapshot_id, apply_description, workspace_id, snapshot_resource_versions, variable_snapshot_id, snapshot_provider_config, snapshot_created_at, plan_hash, apply_confirmed_by, apply_confirmed_at, is_background) FROM stdin;
 \.
 
 
@@ -11642,6 +11694,14 @@ ALTER TABLE ONLY public.variable_sets
 
 ALTER TABLE ONLY public.variable_sets
     ADD CONSTRAINT variable_sets_varset_id_key UNIQUE (varset_id);
+
+
+--
+-- Name: variable_snapshots variable_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.variable_snapshots
+    ADD CONSTRAINT variable_snapshots_pkey PRIMARY KEY (id);
 
 
 --
@@ -13966,6 +14026,20 @@ CREATE UNIQUE INDEX idx_variable_sets_name ON public.variable_sets USING btree (
 --
 
 CREATE INDEX idx_variable_sets_scope ON public.variable_sets USING btree (scope);
+
+
+--
+-- Name: idx_vsnap_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_vsnap_id ON public.variable_snapshots USING btree (vsnap_id);
+
+
+--
+-- Name: idx_vsnap_workspace; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_vsnap_workspace ON public.variable_snapshots USING btree (workspace_id);
 
 
 --

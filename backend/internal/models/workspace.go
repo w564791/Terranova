@@ -170,38 +170,6 @@ func (w *WorkspaceVariableArray) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, w)
 }
 
-// VariableSnapshot 变量快照引用（只存储必要字段）
-type VariableSnapshot struct {
-	WorkspaceID  string `json:"workspace_id"`  // Workspace语义化ID
-	VariableID   string `json:"variable_id"`   // 变量语义化ID
-	Version      int    `json:"version"`       // 版本号
-	VariableType string `json:"variable_type"` // 变量类型: terraform或environment
-}
-
-// VariableSnapshotArray 变量快照数组类型
-type VariableSnapshotArray []VariableSnapshot
-
-// Value 实现 driver.Valuer 接口
-func (v VariableSnapshotArray) Value() (driver.Value, error) {
-	if v == nil {
-		return nil, nil
-	}
-	return json.Marshal(v)
-}
-
-// Scan 实现 sql.Scanner 接口
-func (v *VariableSnapshotArray) Scan(value interface{}) error {
-	if value == nil {
-		*v = nil
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return nil
-	}
-	return json.Unmarshal(bytes, v)
-}
-
 // Workspace 工作空间模型
 type Workspace struct {
 	// 基础字段
@@ -422,7 +390,7 @@ type WorkspaceTask struct {
 
 	// Plan+Apply快照字段（新版本，用于修复竞态条件bug）
 	SnapshotResourceVersions JSONB      `json:"snapshot_resource_versions" gorm:"type:jsonb"` // 资源版本快照
-	SnapshotVariables        JSONB      `json:"snapshot_variables" gorm:"type:jsonb"`         // 变量快照
+	VariableSnapshotID       *string    `json:"variable_snapshot_id" gorm:"type:varchar(30)"` // 变量快照ID（关联variable_snapshots表）
 	SnapshotProviderConfig   JSONB      `json:"snapshot_provider_config" gorm:"type:jsonb"`   // Provider配置快照
 	SnapshotCreatedAt        *time.Time `json:"snapshot_created_at"`                          // 快照创建时间
 

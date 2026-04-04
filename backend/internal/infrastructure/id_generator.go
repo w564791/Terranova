@@ -134,6 +134,12 @@ func GenerateVarsetID() (string, error) {
 	return generateRandomID("varset", 16)
 }
 
+// GenerateVsnapID 生成 Variable Snapshot ID
+// 格式: vsnap-{16位随机小写字母+数字}
+func GenerateVsnapID() (string, error) {
+	return generateRandomID("vsnap", 16)
+}
+
 // GeneratePlanSummaryID 生成Plan Summary ID
 // 格式: plsm-{16位随机小写字母+数字}
 func GeneratePlanSummaryID() (string, error) {
