@@ -2449,15 +2449,23 @@ func (h *ManifestHandler) executeDeployment(deployment models.ManifestDeployment
 
 // createPlanAndApplyTask creates a Plan+Apply task
 func (h *ManifestHandler) createPlanAndApplyTask(workspace models.Workspace, userID string, description string) (uint, error) {
+	// Create variable snapshot BEFORE task (strong ordering: snapshot first, then task)
+	snapshotSvc := services.NewVariableSnapshotService(h.db)
+	vsnapID, _, snapshotErr := snapshotSvc.CreateSnapshot(workspace.WorkspaceID, &userID)
+	if snapshotErr != nil {
+		log.Printf("[WARN] Failed to create variable snapshot for workspace %s: %v", workspace.WorkspaceID, snapshotErr)
+	}
+
 	// Create task
 	task := &models.WorkspaceTask{
-		WorkspaceID:   workspace.WorkspaceID,
-		TaskType:      models.TaskTypePlanAndApply,
-		Status:        models.TaskStatusPending,
-		ExecutionMode: workspace.ExecutionMode,
-		CreatedBy:     &userID,
-		Stage:         "pending",
-		Description:   description,
+		WorkspaceID:        workspace.WorkspaceID,
+		TaskType:           models.TaskTypePlanAndApply,
+		Status:             models.TaskStatusPending,
+		ExecutionMode:      workspace.ExecutionMode,
+		CreatedBy:          &userID,
+		Stage:              "pending",
+		Description:        description,
+		VariableSnapshotID: vsnapID,
 	}
 
 	if err := h.db.Create(task).Error; err != nil {
@@ -2517,27 +2525,8 @@ func (h *ManifestHandler) createTaskSnapshot(task *models.WorkspaceTask, workspa
 		}
 	}
 
-	// 2. Snapshot variables（使用 ResolutionService 获取所有有效变量，包括 varset 变量）
-	resolver := services.NewVariableResolutionService(h.db)
-	effectiveVars, resolveErr := resolver.ResolveDisplay(workspace.WorkspaceID)
-	if resolveErr != nil {
-		return fmt.Errorf("failed to resolve effective variables: %w", resolveErr)
-	}
-
-	variableSnapshots := make([]map[string]interface{}, 0)
-	for _, ev := range effectiveVars {
-		if ev.IsOverridden {
-			continue
-		}
-		variableSnapshots = append(variableSnapshots, map[string]interface{}{
-			"workspace_id":  workspace.WorkspaceID,
-			"variable_id":   ev.VariableID,
-			"version":       ev.Version,
-			"variable_type": string(ev.VariableType),
-		})
-	}
-
-	// 3. Snapshot Provider config（模板模式下动态解析）
+	// 2. Snapshot Provider config（模板模式下动态解析）
+	// NOTE: Variable snapshots are now created BEFORE task creation via VariableSnapshotService
 	providerConfig := workspace.ProviderConfig
 	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
 	if len(templateIDs) > 0 {
@@ -2550,19 +2539,17 @@ func (h *ManifestHandler) createTaskSnapshot(task *models.WorkspaceTask, workspa
 		}
 	}
 
-	// 4. Serialize and save
+	// 3. Serialize and save
 	resourceVersionsJSON, _ := json.Marshal(models.JSONB(resourceVersions))
-	variablesJSON, _ := json.Marshal(variableSnapshots)
 	providerConfigJSON, _ := json.Marshal(models.JSONB(providerConfig))
 
 	if err := h.db.Exec(`
-		UPDATE workspace_tasks 
+		UPDATE workspace_tasks
 		SET snapshot_resource_versions = ?::jsonb,
-		    snapshot_variables = ?::jsonb,
 		    snapshot_provider_config = ?::jsonb,
 		    snapshot_created_at = ?
 		WHERE id = ?
-	`, resourceVersionsJSON, variablesJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
+	`, resourceVersionsJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
 		return fmt.Errorf("failed to save snapshot: %w", err)
 	}
 
