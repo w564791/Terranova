@@ -28,6 +28,10 @@ bin/
 .qwen/
 CLAUDE.md
 
+# 证书/密钥
+*.pem
+*.key
+
 # 环境变量
 .env
 .env.local
