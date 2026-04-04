@@ -139,6 +139,37 @@ func (s *VariableResolutionService) ResolveDisplay(workspaceID string) ([]Effect
 	return result, nil
 }
 
+// ResolveExecution returns final effective variables as []WorkspaceVariable with FULL values (including sensitive).
+// Used by execution path (LocalDataAccessor) — NEVER mask values here.
+func (s *VariableResolutionService) ResolveExecution(workspaceID string) ([]models.WorkspaceVariable, error) {
+	candidates, err := s.collectAllCandidates(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Last candidate per key wins
+	winners := make(map[string]*variableCandidate)
+	for i := range candidates {
+		winners[candidates[i].Key] = &candidates[i]
+	}
+
+	var result []models.WorkspaceVariable
+	for _, c := range winners {
+		result = append(result, models.WorkspaceVariable{
+			VariableID:   c.VariableID,
+			WorkspaceID:  workspaceID,
+			Key:          c.Key,
+			Value:        c.Value, // Full value, never masked
+			VariableType: c.VariableType,
+			ValueFormat:  c.ValueFormat,
+			Sensitive:    c.Sensitive,
+			Description:  c.Description,
+			Version:      c.Version,
+		})
+	}
+	return result, nil
+}
+
 // ResolveFlat returns only the final effective variables as key->value map, filtered by variable type.
 func (s *VariableResolutionService) ResolveFlat(workspaceID string, varType models.VariableType) (map[string]string, error) {
 	candidates, err := s.collectAllCandidates(workspaceID)

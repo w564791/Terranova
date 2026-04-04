@@ -64,35 +64,24 @@ func (a *LocalDataAccessor) GetWorkspaceResources(workspaceID string) ([]models.
 }
 
 // GetWorkspaceVariables 获取 Workspace 变量列表（含 Variable Set 合并，优先级解析后的最终结果）
+// 注意：此方法用于执行路径，必须返回真实值（包括 sensitive），不能清空。
 func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error) {
 	db := a.getDB()
 
-	// 使用 VariableResolutionService 获取合并后的完整变量集
+	// 使用 ResolveFlat 获取最终生效变量的完整值（含 sensitive 原始值）
 	resolver := NewVariableResolutionService(db)
-	display, err := resolver.ResolveDisplay(workspaceID)
+	flatAll, err := resolver.ResolveExecution(workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve effective variables: %w", err)
 	}
 
-	// 过滤：只要指定类型、非覆盖（最终生效）的变量
+	// 过滤指定类型
 	var variables []models.WorkspaceVariable
-	for _, ev := range display {
-		if ev.IsOverridden {
+	for _, v := range flatAll {
+		if v.VariableType != varType {
 			continue
 		}
-		if ev.VariableType != varType {
-			continue
-		}
-		variables = append(variables, models.WorkspaceVariable{
-			VariableID:   ev.VariableID,
-			WorkspaceID:  workspaceID,
-			Key:          ev.Key,
-			Value:        ev.Value,
-			VariableType: ev.VariableType,
-			ValueFormat:  ev.ValueFormat,
-			Sensitive:    ev.Sensitive,
-			Description:  ev.Description,
-		})
+		variables = append(variables, v)
 	}
 
 	return variables, nil
