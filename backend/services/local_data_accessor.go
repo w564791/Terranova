@@ -13,8 +13,9 @@ import (
 // LocalDataAccessor Local 模式的数据访问实现
 // 直接访问数据库
 type LocalDataAccessor struct {
-	db *gorm.DB
-	tx *gorm.DB // 用于事务支持
+	db           *gorm.DB
+	tx           *gorm.DB                  // 用于事务支持
+	snapshotVars []models.WorkspaceVariable // cached snapshot variables
 }
 
 // NewLocalDataAccessor 创建 Local 数据访问器
@@ -63,27 +64,44 @@ func (a *LocalDataAccessor) GetWorkspaceResources(workspaceID string) ([]models.
 	return resources, nil
 }
 
+// LoadSnapshot loads variables from snapshot table into memory cache.
+func (a *LocalDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
+	svc := NewVariableSnapshotService(db)
+	vars, err := svc.LoadFromSnapshot(vsnapID)
+	if err != nil {
+		return err
+	}
+	a.snapshotVars = vars
+	return nil
+}
+
 // GetWorkspaceVariables 获取 Workspace 变量列表（含 Variable Set 合并，优先级解析后的最终结果）
 // 注意：此方法用于执行路径，必须返回真实值（包括 sensitive），不能清空。
 func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error) {
-	db := a.getDB()
+	// If snapshot is loaded, use cached data
+	if a.snapshotVars != nil {
+		var filtered []models.WorkspaceVariable
+		for _, v := range a.snapshotVars {
+			if v.VariableType == varType {
+				filtered = append(filtered, v)
+			}
+		}
+		return filtered, nil
+	}
 
-	// 使用 ResolveFlat 获取最终生效变量的完整值（含 sensitive 原始值）
+	// Fallback: live resolution (for cases without snapshot)
+	db := a.getDB()
 	resolver := NewVariableResolutionService(db)
 	flatAll, err := resolver.ResolveExecution(workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve effective variables: %w", err)
 	}
-
-	// 过滤指定类型
 	var variables []models.WorkspaceVariable
 	for _, v := range flatAll {
-		if v.VariableType != varType {
-			continue
+		if v.VariableType == varType {
+			variables = append(variables, v)
 		}
-		variables = append(variables, v)
 	}
-
 	return variables, nil
 }
 
