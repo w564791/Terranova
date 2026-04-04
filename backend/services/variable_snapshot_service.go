@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"iac-platform/internal/infrastructure"
 	"iac-platform/internal/models"
+	"log"
 
 	"gorm.io/gorm"
 )
@@ -86,19 +87,72 @@ func (s *VariableSnapshotService) LoadFromSnapshot(vsnapID string) ([]models.Wor
 		return nil, fmt.Errorf("failed to load snapshot refs: %w", err)
 	}
 
-	var result []models.WorkspaceVariable
+	// Group refs by source_type
+	type varRef struct {
+		VariableID string
+		Version    int
+	}
+	var wsRefs, varsetRefs []varRef
+	wsRefMap := make(map[string]bool)
+	varsetRefMap := make(map[string]bool)
+
 	for _, ref := range refs {
+		r := varRef{VariableID: ref.VariableID, Version: ref.Version}
 		switch ref.SourceType {
 		case "workspace":
-			var v models.WorkspaceVariable
-			if err := s.db.Where("variable_id = ? AND version = ?", ref.VariableID, ref.Version).
-				First(&v).Error; err == nil {
-				result = append(result, v)
-			}
+			wsRefs = append(wsRefs, r)
+			wsRefMap[fmt.Sprintf("%s:%d", r.VariableID, r.Version)] = true
 		case "varset":
-			var v models.VarsetVariable
-			if err := s.db.Where("variable_id = ? AND version = ?", ref.VariableID, ref.Version).
-				First(&v).Error; err == nil {
+			varsetRefs = append(varsetRefs, r)
+			varsetRefMap[fmt.Sprintf("%s:%d", r.VariableID, r.Version)] = true
+		}
+	}
+
+	var result []models.WorkspaceVariable
+
+	// Batch load workspace variables
+	if len(wsRefs) > 0 {
+		var wsVars []models.WorkspaceVariable
+		tx := s.db
+		for i, r := range wsRefs {
+			if i == 0 {
+				tx = tx.Where("(variable_id = ? AND version = ?)", r.VariableID, r.Version)
+			} else {
+				tx = tx.Or("(variable_id = ? AND version = ?)", r.VariableID, r.Version)
+			}
+		}
+		if err := tx.Find(&wsVars).Error; err != nil {
+			log.Printf("[WARN] Failed to batch load workspace variables: %v", err)
+		} else {
+			found := make(map[string]bool)
+			for _, v := range wsVars {
+				result = append(result, v)
+				found[fmt.Sprintf("%s:%d", v.VariableID, v.Version)] = true
+			}
+			for key := range wsRefMap {
+				if !found[key] {
+					log.Printf("[WARN] Snapshot ref not found in workspace_variables: %s", key)
+				}
+			}
+		}
+	}
+
+	// Batch load varset variables
+	if len(varsetRefs) > 0 {
+		var vsetVars []models.VarsetVariable
+		tx := s.db
+		for i, r := range varsetRefs {
+			if i == 0 {
+				tx = tx.Where("(variable_id = ? AND version = ?)", r.VariableID, r.Version)
+			} else {
+				tx = tx.Or("(variable_id = ? AND version = ?)", r.VariableID, r.Version)
+			}
+		}
+		if err := tx.Find(&vsetVars).Error; err != nil {
+			log.Printf("[WARN] Failed to batch load varset variables: %v", err)
+		} else {
+			found := make(map[string]bool)
+			for _, v := range vsetVars {
 				result = append(result, models.WorkspaceVariable{
 					VariableID:   v.VariableID,
 					Key:          v.Key,
@@ -109,6 +163,12 @@ func (s *VariableSnapshotService) LoadFromSnapshot(vsnapID string) ([]models.Wor
 					Description:  v.Description,
 					Version:      v.Version,
 				})
+				found[fmt.Sprintf("%s:%d", v.VariableID, v.Version)] = true
+			}
+			for key := range varsetRefMap {
+				if !found[key] {
+					log.Printf("[WARN] Snapshot ref not found in varset_variables: %s", key)
+				}
 			}
 		}
 	}

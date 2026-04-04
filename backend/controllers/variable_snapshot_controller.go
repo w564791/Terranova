@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"iac-platform/services"
 
@@ -41,6 +42,7 @@ func (c *VariableSnapshotController) CreateSnapshot(ctx *gin.Context) {
 		"vsnap_id":     vsnapID,
 		"workspace_id": workspaceID,
 		"item_count":   count,
+		"created_at":   time.Now(),
 	})
 }
 
