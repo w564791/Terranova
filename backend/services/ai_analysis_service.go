@@ -156,9 +156,12 @@ func (s *AIAnalysisService) BuildPromptWithCapability(taskType, tfVersion, error
 	return prompt
 }
 
-// AnalyzeErrorByTaskID 根据任务ID分析错误（安全版本）
+// AnalyzeErrorByTaskID 根据任务ID分析错误（安全版本，AIAgentLoop 模式）
 // 安全说明：从数据库获取任务信息，不信任客户端输入，防止 prompt injection 攻击
+// 使用 AIAgentLoop 让 AI 自主查询所需上下文（module 输入参数、资源变更详情等），而非一次性拼接所有信息
 func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*AnalysisResult, int, error) {
+	startTime := time.Now()
+
 	// 从数据库获取任务信息
 	var task models.WorkspaceTask
 	if err := s.db.First(&task, taskID).Error; err != nil {
@@ -174,7 +177,6 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 	// 构建错误信息：优先使用 ErrorMessage，如果为空则尝试从 PlanOutput 或 ApplyOutput 中提取
 	errorMessage := task.ErrorMessage
 	if errorMessage == "" {
-		// 如果没有明确的错误信息，尝试从输出中提取
 		if task.Status == models.TaskStatusFailed {
 			if task.ApplyOutput != "" {
 				errorMessage = task.ApplyOutput
@@ -184,141 +186,91 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 		}
 	}
 
-	// 如果仍然没有错误信息，返回错误
 	if errorMessage == "" {
 		return nil, 0, fmt.Errorf("任务没有错误信息，无需分析")
 	}
 
-	// 查询资源变更记录，分别构建失败资源和成功资源（含配置详情）
-	var failedResources, succeededResources string
-	var resourceChanges []models.WorkspaceTaskResourceChange
-	s.db.Where("task_id = ?", taskID).Find(&resourceChanges)
-	if len(resourceChanges) > 0 {
-		// 1. 收集失败资源及其所属 module，附带 ChangesAfter 配置
-		failedModules := make(map[string]bool)
-		failedAddrSet := make(map[string]bool)
-		var failedLines []string
-		for _, rc := range resourceChanges {
-			if rc.ApplyStatus == "applying" || rc.ApplyStatus == "failed" {
-				failedModules[rc.ModuleAddress] = true
-				failedAddrSet[rc.ResourceAddress] = true
-				line := fmt.Sprintf("- %s (action: %s)", rc.ResourceAddress, rc.Action)
-				if config := marshalJSONB(rc.ChangesAfter); config != "" {
-					line += fmt.Sprintf("\n  配置: %s", config)
-				}
-				failedLines = append(failedLines, line)
-			}
-		}
-		if len(failedLines) > 0 {
-			failedResources = strings.Join(failedLines, "\n")
-		}
-
-		// 2. 构建同 module 已成功资源列表（含配置详情）
-		//    来源：workspace_task_resource_changes 中同 workspace + 同 module 已完成的变更记录
-		//    同一资源取最新一条（按 id DESC），用 ChangesAfter 作为配置
-		if len(failedModules) > 0 {
-			failedModulePaths := make([]string, 0, len(failedModules))
-			for m := range failedModules {
-				failedModulePaths = append(failedModulePaths, m)
-			}
-
-			// 查询同 workspace、同 module 下 apply 成功且有配置数据的变更记录（按 id DESC 取最新）
-			// 注意：重试任务可能不带 changes_after，需排除以取到首次任务的完整数据
-			var succeededChanges []models.WorkspaceTaskResourceChange
-			s.db.Where("workspace_id = ? AND module_address IN ? AND apply_status = ? AND changes_after IS NOT NULL",
-				task.WorkspaceID, failedModulePaths, "completed").
-				Order("id DESC").
-				Find(&succeededChanges)
-
-			// 按 resource_address 去重，只保留最新一条
-			seen := make(map[string]bool)
-			var succeededLines []string
-			for _, rc := range succeededChanges {
-				if failedAddrSet[rc.ResourceAddress] || seen[rc.ResourceAddress] {
-					continue
-				}
-				seen[rc.ResourceAddress] = true
-				line := fmt.Sprintf("- %s (%s)", rc.ResourceAddress, rc.ResourceType)
-				if config := marshalJSONB(rc.ChangesAfter); config != "" {
-					line += fmt.Sprintf("\n  配置: %s", config)
-				}
-				succeededLines = append(succeededLines, line)
-			}
-			if len(succeededLines) > 0 {
-				succeededResources = strings.Join(succeededLines, "\n")
-			}
-		}
-	}
-
-	// 确定任务类型
-	taskType := string(task.TaskType)
-	if taskType == "" {
-		taskType = "plan_and_apply"
-	}
-
-	// 获取 Terraform 版本
-	tfVersion := workspace.TerraformVersion
-	if tfVersion == "" {
-		tfVersion = "latest"
-	}
-
-	return s.AnalyzeError(fmt.Sprintf("%d", taskID), userID, errorMessage, failedResources, succeededResources, taskType, tfVersion)
-}
-
-// AnalyzeError 分析错误（内部方法）
-// 注意：此方法仅供内部调用，外部应使用 AnalyzeErrorByTaskID
-func (s *AIAnalysisService) AnalyzeError(taskID, userID string, errorMessage, failedResources, succeededResources, taskType, tfVersion string) (*AnalysisResult, int, error) {
-	startTime := time.Now()
-
-	// 获取支持错误分析的 AI 配置
+	// 获取 AI 配置
 	cfg, err := s.configService.GetConfigForCapability("error_analysis")
 	if err != nil {
 		return nil, 0, fmt.Errorf("无法获取 AI 配置: %w", err)
 	}
-
 	if cfg == nil {
 		return nil, 0, fmt.Errorf("AI 分析服务未启用")
 	}
 
-	// 使用配置中的频率限制检查
+	// 速率限制检查
 	allowed, retryAfter := s.CheckRateLimitWithConfig(userID, cfg.RateLimitSeconds)
 	if !allowed {
 		return nil, retryAfter, fmt.Errorf("请求过于频繁，请在 %d 秒后重试", retryAfter)
 	}
 
-	// 获取自定义的能力场景 prompt（如果有）
-	capabilityPrompt := ""
-	if cfg.CapabilityPrompts != nil {
-		if prompt, ok := cfg.CapabilityPrompts["error_analysis"]; ok && prompt != "" {
-			capabilityPrompt = prompt
-		}
+	// 确定任务类型和 Terraform 版本
+	taskType := string(task.TaskType)
+	if taskType == "" {
+		taskType = "plan_and_apply"
+	}
+	tfVersion := workspace.TerraformVersion
+	if tfVersion == "" {
+		tfVersion = "latest"
 	}
 
-	// 构建 prompt（支持自定义能力场景 prompt）
-	prompt := s.BuildPromptWithCapability(taskType, tfVersion, errorMessage, failedResources, succeededResources, cfg.CustomPrompt, capabilityPrompt)
+	// 构建 system prompt
+	systemPrompt := s.buildErrorAnalysisSystemPrompt(cfg)
 
-	// 根据服务类型调用不同的 API
-	var result *AnalysisResult
-	log.Printf("[AIAnalysis] taskID=%s service=%s model=%s prompt:\n%s", taskID, cfg.ServiceType, cfg.ModelID, prompt)
+	// 构建 user prompt — 只包含错误信息和基本上下文，详细数据由 AI 通过工具获取
+	userPrompt := fmt.Sprintf(
+		"请分析以下 Terraform 任务执行错误。\n\n"+
+			"任务 ID: %d\n"+
+			"工作空间: %s\n"+
+			"执行阶段: %s\n"+
+			"Terraform 版本: %s\n\n"+
+			"错误信息:\n%s",
+		taskID, task.WorkspaceID, taskType, tfVersion, errorMessage,
+	)
 
-	switch cfg.ServiceType {
-	case "bedrock":
-		result, err = s.callBedrock(cfg.AWSRegion, cfg.ModelID, prompt, cfg.UseInferenceProfile)
-	case "openai", "azure_openai", "ollama":
-		result, err = s.callOpenAICompatible(cfg.BaseURL, cfg.APIKey, cfg.ModelID, prompt)
-	default:
-		return nil, 0, fmt.Errorf("不支持的服务类型: %s", cfg.ServiceType)
-	}
+	// 创建 Agent Loop
+	caller := NewAICallerFromConfig(cfg)
+	loop := NewAIAgentLoop(caller, 5)
 
+	// 注册错误分析专用工具
+	loop.RegisterTool(NewQueryTaskResourceChangesTool(s.db, taskID))
+	loop.RegisterTool(NewQueryModuleInputsTool(task.PlanJSON))
+	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
+
+	// 设置输出验证器
+	loop.SetOutputValidator(errorAnalysisValidator)
+
+	// 设置过程日志 observer
+	var processLog strings.Builder
+	loop.SetObserver(buildErrorAnalysisObserver(&processLog))
+
+	log.Printf("[AIAnalysis] taskID=%d service=%s model=%s starting agent loop", taskID, cfg.ServiceType, cfg.ModelID)
+
+	// 运行 Agent Loop
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	result, err := loop.Run(ctx, systemPrompt, userPrompt)
 	if err != nil {
 		return nil, 0, fmt.Errorf("AI 分析失败: %w", err)
+	}
+
+	log.Printf("[AIAnalysis] taskID=%d completed in %d steps, tool_calls=%d",
+		taskID, result.TotalSteps, len(result.ToolCalls))
+
+	// 解析最终输出
+	analysisResult, err := parseErrorAnalysisOutput(result.FinalOutput)
+	if err != nil {
+		return nil, 0, fmt.Errorf("解析 AI 分析结果失败: %w", err)
 	}
 
 	// 计算耗时
 	duration := int(time.Since(startTime).Milliseconds())
 
-	// 保存分析结果
-	if err := s.configService.SaveAnalysis(taskID, userID, errorMessage, result, duration); err != nil {
+	// 保存分析结果（含过程日志）
+	taskIDStr := fmt.Sprintf("%d", taskID)
+	if err := s.configService.SaveAnalysis(taskIDStr, userID, errorMessage, analysisResult, duration, processLog.String()); err != nil {
 		return nil, 0, fmt.Errorf("保存分析结果失败: %w", err)
 	}
 
@@ -327,7 +279,119 @@ func (s *AIAnalysisService) AnalyzeError(taskID, userID string, errorMessage, fa
 		return nil, 0, fmt.Errorf("更新速率限制失败: %w", err)
 	}
 
-	return result, duration, nil
+	return analysisResult, duration, nil
+}
+
+// buildErrorAnalysisSystemPrompt 构建错误分析的 system prompt
+func (s *AIAnalysisService) buildErrorAnalysisSystemPrompt(cfg *models.AIConfig) string {
+	// 支持自定义能力场景 prompt
+	if cfg.CapabilityPrompts != nil {
+		if prompt, ok := cfg.CapabilityPrompts["error_analysis"]; ok && prompt != "" {
+			return prompt
+		}
+	}
+
+	prompt := `你是一个专业的 Terraform 和云基础设施专家。你的任务是分析 Terraform 执行过程中的错误，给出精准诊断。
+
+## 分析流程
+
+你有以下工具可以使用，请按需调用来收集足够的上下文信息：
+
+1. **query_task_resource_changes** — 查询任务的资源变更记录，了解哪些资源成功、哪些失败、配置数据
+2. **query_module_inputs** — 查询 module 的用户输入参数（从 plan JSON 的 configuration 中提取）。
+   这是最关键的工具 — 当资源的 changes_after 中某些字段为 null 时，说明该字段在 plan 阶段是 (known after apply)，
+   此时必须用此工具查看用户的原始输入来获取完整信息。
+3. **query_resource_attributes** — 在 CMDB 中搜索资源的完整属性
+
+## 分析要求
+
+1. 先查询资源变更记录，了解失败资源和上下文
+2. 对于失败资源，查询其所属 module 的用户输入参数，找出配置中的具体问题
+3. 根本原因要具体：指出失败资源的哪个配置项的什么值导致了问题，与正确值对比
+4. 解决方案要可操作，包含具体的修改建议
+5. 解决方案数量 1-5 条，按推荐优先级排序
+
+## 输出格式
+
+收集完信息后，返回纯 JSON 结果（不要有任何额外的解释、说明或 markdown 标记）：
+
+{
+  "error_type": "错误类型（配置错误/权限错误/资源冲突/网络错误/语法错误/依赖错误/状态错误/配额限制/其他）",
+  "root_cause": "根本原因：指出具体资源和失败原因（不超过150字）",
+  "solutions": [
+    "解决方案：具体修改建议，可包含代码示例（不超过200字）"
+  ],
+  "prevention": "预防措施（不超过100字）",
+  "severity": "low/medium/high/critical"
+}`
+
+	if cfg.CustomPrompt != "" {
+		prompt += fmt.Sprintf("\n\n## 补充要求\n%s", cfg.CustomPrompt)
+	}
+
+	return prompt
+}
+
+// errorAnalysisValidator 验证错误分析的 AI 输出格式
+var errorAnalysisValidator OutputValidator = func(output string) error {
+	text := extractJSON(output)
+	var parsed AnalysisResult
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		return fmt.Errorf("输出不是有效的 JSON 格式，请确保输出纯 JSON（不要包含 markdown 代码块标记）")
+	}
+	if parsed.ErrorType == "" {
+		return fmt.Errorf("缺少 error_type 字段")
+	}
+	if parsed.RootCause == "" {
+		return fmt.Errorf("缺少 root_cause 字段")
+	}
+	if len(parsed.Solutions) == 0 {
+		return fmt.Errorf("缺少 solutions 字段")
+	}
+	return nil
+}
+
+// buildErrorAnalysisObserver 构建错误分析的过程日志 observer
+func buildErrorAnalysisObserver(processLog *strings.Builder) AgentLoopObserver {
+	return func(event AgentLoopEvent) {
+		now := time.Now().Format("15:04:05.000")
+		var line string
+		switch event.Type {
+		case "thinking":
+			runes := []rune(event.Content)
+			content := event.Content
+			if len(runes) > 500 {
+				content = string(runes[:500]) + "..."
+			}
+			line = fmt.Sprintf("[%s] [Step %d] Thinking: %s", now, event.Step, content)
+		case "tool_call":
+			line = fmt.Sprintf("[%s] [Step %d] Tool call: %s params=%s", now, event.Step, event.ToolName, event.Content)
+		case "tool_result":
+			if event.Error != "" {
+				line = fmt.Sprintf("[%s] [Step %d] Tool result: %s failed (%dms): %s", now, event.Step, event.ToolName, event.Duration, event.Error)
+			} else {
+				line = fmt.Sprintf("[%s] [Step %d] Tool result: %s ok (%dms)", now, event.Step, event.ToolName, event.Duration)
+			}
+		case "output":
+			line = fmt.Sprintf("[%s] [Step %d] AI output generated", now, event.Step)
+		case "retry":
+			line = fmt.Sprintf("[%s] [Step %d] Retry: %s", now, event.Step, event.Content)
+		default:
+			line = fmt.Sprintf("[%s] [Step %d] %s: %s", now, event.Step, event.Type, event.Content)
+		}
+		processLog.WriteString(line + "\n")
+		log.Printf("[AIAnalysis] %s", line)
+	}
+}
+
+// parseErrorAnalysisOutput 解析 Agent Loop 的最终输出为 AnalysisResult
+func parseErrorAnalysisOutput(output string) (*AnalysisResult, error) {
+	text := extractJSON(output)
+	var result AnalysisResult
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return nil, fmt.Errorf("无法解析 JSON: %w (内容: %s)", err, text)
+	}
+	return &result, nil
 }
 
 // callBedrock 调用 Bedrock API

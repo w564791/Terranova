@@ -138,6 +138,15 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 			continue
 		}
 
+		// 清掉旧 hash，确保 AI 失败后补偿能捡到
+		if resource.SummaryHash != "" && resource.SummaryHash != hash {
+			s.db.Model(&models.ResourceIndex{}).Where("id = ?", resource.ID).
+				Updates(map[string]interface{}{
+					"summary_hash":              "",
+					"summary_assessment_status": "",
+				})
+		}
+
 		// 如果有 regeneration hint（质量反馈），追加到 prompt
 		if resource.SummaryRegenerationHint != "" {
 			userPrompt += fmt.Sprintf("\n\n上一次生成的摘要存在以下问题，请在本次生成中修正：\n%s", resource.SummaryRegenerationHint)

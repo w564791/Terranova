@@ -52,7 +52,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 
 ```yaml
 action 映射规则:
-  - replace（delete + create）：工具调用和 blast_radius 按 update 规则执行；risk_factors 中不标记 resource_deletion（因为资源会被重建）
+  - replace（delete + create）视为 update，按 update 规则执行工具调用和风险评估
 
 mandatory_calls:
   - condition: action in ["update", "delete", "replace"]
@@ -81,6 +81,7 @@ mandatory_calls:
       以获取 resource_summary，用于：
       1. 在 affected_resources.impact 中写出具体影响（如"S3 VPC Endpoint 不可达将导致应用无法访问 S3"）
       2. 评估实际业务影响严重程度
+      3. 禁止对所有依赖方使用相同的模板化 impact 描述
 
 禁止：
   - 禁止编造依赖关系
@@ -225,8 +226,7 @@ medium:
 
 ```yaml
 requires_human_confirmation_rules:
-  - risk_level == "critical"
-  - risk_level == "high" AND confidence == "low"
+  - risk_level in ["high", "critical"] AND confidence == "low"
   - uncertainty.level == "high"
   - risk_factors 包含 external_exposure_change
   - risk_factors 包含 resource_deletion AND direct_dependencies > 0

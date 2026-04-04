@@ -2,6 +2,8 @@ package services
 
 import (
 	"iac-platform/internal/models"
+
+	"gorm.io/gorm"
 )
 
 // DataAccessor 数据访问接口
@@ -11,6 +13,7 @@ type DataAccessor interface {
 	GetWorkspace(workspaceID string) (*models.Workspace, error)
 	GetWorkspaceResources(workspaceID string) ([]models.WorkspaceResource, error)
 	GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error)
+	LoadSnapshot(vsnapID string, db *gorm.DB) error
 	LockWorkspace(workspaceID, userID, reason string) error
 	UnlockWorkspace(workspaceID string) error
 	UpdateWorkspaceFields(workspaceID string, updates map[string]interface{}) error

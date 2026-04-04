@@ -147,27 +147,27 @@ func TestValidateSnapshot_NilResourceVersions(t *testing.T) {
 	assert.Contains(t, err.Error(), "snapshot resource versions is nil")
 }
 
-func TestValidateSnapshot_NilVariables(t *testing.T) {
+func TestValidateSnapshot_NilVariableSnapshotID(t *testing.T) {
 	executor := newTestExecutor(nil)
 	now := time.Now()
 	task := &models.WorkspaceTask{
 		SnapshotCreatedAt:        &now,
 		SnapshotResourceVersions: models.JSONB{},
-		SnapshotVariables:        nil,
+		VariableSnapshotID:       nil, // nil is valid — just logs a warning
 	}
 	logger := NewTerraformLogger(nil)
 	err := executor.ValidateResourceVersionSnapshot(task, logger)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "snapshot variables missing")
+	assert.NoError(t, err) // nil variable_snapshot_id is allowed (warns but passes)
 }
 
 func TestValidateSnapshot_NilProviderConfig(t *testing.T) {
 	executor := newTestExecutor(nil)
 	now := time.Now()
+	vsnapID := "vsnap-test-001"
 	task := &models.WorkspaceTask{
 		SnapshotCreatedAt:        &now,
 		SnapshotResourceVersions: models.JSONB{},
-		SnapshotVariables:        models.JSONB{},
+		VariableSnapshotID:       &vsnapID,
 		SnapshotProviderConfig:   nil,
 	}
 	logger := NewTerraformLogger(nil)
@@ -179,10 +179,11 @@ func TestValidateSnapshot_NilProviderConfig(t *testing.T) {
 func TestValidateSnapshot_EmptyResources_Success(t *testing.T) {
 	executor := newTestExecutor(nil)
 	now := time.Now()
+	vsnapID := "vsnap-test-002"
 	task := &models.WorkspaceTask{
 		SnapshotCreatedAt:        &now,
 		SnapshotResourceVersions: models.JSONB{},
-		SnapshotVariables:        models.JSONB{},
+		VariableSnapshotID:       &vsnapID,
 		SnapshotProviderConfig:   models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -202,7 +203,7 @@ func TestValidateSnapshot_AgentMode_SkipsDBValidation(t *testing.T) {
 				"version":        float64(1),
 			},
 		},
-		SnapshotVariables:      models.JSONB{},
+		VariableSnapshotID:     strPtr("vsnap-test-agent"),
 		SnapshotProviderConfig: models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -222,7 +223,7 @@ func TestValidateSnapshot_LocalMode_ResourceNotFound(t *testing.T) {
 				"version":        float64(1),
 			},
 		},
-		SnapshotVariables:      models.JSONB{},
+		VariableSnapshotID:     strPtr("vsnap-test-local"),
 		SnapshotProviderConfig: models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -247,7 +248,7 @@ func TestValidateSnapshot_LocalMode_VersionNotFound(t *testing.T) {
 				"version":        float64(99), // version 99 doesn't exist
 			},
 		},
-		SnapshotVariables:      models.JSONB{},
+		VariableSnapshotID:     strPtr("vsnap-test-ver"),
 		SnapshotProviderConfig: models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -272,7 +273,7 @@ func TestValidateSnapshot_LocalMode_AllValid(t *testing.T) {
 				"version":        float64(1),
 			},
 		},
-		SnapshotVariables:      models.JSONB{"_array": []interface{}{}},
+		VariableSnapshotID:     strPtr("vsnap-test-valid"),
 		SnapshotProviderConfig: models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -302,7 +303,7 @@ func TestValidateSnapshot_LocalMode_MultipleResources(t *testing.T) {
 				"version":        float64(2),
 			},
 		},
-		SnapshotVariables:      models.JSONB{},
+		VariableSnapshotID:     strPtr("vsnap-test-multi"),
 		SnapshotProviderConfig: models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -319,7 +320,7 @@ func TestValidateSnapshot_OldSnapshot_WarnsButPasses(t *testing.T) {
 	task := &models.WorkspaceTask{
 		SnapshotCreatedAt:        &oldTime,
 		SnapshotResourceVersions: models.JSONB{},
-		SnapshotVariables:        models.JSONB{},
+		VariableSnapshotID:       strPtr("vsnap-test-old"),
 		SnapshotProviderConfig:   models.JSONB{"region": "us-east-1"},
 	}
 	logger := NewTerraformLogger(nil)
@@ -583,7 +584,7 @@ func TestPlanApply_SnapshotPreservedAcrossPhases(t *testing.T) {
 				"version":        float64(1),
 			},
 		},
-		SnapshotVariables:      models.JSONB{},
+		VariableSnapshotID:     strPtr("vsnap-test-stale"),
 		SnapshotProviderConfig: models.JSONB{"region": "us-east-1"},
 	}
 

@@ -67,6 +67,8 @@ type CMDBOverviewQueue struct {
 	AssessmentPending    int64 `json:"assessment_pending"`
 	AssessmentProcessing int64 `json:"assessment_processing"`
 	AssessmentFailed     int64 `json:"assessment_failed"`
+	// 资源级别：L2/L3 评估待补偿 (resource_index.summary_assessment_status = 'partial')
+	AssessmentPartial int64 `json:"assessment_partial"`
 }
 
 // CMDBRecentSync 最近同步记录

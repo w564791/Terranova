@@ -285,57 +285,12 @@ func (c *AgentAPIClient) GetPlanTask(taskID uint) (*models.WorkspaceTask, error)
 			task.SnapshotResourceVersions = models.JSONB(snapshotResourceVersions)
 		}
 
-		// 处理 snapshot_variables - 支持两种格式:
-		// 1. 数组格式: [...]
-		// 2. 对象格式: {"_array": [...]}
+		// Store snapshot_variables in Context for agent use
 		if snapshotVariables, ok := taskData["snapshot_variables"].([]interface{}); ok {
-			// 格式1: 直接是数组
-			variables := make([]models.WorkspaceVariable, 0, len(snapshotVariables))
-			for _, item := range snapshotVariables {
-				if varMap, ok := item.(map[string]interface{}); ok {
-					variable := models.WorkspaceVariable{
-						ID:           getUint(varMap, "id"),
-						WorkspaceID:  getString(varMap, "workspace_id"),
-						VariableID:   getString(varMap, "variable_id"),
-						Version:      getInt(varMap, "version"),
-						Key:          getString(varMap, "key"),
-						Value:        getString(varMap, "value"),
-						VariableType: models.VariableType(getString(varMap, "variable_type")),
-						Sensitive:    getBool(varMap, "sensitive"),
-						Description:  getString(varMap, "description"),
-						ValueFormat:  models.ValueFormat(getString(varMap, "value_format")),
-					}
-					variables = append(variables, variable)
-				}
+			if task.Context == nil {
+				task.Context = make(map[string]interface{})
 			}
-			// Convert to JSONB format (map with _array key for compatibility)
-			task.SnapshotVariables = models.JSONB{"_array": variables}
-		} else if snapshotVarsMap, ok := taskData["snapshot_variables"].(map[string]interface{}); ok {
-			// 格式2: {"_array": [...]} 对象格式
-			if arrayData, hasArray := snapshotVarsMap["_array"].([]interface{}); hasArray {
-				variables := make([]models.WorkspaceVariable, 0, len(arrayData))
-				for _, item := range arrayData {
-					if varMap, ok := item.(map[string]interface{}); ok {
-						variable := models.WorkspaceVariable{
-							ID:           getUint(varMap, "id"),
-							WorkspaceID:  getString(varMap, "workspace_id"),
-							VariableID:   getString(varMap, "variable_id"),
-							Version:      getInt(varMap, "version"),
-							Key:          getString(varMap, "key"),
-							Value:        getString(varMap, "value"),
-							VariableType: models.VariableType(getString(varMap, "variable_type")),
-							Sensitive:    getBool(varMap, "sensitive"),
-							Description:  getString(varMap, "description"),
-							ValueFormat:  models.ValueFormat(getString(varMap, "value_format")),
-						}
-						variables = append(variables, variable)
-					}
-				}
-				task.SnapshotVariables = models.JSONB{"_array": variables}
-			} else {
-				// 直接使用原始 map
-				task.SnapshotVariables = models.JSONB(snapshotVarsMap)
-			}
+			task.Context["_snapshot_variables"] = snapshotVariables
 		}
 
 		if snapshotProviderConfig, ok := taskData["snapshot_provider_config"].(map[string]interface{}); ok {
@@ -877,51 +832,12 @@ func (c *AgentAPIClient) parsePlanTaskResponse(respBody map[string]interface{}) 
 			task.SnapshotResourceVersions = models.JSONB(snapshotResourceVersions)
 		}
 
-		// 处理 snapshot_variables
+		// Store snapshot_variables in Context for agent use
 		if snapshotVariables, ok := taskData["snapshot_variables"].([]interface{}); ok {
-			variables := make([]models.WorkspaceVariable, 0, len(snapshotVariables))
-			for _, item := range snapshotVariables {
-				if varMap, ok := item.(map[string]interface{}); ok {
-					variable := models.WorkspaceVariable{
-						ID:           getUint(varMap, "id"),
-						WorkspaceID:  getString(varMap, "workspace_id"),
-						VariableID:   getString(varMap, "variable_id"),
-						Version:      getInt(varMap, "version"),
-						Key:          getString(varMap, "key"),
-						Value:        getString(varMap, "value"),
-						VariableType: models.VariableType(getString(varMap, "variable_type")),
-						Sensitive:    getBool(varMap, "sensitive"),
-						Description:  getString(varMap, "description"),
-						ValueFormat:  models.ValueFormat(getString(varMap, "value_format")),
-					}
-					variables = append(variables, variable)
-				}
+			if task.Context == nil {
+				task.Context = make(map[string]interface{})
 			}
-			task.SnapshotVariables = models.JSONB{"_array": variables}
-		} else if snapshotVarsMap, ok := taskData["snapshot_variables"].(map[string]interface{}); ok {
-			if arrayData, hasArray := snapshotVarsMap["_array"].([]interface{}); hasArray {
-				variables := make([]models.WorkspaceVariable, 0, len(arrayData))
-				for _, item := range arrayData {
-					if varMap, ok := item.(map[string]interface{}); ok {
-						variable := models.WorkspaceVariable{
-							ID:           getUint(varMap, "id"),
-							WorkspaceID:  getString(varMap, "workspace_id"),
-							VariableID:   getString(varMap, "variable_id"),
-							Version:      getInt(varMap, "version"),
-							Key:          getString(varMap, "key"),
-							Value:        getString(varMap, "value"),
-							VariableType: models.VariableType(getString(varMap, "variable_type")),
-							Sensitive:    getBool(varMap, "sensitive"),
-							Description:  getString(varMap, "description"),
-							ValueFormat:  models.ValueFormat(getString(varMap, "value_format")),
-						}
-						variables = append(variables, variable)
-					}
-				}
-				task.SnapshotVariables = models.JSONB{"_array": variables}
-			} else {
-				task.SnapshotVariables = models.JSONB(snapshotVarsMap)
-			}
+			task.Context["_snapshot_variables"] = snapshotVariables
 		}
 
 		if snapshotProviderConfig, ok := taskData["snapshot_provider_config"].(map[string]interface{}); ok {

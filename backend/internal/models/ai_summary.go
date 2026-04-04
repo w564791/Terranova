@@ -22,6 +22,7 @@ type AIPlanSummary struct {
 	Status            string          `gorm:"type:varchar(20);not null;default:'pending'" json:"status"`    // pending/running/completed/failed
 	ErrorMessage      string          `gorm:"type:text" json:"error_message,omitempty"`                     // 失败原因
 	Duration          int             `json:"duration"`                                                      // 分析耗时（毫秒）
+	ProcessLog        string          `gorm:"type:text" json:"process_log,omitempty"`                        // AI 分析过程日志
 	CreatedAt         time.Time       `json:"created_at"`                                                    // 创建时间（本地时间）
 	// 人机协同决策字段
 	RequiresConfirmation bool            `gorm:"default:false" json:"requires_confirmation"`                    // AI 判断是否需要人工确认
@@ -56,6 +57,7 @@ type AIApplySummary struct {
 	Status              string          `gorm:"type:varchar(20);not null;default:'pending'" json:"status"`    // pending/running/completed/failed
 	ErrorMessage        string          `gorm:"type:text" json:"error_message,omitempty"`                     // 失败原因
 	Duration            int             `json:"duration"`                                                      // 分析耗时（毫秒）
+	ProcessLog          string          `gorm:"type:text" json:"process_log,omitempty"`                        // AI 分析过程日志
 	CreatedAt           time.Time       `json:"created_at"`                                                    // 创建时间（本地时间）
 }
 

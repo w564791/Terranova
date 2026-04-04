@@ -89,8 +89,9 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 
 	// 解析请求体
 	var req struct {
-		Description string `json:"description"`
-		RunType     string `json:"run_type"` // "plan" 或 "plan_and_apply"
+		Description        string  `json:"description"`
+		RunType            string  `json:"run_type"`             // "plan" 或 "plan_and_apply"
+		VariableSnapshotID *string `json:"variable_snapshot_id"` // 可选，API 用户可传已有 vsnap_id
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		// 如果没有请求体，继续执行（description是可选的）
@@ -142,15 +143,37 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		taskType = models.TaskTypePlan
 	}
 
+	// Variable snapshot: use provided vsnap_id or create new one
+	var vsnapID *string
+	if req.VariableSnapshotID != nil && *req.VariableSnapshotID != "" {
+		// API user provided existing snapshot — validate it exists
+		var count int64
+		c.db.Model(&models.VariableSnapshot{}).Where("vsnap_id = ?", *req.VariableSnapshotID).Count(&count)
+		if count == 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "variable_snapshot_id not found: " + *req.VariableSnapshotID})
+			return
+		}
+		vsnapID = req.VariableSnapshotID
+	} else {
+		// Auto-create snapshot
+		snapshotSvc := services.NewVariableSnapshotService(c.db)
+		var snapshotErr error
+		vsnapID, _, snapshotErr = snapshotSvc.CreateSnapshot(workspace.WorkspaceID, &uid)
+		if snapshotErr != nil {
+			log.Printf("[WARN] Failed to create variable snapshot for workspace %s: %v", workspace.WorkspaceID, snapshotErr)
+		}
+	}
+
 	// 创建任务（只创建一个任务）
 	task := &models.WorkspaceTask{
-		WorkspaceID:   workspace.WorkspaceID,
-		TaskType:      taskType,
-		Status:        models.TaskStatusPending,
-		ExecutionMode: workspace.ExecutionMode,
-		CreatedBy:     &uid,
-		Stage:         "pending",
-		Description:   req.Description,
+		WorkspaceID:        workspace.WorkspaceID,
+		TaskType:           taskType,
+		Status:             models.TaskStatusPending,
+		ExecutionMode:      workspace.ExecutionMode,
+		CreatedBy:          &uid,
+		Stage:              "pending",
+		Description:        req.Description,
+		VariableSnapshotID: vsnapID,
 	}
 
 	if err := c.db.Create(task).Error; err != nil {
@@ -291,7 +314,7 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 	} else {
 		// 排除plan_json和快照字段以减少响应大小
 		if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
-			Omit("plan_json", "snapshot_variables", "snapshot_resource_versions", "snapshot_provider_config").
+			Omit("plan_json", "snapshot_resource_versions", "snapshot_provider_config").
 			First(&task).Error; err != nil {
 			log.Printf("[ERROR] GetTask query failed: id=%d, workspace_id=%s, error=%v",
 				taskID, workspace.WorkspaceID, err)
@@ -349,15 +372,24 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 		"apply_confirmed_at": task.ApplyConfirmedAt,
 	}
 
-	// 只在ShowUnchangedResources为true时包含plan_json
+	// 只在ShowUnchangedResources为true时包含plan_json等大字段
 	if workspace.ShowUnchangedResources {
 		taskResponse["plan_json"] = task.PlanJSON
 		taskResponse["outputs"] = task.Outputs
 		taskResponse["context"] = task.Context
 		taskResponse["snapshot_resource_versions"] = task.SnapshotResourceVersions
-		taskResponse["snapshot_variables"] = task.SnapshotVariables
 		taskResponse["snapshot_provider_config"] = task.SnapshotProviderConfig
-		taskResponse["snapshot_created_at"] = task.SnapshotCreatedAt
+	}
+
+	// Load snapshot variables from new variable_snapshots table
+	taskResponse["snapshot_created_at"] = task.SnapshotCreatedAt
+	if task.VariableSnapshotID != nil {
+		var snapRefs []models.VariableSnapshot
+		c.db.Where("vsnap_id = ?", *task.VariableSnapshotID).Find(&snapRefs)
+		taskResponse["variable_snapshot_id"] = *task.VariableSnapshotID
+		taskResponse["snapshot_variables"] = snapRefs
+	} else {
+		taskResponse["variable_snapshot_id"] = nil
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
@@ -1441,38 +1473,8 @@ func createTaskSnapshot(db *gorm.DB, task *models.WorkspaceTask, workspace *mode
 		}
 	}
 
-	// 2. 快照变量（只保存variable_id和version引用）
-	// 只获取最新版本为未删除状态的变量
-	var variables []models.WorkspaceVariable
-	if err := db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		WHERE wv.workspace_id = ? 
-		  AND wv.is_deleted = false
-		  AND wv.version = (
-			SELECT MAX(version)
-			FROM workspace_variables
-			WHERE workspace_id = wv.workspace_id 
-			  AND variable_id = wv.variable_id
-			  AND is_deleted = false
-		  )
-	`, workspace.WorkspaceID).Scan(&variables).Error; err != nil {
-		return fmt.Errorf("failed to get latest non-deleted variables: %w", err)
-	}
-
-	// 构建变量快照：只保存必要字段（workspace_id, variable_id, version, variable_type）
-	// 使用 map 而不是结构体，避免 JSON 序列化包含零值字段
-	variableSnapshots := make([]map[string]interface{}, 0, len(variables))
-	for _, v := range variables {
-		variableSnapshots = append(variableSnapshots, map[string]interface{}{
-			"workspace_id":  v.WorkspaceID,
-			"variable_id":   v.VariableID,
-			"version":       v.Version,
-			"variable_type": string(v.VariableType),
-		})
-	}
-
-	// 3. 快照Provider配置（模板模式下动态解析，确保使用最新模板数据）
+	// 2. 快照Provider配置（模板模式下动态解析，确保使用最新模板数据）
+	// NOTE: Variable snapshots are now created BEFORE task creation via VariableSnapshotService
 	providerConfig := workspace.ProviderConfig
 	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
 	if len(templateIDs) > 0 {
@@ -1486,17 +1488,7 @@ func createTaskSnapshot(db *gorm.DB, task *models.WorkspaceTask, workspace *mode
 		}
 	}
 
-	// 4. 序列化变量快照为JSON
-	variablesJSON, err := json.Marshal(variableSnapshots)
-	if err != nil {
-		return fmt.Errorf("failed to marshal variable snapshots: %w", err)
-	}
-
-	// 【调试】打印实际序列化的JSON
-	log.Printf("[DEBUG] Task %d snapshot JSON (first 200 chars): %s", task.ID, string(variablesJSON)[:min(200, len(variablesJSON))])
-	log.Printf("[DEBUG] Task %d snapshot JSON length: %d bytes", task.ID, len(variablesJSON))
-
-	// 5. 保存快照到task（使用原始SQL确保JSON数组格式正确）
+	// 3. 保存快照到task（使用原始SQL确保JSON格式正确）
 	resourceVersionsJSON, err := json.Marshal(models.JSONB(resourceVersions))
 	if err != nil {
 		return fmt.Errorf("failed to marshal resource versions: %w", err)
@@ -1508,18 +1500,17 @@ func createTaskSnapshot(db *gorm.DB, task *models.WorkspaceTask, workspace *mode
 	}
 
 	if err := db.Exec(`
-		UPDATE workspace_tasks 
+		UPDATE workspace_tasks
 		SET snapshot_resource_versions = ?::jsonb,
-		    snapshot_variables = ?::jsonb,
 		    snapshot_provider_config = ?::jsonb,
 		    snapshot_created_at = ?
 		WHERE id = ?
-	`, resourceVersionsJSON, variablesJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
+	`, resourceVersionsJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
 		return fmt.Errorf("failed to save snapshot: %w", err)
 	}
 
-	log.Printf("[DEBUG] Snapshot created for task %d: %d resources, %d variable references",
-		task.ID, len(resourceVersions), len(variableSnapshots))
+	log.Printf("[DEBUG] Snapshot created for task %d: %d resources",
+		task.ID, len(resourceVersions))
 
 	return nil
 }

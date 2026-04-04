@@ -499,6 +499,9 @@ func (h *RawAgentCCHandler) handleTaskCompleted(agentConn *RawAgentConnection, p
 	// 发送任务完成通知
 	go h.sendTaskCompletedNotification(uint(taskID))
 
+	// 触发 AI Summary（服务端执行，agent 端没有 DB）
+	go h.triggerAISummary(uint(taskID))
+
 	// Apply 完成后的 Server 端处理（CMDB 同步 + Run Triggers）
 	go h.postApplyCompletionTasks(uint(taskID))
 
@@ -643,6 +646,36 @@ func (h *RawAgentCCHandler) sendTaskCompletedNotification(taskID uint) {
 
 	default:
 		log.Printf("[Notification] Task %d has status %s, no notification sent", taskID, task.Status)
+	}
+}
+
+// triggerAISummary 在服务端触发 AI Summary（Agent 模式下 agent 端没有 DB，由服务端执行）
+func (h *RawAgentCCHandler) triggerAISummary(taskID uint) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[PANIC] AI summary generation panicked for task %d: %v", taskID, r)
+		}
+	}()
+
+	var task models.WorkspaceTask
+	if err := h.db.First(&task, taskID).Error; err != nil {
+		log.Printf("[AISummary] Task %d not found for summary trigger: %v", taskID, err)
+		return
+	}
+
+	summaryService := services.NewAISummaryServiceWithStream(h.db, h.streamManager)
+
+	switch task.Status {
+	case models.TaskStatusApplyPending:
+		if task.ChangesAdd+task.ChangesChange+task.ChangesDestroy > 0 {
+			log.Printf("[AISummary] Triggering plan summary for agent task %d", taskID)
+			summaryService.GeneratePlanSummary(taskID)
+		}
+	case models.TaskStatusApplied:
+		log.Printf("[AISummary] Triggering apply summary for agent task %d", taskID)
+		summaryService.GenerateApplySummary(taskID)
+	default:
+		log.Printf("[AISummary] Task %d status %s, no summary needed", taskID, task.Status)
 	}
 }
 
@@ -1068,28 +1101,14 @@ func (h *RawAgentCCHandler) processDriftCheckResult(taskID uint) {
 // 通过检查任务的变量快照中的 TF_CLI_ARGS 环境变量来判断
 func (h *RawAgentCCHandler) hasTargetParameter(task *models.WorkspaceTask) bool {
 	// 1. 首先检查任务的变量快照（如果有）
-	if task.SnapshotVariables != nil && len(task.SnapshotVariables) > 0 {
-		// 尝试从 _array 格式中提取变量引用
-		if arrayData, hasArray := task.SnapshotVariables["_array"]; hasArray {
-			if variables, ok := arrayData.([]interface{}); ok {
-				// 收集所有变量 ID
-				var variableIDs []string
-				for _, v := range variables {
-					if varMap, ok := v.(map[string]interface{}); ok {
-						if varID, ok := varMap["variable_id"].(string); ok {
-							variableIDs = append(variableIDs, varID)
-						}
-					}
-				}
-				// 查询这些变量中是否有 TF_CLI_ARGS
-				if len(variableIDs) > 0 {
-					var tfCliArgsVar models.WorkspaceVariable
-					if err := h.db.Where("variable_id IN ? AND key = ?", variableIDs, "TF_CLI_ARGS").
-						First(&tfCliArgsVar).Error; err == nil {
-						// 找到了 TF_CLI_ARGS，检查是否包含 --target
-						if strings.Contains(tfCliArgsVar.Value, "--target") || strings.Contains(tfCliArgsVar.Value, "-target") {
-							return true
-						}
+	if task.VariableSnapshotID != nil {
+		snapshotSvc := services.NewVariableSnapshotService(h.db)
+		vars, err := snapshotSvc.LoadFromSnapshot(*task.VariableSnapshotID)
+		if err == nil {
+			for _, v := range vars {
+				if v.Key == "TF_CLI_ARGS" {
+					if strings.Contains(v.Value, "--target") || strings.Contains(v.Value, "-target") {
+						return true
 					}
 				}
 			}

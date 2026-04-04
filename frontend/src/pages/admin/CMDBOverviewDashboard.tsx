@@ -297,7 +297,7 @@ const CMDBOverviewDashboard: React.FC = () => {
       <div className={`${styles.row} ${styles.rowQueueType}`}>
         <div className={styles.card}>
           <div className={styles.cardLabel}>任务队列</div>
-          <div className={styles.queueNote}>Workspace 的 Summary 在同步时即时生成，无独立队列</div>
+          <div className={styles.queueNote}>Workspace 的 Summary 在同步时即时生成，无独立队列。L2/L3 待补偿表示 LLM 评估失败的资源数，系统会自动重试。</div>
           <div className={styles.queueHeader}>
             <span className={styles.queueHeaderLabel}>队列</span>
             <span className={styles.queueHeaderCols}>待处理 / 处理中 / 失败</span>
@@ -342,6 +342,14 @@ const CMDBOverviewDashboard: React.FC = () => {
               <span style={{ color: data.queue.assessment_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.assessment_failed}</span>
             </span>
           </div>
+          {data.queue.assessment_partial > 0 && (
+            <div className={styles.queueRow}>
+              <span className={styles.queueLabel} style={{ paddingLeft: 16, fontSize: 12, color: '#fa8c16' }}>L2/L3 待补偿</span>
+              <span className={styles.queueCounts}>
+                <span style={{ color: '#fa8c16' }}>{data.queue.assessment_partial} 个资源</span>
+              </span>
+            </div>
+          )}
         </div>
 
         <div className={styles.card}>

@@ -32,10 +32,10 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 		return fmt.Errorf("workspace不存在: %w", err)
 	}
 
-	// 检查是否存在同名的活跃变量
+	// 检查是否存在同名的活跃变量（不区分类型，同名 key 只能有一个）
 	var existing models.WorkspaceVariable
-	err := s.db.Where("workspace_id = ? AND key = ? AND variable_type = ? AND is_deleted = ?",
-		variable.WorkspaceID, variable.Key, variable.VariableType, false).
+	err := s.db.Where("workspace_id = ? AND key = ? AND is_deleted = ?",
+		variable.WorkspaceID, variable.Key, false).
 		First(&existing).Error
 
 	if err == nil {
@@ -404,34 +404,30 @@ func (s *WorkspaceVariableService) GetVariablesForExecution(workspaceID uint) (m
 
 // GetTerraformVariables 获取Terraform变量
 func (s *WorkspaceVariableService) GetTerraformVariables(workspaceID uint) (map[string]string, error) {
-	var variables []*models.WorkspaceVariable
-	if err := s.db.Where("workspace_id = ? AND variable_type = ?",
-		workspaceID, models.VariableTypeTerraform).Find(&variables).Error; err != nil {
-		return nil, fmt.Errorf("获取Terraform变量失败: %w", err)
+	// Convert numeric ID to semantic workspace_id
+	var ws struct {
+		WorkspaceID string
+	}
+	if err := s.db.Table("workspaces").Select("workspace_id").Where("id = ?", workspaceID).First(&ws).Error; err != nil {
+		return nil, fmt.Errorf("获取Workspace失败: %w", err)
 	}
 
-	result := make(map[string]string)
-	for _, v := range variables {
-		result[v.Key] = v.Value
-	}
-
-	return result, nil
+	resolver := NewVariableResolutionService(s.db)
+	return resolver.ResolveFlat(ws.WorkspaceID, models.VariableTypeTerraform)
 }
 
 // GetEnvironmentVariables 获取环境变量
 func (s *WorkspaceVariableService) GetEnvironmentVariables(workspaceID uint) (map[string]string, error) {
-	var variables []*models.WorkspaceVariable
-	if err := s.db.Where("workspace_id = ? AND variable_type = ?",
-		workspaceID, models.VariableTypeEnvironment).Find(&variables).Error; err != nil {
-		return nil, fmt.Errorf("获取环境变量失败: %w", err)
+	// Convert numeric ID to semantic workspace_id
+	var ws struct {
+		WorkspaceID string
+	}
+	if err := s.db.Table("workspaces").Select("workspace_id").Where("id = ?", workspaceID).First(&ws).Error; err != nil {
+		return nil, fmt.Errorf("获取Workspace失败: %w", err)
 	}
 
-	result := make(map[string]string)
-	for _, v := range variables {
-		result[v.Key] = v.Value
-	}
-
-	return result, nil
+	resolver := NewVariableResolutionService(s.db)
+	return resolver.ResolveFlat(ws.WorkspaceID, models.VariableTypeEnvironment)
 }
 
 // BulkCreateVariables 批量创建变量

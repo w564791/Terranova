@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import api from '../services/api';
+import { variableSetService, EffectiveVariable } from '../services/variableSets';
 import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './WorkspaceDetail.module.css';
 
@@ -43,9 +44,49 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
     value_format: 'string' as 'string' | 'hcl'
   });
 
+  // Effective variables state
+  const [effectiveVars, setEffectiveVars] = useState<EffectiveVariable[]>([]);
+  const [effectiveLoading, setEffectiveLoading] = useState(false);
+
   useEffect(() => {
     fetchVariables();
+    fetchEffectiveVariables();
   }, []);
+
+  const fetchEffectiveVariables = useCallback(async () => {
+    try {
+      setEffectiveLoading(true);
+      const data = await variableSetService.getEffectiveVariables(workspaceId);
+      // Sort: active first, then overridden
+      const sorted = [...(data || [])].sort((a, b) => {
+        if (a.is_overridden === b.is_overridden) {
+          return a.key.localeCompare(b.key);
+        }
+        return a.is_overridden ? 1 : -1;
+      });
+      setEffectiveVars(sorted);
+    } catch (error) {
+      const message = extractErrorMessage(error);
+      showToast(message, 'error');
+    } finally {
+      setEffectiveLoading(false);
+    }
+  }, [workspaceId, showToast]);
+
+  // Refresh effective variables after workspace variable changes
+  const refreshEffective = () => {
+    fetchEffectiveVariables();
+  };
+
+  const formatSource = (ev: EffectiveVariable): string => {
+    let name = ev.source_name;
+    if (ev.scope_level === 'global') {
+      name += ' (Glob)';
+    } else if (ev.scope_level === 'project') {
+      name += ' (Proj)';
+    }
+    return name;
+  };
 
   const fetchVariables = async () => {
     try {
@@ -92,6 +133,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
       setDeleteDialogOpen(false);
       setVariableToDelete(null);
       fetchVariables();
+      refreshEffective();
     } catch (error) {
       const message = extractErrorMessage(error);
       showToast(message, 'error');
@@ -154,6 +196,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
             showToast('版本冲突：变量已被其他用户修改，请刷新后重试', 'error');
             // 自动刷新变量列表
             await fetchVariables();
+            refreshEffective();
           } else {
             throw error;
           }
@@ -176,6 +219,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
         value_format: 'string'
       });
       fetchVariables();
+      refreshEffective();
     } catch (error) {
       const message = extractErrorMessage(error);
       showToast(message, 'error');
@@ -330,7 +374,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
               </div>
             ) : (
               // 变量行
-              <div className={styles.variableRow}>
+              <div className={styles.variableRow} id={`var-${variable.variable_id}`}>
                 <div className={styles.variableKeyCell}>
                   <div className={styles.variableKey}>
                     {variable.key}
@@ -488,6 +532,127 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
           <div className={styles.loading}>加载中...</div>
         </div>
       )}
+
+      {/* Effective Variables Section */}
+      <div className={styles.section}>
+        <h3 className={styles.sectionTitle} style={{ marginBottom: '12px' }}>
+          Variable Set Variables
+        </h3>
+        <div>
+            {effectiveLoading ? (
+              <div className={styles.loading}>Loading effective variables...</div>
+            ) : effectiveVars.filter(ev => ev.source_type === 'varset').length === 0 ? (
+              <p className={styles.infoText}>No variable set variables attached to this workspace.</p>
+            ) : (
+              <>
+                <p className={styles.infoText} style={{ marginBottom: '12px' }}>
+                  以下为通过 Variable Set 注入的变量。被 Workspace 自身变量覆盖的会标记为 Overridden。
+                </p>
+                {/* Effective variables table header */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 2fr 1fr 1.5fr 100px',
+                  gap: 'var(--spacing-md)',
+                  padding: 'var(--spacing-sm) var(--spacing-md)',
+                  background: 'var(--color-gray-50)',
+                  border: '1px solid var(--color-gray-200)',
+                  borderRadius: 'var(--radius-md) var(--radius-md) 0 0',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--color-gray-600)',
+                  textTransform: 'uppercase' as const,
+                }}>
+                  <div>Key</div>
+                  <div>Value</div>
+                  <div>Type</div>
+                  <div>Source</div>
+                  <div>Status</div>
+                </div>
+
+                {/* Effective variables rows */}
+                {effectiveVars.filter(ev => ev.source_type === 'varset').map((ev) => (
+                  <div
+                    key={`${ev.variable_id}-${ev.source_id}`}
+                    id={`var-${ev.variable_id}`}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '2fr 2fr 1fr 1.5fr 100px',
+                      gap: 'var(--spacing-md)',
+                      padding: 'var(--spacing-md)',
+                      border: '1px solid var(--color-gray-200)',
+                      borderTop: 'none',
+                      background: 'var(--color-white)',
+                      alignItems: 'center',
+                      textDecoration: ev.is_overridden ? 'line-through' : 'none',
+                      opacity: ev.is_overridden ? 0.6 : 1,
+                    }}
+                  >
+                    <div style={{ fontWeight: 500, color: 'var(--color-gray-900)', fontSize: '14px' }}>
+                      {ev.key}
+                    </div>
+                    <div style={{ color: 'var(--color-gray-700)', fontSize: '13px', wordBreak: 'break-all' }}>
+                      {ev.is_overridden && ev.overridden_by ? (
+                        <>
+                          <a
+                            href={`#var-${ev.overridden_by.variable_id}`}
+                            style={{ color: 'var(--color-blue-600)', textDecoration: 'none', fontWeight: 500 }}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              const el = document.getElementById(`var-${ev.overridden_by!.variable_id}`);
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el.style.background = '#DBEAFE';
+                                setTimeout(() => { el.style.background = ''; }, 2000);
+                              }
+                            }}
+                          >
+                            Overridden
+                          </a>
+                          {' '}{ev.key}
+                        </>
+                      ) : ev.sensitive ? (
+                        <span style={{ fontStyle: 'italic', color: 'var(--color-gray-500)' }}>-- sensitive --</span>
+                      ) : (
+                        ev.value
+                      )}
+                    </div>
+                    <div style={{ color: 'var(--color-gray-600)', fontSize: '13px' }}>
+                      {ev.variable_type === 'terraform' ? 'Terraform' : 'Environment'}
+                    </div>
+                    <div style={{ color: 'var(--color-gray-600)', fontSize: '13px' }}>
+                      {formatSource(ev)}
+                    </div>
+                    <div>
+                      {ev.is_overridden ? (
+                        <span style={{
+                          background: 'var(--color-gray-100)',
+                          color: 'var(--color-gray-600)',
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                        }}>
+                          Overridden
+                        </span>
+                      ) : (
+                        <span style={{
+                          background: '#D1FAE5',
+                          color: '#065F46',
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                        }}>
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"iac-platform/internal/crypto"
 	"iac-platform/internal/database"
 	"iac-platform/internal/models"
 	"log"
@@ -14,8 +13,9 @@ import (
 // LocalDataAccessor Local 模式的数据访问实现
 // 直接访问数据库
 type LocalDataAccessor struct {
-	db *gorm.DB
-	tx *gorm.DB // 用于事务支持
+	db           *gorm.DB
+	tx           *gorm.DB                  // 用于事务支持
+	snapshotVars []models.WorkspaceVariable // cached snapshot variables
 }
 
 // NewLocalDataAccessor 创建 Local 数据访问器
@@ -64,39 +64,44 @@ func (a *LocalDataAccessor) GetWorkspaceResources(workspaceID string) ([]models.
 	return resources, nil
 }
 
-// GetWorkspaceVariables 获取 Workspace 变量列表（只返回每个变量的最新版本）
-func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error) {
-	var variables []models.WorkspaceVariable
-	db := a.getDB()
-
-	// 使用子查询只获取每个变量的最新版本
-	err := db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		INNER JOIN (
-			SELECT variable_id, MAX(version) as max_version
-			FROM workspace_variables
-			WHERE workspace_id = ? AND variable_type = ? AND is_deleted = false
-			GROUP BY variable_id
-		) latest ON wv.variable_id = latest.variable_id AND wv.version = latest.max_version
-		WHERE wv.workspace_id = ? AND wv.variable_type = ? AND wv.is_deleted = false
-	`, workspaceID, varType, workspaceID, varType).Scan(&variables).Error
-
+// LoadSnapshot loads variables from snapshot table into memory cache.
+func (a *LocalDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
+	svc := NewVariableSnapshotService(db)
+	vars, err := svc.LoadFromSnapshot(vsnapID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace variables: %w", err)
+		return err
+	}
+	a.snapshotVars = vars
+	return nil
+}
+
+// GetWorkspaceVariables 获取 Workspace 变量列表（含 Variable Set 合并，优先级解析后的最终结果）
+// 注意：此方法用于执行路径，必须返回真实值（包括 sensitive），不能清空。
+func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error) {
+	// If snapshot is loaded, use cached data
+	if a.snapshotVars != nil {
+		var filtered []models.WorkspaceVariable
+		for _, v := range a.snapshotVars {
+			if v.VariableType == varType {
+				filtered = append(filtered, v)
+			}
+		}
+		return filtered, nil
 	}
 
-	// Raw SQL bypasses GORM AfterFind hook, manually decrypt sensitive variables
-	for i := range variables {
-		if variables[i].Sensitive && variables[i].Value != "" && crypto.IsEncrypted(variables[i].Value) {
-			decrypted, err := crypto.DecryptValue(variables[i].Value)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decrypt variable %s: %w", variables[i].Key, err)
-			}
-			variables[i].Value = decrypted
+	// Fallback: live resolution (for cases without snapshot)
+	db := a.getDB()
+	resolver := NewVariableResolutionService(db)
+	flatAll, err := resolver.ResolveExecution(workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve effective variables: %w", err)
+	}
+	var variables []models.WorkspaceVariable
+	for _, v := range flatAll {
+		if v.VariableType == varType {
+			variables = append(variables, v)
 		}
 	}
-
 	return variables, nil
 }
 

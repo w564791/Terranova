@@ -426,7 +426,7 @@ type AnalysisResult struct {
 }
 
 // SaveAnalysis 保存分析结果
-func (s *AIConfigService) SaveAnalysis(taskID, userID string, errorMessage string, result *AnalysisResult, duration int) error {
+func (s *AIConfigService) SaveAnalysis(taskID, userID string, errorMessage string, result *AnalysisResult, duration int, processLog string) error {
 	// 将 solutions 转换为 JSON
 	solutionsJSON, err := json.Marshal(result.Solutions)
 	if err != nil {
@@ -436,10 +436,10 @@ func (s *AIConfigService) SaveAnalysis(taskID, userID string, errorMessage strin
 	// 使用 ON CONFLICT 实现真正的 UPSERT
 	// 如果 task_id 已存在，则更新；否则插入
 	return s.db.Exec(`
-		INSERT INTO ai_error_analyses (task_id, user_id, error_message, error_type, root_cause, solutions, prevention, severity, analysis_duration, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-		ON CONFLICT (task_id) 
-		DO UPDATE SET 
+		INSERT INTO ai_error_analyses (task_id, user_id, error_message, error_type, root_cause, solutions, prevention, severity, analysis_duration, process_log, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+		ON CONFLICT (task_id)
+		DO UPDATE SET
 			user_id = EXCLUDED.user_id,
 			error_message = EXCLUDED.error_message,
 			error_type = EXCLUDED.error_type,
@@ -448,8 +448,9 @@ func (s *AIConfigService) SaveAnalysis(taskID, userID string, errorMessage strin
 			prevention = EXCLUDED.prevention,
 			severity = EXCLUDED.severity,
 			analysis_duration = EXCLUDED.analysis_duration,
+			process_log = EXCLUDED.process_log,
 			created_at = NOW()
-	`, taskID, userID, errorMessage, result.ErrorType, result.RootCause, string(solutionsJSON), result.Prevention, result.Severity, duration).Error
+	`, taskID, userID, errorMessage, result.ErrorType, result.RootCause, string(solutionsJSON), result.Prevention, result.Severity, duration, processLog).Error
 }
 
 // GetAnalysis 获取任务的分析结果

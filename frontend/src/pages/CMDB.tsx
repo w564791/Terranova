@@ -1373,7 +1373,7 @@ const CMDB: React.FC = () => {
         >
           Search
         </button>
-        {isAdmin && hasExternalSources && (
+        {isAdmin && (
           <button
             className={`${styles.tab} ${activeTab === 'external' ? styles.tabActive : ''}`}
             onClick={() => handleTabChange('external')}

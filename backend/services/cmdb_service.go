@@ -691,19 +691,23 @@ func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resour
 	// 创建module节点映射
 	moduleNodes := make(map[string]*models.ResourceTreeNode)
 
-	// 为根module查找对应的平台资源（使用模糊匹配）
+	// 为根module查找对应的平台资源
 	findPlatformResource := func(moduleName string) *models.WorkspaceResource {
 		// 精确匹配
 		if pr, ok := platformResources[moduleName]; ok {
 			return pr
 		}
-		// 模糊匹配：检查resource_name是否包含在moduleName中
+		// 后缀匹配：module name 格式为 Provider_type_resourceName，匹配 _resName 后缀
+		var bestMatch *models.WorkspaceResource
+		bestLen := 0
 		for resName, pr := range platformResources {
-			if strings.Contains(moduleName, resName) || strings.Contains(resName, moduleName) {
-				return pr
+			suffix := "_" + resName
+			if strings.HasSuffix(moduleName, suffix) && len(resName) > bestLen {
+				bestMatch = pr
+				bestLen = len(resName)
 			}
 		}
-		return nil
+		return bestMatch
 	}
 
 	for _, m := range modules {
@@ -917,6 +921,8 @@ func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
 	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "pending").Count(&overview.Queue.AssessmentPending)
 	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "processing").Count(&overview.Queue.AssessmentProcessing)
 	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "failed").Count(&overview.Queue.AssessmentFailed)
+	// 资源级别：L2/L3 评估待补偿
+	s.db.Model(&models.ResourceIndex{}).Where("summary_assessment_status = ?", string(models.AssessmentStatusPartial)).Count(&overview.Queue.AssessmentPartial)
 
 	return &overview, nil
 }

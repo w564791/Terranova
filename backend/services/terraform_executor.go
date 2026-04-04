@@ -682,19 +682,34 @@ func (s *TerraformExecutor) ExecutePlan(
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// 从workspace_variables表读取TF_LOG
-	tfLogLevel := "info" // 默认
-	if s.db != nil {
-		var tfLogVar models.WorkspaceVariable
-		if err := s.db.Where("workspace_id = ? AND key = ? AND variable_type = ?",
-			workspace.WorkspaceID, "TF_LOG", models.VariableTypeEnvironment).First(&tfLogVar).Error; err == nil {
-			tfLogLevel = tfLogVar.Value
+	// Load variable snapshot into DataAccessor cache
+	if task.VariableSnapshotID != nil && s.db != nil {
+		if err := s.dataAccessor.LoadSnapshot(*task.VariableSnapshotID, s.db); err != nil {
+			log.Printf("[WARN] Failed to load variable snapshot %s: %v", *task.VariableSnapshotID, err)
+		} else {
+			log.Printf("[INFO] Loaded variable snapshot %s for task %d", *task.VariableSnapshotID, task.ID)
+		}
+	}
+
+	// 读取TF_LOG（从DataAccessor，使用snapshot缓存）
+	tfLogLevel := "info"
+	if envVars, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeEnvironment); err == nil {
+		for _, v := range envVars {
+			if v.Key == "TF_LOG" {
+				tfLogLevel = v.Value
+				break
+			}
 		}
 	}
 
 	// 创建输出流和日志记录器
 	stream := s.streamManager.GetOrCreate(task.ID)
-	defer s.streamManager.Close(task.ID)
+	var summaryDone sync.WaitGroup
+	defer func() {
+		summaryDone.Wait()
+		stream.Broadcast(OutputMessage{Type: "completed", Timestamp: time.Now()})
+		s.streamManager.Close(task.ID)
+	}()
 
 	// 检测是否为 Agent 模式
 	isAgentMode := (s.db == nil)
@@ -803,25 +818,46 @@ func (s *TerraformExecutor) ExecutePlan(
 		}
 	}
 
-	// 1.4 获取变量（使用 DataAccessor）
-	logger.Info("Fetching workspace variables...")
+	// 1.4 获取变量（使用 DataAccessor，含 Variable Set 合并）
+	logger.Info("Fetching terraform variables (workspace + variable sets)...")
 	variables, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform)
 	if err != nil {
-		logger.Warn("Failed to fetch variables: %v", err)
+		logger.Warn("Failed to fetch terraform variables: %v", err)
 	} else {
 		normalCount := 0
 		sensitiveCount := 0
 		for _, v := range variables {
 			if v.Sensitive {
-				logger.Info("✓ Variable: %s = ***SENSITIVE***", v.Key)
+				logger.Info("✓ Terraform variable: %s = ***SENSITIVE***", v.Key)
 				sensitiveCount++
 			} else {
-				logger.Info("✓ Variable: %s = %s", v.Key, v.Value)
+				logger.Info("✓ Terraform variable: %s = %s", v.Key, v.Value)
 				normalCount++
 			}
 		}
-		logger.Info("Total: %d variables loaded (%d normal, %d sensitive)",
+		logger.Info("Total: %d terraform variables loaded (%d normal, %d sensitive)",
 			len(variables), normalCount, sensitiveCount)
+	}
+
+	// 1.4.1 获取环境变量
+	logger.Info("Fetching environment variables (workspace + variable sets)...")
+	envVariables, envErr := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeEnvironment)
+	if envErr != nil {
+		logger.Warn("Failed to fetch environment variables: %v", envErr)
+	} else {
+		envNormal := 0
+		envSensitive := 0
+		for _, v := range envVariables {
+			if v.Sensitive {
+				logger.Info("✓ Environment variable: %s = ***SENSITIVE***", v.Key)
+				envSensitive++
+			} else {
+				logger.Info("✓ Environment variable: %s", v.Key)
+				envNormal++
+			}
+		}
+		logger.Info("Total: %d environment variables loaded (%d normal, %d sensitive)",
+			len(envVariables), envNormal, envSensitive)
 	}
 
 	// 1.5 获取Provider配置
@@ -1207,12 +1243,6 @@ func (s *TerraformExecutor) ExecutePlan(
 	logger.Info("✓ Post-plan Run Tasks completed (no mandatory failures)")
 	logger.StageEnd("post_plan_run_tasks")
 
-	// 发送完成消息
-	stream.Broadcast(OutputMessage{
-		Type:      "completed",
-		Timestamp: time.Now(),
-	})
-
 	// 在所有阶段完成后获取完整输出（包含Fetching/Init/Planning/Saving Plan所有阶段）
 	planOutput := logger.GetFullOutput()
 
@@ -1372,16 +1402,18 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	log.Printf("Task %d plan output saved (%d bytes)", task.ID, len(planOutput))
 
-	// 异步触发 Plan Summary（不阻塞主流程）
+	// 异步触发 Plan Summary（不阻塞主流程，但 stream 生命周期等待其完成）
 	// 注意：必须在 task changes 字段保存到 DB 之后触发，否则 summary 服务查到的 changes 为 0
 	if s.db != nil && (task.ChangesAdd+task.ChangesChange+task.ChangesDestroy) > 0 {
+		summaryDone.Add(1)
 		go func() {
+			defer summaryDone.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("[PANIC] Plan summary generation panicked for task %d: %v", task.ID, r)
 				}
 			}()
-			summaryService := NewAISummaryService(s.db)
+			summaryService := NewAISummaryServiceWithStream(s.db, s.streamManager)
 			summaryService.GeneratePlanSummary(task.ID)
 		}()
 	}
@@ -1930,6 +1962,15 @@ func (s *TerraformExecutor) ExecuteApply(
 	}
 	log.Printf("[%s MODE] ExecuteApply started for task %d, workspace %s", executionMode, task.ID, task.WorkspaceID)
 
+	// Load variable snapshot into DataAccessor cache
+	if task.VariableSnapshotID != nil && s.db != nil {
+		if err := s.dataAccessor.LoadSnapshot(*task.VariableSnapshotID, s.db); err != nil {
+			log.Printf("[WARN] Failed to load variable snapshot %s: %v", *task.VariableSnapshotID, err)
+		} else {
+			log.Printf("[INFO] Loaded variable snapshot %s for task %d", *task.VariableSnapshotID, task.ID)
+		}
+	}
+
 	// 清理可能存在的孤儿 temp state 记录
 	if cleanupErr := s.dataAccessor.CleanupOrphanedTempStates(task.WorkspaceID); cleanupErr != nil {
 		log.Printf("[StateWatcher] Failed to cleanup orphaned temp states: %v", cleanupErr)
@@ -1937,7 +1978,12 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	// 创建输出流和日志记录器
 	stream := s.streamManager.GetOrCreate(task.ID)
-	defer s.streamManager.Close(task.ID)
+	var summaryDone sync.WaitGroup
+	defer func() {
+		summaryDone.Wait()
+		stream.Broadcast(OutputMessage{Type: "completed", Timestamp: time.Now()})
+		s.streamManager.Close(task.ID)
+	}()
 
 	// 检测是否为 Agent 模式
 	isAgentMode := (s.db == nil)
@@ -2097,12 +2143,30 @@ func (s *TerraformExecutor) ExecuteApply(
 		// 1.6 生成配置文件（使用快照数据）
 		logger.Info("Generating configuration files from snapshot...")
 
-		// 【修复】在Agent模式下,优先使用Context中的完整变量数据
-		var variableSnapshots interface{} = planTask.SnapshotVariables
-		if planTask.Context != nil {
-			if snapVars, ok := planTask.Context["_snapshot_variables"]; ok && snapVars != nil {
-				variableSnapshots = snapVars
-				logger.Debug("Using snapshot_variables from context (Agent mode with full data)")
+		// 从DataAccessor获取变量（Local模式使用snapshot缓存，Agent模式使用Context）
+		var variableSnapshots interface{}
+		if task.VariableSnapshotID != nil {
+			// 新模式：从DataAccessor获取已缓存的snapshot变量
+			allVars := make([]models.WorkspaceVariable, 0)
+			if tfVars, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform); err == nil {
+				allVars = append(allVars, tfVars...)
+			}
+			if envVars, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeEnvironment); err == nil {
+				allVars = append(allVars, envVars...)
+			}
+			variableSnapshots = allVars
+			logger.Debug("Using %d variables from DataAccessor snapshot cache", len(allVars))
+		} else {
+			// 旧模式兼容：尝试从Context获取变量数据（Agent模式）
+			if planTask.Context != nil {
+				if snapVars, ok := planTask.Context["_snapshot_variables"]; ok && snapVars != nil {
+					variableSnapshots = snapVars
+					logger.Debug("Using snapshot_variables from context (Agent mode with full data)")
+				}
+			}
+			if variableSnapshots == nil {
+				logger.Warn("No variable snapshot available for apply config generation")
+				variableSnapshots = []models.WorkspaceVariable{}
 			}
 		}
 
@@ -2603,12 +2667,6 @@ func (s *TerraformExecutor) ExecuteApply(
 	logger.Info("State save completed successfully")
 	logger.StageEnd("saving_state")
 
-	// 发送完成消息
-	stream.Broadcast(OutputMessage{
-		Type:      "completed",
-		Timestamp: time.Now(),
-	})
-
 	// 更新任务状态为Applied（Apply成功完成）
 	task.Status = models.TaskStatusApplied
 	task.Stage = "applied"
@@ -2657,16 +2715,17 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	log.Printf("Task %d applied successfully", task.ID)
 
-	// 异步触发 Apply Summary（不阻塞主流程）
-	// 注意：仅在成功路径触发，saving_state 错误路径不触发
+	// 异步触发 Apply Summary（不阻塞主流程，但 stream 生命周期等待其完成）
 	if s.db != nil {
+		summaryDone.Add(1)
 		go func() {
+			defer summaryDone.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("[PANIC] Apply summary generation panicked for task %d: %v", task.ID, r)
 				}
 			}()
-			summaryService := NewAISummaryService(s.db)
+			summaryService := NewAISummaryServiceWithStream(s.db, s.streamManager)
 			summaryService.GenerateApplySummary(task.ID)
 		}()
 	}
@@ -3250,6 +3309,8 @@ func (s *TerraformExecutor) workDirExists(workDir string) bool {
 // ============================================================================
 
 // CreateResourceVersionSnapshot 创建资源版本快照（新版本，保存到task表）
+// 注意：变量快照现在由 VariableSnapshotService 在 task 创建前生成（variable_snapshot_id），
+// 此函数仅保存资源版本和Provider配置快照。
 func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	task *models.WorkspaceTask,
 	workspace *models.Workspace,
@@ -3274,37 +3335,7 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	}
 	logger.Debug("Captured %d resource versions", len(resourceVersions))
 
-	// 2. 快照变量（只保存variable_id和version引用）
-	// 使用子查询只获取每个变量的最新版本
-	var variables []models.WorkspaceVariable
-	if err := s.db.Raw(`
-		SELECT wv.*
-		FROM workspace_variables wv
-		INNER JOIN (
-			SELECT variable_id, MAX(version) as max_version
-			FROM workspace_variables
-			WHERE workspace_id = ? AND is_deleted = false
-			GROUP BY variable_id
-		) latest ON wv.variable_id = latest.variable_id AND wv.version = latest.max_version
-		WHERE wv.workspace_id = ? AND wv.is_deleted = false
-	`, workspace.WorkspaceID, workspace.WorkspaceID).Scan(&variables).Error; err != nil {
-		return fmt.Errorf("failed to get latest variables: %w", err)
-	}
-
-	// 构建变量快照：只保存必要字段（引用格式）
-	// 使用 map 而不是结构体，避免 JSON 序列化包含零值字段
-	variableSnapshots := make([]map[string]interface{}, 0, len(variables))
-	for _, v := range variables {
-		variableSnapshots = append(variableSnapshots, map[string]interface{}{
-			"workspace_id":  v.WorkspaceID,
-			"variable_id":   v.VariableID,
-			"version":       v.Version,
-			"variable_type": string(v.VariableType),
-		})
-	}
-	logger.Debug("Captured %d variable references", len(variableSnapshots))
-
-	// 3. 快照Provider配置（模板模式下动态解析，仅 Local 模式；Agent 模式由 API 层已解析）
+	// 2. 快照Provider配置（模板模式下动态解析，仅 Local 模式；Agent 模式由 API 层已解析）
 	providerConfig := workspace.ProviderConfig
 	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
 	if len(templateIDs) > 0 && s.db != nil {
@@ -3318,17 +3349,11 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	}
 	logger.Debug("Captured provider configuration")
 
-	// 4. 记录快照时间
+	// 3. 记录快照时间
 	snapshotTime := time.Now()
 
-	// 5. 保存快照到task
+	// 4. 保存快照到task（仅资源版本和Provider配置，变量由variable_snapshot_id关联）
 	if s.db != nil {
-		// Local模式：使用原始SQL确保JSON格式正确
-		variablesJSON, err := json.Marshal(variableSnapshots)
-		if err != nil {
-			return fmt.Errorf("failed to marshal variables: %w", err)
-		}
-
 		resourceVersionsJSON, err := json.Marshal(models.JSONB(resourceVersions))
 		if err != nil {
 			return fmt.Errorf("failed to marshal resource versions: %w", err)
@@ -3340,31 +3365,18 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 		}
 
 		if err := s.db.Exec(`
-			UPDATE workspace_tasks 
+			UPDATE workspace_tasks
 			SET snapshot_resource_versions = ?::jsonb,
-			    snapshot_variables = ?::jsonb,
 			    snapshot_provider_config = ?::jsonb,
 			    snapshot_created_at = ?
 			WHERE id = ?
-		`, resourceVersionsJSON, variablesJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
+		`, resourceVersionsJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
 			return fmt.Errorf("failed to save snapshot: %w", err)
 		}
 		logger.Debug("Snapshot saved to database")
 	} else {
-		// Agent模式：通过DataAccessor保存（需要在task对象中设置）
+		// Agent模式：通过DataAccessor保存
 		task.SnapshotResourceVersions = models.JSONB(resourceVersions)
-		// 将 map 数组转换为 WorkspaceVariable 数组以兼容现有字段类型
-		snapshotVars := make([]models.WorkspaceVariable, 0, len(variableSnapshots))
-		for _, snap := range variableSnapshots {
-			snapshotVars = append(snapshotVars, models.WorkspaceVariable{
-				WorkspaceID:  snap["workspace_id"].(string),
-				VariableID:   snap["variable_id"].(string),
-				Version:      snap["version"].(int),
-				VariableType: models.VariableType(snap["variable_type"].(string)),
-			})
-		}
-		// Convert to JSONB format (map with _array key for compatibility)
-		task.SnapshotVariables = models.JSONB{"_array": snapshotVars}
 		task.SnapshotProviderConfig = models.JSONB(providerConfig)
 		task.SnapshotCreatedAt = &snapshotTime
 
@@ -3376,7 +3388,7 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 
 	logger.Info("Snapshot summary:")
 	logger.Info("  - Resources: %d", len(resourceVersions))
-	logger.Info("  - Variables: %d", len(variables))
+	logger.Info("  - Variable snapshot: %v", task.VariableSnapshotID != nil)
 	logger.Info("  - Provider config: %v", providerConfig != nil)
 	logger.Info("  - Created at: %s", snapshotTime.Format("2006-01-02 15:04:05"))
 
@@ -4318,34 +4330,11 @@ func (s *TerraformExecutor) ValidateResourceVersionSnapshot(
 		return fmt.Errorf("snapshot resource versions is nil (should be empty map if no resources)")
 	}
 
-	// 验证 SnapshotVariables - 支持多种格式:
-	// 1. nil - 错误
-	// 2. {"_array": [...]} - 正常格式
-	// 3. [...] - 旧格式（直接数组）
-	// 4. {} - 空对象，允许（workspace可能没有变量）
-	if planTask.SnapshotVariables == nil {
-		return fmt.Errorf("snapshot variables missing (nil)")
-	}
-
-	// 检查是否是空 map（允许，因为 workspace 可能没有变量）
-	if len(planTask.SnapshotVariables) == 0 {
-		logger.Debug("Snapshot variables is empty map (workspace may have no variables)")
+	// 验证变量快照（通过 variable_snapshot_id 关联）
+	if planTask.VariableSnapshotID != nil {
+		logger.Debug("Variable snapshot ID: %s", *planTask.VariableSnapshotID)
 	} else {
-		// 检查 _array 格式
-		if arrayData, hasArray := planTask.SnapshotVariables["_array"]; hasArray {
-			// 检查 _array 是否为空
-			switch arr := arrayData.(type) {
-			case []interface{}:
-				logger.Debug("Snapshot variables has %d items in _array format", len(arr))
-			case []models.WorkspaceVariable:
-				logger.Debug("Snapshot variables has %d items in _array format (WorkspaceVariable)", len(arr))
-			default:
-				logger.Debug("Snapshot variables _array has unknown type: %T", arrayData)
-			}
-		} else {
-			// 可能是旧格式或其他格式
-			logger.Debug("Snapshot variables format: %d keys", len(planTask.SnapshotVariables))
-		}
+		logger.Warn("No variable snapshot ID (variable_snapshot_id is nil)")
 	}
 
 	if planTask.SnapshotProviderConfig == nil {
@@ -4354,7 +4343,7 @@ func (s *TerraformExecutor) ValidateResourceVersionSnapshot(
 
 	logger.Debug("Snapshot validation:")
 	logger.Debug("  - Resources: %d", len(planTask.SnapshotResourceVersions))
-	logger.Debug("  - Variables: %d", len(planTask.SnapshotVariables))
+	logger.Debug("  - Variable snapshot ID: %v", planTask.VariableSnapshotID)
 	logger.Debug("  - Provider config: %v", planTask.SnapshotProviderConfig != nil)
 	logger.Debug("  - Created at: %s", planTask.SnapshotCreatedAt.Format("2006-01-02 15:04:05"))
 

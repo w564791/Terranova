@@ -6,6 +6,8 @@ import (
 	"iac-platform/internal/models"
 	"log"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // RemoteDataAccessor implements DataAccessor interface for Agent mode
@@ -164,6 +166,11 @@ func (a *RemoteDataAccessor) GetWorkspaceVariables(workspaceID string, varType m
 	}
 
 	return variables, nil
+}
+
+// LoadSnapshot is a no-op for agent mode.
+func (a *RemoteDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
+	return nil
 }
 
 // ============================================================================

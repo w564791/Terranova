@@ -46,8 +46,20 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
         logText = task.apply_output || '';
       }
       
+      // 获取 AI summary 的 process_log 并追加到日志末尾
+      try {
+        const summaryEndpoint = taskType === 'plan' ? 'plan-summary' : 'apply-summary';
+        const summaryData: any = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/${summaryEndpoint}`);
+        const processLog = summaryData?.process_log || '';
+        if (processLog) {
+          logText = logText + '\n' + processLog;
+        }
+      } catch {
+        // summary 不存在或未完成，忽略
+      }
+
       console.log('[StageLogViewer] Task type:', taskType, 'Log length:', logText.length);
-      
+
       if (!logText) {
         console.log('[StageLogViewer] No logs found, task:', task);
         // 如果任务被取消且没有日志，说明是在pending状态取消的
@@ -151,6 +163,8 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
       'post_apply': 'Post-Apply',
       'saving_plan': 'Saving Plan',
       'saving_state': 'Saving State',
+      'post_plan_summary': 'Plan Summary',
+      'post_apply_summary': 'Apply Summary',
     };
     return nameMap[stageName] || stageName;
   };
@@ -168,6 +182,7 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
         'cost_estimation',
         'policy_check',
         'saving_plan',
+        'post_plan_summary',
       ];
     } else {
       return [
@@ -179,6 +194,7 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
         'applying',
         'post_apply',
         'saving_state',
+        'post_apply_summary',
       ];
     }
   };
@@ -188,13 +204,23 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
     return stages.some(s => s.name === stageName);
   };
 
-  const getDisplayLogs = (): string => {
-    if (selectedStage === 'all') {
-      return stages.map(s => s.logs).join('\n\n');
-    }
-    
-    const stage = stages.find(s => s.name === selectedStage);
-    return stage ? stage.logs : '';
+  // 获取当前要显示的日志行（解析为结构化数组）
+  const getDisplayLines = (): { text: string; isStageMarker: boolean; stageStatus?: string; stageName?: string; stageTime?: string }[] => {
+    const logText = selectedStage === 'all'
+      ? stages.map(s => s.logs).join('\n\n')
+      : (stages.find(s => s.name === selectedStage)?.logs || '');
+
+    return logText.split('\n').map(line => {
+      const beginMatch = line.match(/^========== (\w+) BEGIN at (.+) ==========$/);
+      if (beginMatch) {
+        return { text: line, isStageMarker: true, stageStatus: 'begin', stageName: beginMatch[1].toLowerCase(), stageTime: beginMatch[2] };
+      }
+      const endMatch = line.match(/^========== (\w+) END at (.+) ==========$/);
+      if (endMatch) {
+        return { text: line, isStageMarker: true, stageStatus: 'end', stageName: endMatch[1].toLowerCase(), stageTime: endMatch[2] };
+      }
+      return { text: line, isStageMarker: false };
+    });
   };
 
   const handleDownload = () => {
@@ -264,7 +290,26 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
       </div>
       
       <div className={styles.logContent}>
-        <pre>{getDisplayLogs()}</pre>
+        {getDisplayLines().map((line, index) => {
+          if (line.isStageMarker) {
+            return (
+              <div key={index} className={styles.stageMarker}>
+                <span className={styles.stageIcon}>
+                  {line.stageStatus === 'begin' ? '\u25B6' : '\u2713'}
+                </span>
+                <span className={styles.stageName}>{line.stageName}</span>
+                <span className={styles.stageStatus}>{line.stageStatus}</span>
+                <span className={styles.stageTime}>{line.stageTime}</span>
+              </div>
+            );
+          }
+          return (
+            <div key={index} className={styles.line}>
+              <span className={styles.lineNum}>{index + 1}</span>
+              <span className={styles.content}>{line.text}</span>
+            </div>
+          );
+        })}
       </div>
       
       {selectedStage !== 'all' && (

@@ -37,6 +37,7 @@ export interface CMDBOverview {
     assessment_pending: number;
     assessment_processing: number;
     assessment_failed: number;
+    assessment_partial: number;
   };
 }
 

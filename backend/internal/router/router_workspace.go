@@ -7,6 +7,7 @@ import (
 	"iac-platform/internal/middleware"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
+	"log"
 	"net/http"
 	"time"
 
@@ -544,6 +545,40 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			}),
 			variableController.GetVariableVersion,
 		)
+		// Effective variables (merged from variable sets + workspace variables)
+		resolutionService := services.NewVariableResolutionService(db)
+		workspaces.GET("/:id/effective-variables",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+			}),
+			func(ctx *gin.Context) {
+				workspaceID := ctx.Param("id")
+				result, err := resolutionService.ResolveDisplay(workspaceID)
+				if err != nil {
+					log.Printf("Failed to resolve effective variables for workspace %s: %v", workspaceID, err)
+					ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve effective variables"})
+					return
+				}
+				ctx.JSON(http.StatusOK, result)
+			},
+		)
+
+		// Variable Snapshots
+		vsnapController := controllers.NewVariableSnapshotController(db)
+		workspaces.POST("/:id/variable-snapshots",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			vsnapController.CreateSnapshot)
+		workspaces.DELETE("/:id/variable-snapshots/:vsnap_id",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACE_VARIABLES", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+			}),
+			vsnapController.DeleteSnapshot)
+
 		// Resource operations - READ level (精细化权限优先)
 		workspaces.GET("/:id/resources",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{

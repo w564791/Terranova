@@ -200,6 +200,9 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	// 全局设置管理
 	setupGlobalRoutes(protected, db, iamMiddleware)
 
+	// 变量集管理
+	SetupVariableSetRoutes(protected, db, iamMiddleware)
+
 	// 通知管理
 	SetupNotificationRoutes(protected, db, iamMiddleware)
 

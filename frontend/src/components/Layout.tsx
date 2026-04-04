@@ -20,6 +20,7 @@ const Layout: React.FC = () => {
   const [hasWorkspacesPermission, setHasWorkspacesPermission] = useState(false);
   const [hasModulesPermission, setHasModulesPermission] = useState(false);
   const [hasIAMPermission, setHasIAMPermission] = useState(false);
+  const [hasVariableSetsPermission, setHasVariableSetsPermission] = useState(false);
   const [hasGlobalSettingsPermission, setHasGlobalSettingsPermission] = useState(false);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
 
@@ -59,27 +60,30 @@ const Layout: React.FC = () => {
           };
 
           // 检查各项权限
-          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, globalPerm] = await Promise.all([
+          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, globalPerm, varsetPerm] = await Promise.all([
             checkPermission('ORGANIZATION'),
             checkPermission('WORKSPACES'),
             checkPermission('MODULES'),
             checkPermission('IAM_PERMISSIONS'),
             checkPermission('SYSTEM_SETTINGS'),
+            checkPermission('VARIABLE_SETS'),
           ]);
 
-          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'Global:', globalPerm);
+          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'Global:', globalPerm, 'VarSets:', varsetPerm);
 
           setHasDashboardPermission(dashPerm);
           setHasWorkspacesPermission(workspacesPerm);
           setHasModulesPermission(modulesPerm);
           setHasIAMPermission(iamPerm);
           setHasGlobalSettingsPermission(globalPerm);
+          setHasVariableSetsPermission(varsetPerm);
         } catch (error) {
           setHasDashboardPermission(false);
           setHasWorkspacesPermission(false);
           setHasModulesPermission(false);
           setHasIAMPermission(false);
           setHasGlobalSettingsPermission(false);
+          setHasVariableSetsPermission(false);
         }
       } else if (user && user.is_system_admin) {
         setHasDashboardPermission(true);
@@ -87,6 +91,7 @@ const Layout: React.FC = () => {
         setHasModulesPermission(true);
         setHasIAMPermission(true);
         setHasGlobalSettingsPermission(true);
+        setHasVariableSetsPermission(true);
       }
       setPermissionsLoading(false);
     };
@@ -118,6 +123,7 @@ const Layout: React.FC = () => {
     { path: '/modules', label: 'Modules', icon: '', requireAdmin: false, requireModulesPermission: true },
     { path: '/admin/manifests', label: 'Manifests', icon: '', requireGlobalSettingsPermission: true },
     { path: '/workspaces', label: 'Workspaces', icon: '', requireWorkspacesPermission: true },
+    { path: '/variable-sets', label: 'Variable Sets', icon: '', requireVariableSetsPermission: true },
     { path: '/cmdb', label: 'CMDB', icon: '' },
     { path: '/iam/organizations', label: 'IAM', icon: '', requireIAMPermission: true },
     {
@@ -146,6 +152,7 @@ const Layout: React.FC = () => {
         if (item.path === '/') return hasDashboardPermission;
         if ((item as any).requireModulesPermission) return hasModulesPermission;
         if ((item as any).requireWorkspacesPermission) return hasWorkspacesPermission;
+        if ((item as any).requireVariableSetsPermission) return hasVariableSetsPermission;
         if ((item as any).requireIAMPermission) return hasIAMPermission;
         if ((item as any).requireGlobalSettingsPermission) return hasGlobalSettingsPermission;
         return true;
@@ -192,7 +199,7 @@ const Layout: React.FC = () => {
   }
 
   // 如果用户不是admin且没有任何权限，显示NoPermission页面
-  if (!user?.is_system_admin && !hasDashboardPermission && !hasWorkspacesPermission && !hasModulesPermission && !hasIAMPermission && !hasGlobalSettingsPermission) {
+  if (!user?.is_system_admin && !hasDashboardPermission && !hasWorkspacesPermission && !hasModulesPermission && !hasIAMPermission && !hasGlobalSettingsPermission && !hasVariableSetsPermission) {
     return <NoPermission />;
   }
 

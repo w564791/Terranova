@@ -156,7 +156,10 @@ func (w *AssessmentWorker) scanner() {
 // scanPending scans for pending records and submits them
 func (w *AssessmentWorker) scanPending() {
 	var logs []models.SkillUsageLog
-	err := w.db.Where("assessment_status = ?", models.AssessmentStatusPending).
+	err := w.db.Where("assessment_status IN ?", []string{
+		string(models.AssessmentStatusPending),
+		string(models.AssessmentStatusPartial),
+	}).
 		Order("created_at ASC").
 		Limit(50).
 		Find(&logs).Error
@@ -195,9 +198,12 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 		return false, nil
 	}
 
-	// 3. Idempotency: CAS update pending → assessing to prevent duplicate processing
+	// 3. Idempotency: CAS update pending/partial → assessing to prevent duplicate processing
 	result := w.db.Model(&models.SkillUsageLog{}).
-		Where("id = ? AND assessment_status = ?", usageLogID, string(models.AssessmentStatusPending)).
+		Where("id = ? AND assessment_status IN ?", usageLogID, []string{
+			string(models.AssessmentStatusPending),
+			string(models.AssessmentStatusPartial),
+		}).
 		Update("assessment_status", "assessing")
 	if result.RowsAffected == 0 {
 		// Another worker already picked this up
@@ -252,6 +258,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 		usageLogID, schemaResult.Verdict, schemaResult.Score, assessmentLatencyMs)
 
 	// --- Layer 2/3: LLM evaluation (optional, based on sampling) ---
+	hasLLMError := false
 	if w.sampler != nil && w.evaluator != nil {
 		decision := w.sampler.Decide(&usageLog, validationResult.Valid)
 
@@ -262,6 +269,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 			evalCancel()
 			if err != nil {
 				log.Printf("[AssessmentWorker] Layer 2 eval error for %s: %v", usageLogID, err)
+				hasLLMError = true
 			} else {
 				latency := ruleResult.LatencyMs
 				ruleViolations := ruleResult.RuleViolations
@@ -292,6 +300,7 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 			evalCancel()
 			if err != nil {
 				log.Printf("[AssessmentWorker] Layer 3 eval error for %s: %v", usageLogID, err)
+				hasLLMError = true
 			} else {
 				latency := semanticResult.LatencyMs
 				qualityIssues := semanticResult.QualityIssues
@@ -316,10 +325,14 @@ func (w *AssessmentWorker) ProcessOne(usageLogID, taskSkillName string) (bool, e
 		}
 	}
 
-	// 8. Update usage log assessment_status to "assessed" (after all layers complete)
+	// 8. Update usage log assessment_status: partial if LLM failed, assessed if all succeeded
+	finalStatus := models.AssessmentStatusAssessed
+	if hasLLMError {
+		finalStatus = models.AssessmentStatusPartial
+	}
 	if err := w.db.Model(&models.SkillUsageLog{}).
 		Where("id = ?", usageLogID).
-		Update("assessment_status", models.AssessmentStatusAssessed).Error; err != nil {
+		Update("assessment_status", finalStatus).Error; err != nil {
 		return false, fmt.Errorf("failed to update assessment status: %w", err)
 	}
 

@@ -67,6 +67,8 @@ import IAMLayout from './components/IAMLayout';
 import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
 import CMDB from './pages/CMDB';
+import VariableSetsPage from './pages/VariableSetsPage';
+import VariableSetDetail from './pages/VariableSetDetail';
 import Setup from './pages/Setup';
 import SSOCallback from './pages/SSOCallback';
 import SSOConfig from './pages/admin/SSOConfig';
@@ -158,6 +160,8 @@ const App: FC = () => {
                 <Route path="workspaces/create" element={<CreateWorkspace />} />
                 <Route path="workspaces/:id/edit" element={<EditWorkspace />} />
                 <Route path="workspaces/:id/resources" element={<WorkspaceResources />} />
+                <Route path="variable-sets" element={<VariableSetsPage />} />
+                <Route path="variable-sets/:varsetId" element={<VariableSetDetail />} />
                 <Route path="test-form" element={<TestDynamicForm />} />
                 <Route path="modules/:moduleId/schemas" element={<SchemaManagement />} />
                 <Route path="modules/:moduleId/schemas/:schemaId/edit" element={<SchemaEditorPage />} />

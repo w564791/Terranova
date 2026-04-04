@@ -7,9 +7,10 @@ interface Props {
   taskId: number;
   onStageChange?: (stage: string) => void; // 新增：通知父组件当前阶段变化
   currentTaskStage?: string; // 从父组件接收当前任务阶段（来自API）
+  onEmpty?: () => void; // WebSocket 连接后无数据时回调（用于降级到 HTTP）
 }
 
-const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, currentTaskStage }) => {
+const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, currentTaskStage, onEmpty }) => {
   const { lines, isConnected, isCompleted, error } = useTerraformOutput(taskId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,6 +22,18 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
   const [currentStage, setCurrentStage] = useState<string>('fetching');
   const [availableStages, setAvailableStages] = useState<Set<string>>(new Set(['fetching']));
   const [userSelectedAll, setUserSelectedAll] = useState(false); // 用户是否手动选择了"全部"
+
+  // 检测空 stream：连接成功但 3 秒内无任何数据，触发 onEmpty 降级到 HTTP
+  useEffect(() => {
+    if (!onEmpty || !isConnected || lines.length > 0) return;
+    const timer = setTimeout(() => {
+      if (lines.length === 0) {
+        console.log('[TerraformOutputViewer] Connected but no data after 3s, triggering onEmpty');
+        onEmpty();
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isConnected, lines.length, onEmpty]);
 
   // 获取任务状态
   useEffect(() => {
@@ -101,14 +114,18 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       
       // 自动切换逻辑：
       // 1. 如果用户手动选择了"全部"，不自动切换
-      // 2. 如果用户选择了具体阶段，自动跟随当前阶段切换
-      // 3. 如果用户没有操作（filterStage === 'all' 且 !userSelectedAll），自动切换
-      if (!userSelectedAll) {
-        console.log('[TerraformOutputViewer] Auto-switching to stage:', latestActiveStage);
-        setFilterStage(latestActiveStage);
+      // 2. 只在实时运行中（isConnected 且未完成）自动跟随当前阶段
+      // 3. 历史回放（已完成的任务）默认保持"全部"
+      if (!userSelectedAll && isConnected && !isCompleted) {
+        // summary 阶段默认折叠，不自动跳转
+        const collapsedStages = ['post_plan_summary', 'post_apply_summary'];
+        if (!collapsedStages.includes(latestActiveStage)) {
+          console.log('[TerraformOutputViewer] Auto-switching to stage:', latestActiveStage);
+          setFilterStage(latestActiveStage);
+        }
       }
     }
-  }, [lines, currentStage, userSelectedAll, onStageChange, currentTaskStage]);
+  }, [lines, currentStage, userSelectedAll, isConnected, isCompleted, onStageChange, currentTaskStage]);
 
   // 检测用户是否手动滚动
   const handleScroll = () => {
@@ -204,6 +221,8 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       'post_apply': 'Post-Apply',
       'saving_plan': 'Saving Plan',
       'saving_state': 'Saving State',
+      'post_plan_summary': 'Plan Summary',
+      'post_apply_summary': 'Apply Summary',
     };
     return nameMap[stageName] || stageName;
   };
@@ -223,6 +242,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       'cost_estimation',
       'policy_check',
       'saving_plan',
+      'post_plan_summary',
     ];
   };
 
@@ -233,9 +253,11 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
 
   // 过滤日志行
   const filteredLines = filterStage === 'all' ? lines : lines.filter((line, index) => {
-    // 如果是stage_marker，总是显示
-    if (line.type === 'stage_marker') return true;
-    
+    // 阶段标记只显示选中阶段的
+    if (line.type === 'stage_marker') {
+      return line.stage?.toLowerCase() === filterStage;
+    }
+
     // 找到当前行所属的阶段
     let currentPhase = 'fetching'; // 默认阶段
     for (let i = index; i >= 0; i--) {
@@ -244,7 +266,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
         break;
       }
     }
-    
+
     return currentPhase === filterStage;
   });
 
