@@ -245,7 +245,7 @@ const VariableSetDetail: React.FC = () => {
                     <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Key</th>
                     <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Value</th>
                     <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Category</th>
-                    <th style={{ width: '80px' }}></th>
+                    <th style={{ width: '120px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
