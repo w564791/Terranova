@@ -454,31 +454,12 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 	}
 
 	// Get effective variables (workspace + variable sets merged)
+	// 使用 ResolveExecution: agent 需要完整值（包括 sensitive）来执行 terraform
 	resolver := services.NewVariableResolutionService(h.db)
-	effectiveVars, err := resolver.ResolveDisplay(workspace.WorkspaceID)
+	variables, err := resolver.ResolveExecution(workspace.WorkspaceID)
 	if err != nil {
 		log.Printf("[Agent] Failed to resolve effective variables: %v", err)
-	}
-
-	// Convert to WorkspaceVariable format for agent compatibility
-	var variables []models.WorkspaceVariable
-	if effectiveVars != nil {
-		for _, ev := range effectiveVars {
-			if ev.IsOverridden {
-				continue
-			}
-			variables = append(variables, models.WorkspaceVariable{
-				VariableID:   ev.VariableID,
-				WorkspaceID:  workspace.WorkspaceID,
-				Key:          ev.Key,
-				Value:        ev.Value,
-				VariableType: ev.VariableType,
-				ValueFormat:  ev.ValueFormat,
-				Sensitive:    ev.Sensitive,
-				Description:  ev.Description,
-				Version:      ev.Version,
-			})
-		}
+		variables = []models.WorkspaceVariable{}
 	}
 
 	// Get workspace outputs
