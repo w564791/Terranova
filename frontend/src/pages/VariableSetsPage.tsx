@@ -130,7 +130,7 @@ const VariableSetsPage: React.FC = () => {
 
       {/* ====== Create Form ====== */}
       {showForm && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '32px', marginBottom: '24px', maxWidth: '720px' }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '32px', marginBottom: '24px' }}>
 
           {/* Name */}
           <div style={{ marginBottom: '24px' }}>
@@ -258,41 +258,54 @@ const VariableSetsPage: React.FC = () => {
             {/* Inline add variable */}
             {showVarInput ? (
               <div style={{ ...cardBox, marginTop: '0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Key <span style={{ color: 'red' }}>*</span></label>
-                    <input style={inputStyle} value={varForm.key} onChange={e => setVarForm({ ...varForm, key: e.target.value })} />
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#1a1a1a', marginBottom: '16px' }}>Add new variable</div>
+
+                {/* Type radio */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', marginBottom: '12px' }}>
+                    <input type="radio" checked={varForm.variable_type === 'terraform'} onChange={() => setVarForm({ ...varForm, variable_type: 'terraform' })} style={{ marginTop: '3px' }} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>Terraform variable</div>
+                      <div style={subText}>These variables should match the declarations in your configuration. Click the HCL box to use interpolation or set a non-string value.</div>
+                    </div>
+                  </label>
+                  <label style={{ display: 'flex', gap: '10px', cursor: 'pointer' }}>
+                    <input type="radio" checked={varForm.variable_type === 'environment'} onChange={() => setVarForm({ ...varForm, variable_type: 'environment' })} style={{ marginTop: '3px' }} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>Environment variable</div>
+                      <div style={subText}>These variables are available in the Terraform runtime environment.</div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Key + Value + HCL + Sensitive on one row */}
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Key</label>
+                    <input style={inputStyle} value={varForm.key} onChange={e => setVarForm({ ...varForm, key: e.target.value })} placeholder="key" />
                   </div>
-                  <div>
+                  <div style={{ flex: 1.5 }}>
                     <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Value</label>
-                    <input style={inputStyle} type={varForm.sensitive ? 'password' : 'text'} value={varForm.value} onChange={e => setVarForm({ ...varForm, value: e.target.value })} />
+                    <input style={inputStyle} type={varForm.sensitive ? 'password' : 'text'} value={varForm.value} onChange={e => setVarForm({ ...varForm, value: e.target.value })} placeholder="value" />
                   </div>
-                </div>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Description</label>
-                  <input style={inputStyle} value={varForm.description} onChange={e => setVarForm({ ...varForm, description: e.target.value })} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '12px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                    <input type="radio" checked={varForm.variable_type === 'terraform'} onChange={() => setVarForm({ ...varForm, variable_type: 'terraform' })} /> Terraform variable
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', paddingBottom: '10px' }}>
+                    <input type="checkbox" checked={varForm.value_format === 'hcl'} onChange={e => setVarForm({ ...varForm, value_format: e.target.checked ? 'hcl' : 'string' })} /> HCL
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-                    <input type="radio" checked={varForm.variable_type === 'environment'} onChange={() => setVarForm({ ...varForm, variable_type: 'environment' })} /> Environment variable
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', paddingBottom: '10px' }}>
+                    <input type="checkbox" checked={varForm.sensitive} onChange={e => setVarForm({ ...varForm, sensitive: e.target.checked })} /> Sensitive
                   </label>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={varForm.sensitive} onChange={e => setVarForm({ ...varForm, sensitive: e.target.checked })} /> Sensitive
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={varForm.value_format === 'hcl'} onChange={e => setVarForm({ ...varForm, value_format: e.target.checked ? 'hcl' : 'string' })} /> HCL
-                    </label>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button style={{ padding: '6px 14px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }} onClick={() => setShowVarInput(false)}>Cancel</button>
-                    <button style={{ padding: '6px 14px', border: 'none', background: '#3b82f6', color: '#fff', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }} onClick={addVar}>Add variable</button>
-                  </div>
+
+                {/* Description */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Description (Optional)</label>
+                  <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const }} value={varForm.description} onChange={e => setVarForm({ ...varForm, description: e.target.value })} placeholder="description (optional)" />
+                </div>
+
+                {/* Buttons */}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button style={{ padding: '8px 18px', border: 'none', background: '#3b82f6', color: '#fff', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} onClick={addVar}>Add variable</button>
+                  <button style={{ padding: '8px 18px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }} onClick={() => setShowVarInput(false)}>Cancel</button>
                 </div>
               </div>
             ) : (
