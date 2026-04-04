@@ -89,8 +89,9 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 
 	// 解析请求体
 	var req struct {
-		Description string `json:"description"`
-		RunType     string `json:"run_type"` // "plan" 或 "plan_and_apply"
+		Description        string  `json:"description"`
+		RunType            string  `json:"run_type"`             // "plan" 或 "plan_and_apply"
+		VariableSnapshotID *string `json:"variable_snapshot_id"` // 可选，API 用户可传已有 vsnap_id
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		// 如果没有请求体，继续执行（description是可选的）
@@ -142,11 +143,25 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		taskType = models.TaskTypePlan
 	}
 
-	// Create variable snapshot BEFORE task (strong ordering: snapshot first, then task)
-	snapshotSvc := services.NewVariableSnapshotService(c.db)
-	vsnapID, _, snapshotErr := snapshotSvc.CreateSnapshot(workspace.WorkspaceID, &uid)
-	if snapshotErr != nil {
-		log.Printf("[WARN] Failed to create variable snapshot for workspace %s: %v", workspace.WorkspaceID, snapshotErr)
+	// Variable snapshot: use provided vsnap_id or create new one
+	var vsnapID *string
+	if req.VariableSnapshotID != nil && *req.VariableSnapshotID != "" {
+		// API user provided existing snapshot — validate it exists
+		var count int64
+		c.db.Model(&models.VariableSnapshot{}).Where("vsnap_id = ?", *req.VariableSnapshotID).Count(&count)
+		if count == 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "variable_snapshot_id not found: " + *req.VariableSnapshotID})
+			return
+		}
+		vsnapID = req.VariableSnapshotID
+	} else {
+		// Auto-create snapshot
+		snapshotSvc := services.NewVariableSnapshotService(c.db)
+		var snapshotErr error
+		vsnapID, _, snapshotErr = snapshotSvc.CreateSnapshot(workspace.WorkspaceID, &uid)
+		if snapshotErr != nil {
+			log.Printf("[WARN] Failed to create variable snapshot for workspace %s: %v", workspace.WorkspaceID, snapshotErr)
+		}
 	}
 
 	// 创建任务（只创建一个任务）
