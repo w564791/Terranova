@@ -230,7 +230,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		snapshot_id TEXT DEFAULT '',
 		apply_description TEXT DEFAULT '',
 		snapshot_resource_versions TEXT,
-		snapshot_variables TEXT,
+		variable_snapshot_id TEXT,
 		snapshot_provider_config TEXT,
 		snapshot_created_at DATETIME,
 		apply_confirmed_by TEXT,
