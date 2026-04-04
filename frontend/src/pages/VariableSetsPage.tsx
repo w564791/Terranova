@@ -237,21 +237,38 @@ const VariableSetsPage: React.FC = () => {
               You can add any number of Terraform and Environment variables. Terraform will use these variables for all plan and apply operations.
             </p>
 
-            {/* Pending vars list */}
+            {/* Pending vars table */}
             {pendingVars.length > 0 && (
-              <div style={{ marginBottom: '12px' }}>
-                {pendingVars.map((v, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: '6px', marginBottom: '6px', background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '14px' }}>{v.key}</span>
-                      <span style={{ fontSize: '12px', padding: '2px 8px', background: v.variable_type === 'terraform' ? '#EDE9FE' : '#FEF3C7', color: v.variable_type === 'terraform' ? '#6D28D9' : '#92400E', borderRadius: '4px' }}>
-                        {v.variable_type === 'terraform' ? 'Terraform' : 'Environment'}
-                      </span>
-                      {v.sensitive && <span style={{ fontSize: '12px', padding: '2px 8px', background: '#FEE2E2', color: '#991B1B', borderRadius: '4px' }}>Sensitive</span>}
-                    </div>
-                    <span style={{ cursor: 'pointer', color: '#9ca3af', fontSize: '18px', lineHeight: 1 }} onClick={() => setPendingVars(pendingVars.filter((_, j) => j !== i))}>x</span>
-                  </div>
-                ))}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Key</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Value</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Category</th>
+                      <th style={{ width: '40px' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingVars.map((v, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ fontWeight: 500, fontSize: '14px' }}>{v.key}</span>
+                          {v.sensitive && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: '#FEF3C7', color: '#92400E', borderRadius: '4px', fontWeight: 600 }}>SENSITIVE</span>}
+                        </td>
+                        <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '14px' }}>
+                          {v.sensitive ? '-- sensitive value --' : (v.value || <span style={{ color: '#d1d5db' }}>(empty)</span>)}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '14px', color: '#374151' }}>
+                          {v.variable_type === 'terraform' ? 'Terraform' : 'Environment'}
+                        </td>
+                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                          <span style={{ cursor: 'pointer', color: '#9ca3af', fontSize: '16px' }} onClick={() => setPendingVars(pendingVars.filter((_, j) => j !== i))}>x</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 
