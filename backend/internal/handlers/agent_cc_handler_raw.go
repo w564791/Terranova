@@ -1101,28 +1101,14 @@ func (h *RawAgentCCHandler) processDriftCheckResult(taskID uint) {
 // 通过检查任务的变量快照中的 TF_CLI_ARGS 环境变量来判断
 func (h *RawAgentCCHandler) hasTargetParameter(task *models.WorkspaceTask) bool {
 	// 1. 首先检查任务的变量快照（如果有）
-	if task.SnapshotVariables != nil && len(task.SnapshotVariables) > 0 {
-		// 尝试从 _array 格式中提取变量引用
-		if arrayData, hasArray := task.SnapshotVariables["_array"]; hasArray {
-			if variables, ok := arrayData.([]interface{}); ok {
-				// 收集所有变量 ID
-				var variableIDs []string
-				for _, v := range variables {
-					if varMap, ok := v.(map[string]interface{}); ok {
-						if varID, ok := varMap["variable_id"].(string); ok {
-							variableIDs = append(variableIDs, varID)
-						}
-					}
-				}
-				// 查询这些变量中是否有 TF_CLI_ARGS
-				if len(variableIDs) > 0 {
-					var tfCliArgsVar models.WorkspaceVariable
-					if err := h.db.Where("variable_id IN ? AND key = ?", variableIDs, "TF_CLI_ARGS").
-						First(&tfCliArgsVar).Error; err == nil {
-						// 找到了 TF_CLI_ARGS，检查是否包含 --target
-						if strings.Contains(tfCliArgsVar.Value, "--target") || strings.Contains(tfCliArgsVar.Value, "-target") {
-							return true
-						}
+	if task.VariableSnapshotID != nil {
+		snapshotSvc := services.NewVariableSnapshotService(h.db)
+		vars, err := snapshotSvc.LoadFromSnapshot(*task.VariableSnapshotID)
+		if err == nil {
+			for _, v := range vars {
+				if v.Key == "TF_CLI_ARGS" {
+					if strings.Contains(v.Value, "--target") || strings.Contains(v.Value, "-target") {
+						return true
 					}
 				}
 			}

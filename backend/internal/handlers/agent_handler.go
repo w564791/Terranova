@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -453,12 +452,18 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 		}
 	}
 
-	// Get effective variables (workspace + variable sets merged)
-	// 使用 ResolveExecution: agent 需要完整值（包括 sensitive）来执行 terraform
-	resolver := services.NewVariableResolutionService(h.db)
-	variables, err := resolver.ResolveExecution(workspace.WorkspaceID)
-	if err != nil {
-		log.Printf("[Agent] Failed to resolve effective variables: %v", err)
+	// Load variables from snapshot (not live resolution)
+	var variables []models.WorkspaceVariable
+	if task.VariableSnapshotID != nil {
+		snapshotSvc := services.NewVariableSnapshotService(h.db)
+		vars, err := snapshotSvc.LoadFromSnapshot(*task.VariableSnapshotID)
+		if err != nil {
+			log.Printf("[Agent] Failed to load snapshot variables: %v", err)
+			variables = []models.WorkspaceVariable{}
+		} else {
+			variables = vars
+		}
+	} else {
 		variables = []models.WorkspaceVariable{}
 	}
 
@@ -512,7 +517,7 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 
 	// Get latest state version
 	var stateVersion models.WorkspaceStateVersion
-	err = h.db.Where("workspace_id = ?", workspace.WorkspaceID).
+	err := h.db.Where("workspace_id = ?", workspace.WorkspaceID).
 		Order("version DESC").
 		First(&stateVersion).Error
 
@@ -1175,65 +1180,28 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 	if task.SnapshotResourceVersions != nil {
 		taskResponse["snapshot_resource_versions"] = task.SnapshotResourceVersions
 	}
-	// 【修复】解析快照变量:如果是旧格式(只有引用),需要从数据库查询完整数据
-	if task.SnapshotVariables != nil {
-		// JSONB.Scan 将 DB 中的 JSON 数组包装为 {"_array": [...]},
-		// 使用 UnwrapArray() 还原为原始数组 JSON
-		snapshotVarsJSON, _ := task.SnapshotVariables.UnwrapArray()
-		var snapshotVars []map[string]interface{}
-		if err := json.Unmarshal(snapshotVarsJSON, &snapshotVars); err == nil && len(snapshotVars) > 0 {
-			// 检查第一个元素是否包含key字段
-			firstVar := snapshotVars[0]
-			if _, hasKey := firstVar["key"]; !hasKey {
-				// 旧格式(只有引用),需要查询完整数据
-				var fullVariables []gin.H
-				for _, snapVar := range snapshotVars {
-					varID, _ := snapVar["variable_id"].(string)
-					version, _ := snapVar["version"].(float64)
-					workspaceID, _ := snapVar["workspace_id"].(string)
-
-					// 从 workspace_variables 查询完整变量数据
-					var variable models.WorkspaceVariable
-					if err := h.db.Where("variable_id = ? AND version = ?", varID, int(version)).
-						First(&variable).Error; err == nil {
-						fullVariables = append(fullVariables, gin.H{
-							"workspace_id":  variable.WorkspaceID,
-							"variable_id":   variable.VariableID,
-							"version":       variable.Version,
-							"variable_type": variable.VariableType,
-							"key":           variable.Key,
-							"value":         variable.Value,
-							"sensitive":     variable.Sensitive,
-							"description":   variable.Description,
-							"value_format":  variable.ValueFormat,
-						})
-					} else {
-						// Fallback: 尝试从 varset_variables 查询（varset 变量也可能在快照中）
-						var varsetVar models.VarsetVariable
-						if err2 := h.db.Where("variable_id = ? AND version = ?", varID, int(version)).
-							First(&varsetVar).Error; err2 == nil {
-							fullVariables = append(fullVariables, gin.H{
-								"workspace_id":  workspaceID,
-								"variable_id":   varsetVar.VariableID,
-								"version":       varsetVar.Version,
-								"variable_type": varsetVar.VariableType,
-								"key":           varsetVar.Key,
-								"value":         varsetVar.Value,
-								"sensitive":     varsetVar.Sensitive,
-								"description":   varsetVar.Description,
-								"value_format":  varsetVar.ValueFormat,
-							})
-						}
-					}
-				}
-				taskResponse["snapshot_variables"] = fullVariables
-			} else {
-				// 新格式(已包含完整数据),直接返回
-				taskResponse["snapshot_variables"] = task.SnapshotVariables
-			}
+	// Load variables from snapshot table
+	if task.VariableSnapshotID != nil {
+		snapshotSvc := services.NewVariableSnapshotService(h.db)
+		vars, err := snapshotSvc.LoadFromSnapshot(*task.VariableSnapshotID)
+		if err != nil {
+			log.Printf("[Agent] Failed to load snapshot variables for apply: %v", err)
 		} else {
-			// 无法解析或为空,直接返回原始数据
-			taskResponse["snapshot_variables"] = task.SnapshotVariables
+			varList := make([]gin.H, 0, len(vars))
+			for _, v := range vars {
+				varList = append(varList, gin.H{
+					"workspace_id":  task.WorkspaceID,
+					"variable_id":   v.VariableID,
+					"version":       v.Version,
+					"variable_type": v.VariableType,
+					"key":           v.Key,
+					"value":         v.Value,
+					"sensitive":     v.Sensitive,
+					"description":   v.Description,
+					"value_format":  v.ValueFormat,
+				})
+			}
+			taskResponse["snapshot_variables"] = varList
 		}
 	}
 	if task.SnapshotProviderConfig != nil {
