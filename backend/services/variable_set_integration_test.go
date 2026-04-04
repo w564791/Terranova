@@ -123,6 +123,17 @@ func TestMain(m *testing.M) {
 			project_id INTEGER NOT NULL,
 			workspace_id VARCHAR(50) NOT NULL
 		)`)
+		testDB.Exec(`CREATE TABLE IF NOT EXISTS variable_snapshots (
+			id SERIAL PRIMARY KEY,
+			vsnap_id VARCHAR(30) NOT NULL,
+			workspace_id VARCHAR(50) NOT NULL,
+			variable_id VARCHAR(20) NOT NULL,
+			version INTEGER NOT NULL,
+			variable_type VARCHAR(20) NOT NULL,
+			source_type VARCHAR(20) NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_by VARCHAR(20)
+		)`)
 	}
 
 	// Run tests
@@ -470,5 +481,239 @@ func TestResolution_VersionInEffectiveVariable(t *testing.T) {
 				t.Errorf("should have latest value 'v2', got '%s'", ev.Value)
 			}
 		}
+	}
+}
+
+// ----- Snapshot Tests -----
+
+func TestSnapshot_CreateWithWorkspaceAndVarsetVars(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	// Ensure test workspace
+	db.Exec("INSERT INTO workspaces (workspace_id, name, execution_mode, terraform_version, workdir, state_backend) VALUES ('ws-snap-test1', 'snap-test1', 'local', 'latest', '/workspace', 'local') ON CONFLICT (workspace_id) DO NOTHING")
+	defer db.Exec("DELETE FROM workspace_variables WHERE workspace_id = 'ws-snap-test1'")
+	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-snap-test1'")
+
+	// Create workspace variable
+	wsVar := &models.WorkspaceVariable{
+		WorkspaceID: "ws-snap-test1", Key: "ws_key", Value: "ws_val",
+		VariableType: models.VariableTypeTerraform, ValueFormat: models.ValueFormatString, Version: 1,
+	}
+	db.Create(wsVar)
+	defer db.Exec("DELETE FROM workspace_variables WHERE variable_id = ?", wsVar.VariableID)
+
+	// Create global varset with variable
+	vsSvc := NewVariableSetService(db)
+	vs, _ := vsSvc.Create("snap-test-global", "test", "global", nil)
+	defer func() {
+		db.Exec("DELETE FROM varset_assignments WHERE varset_id = ?", vs.VarsetID)
+		db.Exec("DELETE FROM varset_variables WHERE varset_id = ?", vs.VarsetID)
+		db.Exec("DELETE FROM variable_sets WHERE varset_id = ?", vs.VarsetID)
+	}()
+
+	vvSvc := NewVarsetVariableService(db)
+	vvSvc.Create(vs.VarsetID, "varset_key", "varset_val", "",
+		models.VariableTypeTerraform, models.ValueFormatString, false, nil)
+
+	// Create snapshot
+	snapSvc := NewVariableSnapshotService(db)
+	vsnapID, count, err := snapSvc.CreateSnapshot("ws-snap-test1", nil)
+	if err != nil {
+		t.Fatalf("create snapshot: %v", err)
+	}
+	defer db.Exec("DELETE FROM variable_snapshots WHERE vsnap_id = ?", *vsnapID)
+
+	if vsnapID == nil {
+		t.Fatal("vsnap_id should not be nil")
+	}
+	if count != 2 {
+		t.Errorf("want 2 items, got %d", count)
+	}
+
+	// Verify source_type
+	var refs []models.VariableSnapshot
+	db.Where("vsnap_id = ?", *vsnapID).Find(&refs)
+	wsCount, varsetCount := 0, 0
+	for _, r := range refs {
+		if r.SourceType == "workspace" {
+			wsCount++
+		}
+		if r.SourceType == "varset" {
+			varsetCount++
+		}
+	}
+	if wsCount != 1 || varsetCount != 1 {
+		t.Errorf("want 1 workspace + 1 varset, got ws=%d varset=%d", wsCount, varsetCount)
+	}
+}
+
+func TestSnapshot_CreateNoVariables(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	db.Exec("INSERT INTO workspaces (workspace_id, name, execution_mode, terraform_version, workdir, state_backend) VALUES ('ws-snap-empty', 'snap-empty', 'local', 'latest', '/workspace', 'local') ON CONFLICT (workspace_id) DO NOTHING")
+	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-snap-empty'")
+
+	snapSvc := NewVariableSnapshotService(db)
+	vsnapID, count, err := snapSvc.CreateSnapshot("ws-snap-empty", nil)
+	if err != nil {
+		t.Fatalf("create snapshot: %v", err)
+	}
+	if vsnapID != nil {
+		t.Error("vsnap_id should be nil for empty workspace")
+	}
+	if count != 0 {
+		t.Errorf("want 0 items, got %d", count)
+	}
+}
+
+func TestSnapshot_LoadResolvesFromSourceTables(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	db.Exec("INSERT INTO workspaces (workspace_id, name, execution_mode, terraform_version, workdir, state_backend) VALUES ('ws-snap-load', 'snap-load', 'local', 'latest', '/workspace', 'local') ON CONFLICT (workspace_id) DO NOTHING")
+	defer db.Exec("DELETE FROM workspace_variables WHERE workspace_id = 'ws-snap-load'")
+	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-snap-load'")
+
+	// Create workspace variable
+	wsVar := &models.WorkspaceVariable{
+		WorkspaceID: "ws-snap-load", Key: "load_key", Value: "load_val",
+		VariableType: models.VariableTypeTerraform, ValueFormat: models.ValueFormatString, Version: 1,
+	}
+	db.Create(wsVar)
+	defer db.Exec("DELETE FROM workspace_variables WHERE variable_id = ?", wsVar.VariableID)
+
+	// Create snapshot + load
+	snapSvc := NewVariableSnapshotService(db)
+	vsnapID, _, _ := snapSvc.CreateSnapshot("ws-snap-load", nil)
+	defer db.Exec("DELETE FROM variable_snapshots WHERE vsnap_id = ?", *vsnapID)
+
+	vars, err := snapSvc.LoadFromSnapshot(*vsnapID)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(vars) != 1 {
+		t.Fatalf("want 1, got %d", len(vars))
+	}
+	if vars[0].Key != "load_key" || vars[0].Value != "load_val" {
+		t.Errorf("wrong data: key=%s val=%s", vars[0].Key, vars[0].Value)
+	}
+}
+
+func TestSnapshot_VariableChangeAfterSnapshot(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	db.Exec("INSERT INTO workspaces (workspace_id, name, execution_mode, terraform_version, workdir, state_backend) VALUES ('ws-snap-isolate', 'snap-isolate', 'local', 'latest', '/workspace', 'local') ON CONFLICT (workspace_id) DO NOTHING")
+	defer db.Exec("DELETE FROM workspace_variables WHERE workspace_id = 'ws-snap-isolate'")
+	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-snap-isolate'")
+
+	// Create variable version 1
+	wsVar := &models.WorkspaceVariable{
+		WorkspaceID: "ws-snap-isolate", Key: "iso_key", Value: "old_val",
+		VariableType: models.VariableTypeTerraform, ValueFormat: models.ValueFormatString, Version: 1,
+	}
+	db.Create(wsVar)
+	defer db.Exec("DELETE FROM workspace_variables WHERE variable_id = ?", wsVar.VariableID)
+
+	// Create snapshot (captures version 1)
+	snapSvc := NewVariableSnapshotService(db)
+	vsnapID, _, _ := snapSvc.CreateSnapshot("ws-snap-isolate", nil)
+	defer db.Exec("DELETE FROM variable_snapshots WHERE vsnap_id = ?", *vsnapID)
+
+	// Update variable to version 2
+	newVar := &models.WorkspaceVariable{
+		VariableID:   wsVar.VariableID,
+		WorkspaceID:  "ws-snap-isolate",
+		Key:          "iso_key",
+		Value:        "new_val",
+		VariableType: models.VariableTypeTerraform,
+		ValueFormat:  models.ValueFormatString,
+		Version:      2,
+	}
+	db.Create(newVar)
+
+	// Load from snapshot — should return version 1 (old value)
+	vars, _ := snapSvc.LoadFromSnapshot(*vsnapID)
+	if len(vars) != 1 {
+		t.Fatalf("want 1, got %d", len(vars))
+	}
+	if vars[0].Value != "old_val" {
+		t.Errorf("snapshot should return old value 'old_val', got '%s'", vars[0].Value)
+	}
+}
+
+func TestSnapshot_LocalDataAccessorCache(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	db.Exec("INSERT INTO workspaces (workspace_id, name, execution_mode, terraform_version, workdir, state_backend) VALUES ('ws-snap-cache', 'snap-cache', 'local', 'latest', '/workspace', 'local') ON CONFLICT (workspace_id) DO NOTHING")
+	defer db.Exec("DELETE FROM workspace_variables WHERE workspace_id = 'ws-snap-cache'")
+	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-snap-cache'")
+
+	wsVar := &models.WorkspaceVariable{
+		WorkspaceID: "ws-snap-cache", Key: "cache_key", Value: "cache_val",
+		VariableType: models.VariableTypeTerraform, ValueFormat: models.ValueFormatString, Version: 1,
+	}
+	db.Create(wsVar)
+	defer db.Exec("DELETE FROM workspace_variables WHERE variable_id = ?", wsVar.VariableID)
+
+	snapSvc := NewVariableSnapshotService(db)
+	vsnapID, _, _ := snapSvc.CreateSnapshot("ws-snap-cache", nil)
+	defer db.Exec("DELETE FROM variable_snapshots WHERE vsnap_id = ?", *vsnapID)
+
+	// Load into LocalDataAccessor
+	accessor := NewLocalDataAccessor(db)
+	if err := accessor.LoadSnapshot(*vsnapID, db); err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+
+	// Get variables — should return cached
+	vars, err := accessor.GetWorkspaceVariables("ws-snap-cache", models.VariableTypeTerraform)
+	if err != nil {
+		t.Fatalf("get vars: %v", err)
+	}
+	if len(vars) != 1 || vars[0].Value != "cache_val" {
+		t.Errorf("cache miss: got %v", vars)
+	}
+
+	// Update live variable
+	db.Create(&models.WorkspaceVariable{
+		VariableID:   wsVar.VariableID,
+		WorkspaceID:  "ws-snap-cache",
+		Key:          "cache_key",
+		Value:        "updated_val",
+		VariableType: models.VariableTypeTerraform,
+		ValueFormat:  models.ValueFormatString,
+		Version:      2,
+	})
+
+	// Still returns cached old value
+	vars2, _ := accessor.GetWorkspaceVariables("ws-snap-cache", models.VariableTypeTerraform)
+	if len(vars2) != 1 || vars2[0].Value != "cache_val" {
+		t.Errorf("should still return cached 'cache_val', got '%s'", vars2[0].Value)
+	}
+}
+
+func TestSnapshot_NullSnapshotFallback(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	// LocalDataAccessor without LoadSnapshot → falls back to live resolution
+	accessor := NewLocalDataAccessor(db)
+	// No LoadSnapshot call — snapshotVars is nil
+
+	// Should not panic, returns empty or live data
+	vars, err := accessor.GetWorkspaceVariables("ws-nonexistent", models.VariableTypeTerraform)
+	if err != nil {
+		// It's OK to get an error for non-existent workspace in live mode
+		return
+	}
+	// Should return empty for non-existent workspace
+	_ = vars
+}
+
+func TestSnapshot_DeleteNonExistent(t *testing.T) {
+	db := setupVarsetTestDB(t)
+
+	snapSvc := NewVariableSnapshotService(db)
+	err := snapSvc.DeleteSnapshot("vsnap-nonexistent")
+	if err == nil {
+		t.Error("should error for non-existent snapshot")
 	}
 }
