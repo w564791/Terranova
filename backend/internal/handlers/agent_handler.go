@@ -1374,10 +1374,22 @@ func (h *AgentHandler) LockWorkspace(c *gin.Context) {
 		"lock_info": lockInfo,
 	}
 
-	if err := h.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
-		Updates(updates).Error; err != nil {
+	// Atomic lock: only succeed if workspace is currently unlocked
+	result := h.db.Model(&models.Workspace{}).
+		Where("workspace_id = ? AND lock_id IS NULL", workspaceID).
+		Updates(updates)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to lock workspace"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		// Already locked - read current lock for error message
+		var ws models.Workspace
+		h.db.Select("lock_info").Where("workspace_id = ?", workspaceID).First(&ws)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":     "workspace is already locked",
+			"lock_info": ws.LockInfo,
+		})
 		return
 	}
 

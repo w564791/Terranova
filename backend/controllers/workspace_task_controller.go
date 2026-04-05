@@ -929,26 +929,30 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 	}
 
 	// 如果有 plan_and_apply 任务被取消，检查并解锁 workspace
-	if needUnlockWorkspace && workspace.LockID != nil {
-		// 检查锁定原因是否与被取消的任务相关
-		lockInfoStr := ""
-		if workspace.LockInfo != nil {
+	if needUnlockWorkspace && workspace.LockID != nil && workspace.LockInfo != nil {
+		// Never clear a Terraform HTTP backend lock (has "Operation" key
+		// like "OperationTypePlan" or "OperationTypeApply")
+		if _, isHTTPLock := workspace.LockInfo["Operation"]; isHTTPLock {
+			log.Printf("[CancelPreviousTasks] Workspace %s has active Terraform HTTP lock, not clearing", workspace.WorkspaceID)
+		} else {
+			// Platform-managed lock: check if it belongs to a cancelled task
+			lockInfoStr := ""
 			if info, ok := workspace.LockInfo["info"].(string); ok {
 				lockInfoStr = info
 			}
-		}
-		for _, task := range previousTasks {
-			if task.TaskType == models.TaskTypePlanAndApply {
-				expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
-				if strings.Contains(lockInfoStr, expectedLockReason) || strings.Contains(lockInfoStr, fmt.Sprintf("task #%d", task.ID)) {
-					workspace.LockID = nil
-					workspace.LockInfo = nil
-					if err := c.db.Save(&workspace).Error; err != nil {
-						log.Printf("[CancelPreviousTasks] Failed to unlock workspace %s: %v", workspace.WorkspaceID, err)
-					} else {
-						log.Printf("[CancelPreviousTasks] Workspace %s unlocked after cancelling task %d", workspace.WorkspaceID, task.ID)
+			for _, task := range previousTasks {
+				if task.TaskType == models.TaskTypePlanAndApply {
+					expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
+					if strings.Contains(lockInfoStr, expectedLockReason) || strings.Contains(lockInfoStr, fmt.Sprintf("task #%d", task.ID)) {
+						workspace.LockID = nil
+						workspace.LockInfo = nil
+						if err := c.db.Save(&workspace).Error; err != nil {
+							log.Printf("[CancelPreviousTasks] Failed to unlock workspace %s: %v", workspace.WorkspaceID, err)
+						} else {
+							log.Printf("[CancelPreviousTasks] Workspace %s unlocked after cancelling task %d", workspace.WorkspaceID, task.ID)
+						}
+						break // 只需要解锁一次
 					}
-					break // 只需要解锁一次
 				}
 			}
 		}
@@ -1089,22 +1093,26 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 	if task.TaskType == models.TaskTypePlanAndApply {
 		var workspace models.Workspace
 		if err := c.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; err == nil {
-			if workspace.LockID != nil {
-				// 检查锁定原因是否与当前任务相关
-				lockInfoStr := ""
-				if workspace.LockInfo != nil {
+			if workspace.LockID != nil && workspace.LockInfo != nil {
+				// Never clear a Terraform HTTP backend lock (has "Operation" key
+				// like "OperationTypePlan" or "OperationTypeApply")
+				if _, isHTTPLock := workspace.LockInfo["Operation"]; isHTTPLock {
+					log.Printf("[CancelTask] Workspace %s has active Terraform HTTP lock, not clearing", task.WorkspaceID)
+				} else {
+					// Platform-managed lock: check if it belongs to this task
+					lockInfoStr := ""
 					if info, ok := workspace.LockInfo["info"].(string); ok {
 						lockInfoStr = info
 					}
-				}
-				expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
-				if strings.Contains(lockInfoStr, expectedLockReason) || strings.Contains(lockInfoStr, fmt.Sprintf("task #%d", task.ID)) {
-					workspace.LockID = nil
-					workspace.LockInfo = nil
-					if err := c.db.Save(&workspace).Error; err != nil {
-						log.Printf("[CancelTask] Failed to unlock workspace %s: %v", task.WorkspaceID, err)
-					} else {
-						log.Printf("[CancelTask] Workspace %s unlocked after cancelling task %d", task.WorkspaceID, task.ID)
+					expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
+					if strings.Contains(lockInfoStr, expectedLockReason) || strings.Contains(lockInfoStr, fmt.Sprintf("task #%d", task.ID)) {
+						workspace.LockID = nil
+						workspace.LockInfo = nil
+						if err := c.db.Save(&workspace).Error; err != nil {
+							log.Printf("[CancelTask] Failed to unlock workspace %s: %v", task.WorkspaceID, err)
+						} else {
+							log.Printf("[CancelTask] Workspace %s unlocked after cancelling task %d", task.WorkspaceID, task.ID)
+						}
 					}
 				}
 			}
@@ -1205,9 +1213,10 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 		task.ErrorMessage = ""
 		c.db.Omit("state_token_hash").Save(&task)
 
-		workspace.LockID = nil
-		workspace.LockInfo = nil
-		c.db.Save(&workspace)
+		// NOTE: Do not clear workspace lock here. In HTTP backend mode, locks are
+		// managed by Terraform itself. In non-HTTP mode, the executor handles
+		// lock cleanup. RetryStateSave is a recovery endpoint and should not
+		// be unlocking workspaces unconditionally.
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"message": "State already saved via HTTP state backend, task status updated",
@@ -1260,13 +1269,13 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 	task.ErrorMessage = ""
 	c.db.Omit("state_token_hash").Save(&task)
 
-	// 解锁workspace
-	workspace.LockID = nil
-	workspace.LockInfo = nil
-	c.db.Save(&workspace)
+	// NOTE: Do not clear workspace lock here. In HTTP backend mode, locks are
+	// managed by Terraform itself. In non-HTTP mode, the executor handles
+	// lock cleanup. RetryStateSave is a recovery endpoint and should not
+	// be unlocking workspaces unconditionally.
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"message": "State saved successfully from backup, workspace unlocked",
+		"message": "State saved successfully from backup, task status updated",
 		"task":    task,
 	})
 }

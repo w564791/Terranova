@@ -437,31 +437,8 @@ func (s *StateService) calculateChecksum(data []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// lockWorkspace 锁定 workspace
+// lockWorkspace 锁定 workspace (atomic: uses WHERE lock_id IS NULL to prevent TOCTOU race)
 func (s *StateService) lockWorkspace(workspaceID, userID, reason string) error {
-	// 检查是否已锁定
-	var workspace models.Workspace
-	if err := s.db.Where("workspace_id = ?", workspaceID).First(&workspace).Error; err != nil {
-		return fmt.Errorf("workspace not found: %w", err)
-	}
-
-	if workspace.LockID != nil {
-		who := "unknown"
-		if workspace.LockInfo != nil {
-			if w, ok := workspace.LockInfo["who"].(string); ok {
-				who = w
-			}
-		}
-		info := ""
-		if workspace.LockInfo != nil {
-			if i, ok := workspace.LockInfo["info"].(string); ok {
-				info = i
-			}
-		}
-		return fmt.Errorf("workspace is already locked by %s: %s", who, info)
-	}
-
-	// 锁定
 	lockID := fmt.Sprintf("%d", time.Now().UnixNano())
 	lockInfo := models.JSONB{
 		"ID":          lockID,
@@ -471,12 +448,35 @@ func (s *StateService) lockWorkspace(workspaceID, userID, reason string) error {
 		"info":        reason,
 		"created":     time.Now().Format(time.RFC3339),
 	}
-	return s.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
+
+	result := s.db.Model(&models.Workspace{}).
+		Where("workspace_id = ? AND lock_id IS NULL", workspaceID).
 		Updates(map[string]interface{}{
 			"lock_id":   lockID,
 			"lock_info": lockInfo,
-		}).Error
+		})
+	if result.Error != nil {
+		return fmt.Errorf("failed to lock workspace: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		// Already locked or workspace not found - read current lock for error message
+		var ws models.Workspace
+		if err := s.db.Select("lock_id", "lock_info").Where("workspace_id = ?", workspaceID).First(&ws).Error; err != nil {
+			return fmt.Errorf("workspace not found: %w", err)
+		}
+		who := "unknown"
+		info := ""
+		if ws.LockInfo != nil {
+			if w, ok := ws.LockInfo["who"].(string); ok {
+				who = w
+			}
+			if i, ok := ws.LockInfo["info"].(string); ok {
+				info = i
+			}
+		}
+		return fmt.Errorf("workspace is already locked by %s: %s", who, info)
+	}
+	return nil
 }
 
 // unlockWorkspace 解锁 workspace
