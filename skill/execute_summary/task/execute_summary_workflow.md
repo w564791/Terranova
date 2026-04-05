@@ -146,6 +146,32 @@ uncertainty_schema:
 
 `direct_dependencies` 必须来自 `query_cmdb_dependencies` 查询结果，禁止估算。
 
+### 6.0 direct_dependencies 统计规则（重要）
+
+```yaml
+排除同一逻辑资源的配置组件:
+  query_cmdb_dependencies 返回的依赖方中，排除与变更资源属于同一逻辑资源的配置附属资源。
+  
+  判断方式:
+    - 依赖方的 resource_type 与变更资源的 resource_type 相同，或为其配置附属类型
+    - 配置附属类型 = resource_type 以变更资源的 resource_type 为前缀 + "_"
+    - 且依赖方与变更资源属于同一 module（terraform_address 的 module 前缀相同）
+  
+  示例:
+    变更资源: aws_s3_bucket (module.s3_xxx)
+    排除: aws_s3_bucket_versioning, aws_s3_bucket_policy, aws_s3_bucket_lifecycle_configuration (同 module, 同前缀)
+    计入: aws_instance (不同类型), aws_vpc_endpoint (不同类型)
+    
+    变更资源: aws_security_group (module.vpc)
+    排除: aws_security_group_rule (同 module, 同前缀)
+    计入: aws_instance, aws_network_interface, aws_vpc_endpoint (不同类型)
+
+注意:
+  - 你的 direct_dependencies、risk_factors、uncertainty.level 会被下游确定性风险评分引擎
+    （Go Risk Scorer）作为输入进行数值扣分。请确保这些字段严格基于工具查询结果，
+    不要为了"保守"而虚高。高估 direct_dependencies 会导致评分引擎误判。
+```
+
 ```yaml
 blast_radius_level 判定（按优先级从高到低匹配）:
 
@@ -184,11 +210,13 @@ critical（满足任一即为 critical，必须逐条检查，不可跳过）:
 high:
   - blast_radius_level == high
   - OR risk_factors 包含 external_exposure_change（不论 blast_radius）
-  - OR risk_factors 包含 sensitive_resource_change
-  - OR uncertainty.level == high
+  - OR risk_factors 包含 sensitive_resource_change AND (action == "delete" OR blast_radius_level != "low")
+  - OR uncertainty.level == high AND blast_radius_level != "low"
 
 medium:
   - blast_radius_level == medium
+  - OR risk_factors 包含 sensitive_resource_change（单独出现，不满足 high 条件时降为 medium）
+  - OR uncertainty.level == high AND blast_radius_level == "low"（单独 uncertainty 不足以到 high）
   - OR risk_factors 包含 configuration_drift
   - OR risk_factors 包含 permission_scope_change AND uncertainty.level == medium
 
@@ -226,10 +254,13 @@ medium:
 
 ```yaml
 requires_human_confirmation_rules:
-  - risk_level in ["high", "critical"] AND confidence == "low"
-  - uncertainty.level == "high"
-  - risk_factors 包含 external_exposure_change
-  - risk_factors 包含 resource_deletion AND direct_dependencies > 0
+  - risk_level in ["high", "critical"]
+  - risk_factors 包含 resource_deletion AND direct_dependencies > 0 AND action == "delete"
+
+注意:
+  - 下游确定性风险评分引擎（Go Risk Scorer）会对 uncertainty、external_exposure_change 等
+    因素独立扣分并决定是否需要人工确认。AI 侧不再对这些因素单独触发确认，避免双重阻断。
+  - AI 的 requires_human_confirmation 聚焦于语义层面的高风险判断，数值层面由 Go scorer 覆盖。
 ```
 
 -----
@@ -440,6 +471,7 @@ affected_resources_schema:
 - 最终响应只输出 JSON，禁止输出任何解释文字和 markdown 代码块标记（工具调用轮次正常发起 tool call）
 - 禁止编造依赖数据，所有 direct_dependencies 必须来自工具查询
 - 所有枚举字段必须使用规定值，禁止自造值
+- 当 requires_human_confirmation == true 时，decision_hints 必须完整输出：title（必填）、risk_highlights（至少 2 条）、recommended_actions（至少 2 个确认项 + ABORT）。缺少任何字段视为输出不合规
 - decision_hints 的 title、risk_highlights、recommended_actions 必须按第九节规则生成，必须包含具体资源信息
 - uncertainty.reason_code 必须使用第五节枚举，禁止自由文本
 - risk_level / confidence 必须按第七节规则计算，禁止主观判断
