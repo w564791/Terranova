@@ -568,23 +568,26 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 			// When Go scorer upgrades risk level but AI didn't generate decision actions,
 			// provide default confirmation options so the UI isn't stuck
 			if summary.RequiresConfirmation && len(summary.DecisionActions) == 0 {
-				if summary.DecisionTitle == "" {
-					summary.DecisionTitle = fmt.Sprintf("Risk Score: %.1f/100 (%s)", scoreResult.FinalScore, summary.RiskLevel)
+				summary.DecisionTitle = fmt.Sprintf(
+					"Deterministic Risk Assessment: %.1f/100 (%s) — AI assessed %s, upgraded by Go scorer",
+					scoreResult.FinalScore, summary.RiskLevel, aiLevel)
+
+				// Build risk highlights: explain the upgrade + show top deductions
+				highlights := []string{
+					fmt.Sprintf("AI assessed this change as \"%s\", but the deterministic risk scorer calculated a score of %.1f/100 (%s)", aiLevel, scoreResult.FinalScore, goLevel),
+					fmt.Sprintf("The effective risk level is \"%s\" (max of AI and Go assessments)", summary.RiskLevel),
 				}
-				// Build risk highlights from deductions
-				var highlights []string
 				for _, d := range scoreResult.Deductions {
-					highlights = append(highlights, fmt.Sprintf("[%s] %s (%d)", d.Category, d.Item, d.Points))
+					highlights = append(highlights, fmt.Sprintf("%s: %s (%d pts)", d.Category, d.Item, d.Points))
 				}
-				if len(highlights) > 0 {
-					summary.RiskHighlights, _ = json.Marshal(highlights)
-				}
+				summary.RiskHighlights, _ = json.Marshal(highlights)
+
 				// Default decision actions
 				defaultActions := []struct {
 					Code  string `json:"code"`
 					Label string `json:"label"`
 				}{
-					{Code: "ACCEPT_RISK", Label: "I have reviewed the risk score and accept the risk"},
+					{Code: "ACCEPT_RISK", Label: "I have reviewed the deterministic risk assessment and accept the risk"},
 				}
 				summary.DecisionActions, _ = json.Marshal(defaultActions)
 				log.Printf("[RiskScorer] generated default decision actions for task %d (Go upgraded to %s, AI was %s)",
