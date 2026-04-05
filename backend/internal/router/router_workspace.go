@@ -251,6 +251,13 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			}),
 			summaryController.ConfirmPlanSummary,
 		)
+		workspaces.POST("/:id/tasks/:task_id/plan-summary/bypass",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+			}),
+			summaryController.BypassAIIncomplete,
+		)
 
 		workspaces.GET("/:id/tasks/:task_id/state-backup",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{

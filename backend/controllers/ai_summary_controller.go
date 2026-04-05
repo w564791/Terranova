@@ -332,3 +332,85 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "决策已提交"})
 }
+
+// BypassAIIncomplete allows system admin to bypass AI analysis incomplete block
+func (c *AISummaryController) BypassAIIncomplete(ctx *gin.Context) {
+	workspaceID := ctx.Param("id")
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+
+	// Only system admin can bypass
+	isAdmin, _ := ctx.Get("is_system_admin")
+	isAdminBool, _ := isAdmin.(bool)
+	if !isAdminBool {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "only system admin can bypass AI analysis incomplete"})
+		return
+	}
+
+	var req struct {
+		BypassReason string `json:"bypass_reason" binding:"required"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "bypass_reason is required"})
+		return
+	}
+
+	// Get plan summary + validate
+	summary := c.service.GetPlanSummary(uint(taskID))
+	if summary == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "plan summary not found"})
+		return
+	}
+	if summary.WorkspaceID != workspaceID {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
+		return
+	}
+	if !summary.AIAnalysisIncomplete {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "AI analysis is not incomplete"})
+		return
+	}
+	if summary.BypassedBy != nil {
+		ctx.JSON(http.StatusConflict, gin.H{"error": "already bypassed"})
+		return
+	}
+
+	// Update bypass fields
+	username, _ := ctx.Get("username")
+	usernameStr := "unknown"
+	if u, ok := username.(string); ok && u != "" {
+		usernameStr = u
+	}
+
+	now := time.Now()
+	c.db.Model(&models.AIPlanSummary{}).Where("id = ?", summary.ID).Updates(map[string]interface{}{
+		"bypassed_by":   usernameStr,
+		"bypassed_at":   now,
+		"bypass_reason": req.BypassReason,
+	})
+
+	// Write audit log
+	userID, _ := ctx.Get("user_id")
+	userIDStr, _ := userID.(string)
+	var userIDUint *uint
+	if uid, err := strconv.ParseUint(userIDStr, 10, 64); err == nil {
+		uidVal := uint(uid)
+		userIDUint = &uidVal
+	}
+	taskIDUint := uint(taskID)
+	c.db.Create(&models.AuditLog{
+		UserID:       userIDUint,
+		Action:       "bypass_ai_incomplete",
+		ResourceType: "plan_summary",
+		ResourceID:   &taskIDUint,
+		NewValues:    fmt.Sprintf(`{"bypass_reason":"%s","bypassed_by":"%s","task_id":%d,"summary_id":"%s"}`, req.BypassReason, usernameStr, taskID, summary.ID),
+		IPAddress:    ctx.ClientIP(),
+		UserAgent:    ctx.GetHeader("User-Agent"),
+	})
+
+	// Reload and return updated summary
+	updated := c.service.GetPlanSummary(uint(taskID))
+	ctx.JSON(http.StatusOK, updated)
+}
