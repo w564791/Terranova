@@ -1755,11 +1755,15 @@ func (s *TerraformExecutor) saveTaskCancellation(
 		task.ApplyOutput = fullOutput
 
 		// Apply 取消时，解锁 workspace（对齐 saveTaskFailure）
-		logger.Info("Unlocking workspace after apply cancellation...")
-		if unlockErr := s.dataAccessor.UnlockWorkspace(task.WorkspaceID); unlockErr != nil {
-			logger.Warn("Failed to unlock workspace: %v", unlockErr)
+		if s.stateBackendURL != "" {
+			logger.Info("HTTP backend mode: skipping unlock (Terraform manages locks)")
 		} else {
-			logger.Info("✓ Workspace unlocked")
+			logger.Info("Unlocking workspace after apply cancellation...")
+			if unlockErr := s.dataAccessor.UnlockWorkspace(task.WorkspaceID); unlockErr != nil {
+				logger.Warn("Failed to unlock workspace: %v", unlockErr)
+			} else {
+				logger.Info("✓ Workspace unlocked")
+			}
 		}
 
 		// Apply 取消时，尝试保存 partial state（terraform 可能已创建部分资源）
@@ -1866,11 +1870,15 @@ func (s *TerraformExecutor) saveTaskFailure(
 		task.ApplyOutput = fullOutput
 
 		// Apply失败时，解锁workspace（如果之前被锁定）
-		logger.Info("Unlocking workspace after apply failure...")
-		if unlockErr := s.dataAccessor.UnlockWorkspace(task.WorkspaceID); unlockErr != nil {
-			logger.Warn("Failed to unlock workspace: %v", unlockErr)
+		if s.stateBackendURL != "" {
+			logger.Info("HTTP backend mode: skipping unlock (Terraform manages locks)")
 		} else {
-			logger.Info("✓ Workspace unlocked")
+			logger.Info("Unlocking workspace after apply failure...")
+			if unlockErr := s.dataAccessor.UnlockWorkspace(task.WorkspaceID); unlockErr != nil {
+				logger.Warn("Failed to unlock workspace: %v", unlockErr)
+			} else {
+				logger.Info("✓ Workspace unlocked")
+			}
 		}
 
 		// Apply失败时，尝试保存 partial state（terraform 可能已创建部分资源）
@@ -2818,11 +2826,15 @@ func (s *TerraformExecutor) ExecuteApply(
 	}
 
 	// Apply成功完成后，解锁workspace
-	logger.Info("Unlocking workspace after successful apply...")
-	if err := s.dataAccessor.UnlockWorkspace(workspace.WorkspaceID); err != nil {
-		logger.Warn("Failed to unlock workspace: %v", err)
+	if s.stateBackendURL != "" {
+		logger.Info("HTTP backend mode: skipping unlock (Terraform manages locks)")
 	} else {
-		logger.Info("✓ Workspace unlocked successfully")
+		logger.Info("Unlocking workspace after successful apply...")
+		if err := s.dataAccessor.UnlockWorkspace(workspace.WorkspaceID); err != nil {
+			logger.Warn("Failed to unlock workspace: %v", err)
+		} else {
+			logger.Info("✓ Workspace unlocked successfully")
+		}
 	}
 
 	// 清理工作目录（Apply完成后不再需要）
@@ -2987,14 +2999,18 @@ func (s *TerraformExecutor) SaveNewStateVersion(
 	log.Printf("CRITICAL: Failed to save state after %d retries", maxRetries)
 
 	// 4.1 自动锁定workspace
-	lockErr := s.lockWorkspace(
-		workspace.WorkspaceID, // 保持使用内部数字ID
-		*task.CreatedBy,
-		fmt.Sprintf("Auto-locked: State save failed for task %d. State backed up to %s",
-			task.ID, backupPath),
-	)
-	if lockErr != nil {
-		log.Printf("ERROR: Failed to auto-lock workspace: %v", lockErr)
+	if s.stateBackendURL != "" {
+		log.Printf("WARNING: HTTP backend mode: skipping auto-lock (workspace protected by failed task state)")
+	} else {
+		lockErr := s.lockWorkspace(
+			workspace.WorkspaceID, // 保持使用内部数字ID
+			*task.CreatedBy,
+			fmt.Sprintf("Auto-locked: State save failed for task %d. State backed up to %s",
+				task.ID, backupPath),
+		)
+		if lockErr != nil {
+			log.Printf("ERROR: Failed to auto-lock workspace: %v", lockErr)
+		}
 	}
 
 	// 4.2 更新任务状态为部分成功
@@ -3101,16 +3117,20 @@ func (s *TerraformExecutor) fallbackSaveFromErroredState(
 	// All retries failed - auto-lock workspace and set partial_success
 	logError("CRITICAL: Failed to save fallback state after %d retries", maxRetries)
 
-	lockErr := s.lockWorkspace(
-		workspace.WorkspaceID,
-		*task.CreatedBy,
-		fmt.Sprintf("Auto-locked: Fallback state save failed for task %d. State backed up to %s",
-			task.ID, backupPath),
-	)
-	if lockErr != nil {
-		logError("Failed to auto-lock workspace: %v", lockErr)
+	if s.stateBackendURL != "" {
+		logWarn("HTTP backend mode: skipping auto-lock (workspace protected by failed task state)")
 	} else {
-		logInfo("Workspace auto-locked for safety")
+		lockErr := s.lockWorkspace(
+			workspace.WorkspaceID,
+			*task.CreatedBy,
+			fmt.Sprintf("Auto-locked: Fallback state save failed for task %d. State backed up to %s",
+				task.ID, backupPath),
+		)
+		if lockErr != nil {
+			logError("Failed to auto-lock workspace: %v", lockErr)
+		} else {
+			logInfo("Workspace auto-locked for safety")
+		}
 	}
 
 	task.Status = "partial_success"
@@ -4448,16 +4468,20 @@ func (s *TerraformExecutor) SaveNewStateVersionWithLogging(
 	logger.Error("State backed up to: %s", backupPath)
 
 	// 自动锁定workspace
-	lockErr := s.lockWorkspace(
-		workspace.WorkspaceID, // 保持使用内部数字ID
-		*task.CreatedBy,
-		fmt.Sprintf("Auto-locked: State save failed for task %d. State backed up to %s",
-			task.ID, backupPath),
-	)
-	if lockErr != nil {
-		logger.Error("Failed to auto-lock workspace: %v", lockErr)
+	if s.stateBackendURL != "" {
+		logger.Warn("HTTP backend mode: skipping auto-lock (workspace protected by failed task state)")
 	} else {
-		logger.Info("Workspace auto-locked for safety")
+		lockErr := s.lockWorkspace(
+			workspace.WorkspaceID, // 保持使用内部数字ID
+			*task.CreatedBy,
+			fmt.Sprintf("Auto-locked: State save failed for task %d. State backed up to %s",
+				task.ID, backupPath),
+		)
+		if lockErr != nil {
+			logger.Error("Failed to auto-lock workspace: %v", lockErr)
+		} else {
+			logger.Info("Workspace auto-locked for safety")
+		}
 	}
 
 	return fmt.Errorf("state save failed, workspace locked, backup at: %s", backupPath)

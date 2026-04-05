@@ -25,11 +25,16 @@ export interface Workspace {
   lock_id?: string;
   lock_info?: {
     ID?: string;
-    operation?: string;
+    operation?: string;   // UI lock: "ui_lock", "state_upload"
+    Operation?: string;   // Terraform lock: "OperationTypePlan", "OperationTypeApply"
     who?: string;
+    Who?: string;         // Terraform lock: "user@hostname"
     who_display?: string;
     info?: string;
+    Info?: string;        // Terraform lock info
     created?: string;
+    Created?: string;     // Terraform lock: RFC3339 timestamp
+    Version?: string;     // Terraform version
   };
   ui_mode?: 'console' | 'structured';
   show_unchanged_resources?: boolean;

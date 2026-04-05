@@ -593,8 +593,10 @@ const WorkspaceDetail: React.FC = () => {
               <h1 className={styles.globalTitle}>{workspace.name}</h1>
               <div className={styles.globalMeta}>
                 <span className={styles.metaItem}>ID: {workspace.workspace_id}</span>
-                <span className={styles.metaItem}>
-                  {workspace.lock_id ? 'Locked' : 'Unlocked'}
+                <span className={styles.metaItem} title={workspace.lock_info ? `${workspace.lock_info.who_display || workspace.lock_info.who || 'unknown'} - ${workspace.lock_info.info || workspace.lock_info.Operation || ''}` : ''}>
+                  {workspace.lock_id
+                    ? `Locked${workspace.lock_info?.Operation ? ' (Terraform)' : workspace.lock_info?.operation === 'ui_lock' ? ' (Manual)' : ''}`
+                    : 'Unlocked'}
                 </span>
                 <span className={styles.metaItem}>
                   Resources {currentStateResourcesCount}

@@ -282,13 +282,8 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 				"error_message": "用户在风险决策阶段选择终止变更",
 				"completed_at":  now,
 			})
-		// 解锁 workspace
-		c.db.Model(&models.Workspace{}).
-			Where("workspace_id = ? AND lock_id IS NOT NULL", task.WorkspaceID).
-			Updates(map[string]interface{}{
-				"lock_id":   nil,
-				"lock_info": nil,
-			})
+		// Note: workspace unlock is handled by executor's saveTaskCancellation flow.
+		// Doing it here is redundant and dangerous in HTTP backend mode.
 	} else {
 		c.db.Model(&models.WorkspaceTask{}).
 			Where("id = ? AND status = ?", taskID, string(models.TaskStatusDecisionRequired)).
