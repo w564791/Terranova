@@ -580,17 +580,28 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 			summary.RiskLevel = maxSeverity(aiLevel, goLevel)
 			summary.RequiresConfirmation = summary.RiskLevel == "high" || summary.RiskLevel == "critical"
 
-			// When Go scorer upgrades risk level but AI didn't generate decision actions,
+			// When requires_confirmation but AI didn't generate decision actions,
 			// provide default confirmation options so the UI isn't stuck
 			if summary.RequiresConfirmation && len(summary.DecisionActions) == 0 {
-				summary.DecisionTitle = fmt.Sprintf(
-					"Deterministic Risk Assessment: %.1f/100 (%s) — AI assessed %s, upgraded by Go scorer",
-					scoreResult.FinalScore, summary.RiskLevel, aiLevel)
+				goUpgraded := severityGap(goLevel, aiLevel) > 0 && goLevel == summary.RiskLevel && aiLevel != goLevel
+				if goUpgraded {
+					// Go scorer upgraded AI's assessment
+					summary.DecisionTitle = fmt.Sprintf(
+						"Deterministic Risk Assessment: %.1f/100 (%s) — AI assessed %s, upgraded by Go scorer",
+						scoreResult.FinalScore, summary.RiskLevel, aiLevel)
+				} else {
+					// AI itself assessed high/critical but didn't provide decision actions
+					summary.DecisionTitle = fmt.Sprintf(
+						"Risk Assessment: %s (score: %.1f/100)",
+						summary.RiskLevel, scoreResult.FinalScore)
+				}
 
-				// Build risk highlights: explain the upgrade + show top deductions
-				highlights := []string{
-					fmt.Sprintf("AI assessed this change as \"%s\", but the deterministic risk scorer calculated a score of %.1f/100 (%s)", aiLevel, scoreResult.FinalScore, goLevel),
-					fmt.Sprintf("The effective risk level is \"%s\" (max of AI and Go assessments)", summary.RiskLevel),
+				var highlights []string
+				if goUpgraded {
+					highlights = append(highlights,
+						fmt.Sprintf("AI assessed this change as \"%s\", but the deterministic risk scorer calculated a score of %.1f/100 (%s)", aiLevel, scoreResult.FinalScore, goLevel),
+						fmt.Sprintf("The effective risk level is \"%s\" (max of AI and Go assessments)", summary.RiskLevel),
+					)
 				}
 				for _, d := range scoreResult.Deductions {
 					highlights = append(highlights, fmt.Sprintf("%s: %s (%d pts)", d.Category, d.Item, d.Points))
