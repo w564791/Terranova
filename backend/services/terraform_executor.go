@@ -3463,6 +3463,28 @@ func (s *TerraformExecutor) parsePlanChanges(planJSON map[string]interface{}) (i
 		}
 	}
 
+	// Drift check (-refresh-only): changes are in resource_drift, not resource_changes
+	if resourceDrift, ok := planJSON["resource_drift"].([]interface{}); ok {
+		for _, rd := range resourceDrift {
+			if driftMap, ok := rd.(map[string]interface{}); ok {
+				if changeDetail, ok := driftMap["change"].(map[string]interface{}); ok {
+					if actions, ok := changeDetail["actions"].([]interface{}); ok {
+						for _, action := range actions {
+							switch action.(string) {
+							case "create":
+								add++
+							case "update":
+								change++
+							case "delete":
+								destroy++
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return add, change, destroy
 }
 

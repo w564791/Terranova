@@ -67,6 +67,10 @@ Terraform HTTP State Backend -- 将 Terraform state 管理从本地文件模式�
 - **删除** `workspace_task_controller.go.bak` 备份文件
 - **标记废弃** UpsertTempState/PromoteTempState/CleanupOrphanedTempStates（temp state 机制在 HTTP backend 下冗余）
 
+### Bug Fixes
+
+- **修复** Drift check 漂移检测无结果：`parsePlanChanges` 只解析 `resource_changes`，未解析 `-refresh-only` 模式下的 `resource_drift` 字段，导致外部变更（如手动修改 S3 tag）检测不到
+
 ### Database Migration
 
 - `backend/migrations/add_http_state_backend.sql`
