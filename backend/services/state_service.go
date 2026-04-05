@@ -93,7 +93,7 @@ func (s *StateService) UploadState(
 			}
 		} else {
 			// 强制上传：更新锁定原因
-			s.updateLockReason(workspaceID,
+			s.updateLockInfo(workspaceID,
 				"Locked after force upload. Please verify state before unlocking.")
 		}
 	}()
@@ -445,20 +445,37 @@ func (s *StateService) lockWorkspace(workspaceID, userID, reason string) error {
 		return fmt.Errorf("workspace not found: %w", err)
 	}
 
-	if workspace.IsLocked {
-		return fmt.Errorf("workspace is already locked by %s: %s",
-			*workspace.LockedBy, workspace.LockReason)
+	if workspace.LockID != nil {
+		who := "unknown"
+		if workspace.LockInfo != nil {
+			if w, ok := workspace.LockInfo["who"].(string); ok {
+				who = w
+			}
+		}
+		info := ""
+		if workspace.LockInfo != nil {
+			if i, ok := workspace.LockInfo["info"].(string); ok {
+				info = i
+			}
+		}
+		return fmt.Errorf("workspace is already locked by %s: %s", who, info)
 	}
 
 	// 锁定
-	now := time.Now()
+	lockID := fmt.Sprintf("%d", time.Now().UnixNano())
+	lockInfo := models.JSONB{
+		"ID":          lockID,
+		"operation":   "state_upload",
+		"who":         userID,
+		"who_display": userID,
+		"info":        reason,
+		"created":     time.Now().Format(time.RFC3339),
+	}
 	return s.db.Model(&models.Workspace{}).
 		Where("workspace_id = ?", workspaceID).
 		Updates(map[string]interface{}{
-			"is_locked":   true,
-			"locked_by":   userID,
-			"locked_at":   now,
-			"lock_reason": reason,
+			"lock_id":   lockID,
+			"lock_info": lockInfo,
 		}).Error
 }
 
@@ -467,18 +484,25 @@ func (s *StateService) unlockWorkspace(workspaceID string) error {
 	return s.db.Model(&models.Workspace{}).
 		Where("workspace_id = ?", workspaceID).
 		Updates(map[string]interface{}{
-			"is_locked":   false,
-			"locked_by":   nil,
-			"locked_at":   nil,
-			"lock_reason": "",
+			"lock_id":   nil,
+			"lock_info": nil,
 		}).Error
 }
 
-// updateLockReason 更新锁定原因
-func (s *StateService) updateLockReason(workspaceID, reason string) error {
-	return s.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
-		Update("lock_reason", reason).Error
+// updateLockInfo 更新锁定信息
+func (s *StateService) updateLockInfo(workspaceID, reason string) error {
+	// Read current lock_info, update the info field
+	var workspace models.Workspace
+	if err := s.db.Where("workspace_id = ?", workspaceID).First(&workspace).Error; err != nil {
+		return err
+	}
+	if workspace.LockInfo != nil {
+		workspace.LockInfo["info"] = reason
+		return s.db.Model(&models.Workspace{}).
+			Where("workspace_id = ?", workspaceID).
+			Update("lock_info", workspace.LockInfo).Error
+	}
+	return nil
 }
 
 // logAudit 记录审计日志

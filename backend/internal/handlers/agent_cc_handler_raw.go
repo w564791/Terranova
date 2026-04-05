@@ -1064,7 +1064,7 @@ func (h *RawAgentCCHandler) cleanupAgentTasks(agentID string) {
 		task.ErrorMessage = fmt.Sprintf("Agent %s disconnected unexpectedly", agentID)
 		task.CompletedAt = timePtr(time.Now())
 
-		if err := h.db.Save(&task).Error; err != nil {
+		if err := h.db.Omit("state_token_hash").Save(&task).Error; err != nil {
 			log.Printf("[Raw] Failed to update task %d: %v", task.ID, err)
 			continue
 		}

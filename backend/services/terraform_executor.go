@@ -35,6 +35,8 @@ type TerraformExecutor struct {
 	cachedBinaryVersion string               // 缓存的版本号
 	runTaskExecutor     *RunTaskExecutor     // Run Task 执行器
 	notificationSender  *NotificationSender  // 通知发送器
+	stateBackendURL     string               // HTTP state backend base URL
+	stateToken          string               // JWT token for current task
 }
 
 // NewTerraformExecutor 创建Terraform执行器（向后兼容）
@@ -52,6 +54,18 @@ func NewTerraformExecutor(db *gorm.DB, streamManager *OutputStreamManager) *Terr
 		runTaskExecutor:    nil,                        // 延迟初始化，需要 baseURL
 		notificationSender: NewNotificationSender(db, baseURL),
 	}
+}
+
+// ForTask creates a shallow copy of the executor with per-task mutable state (stateBackendURL, stateToken).
+// Shared immutable fields (db, downloader, streamManager, etc.) are reused safely.
+// This prevents concurrent goroutines from overwriting each other's state backend config.
+func (s *TerraformExecutor) ForTask() *TerraformExecutor {
+	clone := *s
+	clone.stateBackendURL = ""
+	clone.stateToken = ""
+	clone.cachedBinaryPath = ""
+	clone.cachedBinaryVersion = ""
+	return &clone
 }
 
 // SetRunTaskExecutor 设置 Run Task 执行器
@@ -105,13 +119,25 @@ func NewTerraformExecutorWithAccessor(accessor DataAccessor, streamManager *Outp
 		downloader = NewTerraformDownloaderForAgent(remoteAccessor)
 	}
 
-	return &TerraformExecutor{
+	executor := &TerraformExecutor{
 		db:            nil, // Agent 模式下不需要直接访问数据库
 		dataAccessor:  accessor,
 		streamManager: streamManager,
 		signalManager: GetSignalManager(),
 		downloader:    downloader, // Agent 模式下也使用下载器
 	}
+
+	// Agent mode: set state backend URL and token from task data
+	if remoteAccessor, ok := accessor.(*RemoteDataAccessor); ok {
+		url, token := remoteAccessor.GetStateBackendConfig()
+		if url != "" && token != "" {
+			executor.stateBackendURL = url
+			executor.stateToken = token
+			log.Printf("[Agent] HTTP state backend configured: %s", url)
+		}
+	}
+
+	return executor
 }
 
 // ============================================================================
@@ -183,6 +209,13 @@ func (s *TerraformExecutor) GenerateConfigFiles(
 	workspace *models.Workspace,
 	workDir string,
 ) error {
+	// 0. Generate backend.tf.json (HTTP state backend)
+	if s.stateBackendURL != "" {
+		if err := s.generateBackendTFJSON(workDir); err != nil {
+			return fmt.Errorf("failed to write backend.tf.json: %w", err)
+		}
+	}
+
 	// 1. 生成 main.tf.json
 	// 优先从资源聚合生成，如果没有资源则使用workspace.TFCode
 	mainTF, err := s.generateMainTF(workspace)
@@ -474,6 +507,12 @@ func (s *TerraformExecutor) PrepareStateFile(
 	workspace *models.Workspace,
 	workDir string,
 ) error {
+	// HTTP backend mode: Terraform handles state via HTTP, no local file needed
+	if s.stateBackendURL != "" {
+		log.Printf("HTTP backend mode: skipping PrepareStateFile for workspace %s", workspace.WorkspaceID)
+		return nil
+	}
+
 	// 获取最新的State版本
 	var stateVersion models.WorkspaceStateVersion
 	err := s.db.Where("workspace_id = ?", workspace.WorkspaceID).
@@ -627,6 +666,37 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 					env = append(env, fmt.Sprintf("AWS_REGION=%s", region))
 					log.Printf("DEBUG: Added AWS region from provider config: %s", region)
 				}
+			}
+		}
+	}
+
+	// HTTP State Backend environment variables
+	if s.stateBackendURL != "" && s.stateToken != "" {
+		env = append(env,
+			fmt.Sprintf("TF_HTTP_ADDRESS=%s", s.stateBackendURL),
+			fmt.Sprintf("TF_HTTP_LOCK_ADDRESS=%s/lock", s.stateBackendURL),
+			fmt.Sprintf("TF_HTTP_UNLOCK_ADDRESS=%s/unlock", s.stateBackendURL),
+			"TF_HTTP_LOCK_METHOD=POST",
+			"TF_HTTP_UNLOCK_METHOD=POST",
+			"TF_HTTP_USERNAME=terranova",
+			fmt.Sprintf("TF_HTTP_PASSWORD=%s", s.stateToken),
+			"TF_HTTP_RETRY_MAX=3",
+			"TF_HTTP_RETRY_WAIT_MIN=1",
+			"TF_HTTP_RETRY_WAIT_MAX=30",
+		)
+
+		// CA cert injection for self-signed certs (Agent/K8s mode)
+		// TF_HTTP_CLIENT_CA_CERTIFICATE_PEM accepts PEM content directly, not a file path
+		if caCert := os.Getenv("_TERRANOVA_CA_CERT"); caCert != "" {
+			hasCACert := false
+			for _, v := range envVars {
+				if strings.HasPrefix(v.Key, "TF_HTTP_CLIENT_CA_CERTIFICATE_PEM") {
+					hasCACert = true
+					break
+				}
+			}
+			if !hasCACert {
+				env = append(env, fmt.Sprintf("TF_HTTP_CLIENT_CA_CERTIFICATE_PEM=%s", caCert))
 			}
 		}
 	}
@@ -972,6 +1042,12 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	planFile := filepath.Join(workDir, "plan.out")
 	args := []string{"plan", "-out=" + planFile, "-no-color", "-var-file=variables.tfvars"}
+
+	// HTTP backend mode: plan doesn't modify state, skip locking to avoid
+	// blocking concurrent plans or conflicting with apply locks
+	if s.stateBackendURL != "" {
+		args = append(args, "-lock=false")
+	}
 
 	// Drift Check 任务：添加 --refresh-only 参数
 	if task.TaskType == models.TaskTypeDriftCheck {
@@ -1330,19 +1406,25 @@ func (s *TerraformExecutor) ExecutePlan(
 			logger.Info("Plan completed with changes, status changed to apply_pending")
 
 			// 自动锁定workspace，防止在Plan-Apply期间修改配置
-			logger.Info("Locking workspace to prevent configuration changes during plan-apply gap...")
-			lockReason := fmt.Sprintf("Locked for apply (task #%d). Do not modify resources/variables until apply completes.", task.ID)
-			if err := s.lockWorkspace(workspace.WorkspaceID, "system", lockReason); err != nil {
-				logger.Error("Failed to lock workspace: %v", err)
-				// 清理已保存的 PlanData/PlanJSON，避免 failed 任务残留无用数据
-				if s.db != nil {
-					s.db.Model(&models.WorkspaceTask{}).Where("id = ?", task.ID).
-						Updates(map[string]interface{}{"plan_data": nil, "plan_json": nil})
+			// HTTP backend 模式下跳过：lock_id 字段与 Terraform 的 HTTP LOCK 共享，
+			// executor 的 UI 锁会阻止 apply 阶段的 Terraform LOCK 操作。
+			if s.stateBackendURL != "" {
+				logger.Info("HTTP backend mode: skipping workspace auto-lock (Terraform manages locks via HTTP)")
+			} else {
+				logger.Info("Locking workspace to prevent configuration changes during plan-apply gap...")
+				lockReason := fmt.Sprintf("Locked for apply (task #%d). Do not modify resources/variables until apply completes.", task.ID)
+				if err := s.lockWorkspace(workspace.WorkspaceID, "system", lockReason); err != nil {
+					logger.Error("Failed to lock workspace: %v", err)
+					// 清理已保存的 PlanData/PlanJSON，避免 failed 任务残留无用数据
+					if s.db != nil {
+						s.db.Model(&models.WorkspaceTask{}).Where("id = ?", task.ID).
+							Updates(map[string]interface{}{"plan_data": nil, "plan_json": nil})
+					}
+					s.saveTaskFailure(task, logger, fmt.Errorf("failed to lock workspace: %w", err), "plan")
+					return fmt.Errorf("failed to lock workspace after plan: %w", err)
 				}
-				s.saveTaskFailure(task, logger, fmt.Errorf("failed to lock workspace: %w", err), "plan")
-				return fmt.Errorf("failed to lock workspace after plan: %w", err)
+				logger.Info("Workspace locked successfully")
 			}
-			logger.Info("✓ Workspace locked successfully")
 
 			// 保留工作目录给Apply使用
 			logger.Info("Preserving work directory for apply: %s", workDir)
@@ -1514,7 +1596,7 @@ func (s *TerraformExecutor) SavePlanData(
 		task.PlanData = planData
 		task.PlanJSON = planJSON
 
-		saveErr = s.db.Save(task).Error
+		saveErr = s.db.Omit("state_token_hash").Save(task).Error
 		if saveErr == nil {
 			log.Printf("Plan data saved successfully")
 			return
@@ -1684,16 +1766,26 @@ func (s *TerraformExecutor) saveTaskCancellation(
 		// 如果 state 已由 watcher promote，跳过此步骤
 		skipPartialState := len(stateAlreadySaved) > 0 && stateAlreadySaved[0]
 		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
-		if !skipPartialState && s.db != nil {
-			stateFile := filepath.Join(workDir, "terraform.tfstate")
-			if _, statErr := os.Stat(stateFile); statErr == nil {
-				logger.Info("Attempting to save partial state after apply cancellation...")
-				var workspace models.Workspace
-				if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr == nil {
-					if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
-						logger.Warn("Failed to save partial state: %v", saveErr)
-					} else {
-						logger.Info("✓ Partial state saved to database")
+		if !skipPartialState {
+			if s.stateBackendURL != "" {
+				// HTTP backend mode: partial state already saved via HTTP POST, just verify
+				latestState, dbErr := s.dataAccessor.GetLatestStateVersion(task.WorkspaceID)
+				if dbErr == nil && latestState != nil && latestState.TaskID != nil && *latestState.TaskID == task.ID {
+					logger.Info("HTTP backend mode: partial state confirmed in DB (version #%d)", latestState.Version)
+				} else {
+					logger.Warn("HTTP backend mode: no partial state found in DB for cancelled task %d", task.ID)
+				}
+			} else if s.db != nil {
+				stateFile := filepath.Join(workDir, "terraform.tfstate")
+				if _, statErr := os.Stat(stateFile); statErr == nil {
+					logger.Info("Attempting to save partial state after apply cancellation...")
+					var workspace models.Workspace
+					if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr == nil {
+						if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
+							logger.Warn("Failed to save partial state: %v", saveErr)
+						} else {
+							logger.Info("Partial state saved to database")
+						}
 					}
 				}
 			}
@@ -1785,25 +1877,46 @@ func (s *TerraformExecutor) saveTaskFailure(
 		// 如果 state 已由 watcher promote，跳过此步骤
 		skipPartialState := len(stateAlreadySaved) > 0 && stateAlreadySaved[0]
 		workDir := fmt.Sprintf("/tmp/iac-platform/workspaces/%s/%d", task.WorkspaceID, task.ID)
-		stateFile := filepath.Join(workDir, "terraform.tfstate")
-		_, statErr := os.Stat(stateFile)
-		if !skipPartialState && statErr == nil {
-			logger.Info("Attempting to save partial state after apply failure...")
-			var workspace models.Workspace
-			if s.db != nil {
-				// Local 模式：从数据库加载完整 workspace
-				if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr != nil {
-					logger.Warn("Failed to load workspace for partial state save: %v", dbErr)
+		if !skipPartialState {
+			if s.stateBackendURL != "" {
+				// HTTP backend mode: partial state already saved via HTTP POST, just verify
+				latestState, dbErr := s.dataAccessor.GetLatestStateVersion(task.WorkspaceID)
+				if dbErr == nil && latestState != nil && latestState.TaskID != nil && *latestState.TaskID == task.ID {
+					logger.Info("HTTP backend mode: partial state confirmed in DB (version #%d)", latestState.Version)
+				} else {
+					// Attempt fallback from errored.tfstate
+					logger.Warn("HTTP backend mode: no partial state found, attempting fallback...")
+					var workspace models.Workspace
+					workspace.WorkspaceID = task.WorkspaceID
+					if s.db != nil {
+						s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace)
+					}
+					if fbErr := s.fallbackSaveFromErroredState(&workspace, task, workDir, logger); fbErr != nil {
+						logger.Warn("Fallback state save failed: %v", fbErr)
+					}
 				}
 			} else {
-				// Agent 模式：构造最小 workspace（SaveStateToDatabase 在 Agent 模式下只需 WorkspaceID）
-				workspace.WorkspaceID = task.WorkspaceID
-			}
-			if workspace.WorkspaceID != "" {
-				if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
-					logger.Warn("Failed to save partial state: %v", saveErr)
-				} else {
-					logger.Info("✓ Partial state saved to database")
+				stateFile := filepath.Join(workDir, "terraform.tfstate")
+				_, statErr := os.Stat(stateFile)
+				if statErr == nil {
+					logger.Info("Attempting to save partial state after apply failure...")
+					var workspace models.Workspace
+					if s.db != nil {
+						// Local 模式：从数据库加载完整 workspace
+						if dbErr := s.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; dbErr != nil {
+							logger.Warn("Failed to load workspace for partial state save: %v", dbErr)
+						}
+					} else {
+						// Agent 模式：构造最小 workspace（SaveStateToDatabase 在 Agent 模式下只需 WorkspaceID）
+						workspace.WorkspaceID = task.WorkspaceID
+					}
+					if workspace.WorkspaceID != "" {
+						if saveErr := s.SaveNewStateVersion(&workspace, task, workDir); saveErr != nil {
+							logger.Warn("Failed to save partial state: %v", saveErr)
+						} else {
+							logger.Info("Partial state saved to database")
+						}
+					}
 				}
 			}
 		}
@@ -1936,6 +2049,19 @@ func (s *TerraformExecutor) writeJSONFile(workDir, filename string, data interfa
 
 	filePath := filepath.Join(workDir, filename)
 	return os.WriteFile(filePath, content, 0644)
+}
+
+// generateBackendTFJSON generates backend.tf.json declaring the HTTP backend.
+// All backend config is injected via TF_HTTP_* environment variables.
+func (s *TerraformExecutor) generateBackendTFJSON(workDir string) error {
+	backendConfig := map[string]interface{}{
+		"terraform": map[string]interface{}{
+			"backend": map[string]interface{}{
+				"http": map[string]interface{}{},
+			},
+		},
+	}
+	return s.writeJSONFile(workDir, "backend.tf.json", backendConfig)
 }
 
 // writeFile 写入文件
@@ -2358,12 +2484,17 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	// ========== 启动 State File Watcher ==========
 	var stateWatcher *StateFileWatcher
-	stateWatcher = NewStateFileWatcher(
-		workDir, workspace.WorkspaceID, task.ID, task.CreatedBy, s.dataAccessor,
-	)
-	if err := stateWatcher.Start(); err != nil {
-		logger.Warn("Failed to start state watcher, will use fallback: %v", err)
-		stateWatcher = nil
+	if s.stateBackendURL != "" {
+		// HTTP backend mode: Terraform POSTs state directly, watcher not needed
+		logger.Info("HTTP backend mode: skipping state file watcher (state managed via HTTP POST)")
+	} else {
+		stateWatcher = NewStateFileWatcher(
+			workDir, workspace.WorkspaceID, task.ID, task.CreatedBy, s.dataAccessor,
+		)
+		if err := stateWatcher.Start(); err != nil {
+			logger.Warn("Failed to start state watcher, will use fallback: %v", err)
+			stateWatcher = nil
+		}
 	}
 
 	// ========== 阶段4: Applying ==========
@@ -2632,32 +2763,24 @@ func (s *TerraformExecutor) ExecuteApply(
 		logger.Info("Extracting resource details from state...")
 		log.Printf("[DEBUG] Task %d: Starting resource ID extraction", task.ID)
 
-		// 读取并解析state文件以提取资源详情
-		stateFile := filepath.Join(workDir, "terraform.tfstate")
-		log.Printf("[DEBUG] Task %d: Reading state file: %s", task.ID, stateFile)
-
-		stateData, err := os.ReadFile(stateFile)
+		// 从数据库获取最新 state（兼容 HTTP backend 和 local 两种模式）
+		latestState, err := s.dataAccessor.GetLatestStateVersion(workspace.WorkspaceID)
 		if err != nil {
-			logger.Warn("Failed to read state file for resource details: %v", err)
-			log.Printf("[ERROR] Task %d: Failed to read state file: %v", task.ID, err)
+			logger.Warn("Failed to get latest state version for resource details: %v", err)
+			log.Printf("[ERROR] Task %d: Failed to get latest state version: %v", task.ID, err)
+		} else if latestState == nil {
+			logger.Warn("No state version found for resource details extraction")
 		} else {
-			log.Printf("[DEBUG] Task %d: State file read successfully, size: %d bytes", task.ID, len(stateData))
+			log.Printf("[DEBUG] Task %d: State version #%d loaded from DB", task.ID, latestState.Version)
 
-			var stateContent map[string]interface{}
-			if err := json.Unmarshal(stateData, &stateContent); err != nil {
-				logger.Warn("Failed to parse state for resource details: %v", err)
-				log.Printf("[ERROR] Task %d: Failed to parse state JSON: %v", task.ID, err)
+			stateContent := latestState.Content
+			applyParserService := NewApplyParserService(s.db, s.streamManager)
+			logger.Debug("Calling ExtractResourceDetailsFromState for task %d", task.ID)
+
+			if err := applyParserService.ExtractResourceDetailsFromState(task.ID, stateContent, logger); err != nil {
+				logger.Warn("Failed to extract resource details: %v", err)
 			} else {
-				log.Printf("[DEBUG] Task %d: State JSON parsed successfully", task.ID)
-
-				applyParserService := NewApplyParserService(s.db, s.streamManager)
-				logger.Debug("Calling ExtractResourceDetailsFromState for task %d", task.ID)
-
-				if err := applyParserService.ExtractResourceDetailsFromState(task.ID, stateContent, logger); err != nil {
-					logger.Warn("Failed to extract resource details: %v", err)
-				} else {
-					logger.Info("✓ Resource details extracted successfully")
-				}
+				logger.Info("Resource details extracted successfully")
 			}
 		}
 	} else {
@@ -2802,6 +2925,24 @@ func (s *TerraformExecutor) SaveNewStateVersion(
 	task *models.WorkspaceTask,
 	workDir string,
 ) error {
+	// HTTP backend mode: verify state was saved via HTTP POST, fallback if needed
+	if s.stateBackendURL != "" {
+		latestState, err := s.dataAccessor.GetLatestStateVersion(workspace.WorkspaceID)
+		if err == nil && latestState != nil && latestState.TaskID != nil && *latestState.TaskID == task.ID {
+			log.Printf("HTTP backend mode: state already saved via HTTP POST for task %d", task.ID)
+			return nil
+		}
+		// State version not tagged with this task ID -- normal when apply made zero changes
+		if err == nil && latestState != nil {
+			log.Printf("HTTP backend mode: state unchanged for task %d (latest version #%d belongs to another task) - no new version needed",
+				task.ID, latestState.Version)
+			return nil
+		}
+		// No state at all, or DB error - attempt fallback
+		log.Printf("HTTP backend mode: no state found for workspace %s, attempting fallback", workspace.WorkspaceID)
+		return s.fallbackSaveFromErroredState(workspace, task, workDir, nil)
+	}
+
 	stateFile := filepath.Join(workDir, "terraform.tfstate")
 
 	// 1. 读取State文件
@@ -2866,6 +3007,121 @@ func (s *TerraformExecutor) SaveNewStateVersion(
 	return fmt.Errorf("state save failed, workspace locked, backup at: %s", backupPath)
 }
 
+// fallbackSaveFromErroredState attempts to read errored.tfstate or terraform.tfstate from
+// the work directory, backs it up, and saves to DB with retries. If all retries fail,
+// auto-locks the workspace and sets task to partial_success.
+func (s *TerraformExecutor) fallbackSaveFromErroredState(
+	workspace *models.Workspace,
+	task *models.WorkspaceTask,
+	workDir string,
+	logger *TerraformLogger,
+) error {
+	logInfo := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if logger != nil {
+			logger.Info("%s", msg)
+		} else {
+			log.Printf("[fallbackSaveFromErroredState] %s", msg)
+		}
+	}
+	logWarn := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if logger != nil {
+			logger.Warn("%s", msg)
+		} else {
+			log.Printf("[fallbackSaveFromErroredState] WARNING: %s", msg)
+		}
+	}
+	logError := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if logger != nil {
+			logger.Error("%s", msg)
+		} else {
+			log.Printf("[fallbackSaveFromErroredState] ERROR: %s", msg)
+		}
+	}
+
+	// Try file candidates in order
+	candidates := []string{"errored.tfstate", "terraform.tfstate"}
+	var stateData []byte
+	var sourceFile string
+
+	for _, candidate := range candidates {
+		candidatePath := filepath.Join(workDir, candidate)
+		data, err := os.ReadFile(candidatePath)
+		if err != nil {
+			logInfo("Candidate %s not found or unreadable: %v", candidate, err)
+			continue
+		}
+		if len(data) == 0 {
+			logInfo("Candidate %s is empty, skipping", candidate)
+			continue
+		}
+		stateData = data
+		sourceFile = candidate
+		logInfo("Found fallback state file: %s (%.1f KB)", candidate, float64(len(data))/1024)
+		break
+	}
+
+	if stateData == nil {
+		return fmt.Errorf("no fallback state file found in %s", workDir)
+	}
+
+	// Back up to /var/backup/states/
+	backupDir := "/var/backup/states"
+	os.MkdirAll(backupDir, 0700)
+	backupPath := filepath.Join(backupDir,
+		fmt.Sprintf("ws_%s_task_%d_%s_%d.tfstate",
+			workspace.WorkspaceID, task.ID, sourceFile, time.Now().Unix()))
+
+	if err := os.WriteFile(backupPath, stateData, 0600); err != nil {
+		logWarn("Failed to backup fallback state to file: %v", err)
+	} else {
+		logInfo("Fallback state backed up to: %s", backupPath)
+	}
+
+	// Save to DB with retries (exponential backoff: 2s, 4s, 6s, 8s, 10s)
+	maxRetries := 5
+	var saveErr error
+
+	for i := 0; i < maxRetries; i++ {
+		saveErr = s.SaveStateToDatabase(workspace, task, stateData)
+		if saveErr == nil {
+			logInfo("Fallback state saved to database successfully (from %s)", sourceFile)
+			return nil
+		}
+
+		logWarn("Failed to save fallback state (attempt %d/%d): %v", i+1, maxRetries, saveErr)
+
+		if i < maxRetries-1 {
+			time.Sleep(time.Duration(i+1) * 2 * time.Second)
+		}
+	}
+
+	// All retries failed - auto-lock workspace and set partial_success
+	logError("CRITICAL: Failed to save fallback state after %d retries", maxRetries)
+
+	lockErr := s.lockWorkspace(
+		workspace.WorkspaceID,
+		*task.CreatedBy,
+		fmt.Sprintf("Auto-locked: Fallback state save failed for task %d. State backed up to %s",
+			task.ID, backupPath),
+	)
+	if lockErr != nil {
+		logError("Failed to auto-lock workspace: %v", lockErr)
+	} else {
+		logInfo("Workspace auto-locked for safety")
+	}
+
+	task.Status = "partial_success"
+	task.ErrorMessage = fmt.Sprintf(
+		"Apply succeeded but fallback state save failed. Workspace auto-locked. State backed up to: %s",
+		backupPath)
+	s.dataAccessor.UpdateTask(task)
+
+	return fmt.Errorf("fallback state save failed, workspace locked, backup at: %s", backupPath)
+}
+
 // SaveStateToDatabase 保存State到数据库（公开方法，供重试使用）
 func (s *TerraformExecutor) SaveStateToDatabase(
 	workspace *models.Workspace,
@@ -2887,29 +3143,13 @@ func (s *TerraformExecutor) SaveStateToDatabase(
 
 	newVersion := maxVersion + 1
 
-	// Agent 模式不支持事务，需要顺序执行
-	if s.db != nil {
-		// Local 模式：使用事务
-		return s.db.Transaction(func(tx *gorm.DB) error {
-			stateVersion := &models.WorkspaceStateVersion{
-				WorkspaceID: workspace.WorkspaceID,
-				Version:     newVersion,
-				Content:     stateContent,
-				Checksum:    checksum,
-				SizeBytes:   len(stateData),
-				TaskID:      &task.ID,
-				CreatedBy:   task.CreatedBy,
-			}
+	// Agent mode: state is now managed via HTTP state backend, no fallback needed here
+	// Local mode: save directly via DB transaction
+	if s.db == nil {
+		return fmt.Errorf("SaveStateToDatabase called without DB connection; in Agent mode, state should be saved via HTTP state backend")
+	}
 
-			if err := tx.Create(stateVersion).Error; err != nil {
-				return err
-			}
-
-			// 更新workspace的tf_state
-			return tx.Model(workspace).Update("tf_state", stateContent).Error
-		})
-	} else {
-		// Agent 模式：顺序执行（通过 DataAccessor）
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		stateVersion := &models.WorkspaceStateVersion{
 			WorkspaceID: workspace.WorkspaceID,
 			Version:     newVersion,
@@ -2920,14 +3160,13 @@ func (s *TerraformExecutor) SaveStateToDatabase(
 			CreatedBy:   task.CreatedBy,
 		}
 
-		// 创建新的 state version
-		if err := s.dataAccessor.SaveStateVersion(stateVersion); err != nil {
+		if err := tx.Create(stateVersion).Error; err != nil {
 			return err
 		}
 
-		// 更新 workspace 的 tf_state
-		return s.dataAccessor.UpdateWorkspaceState(workspace.WorkspaceID, stateContent)
-	}
+		// 更新workspace的tf_state
+		return tx.Model(workspace).Update("tf_state", stateContent).Error
+	})
 }
 
 // lockWorkspace 锁定workspace
@@ -2936,7 +3175,15 @@ func (s *TerraformExecutor) lockWorkspace(
 	userID string,
 	reason string,
 ) error {
-	return s.dataAccessor.LockWorkspace(workspaceID, userID, reason)
+	lockInfo := map[string]interface{}{
+		"ID":          fmt.Sprintf("%d", time.Now().UnixNano()),
+		"operation":   "terraform_run",
+		"who":         userID,
+		"who_display": userID,
+		"info":        reason,
+		"created":     time.Now().Format(time.RFC3339),
+	}
+	return s.dataAccessor.LockWorkspace(workspaceID, lockInfo)
 }
 
 // GetTaskLogs 获取任务日志
@@ -3112,7 +3359,7 @@ func getMapKeys(m map[string]string) []string {
 	return keys
 }
 
-// cleanProviderConfig 清理provider配置，移除空的terraform块
+// cleanProviderConfig 清理provider配置，移除空的terraform块和backend配置（防止与backend.tf.json冲突）
 func (s *TerraformExecutor) cleanProviderConfig(providerConfig map[string]interface{}) map[string]interface{} {
 	if providerConfig == nil {
 		return providerConfig
@@ -3120,18 +3367,31 @@ func (s *TerraformExecutor) cleanProviderConfig(providerConfig map[string]interf
 
 	cleaned := make(map[string]interface{})
 	for key, value := range providerConfig {
-		// 如果是terraform块
 		if key == "terraform" {
 			// 检查是否为空数组或空对象
 			if arr, ok := value.([]interface{}); ok && len(arr) == 0 {
-				// 跳过空的terraform块
 				log.Printf("Skipping empty terraform block in provider config")
 				continue
 			}
-			if obj, ok := value.(map[string]interface{}); ok && len(obj) == 0 {
-				// 跳过空的terraform对象
-				log.Printf("Skipping empty terraform object in provider config")
-				continue
+			if obj, ok := value.(map[string]interface{}); ok {
+				if len(obj) == 0 {
+					log.Printf("Skipping empty terraform object in provider config")
+					continue
+				}
+				// Remove backend key to prevent conflict with backend.tf.json
+				if _, hasBackend := obj["backend"]; hasBackend {
+					filteredObj := make(map[string]interface{})
+					for k, v := range obj {
+						if k != "backend" {
+							filteredObj[k] = v
+						}
+					}
+					if len(filteredObj) == 0 {
+						continue
+					}
+					cleaned[key] = filteredObj
+					continue
+				}
 			}
 		}
 		cleaned[key] = value
@@ -3464,6 +3724,14 @@ func (s *TerraformExecutor) GenerateConfigFilesWithLogging(
 	workDir string,
 	logger *TerraformLogger,
 ) error {
+	// 0. Generate backend.tf.json (HTTP state backend)
+	if s.stateBackendURL != "" {
+		if err := s.generateBackendTFJSON(workDir); err != nil {
+			return fmt.Errorf("failed to write backend.tf.json: %w", err)
+		}
+		logger.Info("Generated backend.tf.json (HTTP state backend)")
+	}
+
 	logger.Debug("Aggregating TF code from resources...")
 
 	// 1. 生成 main.tf.json
@@ -3617,6 +3885,12 @@ func (s *TerraformExecutor) PrepareStateFileWithLogging(
 	workDir string,
 	logger *TerraformLogger,
 ) error {
+	// HTTP backend mode: Terraform handles state via HTTP, no local file needed
+	if s.stateBackendURL != "" {
+		logger.Info("HTTP backend mode: state managed via HTTP backend, skipping local state file preparation")
+		return nil
+	}
+
 	stateFile := filepath.Join(workDir, "terraform.tfstate")
 
 	// 使用 DataAccessor 获取最新的State版本
@@ -3831,6 +4105,12 @@ plugin_cache_may_break_dependency_lock_file = true
 		"init",
 		"-no-color",
 		"-input=false",
+	}
+
+	// HTTP backend mode: plan-only tasks don't modify state, skip locking
+	// plan_and_apply tasks need locking because apply will write state
+	if s.stateBackendURL != "" && task.TaskType == models.TaskTypePlan {
+		args = append(args, "-lock=false")
 	}
 
 	if needUpgrade {
@@ -4054,6 +4334,28 @@ func (s *TerraformExecutor) SaveNewStateVersionWithLogging(
 	workDir string,
 	logger *TerraformLogger,
 ) error {
+	// HTTP backend mode: verify state was saved via HTTP POST, fallback if needed
+	if s.stateBackendURL != "" {
+		logger.Info("HTTP backend mode: verifying state was saved via HTTP POST...")
+		latestState, err := s.dataAccessor.GetLatestStateVersion(workspace.WorkspaceID)
+		if err == nil && latestState != nil && latestState.TaskID != nil && *latestState.TaskID == task.ID {
+			logger.Info("HTTP backend mode: state version #%d confirmed (saved via HTTP POST)", latestState.Version)
+			return nil
+		}
+		// State version not tagged with this task ID.
+		// This is normal when apply made zero changes -- Terraform skips the POST
+		// (or our checksum dedup skipped creating a new version).
+		// If ANY state version exists for this workspace, treat as success.
+		if err == nil && latestState != nil {
+			logger.Info("HTTP backend mode: state unchanged (latest version #%d belongs to task %v, not current task %d) - no new version needed",
+				latestState.Version, latestState.TaskID, task.ID)
+			return nil
+		}
+		// No state at all, or DB error - attempt fallback from errored.tfstate
+		logger.Warn("HTTP backend mode: no state found for workspace %s, attempting fallback from errored.tfstate", workspace.WorkspaceID)
+		return s.fallbackSaveFromErroredState(workspace, task, workDir, logger)
+	}
+
 	stateFile := filepath.Join(workDir, "terraform.tfstate")
 
 	// 1. 读取State文件
@@ -5037,6 +5339,14 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 	logger *TerraformLogger,
 ) error {
 	logger.Debug("Generating config files from snapshot data...")
+
+	// 0. Generate backend.tf.json (HTTP state backend)
+	if s.stateBackendURL != "" {
+		if err := s.generateBackendTFJSON(workDir); err != nil {
+			return fmt.Errorf("failed to write backend.tf.json: %w", err)
+		}
+		logger.Info("Generated backend.tf.json (HTTP state backend)")
+	}
 
 	// 解析变量快照为实际变量值
 	snapshotVariables, err := s.ResolveVariableSnapshots(variableSnapshots, workspace.WorkspaceID)

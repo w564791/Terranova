@@ -25,10 +25,18 @@ jobs:
         run: cd backend && go mod download
 
       - name: Build server
-        run: cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o /dev/null main.go
+        run: |
+          cd backend
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          CGO_ENABLED=0 go build -ldflags="-s -w -X iac-platform/internal/version.CommitHash=${COMMIT_HASH} -X iac-platform/internal/version.BuildTime=${BUILD_TIME}" -o /dev/null main.go
 
       - name: Build agent
-        run: cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o /dev/null cmd/agent/main.go
+        run: |
+          cd backend
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          CGO_ENABLED=0 go build -ldflags="-s -w -X iac-platform/internal/version.CommitHash=${COMMIT_HASH} -X iac-platform/internal/version.BuildTime=${BUILD_TIME}" -o /dev/null cmd/agent/main.go
 
       - name: Vet
         run: cd backend && go vet ./...

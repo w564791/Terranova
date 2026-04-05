@@ -7367,7 +7367,8 @@ CREATE TABLE public.workspace_tasks (
     plan_hash character varying(64),
     apply_confirmed_by character varying(255),
     apply_confirmed_at timestamp without time zone,
-    is_background boolean DEFAULT false
+    is_background boolean DEFAULT false,
+    state_token_hash character varying(64)
 );
 
 
@@ -7571,10 +7572,8 @@ CREATE TABLE public.workspaces (
     auto_apply boolean DEFAULT false,
     plan_only boolean DEFAULT false,
     workdir character varying(500) DEFAULT '/workspace'::character varying,
-    is_locked boolean DEFAULT false,
-    locked_by character varying(20),
-    locked_at timestamp without time zone,
-    lock_reason text,
+    lock_id character varying(255),
+    lock_info jsonb,
     tf_code jsonb,
     tf_state jsonb,
     provider_config jsonb,
@@ -7640,17 +7639,17 @@ COMMENT ON COLUMN public.workspaces.plan_only IS '是否仅执行Plan';
 
 
 --
--- Name: COLUMN workspaces.is_locked; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN workspaces.lock_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.workspaces.is_locked IS '是否锁定';
+COMMENT ON COLUMN public.workspaces.lock_id IS 'Unified lock ID (non-null = locked)';
 
 
 --
--- Name: COLUMN workspaces.locked_by; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN workspaces.lock_info; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.workspaces.locked_by IS '锁定workspace的用户ID（外键关联users表）';
+COMMENT ON COLUMN public.workspaces.lock_info IS 'Lock metadata: {ID, operation, who, who_display, info, created}';
 
 
 --
@@ -9887,7 +9886,7 @@ COPY public.variable_snapshots (id, vsnap_id, workspace_id, variable_id, version
 -- Data for Name: workspace_tasks; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.workspace_tasks (id, task_type, status, execution_mode, agent_id, k8s_pod_name, k8s_namespace, plan_output, apply_output, error_message, started_at, completed_at, duration, retry_count, max_retries, created_by, created_at, updated_at, changes_add, changes_change, changes_destroy, k8s_config_id, execution_node, plan_task_id, plan_data, plan_json, outputs, stage, context, locked_by, locked_at, lock_expires_at, description, snapshot_id, apply_description, workspace_id, snapshot_resource_versions, variable_snapshot_id, snapshot_provider_config, snapshot_created_at, plan_hash, apply_confirmed_by, apply_confirmed_at, is_background) FROM stdin;
+COPY public.workspace_tasks (id, task_type, status, execution_mode, agent_id, k8s_pod_name, k8s_namespace, plan_output, apply_output, error_message, started_at, completed_at, duration, retry_count, max_retries, created_by, created_at, updated_at, changes_add, changes_change, changes_destroy, k8s_config_id, execution_node, plan_task_id, plan_data, plan_json, outputs, stage, context, locked_by, locked_at, lock_expires_at, description, snapshot_id, apply_description, workspace_id, snapshot_resource_versions, variable_snapshot_id, snapshot_provider_config, snapshot_created_at, plan_hash, apply_confirmed_by, apply_confirmed_at, is_background, state_token_hash) FROM stdin;
 \.
 
 
@@ -9903,7 +9902,7 @@ COPY public.workspace_variables (id, variable_id, workspace_id, key, version, va
 -- Data for Name: workspaces; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.workspaces (id, name, description, state_backend, state_config, terraform_version, execution_mode, agent_pool_id, created_by, created_at, updated_at, agent_id, auto_apply, plan_only, workdir, is_locked, locked_by, locked_at, lock_reason, tf_code, tf_state, provider_config, init_config, retry_enabled, max_retries, notify_settings, log_config, state, tags, system_variables, resource_count, last_plan_at, last_apply_at, drift_count, last_drift_check, k8s_config_id, variables, current_code_version_id, workspace_execution_mode, ui_mode, show_unchanged_resources, workspace_type, workspace_id, current_pool_id, outputs_sharing, provider_config_hash, last_init_hash, last_init_terraform_version, terraform_lock_hcl, drift_check_enabled, drift_check_start_time, drift_check_end_time, drift_check_interval) FROM stdin;
+COPY public.workspaces (id, name, description, state_backend, state_config, terraform_version, execution_mode, agent_pool_id, created_by, created_at, updated_at, agent_id, auto_apply, plan_only, workdir, lock_id, lock_info, tf_code, tf_state, provider_config, init_config, retry_enabled, max_retries, notify_settings, log_config, state, tags, system_variables, resource_count, last_plan_at, last_apply_at, drift_count, last_drift_check, k8s_config_id, variables, current_code_version_id, workspace_execution_mode, ui_mode, show_unchanged_resources, workspace_type, workspace_id, current_pool_id, outputs_sharing, provider_config_hash, last_init_hash, last_init_terraform_version, terraform_lock_hcl, drift_check_enabled, drift_check_start_time, drift_check_end_time, drift_check_interval) FROM stdin;
 \.
 
 
@@ -14275,6 +14274,13 @@ CREATE INDEX idx_workspace_tasks_snapshot_id ON public.workspace_tasks USING btr
 
 
 --
+-- Name: idx_workspace_tasks_state_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workspace_tasks_state_token ON public.workspace_tasks USING btree (state_token_hash) WHERE (state_token_hash IS NOT NULL);
+
+
+--
 -- Name: idx_workspace_tasks_status; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14331,10 +14337,10 @@ CREATE INDEX idx_workspaces_init_config_gin ON public.workspaces USING gin (init
 
 
 --
--- Name: idx_workspaces_is_locked; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_workspaces_lock_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_workspaces_is_locked ON public.workspaces USING btree (is_locked);
+CREATE INDEX idx_workspaces_lock_id ON public.workspaces USING btree (lock_id);
 
 
 --
@@ -14373,17 +14379,7 @@ CREATE INDEX idx_workspaces_last_plan_at ON public.workspaces USING btree (last_
 
 
 --
--- Name: idx_workspaces_locked; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_workspaces_locked ON public.workspaces USING btree (is_locked);
-
-
---
--- Name: idx_workspaces_locked_by; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_workspaces_locked_by ON public.workspaces USING btree (locked_by);
+-- (removed: idx_workspaces_locked and idx_workspaces_locked_by - replaced by idx_workspaces_lock_id)
 
 
 --

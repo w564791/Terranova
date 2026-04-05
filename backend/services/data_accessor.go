@@ -14,7 +14,7 @@ type DataAccessor interface {
 	GetWorkspaceResources(workspaceID string) ([]models.WorkspaceResource, error)
 	GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error)
 	LoadSnapshot(vsnapID string, db *gorm.DB) error
-	LockWorkspace(workspaceID, userID, reason string) error
+	LockWorkspace(workspaceID string, lockInfo map[string]interface{}) error
 	UnlockWorkspace(workspaceID string) error
 	UpdateWorkspaceFields(workspaceID string, updates map[string]interface{}) error
 
@@ -24,8 +24,6 @@ type DataAccessor interface {
 
 	// State 相关
 	GetLatestStateVersion(workspaceID string) (*models.WorkspaceStateVersion, error)
-	SaveStateVersion(version *models.WorkspaceStateVersion) error
-	UpdateWorkspaceState(workspaceID string, stateContent map[string]interface{}) error
 	GetMaxStateVersion(workspaceID string) (int, error)
 
 	// State Watcher 相关（temp state 管理）

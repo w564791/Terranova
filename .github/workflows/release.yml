@@ -52,9 +52,11 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           cd backend
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
           EXT=""
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
-          go build -ldflags="-s -w" -o ../dist/iac-platform-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} main.go
+          go build -ldflags="-s -w -X iac-platform/internal/version.CommitHash=${COMMIT_HASH} -X iac-platform/internal/version.BuildTime=${BUILD_TIME}" -o ../dist/iac-platform-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} main.go
 
       - name: Build agent
         env:
@@ -63,9 +65,11 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           cd backend
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
           EXT=""
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
-          go build -ldflags="-s -w" -o ../dist/iac-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} cmd/agent/main.go
+          go build -ldflags="-s -w -X iac-platform/internal/version.CommitHash=${COMMIT_HASH} -X iac-platform/internal/version.BuildTime=${BUILD_TIME}" -o ../dist/iac-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} cmd/agent/main.go
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

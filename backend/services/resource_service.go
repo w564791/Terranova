@@ -818,7 +818,7 @@ func (s *ResourceService) CreatePlanTaskWithTargets(
 	}
 
 	// 检查workspace是否被锁定
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		return nil, fmt.Errorf("workspace is locked")
 	}
 

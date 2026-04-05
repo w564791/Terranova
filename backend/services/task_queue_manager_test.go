@@ -151,10 +151,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		workdir TEXT DEFAULT '/workspace',
 		state_backend TEXT DEFAULT 'local',
 		state_config TEXT,
-		is_locked INTEGER DEFAULT 0,
-		locked_by TEXT,
-		locked_at DATETIME,
-		lock_reason TEXT DEFAULT '',
+		lock_id TEXT,
+		lock_info TEXT,
 		tf_code TEXT,
 		tf_state TEXT,
 		provider_config TEXT,
@@ -236,6 +234,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		apply_confirmed_by TEXT,
 		apply_confirmed_at DATETIME,
 		is_background INTEGER DEFAULT 0,
+		state_token_hash TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
@@ -285,8 +284,7 @@ type testWorkspace struct {
 	Name          string               `gorm:"not null"`
 	StateBackend  string               `gorm:"default:local"`
 	ExecutionMode models.ExecutionMode `gorm:"default:agent"`
-	IsLocked      bool                 `gorm:"default:false"`
-	LockedBy      *string
+	LockID        *string              `gorm:"column:lock_id"`
 	CurrentPoolID *string `gorm:"column:current_pool_id"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -418,8 +416,7 @@ func TestSetup(t *testing.T) {
 func TestGetNextExecutableTask_LockedWorkspace(t *testing.T) {
 	db := setupTestDB(t)
 	createTestWorkspace(t, db, "ws-locked", func(ws *testWorkspace) {
-		ws.IsLocked = true
-		ws.LockedBy = strPtr("admin")
+		ws.LockID = strPtr("test-lock-id")
 	})
 	createTestTask(t, db, "ws-locked", models.TaskTypePlanAndApply, models.TaskStatusPending)
 
@@ -1309,8 +1306,7 @@ func TestCalculateRetryDelay(t *testing.T) {
 func TestCanExecuteNewTask_Locked(t *testing.T) {
 	db := setupTestDB(t)
 	createTestWorkspace(t, db, "ws-can-001", func(ws *testWorkspace) {
-		ws.IsLocked = true
-		ws.LockedBy = strPtr("admin")
+		ws.LockID = strPtr("test-lock-id")
 	})
 
 	mgr := newTestManager(db, nil, nil)

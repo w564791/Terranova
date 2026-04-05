@@ -172,10 +172,8 @@ type WorkspaceListItem struct {
 	Workdir                string                `json:"workdir"`
 	StateBackend           string                `json:"state_backend"`
 	StateConfig            models.JSONB          `json:"state_config"`
-	IsLocked               bool                  `json:"is_locked"`
-	LockedBy               *string               `json:"locked_by"`
-	LockedAt               *time.Time            `json:"locked_at"`
-	LockReason             string                `json:"lock_reason"`
+	LockID                 *string               `json:"lock_id"`
+	LockInfo               models.JSONB          `json:"lock_info"`
 	ProviderConfig         models.JSONB          `json:"provider_config"`
 	InitConfig             models.JSONB          `json:"init_config"`
 	RetryEnabled           bool                  `json:"retry_enabled"`
@@ -224,10 +222,8 @@ func toWorkspaceListItem(w models.Workspace) WorkspaceListItem {
 		Workdir:                w.Workdir,
 		StateBackend:           w.StateBackend,
 		StateConfig:            w.StateConfig,
-		IsLocked:               w.IsLocked,
-		LockedBy:               w.LockedBy,
-		LockedAt:               w.LockedAt,
-		LockReason:             w.LockReason,
+		LockID:                 w.LockID,
+		LockInfo:               w.LockInfo,
 		ProviderConfig:         w.ProviderConfig,
 		InitConfig:             w.InitConfig,
 		RetryEnabled:           w.RetryEnabled,

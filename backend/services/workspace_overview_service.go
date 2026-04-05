@@ -47,10 +47,9 @@ type WorkspaceOverviewResponse struct {
 	WorkspaceID      string  `json:"workspace_id"` // 语义化ID (对外使用)
 	Name             string  `json:"name"`
 	Description      string  `json:"description"`
-	IsLocked         bool    `json:"is_locked"`
-	LockedBy         *string `json:"locked_by"`
-	LockedByUsername string  `json:"locked_by_username,omitempty"` // 锁定者用户名
-	LockReason       string  `json:"lock_reason"`
+	LockID           *string      `json:"lock_id"`
+	LockInfo         models.JSONB `json:"lock_info"`
+	LockedByUsername string       `json:"locked_by_username,omitempty"` // 锁定者用户名
 
 	// 执行配置
 	ExecutionMode    string `json:"execution_mode"`
@@ -104,9 +103,8 @@ func (s *WorkspaceOverviewService) GetWorkspaceOverview(workspaceID string) (*Wo
 		WorkspaceID:      workspace.WorkspaceID, // 语义化ID
 		Name:             workspace.Name,
 		Description:      workspace.Description,
-		IsLocked:         workspace.IsLocked,
-		LockedBy:         workspace.LockedBy,
-		LockReason:       workspace.LockReason,
+		LockID:           workspace.LockID,
+		LockInfo:         workspace.LockInfo,
 		ExecutionMode:    string(workspace.ExecutionMode),
 		TerraformVersion: workspace.TerraformVersion,
 		WorkingDirectory: workspace.Workdir,
@@ -120,16 +118,25 @@ func (s *WorkspaceOverviewService) GetWorkspaceOverview(workspaceID string) (*Wo
 		UpdatedAt:        workspace.UpdatedAt,
 	}
 
-	// 如果workspace被锁定，查询锁定者的用户名
-	if workspace.IsLocked && workspace.LockedBy != nil {
-		var username string
-		err := s.db.Table("users").
-			Select("username").
-			Where("id = ?", *workspace.LockedBy).
-			Scan(&username).Error
+	// 如果workspace被锁定，查询锁定者的用户名并注入 lock_info.who_display
+	if workspace.LockID != nil && workspace.LockInfo != nil {
+		if who, ok := workspace.LockInfo["who"].(string); ok {
+			var username string
+			err := s.db.Table("users").
+				Select("username").
+				Where("user_id = ?", who).
+				Scan(&username).Error
 
-		if err == nil && username != "" {
-			response.LockedByUsername = username
+			if err == nil && username != "" {
+				response.LockedByUsername = username
+				// Enrich lock_info.who_display for frontend consumption
+				enrichedInfo := make(models.JSONB)
+				for k, v := range workspace.LockInfo {
+					enrichedInfo[k] = v
+				}
+				enrichedInfo["who_display"] = username
+				response.LockInfo = enrichedInfo
+			}
 		}
 	}
 

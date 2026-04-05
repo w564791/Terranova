@@ -4,6 +4,7 @@
 	build-server build-agent build-all \
 	docker-build docker-build-frontend docker-build-agent docker-build-db-init docker-build-all \
 	docker-push docker-push-frontend docker-push-agent docker-push-db-init docker-push-all \
+	docker-push-arm64 docker-push-frontend-arm64 docker-push-agent-arm64 docker-push-db-init-arm64 docker-push-all-arm64 \
 	run-server run-agent local-server local-frontend local-agent \
 	generate-secret deploy-local export-seed-data clean
 
@@ -23,7 +24,11 @@ IMAGE_FRONTEND ?= $(DOCKER_REPO)/iac-frontend
 IMAGE_AGENT ?= $(DOCKER_REPO)/iac-agent
 IMAGE_DB_INIT ?= $(DOCKER_REPO)/iac-db-init
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 PLATFORMS ?= linux/arm64,linux/amd64
+LDFLAGS_VERSION = -X iac-platform/internal/version.CommitHash=$(COMMIT_HASH) -X iac-platform/internal/version.BuildTime=$(BUILD_TIME)
+DOCKER_BUILD_ARGS = --build-arg COMMIT_HASH=$(COMMIT_HASH) --build-arg BUILD_TIME=$(BUILD_TIME)
 
 help: ## 显示帮助信息
 	@echo "IaC平台开发命令:"
@@ -115,12 +120,12 @@ check: vet test ## 运行所有检查（vet + test），构建前必须通过
 
 build-server: ## 构建服务器二进制文件（当前平台）
 	@echo "构建服务器..."
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o iac-platform main.go
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w $(LDFLAGS_VERSION)" -o iac-platform main.go
 	@echo "服务器构建完成: backend/iac-platform"
 
 build-agent: ## 构建Agent二进制文件（当前平台）
 	@echo "构建Agent..."
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o iac-agent cmd/agent/main.go
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w $(LDFLAGS_VERSION)" -o iac-agent cmd/agent/main.go
 	@echo "Agent构建完成: backend/iac-agent"
 
 build-all: build-server build-agent ## 构建所有二进制文件
@@ -134,6 +139,7 @@ docker-build: ## 构建后端 Docker 镜像（本地，当前架构）
 	docker build \
 		-t $(IMAGE_SERVER):$(VERSION) \
 		-t $(IMAGE_SERVER):latest \
+		$(DOCKER_BUILD_ARGS) \
 		backend/
 	@echo "镜像构建完成: $(IMAGE_SERVER):$(VERSION)"
 
@@ -150,6 +156,7 @@ docker-build-agent: ## 构建 Agent Docker 镜像（本地，当前架构）
 	docker build \
 		-t $(IMAGE_AGENT):$(VERSION) \
 		-t $(IMAGE_AGENT):latest \
+		$(DOCKER_BUILD_ARGS) \
 		-f backend/cmd/agent/Dockerfile backend/
 	@echo "镜像构建完成: $(IMAGE_AGENT):$(VERSION)"
 
@@ -168,13 +175,7 @@ docker-push: ## 构建多架构后端镜像并推送 (arm64+amd64)
 	docker buildx build --platform $(PLATFORMS) \
 		-t $(IMAGE_SERVER):$(VERSION) \
 		-t $(IMAGE_SERVER):latest \
-		--push backend/
-	@echo "推送完成"
-docker-local-push: ## 构建多架构后端镜像并推送 (arm64)
-	@echo "构建并推送: $(IMAGE_SERVER):$(VERSION) [$(PLATFORMS)]"
-	docker buildx build --platform linux/arm64 \
-		-t $(IMAGE_SERVER):$(VERSION) \
-		-t $(IMAGE_SERVER):latest \
+		$(DOCKER_BUILD_ARGS) \
 		--push backend/
 	@echo "推送完成"
 
@@ -191,6 +192,7 @@ docker-push-agent: ## 构建多架构 Agent 镜像并推送 (arm64+amd64)
 	docker buildx build --platform $(PLATFORMS) \
 		-t $(IMAGE_AGENT):$(VERSION) \
 		-t $(IMAGE_AGENT):latest \
+		$(DOCKER_BUILD_ARGS) \
 		-f backend/cmd/agent/Dockerfile --push backend/
 	@echo "推送完成"
 
@@ -203,6 +205,42 @@ docker-push-db-init: ## 构建多架构 DB 初始化镜像并推送 (arm64+amd64
 	@echo "推送完成"
 
 docker-push-all: check docker-push docker-push-frontend docker-push-agent docker-push-db-init ## 构建并推送所有多架构镜像（先运行测试）
+
+docker-push-arm64: ## 构建 arm64 后端镜像并推送
+	@echo "构建并推送: $(IMAGE_SERVER):$(VERSION) [linux/arm64]"
+	docker buildx build --platform linux/arm64 \
+		-t $(IMAGE_SERVER):$(VERSION) \
+		-t $(IMAGE_SERVER):latest \
+		$(DOCKER_BUILD_ARGS) \
+		--push backend/
+	@echo "推送完成"
+
+docker-push-frontend-arm64: ## 构建 arm64 前端镜像并推送
+	@echo "构建并推送: $(IMAGE_FRONTEND):$(VERSION) [linux/arm64]"
+	docker buildx build --platform linux/arm64 \
+		-t $(IMAGE_FRONTEND):$(VERSION) \
+		-t $(IMAGE_FRONTEND):latest \
+		--push frontend/
+	@echo "推送完成"
+
+docker-push-agent-arm64: ## 构建 arm64 Agent 镜像并推送
+	@echo "构建并推送: $(IMAGE_AGENT):$(VERSION) [linux/arm64]"
+	docker buildx build --platform linux/arm64 \
+		-t $(IMAGE_AGENT):$(VERSION) \
+		-t $(IMAGE_AGENT):latest \
+		$(DOCKER_BUILD_ARGS) \
+		-f backend/cmd/agent/Dockerfile --push backend/
+	@echo "推送完成"
+
+docker-push-db-init-arm64: ## 构建 arm64 DB 初始化镜像并推送
+	@echo "构建并推送: $(IMAGE_DB_INIT):$(VERSION) [linux/arm64]"
+	docker buildx build --platform linux/arm64 \
+		-t $(IMAGE_DB_INIT):$(VERSION) \
+		-t $(IMAGE_DB_INIT):latest \
+		--push manifests/db/
+	@echo "推送完成"
+
+docker-push-all-arm64: check docker-push-arm64 docker-push-frontend-arm64 docker-push-agent-arm64 docker-push-db-init-arm64 ## 构建并推送所有 arm64 镜像（先运行测试）
 
 # =============================================================================
 # Docker 容器运行（编译后运行）

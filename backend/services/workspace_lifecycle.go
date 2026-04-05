@@ -75,7 +75,7 @@ func (s *WorkspaceLifecycleService) TransitionState(workspaceID string, newState
 	}
 
 	// 检查是否锁定
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		return errors.New("workspace已锁定，无法执行状态转换")
 	}
 
@@ -101,7 +101,7 @@ func (s *WorkspaceLifecycleService) StartPlan(workspaceID string, userID string)
 	}
 
 	// 检查是否锁定
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		return nil, errors.New("workspace已锁定，无法执行Plan")
 	}
 
@@ -205,12 +205,19 @@ func (s *WorkspaceLifecycleService) CompletePlan(taskID uint, success bool, outp
 
 // LockWorkspace 锁定workspace
 func (s *WorkspaceLifecycleService) LockWorkspace(workspaceID string, userID string, reason string) error {
-	now := time.Now()
+	lockID := fmt.Sprintf("%d", time.Now().UnixNano())
+	lockInfo := models.JSONB{
+		"ID":          lockID,
+		"operation":   "ui_lock",
+		"who":         userID,
+		"who_display": userID,
+		"info":        reason,
+		"created":     time.Now().Format(time.RFC3339),
+	}
+
 	updates := map[string]interface{}{
-		"is_locked":   true,
-		"locked_by":   userID,
-		"locked_at":   now,
-		"lock_reason": reason,
+		"lock_id":   lockID,
+		"lock_info": lockInfo,
 	}
 
 	if err := s.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(updates).Error; err != nil {
@@ -223,10 +230,8 @@ func (s *WorkspaceLifecycleService) LockWorkspace(workspaceID string, userID str
 // UnlockWorkspace 解锁workspace
 func (s *WorkspaceLifecycleService) UnlockWorkspace(workspaceID string) error {
 	updates := map[string]interface{}{
-		"is_locked":   false,
-		"locked_by":   nil,
-		"locked_at":   nil,
-		"lock_reason": "",
+		"lock_id":   nil,
+		"lock_info": nil,
 	}
 
 	if err := s.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(updates).Error; err != nil {

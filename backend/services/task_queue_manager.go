@@ -35,13 +35,14 @@ type taskDispatchMessage struct {
 
 // TaskQueueManager 任务队列管理器
 type TaskQueueManager struct {
-	db               *gorm.DB
-	executor         *TerraformExecutor
-	k8sJobService    *K8sJobService
-	k8sDeploymentSvc *K8sDeploymentService // K8s Pod管理服务（用于槽位管理）
-	agentCCHandler   AgentCCHandler        // Interface for Agent C&C communication
-	pgLocker         LockProvider          // PG advisory locks for workspace serialization
-	pubsub           *pgpubsub.PubSub      // PG NOTIFY/LISTEN for cross-replica dispatch
+	db                *gorm.DB
+	executor          *TerraformExecutor
+	k8sJobService     *K8sJobService
+	k8sDeploymentSvc  *K8sDeploymentService // K8s Pod管理服务（用于槽位管理）
+	agentCCHandler    AgentCCHandler        // Interface for Agent C&C communication
+	pgLocker          LockProvider          // PG advisory locks for workspace serialization
+	pubsub            *pgpubsub.PubSub      // PG NOTIFY/LISTEN for cross-replica dispatch
+	stateTokenService *StateTokenService    // HTTP state backend token service
 
 	taskCancelsMu sync.Mutex
 	taskCancels   map[uint]context.CancelFunc // cancel functions for running tasks
@@ -91,6 +92,12 @@ func (m *TaskQueueManager) SetPubSub(ps *pgpubsub.PubSub) {
 	log.Println("[TaskQueue] PG PubSub configured for cross-replica task dispatch")
 }
 
+// SetStateTokenService sets the state token service for HTTP state backend.
+func (m *TaskQueueManager) SetStateTokenService(svc *StateTokenService) {
+	m.stateTokenService = svc
+	log.Println("[TaskQueue] State Token Service configured for HTTP state backend")
+}
+
 // SetK8sDeploymentService sets the K8s Deployment Service (called from main.go after initialization)
 // This is needed for slot-based task allocation in K8s mode
 func (m *TaskQueueManager) SetK8sDeploymentService(svc *K8sDeploymentService) {
@@ -108,10 +115,12 @@ func (m *TaskQueueManager) CanExecuteNewTask(workspaceID string) (bool, string) 
 		return false, fmt.Sprintf("无法获取workspace信息: %v", err)
 	}
 
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		lockedBy := "unknown"
-		if workspace.LockedBy != nil {
-			lockedBy = *workspace.LockedBy
+		if workspace.LockInfo != nil {
+			if who, ok := workspace.LockInfo["who"].(string); ok {
+				lockedBy = who
+			}
 		}
 		return false, fmt.Sprintf("workspace被%s锁定", lockedBy)
 	}
@@ -153,12 +162,14 @@ func (m *TaskQueueManager) GetNextExecutableTask(workspaceID string) (*models.Wo
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	isLocked := workspace.IsLocked
+	isLocked := workspace.LockID != nil
 
 	if isLocked {
 		lockedBy := "unknown"
-		if workspace.LockedBy != nil {
-			lockedBy = *workspace.LockedBy
+		if workspace.LockInfo != nil {
+			if who, ok := workspace.LockInfo["who"].(string); ok {
+				lockedBy = who
+			}
 		}
 		log.Printf("[TaskQueue] Workspace %s is locked by %s, plan_and_apply tasks must wait (plan-only can proceed)", workspaceID, lockedBy)
 		// 不 return — plan-only 任务可以继续，下面会跳过 plan_and_apply 检查
@@ -384,7 +395,7 @@ func (m *TaskQueueManager) createK8sJobForTask(task *models.WorkspaceTask, works
 
 		// 增加重试计数
 		task.RetryCount++
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 
 		// 检查是否是freeze window错误
 		errMsg := err.Error()
@@ -404,7 +415,7 @@ func (m *TaskQueueManager) createK8sJobForTask(task *models.WorkspaceTask, works
 	// 成功创建Job，重置重试计数
 	if task.RetryCount > 0 {
 		task.RetryCount = 0
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 	}
 
 	log.Printf("[TaskQueue] Successfully created K8s Job for task %d", task.ID)
@@ -723,7 +734,7 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 
 	// Save to database BEFORE sending task to agent
 	// This is critical: agent will call GetTaskData immediately after receiving the task
-	if err := m.db.Save(task).Error; err != nil {
+	if err := m.db.Omit("state_token_hash").Save(task).Error; err != nil {
 		// Release slot if allocated
 		if selectedPodName != "" {
 			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
@@ -734,7 +745,7 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 
 		// Increment retry count
 		task.RetryCount++
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 
 		// Retry with exponential backoff
 		retryDelay := m.calculateRetryDelay(task)
@@ -799,11 +810,11 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 		if action == "apply" {
 			task.Status = models.TaskStatusApplyPending
 		}
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 
 		// Increment retry count
 		task.RetryCount++
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 
 		// Retry with exponential backoff
 		retryDelay := m.calculateRetryDelay(task)
@@ -815,7 +826,7 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 	// Reset retry count on success
 	if task.RetryCount > 0 {
 		task.RetryCount = 0
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 	}
 
 	log.Printf("[TaskQueue] Successfully pushed task %d to agent %s (action: %s)", task.ID, selectedAgent.AgentID, action)
@@ -869,7 +880,7 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 			task.ErrorMessage = fmt.Sprintf("internal panic: %v", r)
 			now := time.Now()
 			task.CompletedAt = &now
-			m.db.Save(task)
+			m.db.Omit("state_token_hash").Save(task)
 			if task.StartedAt != nil {
 				metrics.RecordTaskCompleted(string(task.TaskType), string(task.Status), now.Sub(*task.StartedAt).Seconds())
 			}
@@ -896,11 +907,58 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 		task.ErrorMessage = "cancelled before execution started"
 		now := time.Now()
 		task.CompletedAt = &now
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 		if task.StartedAt != nil {
 			metrics.RecordTaskCompleted(string(task.TaskType), string(task.Status), now.Sub(*task.StartedAt).Seconds())
 		}
 		return
+	}
+
+	// Create per-task executor clone to avoid concurrent goroutines overwriting shared state
+	executor := m.executor.ForTask()
+
+	// Generate state token and set up HTTP state backend URL
+	if m.stateTokenService != nil {
+		token, tokenErr := m.stateTokenService.GenerateToken(task.WorkspaceID, task.ID)
+		if tokenErr != nil {
+			log.Printf("[TaskQueue] WARNING: Failed to generate state token for task %d: %v", task.ID, tokenErr)
+		} else {
+			tokenPrefix := token
+			if len(tokenPrefix) > 30 {
+				tokenPrefix = tokenPrefix[:30] + "..."
+			}
+			log.Printf("[TaskQueue] Generated state token for task %d, action=%s, prefix=%s", task.ID, action, tokenPrefix)
+			executor.stateToken = token
+			// Determine state backend URL based on execution mode
+			internalPort := os.Getenv("INTERNAL_HTTP_PORT")
+			if internalPort == "" {
+				apiPort := os.Getenv("SERVER_PORT")
+				if apiPort == "" {
+					apiPort = "8080"
+				}
+				var apiPortNum int
+				fmt.Sscanf(apiPort, "%d", &apiPortNum)
+				internalPort = fmt.Sprintf("%d", apiPortNum+20)
+			}
+			executor.stateBackendURL = fmt.Sprintf("http://127.0.0.1:%s/api/v1/terraform/state/%s", internalPort, task.WorkspaceID)
+			// Revoke token only when task reaches terminal state (not apply_pending).
+			// For plan_and_apply tasks, the plan phase sets apply_pending and returns,
+			// but the token must remain valid for the subsequent apply phase.
+			// Using a closure to capture the final task status.
+			taskIDForRevoke := task.ID
+			defer func() {
+				// Re-read task status from DB to get the actual final state
+				var currentTask models.WorkspaceTask
+				if err := m.db.Select("status").First(&currentTask, taskIDForRevoke).Error; err == nil {
+					if currentTask.IsTerminal() {
+						m.stateTokenService.RevokeToken(taskIDForRevoke)
+					}
+				} else {
+					// DB error, revoke anyway to be safe
+					m.stateTokenService.RevokeToken(taskIDForRevoke)
+				}
+			}()
+		}
 	}
 
 	var err error
@@ -911,13 +969,13 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 
 		// 设置PlanTaskID指向自己（plan_and_apply任务的plan数据在自己身上）
 		task.PlanTaskID = &task.ID
-		m.db.Save(task)
+		m.db.Omit("state_token_hash").Save(task)
 
 		// 发送任务开始执行通知（Local 模式，与 Agent 模式 pushTaskToAgent 对齐）
 		go m.sendTaskStartNotification(task, "apply")
 
 		// 执行Apply
-		err = m.executor.ExecuteApply(ctx, task)
+		err = executor.ExecuteApply(ctx, task)
 
 		if err != nil {
 			// ExecuteApply已经通过saveTaskFailure保存了详细错误信息
@@ -934,7 +992,7 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 		go m.sendTaskStartNotification(task, "plan")
 
 		// 执行Plan
-		err = m.executor.ExecutePlan(ctx, task)
+		err = executor.ExecutePlan(ctx, task)
 
 		if err != nil {
 			// ExecutePlan已经通过saveTaskFailure保存了详细错误信息
@@ -1202,7 +1260,7 @@ func (m *TaskQueueManager) CleanupOrphanTasks() error {
 
 			// 将状态重置为apply_pending（如果之前被错误地设置为running）
 			task.Status = models.TaskStatusApplyPending
-			if err := m.db.Save(&task).Error; err != nil {
+			if err := m.db.Omit("state_token_hash").Save(&task).Error; err != nil {
 				log.Printf("[TaskQueue] Failed to reset task %d status: %v", task.ID, err)
 			}
 			skippedCount++
@@ -1214,7 +1272,7 @@ func (m *TaskQueueManager) CleanupOrphanTasks() error {
 		task.ErrorMessage = "Task interrupted by server restart"
 		task.CompletedAt = timePtr(time.Now())
 
-		if err := m.db.Save(&task).Error; err != nil {
+		if err := m.db.Omit("state_token_hash").Save(&task).Error; err != nil {
 			log.Printf("[TaskQueue] Failed to update orphan task %d: %v", task.ID, err)
 			continue
 		}

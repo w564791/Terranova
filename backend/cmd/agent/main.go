@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"iac-platform/agent/control"
+	"iac-platform/internal/version"
 	"iac-platform/services"
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	log.Printf("IAC Agent v3.2 starting...")
+	log.Printf("IAC Agent v3.2 starting (%s)", version.String())
 
 	// 1. Read environment variables
 	apiEndpoint := os.Getenv("IAC_API_ENDPOINT")

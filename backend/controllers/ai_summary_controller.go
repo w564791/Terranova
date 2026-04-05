@@ -284,11 +284,10 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 			})
 		// 解锁 workspace
 		c.db.Model(&models.Workspace{}).
-			Where("workspace_id = ? AND is_locked = ?", task.WorkspaceID, true).
+			Where("workspace_id = ? AND lock_id IS NOT NULL", task.WorkspaceID).
 			Updates(map[string]interface{}{
-				"is_locked":   false,
-				"locked_by":   nil,
-				"lock_reason": nil,
+				"lock_id":   nil,
+				"lock_info": nil,
 			})
 	} else {
 		c.db.Model(&models.WorkspaceTask{}).

@@ -169,10 +169,10 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
       setAutoApply(workspace.auto_apply || false);
       setUiMode(workspace.ui_mode || 'console');
       setShowUnchangedResources(workspace.show_unchanged_resources || false);
-      setIsLocked(workspace.is_locked || false);
+      setIsLocked(!!workspace.lock_id);
       // 只在workspace被锁定时才更新lockReason，避免覆盖用户正在输入的内容
-      if (workspace.is_locked) {
-        setLockReason(workspace.lock_reason || '');
+      if (workspace.lock_id) {
+        setLockReason(workspace.lock_info?.info || '');
       }
       
       // 转换tags为tagPairs
@@ -296,7 +296,7 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
       setShowLockReason(false);
       success('Workspace已锁定');
       
-      // 重新加载settings以获取locked_at和locked_by_username
+      // 重新加载settings以获取lock_info
       const response = await workspaceService.getWorkspace(id!);
       setSettings(response.data);
     } catch (err) {
@@ -725,17 +725,17 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
 
                   {isLocked && (
                     <div className={styles.lockInfo}>
-                      {settings.locked_by_username && (
+                      {settings.lock_info?.who_display && (
                         <div className={styles.lockInfoItem}>
                           <span className={styles.lockInfoLabel}>Locked by:</span>
-                          <span className={styles.lockInfoValue}>{settings.locked_by_username}</span>
+                          <span className={styles.lockInfoValue}>{settings.lock_info.who_display}</span>
                         </div>
                       )}
-                      {settings.locked_at && (
+                      {settings.lock_info?.created && (
                         <div className={styles.lockInfoItem}>
                           <span className={styles.lockInfoLabel}>Locked at:</span>
                           <span className={styles.lockInfoValue}>
-                            {new Date(settings.locked_at).toLocaleString()}
+                            {new Date(settings.lock_info.created).toLocaleString()}
                           </span>
                         </div>
                       )}

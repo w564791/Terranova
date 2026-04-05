@@ -241,10 +241,8 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		"provider_overrides":       services.FilterTemplateSensitiveInfo(workspace.ProviderOverrides),
 		"notify_settings":          workspace.NotifySettings,
 		"state":                    workspace.State,
-		"is_locked":                workspace.IsLocked,
-		"locked_by":                workspace.LockedBy,
-		"locked_at":                workspace.LockedAt,
-		"lock_reason":              workspace.LockReason,
+		"lock_id":                  workspace.LockID,
+		"lock_info":                workspace.LockInfo,
 		"ui_mode":                  workspace.UIMode,
 		"show_unchanged_resources": workspace.ShowUnchangedResources,
 		"resource_count":           resourceCount,
@@ -254,16 +252,25 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		"updated_at":               workspace.UpdatedAt,
 	}
 
-	// 如果workspace被锁定，查询锁定者的用户名
-	if workspace.IsLocked && workspace.LockedBy != nil {
-		var username string
-		err := wc.workspaceService.GetDB().Table("users").
-			Select("username").
-			Where("id = ?", *workspace.LockedBy).
-			Scan(&username).Error
+	// 如果workspace被锁定，查询锁定者的用户名并注入 lock_info.who_display
+	if workspace.LockID != nil && workspace.LockInfo != nil {
+		if who, ok := workspace.LockInfo["who"].(string); ok {
+			var username string
+			err := wc.workspaceService.GetDB().Table("users").
+				Select("username").
+				Where("user_id = ?", who).
+				Scan(&username).Error
 
-		if err == nil && username != "" {
-			response["locked_by_username"] = username
+			if err == nil && username != "" {
+				response["locked_by_username"] = username
+				// Enrich lock_info.who_display for frontend consumption
+				enrichedInfo := make(map[string]interface{})
+				for k, v := range workspace.LockInfo {
+					enrichedInfo[k] = v
+				}
+				enrichedInfo["who_display"] = username
+				response["lock_info"] = enrichedInfo
+			}
 		}
 	}
 

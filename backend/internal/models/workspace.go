@@ -197,11 +197,9 @@ type Workspace struct {
 	StateBackend string `json:"state_backend" gorm:"not null"`
 	StateConfig  JSONB  `json:"state_config" gorm:"type:jsonb"`
 
-	// 锁定状态
-	IsLocked   bool       `json:"is_locked" gorm:"default:false"`
-	LockedBy   *string    `json:"locked_by" gorm:"type:varchar(20)"`
-	LockedAt   *time.Time `json:"locked_at"`
-	LockReason string     `json:"lock_reason"`
+	// 锁定状态（统一锁：UI 手动锁和 Terraform 运行时锁共用）
+	LockID   *string `json:"lock_id" gorm:"type:varchar(255)"`
+	LockInfo JSONB   `json:"lock_info" gorm:"type:jsonb"`
 
 	// 文件存储
 	TFCode  JSONB `json:"tf_code" gorm:"type:jsonb"`
@@ -400,6 +398,9 @@ type WorkspaceTask struct {
 
 	// 后台任务标记（drift_check 等后台任务不显示在任务列表中）
 	IsBackground bool `json:"is_background" gorm:"default:false;index"` // 是否为后台任务
+
+	// HTTP State Backend token (store SHA256 hash, not the raw token)
+	StateTokenHash string `json:"-" gorm:"type:varchar(64);index"`
 
 	// 关联
 	Workspace *Workspace     `json:"workspace,omitempty" gorm:"foreignKey:WorkspaceID"`
