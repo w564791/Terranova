@@ -12,7 +12,7 @@ import (
 )
 
 // setupAgentAPIRoutes sets up Agent API routes (使用 Pool Token 认证，不需要 JWT)
-func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *services.OutputStreamManager, agentMetricsHub *websocket.AgentMetricsHub, runTaskExecutor *services.RunTaskExecutor, queueManager *services.TaskQueueManager) {
+func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *services.OutputStreamManager, agentMetricsHub *websocket.AgentMetricsHub, runTaskExecutor *services.RunTaskExecutor, queueManager *services.TaskQueueManager, stateTokenService *services.StateTokenService) {
 	// Initialize handlers
 	agentHandler := handlers.NewAgentHandler(db, streamManager, agentMetricsHub)
 
@@ -24,6 +24,11 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 	// 注入任务队列管理器（用于 Agent 模式下 CMDB 同步等 server 侧逻辑）
 	if queueManager != nil {
 		agentHandler.SetTaskQueueManager(queueManager)
+	}
+
+	// 注入 State Token Service（用于 Agent 模式下 HTTP state backend）
+	if stateTokenService != nil {
+		agentHandler.SetStateTokenService(stateTokenService)
 	}
 	agentPoolSecretsHandler := handlers.NewAgentPoolSecretsHandler(db)
 
@@ -70,8 +75,7 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 		// Update task status
 		agentTasks.PUT("/:task_id/status", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.UpdateTaskStatus)
 
-		// Save state version
-		agentTasks.POST("/:task_id/state", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.SaveTaskState)
+		// SaveTaskState removed - state is now managed via HTTP state backend
 
 		// New endpoints for Agent Mode refactoring
 		agentTasks.GET("/:task_id/plan-task", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.GetPlanTask)
@@ -263,4 +267,29 @@ func setupWorkspaceAgentRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMidd
 		}),
 		poolAuthHandler.GetCurrentPool,
 	)
+}
+
+// setupTFStateBackendRoutes registers Terraform HTTP state backend routes.
+// Uses State Token auth (not Pool Token, not JWT).
+// Accepts gin.IRouter to work with both *gin.Engine (internal HTTP server) and *gin.RouterGroup (main router).
+func setupTFStateBackendRoutes(parent gin.IRouter, db *gorm.DB, tokenService *services.StateTokenService) {
+	handler := handlers.NewTFStateBackendHandler(db, tokenService)
+	stateAuth := middleware.StateTokenAuth(tokenService)
+
+	tfState := parent.Group("/terraform/state")
+	tfState.Use(stateAuth)
+	{
+		tfState.GET("/:workspace_id", handler.GetState)
+		tfState.POST("/:workspace_id", handler.UpdateState)
+		tfState.DELETE("/:workspace_id", handler.DeleteState)
+		tfState.POST("/:workspace_id/lock", handler.LockState)
+		tfState.POST("/:workspace_id/unlock", handler.UnlockState)
+	}
+}
+
+// SetupTFStateBackendOnEngine registers routes on a standalone gin.Engine (for internal HTTP server).
+func SetupTFStateBackendOnEngine(r *gin.Engine, db *gorm.DB, tokenService *services.StateTokenService) {
+	// Internal server has no /api/v1 prefix, so add it here
+	apiGroup := r.Group("/api/v1")
+	setupTFStateBackendRoutes(apiGroup, db, tokenService)
 }

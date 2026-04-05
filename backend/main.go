@@ -22,6 +22,7 @@ import (
 	"iac-platform/internal/websocket"
 	"iac-platform/internal/leaderelection"
 	"iac-platform/internal/pgpubsub"
+	"iac-platform/internal/version"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,8 @@ import (
 // @description Type "Bearer" followed by a space and the pool token.
 
 func main() {
+	log.Printf("[Server] Starting iac-platform (%s)", version.String())
+
 	// 设置时区为本地时区
 	loc, err := time.LoadLocation("Asia/Singapore")
 	if err != nil {
@@ -317,14 +320,41 @@ func main() {
 	ccNotifier.SetCCHandler(rawCCHandler)
 	log.Println("[CCNotifier] C&C handler registered for credentials refresh notifications")
 
+	// State Token Service for HTTP State Backend
+	stateTokenService := services.NewStateTokenService(db)
+	queueManager.SetStateTokenService(stateTokenService)
+
 	// 初始化路由，传入rawCCHandler以支持任务取消功能和agentMetricsHub以支持实时metrics
 	// 同时传入runTaskExecutor以支持Agent模式下的Run Task执行
-	r := router.Setup(db, streamManager, wsHub, agentMetricsHub, queueManager, rawCCHandler, runTaskExecutor)
+	r := router.Setup(db, streamManager, wsHub, agentMetricsHub, queueManager, rawCCHandler, runTaskExecutor, stateTokenService)
 
 	log.Println("System initialized with task queue management and Agent C&C support")
 
 	health.MarkStartupReady()
 	log.Println("Startup health check marked ready")
+
+	// Internal HTTP server (127.0.0.1 only, plain HTTP) for local mode Terraform HTTP state backend.
+	// Avoids TLS cert hostname mismatch when main port uses HTTPS with a domain cert.
+	internalPort := os.Getenv("INTERNAL_HTTP_PORT")
+	if internalPort == "" {
+		apiPort := os.Getenv("SERVER_PORT")
+		if apiPort == "" {
+			apiPort = "8080"
+		}
+		var apiPortNum int
+		fmt.Sscanf(apiPort, "%d", &apiPortNum)
+		internalPort = fmt.Sprintf("%d", apiPortNum+20)
+	}
+	internalRouter := gin.New()
+	internalRouter.Use(gin.Recovery())
+	router.SetupTFStateBackendOnEngine(internalRouter, db, stateTokenService)
+	go func() {
+		internalAddr := "127.0.0.1:" + internalPort
+		log.Printf("[Internal] Starting HTTP state backend on %s (loopback only, plain HTTP)", internalAddr)
+		if err := internalRouter.Run(internalAddr); err != nil {
+			log.Printf("[Internal] Failed to start internal HTTP server: %v", err)
+		}
+	}()
 
 	// 获取 Embedding Worker 和 PostSync Worker（在 router.Setup 之后才可用）
 	embeddingWorker := router.GetEmbeddingWorker()

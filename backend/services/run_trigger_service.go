@@ -416,7 +416,7 @@ func (s *RunTriggerService) createTriggeredTask(targetWorkspaceID string, source
 	}
 
 	// 检查 workspace 是否被锁定
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		return nil, fmt.Errorf("target workspace is locked")
 	}
 

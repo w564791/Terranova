@@ -125,7 +125,7 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 	// 检查workspace是否被锁定
 	// plan-only 任务不受锁影响（不修改 state）
 	// plan_and_apply 任务在锁定时排队（不拒绝）
-	if workspace.IsLocked && req.RunType != "plan" {
+	if workspace.LockID != nil && req.RunType != "plan" {
 		// plan_and_apply 任务：排队而非拒绝
 		log.Printf("[TaskCreate] Workspace %s is locked, plan_and_apply task will be queued", workspace.WorkspaceID)
 	}
@@ -804,7 +804,7 @@ func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
 	// 设置 PlanTaskID 指向自己（plan_and_apply 任务的 plan 数据在自己身上）
 	task.PlanTaskID = &task.ID
 
-	if err := c.db.Save(&task).Error; err != nil {
+	if err := c.db.Omit("state_token_hash").Save(&task).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
 		return
 	}
@@ -919,7 +919,7 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 		task.CompletedAt = timePtr(time.Now())
 		task.ErrorMessage = "Cancelled by user to prioritize later task"
 
-		if err := c.db.Save(&task).Error; err == nil {
+		if err := c.db.Omit("state_token_hash").Save(&task).Error; err == nil {
 			cancelledCount++
 			// 检查是否有 plan_and_apply 任务被取消，需要解锁 workspace
 			if task.TaskType == models.TaskTypePlanAndApply {
@@ -929,22 +929,30 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 	}
 
 	// 如果有 plan_and_apply 任务被取消，检查并解锁 workspace
-	if needUnlockWorkspace && workspace.IsLocked {
-		// 检查锁定原因是否与被取消的任务相关
-		for _, task := range previousTasks {
-			if task.TaskType == models.TaskTypePlanAndApply {
-				expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
-				if strings.Contains(workspace.LockReason, expectedLockReason) || strings.Contains(workspace.LockReason, fmt.Sprintf("task #%d", task.ID)) {
-					workspace.IsLocked = false
-					workspace.LockedBy = nil
-					workspace.LockedAt = nil
-					workspace.LockReason = ""
-					if err := c.db.Save(&workspace).Error; err != nil {
-						log.Printf("[CancelPreviousTasks] Failed to unlock workspace %s: %v", workspace.WorkspaceID, err)
-					} else {
-						log.Printf("[CancelPreviousTasks] Workspace %s unlocked after cancelling task %d", workspace.WorkspaceID, task.ID)
+	if needUnlockWorkspace && workspace.LockID != nil && workspace.LockInfo != nil {
+		// Never clear a Terraform HTTP backend lock (has "Operation" key
+		// like "OperationTypePlan" or "OperationTypeApply")
+		if _, isHTTPLock := workspace.LockInfo["Operation"]; isHTTPLock {
+			log.Printf("[CancelPreviousTasks] Workspace %s has active Terraform HTTP lock, not clearing", workspace.WorkspaceID)
+		} else {
+			// Platform-managed lock: check if it belongs to a cancelled task
+			lockInfoStr := ""
+			if info, ok := workspace.LockInfo["info"].(string); ok {
+				lockInfoStr = info
+			}
+			for _, task := range previousTasks {
+				if task.TaskType == models.TaskTypePlanAndApply {
+					expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
+					if strings.Contains(lockInfoStr, expectedLockReason) || strings.Contains(lockInfoStr, fmt.Sprintf("task #%d", task.ID)) {
+						workspace.LockID = nil
+						workspace.LockInfo = nil
+						if err := c.db.Save(&workspace).Error; err != nil {
+							log.Printf("[CancelPreviousTasks] Failed to unlock workspace %s: %v", workspace.WorkspaceID, err)
+						} else {
+							log.Printf("[CancelPreviousTasks] Workspace %s unlocked after cancelling task %d", workspace.WorkspaceID, task.ID)
+						}
+						break // 只需要解锁一次
 					}
-					break // 只需要解锁一次
 				}
 			}
 		}
@@ -1075,7 +1083,7 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 	task.CompletedAt = timePtr(time.Now())
 	task.ErrorMessage = "Task cancelled by user"
 
-	if err := c.db.Save(&task).Error; err != nil {
+	if err := c.db.Omit("state_token_hash").Save(&task).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel task"})
 		return
 	}
@@ -1085,18 +1093,26 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 	if task.TaskType == models.TaskTypePlanAndApply {
 		var workspace models.Workspace
 		if err := c.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; err == nil {
-			if workspace.IsLocked {
-				// 检查锁定原因是否与当前任务相关
-				expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
-				if strings.Contains(workspace.LockReason, expectedLockReason) || strings.Contains(workspace.LockReason, fmt.Sprintf("task #%d", task.ID)) {
-					workspace.IsLocked = false
-					workspace.LockedBy = nil
-					workspace.LockedAt = nil
-					workspace.LockReason = ""
-					if err := c.db.Save(&workspace).Error; err != nil {
-						log.Printf("[CancelTask] Failed to unlock workspace %s: %v", task.WorkspaceID, err)
-					} else {
-						log.Printf("[CancelTask] Workspace %s unlocked after cancelling task %d", task.WorkspaceID, task.ID)
+			if workspace.LockID != nil && workspace.LockInfo != nil {
+				// Never clear a Terraform HTTP backend lock (has "Operation" key
+				// like "OperationTypePlan" or "OperationTypeApply")
+				if _, isHTTPLock := workspace.LockInfo["Operation"]; isHTTPLock {
+					log.Printf("[CancelTask] Workspace %s has active Terraform HTTP lock, not clearing", task.WorkspaceID)
+				} else {
+					// Platform-managed lock: check if it belongs to this task
+					lockInfoStr := ""
+					if info, ok := workspace.LockInfo["info"].(string); ok {
+						lockInfoStr = info
+					}
+					expectedLockReason := fmt.Sprintf("Locked for apply (task #%d)", task.ID)
+					if strings.Contains(lockInfoStr, expectedLockReason) || strings.Contains(lockInfoStr, fmt.Sprintf("task #%d", task.ID)) {
+						workspace.LockID = nil
+						workspace.LockInfo = nil
+						if err := c.db.Save(&workspace).Error; err != nil {
+							log.Printf("[CancelTask] Failed to unlock workspace %s: %v", task.WorkspaceID, err)
+						} else {
+							log.Printf("[CancelTask] Workspace %s unlocked after cancelling task %d", task.WorkspaceID, task.ID)
+						}
 					}
 				}
 			}
@@ -1135,7 +1151,7 @@ func timePtr(t time.Time) *time.Time {
 
 // RetryStateSave 重试State保存
 // @Summary Retry state save
-// @Description Retry saving a failed state file from backup
+// @Description Retry saving a failed state file. With HTTP state backend, checks if state already exists in DB first.
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
@@ -1185,11 +1201,36 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 		return
 	}
 
-	// 从错误信息中提取备份路径
+	// Check if state already exists in DB (saved via HTTP state backend POST)
+	taskIDUint := uint(taskID)
+	var existingState models.WorkspaceStateVersion
+	if err := c.db.Where("workspace_id = ? AND task_id = ?", workspace.WorkspaceID, taskIDUint).
+		Order("version DESC").First(&existingState).Error; err == nil {
+		// State already exists from HTTP state backend - just fix the task status
+		log.Printf("[RetryStateSave] State already exists for task %d (version %d), marking task as success", taskID, existingState.Version)
+
+		task.Status = models.TaskStatusSuccess
+		task.ErrorMessage = ""
+		c.db.Omit("state_token_hash").Save(&task)
+
+		// NOTE: Do not clear workspace lock here. In HTTP backend mode, locks are
+		// managed by Terraform itself. In non-HTTP mode, the executor handles
+		// lock cleanup. RetryStateSave is a recovery endpoint and should not
+		// be unlocking workspaces unconditionally.
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "State already saved via HTTP state backend, task status updated",
+			"version": existingState.Version,
+			"task":    task,
+		})
+		return
+	}
+
+	// Fallback: try to recover from backup file (legacy path)
 	backupPath := extractBackupPath(task.ErrorMessage)
 	if backupPath == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Cannot find backup path in error message",
+			"error":   "State not found in DB and cannot find backup path in error message",
 			"details": "Error message format may be incorrect or backup path is missing",
 		})
 		return
@@ -1198,9 +1239,9 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 	// 检查备份文件是否存在
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		ctx.JSON(http.StatusNotFound, gin.H{
-			"error":       "Backup file not found",
+			"error":       "State not found in DB and backup file not found",
 			"backup_path": backupPath,
-			"suggestion":  "The backup file may have been deleted or the backup directory was not created successfully. Please check the backup directory permissions.",
+			"suggestion":  "The backup file may have been deleted or the backup directory was not created successfully.",
 		})
 		return
 	}
@@ -1226,17 +1267,15 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 	// 更新任务状态
 	task.Status = models.TaskStatusSuccess
 	task.ErrorMessage = ""
-	c.db.Save(&task)
+	c.db.Omit("state_token_hash").Save(&task)
 
-	// 解锁workspace
-	workspace.IsLocked = false
-	workspace.LockedBy = nil
-	workspace.LockedAt = nil
-	workspace.LockReason = ""
-	c.db.Save(&workspace)
+	// NOTE: Do not clear workspace lock here. In HTTP backend mode, locks are
+	// managed by Terraform itself. In non-HTTP mode, the executor handles
+	// lock cleanup. RetryStateSave is a recovery endpoint and should not
+	// be unlocking workspaces unconditionally.
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"message": "State saved successfully, workspace unlocked",
+		"message": "State saved successfully from backup, task status updated",
 		"task":    task,
 	})
 }

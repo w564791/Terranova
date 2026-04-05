@@ -27,6 +27,7 @@ type AgentHandler struct {
 	metricsHub            *websocket.AgentMetricsHub
 	runTaskExecutor       *services.RunTaskExecutor    // Run Task 执行器
 	taskQueueManager      *services.TaskQueueManager   // 任务队列管理器（用于 CMDB 同步等 server 侧逻辑）
+	stateTokenService     *services.StateTokenService  // HTTP state backend token service
 }
 
 // NewAgentHandler creates a new agent handler
@@ -39,6 +40,11 @@ func NewAgentHandler(db *gorm.DB, streamManager *services.OutputStreamManager, m
 		metricsHub:            metricsHub,
 		runTaskExecutor:       nil, // 延迟初始化
 	}
+}
+
+// SetStateTokenService sets the state token service for HTTP state backend.
+func (h *AgentHandler) SetStateTokenService(ts *services.StateTokenService) {
+	h.stateTokenService = ts
 }
 
 // SetRunTaskExecutor sets the Run Task executor
@@ -584,6 +590,21 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 		}
 	}
 
+	// Generate state backend token for Agent/K8s mode HTTP state backend
+	if h.stateTokenService != nil {
+		stateToken, tokenErr := h.stateTokenService.GenerateToken(workspace.WorkspaceID, task.ID)
+		if tokenErr != nil {
+			log.Printf("WARNING: Failed to generate state token for task %d: %v", task.ID, tokenErr)
+		} else {
+			platformConfigService := services.NewPlatformConfigService(h.db)
+			serverURL := platformConfigService.GetBaseURL()
+			response["state_backend"] = gin.H{
+				"url":   fmt.Sprintf("%s/api/v1/terraform/state/%s", serverURL, workspace.WorkspaceID),
+				"token": stateToken,
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -671,7 +692,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 	} else if req.Phase == "apply" {
 		task.ApplyOutput += req.Content
 	}
-	h.db.Save(&task)
+	h.db.Omit("state_token_hash").Save(&task)
 
 	// IMPORTANT: Feed logs into OutputStreamManager for real-time WebSocket streaming
 	// This allows frontend to see agent logs in real-time via WebSocket
@@ -850,6 +871,14 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		return
 	}
 
+	// Revoke state token on terminal status
+	task.Status = req.Status
+	if task.IsTerminal() && h.stateTokenService != nil {
+		if err := h.stateTokenService.RevokeToken(task.ID); err != nil {
+			log.Printf("WARNING: Failed to revoke state token for task %d: %v", task.ID, err)
+		}
+	}
+
 	// 注意：post_plan Run Tasks 在 UploadPlanData 中执行（Plan 完成后）
 	// apply_pending 状态是 pre_apply 的时机，但 pre_apply 需要在 Agent 开始 Apply 前执行
 	// 目前 pre_apply 在 terraform_executor.go 中处理（Local 模式）
@@ -929,135 +958,7 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 	})
 }
 
-// SaveTaskState saves task state version
-// @Summary Save task state
-// @Description Save a new state version for the task and extract resource IDs from state
-// @Tags Agent Task
-// @Accept json
-// @Produce json
-// @Security PoolTokenAuth
-// @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "State data with content, checksum, and size"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/agents/tasks/{task_id}/state [post]
-func (h *AgentHandler) SaveTaskState(c *gin.Context) {
-	taskIDStr := c.Param("task_id")
-	if taskIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "task_id is required",
-		})
-		return
-	}
-
-	// Convert task_id to uint
-	var taskID uint
-	if _, err := fmt.Sscanf(taskIDStr, "%d", &taskID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid task_id format",
-		})
-		return
-	}
-
-	// Parse request body
-	var req struct {
-		Content  map[string]interface{} `json:"content" binding:"required"`
-		Checksum string                 `json:"checksum" binding:"required"`
-		Size     int                    `json:"size" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request body: " + err.Error(),
-		})
-		return
-	}
-
-	// Get task
-	var task models.WorkspaceTask
-	if err := h.db.First(&task, taskID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "task not found",
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	// Get workspace
-	var workspace models.Workspace
-	if err := h.db.Where("workspace_id = ?", task.WorkspaceID).First(&workspace).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to get workspace: " + err.Error(),
-		})
-		return
-	}
-
-	// Get max version
-	var maxVersion int
-	h.db.Model(&models.WorkspaceStateVersion{}).
-		Where("workspace_id = ?", workspace.WorkspaceID).
-		Select("COALESCE(MAX(version), 0)").
-		Scan(&maxVersion)
-
-	newVersion := maxVersion + 1
-
-	// Create new state version in transaction
-	err := h.db.Transaction(func(tx *gorm.DB) error {
-		stateVersion := &models.WorkspaceStateVersion{
-			WorkspaceID: workspace.WorkspaceID,
-			Version:     newVersion,
-			Content:     req.Content,
-			Checksum:    req.Checksum,
-			SizeBytes:   req.Size,
-			TaskID:      &task.ID,
-			CreatedBy:   task.CreatedBy,
-		}
-
-		if err := tx.Create(stateVersion).Error; err != nil {
-			return err
-		}
-
-		// Update workspace's tf_state
-		return tx.Model(&workspace).Update("tf_state", req.Content).Error
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to save state: " + err.Error(),
-		})
-		return
-	}
-
-	// 【修复】从 State 中提取资源 ID（Agent 模式下在服务端执行）
-	// 这是之前在 Local 模式下执行但在 Agent 模式下被跳过的逻辑
-	go func() {
-		log.Printf("[SaveTaskState] Extracting resource IDs from state for task %d (Agent mode)", taskID)
-
-		// 创建一个简单的 logger（用于 ApplyParserService）
-		stream := h.streamManager.GetOrCreate(taskID)
-		logger := services.NewTerraformLoggerWithLevelAndMode(stream, "info", true)
-
-		applyParserService := services.NewApplyParserService(h.db, h.streamManager)
-		if err := applyParserService.ExtractResourceDetailsFromState(taskID, req.Content, logger); err != nil {
-			log.Printf("[SaveTaskState] Failed to extract resource IDs for task %d: %v", taskID, err)
-		} else {
-			log.Printf("[SaveTaskState] Successfully extracted resource IDs for task %d", taskID)
-		}
-	}()
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "state saved successfully",
-		"version": newVersion,
-	})
-}
+// SaveTaskState - REMOVED: State is now managed via HTTP state backend (POST /state/{workspace_id})
 
 // ============================================================================
 // New handlers for Agent Mode refactoring
@@ -1458,20 +1359,37 @@ func (h *AgentHandler) LockWorkspace(c *gin.Context) {
 		return
 	}
 
+	lockID := fmt.Sprintf("%d", time.Now().UnixNano())
+	lockInfo := models.JSONB{
+		"ID":          lockID,
+		"operation":   "agent_lock",
+		"who":         req.UserID,
+		"who_display": req.UserID,
+		"info":        req.Reason,
+		"created":     time.Now().Format(time.RFC3339),
+	}
+
 	updates := map[string]interface{}{
-		"is_locked": true,
-		"locked_by": req.UserID,
-		"locked_at": time.Now(),
+		"lock_id":   lockID,
+		"lock_info": lockInfo,
 	}
 
-	if req.Reason != "" {
-		updates["lock_reason"] = req.Reason
-	}
-
-	if err := h.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
-		Updates(updates).Error; err != nil {
+	// Atomic lock: only succeed if workspace is currently unlocked
+	result := h.db.Model(&models.Workspace{}).
+		Where("workspace_id = ? AND lock_id IS NULL", workspaceID).
+		Updates(updates)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to lock workspace"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		// Already locked - read current lock for error message
+		var ws models.Workspace
+		h.db.Select("lock_info").Where("workspace_id = ?", workspaceID).First(&ws)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":     "workspace is already locked",
+			"lock_info": ws.LockInfo,
+		})
 		return
 	}
 
@@ -1499,10 +1417,8 @@ func (h *AgentHandler) UnlockWorkspace(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"is_locked":   false,
-		"locked_by":   nil,
-		"locked_at":   nil,
-		"lock_reason": nil,
+		"lock_id":   nil,
+		"lock_info": nil,
 	}
 
 	if err := h.db.Model(&models.Workspace{}).
@@ -1894,6 +1810,7 @@ func (h *AgentHandler) SaveTerraformLockHCL(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/state/temp [put]
 func (h *AgentHandler) UpsertTempState(c *gin.Context) {
+	log.Printf("DEPRECATED: UpsertTempState called - this endpoint will be removed. State is now managed via HTTP state backend.")
 	workspaceID := c.Param("workspace_id")
 
 	var req struct {
@@ -1945,6 +1862,7 @@ func (h *AgentHandler) UpsertTempState(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/state/promote [post]
 func (h *AgentHandler) PromoteTempState(c *gin.Context) {
+	log.Printf("DEPRECATED: PromoteTempState called - this endpoint will be removed. State is now managed via HTTP state backend.")
 	workspaceID := c.Param("workspace_id")
 
 	var req struct {
@@ -1978,6 +1896,7 @@ func (h *AgentHandler) PromoteTempState(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/workspaces/{workspace_id}/state/temp [delete]
 func (h *AgentHandler) CleanupOrphanedTempStates(c *gin.Context) {
+	log.Printf("DEPRECATED: CleanupOrphanedTempStates called - this endpoint will be removed. State is now managed via HTTP state backend.")
 	workspaceID := c.Param("workspace_id")
 
 	accessor := services.NewLocalDataAccessor(h.db)

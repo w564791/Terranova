@@ -29,7 +29,15 @@ interface Workspace {
   terraform_version: string;
   execution_mode: string;
   current_state: WorkspaceState;
-  is_locked: boolean;
+  lock_id?: string;
+  lock_info?: {
+    ID?: string;
+    operation?: string;
+    who?: string;
+    who_display?: string;
+    info?: string;
+    created?: string;
+  };
   auto_apply: boolean;
   created_at: string;
   updated_at: string;
@@ -39,9 +47,15 @@ interface WorkspaceOverview {
   id: number;
   name: string;
   description: string;
-  is_locked: boolean;
-  locked_by: number | null;
-  lock_reason: string;
+  lock_id?: string;
+  lock_info?: {
+    ID?: string;
+    operation?: string;
+    who?: string;
+    who_display?: string;
+    info?: string;
+    created?: string;
+  };
   execution_mode: string;
   terraform_version: string;
   working_directory: string;
@@ -301,7 +315,7 @@ const WorkspaceDetail: React.FC = () => {
       //       
       //       // 只在关键字段改变时更新state（排除updated_at，因为它总是在变）
       //       if (!workspace || 
-      //           workspace.is_locked !== newWorkspace.is_locked ||
+      //           workspace.lock_id !== newWorkspace.lock_id ||
       //           workspace.name !== newWorkspace.name ||
       //           workspace.terraform_version !== newWorkspace.terraform_version) {
       //         setWorkspace(newWorkspace);
@@ -354,7 +368,7 @@ const WorkspaceDetail: React.FC = () => {
       return;
     }
     
-    if (workspace?.is_locked) {
+    if (workspace?.lock_id) {
       // 直接解锁
       handleUnlock();
     } else {
@@ -579,8 +593,10 @@ const WorkspaceDetail: React.FC = () => {
               <h1 className={styles.globalTitle}>{workspace.name}</h1>
               <div className={styles.globalMeta}>
                 <span className={styles.metaItem}>ID: {workspace.workspace_id}</span>
-                <span className={styles.metaItem}>
-                  {workspace.is_locked ? 'Locked' : 'Unlocked'}
+                <span className={styles.metaItem} title={workspace.lock_info ? `${workspace.lock_info.who_display || workspace.lock_info.who || 'unknown'} - ${workspace.lock_info.info || workspace.lock_info.Operation || ''}` : ''}>
+                  {workspace.lock_id
+                    ? `Locked${workspace.lock_info?.Operation ? ' (Terraform)' : workspace.lock_info?.operation === 'ui_lock' ? ' (Manual)' : ''}`
+                    : 'Unlocked'}
                 </span>
                 <span className={styles.metaItem}>
                   Resources {currentStateResourcesCount}
@@ -598,12 +614,12 @@ const WorkspaceDetail: React.FC = () => {
             </div>
             <div className={styles.globalHeaderRight}>
               <button 
-                className={`${styles.lockButton} ${(workspace.is_locked || hasActivePlanAndApplyTask) ? styles.locked : ''}`}
+                className={`${styles.lockButton} ${(workspace.lock_id || hasActivePlanAndApplyTask) ? styles.locked : ''}`}
                 onClick={handleLockWorkspace}
                 disabled={hasActivePlanAndApplyTask}
                 title={hasActivePlanAndApplyTask ? 'Workspace is locked by active PLAN_AND_APPLY task' : ''}
               >
-                {workspace.is_locked || hasActivePlanAndApplyTask ? 'Locked' : 'Lock'}
+                {workspace.lock_id || hasActivePlanAndApplyTask ? 'Locked' : 'Lock'}
               </button>
               <button 
                 className={styles.newRunButton}

@@ -235,6 +235,14 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			}),
 			summaryController.RetryPlanSummary,
 		)
+		workspaces.POST("/:id/tasks/:task_id/plan-summary/stop",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			summaryController.StopPlanSummary,
+		)
 		workspaces.POST("/:id/tasks/:task_id/apply-summary/retry",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
@@ -250,6 +258,13 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
 			}),
 			summaryController.ConfirmPlanSummary,
+		)
+		workspaces.POST("/:id/tasks/:task_id/plan-summary/bypass",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
+			}),
+			summaryController.BypassAIIncomplete,
 		)
 
 		workspaces.GET("/:id/tasks/:task_id/state-backup",

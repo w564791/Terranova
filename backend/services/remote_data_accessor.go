@@ -195,25 +195,8 @@ func (a *RemoteDataAccessor) GetLatestStateVersion(workspaceID string) (*models.
 	return stateVersion, nil
 }
 
-// SaveStateVersion 保存 State 版本（带重试）
-func (a *RemoteDataAccessor) SaveStateVersion(version *models.WorkspaceStateVersion) error {
-	// Get task ID from cached data
-	taskData, ok := a.taskData["task"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("task data not found in cache")
-	}
-
-	taskID := getUint(taskData, "id")
-
-	// 使用带重试的方法保存 State（这是最关键的写操作）
-	return a.apiClient.SaveTaskStateWithRetry(taskID, version.Content, version.Checksum, version.SizeBytes)
-}
-
-// UpdateWorkspaceState 更新 Workspace 的 State
-func (a *RemoteDataAccessor) UpdateWorkspaceState(workspaceID string, stateContent map[string]interface{}) error {
-	// This is handled by SaveStateVersion in Agent mode
-	return nil
-}
+// SaveStateVersion - REMOVED: State is now managed via HTTP state backend
+// UpdateWorkspaceState - REMOVED: State is now managed via HTTP state backend
 
 // ============================================================================
 // Task 相关
@@ -355,7 +338,9 @@ func (a *RemoteDataAccessor) CheckResourceVersionExists(resourceID string, versi
 // ============================================================================
 
 // LockWorkspace 锁定 Workspace
-func (a *RemoteDataAccessor) LockWorkspace(workspaceID, userID, reason string) error {
+func (a *RemoteDataAccessor) LockWorkspace(workspaceID string, lockInfo map[string]interface{}) error {
+	userID, _ := lockInfo["who"].(string)
+	reason, _ := lockInfo["info"].(string)
 	return a.apiClient.LockWorkspace(workspaceID, userID, reason)
 }
 
@@ -628,6 +613,18 @@ func (a *RemoteDataAccessor) GetRemoteDataConfig() []map[string]interface{} {
 	}
 
 	return result
+}
+
+// GetStateBackendConfig returns HTTP state backend config from task data (Agent mode).
+// Returns url and token; empty strings if not configured.
+func (a *RemoteDataAccessor) GetStateBackendConfig() (url string, token string) {
+	stateBackend, ok := a.taskData["state_backend"].(map[string]interface{})
+	if !ok {
+		return "", ""
+	}
+	url, _ = stateBackend["url"].(string)
+	token, _ = stateBackend["token"].(string)
+	return url, token
 }
 
 // GetModuleVersions 获取 module 版本映射（Agent模式）

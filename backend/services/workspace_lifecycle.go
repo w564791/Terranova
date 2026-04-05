@@ -75,7 +75,7 @@ func (s *WorkspaceLifecycleService) TransitionState(workspaceID string, newState
 	}
 
 	// 检查是否锁定
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		return errors.New("workspace已锁定，无法执行状态转换")
 	}
 
@@ -101,7 +101,7 @@ func (s *WorkspaceLifecycleService) StartPlan(workspaceID string, userID string)
 	}
 
 	// 检查是否锁定
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		return nil, errors.New("workspace已锁定，无法执行Plan")
 	}
 
@@ -203,30 +203,43 @@ func (s *WorkspaceLifecycleService) CompletePlan(taskID uint, success bool, outp
 // func (s *WorkspaceLifecycleService) StartApply(workspaceID string, userID string) (*models.WorkspaceTask, error) { ... }
 // func (s *WorkspaceLifecycleService) CompleteApply(taskID uint, success bool, output string, errorMsg string) error { ... }
 
-// LockWorkspace 锁定workspace
+// LockWorkspace 锁定workspace (atomic: uses WHERE lock_id IS NULL to prevent TOCTOU race)
 func (s *WorkspaceLifecycleService) LockWorkspace(workspaceID string, userID string, reason string) error {
-	now := time.Now()
+	lockID := fmt.Sprintf("%d", time.Now().UnixNano())
+	lockInfo := models.JSONB{
+		"ID":          lockID,
+		"operation":   "ui_lock",
+		"who":         userID,
+		"who_display": userID,
+		"info":        reason,
+		"created":     time.Now().Format(time.RFC3339),
+	}
+
 	updates := map[string]interface{}{
-		"is_locked":   true,
-		"locked_by":   userID,
-		"locked_at":   now,
-		"lock_reason": reason,
+		"lock_id":   lockID,
+		"lock_info": lockInfo,
 	}
 
-	if err := s.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(updates).Error; err != nil {
-		return fmt.Errorf("锁定workspace失败: %w", err)
+	result := s.db.Model(&models.Workspace{}).Where("workspace_id = ? AND lock_id IS NULL", workspaceID).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("锁定workspace失败: %w", result.Error)
 	}
-
+	if result.RowsAffected == 0 {
+		// Already locked - read current lock for error message
+		var ws models.Workspace
+		if err := s.db.Select("lock_info").Where("workspace_id = ?", workspaceID).First(&ws).Error; err != nil {
+			return fmt.Errorf("workspace not found: %w", err)
+		}
+		return fmt.Errorf("workspace is already locked: %v", ws.LockInfo)
+	}
 	return nil
 }
 
 // UnlockWorkspace 解锁workspace
 func (s *WorkspaceLifecycleService) UnlockWorkspace(workspaceID string) error {
 	updates := map[string]interface{}{
-		"is_locked":   false,
-		"locked_by":   nil,
-		"locked_at":   nil,
-		"lock_reason": "",
+		"lock_id":   nil,
+		"lock_info": nil,
 	}
 
 	if err := s.db.Model(&models.Workspace{}).Where("workspace_id = ?", workspaceID).Updates(updates).Error; err != nil {

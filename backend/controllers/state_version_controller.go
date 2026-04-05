@@ -526,7 +526,7 @@ func (svc *StateVersionController) RollbackState(c *gin.Context) {
 		}
 	}
 
-	if workspace.IsLocked {
+	if workspace.LockID != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":      400,
 			"message":   "workspace已锁定，无法回滚",

@@ -22,7 +22,7 @@ import (
 	_ "iac-platform/docs" // swagger docs
 )
 
-func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *websocket.Hub, agentMetricsHub *websocket.AgentMetricsHub, queueManager *services.TaskQueueManager, rawCCHandler *handlers.RawAgentCCHandler, runTaskExecutor *services.RunTaskExecutor) *gin.Engine {
+func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *websocket.Hub, agentMetricsHub *websocket.AgentMetricsHub, queueManager *services.TaskQueueManager, rawCCHandler *handlers.RawAgentCCHandler, runTaskExecutor *services.RunTaskExecutor, stateTokenService *services.StateTokenService) *gin.Engine {
 	r := gin.New()
 
 	// 设置全局数据库连接（用于JWT中间件查询用户信息）
@@ -120,7 +120,12 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	api.POST("/auth/logout", middleware.JWTAuth(), handlers.NewAuthHandler(db).Logout)
 
 	// Agent API routes (使用 Pool Token 认证，不需要 JWT)
-	setupAgentAPIRoutes(api, db, streamManager, agentMetricsHub, runTaskExecutor, queueManager)
+	setupAgentAPIRoutes(api, db, streamManager, agentMetricsHub, runTaskExecutor, queueManager, stateTokenService)
+
+	// Terraform HTTP State Backend routes (使用 State Token 认证)
+	if stateTokenService != nil {
+		setupTFStateBackendRoutes(api, db, stateTokenService)
+	}
 
 	// Run Task Callback routes (公开路由，不需要认证，供外部 Run Task 服务回调)
 	setupRunTaskCallbackRoutes(api, db, runTaskExecutor)

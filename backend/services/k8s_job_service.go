@@ -149,7 +149,7 @@ func (s *K8sJobService) CreateJobForTask(ctx context.Context, task *models.Works
 	// 8. Update task with K8s info
 	task.K8sPodName = jobName
 	task.K8sNamespace = namespace
-	if err := s.db.Save(task).Error; err != nil {
+	if err := s.db.Omit("state_token_hash").Save(task).Error; err != nil {
 		log.Printf("[K8sJob] Warning: failed to update task with K8s info: %v", err)
 	}
 

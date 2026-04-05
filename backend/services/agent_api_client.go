@@ -132,23 +132,7 @@ func (c *AgentAPIClient) UpdateTaskStatus(taskID uint, status string, updates ma
 	return nil
 }
 
-// SaveTaskState saves task state version
-func (c *AgentAPIClient) SaveTaskState(taskID uint, content map[string]interface{}, checksum string, size int) error {
-	path := fmt.Sprintf("/api/v1/agents/tasks/%d/state", taskID)
-
-	reqBody := map[string]interface{}{
-		"content":  content,
-		"checksum": checksum,
-		"size":     size,
-	}
-
-	_, err := c.doRequest("POST", path, reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to save state: %w", err)
-	}
-
-	return nil
-}
+// SaveTaskState - REMOVED: State is now managed via HTTP state backend
 
 // doRequest performs HTTP request with authentication
 func (c *AgentAPIClient) doRequest(method, path string, body interface{}) (map[string]interface{}, error) {
@@ -865,23 +849,7 @@ func (c *AgentAPIClient) parsePlanTaskResponse(respBody map[string]interface{}) 
 	return task, nil
 }
 
-// SaveTaskStateWithRetry 保存 State（带重试）- 最关键的写操作
-func (c *AgentAPIClient) SaveTaskStateWithRetry(taskID uint, content map[string]interface{}, checksum string, size int) error {
-	path := fmt.Sprintf("/api/v1/agents/tasks/%d/state", taskID)
-
-	reqBody := map[string]interface{}{
-		"content":  content,
-		"checksum": checksum,
-		"size":     size,
-	}
-
-	_, err := c.doRequestWithRetry("POST", path, reqBody, c.retryConfig.MaxRetries)
-	if err != nil {
-		return fmt.Errorf("failed to save state: %w", err)
-	}
-
-	return nil
-}
+// SaveTaskStateWithRetry - REMOVED: State is now managed via HTTP state backend
 
 // UpdateTaskStatusWithRetry 更新任务状态（带重试）
 func (c *AgentAPIClient) UpdateTaskStatusWithRetry(taskID uint, status string, updates map[string]interface{}) error {

@@ -34,6 +34,15 @@ type AIPlanSummary struct {
 	UserDecisionNote     string          `gorm:"type:text" json:"user_decision_note,omitempty"`                 // 用户补充说明
 	UserDecisionBy       string          `gorm:"type:varchar(20)" json:"user_decision_by,omitempty"`            // 确认人 user_id
 	UserDecisionAt       *time.Time      `json:"user_decision_at,omitempty"`                                    // 确认时间
+	// Deterministic risk scoring
+	RiskScoreValue     *float64        `gorm:"type:float" json:"risk_score_value,omitempty"`
+	RiskScoreColor     string          `gorm:"type:varchar(10)" json:"risk_score_color,omitempty"`
+	RiskScoreBreakdown json.RawMessage `gorm:"type:jsonb" json:"risk_score_breakdown,omitempty"`
+	// AI analysis completeness (orthogonal to risk scoring)
+	AIAnalysisIncomplete bool       `gorm:"default:false" json:"ai_analysis_incomplete"`
+	BypassedBy           *string    `gorm:"type:varchar(20)" json:"bypassed_by,omitempty"`
+	BypassedAt           *time.Time `json:"bypassed_at,omitempty"`
+	BypassReason         string     `gorm:"type:text" json:"bypass_reason,omitempty"`
 }
 
 // TableName 指定表名

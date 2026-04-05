@@ -179,6 +179,28 @@ export interface PlanSummary {
   user_decision_note?: string;
   user_decision_by?: string;
   user_decision_at?: string;
+  // Deterministic risk scoring
+  risk_score_value?: number;
+  risk_score_color?: string;  // green/yellow/orange/red
+  risk_score_breakdown?: {
+    final_score: number;
+    risk_level: string;
+    decision_color: string;
+    deductions: { category: string; item: string; points: number; reason: string }[];
+    base_deduction: number;
+    env_multiplier: number;
+    base_score: number;
+    combo_multiplier_applied?: boolean;
+    combo_detail?: string;
+    near_threshold?: boolean;
+    divergence_alert?: boolean;
+    ai_risk_level?: string;
+  };
+  // AI analysis completeness
+  ai_analysis_incomplete?: boolean;
+  bypassed_by?: string;
+  bypassed_at?: string;
+  bypass_reason?: string;
 }
 
 export interface ApplySummary {
@@ -237,6 +259,26 @@ export const confirmPlanSummary = async (
     decision_code: decisionCode,
     note: note || '',
   });
+};
+
+// 停止卡住的 Plan Summary
+export const stopPlanSummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<void> => {
+  await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/stop`);
+};
+
+// AI 分析不完整 - 管理员绕过
+export const bypassAIIncomplete = async (
+  workspaceId: string,
+  taskId: number,
+  bypassReason: string
+): Promise<PlanSummary> => {
+  const response = await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/bypass`, {
+    bypass_reason: bypassReason,
+  });
+  return response as unknown as PlanSummary;
 };
 
 // 重试 Apply Summary

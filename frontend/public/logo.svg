@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&amp;display=swap');
+  </style>
+  <text x="240" y="80" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="72" fill="#1a3a5c">Terranova</text>
+  <text x="240" y="135" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="600" font-size="46" fill="#2a5a7a">AI &amp; Compliance</text>
+  <text x="240" y="172" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="600" font-size="18" letter-spacing="3" fill="#1a3a5c">AUTOMATION | COMPLIANCE | SECURITY</text>
+</svg>

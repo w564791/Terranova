@@ -5,7 +5,12 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /agent cmd/agent/main.go
+ARG COMMIT_HASH=unknown
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 go build -ldflags="-s -w \
+    -X iac-platform/internal/version.CommitHash=${COMMIT_HASH} \
+    -X iac-platform/internal/version.BuildTime=${BUILD_TIME}" \
+    -o /agent cmd/agent/main.go
 
 # -- Stage 2: Runtime --
 FROM amazonlinux:latest

@@ -129,24 +129,7 @@ func (a *LocalDataAccessor) GetLatestStateVersion(workspaceID string) (*models.W
 	return &stateVersion, nil
 }
 
-// SaveStateVersion 保存 State 版本
-func (a *LocalDataAccessor) SaveStateVersion(version *models.WorkspaceStateVersion) error {
-	db := a.getDB()
-
-	if err := db.Create(version).Error; err != nil {
-		return fmt.Errorf("failed to save state version: %w", err)
-	}
-
-	// 更新 workspace 的 resource_count
-	if err := db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", version.WorkspaceID).
-		Update("resource_count", version.ResourceCount).Error; err != nil {
-		// 记录错误但不返回，因为 state 已经保存成功
-		log.Printf("[LocalData] Warning: failed to update workspace resource_count: %v", err)
-	}
-
-	return nil
-}
+// SaveStateVersion - REMOVED: State is now managed via HTTP state backend
 
 // UpdateWorkspaceState 更新 Workspace 的 State
 func (a *LocalDataAccessor) UpdateWorkspaceState(workspaceID string, stateContent map[string]interface{}) error {
@@ -181,7 +164,10 @@ func (a *LocalDataAccessor) GetTask(taskID uint) (*models.WorkspaceTask, error) 
 func (a *LocalDataAccessor) UpdateTask(task *models.WorkspaceTask) error {
 	db := a.getDB()
 
-	if err := db.Save(task).Error; err != nil {
+	// Omit state_token_hash: this field is managed exclusively by StateTokenService
+	// (GenerateToken/RevokeToken) via raw SQL updates. db.Save() would overwrite
+	// the current hash with a stale value from the in-memory task struct.
+	if err := db.Omit("state_token_hash").Save(task).Error; err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
 	}
 
@@ -306,15 +292,13 @@ func (a *LocalDataAccessor) CheckResourceVersionExists(resourceID string, versio
 // ============================================================================
 
 // LockWorkspace 锁定 Workspace
-func (a *LocalDataAccessor) LockWorkspace(workspaceID, userID, reason string) error {
+func (a *LocalDataAccessor) LockWorkspace(workspaceID string, lockInfo map[string]interface{}) error {
 	db := a.getDB()
 
-	now := time.Now()
+	lockID, _ := lockInfo["ID"].(string)
 	updates := map[string]interface{}{
-		"is_locked":   true,
-		"locked_by":   userID,
-		"locked_at":   now,
-		"lock_reason": reason,
+		"lock_id":   lockID,
+		"lock_info": models.JSONB(lockInfo),
 	}
 
 	if err := db.Model(&models.Workspace{}).
@@ -331,10 +315,8 @@ func (a *LocalDataAccessor) UnlockWorkspace(workspaceID string) error {
 	db := a.getDB()
 
 	updates := map[string]interface{}{
-		"is_locked":   false,
-		"locked_by":   nil,
-		"locked_at":   nil,
-		"lock_reason": "",
+		"lock_id":   nil,
+		"lock_info": nil,
 	}
 
 	if err := db.Model(&models.Workspace{}).
