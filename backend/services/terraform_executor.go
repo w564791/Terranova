@@ -3463,20 +3463,24 @@ func (s *TerraformExecutor) parsePlanChanges(planJSON map[string]interface{}) (i
 		}
 	}
 
-	// Drift check (-refresh-only): changes are in resource_drift, not resource_changes
-	if resourceDrift, ok := planJSON["resource_drift"].([]interface{}); ok {
-		for _, rd := range resourceDrift {
-			if driftMap, ok := rd.(map[string]interface{}); ok {
-				if changeDetail, ok := driftMap["change"].(map[string]interface{}); ok {
-					if actions, ok := changeDetail["actions"].([]interface{}); ok {
-						for _, action := range actions {
-							switch action.(string) {
-							case "create":
-								add++
-							case "update":
-								change++
-							case "delete":
-								destroy++
+	// Drift check (-refresh-only): changes are in resource_drift, not resource_changes.
+	// Only count resource_drift when resource_changes has no real changes (refresh-only mode).
+	// In normal plan mode, resource_changes already incorporates drift — merging would double-count.
+	if add+change+destroy == 0 {
+		if resourceDrift, ok := planJSON["resource_drift"].([]interface{}); ok {
+			for _, rd := range resourceDrift {
+				if driftMap, ok := rd.(map[string]interface{}); ok {
+					if changeDetail, ok := driftMap["change"].(map[string]interface{}); ok {
+						if actions, ok := changeDetail["actions"].([]interface{}); ok {
+							for _, action := range actions {
+								switch action.(string) {
+								case "create":
+									add++
+								case "update":
+									change++
+								case "delete":
+									destroy++
+								}
 							}
 						}
 					}
@@ -4544,9 +4548,11 @@ func (s *TerraformExecutor) extractTerraformOutputs(
 func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string]interface{}) []map[string]interface{} {
 	var resourceChanges []map[string]interface{}
 
-	changes, ok := planJSON["resource_changes"].([]interface{})
-	if !ok {
-		return resourceChanges
+	changes, _ := planJSON["resource_changes"].([]interface{})
+
+	// For refresh-only plans (drift check), include resource_drift
+	if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok {
+		changes = append(changes, driftChanges...)
 	}
 
 	for _, item := range changes {

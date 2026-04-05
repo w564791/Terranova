@@ -978,7 +978,8 @@ func (s *DriftCheckService) ProcessDriftCheckResultByTaskID(taskID uint) error {
 func generatePlanSummary(planJSON map[string]interface{}) string {
 	add, change, destroy := 0, 0, 0
 
-	// Combine resource_changes and resource_drift (for refresh-only drift check)
+	// This function is only called from drift check context (refresh-only plans).
+	// In refresh-only mode, resource_changes is all no-op; actual drift is in resource_drift.
 	allChanges := make([]interface{}, 0)
 	if resourceChanges, ok := planJSON["resource_changes"].([]interface{}); ok {
 		allChanges = append(allChanges, resourceChanges...)

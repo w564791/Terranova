@@ -150,9 +150,32 @@ func (s *PlanParserService) parseResourceChanges(planJSON map[string]interface{}
 
 	changes, _ := planJSON["resource_changes"].([]interface{})
 
-	// Also include resource_drift for refresh-only plans (drift check)
-	if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok {
-		changes = append(changes, driftChanges...)
+	// Filter out no-op actions to check if there are real changes
+	hasRealChanges := false
+	for _, item := range changes {
+		if rc, ok := item.(map[string]interface{}); ok {
+			if ch, ok := rc["change"].(map[string]interface{}); ok {
+				if actions, ok := ch["actions"].([]interface{}); ok {
+					for _, a := range actions {
+						if s, ok := a.(string); ok && s != "no-op" && s != "read" {
+							hasRealChanges = true
+							break
+						}
+					}
+				}
+			}
+		}
+		if hasRealChanges {
+			break
+		}
+	}
+
+	// For refresh-only plans (drift check), resource_changes is all no-op.
+	// Fall back to resource_drift. Don't merge in normal plans to avoid double-counting.
+	if !hasRealChanges {
+		if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
+			changes = driftChanges
+		}
 	}
 
 	if len(changes) == 0 {
