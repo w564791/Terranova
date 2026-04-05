@@ -617,14 +617,15 @@ const DecisionConfirmation: React.FC<{
         <span className={styles.decisionRequired}>Action Required</span>
       </div>
       <div className={styles.decisionBody}>
-        {riskHighlights.length > 0 && (
+        {/* Only show risk_highlights when there's no risk_score_breakdown (avoids duplicate info) */}
+        {riskHighlights.length > 0 && !summary.risk_score_breakdown && (
           <ul className={styles.riskHighlights}>
             {riskHighlights.map((highlight, i) => (
               <li key={i}>{highlight}</li>
             ))}
           </ul>
         )}
-        {riskHighlights.length === 0 && (
+        {riskHighlights.length === 0 && !summary.risk_score_breakdown && (
           <p className={styles.decisionPrompt}>AI 判断此变更需要人工确认后才能执行 Apply：</p>
         )}
         <div className={styles.decisionOptions}>
