@@ -243,6 +243,7 @@ const PlanSummaryResult: React.FC<{
   getRiskColor: (level: string) => string;
   getRiskLabel: (level: string) => string;
 }> = ({ summary, getRiskColor, getRiskLabel }) => {
+  const [showScore, setShowScore] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showAffected, setShowAffected] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
@@ -260,11 +261,11 @@ const PlanSummaryResult: React.FC<{
         </div>
       )}
 
-      {/* Deterministic Risk Score */}
+      {/* Deterministic Risk Score — collapsed by default */}
       {summary.risk_score_value !== undefined && summary.risk_score_breakdown && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>
-            Risk Score
+          <div className={styles.collapseToggle} onClick={() => setShowScore(!showScore)}>
+            {showScore ? '∧' : '∨'} Risk Score
             <span className={`${styles.riskBadge} ${getRiskColor(summary.risk_score_breakdown.risk_level)}`} style={{ marginLeft: 8 }}>
               {summary.risk_score_value.toFixed(1)} / 100
             </span>
@@ -277,37 +278,39 @@ const PlanSummaryResult: React.FC<{
               </span>
             )}
           </div>
-          <div className={styles.sectionContent}>
-            <div className={styles.scoreBar}>
-              <div
-                className={styles.scoreBarFill}
-                style={{
-                  width: `${summary.risk_score_value}%`,
-                  backgroundColor: summary.risk_score_color === 'green' ? '#10b981' :
-                    summary.risk_score_color === 'yellow' ? '#f59e0b' :
-                    summary.risk_score_color === 'orange' ? '#f97316' : '#ef4444'
-                }}
-              />
-            </div>
-            <div className={styles.scoreDetails}>
-              <span>Base Deduction: {summary.risk_score_breakdown.base_deduction}</span>
-              <span>Env Multiplier: x{summary.risk_score_breakdown.env_multiplier}</span>
-              {summary.risk_score_breakdown.combo_multiplier_applied && (
-                <span>Combo: {summary.risk_score_breakdown.combo_detail}</span>
+          {showScore && (
+            <div className={styles.sectionContent}>
+              <div className={styles.scoreBar}>
+                <div
+                  className={styles.scoreBarFill}
+                  style={{
+                    width: `${summary.risk_score_value}%`,
+                    backgroundColor: summary.risk_score_color === 'green' ? '#10b981' :
+                      summary.risk_score_color === 'yellow' ? '#f59e0b' :
+                      summary.risk_score_color === 'orange' ? '#f97316' : '#ef4444'
+                  }}
+                />
+              </div>
+              <div className={styles.scoreDetails}>
+                <span>Base Deduction: {summary.risk_score_breakdown.base_deduction}</span>
+                <span>Env Multiplier: x{summary.risk_score_breakdown.env_multiplier}</span>
+                {summary.risk_score_breakdown.combo_multiplier_applied && (
+                  <span>Combo: {summary.risk_score_breakdown.combo_detail}</span>
+                )}
+              </div>
+              {summary.risk_score_breakdown.deductions.length > 0 && (
+                <div className={styles.deductionList}>
+                  {summary.risk_score_breakdown.deductions.map((d, i) => (
+                    <div key={i} className={styles.deductionItem}>
+                      <span className={styles.deductionCategory}>{d.category}</span>
+                      <span className={styles.deductionPoints}>{d.points}</span>
+                      <span className={styles.deductionReason}>{d.item}: {d.reason}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            {summary.risk_score_breakdown.deductions.length > 0 && (
-              <div className={styles.deductionList}>
-                {summary.risk_score_breakdown.deductions.map((d, i) => (
-                  <div key={i} className={styles.deductionItem}>
-                    <span className={styles.deductionCategory}>{d.category}</span>
-                    <span className={styles.deductionPoints}>{d.points}</span>
-                    <span className={styles.deductionReason}>{d.item}: {d.reason}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 
