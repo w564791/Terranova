@@ -505,40 +505,27 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		return map[string]interface{}{"found": false, "message": "no current version found"}, nil
 	}
 
-	// 3. 找上次 apply 时的版本：state_versions → task_id → snapshot_resource_versions
-	var stateVersion models.WorkspaceStateVersion
-	if err := t.db.Where("workspace_id = ?", workspaceID).
-		Order("version DESC").
-		First(&stateVersion).Error; err != nil {
-		return map[string]interface{}{
-			"found":           true,
-			"message":         "no apply history found, showing current code only",
-			"current_version": currentVersion.Version,
-			"current_code":    currentVersion.TFCode,
-		}, nil
-	}
-
-	// 4. 从对应 task 的 snapshot 中找到 apply 时的版本号
+	// 3. 找最近一次包含该资源的已 apply 任务
+	//    通过 JSONB jsonb_exists 函数查询 snapshot_resource_versions 中包含 resource_id 键的任务
 	var task models.WorkspaceTask
 	if err := t.db.Select("id, snapshot_resource_versions").
-		Where("id = ?", stateVersion.TaskID).
+		Where("workspace_id = ? AND status = 'applied' AND jsonb_exists(snapshot_resource_versions, ?)", workspaceID, resourceID).
+		Order("id DESC").
 		First(&task).Error; err != nil {
 		return map[string]interface{}{
 			"found":           true,
-			"message":         "apply task not found",
+			"message":         "no apply history found for this resource",
 			"current_version": currentVersion.Version,
 			"current_code":    currentVersion.TFCode,
 		}, nil
 	}
 
-	// 5. 从 snapshot 中提取该资源的版本号
+	// 4. 从 snapshot 中提取该资源的版本号
 	var appliedVersionNum int
-	if task.SnapshotResourceVersions != nil {
-		if snap, ok := task.SnapshotResourceVersions[resourceID]; ok {
-			if snapMap, ok := snap.(map[string]interface{}); ok {
-				if v, ok := snapMap["version"].(float64); ok {
-					appliedVersionNum = int(v)
-				}
+	if snap, ok := task.SnapshotResourceVersions[resourceID]; ok {
+		if snapMap, ok := snap.(map[string]interface{}); ok {
+			if v, ok := snapMap["version"].(float64); ok {
+				appliedVersionNum = int(v)
 			}
 		}
 	}
@@ -546,7 +533,7 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 	if appliedVersionNum == 0 {
 		return map[string]interface{}{
 			"found":           true,
-			"message":         "resource not in last apply snapshot, may be newly added",
+			"message":         "could not extract version from snapshot",
 			"current_version": currentVersion.Version,
 			"current_code":    currentVersion.TFCode,
 		}, nil
@@ -584,7 +571,7 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		"has_changes":     true,
 		"applied_version": appliedVersionNum,
 		"current_version": currentVersion.Version,
-		"applied_task_id": stateVersion.TaskID,
+		"applied_task_id": task.ID,
 		"diff":            diff,
 	}, nil
 }
