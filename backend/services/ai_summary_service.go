@@ -166,6 +166,7 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db))
 	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
 	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
+	loop.RegisterTool(NewQueryResourceCodeDiffTool(s.db))
 	loop.SetOutputValidator(planSummaryValidator)
 
 	var processLog strings.Builder
@@ -487,8 +488,14 @@ func (s *AISummaryService) extractPlanChanges(planJSON models.JSONB) interface{}
 			continue
 		}
 		if len(actions) == 1 {
-			if action, ok := actions[0].(string); ok && (action == "no-op" || action == "read") {
-				continue // 跳过 no-op 和 read（data source）
+			if action, ok := actions[0].(string); ok && action == "no-op" {
+				continue // 跳过 no-op
+			}
+			// read（data source）：保留有 action_reason 的（依赖链触发的重新读取），跳过普通 read
+			if action, ok := actions[0].(string); ok && action == "read" {
+				if _, hasReason := change["action_reason"]; !hasReason {
+					continue
+				}
 			}
 		}
 		filtered = append(filtered, item)

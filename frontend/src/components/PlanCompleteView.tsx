@@ -106,6 +106,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
     update: resources.filter(r => r.action === 'update').length,
     delete: resources.filter(r => r.action === 'delete').length,
     replace: resources.filter(r => r.action === 'replace').length,
+    read: resources.filter(r => r.action === 'read').length,
   }), [resources]);
 
   // 创建从触发资源地址到 action invocations 的映射
@@ -185,10 +186,11 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
   };
 
   // 计算变更的字段
-  const computeChanges = (before: Record<string, any>, after: Record<string, any>) => {
+  const computeChanges = (before: Record<string, any>, after: Record<string, any>, action?: string) => {
     const changed: Array<{ key: string; before: any; after: any; type: 'add' | 'remove' | 'modify' }> = [];
     const unchanged: string[] = [];
     const allKeys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+    const isUpdate = action === 'update' || action === 'replace';
 
     allKeys.forEach(key => {
       const beforeVal = before?.[key];
@@ -203,7 +205,8 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
       } else if (beforeEmpty && !afterEmpty) {
         changed.push({ key, before: beforeVal, after: afterVal, type: 'add' });
       } else if (!beforeEmpty && afterEmpty) {
-        changed.push({ key, before: beforeVal, after: afterVal, type: 'remove' });
+        // UPDATE/REPLACE 资源中 after 为 null 表示 "known after apply"，不是删除
+        changed.push({ key, before: beforeVal, after: afterVal, type: isUpdate ? 'modify' : 'remove' });
       } else {
         changed.push({ key, before: beforeVal, after: afterVal, type: 'modify' });
       }
@@ -391,7 +394,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
 
   // 渲染 UPDATE/REPLACE 资源的属性
   const renderUpdateBody = (resource: ResourceChange) => {
-    const { changed, unchanged } = computeChanges(resource.changes_before, resource.changes_after);
+    const { changed, unchanged } = computeChanges(resource.changes_before, resource.changes_after, resource.action);
     
     if (changed.length === 0) {
       return <div className={styles.emptyMessage}>No changes detected</div>;
@@ -510,6 +513,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
       case 'update': return { icon: '~', label: 'UPDATE', className: styles.actionUpdate };
       case 'delete': return { icon: '−', label: 'DELETE', className: styles.actionDelete };
       case 'replace': return { icon: '±', label: 'REPLACE', className: styles.actionReplace };
+      case 'read': return { icon: '≡', label: 'READ', className: styles.actionRead };
       default: return { icon: '?', label: action.toUpperCase(), className: '' };
     }
   };
@@ -553,7 +557,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
 
             {showActionFilter && (
               <div className={styles.actionFilterDropdown}>
-                {['create', 'update', 'delete', 'replace'].map(action => (
+                {['create', 'update', 'delete', 'replace', 'read'].map(action => (
                   <label key={action} className={styles.actionFilterItem}>
                     <input 
                       type="checkbox" 
@@ -631,7 +635,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
 
               {isExpanded && (
                 <div className={styles.resourceBody}>
-                  {resource.action === 'create' && renderCreateBody(resource)}
+                  {(resource.action === 'create' || resource.action === 'read') && renderCreateBody(resource)}
                   {resource.action === 'delete' && renderDeleteBody(resource)}
                   {(resource.action === 'update' || resource.action === 'replace') && renderUpdateBody(resource)}
                   

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import styles from './TaskTimeline.module.css';
+import api from '../services/api';
 import RunTaskResults from './RunTaskResults';
 import StructuredRunOutput from './StructuredRunOutput';
 import SmartLogViewer from './SmartLogViewer';
@@ -305,6 +306,31 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
         </div>
         {expandedSections.has('plan') && (
           <div className={styles.cardContent}>
+            {/* Plan JSON 下载按钮 */}
+            {planStatus !== 'pending' && planStatus !== 'running' && (
+              <div className={styles.planDownloadRow}>
+                <button
+                  className={styles.planDownloadBtn}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const data = await api.get(`/workspaces/${workspaceId}/tasks/${task.id}/resource-changes`);
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `plan-changes-task-${task.id}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (err) {
+                      console.error('Failed to download plan changes:', err);
+                    }
+                  }}
+                >
+                  plan changes download
+                </button>
+              </div>
+            )}
             {/* Plan 阶段错误信息（可折叠） */}
             {planStatus === 'failed' && task.error_message && (
               <>

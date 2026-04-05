@@ -232,6 +232,10 @@
   border-left: 3px solid #ea580c;
 }
 
+.resourceCard.actionRead {
+  border-left: 3px solid #6b7280;
+}
+
 /* Resource Header */
 .resourceHeader {
   display: flex;
@@ -301,6 +305,11 @@
 .actionIcon.actionReplace,
 .iconReplace {
   color: #ea580c;
+}
+
+.actionIcon.actionRead,
+.iconRead {
+  color: #6b7280;
 }
 
 /* Resource Address */
@@ -379,6 +388,11 @@
 .actionBadge.actionReplace {
   background: #ffedd5;
   color: #9a3412;
+}
+
+.actionBadge.actionRead {
+  background: #f3f4f6;
+  color: #374151;
 }
 
 /* Resource Body */

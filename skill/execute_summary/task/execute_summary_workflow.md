@@ -33,6 +33,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 |`query_resource_attributes`|查询指定资源的完整属性                    |plan / apply|
 |`query_state_resources`    |查询工作空间当前完整资源概览                 |plan / apply|
 |`query_plan_summary`       |查询 Plan 阶段影响分析结果               |**仅 apply** |
+|`query_resource_code_diff` |查询资源代码自上次 apply 以来的真实变更         |plan         |
 
 **工具入参说明：**
 
@@ -45,6 +46,7 @@ domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 - `query_resource_attributes`: query（搜索关键词，如 cloud_resource_id、terraform_address、资源名称，支持模糊匹配，自动跨 workspace 含外部 CMDB）
 - `query_state_resources`: workspace_id
 - `query_plan_summary`: task_id
+- `query_resource_code_diff`: workspace_id, resource_id（CMDB 资源标识，如 AWS_s3-bucket.xxx）。返回上次 apply 版本与当前版本的字段级差异
 
 -----
 
@@ -328,6 +330,9 @@ affected_resources_schema:
 ```
 1.  验证 stage == "plan"，否则返回 INVALID_STAGE_CONTEXT
 2.  解析变更资源列表（resource、action、type）。若包含第十二节所列资源类型，步骤 3 中必须包含 query_cmdb_dependencies 调用
+2a. after_unknown 代码变更分析（见第十二A节）：当变更数据中存在 after_unknown 字段时，
+    调用 query_resource_code_diff 获取资源代码自上次 apply 以来的真实变更，
+    结合代码差异判断 unknown 字段是否会发生实质变更。分析结论纳入步骤 6 的影响分析中。
 3.  第一轮工具调用：一次性发起所有变更资源的工具调用（query_resource_attributes、query_module_resources、query_cmdb_dependencies），禁止对同类查询分多轮逐个调用
 4.  第二轮工具调用（依赖方深入查询）：如果 query_cmdb_dependencies 返回依赖方 >= 3 个，必须对依赖方抽样调用 query_resource_attributes（至少 3 个、最多 5 个），获取 resource_summary 用于具体影响描述。此步骤不可跳过。
 5.  根据查询结果记录 direct_dependencies（禁止估算）
@@ -362,6 +367,61 @@ affected_resources_schema:
 1. 安全组/安全组规则
 2. iam role/iam policy
 3. resource base policy,例如secretsmanager policy,kms policy
+```
+
+-----
+
+## 十二A、after_unknown 代码变更分析（强约束）
+
+Terraform plan 中，资源的 `change.after_unknown` 标记了哪些字段的值需要 apply 后才能确定。这些字段在前端显示为 "Known after apply"，**无法直接用于风控判断**。必须通过代码变更分析判断这些字段是否会发生实质变更。
+
+### 识别触发条件
+
+当变更数据中出现以下信号时，必须执行代码变更分析：
+- 资源的 `change.after_unknown` 中有字段标记为 `true`（如 `policy: true`）
+- data source（action=read）带有 `action_reason` 字段（`read_because_dependency_pending` 或 `read_because_config_unknown`）
+
+### 分析方法
+
+```yaml
+步骤:
+  1. 识别 after_unknown 字段所属资源（如 bucket_policy 的 policy 字段）
+  2. 从变更资源的 terraform_address 推断其所属 CMDB 资源标识（resource_id）
+     - 例如: module.AWS_s3-bucket_xxx.aws_s3_bucket_policy.this[0] → resource_id = AWS_s3-bucket.xxx
+     - 规则: module 名称中 资源类型_资源名 对应 CMDB 的 资源类型.资源名
+  3. 调用 query_resource_code_diff(workspace_id, resource_id) 获取代码差异
+  4. 分析代码差异中是否包含影响 unknown 字段的变更
+
+结论分类:
+  - "代码无变更": query_resource_code_diff 返回 has_changes=false，unknown 字段预计不变
+  - "代码有变更但不影响该字段": diff 中的变更与 unknown 字段无关（如只改了 tags，不影响 policy）
+  - "代码有变更且影响该字段": diff 中包含影响 unknown 字段的变更（如修改了 policy document 的内容）
+  - "无法确定": 无法获取代码差异或依赖链过于复杂
+
+输出要求:
+  - changes_overview 中必须说明 after_unknown 字段的预期变更情况
+  - impact_analysis.details 中对应资源的 impact 字段必须包含代码差异分析结论
+  - 当结论为"代码无变更"或"不影响该字段"时，不应因 after_unknown 提升 risk_level
+  - 当结论为"代码有变更且影响该字段"时，必须在 impact 中说明具体变更内容
+  - 当结论为"无法确定"时，在 uncertainty 中标记 level=medium，reason_code=AMBIGUOUS_POLICY_CHANGE
+```
+
+### 示例
+
+```yaml
+场景: S3 bucket 代码中修改了 policy document 的 IAM role 名称
+
+步骤:
+  1. plan 显示 bucket_policy.after_unknown.policy = true
+  2. 推断 resource_id = AWS_s3-bucket.ken-test-2026-02-190344de-0223-0404
+  3. 调用 query_resource_code_diff，返回:
+     diff: [{"path": "module.xxx.policy_statements.AllowEC2RoleReadOnly.condition.aws:PrincipalArn",
+             "type": "modified", "old": "...:role/ec2-instance-role", "new": "...:role/ec2-instance-roles"}]
+  4. diff 显示 policy 相关的 IAM role 名称发生了变更
+
+结论: "S3 Bucket Policy 的 policy 字段标记为 known after apply。
+       代码变更分析显示 AllowEC2RoleReadOnly 条件中的 IAM Role 从 ec2-instance-role
+       改为 ec2-instance-roles，policy 将发生实质变更。"
 ```
 
 -----

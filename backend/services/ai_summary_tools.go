@@ -459,3 +459,196 @@ func (t *QueryPlanSummaryTool) Execute(ctx context.Context, params map[string]in
 		"risk_level":         summary.RiskLevel,
 	}, nil
 }
+
+// QueryResourceCodeDiffTool 查询资源代码在上次 apply 后的真实变更
+type QueryResourceCodeDiffTool struct {
+	db *gorm.DB
+}
+
+func NewQueryResourceCodeDiffTool(db *gorm.DB) *QueryResourceCodeDiffTool {
+	return &QueryResourceCodeDiffTool{db: db}
+}
+
+func (t *QueryResourceCodeDiffTool) Name() string { return "query_resource_code_diff" }
+func (t *QueryResourceCodeDiffTool) Description() string {
+	return "查询资源代码自上次 apply 以来的真实变更。用于分析 after_unknown 字段：对比上次 apply 时的代码与当前代码的差异，判断 unknown 字段是否会发生实质变更。输入 workspace_id 和资源的 resource_id（CMDB 中的资源标识，如 AWS_s3-bucket.xxx）。"
+}
+func (t *QueryResourceCodeDiffTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"workspace_id": map[string]interface{}{"type": "string", "description": "工作空间 ID"},
+			"resource_id":  map[string]interface{}{"type": "string", "description": "CMDB 资源标识（如 AWS_s3-bucket.xxx）"},
+		},
+		"required": []string{"workspace_id", "resource_id"},
+	}
+}
+
+func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	workspaceID, _ := params["workspace_id"].(string)
+	resourceID, _ := params["resource_id"].(string)
+	if workspaceID == "" || resourceID == "" {
+		return nil, fmt.Errorf("workspace_id and resource_id are required")
+	}
+
+	// 1. 找到资源
+	var resource models.WorkspaceResource
+	if err := t.db.Where("workspace_id = ? AND resource_id = ?", workspaceID, resourceID).
+		First(&resource).Error; err != nil {
+		return map[string]interface{}{"found": false, "message": "resource not found"}, nil
+	}
+
+	// 2. 获取当前最新版本
+	var currentVersion models.ResourceCodeVersion
+	if err := t.db.Where("resource_id = ? AND is_latest = true", resource.ID).
+		First(&currentVersion).Error; err != nil {
+		return map[string]interface{}{"found": false, "message": "no current version found"}, nil
+	}
+
+	// 3. 找上次 apply 时的版本：state_versions → task_id → snapshot_resource_versions
+	var stateVersion models.WorkspaceStateVersion
+	if err := t.db.Where("workspace_id = ?", workspaceID).
+		Order("version DESC").
+		First(&stateVersion).Error; err != nil {
+		return map[string]interface{}{
+			"found":           true,
+			"message":         "no apply history found, showing current code only",
+			"current_version": currentVersion.Version,
+			"current_code":    currentVersion.TFCode,
+		}, nil
+	}
+
+	// 4. 从对应 task 的 snapshot 中找到 apply 时的版本号
+	var task models.WorkspaceTask
+	if err := t.db.Select("id, snapshot_resource_versions").
+		Where("id = ?", stateVersion.TaskID).
+		First(&task).Error; err != nil {
+		return map[string]interface{}{
+			"found":           true,
+			"message":         "apply task not found",
+			"current_version": currentVersion.Version,
+			"current_code":    currentVersion.TFCode,
+		}, nil
+	}
+
+	// 5. 从 snapshot 中提取该资源的版本号
+	var appliedVersionNum int
+	if task.SnapshotResourceVersions != nil {
+		if snap, ok := task.SnapshotResourceVersions[resourceID]; ok {
+			if snapMap, ok := snap.(map[string]interface{}); ok {
+				if v, ok := snapMap["version"].(float64); ok {
+					appliedVersionNum = int(v)
+				}
+			}
+		}
+	}
+
+	if appliedVersionNum == 0 {
+		return map[string]interface{}{
+			"found":           true,
+			"message":         "resource not in last apply snapshot, may be newly added",
+			"current_version": currentVersion.Version,
+			"current_code":    currentVersion.TFCode,
+		}, nil
+	}
+
+	// 当前版本和 apply 版本相同，没有变更
+	if appliedVersionNum == currentVersion.Version {
+		return map[string]interface{}{
+			"found":            true,
+			"has_changes":      false,
+			"message":          "code unchanged since last apply",
+			"current_version":  currentVersion.Version,
+			"applied_version":  appliedVersionNum,
+		}, nil
+	}
+
+	// 6. 获取 apply 时的版本代码
+	var appliedVersion models.ResourceCodeVersion
+	if err := t.db.Where("resource_id = ? AND version = ?", resource.ID, appliedVersionNum).
+		First(&appliedVersion).Error; err != nil {
+		return map[string]interface{}{
+			"found":           true,
+			"message":         "applied version record not found",
+			"current_version": currentVersion.Version,
+			"applied_version": appliedVersionNum,
+			"current_code":    currentVersion.TFCode,
+		}, nil
+	}
+
+	// 7. 计算精简 diff：只输出变更的字段
+	diff := computeJSONDiff(appliedVersion.TFCode, currentVersion.TFCode)
+
+	return map[string]interface{}{
+		"found":           true,
+		"has_changes":     true,
+		"applied_version": appliedVersionNum,
+		"current_version": currentVersion.Version,
+		"applied_task_id": stateVersion.TaskID,
+		"diff":            diff,
+	}, nil
+}
+
+// computeJSONDiff 计算两个 JSON 对象的精简差异，只返回变更部分
+func computeJSONDiff(oldCode, newCode map[string]interface{}) []map[string]interface{} {
+	var diffs []map[string]interface{}
+	computeJSONDiffRecursive("", oldCode, newCode, &diffs)
+	return diffs
+}
+
+func computeJSONDiffRecursive(prefix string, oldObj, newObj map[string]interface{}, diffs *[]map[string]interface{}) {
+	allKeys := make(map[string]bool)
+	for k := range oldObj {
+		allKeys[k] = true
+	}
+	for k := range newObj {
+		allKeys[k] = true
+	}
+
+	for key := range allKeys {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+
+		oldVal, oldExists := oldObj[key]
+		newVal, newExists := newObj[key]
+
+		if !oldExists {
+			*diffs = append(*diffs, map[string]interface{}{
+				"path":   path,
+				"type":   "added",
+				"new":    newVal,
+			})
+			continue
+		}
+		if !newExists {
+			*diffs = append(*diffs, map[string]interface{}{
+				"path":   path,
+				"type":   "removed",
+				"old":    oldVal,
+			})
+			continue
+		}
+
+		// 都存在，递归比较
+		oldMap, oldIsMap := oldVal.(map[string]interface{})
+		newMap, newIsMap := newVal.(map[string]interface{})
+		if oldIsMap && newIsMap {
+			computeJSONDiffRecursive(path, oldMap, newMap, diffs)
+			continue
+		}
+
+		// 非 map 类型直接比较 JSON 序列化
+		oldJSON, _ := json.Marshal(oldVal)
+		newJSON, _ := json.Marshal(newVal)
+		if string(oldJSON) != string(newJSON) {
+			*diffs = append(*diffs, map[string]interface{}{
+				"path": path,
+				"type": "modified",
+				"old":  oldVal,
+				"new":  newVal,
+			})
+		}
+	}
+}
