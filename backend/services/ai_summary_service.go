@@ -13,12 +13,22 @@ import (
 	"gorm.io/gorm"
 )
 
+// R1 whitelist: only known risk factors and uncertainty levels are accepted from AI output
+var knownRiskFactors = map[string]bool{
+	"service_disruption": true, "external_exposure_change": true,
+	"dependency_break": true, "resource_deletion": true,
+	"permission_scope_change": true, "sensitive_resource_change": true,
+	"high_blast_radius": true, "configuration_drift": true,
+}
+var knownUncertaintyLevels = map[string]bool{"low": true, "medium": true, "high": true}
+
 // AISummaryService AI 执行摘要服务
 type AISummaryService struct {
 	db             *gorm.DB
 	configService  *AIConfigService
 	skillAssembler *SkillAssembler
-	streamManager  *OutputStreamManager // 新增
+	streamManager  *OutputStreamManager
+	riskScorer     *RiskScorer
 }
 
 // NewAISummaryService 创建摘要服务
@@ -27,6 +37,7 @@ func NewAISummaryService(db *gorm.DB) *AISummaryService {
 		db:             db,
 		configService:  NewAIConfigService(db),
 		skillAssembler: NewSkillAssembler(db),
+		riskScorer:     NewRiskScorer(db),
 	}
 }
 
@@ -37,6 +48,7 @@ func NewAISummaryServiceWithStream(db *gorm.DB, streamManager *OutputStreamManag
 		configService:  NewAIConfigService(db),
 		skillAssembler: NewSkillAssembler(db),
 		streamManager:  streamManager,
+		riskScorer:     NewRiskScorer(db),
 	}
 }
 
@@ -520,14 +532,41 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		}
 	}
 
-	// V2 兜底：如果 AI 没有返回 risk_evaluation 结构（V2 格式），
-	// 根据 risk_level 自动判断是否需要人工确认
-	if aiOutput.RiskEvaluation == nil && (summary.RiskLevel == "high" || summary.RiskLevel == "critical") {
+	// V2 兜底：仅在 riskScorer 不可用时生效
+	if s.riskScorer == nil && aiOutput.RiskEvaluation == nil && (summary.RiskLevel == "high" || summary.RiskLevel == "critical") {
 		summary.RequiresConfirmation = true
 		log.Printf("[AISummaryService] V2 fallback: risk_level=%s, auto-setting requires_confirmation=true for task %d", summary.RiskLevel, summary.TaskID)
 	}
 
 	summary.PlanChanges = planChangesJSON
+
+	// Deterministic risk scoring
+	if s.riskScorer != nil {
+		riskInput, aiComplete, err := s.buildRiskScoringInput(summary, workspaceID, taskID, planChangesJSON)
+		summary.AIAnalysisIncomplete = !aiComplete
+
+		if err != nil {
+			log.Printf("[RiskScorer] build input failed: %v", err)
+		} else {
+			scoreResult := s.riskScorer.Score(riskInput)
+			scoreResult.AIRiskLevel = summary.RiskLevel
+			scoreResult.DivergenceAlert = severityGap(summary.RiskLevel, scoreResult.RiskLevel) >= 2
+			if scoreResult.DivergenceAlert {
+				log.Printf("[RiskScorer] DIVERGENCE: AI=%s Go=%s for task %d",
+					summary.RiskLevel, scoreResult.RiskLevel, taskID)
+			}
+
+			summary.RiskScoreValue = &scoreResult.FinalScore
+			summary.RiskScoreColor = scoreResult.DecisionColor
+			summary.RiskScoreBreakdown, _ = json.Marshal(scoreResult)
+
+			goLevel := scoreResult.RiskLevel
+			aiLevel := summary.RiskLevel
+			summary.RiskLevel = maxSeverity(aiLevel, goLevel)
+			summary.RequiresConfirmation = summary.RiskLevel == "high" || summary.RiskLevel == "critical"
+		}
+	}
+
 	summary.ToolCalls, _ = json.Marshal(result.ToolCalls)
 	if len(result.ThinkingContents) > 0 {
 		summary.ThinkingContent, _ = json.Marshal(result.ThinkingContents)
@@ -811,4 +850,175 @@ func (s *AISummaryService) buildObserver(taskID uint, processLog *strings.Builde
 // 实际上 agent loop 结束后 ctx 自然过期，不会泄漏
 func contextWithTimeout() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 5*time.Minute)
+}
+
+// buildRiskScoringInput extracts all scoring inputs from summary, workspace, task, and plan data.
+func (s *AISummaryService) buildRiskScoringInput(summary *models.AIPlanSummary, workspaceID string, taskID uint, planChangesJSON []byte) (RiskScoringInput, bool, error) {
+	input := RiskScoringInput{}
+	aiComplete := true
+
+	// 1. Workspace: tier + resource count
+	var ws models.Workspace
+	if err := s.db.Select("tags, resource_count").Where("workspace_id = ?", workspaceID).First(&ws).Error; err != nil {
+		return input, false, fmt.Errorf("workspace lookup: %w", err)
+	}
+	input.WorkspaceResourceCount = ws.ResourceCount
+	if ws.Tags != nil {
+		var tags map[string]interface{}
+		if raw, err := json.Marshal(ws.Tags); err == nil {
+			if json.Unmarshal(raw, &tags) == nil {
+				if tier, ok := tags["tier"].(string); ok {
+					input.WorkspaceTier = tier
+				}
+			}
+		}
+	}
+
+	// 2. Task: total changes
+	var task models.WorkspaceTask
+	if err := s.db.Select("changes_add, changes_change, changes_destroy").First(&task, taskID).Error; err != nil {
+		return input, false, fmt.Errorf("task lookup: %w", err)
+	}
+	input.TotalChanges = task.ChangesAdd + task.ChangesChange + task.ChangesDestroy
+
+	// 3. Parse impact_analysis
+	if len(summary.ImpactAnalysis) > 0 {
+		input.MaxDirectDependencies, input.MaxDependencyResource,
+			input.RiskFactors, input.RiskFactorResourceCounts,
+			input.UncertaintyLevel = parseImpactAnalysis(summary.ImpactAnalysis)
+	} else {
+		aiComplete = false
+		input.UncertaintyLevel = "high"
+	}
+
+	// 4. Parse affected_resources for cross-workspace count
+	if len(summary.AffectedResources) > 0 {
+		input.CrossWorkspaceCount = parseCrossWorkspaceCount(summary.AffectedResources, workspaceID)
+	}
+
+	// 5. Parse plan changes for module prefixes, query module_hierarchy
+	if len(planChangesJSON) > 0 {
+		input.AffectedModuleResourceCount = s.calcModuleResourceCount(planChangesJSON, workspaceID)
+	}
+
+	// 6. AI completeness check
+	if summary.RiskLevel == "" {
+		aiComplete = false
+	}
+
+	return input, aiComplete, nil
+}
+
+// parseImpactAnalysis extracts scoring signals from impact_analysis JSON.
+func parseImpactAnalysis(raw json.RawMessage) (maxDeps int, maxDepResource string, factors []string, factorCounts map[string]int, uncertainty string) {
+	factorCounts = make(map[string]int)
+	var items []struct {
+		ResourceAddress    string `json:"resource_address"`
+		DirectDependencies int    `json:"direct_dependencies"`
+		RiskFactors        []string `json:"risk_factors"`
+		Uncertainty        *struct {
+			Level string `json:"level"`
+		} `json:"uncertainty"`
+	}
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return
+	}
+
+	factorSet := make(map[string]bool)
+	for _, item := range items {
+		if item.DirectDependencies > maxDeps {
+			maxDeps = item.DirectDependencies
+			maxDepResource = item.ResourceAddress
+		}
+		for _, f := range item.RiskFactors {
+			if !knownRiskFactors[f] {
+				log.Printf("[RiskScorer] WARN unrecognized risk_factor: %q - skipped", f)
+				continue
+			}
+			factorCounts[f]++
+			if !factorSet[f] {
+				factorSet[f] = true
+				factors = append(factors, f)
+			}
+		}
+		if item.Uncertainty != nil {
+			level := item.Uncertainty.Level
+			if knownUncertaintyLevels[level] {
+				if severityOrder[level] > severityOrder[uncertainty] {
+					uncertainty = level
+				}
+			} else if level != "" {
+				log.Printf("[RiskScorer] WARN unrecognized uncertainty level: %q", level)
+			}
+		}
+	}
+	return
+}
+
+// parseCrossWorkspaceCount counts unique workspace IDs in affected_resources that differ from current.
+func parseCrossWorkspaceCount(raw json.RawMessage, currentWS string) int {
+	var items []struct {
+		WorkspaceID string `json:"workspace_id"`
+	}
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return 0
+	}
+	seen := make(map[string]bool)
+	for _, item := range items {
+		if item.WorkspaceID != "" && item.WorkspaceID != currentWS {
+			seen[item.WorkspaceID] = true
+		}
+	}
+	return len(seen)
+}
+
+// calcModuleResourceCount extracts module prefixes from plan changes and sums TotalResourceCount.
+func (s *AISummaryService) calcModuleResourceCount(planChangesJSON []byte, workspaceID string) int {
+	var changes []struct {
+		Address string `json:"address"`
+	}
+	if err := json.Unmarshal(planChangesJSON, &changes); err != nil {
+		return 0
+	}
+
+	modulePrefixes := make(map[string]bool)
+	for _, c := range changes {
+		if prefix := extractModulePrefix(c.Address); prefix != "" {
+			modulePrefixes[prefix] = true
+		}
+	}
+	if len(modulePrefixes) == 0 {
+		return 0
+	}
+
+	paths := make([]string, 0, len(modulePrefixes))
+	for p := range modulePrefixes {
+		paths = append(paths, p)
+	}
+
+	var total int
+	s.db.Model(&models.ModuleHierarchy{}).
+		Where("workspace_id = ? AND module_path IN ?", workspaceID, paths).
+		Select("COALESCE(SUM(total_resource_count), 0)").
+		Scan(&total)
+	return total
+}
+
+// extractModulePrefix extracts the module path from a Terraform resource address.
+// "module.vpc.aws_vpc.main" -> "module.vpc"
+// "module.vpc.module.subnet.aws_subnet.main" -> "module.vpc.module.subnet"
+// "aws_instance.web" -> ""
+func extractModulePrefix(address string) string {
+	parts := strings.Split(address, ".")
+	var moduleParts []string
+	for i := 0; i+1 < len(parts); i += 2 {
+		if parts[i] != "module" {
+			break
+		}
+		moduleParts = append(moduleParts, parts[i], parts[i+1])
+	}
+	if len(moduleParts) == 0 {
+		return ""
+	}
+	return strings.Join(moduleParts, ".")
 }
