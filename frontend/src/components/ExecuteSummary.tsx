@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
-  confirmPlanSummary,
+  confirmPlanSummary, bypassAIIncomplete,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
 import { reportSkillUsageByCapability } from '../services/aiForm';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../store';
 import styles from './ExecuteSummary.module.css';
 
 // 安全渲染：防止 AI 返回的对象被直接当 React child
@@ -197,6 +199,16 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
             <PlanSummaryResult summary={summary as PlanSummary} getRiskColor={getRiskColor} getRiskLabel={getRiskLabel} />
           )}
 
+          {/* AI Incomplete Warning */}
+          {summary?.status === 'completed' && stage === 'plan' && (
+            <AIIncompleteWarning
+              summary={summary as PlanSummary}
+              workspaceId={workspaceId}
+              taskId={taskId}
+              onBypassed={fetchSummary}
+            />
+          )}
+
           {/* Decision Confirmation */}
           {summary?.status === 'completed' && stage === 'plan' && (summary as PlanSummary).requires_confirmation && (
             <DecisionConfirmation
@@ -245,6 +257,57 @@ const PlanSummaryResult: React.FC<{
         <div className={styles.section}>
           <div className={styles.sectionTitle}>变更概述</div>
           <div className={styles.sectionContent}>{summary.changes_overview}</div>
+        </div>
+      )}
+
+      {/* Deterministic Risk Score */}
+      {summary.risk_score_value !== undefined && summary.risk_score_breakdown && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>
+            Risk Score
+            <span className={`${styles.riskBadge} ${getRiskColor(summary.risk_score_breakdown.risk_level)}`} style={{ marginLeft: 8 }}>
+              {summary.risk_score_value.toFixed(1)} / 100
+            </span>
+            {summary.risk_score_breakdown.near_threshold && (
+              <span className={styles.nearThresholdTag}>Near Threshold</span>
+            )}
+            {summary.risk_score_breakdown.divergence_alert && (
+              <span className={styles.divergenceTag}>
+                AI/Go Divergence (AI: {getRiskLabel(summary.risk_score_breakdown.ai_risk_level || '')}, Go: {getRiskLabel(summary.risk_score_breakdown.risk_level)})
+              </span>
+            )}
+          </div>
+          <div className={styles.sectionContent}>
+            <div className={styles.scoreBar}>
+              <div
+                className={styles.scoreBarFill}
+                style={{
+                  width: `${summary.risk_score_value}%`,
+                  backgroundColor: summary.risk_score_color === 'green' ? '#10b981' :
+                    summary.risk_score_color === 'yellow' ? '#f59e0b' :
+                    summary.risk_score_color === 'orange' ? '#f97316' : '#ef4444'
+                }}
+              />
+            </div>
+            <div className={styles.scoreDetails}>
+              <span>Base Deduction: {summary.risk_score_breakdown.base_deduction}</span>
+              <span>Env Multiplier: x{summary.risk_score_breakdown.env_multiplier}</span>
+              {summary.risk_score_breakdown.combo_multiplier_applied && (
+                <span>Combo: {summary.risk_score_breakdown.combo_detail}</span>
+              )}
+            </div>
+            {summary.risk_score_breakdown.deductions.length > 0 && (
+              <div className={styles.deductionList}>
+                {summary.risk_score_breakdown.deductions.map((d, i) => (
+                  <div key={i} className={styles.deductionItem}>
+                    <span className={styles.deductionCategory}>{d.category}</span>
+                    <span className={styles.deductionPoints}>{d.points}</span>
+                    <span className={styles.deductionReason}>{d.item}: {d.reason}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -602,6 +665,76 @@ const DecisionConfirmation: React.FC<{
             {submitting ? '提交中...' : '已确认风险'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const AIIncompleteWarning: React.FC<{
+  summary: PlanSummary;
+  workspaceId: string;
+  taskId: number;
+  onBypassed: () => void;
+}> = ({ summary, workspaceId, taskId, onBypassed }) => {
+  const { user } = useSelector((state: RootState) => state.auth);
+  const isAdmin = user?.is_system_admin;
+  const [bypassReason, setBypassReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!summary.ai_analysis_incomplete) return null;
+
+  // Already bypassed
+  if (summary.bypassed_by) {
+    return (
+      <div className={styles.aiIncompleteWarning} style={{ borderColor: '#f59e0b' }}>
+        <div className={styles.warningHeader}>AI Analysis Incomplete (Bypassed)</div>
+        <div className={styles.warningBody}>
+          <p>AI analysis did not complete successfully. Admin {summary.bypassed_by} bypassed at {summary.bypassed_at ? new Date(summary.bypassed_at).toLocaleString() : ''}.</p>
+          {summary.bypass_reason && <p>Reason: {summary.bypass_reason}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  const handleBypass = async () => {
+    if (!bypassReason.trim()) return;
+    try {
+      setSubmitting(true);
+      setError('');
+      await bypassAIIncomplete(workspaceId, taskId, bypassReason);
+      onBypassed();
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : 'Bypass failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className={styles.aiIncompleteWarning}>
+      <div className={styles.warningHeader}>AI Analysis Incomplete</div>
+      <div className={styles.warningBody}>
+        <p>AI analysis did not complete successfully. Operations are blocked until an admin reviews and bypasses this check.</p>
+        {isAdmin && (
+          <div className={styles.bypassForm}>
+            <textarea
+              className={styles.decisionNote}
+              placeholder="Bypass reason (required)"
+              value={bypassReason}
+              onChange={(e) => setBypassReason(e.target.value)}
+              rows={2}
+            />
+            {error && <div style={{ color: '#dc2626', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
+            <button
+              className={styles.bypassButton}
+              onClick={handleBypass}
+              disabled={submitting || !bypassReason.trim()}
+            >
+              {submitting ? 'Processing...' : 'Force Bypass'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
