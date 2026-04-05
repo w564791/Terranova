@@ -564,6 +564,32 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 			aiLevel := summary.RiskLevel
 			summary.RiskLevel = maxSeverity(aiLevel, goLevel)
 			summary.RequiresConfirmation = summary.RiskLevel == "high" || summary.RiskLevel == "critical"
+
+			// When Go scorer upgrades risk level but AI didn't generate decision actions,
+			// provide default confirmation options so the UI isn't stuck
+			if summary.RequiresConfirmation && len(summary.DecisionActions) == 0 {
+				if summary.DecisionTitle == "" {
+					summary.DecisionTitle = fmt.Sprintf("Risk Score: %.1f/100 (%s)", scoreResult.FinalScore, summary.RiskLevel)
+				}
+				// Build risk highlights from deductions
+				var highlights []string
+				for _, d := range scoreResult.Deductions {
+					highlights = append(highlights, fmt.Sprintf("[%s] %s (%d)", d.Category, d.Item, d.Points))
+				}
+				if len(highlights) > 0 {
+					summary.RiskHighlights, _ = json.Marshal(highlights)
+				}
+				// Default decision actions
+				defaultActions := []struct {
+					Code  string `json:"code"`
+					Label string `json:"label"`
+				}{
+					{Code: "ACCEPT_RISK", Label: "I have reviewed the risk score and accept the risk"},
+				}
+				summary.DecisionActions, _ = json.Marshal(defaultActions)
+				log.Printf("[RiskScorer] generated default decision actions for task %d (Go upgraded to %s, AI was %s)",
+					taskID, goLevel, aiLevel)
+			}
 		}
 	}
 
