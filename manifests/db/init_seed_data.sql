@@ -1212,7 +1212,14 @@ CREATE TABLE public.ai_plan_summaries (
     user_decision_by character varying(20),
     user_decision_at timestamp without time zone,
     decision_title text,
-    risk_highlights jsonb
+    risk_highlights jsonb,
+    risk_score_value double precision,
+    risk_score_color character varying(10) DEFAULT ''::character varying,
+    risk_score_breakdown jsonb,
+    ai_analysis_incomplete boolean DEFAULT false,
+    bypassed_by character varying(20),
+    bypassed_at timestamp without time zone,
+    bypass_reason text
 );
 
 
