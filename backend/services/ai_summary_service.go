@@ -912,16 +912,40 @@ func (s *AISummaryService) buildRiskScoringInput(summary *models.AIPlanSummary, 
 // parseImpactAnalysis extracts scoring signals from impact_analysis JSON.
 func parseImpactAnalysis(raw json.RawMessage) (maxDeps int, maxDepResource string, factors []string, factorCounts map[string]int, uncertainty string) {
 	factorCounts = make(map[string]int)
-	var items []struct {
-		ResourceAddress    string `json:"resource_address"`
-		DirectDependencies int    `json:"direct_dependencies"`
+	type analysisItem struct {
+		ResourceAddress    string   `json:"resource_address"`
+		Resource           string   `json:"resource"` // fallback field name
+		DirectDependencies int      `json:"direct_dependencies"`
 		RiskFactors        []string `json:"risk_factors"`
 		Uncertainty        *struct {
 			Level string `json:"level"`
 		} `json:"uncertainty"`
+		BlastRadius *struct {
+			DirectDependencies int `json:"direct_dependencies"`
+		} `json:"blast_radius"`
 	}
+
+	// Try parsing as array first, then as {details: [...]} wrapper
+	var items []analysisItem
 	if err := json.Unmarshal(raw, &items); err != nil {
-		return
+		var wrapper struct {
+			Details []analysisItem `json:"details"`
+		}
+		if err2 := json.Unmarshal(raw, &wrapper); err2 != nil {
+			log.Printf("[RiskScorer] WARN cannot parse impact_analysis: %v", err2)
+			return
+		}
+		items = wrapper.Details
+	}
+
+	// Normalize: some AI outputs put direct_dependencies inside blast_radius
+	for i := range items {
+		if items[i].DirectDependencies == 0 && items[i].BlastRadius != nil {
+			items[i].DirectDependencies = items[i].BlastRadius.DirectDependencies
+		}
+		if items[i].ResourceAddress == "" && items[i].Resource != "" {
+			items[i].ResourceAddress = items[i].Resource
+		}
 	}
 
 	factorSet := make(map[string]bool)
