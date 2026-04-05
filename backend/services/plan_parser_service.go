@@ -148,9 +148,15 @@ func (s *PlanParserService) executeTerraformShowJSON(planFile string) (map[strin
 func (s *PlanParserService) parseResourceChanges(planJSON map[string]interface{}) ([]*models.WorkspaceTaskResourceChange, error) {
 	resourceChanges := []*models.WorkspaceTaskResourceChange{}
 
-	changes, ok := planJSON["resource_changes"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid plan JSON structure: resource_changes not found")
+	changes, _ := planJSON["resource_changes"].([]interface{})
+
+	// Also include resource_drift for refresh-only plans (drift check)
+	if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok {
+		changes = append(changes, driftChanges...)
+	}
+
+	if len(changes) == 0 {
+		return resourceChanges, nil
 	}
 
 	for _, item := range changes {

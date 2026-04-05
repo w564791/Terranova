@@ -978,20 +978,27 @@ func (s *DriftCheckService) ProcessDriftCheckResultByTaskID(taskID uint) error {
 func generatePlanSummary(planJSON map[string]interface{}) string {
 	add, change, destroy := 0, 0, 0
 
+	// Combine resource_changes and resource_drift (for refresh-only drift check)
+	allChanges := make([]interface{}, 0)
 	if resourceChanges, ok := planJSON["resource_changes"].([]interface{}); ok {
-		for _, rc := range resourceChanges {
-			if changeMap, ok := rc.(map[string]interface{}); ok {
-				if changeDetail, ok := changeMap["change"].(map[string]interface{}); ok {
-					if actions, ok := changeDetail["actions"].([]interface{}); ok {
-						for _, action := range actions {
-							switch action.(string) {
-							case "create":
-								add++
-							case "update":
-								change++
-							case "delete":
-								destroy++
-							}
+		allChanges = append(allChanges, resourceChanges...)
+	}
+	if resourceDrift, ok := planJSON["resource_drift"].([]interface{}); ok {
+		allChanges = append(allChanges, resourceDrift...)
+	}
+
+	for _, rc := range allChanges {
+		if changeMap, ok := rc.(map[string]interface{}); ok {
+			if changeDetail, ok := changeMap["change"].(map[string]interface{}); ok {
+				if actions, ok := changeDetail["actions"].([]interface{}); ok {
+					for _, action := range actions {
+						switch action.(string) {
+						case "create":
+							add++
+						case "update":
+							change++
+						case "delete":
+							destroy++
 						}
 					}
 				}
