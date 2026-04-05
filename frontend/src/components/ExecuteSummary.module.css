@@ -706,3 +706,17 @@
 .bypassButton:hover:not(:disabled) {
   background-color: #b91c1c;
 }
+
+/* Stuck analysis actions */
+.stuckActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stuckWarning {
+  font-size: 13px;
+  color: #dc2626;
+  font-weight: 500;
+}

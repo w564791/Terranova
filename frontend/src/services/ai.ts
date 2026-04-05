@@ -261,6 +261,14 @@ export const confirmPlanSummary = async (
   });
 };
 
+// 停止卡住的 Plan Summary
+export const stopPlanSummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<void> => {
+  await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/stop`);
+};
+
 // AI 分析不完整 - 管理员绕过
 export const bypassAIIncomplete = async (
   workspaceId: string,

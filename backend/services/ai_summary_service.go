@@ -313,8 +313,8 @@ func (s *AISummaryService) RetryPlanSummary(taskID uint) error {
 	if err := s.db.Where("task_id = ?", taskID).First(&existing).Error; err != nil {
 		return fmt.Errorf("no plan summary found for task %d", taskID)
 	}
-	if existing.Status != "failed" {
-		return fmt.Errorf("can only retry failed summaries, current status: %s", existing.Status)
+	if existing.Status != "failed" && existing.Status != "running" {
+		return fmt.Errorf("can only retry failed or stuck running summaries, current status: %s", existing.Status)
 	}
 
 	if err := s.db.Delete(&existing).Error; err != nil {
@@ -322,6 +322,21 @@ func (s *AISummaryService) RetryPlanSummary(taskID uint) error {
 	}
 	go s.GeneratePlanSummary(taskID)
 	return nil
+}
+
+// StopPlanSummary force-fails a running plan summary so it can be retried
+func (s *AISummaryService) StopPlanSummary(taskID uint) error {
+	var existing models.AIPlanSummary
+	if err := s.db.Where("task_id = ?", taskID).First(&existing).Error; err != nil {
+		return fmt.Errorf("no plan summary found for task %d", taskID)
+	}
+	if existing.Status != "running" {
+		return fmt.Errorf("can only stop running summaries, current status: %s", existing.Status)
+	}
+	return s.db.Model(&existing).Updates(map[string]interface{}{
+		"status":        "failed",
+		"error_message": "manually stopped by user",
+	}).Error
 }
 
 // RetryApplySummary 重试 Apply Summary

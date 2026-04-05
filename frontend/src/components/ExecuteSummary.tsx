@@ -3,6 +3,7 @@ import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
   confirmPlanSummary, bypassAIIncomplete,
+  stopPlanSummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
 import { reportSkillUsageByCapability } from '../services/aiForm';
@@ -42,6 +43,34 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [runningElapsed, setRunningElapsed] = useState(0);
+
+  // Track elapsed time when summary is running
+  useEffect(() => {
+    if (summary?.status !== 'running') {
+      setRunningElapsed(0);
+      return;
+    }
+    const startTime = summary.created_at ? new Date(summary.created_at).getTime() : Date.now();
+    const updateElapsed = () => setRunningElapsed(Math.floor((Date.now() - startTime) / 1000));
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [summary?.status, summary?.created_at]);
+
+  const handleStop = async () => {
+    try {
+      setRetrying(true);
+      await stopPlanSummary(workspaceId, taskId);
+      setSummary(null);
+      setLoading(true);
+      setTimeout(fetchSummary, 1000);
+    } catch (err: any) {
+      setError(typeof err === 'string' ? err : 'Stop failed');
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -165,7 +194,18 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
           {summary?.status === 'running' && (
             <div className={styles.loading}>
               <div className={styles.spinner} />
-              <span>AI 正在分析变更影响，请稍候...</span>
+              <span>AI 正在分析变更影响，请稍候...（{runningElapsed}s）</span>
+              {runningElapsed > 120 && (
+                <div className={styles.stuckActions}>
+                  <span className={styles.stuckWarning}>Analysis may be stuck</span>
+                  <button className={styles.retryButton} onClick={handleStop} disabled={retrying}>
+                    {retrying ? 'Stopping...' : 'Stop'}
+                  </button>
+                  <button className={styles.retryButton} onClick={handleRetry} disabled={retrying}>
+                    {retrying ? 'Retrying...' : 'Retry'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
