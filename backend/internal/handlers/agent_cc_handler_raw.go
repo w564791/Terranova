@@ -780,14 +780,51 @@ func (h *RawAgentCCHandler) postApplyCompletionTasks(taskID uint) {
 		return
 	}
 
-	// 1. Apply 成功 → 执行 Run Triggers（与 Local 模式对齐）
+	// 1. Apply 成功 → 从 State 提取 Resource ID（与 Local 模式对齐）
+	//    Agent 端 db=nil 无法执行此操作，由 Server 端补做
+	if task.Status == models.TaskStatusApplied {
+		h.extractResourceIDsFromState(taskID, task.WorkspaceID)
+	}
+
+	// 2. Apply 成功 → 执行 Run Triggers（与 Local 模式对齐）
 	if task.Status == models.TaskStatusApplied {
 		log.Printf("[PostApplyComplete] Executing Run Triggers for task %d", taskID)
 		h.taskQueueManager.ExecuteRunTriggers(&task)
 	}
 
-	// 2. CMDB 同步（成功和失败都需要）
+	// 3. CMDB 同步（成功和失败都需要）
 	h.taskQueueManager.SyncCMDBAfterApply(&task)
+}
+
+// extractResourceIDsFromState 从 State 中提取资源 ID（补齐 Agent/K8s 模式缺失的逻辑）
+// Local 模式在 ExecuteApply 内部完成此操作，但 Agent 模式 db=nil 跳过了，由 Server 端补做
+func (h *RawAgentCCHandler) extractResourceIDsFromState(taskID uint, workspaceID string) {
+	log.Printf("[PostApplyComplete] Extracting resource IDs from state for task %d", taskID)
+
+	// 获取最新 state version
+	var stateVersion models.WorkspaceStateVersion
+	if err := h.db.Where("workspace_id = ?", workspaceID).
+		Order("version DESC").
+		First(&stateVersion).Error; err != nil {
+		log.Printf("[PostApplyComplete] No state version found for workspace %s: %v", workspaceID, err)
+		return
+	}
+
+	if stateVersion.Content == nil {
+		log.Printf("[PostApplyComplete] State version %d has nil content", stateVersion.Version)
+		return
+	}
+
+	// 创建 logger（不绑定 stream，仅用于 ExtractResourceDetailsFromState 内部日志）
+	logger := services.NewTerraformLogger(nil)
+
+	// 创建 ApplyParserService 并提取 resource ID
+	applyParserService := services.NewApplyParserService(h.db, h.streamManager)
+	if err := applyParserService.ExtractResourceDetailsFromState(taskID, stateVersion.Content, logger); err != nil {
+		log.Printf("[PostApplyComplete] Failed to extract resource IDs for task %d: %v", taskID, err)
+	} else {
+		log.Printf("[PostApplyComplete] Resource IDs extracted successfully for task %d", taskID)
+	}
 }
 
 // handleLogStream handles real-time log stream from agent

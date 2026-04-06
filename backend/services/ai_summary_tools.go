@@ -505,29 +505,45 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		return map[string]interface{}{"found": false, "message": "no current version found"}, nil
 	}
 
-	// 3. 找最近一次包含该资源的已 apply 任务
-	//    通过 JSONB jsonb_exists 函数查询 snapshot_resource_versions 中包含 resource_id 键的任务
-	var task models.WorkspaceTask
-	if err := t.db.Select("id, snapshot_resource_versions").
-		Where("workspace_id = ? AND status = 'applied' AND jsonb_exists(snapshot_resource_versions, ?)", workspaceID, resourceID).
-		Order("id DESC").
-		First(&task).Error; err != nil {
-		return map[string]interface{}{
-			"found":           true,
-			"message":         "no apply history found for this resource",
-			"current_version": currentVersion.Version,
-			"current_code":    currentVersion.TFCode,
-		}, nil
-	}
-
-	// 4. 从 snapshot 中提取该资源的版本号
+	// 3. 查找上次 apply 时的代码版本号
+	//    优先从 workspace_task_resource_changes.applied_code_version 查询（快速路径）
+	//    Fallback: 扫描 workspace_tasks.snapshot_resource_versions JSONB
+	moduleAddress := "module." + strings.ReplaceAll(resourceID, ".", "_")
 	var appliedVersionNum int
-	if snap, ok := task.SnapshotResourceVersions[resourceID]; ok {
-		if snapMap, ok := snap.(map[string]interface{}); ok {
-			if v, ok := snapMap["version"].(float64); ok {
-				appliedVersionNum = int(v)
+	var appliedTaskID uint
+
+	var rc models.WorkspaceTaskResourceChange
+	if err := t.db.Select("task_id, applied_code_version").
+		Where("workspace_id = ? AND module_address = ? AND apply_status = 'completed' AND applied_code_version IS NOT NULL",
+			workspaceID, moduleAddress).
+		Order("task_id DESC").
+		First(&rc).Error; err == nil && rc.AppliedCodeVersion != nil {
+		appliedVersionNum = *rc.AppliedCodeVersion
+		appliedTaskID = rc.TaskID
+		log.Printf("[query_resource_code_diff] fast path: resource=%s version=%d task=%d", resourceID, appliedVersionNum, appliedTaskID)
+	} else {
+		// Fallback: JSONB scan on snapshot_resource_versions
+		var task models.WorkspaceTask
+		if err := t.db.Select("id, snapshot_resource_versions").
+			Where("workspace_id = ? AND status = 'applied' AND jsonb_exists(snapshot_resource_versions, ?)", workspaceID, resourceID).
+			Order("id DESC").
+			First(&task).Error; err != nil {
+			return map[string]interface{}{
+				"found":           true,
+				"message":         "no apply history found for this resource",
+				"current_version": currentVersion.Version,
+				"current_code":    currentVersion.TFCode,
+			}, nil
+		}
+		appliedTaskID = task.ID
+		if snap, ok := task.SnapshotResourceVersions[resourceID]; ok {
+			if snapMap, ok := snap.(map[string]interface{}); ok {
+				if v, ok := snapMap["version"].(float64); ok {
+					appliedVersionNum = int(v)
+				}
 			}
 		}
+		log.Printf("[query_resource_code_diff] fallback path: resource=%s version=%d task=%d", resourceID, appliedVersionNum, appliedTaskID)
 	}
 
 	if appliedVersionNum == 0 {
@@ -547,10 +563,11 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 			"message":          "code unchanged since last apply",
 			"current_version":  currentVersion.Version,
 			"applied_version":  appliedVersionNum,
+			"applied_task_id":  appliedTaskID,
 		}, nil
 	}
 
-	// 6. 获取 apply 时的版本代码
+	// 4. 获取 apply 时的版本代码
 	var appliedVersion models.ResourceCodeVersion
 	if err := t.db.Where("resource_id = ? AND version = ?", resource.ID, appliedVersionNum).
 		First(&appliedVersion).Error; err != nil {
@@ -563,7 +580,7 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		}, nil
 	}
 
-	// 7. 计算精简 diff：只输出变更的字段
+	// 5. 计算精简 diff：只输出变更的字段
 	diff := computeJSONDiff(appliedVersion.TFCode, currentVersion.TFCode)
 
 	return map[string]interface{}{
@@ -571,7 +588,7 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		"has_changes":     true,
 		"applied_version": appliedVersionNum,
 		"current_version": currentVersion.Version,
-		"applied_task_id": task.ID,
+		"applied_task_id": appliedTaskID,
 		"diff":            diff,
 	}, nil
 }

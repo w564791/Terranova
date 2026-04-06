@@ -210,21 +210,12 @@ const StatePreview: React.FC = () => {
 
   const handleDownload = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `http://localhost:8080/api/v1/workspaces/${workspaceId}/state-versions/${version}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
+      const response = await api.get(
+        `/workspaces/${workspaceId}/state-versions/${version}`,
+        { responseType: 'blob' }
       );
-      
-      if (!response.ok) {
-        throw new Error('下载失败');
-      }
-      
-      const blob = await response.blob();
+
+      const blob = new Blob([response.data]);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

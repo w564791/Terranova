@@ -7246,6 +7246,7 @@ CREATE TABLE public.workspace_task_resource_changes (
     updated_at timestamp without time zone DEFAULT now(),
     resource_id character varying(500),
     resource_attributes jsonb,
+    applied_code_version integer,
     workspace_id character varying(50) NOT NULL
 );
 
@@ -7304,6 +7305,13 @@ COMMENT ON COLUMN public.workspace_task_resource_changes.resource_id IS '资源I
 --
 
 COMMENT ON COLUMN public.workspace_task_resource_changes.resource_attributes IS '资源属性（从terraform state提取，如ARN等）';
+
+
+--
+-- Name: COLUMN workspace_task_resource_changes.applied_code_version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.workspace_task_resource_changes.applied_code_version IS 'resource_code_versions.version at apply completion time';
 
 
 --

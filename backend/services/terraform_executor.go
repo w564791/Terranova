@@ -1938,6 +1938,26 @@ func (s *TerraformExecutor) saveTaskFailure(
 		}
 
 		// 注意：CMDB 同步由 TaskQueueManager.syncCMDBAfterApply 统一处理
+
+		// 将 applying 状态的资源标记为 failed（apply 中途失败）
+		if s.db != nil {
+			now := time.Now()
+			if res := s.db.Model(&models.WorkspaceTaskResourceChange{}).
+				Where("task_id = ? AND apply_status = ?", task.ID, "applying").
+				Updates(map[string]interface{}{
+					"apply_status":       "failed",
+					"apply_completed_at": now,
+					"apply_error":        "task failed during apply",
+					"updated_at":         now,
+				}); res.Error != nil {
+				logger.Warn("Failed to mark applying resources as failed: %v", res.Error)
+			} else if res.RowsAffected > 0 {
+				logger.Info("Marked %d applying resources as failed", res.RowsAffected)
+			}
+
+			// 回填已完成资源的 applied_code_version（部分失败场景：部分资源已 apply 成功）
+			s.backfillAppliedCodeVersion(task.ID, task.WorkspaceID, logger)
+		}
 	}
 
 	// 使用 DataAccessor 更新任务
@@ -2823,6 +2843,9 @@ func (s *TerraformExecutor) ExecuteApply(
 		} else {
 			logger.Info("✓ Updated all pending resources to completed status")
 		}
+
+		// 回填 applied_code_version: 从 workspace_resources + resource_code_versions 获取当前版本号
+		s.backfillAppliedCodeVersion(task.ID, workspace.WorkspaceID, logger)
 	}
 
 	// Apply成功完成后，解锁workspace
@@ -3613,6 +3636,30 @@ func (s *TerraformExecutor) workDirExists(workDir string) bool {
 // ============================================================================
 // 资源版本快照管理
 // ============================================================================
+
+// backfillAppliedCodeVersion writes the current resource_code_versions.version
+// into workspace_task_resource_changes.applied_code_version for completed records.
+// This enables query_resource_code_diff to look up the applied version directly
+// instead of scanning snapshot_resource_versions JSONB.
+func (s *TerraformExecutor) backfillAppliedCodeVersion(taskID uint, workspaceID string, logger *TerraformLogger) {
+	result := s.db.Exec(`
+		UPDATE workspace_task_resource_changes rc
+		SET applied_code_version = rcv.version
+		FROM workspace_resources wr
+		JOIN resource_code_versions rcv ON rcv.id = wr.current_version_id
+		WHERE rc.task_id = ?
+		  AND rc.apply_status = 'completed'
+		  AND rc.applied_code_version IS NULL
+		  AND wr.workspace_id = ?
+		  AND rc.module_address = 'module.' || REPLACE(wr.resource_id, '.', '_')
+	`, taskID, workspaceID)
+
+	if result.Error != nil {
+		logger.Warn("Failed to backfill applied_code_version: %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		logger.Info("Backfilled applied_code_version for %d resource changes", result.RowsAffected)
+	}
+}
 
 // CreateResourceVersionSnapshot 创建资源版本快照（新版本，保存到task表）
 // 注意：变量快照现在由 VariableSnapshotService 在 task 创建前生成（variable_snapshot_id），

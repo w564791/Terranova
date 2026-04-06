@@ -522,6 +522,9 @@ type WorkspaceTaskResourceChange struct {
 	ResourceID         *string `json:"resource_id" gorm:"type:varchar(500)"`  // 资源ID（如AWS资源的ID）
 	ResourceAttributes JSONB   `json:"resource_attributes" gorm:"type:jsonb"` // 资源属性（如ARN等）
 
+	// Apply 时的代码版本号（resource_code_versions.version）
+	AppliedCodeVersion *int `json:"applied_code_version" gorm:"type:integer"` // apply 完成时回填
+
 	// 关联
 	Task      *WorkspaceTask `json:"task,omitempty" gorm:"foreignKey:TaskID"`
 	Workspace *Workspace     `json:"workspace,omitempty" gorm:"foreignKey:WorkspaceID"`
