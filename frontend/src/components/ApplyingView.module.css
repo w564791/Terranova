@@ -90,6 +90,10 @@
   color: #9ca3af;
 }
 
+.statusUnchanged {
+  color: #9ca3af;
+}
+
 /* Action Icon */
 .resourceAction {
   flex-shrink: 0;
@@ -209,6 +213,16 @@
   padding: 3px 8px;
   background: #fee2e2;
   border-radius: 3px;
+}
+
+.statusTextUnchanged {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
 }
 
 /* Expand Icon */

@@ -98,6 +98,14 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
   const [actionsExpanded, setActionsExpanded] = useState(true);
   const [expandedActionIndices, setExpandedActionIndices] = useState<Set<number>>(new Set());
 
+  // Infer effective apply status: when task is applied and resource is still pending, treat as unchanged
+  const getEffectiveStatus = (resource: ResourceChange): string => {
+    if (isApplied && resource.apply_status === 'pending') {
+      return 'unchanged';
+    }
+    return resource.apply_status;
+  };
+
   // 创建从触发资源地址到 action invocations 的映射
   const triggerToActionsMap = useMemo(() => {
     const map = new Map<string, ActionInvocation[]>();
@@ -144,6 +152,8 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
         return <span className={styles.statusCompleted}>✓</span>;
       case 'failed':
         return <span className={styles.statusFailed}>✗</span>;
+      case 'unchanged':
+        return <span className={styles.statusUnchanged}>=</span>;
       case 'pending':
       default:
         return <span className={styles.statusPending}>○</span>;
@@ -172,8 +182,12 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
       return { text: 'Failed', className: styles.statusTextFailed };
     }
 
-    if (resource.apply_status === 'pending') {
+    if (resource.apply_status === 'pending' && !isApplied) {
       return { text: 'Pending', className: styles.resourceStatusText };
+    }
+
+    if (resource.apply_status === 'unchanged' || (resource.apply_status === 'pending' && isApplied)) {
+      return { text: 'Unchanged', className: styles.statusTextUnchanged };
     }
 
     if (resource.apply_status === 'applying') {
@@ -221,7 +235,7 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
 
       {/* 资源列表 */}
       <div className={styles.resourceList}>
-        {resources.map((resource) => {
+        {resources.filter(r => r.action !== 'read').map((resource) => {
           // 检查这个资源是否会触发 actions
           const triggeredActions = triggerToActionsMap.get(resource.resource_address) || [];
           
@@ -229,21 +243,23 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
             <div key={resource.id} className={styles.resourceItem}>
               <div className={styles.resourceHeader}>
                 <div className={styles.resourceStatus}>
-                  {getStatusIcon(resource.apply_status)}
+                  {getStatusIcon(getEffectiveStatus(resource))}
                 </div>
-                <div className={styles.resourceAction}>
-                  {getActionIcon(resource.action)}
-                </div>
+                {!isApplied && (
+                  <div className={styles.resourceAction}>
+                    {getActionIcon(resource.action)}
+                  </div>
+                )}
                 <div 
                   className={styles.resourceAddress}
                   onClick={() => {
-                    // completed状态的资源可以展开查看详情
-                    if (resource.apply_status === 'completed') {
+                    // completed/unchanged状态的资源可以展开查看详情
+                    if (getEffectiveStatus(resource) === 'completed' || getEffectiveStatus(resource) === 'unchanged') {
                       toggleResource(resource.id);
                     }
                   }}
                   style={{
-                    cursor: resource.apply_status === 'completed' ? 'pointer' : 'default'
+                    cursor: (getEffectiveStatus(resource) === 'completed' || getEffectiveStatus(resource) === 'unchanged') ? 'pointer' : 'default'
                   }}
                 >
                   {resource.resource_address}
@@ -275,17 +291,17 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
                 <div 
                   className={getStatusTextAndClass(resource).className}
                   onClick={() => {
-                    if (resource.apply_status === 'completed') {
+                    if (getEffectiveStatus(resource) === 'completed' || getEffectiveStatus(resource) === 'unchanged') {
                       toggleResource(resource.id);
                     }
                   }}
                   style={{
-                    cursor: resource.apply_status === 'completed' ? 'pointer' : 'default'
+                    cursor: (getEffectiveStatus(resource) === 'completed' || getEffectiveStatus(resource) === 'unchanged') ? 'pointer' : 'default'
                   }}
                 >
                   {getStatusTextAndClass(resource).text}
                 </div>
-                {resource.apply_status === 'completed' && (
+                {(getEffectiveStatus(resource) === 'completed' || getEffectiveStatus(resource) === 'unchanged') && (
                   <div 
                     className={styles.expandIcon}
                     onClick={() => toggleResource(resource.id)}
@@ -296,7 +312,7 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
               </div>
 
               {/* 资源详情（仅completed状态时显示） */}
-              {expandedResources.has(resource.id) && resource.apply_status === 'completed' && (
+              {expandedResources.has(resource.id) && (getEffectiveStatus(resource) === 'completed' || getEffectiveStatus(resource) === 'unchanged') && (
                 <div className={styles.resourceDetails}>
                   {/* Resource ID - 如果有的话显示 */}
                   {resource.resource_id ? (
