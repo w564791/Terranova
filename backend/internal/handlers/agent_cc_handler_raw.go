@@ -780,19 +780,53 @@ func (h *RawAgentCCHandler) postApplyCompletionTasks(taskID uint) {
 		return
 	}
 
-	// 1. Apply 成功 → 从 State 提取 Resource ID（与 Local 模式对齐）
+	// 1. Apply 成功 → 批量更新 pending 资源状态 + 回填 applied_code_version
+	//    Agent 端 db=nil 跳过了 terraform_executor.go 中的这段逻辑，由 Server 端补做
+	if task.Status == models.TaskStatusApplied {
+		now := time.Now()
+		if result := h.db.Model(&models.WorkspaceTaskResourceChange{}).
+			Where("task_id = ? AND apply_status = ?", taskID, "pending").
+			Updates(map[string]interface{}{
+				"apply_status":       "completed",
+				"apply_completed_at": now,
+				"updated_at":         now,
+			}); result.Error != nil {
+			log.Printf("[PostApplyComplete] Failed to update pending resources to completed for task %d: %v", taskID, result.Error)
+		} else if result.RowsAffected > 0 {
+			log.Printf("[PostApplyComplete] Updated %d pending resources to completed for task %d", result.RowsAffected, taskID)
+		}
+
+		// 回填 applied_code_version
+		if result := h.db.Exec(`
+			UPDATE workspace_task_resource_changes rc
+			SET applied_code_version = rcv.version
+			FROM workspace_resources wr
+			JOIN resource_code_versions rcv ON rcv.id = wr.current_version_id
+			WHERE rc.task_id = ?
+			  AND rc.apply_status = 'completed'
+			  AND rc.applied_code_version IS NULL
+			  AND wr.workspace_id = ?
+			  AND rc.module_address = 'module.' || REPLACE(wr.resource_id, '.', '_')
+		`, taskID, task.WorkspaceID); result.Error != nil {
+			log.Printf("[PostApplyComplete] Failed to backfill applied_code_version for task %d: %v", taskID, result.Error)
+		} else if result.RowsAffected > 0 {
+			log.Printf("[PostApplyComplete] Backfilled applied_code_version for %d resources in task %d", result.RowsAffected, taskID)
+		}
+	}
+
+	// 2. Apply 成功 → 从 State 提取 Resource ID（与 Local 模式对齐）
 	//    Agent 端 db=nil 无法执行此操作，由 Server 端补做
 	if task.Status == models.TaskStatusApplied {
 		h.extractResourceIDsFromState(taskID, task.WorkspaceID)
 	}
 
-	// 2. Apply 成功 → 执行 Run Triggers（与 Local 模式对齐）
+	// 3. Apply 成功 → 执行 Run Triggers（与 Local 模式对齐）
 	if task.Status == models.TaskStatusApplied {
 		log.Printf("[PostApplyComplete] Executing Run Triggers for task %d", taskID)
 		h.taskQueueManager.ExecuteRunTriggers(&task)
 	}
 
-	// 3. CMDB 同步（成功和失败都需要）
+	// 4. CMDB 同步（成功和失败都需要）
 	h.taskQueueManager.SyncCMDBAfterApply(&task)
 }
 

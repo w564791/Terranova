@@ -4597,9 +4597,31 @@ func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string
 
 	changes, _ := planJSON["resource_changes"].([]interface{})
 
-	// For refresh-only plans (drift check), include resource_drift
-	if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok {
-		changes = append(changes, driftChanges...)
+	// For refresh-only plans (drift check), resource_changes is all no-op.
+	// Only fall back to resource_drift when there are no real changes.
+	// In normal plan mode, resource_changes already incorporates drift — merging would double-count.
+	hasRealChanges := false
+	for _, item := range changes {
+		if rc, ok := item.(map[string]interface{}); ok {
+			if ch, ok := rc["change"].(map[string]interface{}); ok {
+				if acts, ok := ch["actions"].([]interface{}); ok {
+					for _, a := range acts {
+						if s, ok := a.(string); ok && s != "no-op" && s != "read" {
+							hasRealChanges = true
+							break
+						}
+					}
+				}
+			}
+		}
+		if hasRealChanges {
+			break
+		}
+	}
+	if !hasRealChanges {
+		if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
+			changes = driftChanges
+		}
 	}
 
 	for _, item := range changes {
