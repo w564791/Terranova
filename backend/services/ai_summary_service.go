@@ -561,6 +561,10 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 	}
 
 	summary.PlanChanges = planChangesJSON
+	summary.ToolCalls, _ = json.Marshal(result.ToolCalls)
+	if len(result.ThinkingContents) > 0 {
+		summary.ThinkingContent, _ = json.Marshal(result.ThinkingContents)
+	}
 
 	// Deterministic risk scoring
 	if s.riskScorer != nil {
@@ -629,10 +633,6 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		}
 	}
 
-	summary.ToolCalls, _ = json.Marshal(result.ToolCalls)
-	if len(result.ThinkingContents) > 0 {
-		summary.ThinkingContent, _ = json.Marshal(result.ThinkingContents)
-	}
 	summary.Status = "completed"
 	summary.Duration = int(time.Since(startTime).Milliseconds())
 
@@ -953,6 +953,12 @@ func (s *AISummaryService) buildRiskScoringInput(summary *models.AIPlanSummary, 
 		input.UncertaintyLevel = "high"
 	}
 
+	// R2 guardrail: infer service_disruption from structured data.
+	// Conditions: (1) dependency_break or permission_scope_change flagged,
+	// (2) CMDB query_resource_attributes returned found=false,
+	// (3) impact_analysis contains update or delete actions (not pure create).
+	input.RiskFactors = inferServiceDisruption(input.RiskFactors, input.RiskFactorResourceCounts, summary.ToolCalls, summary.ImpactAnalysis)
+
 	// 4. Parse affected_resources for cross-workspace count
 	if len(summary.AffectedResources) > 0 {
 		input.CrossWorkspaceCount = parseCrossWorkspaceCount(summary.AffectedResources, workspaceID)
@@ -1038,7 +1044,93 @@ func parseImpactAnalysis(raw json.RawMessage) (maxDeps int, maxDepResource strin
 			}
 		}
 	}
+
 	return
+}
+
+// inferServiceDisruption checks structured data for evidence of service disruption
+// that AI may have omitted. Three conditions must all be true:
+//  1. dependency_break or permission_scope_change already flagged
+//  2. CMDB query_resource_attributes returned found=false for a referenced resource
+//  3. impact_analysis contains at least one update or delete action (pure creates excluded)
+func inferServiceDisruption(factors []string, factorCounts map[string]int, toolCalls, impactAnalysis json.RawMessage) []string {
+	// Already flagged — nothing to do
+	factorSet := make(map[string]bool, len(factors))
+	for _, f := range factors {
+		factorSet[f] = true
+	}
+	if factorSet["service_disruption"] {
+		return factors
+	}
+
+	// Prerequisite: at least one of these must be present
+	if !factorSet["dependency_break"] && !factorSet["permission_scope_change"] {
+		return factors
+	}
+
+	// Must have a CMDB lookup that returned not-found
+	if !hasCMDBNotFound(toolCalls) {
+		return factors
+	}
+
+	// Must involve modification of existing resources, not pure creation
+	if !hasModifyAction(impactAnalysis) {
+		return factors
+	}
+
+	factors = append(factors, "service_disruption")
+	factorCounts["service_disruption"] = 1
+	log.Printf("[RiskScorer] R2 inferred service_disruption: CMDB resource not found + %v", factors[:len(factors)-1])
+	return factors
+}
+
+// hasModifyAction checks whether impact_analysis contains at least one update or delete action.
+func hasModifyAction(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	type item struct {
+		Action string `json:"action"`
+	}
+	var items []item
+	if err := json.Unmarshal(raw, &items); err != nil {
+		var wrapper struct {
+			Details []item `json:"details"`
+		}
+		if err2 := json.Unmarshal(raw, &wrapper); err2 != nil {
+			return false
+		}
+		items = wrapper.Details
+	}
+	for _, it := range items {
+		a := strings.ToLower(it.Action)
+		if a == "update" || a == "delete" || a == "destroy" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasCMDBNotFound checks whether any query_resource_attributes call returned found=false.
+func hasCMDBNotFound(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var calls []struct {
+		ToolName string `json:"tool_name"`
+		Result   struct {
+			Found *bool `json:"found"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &calls); err != nil {
+		return false
+	}
+	for _, c := range calls {
+		if c.ToolName == "query_resource_attributes" && c.Result.Found != nil && !*c.Result.Found {
+			return true
+		}
+	}
+	return false
 }
 
 // parseCrossWorkspaceCount counts unique workspace IDs in affected_resources that differ from current.

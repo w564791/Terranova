@@ -118,7 +118,7 @@ mandatory_calls:
 |`configuration_drift`      |配置偏移（与预期/基线不符）        |
 |`high_blast_radius`        |变更影响面大                |
 |`sensitive_resource_change`|涉及敏感资源（生产环境、核心基础设施）   |
-|`service_disruption`       |变更可能导致依赖方服务中断（如端口变更导致 VPC Endpoint 不可达、安全组规则删除导致连接丢失）。判定依据：通过第二轮查询获取的依赖方 resource_summary 和 tags，确认依赖方为生产环境（Environment=production）且处于活跃状态的资源（如 running、available、Active，已停止或已删除的不计入） |
+|`service_disruption`       |变更可能导致依赖方服务中断(网络不可达/权限中断等)。判定依据：通过第二轮查询获取依赖方的 resource_summary 和 tags，确认其同时满足: 1.属于生产环境（tag Env*=pro*）,2.处于活跃状态（如 running、available、Active；已停止或已删除的资源不计入） |
 
 -----
 
@@ -369,9 +369,34 @@ affected_resources_schema:
 3. resource base policy,例如secretsmanager policy,kms policy
 ```
 
+## 十三、 必须查询CMDB的场景
+
+```
+1. 关联资源变更
+   a. 安全组、instance profile、IAM Role/Policy 等云资源被修改或删除时，
+      查询 CMDB 确认哪些资源依赖它
+
+2. 资源引用标识符变更
+   a. 当代码变更分析发现 policy、配置、参数中引用的外部资源标识符
+      （如 IAM Role ARN/名称、账号 ID、VPC ID、Security Group ID、
+       KMS Key ID、Subnet ID 等）发生变化时：
+      - 必须对变更前的标识符查询 CMDB，确认原资源是否存在且在使用
+      - 必须对变更后的标识符查询 CMDB，确认新资源是否存在
+      - 若变更后的标识符在 CMDB 中不存在，必须标记 dependency_break
+        和 service_disruption 风险因子
+   b. 典型场景：
+      - Bucket Policy / Resource Policy 中的 Principal 或 Condition 引用变更
+      - Trust Policy 中的 trusted entity 变更
+      - Security Group Rule 中引用的 source/destination 变更
+
+3. known after apply 字段的代码变更分析结果
+   a. 当代码变更分析揭示了 after_unknown 字段的实际变更内容时，
+      如果变更涉及上述引用标识符，同样适用规则 2
+```
+
 -----
 
-## 十二A、after_unknown 代码变更分析（强约束）
+## 十四、after_unknown 代码变更分析（强约束）
 
 Terraform plan 中，资源的 `change.after_unknown` 标记了哪些字段的值需要 apply 后才能确定。这些字段在前端显示为 "Known after apply"，**无法直接用于风控判断**。必须通过代码变更分析判断这些字段是否会发生实质变更。
 
@@ -426,7 +451,7 @@ Terraform plan 中，资源的 `change.after_unknown` 标记了哪些字段的�
 
 -----
 
-## 十三、输出格式
+## 十五、输出格式
 
 ### Plan 阶段
 

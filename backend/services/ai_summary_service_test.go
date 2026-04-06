@@ -152,6 +152,157 @@ func TestGetPlanSummary(t *testing.T) {
 	}
 }
 
+func TestInferServiceDisruption_CMDBNotFound(t *testing.T) {
+	// AI flagged dependency_break but omitted service_disruption; CMDB shows resource not found
+	factors := []string{"permission_scope_change", "dependency_break"}
+	counts := map[string]int{"permission_scope_change": 1, "dependency_break": 1}
+	toolCalls := []byte(`[
+		{"tool_name": "query_resource_attributes", "result": {"found": true}},
+		{"tool_name": "query_resource_attributes", "result": {"found": false}}
+	]`)
+	impact := []byte(`{"details": [{"action": "update", "resource": "aws_s3_bucket_policy.this"}]}`)
+
+	got := inferServiceDisruption(factors, counts, toolCalls, impact)
+
+	factorSet := make(map[string]bool)
+	for _, f := range got {
+		factorSet[f] = true
+	}
+	if !factorSet["service_disruption"] {
+		t.Error("R2 should have inferred service_disruption when CMDB resource not found")
+	}
+	if counts["service_disruption"] != 1 {
+		t.Errorf("expected service_disruption count=1, got %d", counts["service_disruption"])
+	}
+}
+
+func TestInferServiceDisruption_AllFound(t *testing.T) {
+	// CMDB lookups all found=true - should NOT inject
+	factors := []string{"permission_scope_change", "dependency_break"}
+	counts := map[string]int{"permission_scope_change": 1, "dependency_break": 1}
+	toolCalls := []byte(`[
+		{"tool_name": "query_resource_attributes", "result": {"found": true}},
+		{"tool_name": "query_resource_attributes", "result": {"found": true}}
+	]`)
+	impact := []byte(`{"details": [{"action": "update", "resource": "aws_s3_bucket_policy.this"}]}`)
+
+	got := inferServiceDisruption(factors, counts, toolCalls, impact)
+
+	for _, f := range got {
+		if f == "service_disruption" {
+			t.Error("should not infer service_disruption when all CMDB lookups found")
+		}
+	}
+}
+
+func TestInferServiceDisruption_NoPrerequisiteFactor(t *testing.T) {
+	// CMDB not found but no dependency_break or permission_scope_change
+	factors := []string{"configuration_drift"}
+	counts := map[string]int{"configuration_drift": 1}
+	toolCalls := []byte(`[
+		{"tool_name": "query_resource_attributes", "result": {"found": false}}
+	]`)
+	impact := []byte(`{"details": [{"action": "update", "resource": "aws_s3_bucket.this"}]}`)
+
+	got := inferServiceDisruption(factors, counts, toolCalls, impact)
+
+	for _, f := range got {
+		if f == "service_disruption" {
+			t.Error("should not infer service_disruption without prerequisite factors")
+		}
+	}
+}
+
+func TestInferServiceDisruption_AlreadyFlagged(t *testing.T) {
+	// service_disruption already present - should not duplicate
+	factors := []string{"dependency_break", "service_disruption"}
+	counts := map[string]int{"dependency_break": 1, "service_disruption": 1}
+	toolCalls := []byte(`[
+		{"tool_name": "query_resource_attributes", "result": {"found": false}}
+	]`)
+	impact := []byte(`{"details": [{"action": "update", "resource": "aws_s3_bucket_policy.this"}]}`)
+
+	got := inferServiceDisruption(factors, counts, toolCalls, impact)
+
+	count := 0
+	for _, f := range got {
+		if f == "service_disruption" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 service_disruption, got %d", count)
+	}
+}
+
+func TestInferServiceDisruption_CreateOnly(t *testing.T) {
+	// All conditions met except actions are pure create - should NOT inject
+	factors := []string{"permission_scope_change", "dependency_break"}
+	counts := map[string]int{"permission_scope_change": 1, "dependency_break": 1}
+	toolCalls := []byte(`[
+		{"tool_name": "query_resource_attributes", "result": {"found": false}}
+	]`)
+	impact := []byte(`{"details": [
+		{"action": "create", "resource": "aws_s3_bucket.new"},
+		{"action": "create", "resource": "aws_s3_bucket_policy.new"}
+	]}`)
+
+	got := inferServiceDisruption(factors, counts, toolCalls, impact)
+
+	for _, f := range got {
+		if f == "service_disruption" {
+			t.Error("should not infer service_disruption for pure create actions")
+		}
+	}
+}
+
+func TestInferServiceDisruption_MixedActions(t *testing.T) {
+	// Has both create and update - update should trigger inference
+	factors := []string{"dependency_break"}
+	counts := map[string]int{"dependency_break": 1}
+	toolCalls := []byte(`[
+		{"tool_name": "query_resource_attributes", "result": {"found": false}}
+	]`)
+	impact := []byte(`{"details": [
+		{"action": "create", "resource": "aws_s3_bucket.new"},
+		{"action": "update", "resource": "aws_s3_bucket_policy.existing"}
+	]}`)
+
+	got := inferServiceDisruption(factors, counts, toolCalls, impact)
+
+	factorSet := make(map[string]bool)
+	for _, f := range got {
+		factorSet[f] = true
+	}
+	if !factorSet["service_disruption"] {
+		t.Error("R2 should trigger when mixed actions include update")
+	}
+}
+
+func TestHasCMDBNotFound(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		want bool
+	}{
+		{"empty", nil, false},
+		{"no match", []byte(`[{"tool_name": "query_cmdb_dependencies", "result": {"found": false}}]`), false},
+		{"found true", []byte(`[{"tool_name": "query_resource_attributes", "result": {"found": true}}]`), false},
+		{"found false", []byte(`[{"tool_name": "query_resource_attributes", "result": {"found": false}}]`), true},
+		{"mixed", []byte(`[
+			{"tool_name": "query_resource_attributes", "result": {"found": true}},
+			{"tool_name": "query_resource_attributes", "result": {"found": false}}
+		]`), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasCMDBNotFound(tt.raw); got != tt.want {
+				t.Errorf("hasCMDBNotFound() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRetryPlanSummary_OnlyFailedAllowed(t *testing.T) {
 	db := setupSummaryTestDB(t)
 

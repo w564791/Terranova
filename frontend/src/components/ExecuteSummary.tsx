@@ -291,23 +291,37 @@ const PlanSummaryResult: React.FC<{
   const detailsCount = summary.impact_analysis?.details?.length || 0;
   const affectedCount = summary.affected_resources?.length || 0;
 
+  const riskLevel = summary.risk_score_breakdown?.risk_level || summary.risk_level || '';
+  const scoreColor = riskLevel === 'critical' ? '#dc2626' : riskLevel === 'high' ? '#ea580c' : riskLevel === 'medium' ? '#ca8a04' : '#16a34a';
+
   return (
     <div className={styles.result}>
       {/* 变更概述 — 始终展示 */}
       {summary.changes_overview && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>变更概述</div>
           <div className={styles.sectionContent}>{summary.changes_overview}</div>
         </div>
       )}
 
-      {/* Deterministic Risk Score — collapsed by default */}
+      {/* 影响分析 — 风险等级色条 */}
+      {summary.impact_analysis && typeof summary.impact_analysis === 'object' && summary.impact_analysis.summary && (
+        <div className={`${styles.impactBlock} ${styles[`impact_${riskLevel}`] || ''}`}>
+          <div className={`${styles.impactLabel} ${styles[`impactLabel_${riskLevel}`] || ''}`}>影响分析</div>
+          <div className={styles.impactText}>{safeRender(summary.impact_analysis.summary)}</div>
+        </div>
+      )}
+
+      {/* Risk Score — collapsed by default */}
       {summary.risk_score_value !== undefined && summary.risk_score_breakdown && (
         <div className={styles.section}>
           <div className={styles.collapseToggle} onClick={() => setShowScore(!showScore)}>
             {showScore ? '∧' : '∨'} Risk Score
-            <span className={`${styles.riskBadge} ${getRiskColor(summary.risk_score_breakdown.risk_level)}`} style={{ marginLeft: 8 }}>
-              {summary.risk_score_value.toFixed(1)} / 100
+            <span style={{ marginLeft: 8, fontFamily: '"SF Mono", monospace', fontWeight: 700, color: scoreColor }}>
+              {summary.risk_score_value.toFixed(1)}
+            </span>
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>/ 100</span>
+            <span className={styles.scoreBarInline}>
+              <span className={styles.scoreBarInlineFill} style={{ width: `${summary.risk_score_value}%`, backgroundColor: scoreColor }} />
             </span>
             {summary.risk_score_breakdown.near_threshold && (
               <span className={styles.nearThresholdTag}>Near Threshold</span>
@@ -319,73 +333,57 @@ const PlanSummaryResult: React.FC<{
             )}
           </div>
           {showScore && (
-            <div className={styles.sectionContent}>
-              <div className={styles.scoreBar}>
-                <div
-                  className={styles.scoreBarFill}
-                  style={{
-                    width: `${summary.risk_score_value}%`,
-                    backgroundColor: summary.risk_score_color === 'green' ? '#10b981' :
-                      summary.risk_score_color === 'yellow' ? '#f59e0b' :
-                      summary.risk_score_color === 'orange' ? '#f97316' : '#ef4444'
-                  }}
-                />
+            <div className={styles.scoreBreakdownTable}>
+              {summary.risk_score_breakdown.deductions.length > 0 && (() => {
+                let lastCategory = '';
+                return summary.risk_score_breakdown.deductions.map((d, i) => {
+                  const showCat = d.category !== lastCategory;
+                  lastCategory = d.category;
+                  return (
+                    <React.Fragment key={i}>
+                      {showCat && (
+                        <div className={styles.bdCategory}>{d.category}</div>
+                      )}
+                      <div className={styles.bdRow}>
+                        <span className={styles.bdItem}>{d.item}</span>
+                        <span className={styles.bdReason}>{d.reason}</span>
+                        <span className={styles.bdPoints}>{d.points}</span>
+                      </div>
+                    </React.Fragment>
+                  );
+                });
+              })()}
+              <div className={styles.bdSummary}>
+                <span>Base: {summary.risk_score_breakdown.base_deduction} &times; Env: {summary.risk_score_breakdown.env_multiplier}</span>
+                <span className={styles.bdPoints} style={{ color: scoreColor, fontSize: 15 }}>{summary.risk_score_value.toFixed(1)}</span>
               </div>
-              <div className={styles.scoreDetails}>
-                <span>Base Deduction: {summary.risk_score_breakdown.base_deduction}</span>
-                <span>Env Multiplier: x{summary.risk_score_breakdown.env_multiplier}</span>
-                {summary.risk_score_breakdown.combo_multiplier_applied && (
-                  <span>Combo: {summary.risk_score_breakdown.combo_detail}</span>
-                )}
-              </div>
-              {summary.risk_score_breakdown.deductions.length > 0 && (
-                <div className={styles.deductionList}>
-                  {summary.risk_score_breakdown.deductions.map((d, i) => (
-                    <div key={i} className={styles.deductionItem}>
-                      <span className={styles.deductionCategory}>{d.category}</span>
-                      <span className={styles.deductionPoints}>{d.points}</span>
-                      <span className={styles.deductionReason}>{d.item}: {d.reason}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
       )}
 
-      {/* 影响分析 — 摘要始终展示，详情默认折叠 */}
-      {summary.impact_analysis && (
+      {/* 资源变更详情 — 默认折叠 */}
+      {summary.impact_analysis && summary.impact_analysis.details && Array.isArray(summary.impact_analysis.details) && detailsCount > 0 && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>影响分析</div>
-          <div className={styles.sectionContent}>
-            {typeof summary.impact_analysis === 'object' && summary.impact_analysis.summary && (
-              <p>{safeRender(summary.impact_analysis.summary)}</p>
-            )}
-            {summary.impact_analysis.details && Array.isArray(summary.impact_analysis.details) && detailsCount > 0 && (
-              <>
-                <div className={styles.collapseToggle} onClick={() => setShowDetails(!showDetails)}>
-                  {showDetails ? '∧' : '∨'} 资源变更详情（{detailsCount} 项）
-                </div>
-                {showDetails && (
-                  <div className={styles.detailsList}>
-                    {summary.impact_analysis.details.map((d: any, i: number) => (
-                      <div key={i} className={styles.detailItem}>
-                        <div className={styles.detailHeader}>
-                          <span className={styles.detailResource}>{d.resource}</span>
-                          <span className={styles.detailAction}>{d.action}</span>
-                          {d.dependencies_affected > 0 && (
-                            <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
-                          )}
-                        </div>
-                        {d.impact && <div className={styles.detailImpact}>{safeRender(d.impact)}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+          <div className={styles.collapseToggle} onClick={() => setShowDetails(!showDetails)}>
+            {showDetails ? '∧' : '∨'} 资源变更详情（{detailsCount} 项）
           </div>
+          {showDetails && (
+            <div className={styles.detailsList}>
+              {summary.impact_analysis.details.map((d: any, i: number) => (
+                <div key={i} className={styles.detailItem}>
+                  <div className={styles.detailHeader}>
+                    <span className={styles.detailResource}>{d.resource}</span>
+                    <span className={styles.detailAction}>{d.action}</span>
+                    {d.dependencies_affected > 0 && (
+                      <span className={styles.detailDeps}>影响 {d.dependencies_affected} 个依赖</span>
+                    )}
+                  </div>
+                  {d.impact && <div className={styles.detailImpact}>{safeRender(d.impact)}</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -570,25 +568,31 @@ const DecisionConfirmation: React.FC<{
   const abortAction = allActions.find(a => a.code === 'ABORT');
   const allChecked = riskActions.length > 0 && riskActions.every(a => checkedCodes.has(a.code));
 
-  // 已确认状态
+  // 已确认/已取消状态
   if (summary.user_decision_code) {
-    // 兼容新旧格式：新格式用逗号分隔多个 code
+    const isAborted = summary.user_decision_code === 'ABORT';
     const confirmedCodes = summary.user_decision_code.split(',');
     const confirmedLabels = confirmedCodes
       .map(code => summary.decision_actions?.find(a => a.code === code)?.label || code)
       .filter(Boolean);
     return (
-      <div className={styles.decisionBox} style={{ borderColor: '#10b981' }}>
-        <div className={styles.decisionHeader}>
-          <span className={styles.decisionTitle}>{summary.decision_title || summary.decision_scenario || 'Risk Decision'}</span>
-          <span className={styles.decisionConfirmed}>已确认</span>
+      <div className={`${styles.decisionBox} ${isAborted ? styles.decisionCancelled : styles.decisionConfirmedBox}`}>
+        <div className={styles.decisionHeader} style={{ backgroundColor: isAborted ? '#f9fafb' : '#f0fdf4' }}>
+          <span className={styles.decisionTitle} style={{ color: isAborted ? '#374151' : '#065f46' }}>
+            {summary.decision_title || summary.decision_scenario || 'Risk Decision'}
+          </span>
+          <span className={isAborted ? styles.decisionCancelledBadge : styles.decisionConfirmed}>
+            {isAborted ? '已取消' : '已确认'}
+          </span>
         </div>
         <div className={styles.decisionResult}>
           {confirmedLabels.map((label, i) => (
-            <div key={i} style={{ fontSize: '13px', color: '#374151', marginBottom: '2px' }}>✓ {label}</div>
+            <div key={i} style={{ fontSize: '13px', color: isAborted ? '#6b7280' : '#374151', marginBottom: '2px' }}>
+              {isAborted ? '✗' : '✓'} {label}
+            </div>
           ))}
           <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
-            {summary.user_decision_by} 于 {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''} 确认
+            {summary.user_decision_by} 于 {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''} {isAborted ? '取消' : '确认'}
           </div>
           {summary.user_decision_note && (
             <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>备注: {summary.user_decision_note}</div>

@@ -201,6 +201,123 @@
   color: #2563eb;
 }
 
+/* Impact analysis block — risk-colored left border */
+
+.impactBlock {
+  padding: 14px 16px;
+  border-left: 3px solid #d1d5db;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 4px;
+}
+
+.impact_critical { border-color: #dc2626; background-color: #fef2f2; }
+.impact_high { border-color: #ea580c; background-color: #fff7ed; }
+.impact_medium { border-color: #ca8a04; background-color: #fffbeb; }
+.impact_low { border-color: #16a34a; background-color: #f0fdf4; }
+
+.impactLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  color: #6b7280;
+}
+
+.impactLabel_critical { color: #dc2626; }
+.impactLabel_high { color: #ea580c; }
+.impactLabel_medium { color: #ca8a04; }
+.impactLabel_low { color: #16a34a; }
+
+.impactText {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #374151;
+}
+
+/* Inline score bar (in collapse toggle) */
+
+.scoreBarInline {
+  display: inline-block;
+  width: 120px;
+  height: 5px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+.scoreBarInlineFill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* Score breakdown table */
+
+.scoreBreakdownTable {
+  margin: 4px 0 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.bdCategory {
+  padding: 5px 12px;
+  background: #f9fafb;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bdRow {
+  display: flex;
+  align-items: baseline;
+  padding: 7px 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.bdRow:last-child {
+  border-bottom: none;
+}
+
+.bdItem {
+  color: #4b5563;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 200px;
+}
+
+.bdReason {
+  flex: 1;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.bdPoints {
+  text-align: right;
+  font-family: "SF Mono", "Menlo", monospace;
+  font-weight: 600;
+  color: #dc2626;
+  white-space: nowrap;
+  min-width: 50px;
+}
+
+.bdSummary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 /* Impact analysis details */
 
 .detailsList {
@@ -451,6 +568,23 @@
   border-radius: 10px;
   background-color: #d1fae5;
   color: #065f46;
+}
+
+.decisionConfirmedBox {
+  border-color: #10b981;
+}
+
+.decisionCancelled {
+  border-color: #d1d5db;
+}
+
+.decisionCancelledBadge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: #e5e7eb;
+  color: #6b7280;
 }
 
 .decisionBody {
