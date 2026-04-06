@@ -1,6 +1,6 @@
 ## v0.6.2
 
-Agent 模式 resource_drift 双重计数修复、Apply 后 Server 端补偿逻辑、Plan/Apply 前端显示优化。
+Agent 模式 resource_drift 双重计数修复、Apply 后 Server 端补偿逻辑、Plan/Apply 前端显示优化、AI Summary 运维工具增强。
 
 ### Bug Fixes
 
@@ -22,3 +22,15 @@ Agent 模式 resource_drift 双重计数修复、Apply 后 Server 端补偿逻�
 - **修复** Apply 完成后 plan 预测变更但实际未变的资源显示 Pending，现在推断为 Unchanged 状态
 - **优化** Apply 完成后去掉冗余的 action badge（UPDATE/CREATE），状态文字已足够
 - **优化** plan changes download 按钮移入 filter 行，与搜索框和过滤器同行显示
+
+### Enhancements
+
+#### AI Summary 运维工具
+
+- **新增** StopApplySummary API：强制终止卡住的 running 状态 apply summary
+- **优化** RetryApplySummary 放宽条件：支持 `running` 状态重试，处理部署重启导致的孤儿记录
+- **修复** `extractJSON` 增加裸 JSON 提取：当 AI 响应无 markdown 标记时，定位第一个 `{` 到最后一个 `}` 之间的内容
+
+#### CMDB Dashboard
+
+- **优化** 词云组件：条目上限 30、容器 max-height 防溢出、文字 overflow ellipsis、字体范围缩小

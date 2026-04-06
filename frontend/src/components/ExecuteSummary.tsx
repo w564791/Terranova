@@ -3,7 +3,7 @@ import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
   confirmPlanSummary, bypassAIIncomplete,
-  stopPlanSummary,
+  stopPlanSummary, stopApplySummary,
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
 import { reportSkillUsageByCapability } from '../services/aiForm';
@@ -61,7 +61,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
   const handleStop = async () => {
     try {
       setRetrying(true);
-      await stopPlanSummary(workspaceId, taskId);
+      await (stage === 'plan' ? stopPlanSummary : stopApplySummary)(workspaceId, taskId);
       setSummary(null);
       setLoading(true);
       setTimeout(fetchSummary, 1000);

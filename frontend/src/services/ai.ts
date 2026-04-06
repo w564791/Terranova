@@ -269,6 +269,14 @@ export const stopPlanSummary = async (
   await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/plan-summary/stop`);
 };
 
+// 停止卡住的 Apply Summary
+export const stopApplySummary = async (
+  workspaceId: string,
+  taskId: number
+): Promise<void> => {
+  await api.post(`/workspaces/${workspaceId}/tasks/${taskId}/apply-summary/stop`);
+};
+
 // AI 分析不完整 - 管理员绕过
 export const bypassAIIncomplete = async (
   workspaceId: string,

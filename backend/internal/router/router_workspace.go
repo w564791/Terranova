@@ -243,6 +243,14 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			}),
 			summaryController.StopPlanSummary,
 		)
+		workspaces.POST("/:id/tasks/:task_id/apply-summary/stop",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_EXECUTION", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "WRITE"},
+			}),
+			summaryController.StopApplySummary,
+		)
 		workspaces.POST("/:id/tasks/:task_id/apply-summary/retry",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},

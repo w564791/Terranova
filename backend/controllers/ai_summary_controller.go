@@ -154,6 +154,22 @@ func (c *AISummaryController) StopPlanSummary(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"message": "analysis stopped"})
 }
 
+// StopApplySummary force-fails a stuck running apply summary
+func (c *AISummaryController) StopApplySummary(ctx *gin.Context) {
+	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+
+	if err := c.service.StopApplySummary(uint(taskID)); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "analysis stopped"})
+}
+
 // RetryApplySummary 重试 Apply Summary
 // @Summary Retry apply summary generation
 // @Description Retry generating the apply summary for a failed task

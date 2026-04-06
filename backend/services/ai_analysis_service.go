@@ -732,8 +732,8 @@ func cleanInvalidChars(text string) string {
 	return result
 }
 
-// extractJSON 从文本中提取 JSON 内容（处理 markdown 代码块）
-// 版本: 2026-01-31-v3 - 修复了 markdown 代码块提取时的字节索引问题
+// extractJSON 从文本中提取 JSON 内容（处理 markdown 代码块和前后缀文字）
+// 版本: 2026-04-06-v4 - 增加裸 JSON 提取：当无 markdown 标记时，定位第一个 { 到最后一个 } 之间的内容
 func extractJSON(text string) string {
 	// 首先清理无效的控制字符
 	// 注意：cleanInvalidChars 使用 rune 遍历，正确处理多字节 UTF-8 字符
@@ -757,7 +757,22 @@ func extractJSON(text string) string {
 		}
 	}
 
-	return trimSpace(text)
+	trimmed := trimSpace(text)
+
+	// 如果 trimSpace 后已经以 { 开头，直接返回
+	if strings.HasPrefix(trimmed, "{") {
+		return trimmed
+	}
+
+	// AI 可能在 JSON 前后添加自然语言文字（无 markdown 标记），
+	// 尝试提取第一个 { 到最后一个 } 之间的内容
+	firstBrace := strings.Index(trimmed, "{")
+	lastBrace := strings.LastIndex(trimmed, "}")
+	if firstBrace >= 0 && lastBrace > firstBrace {
+		return trimmed[firstBrace : lastBrace+1]
+	}
+
+	return trimmed
 }
 
 // fixIncompleteJSON 修复不完整的 JSON

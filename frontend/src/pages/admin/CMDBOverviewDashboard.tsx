@@ -72,7 +72,7 @@ const CMDBOverviewDashboard: React.FC = () => {
   // 词云数据：随机打乱 + 字体映射
   const wordCloudItems = useMemo(() => {
     if (!searchAnalytics?.top_queries?.length) return [];
-    const queries = [...searchAnalytics.top_queries];
+    const queries = [...searchAnalytics.top_queries].slice(0, 30);
     const maxCount = Math.max(...queries.map(q => q.count));
     const minCount = Math.min(...queries.map(q => q.count));
     const colors = ['#1677ff','#597ef7','#85a5ff','#9333ea','#f759ab','#fa8c16','#52c41a','#13c2c2','#ff4d4f','#faad14'];
@@ -86,7 +86,7 @@ const CMDBOverviewDashboard: React.FC = () => {
       text: q.query,
       count: q.count,
       avgResults: q.avg_results,
-      fontSize: maxCount === minCount ? 20 : 14 + (q.count - minCount) / (maxCount - minCount) * 34,
+      fontSize: maxCount === minCount ? 16 : 12 + (q.count - minCount) / (maxCount - minCount) * 16,
       color: colors[i % colors.length],
       rotation: rotations[i % rotations.length],
     }));

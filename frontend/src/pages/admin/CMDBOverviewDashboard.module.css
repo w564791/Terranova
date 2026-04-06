@@ -399,6 +399,8 @@
   justify-content: center;
   gap: 8px 12px;
   min-height: 160px;
+  max-height: 320px;
+  overflow: hidden;
   padding: 12px;
 }
 
@@ -408,6 +410,9 @@
   transition: opacity 0.2s;
   line-height: 1.2;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wordCloudItem:hover {
