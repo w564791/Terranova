@@ -1221,3 +1221,21 @@
   font-size: 10px;
   font-weight: 600;
 }
+
+/* Plan Download Button (inline with filter row) */
+.planDownloadBtn {
+  padding: 6px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.planDownloadBtn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import styles from './PlanCompleteView.module.css';
+import api from '../services/api';
 
 interface ResourceChange {
   id: number;
@@ -57,6 +58,8 @@ interface Props {
   outputChanges?: OutputChange[];
   actionInvocations?: ActionInvocation[];
   actions?: ActionResource[];
+  workspaceId?: string;
+  taskId?: number;
 }
 
 // 判断值是否为空或无意义
@@ -89,11 +92,11 @@ const formatSimpleValue = (value: any): string => {
   return String(value);
 };
 
-const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], actionInvocations = [], actions = [] }) => {
+const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], actionInvocations = [], actions = [], workspaceId, taskId }) => {
   const [expandedResources, setExpandedResources] = useState<Set<number>>(new Set());
   const [showUnchanged, setShowUnchanged] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
+  const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set(['create', 'update', 'delete', 'replace']));
   const [showActionFilter, setShowActionFilter] = useState(false);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [outputsExpanded, setOutputsExpanded] = useState(false);
@@ -123,13 +126,15 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
     return map;
   }, [actionInvocations]);
 
+  const allActions = ['create', 'update', 'delete', 'replace', 'read'];
+
   // 过滤资源
   const filteredResources = useMemo(() => {
     return resources.filter(resource => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         resource.resource_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
         resource.resource_type.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesAction = selectedActions.size === 0 || selectedActions.has(resource.action);
+      const matchesAction = selectedActions.size === allActions.length || selectedActions.has(resource.action);
       return matchesSearch && matchesAction;
     });
   }, [resources, searchTerm, selectedActions]);
@@ -575,13 +580,34 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
               </div>
             )}
           </div>
+          {workspaceId && taskId && (
+            <button
+              className={styles.planDownloadBtn}
+              onClick={async () => {
+                try {
+                  const data = await api.get(`/workspaces/${workspaceId}/tasks/${taskId}/resource-changes`);
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `plan-changes-task-${taskId}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error('Failed to download plan changes:', err);
+                }
+              }}
+            >
+              plan changes download
+            </button>
+          )}
         </div>
 
-        {(searchTerm || selectedActions.size > 0) && (
+        {(searchTerm || selectedActions.size < allActions.length) && (
           <div className={styles.filterResult}>
             Showing {filteredResources.length} of {resources.length} resources
             <button
-              onClick={() => { setSearchTerm(''); setSelectedActions(new Set()); }}
+              onClick={() => { setSearchTerm(''); setSelectedActions(new Set(allActions)); }}
               className={styles.clearFiltersButton}
             >
               Clear filters

@@ -172,29 +172,6 @@
   background: #fff;
 }
 
-/* Plan Download */
-.planDownloadRow {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.planDownloadBtn {
-  padding: 6px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #fff;
-  color: #374151;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.planDownloadBtn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
 /* Details Grid */
 .detailsGrid {
   display: grid;

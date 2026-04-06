@@ -588,7 +588,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
                 <p>加载资源变更数据...</p>
               </div>
             ) : (
-              <PlanCompleteView resources={resourceChanges} summary={summary} outputChanges={outputChanges} actionInvocations={actionInvocations} actions={actions} />
+              <PlanCompleteView resources={resourceChanges} summary={summary} outputChanges={outputChanges} actionInvocations={actionInvocations} actions={actions} workspaceId={String(workspaceId)} taskId={task.id} />
             )
           ) : task.status === 'pending' ? (
             <div className={styles.stageInfo}>
