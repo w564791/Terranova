@@ -475,16 +475,10 @@ func (c *WorkspaceRemoteDataController) GetSourceWorkspaceOutputs(ctx *gin.Conte
 
 	// 先处理配置的outputs
 	for _, configOutput := range configuredOutputs {
-		outputName := configOutput.OutputName
-
-		// 对于静态输出（resource_name = "__static__"），state中的key是 "static-{output_name}"
-		// 对于资源关联输出，state中的key是 "{resource_name}-{output_name}"
-		var stateKey string
-		if configOutput.ResourceName == "__static__" {
-			stateKey = "static-" + outputName
-		} else {
-			stateKey = configOutput.ResourceName + "-" + outputName
-		}
+		// Use unified StateKey() method to generate state key
+		// Fix: previously used ResourceName directly, but state key uses moduleName
+		// (dots replaced with underscores, extracted from output_value)
+		stateKey := configOutput.StateKey()
 
 		outputInfo := &OutputKeyInfoWithStatus{
 			Key:         stateKey, // 使用state中的key作为显示key，这样用户引用时使用正确的名称
