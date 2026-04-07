@@ -45,16 +45,6 @@ interface EditableOutput extends WorkspaceOutput {
   hasStateValue?: boolean;
 }
 
-interface StateOutputInfo {
-  check_results: any;
-  lineage: string;
-  outputs: Record<string, { value: any; type?: any; sensitive?: boolean }>;
-  resources: any[];
-  serial: number;
-  terraform_version: string;
-  version: number;
-}
-
 interface ResourceForOutput {
   resource_id: string;
   resource_name: string;
@@ -95,11 +85,10 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
   
   const [outputs, setOutputs] = useState<EditableOutput[]>([]);
   const [originalOutputs, setOriginalOutputs] = useState<WorkspaceOutput[]>([]);
-  const [stateOutputs, setStateOutputs] = useState<StateOutputInfo | null>(null);
+  const [stateMeta, setStateMeta] = useState<{ terraform_version?: string; serial?: number; version?: number; lineage?: string } | null>(null);
   const [resources, setResources] = useState<ResourceForOutput[]>([]);
   const [availableOutputs, setAvailableOutputs] = useState<ResourceAvailableOutputs[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stateLoading, setStateLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(new Set());
   
@@ -151,39 +140,34 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
     }
   }, [workspaceId]);
 
-  const fetchStateOutputs = useCallback(async () => {
-    setStateLoading(true);
+  const fetchOutputsCombined = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/state-outputs`, {
-        headers: getAuthHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStateOutputs(data);
-        return data;
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to fetch state outputs:', error);
-      return null;
-    } finally {
-      setStateLoading(false);
-    }
-  }, [workspaceId]);
-
-  const fetchResources = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs/resources`, {
+      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs/combined`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
         const data = await response.json();
         if (data.code === 200) {
+          const fetchedOutputs = (data.outputs || []).map((o: any) => ({
+            ...o,
+            stateValue: o.state_value,
+            hasStateValue: o.has_state_value,
+            stateKey: o.state_key,
+          }));
+          setOriginalOutputs(fetchedOutputs);
+          setOutputs(fetchedOutputs);
           setResources(data.resources || []);
+          setStateMeta(data.state_meta || null);
+          return fetchedOutputs;
         }
       }
+      return [];
     } catch (error) {
-      console.error('Failed to fetch resources:', error);
+      console.error('Failed to fetch combined outputs:', error);
+      return [];
+    } finally {
+      setLoading(false);
     }
   }, [workspaceId]);
 
@@ -210,43 +194,14 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
     return resourceOutputs?.outputs || [];
   }, [availableOutputs]);
 
-  // 合并配置的 outputs 和 state 中的值
-  const mergeOutputsWithState = useCallback((configuredOutputs: WorkspaceOutput[], stateData: StateOutputInfo | null) => {
-    const merged: EditableOutput[] = configuredOutputs.map(output => {
-      // 构建 state 中的 key（格式：module_name-output_name）
-      // output_value 格式：module.AWS_tesr-ccd_ken-aaa-2025-10-12-02.bucket_name
-      const parts = output.output_value.split('.');
-      const moduleName = parts[1] || '';
-      const outputName = parts[2] || output.output_name;
-      const stateKey = `${moduleName}-${outputName}`;
-      
-      const stateOutput = stateData?.outputs?.[stateKey];
-      
-      return {
-        ...output,
-        stateValue: stateOutput?.value,
-        hasStateValue: stateOutput !== undefined,
-      };
-    });
-    
-    return merged;
-  }, []);
 
   useEffect(() => {
     const loadData = async () => {
-      const [configuredOutputs, stateData] = await Promise.all([
-        fetchOutputs(),
-        fetchStateOutputs(),
-      ]);
-      fetchResources();
+      await fetchOutputsCombined();
       fetchAvailableOutputs();
-      
-      const merged = mergeOutputsWithState(configuredOutputs, stateData);
-      setOutputs(merged);
     };
-    
     loadData();
-  }, [fetchOutputs, fetchStateOutputs, fetchResources, fetchAvailableOutputs, mergeOutputsWithState]);
+  }, [fetchOutputsCombined, fetchAvailableOutputs]);
 
   // 检查是否有未保存的更改
   const hasChanges = useCallback(() => {
@@ -362,19 +317,12 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
 
   // 撤销更改
   const handleRevert = () => {
-    const merged = mergeOutputsWithState(originalOutputs, stateOutputs);
-    setOutputs(merged);
+    setOutputs([...originalOutputs]);
   };
 
   // 刷新数据
   const handleRefresh = async () => {
-    const [configuredOutputs, stateData] = await Promise.all([
-      fetchOutputs(),
-      fetchStateOutputs(),
-    ]);
-    
-    const merged = mergeOutputsWithState(configuredOutputs, stateData);
-    setOutputs(merged);
+    await fetchOutputsCombined();
   };
 
   // 批量保存
@@ -484,7 +432,7 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
     return '';
   };
 
-  const isLoading = loading || stateLoading;
+  const isLoading = loading;
 
   // Outputs 内容渲染
   const renderOutputsContent = () => (
@@ -531,10 +479,10 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
         }
         className={styles.card}
       >
-        {stateOutputs && (
+        {stateMeta && (
           <div className={styles.stateInfo}>
             <Text type="secondary">
-              Terraform {stateOutputs.terraform_version} | Serial: {stateOutputs.serial} | State Version: {stateOutputs.version}
+              Terraform {stateMeta.terraform_version} | Serial: {stateMeta.serial} | State Version: {stateMeta.version}
             </Text>
           </div>
         )}
