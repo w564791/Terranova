@@ -32,6 +32,13 @@ func NewTFStateBackendHandler(db *gorm.DB, tokenService *services.StateTokenServ
 func (h *TFStateBackendHandler) GetState(c *gin.Context) {
 	workspaceID := c.GetString("state_workspace_id")
 
+	// Cross-workspace access: return filtered state with only configured outputs
+	if crossWs, exists := c.Get("cross_workspace"); exists && crossWs == true {
+		requesterWsID := c.GetString("requester_workspace_id")
+		h.getCrossWorkspaceState(c, workspaceID, requesterWsID)
+		return
+	}
+
 	var stateVersion models.WorkspaceStateVersion
 	err := h.db.Where("workspace_id = ?", workspaceID).
 		Order("version DESC").
@@ -52,6 +59,89 @@ func (h *TFStateBackendHandler) GetState(c *gin.Context) {
 		return
 	}
 
+	c.Data(http.StatusOK, "application/json", stateBytes)
+}
+
+// getCrossWorkspaceState returns a filtered state containing only configured outputs.
+// Validates sharing permission before returning data.
+func (h *TFStateBackendHandler) getCrossWorkspaceState(c *gin.Context, targetWsID, requesterWsID string) {
+	// 1. Check sharing permission
+	var targetWs models.Workspace
+	if err := h.db.Select("workspace_id, outputs_sharing").
+		Where("workspace_id = ?", targetWsID).First(&targetWs).Error; err != nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
+		return
+	}
+
+	allowed := false
+	switch models.OutputsSharingMode(targetWs.OutputsSharing) {
+	case models.OutputsSharingAll:
+		allowed = true
+	case models.OutputsSharingSpecific:
+		var count int64
+		h.db.Model(&models.WorkspaceOutputsAccess{}).
+			Where("workspace_id = ? AND allowed_workspace_id = ?", targetWsID, requesterWsID).
+			Count(&count)
+		allowed = count > 0
+	}
+
+	if !allowed {
+		log.Printf("[CrossWorkspaceState] Denied: %s -> %s (sharing=%s)", requesterWsID, targetWsID, targetWs.OutputsSharing)
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "workspace does not share outputs with requester"})
+		return
+	}
+
+	// 2. Get latest state version
+	var stateVersion models.WorkspaceStateVersion
+	if err := h.db.Where("workspace_id = ?", targetWsID).
+		Order("version DESC").First(&stateVersion).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to get state"})
+		return
+	}
+
+	// 3. Get configured outputs to build allowed key set
+	var configuredOutputs []models.WorkspaceOutput
+	h.db.Where("workspace_id = ?", targetWsID).Find(&configuredOutputs)
+
+	allowedKeys := make(map[string]bool, len(configuredOutputs))
+	for _, o := range configuredOutputs {
+		allowedKeys[o.StateKey()] = true
+	}
+
+	// 4. Filter state outputs: only include configured keys
+	filteredOutputs := make(map[string]interface{})
+	if stateVersion.Content != nil {
+		if outputs, ok := stateVersion.Content["outputs"].(map[string]interface{}); ok {
+			for key, val := range outputs {
+				if allowedKeys[key] {
+					filteredOutputs[key] = val
+				}
+			}
+		}
+	}
+
+	// 5. Build standard Terraform state format (resources stripped for security)
+	filteredState := map[string]interface{}{
+		"version":           stateVersion.Content["version"],
+		"terraform_version": stateVersion.Content["terraform_version"],
+		"serial":            stateVersion.Content["serial"],
+		"lineage":           stateVersion.Content["lineage"],
+		"outputs":           filteredOutputs,
+		"resources":         []interface{}{},
+	}
+
+	stateBytes, err := json.Marshal(filteredState)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal filtered state"})
+		return
+	}
+
+	log.Printf("[CrossWorkspaceState] Allowed: %s -> %s (%d/%d outputs exposed)",
+		requesterWsID, targetWsID, len(filteredOutputs), len(allowedKeys))
 	c.Data(http.StatusOK, "application/json", stateBytes)
 }
 
