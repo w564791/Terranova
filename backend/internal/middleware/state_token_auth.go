@@ -36,14 +36,24 @@ func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 			return
 		}
 
-		// Verify URL workspace_id matches token
 		urlWorkspaceID := c.Param("workspace_id")
 		if urlWorkspaceID != "" && urlWorkspaceID != workspaceID {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "token workspace mismatch"})
-			return
+			// Cross-workspace access: only GET (read state) is allowed.
+			// POST/LOCK/UNLOCK remain forbidden for cross-workspace requests.
+			if c.Request.Method != http.MethodGet {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "cross-workspace write not allowed"})
+				return
+			}
+			c.Set("cross_workspace", true)
+			c.Set("requester_workspace_id", workspaceID)
 		}
 
-		c.Set("state_workspace_id", workspaceID)
+		// Always use the URL workspace_id as the target
+		targetWorkspaceID := workspaceID
+		if urlWorkspaceID != "" {
+			targetWorkspaceID = urlWorkspaceID
+		}
+		c.Set("state_workspace_id", targetWorkspaceID)
 		c.Set("state_task_id", taskID)
 		c.Next()
 	}
