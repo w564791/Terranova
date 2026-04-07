@@ -3207,8 +3207,12 @@ func (s *TerraformExecutor) SaveStateToDatabase(
 			return err
 		}
 
-		// 更新workspace的tf_state
-		return tx.Model(workspace).Update("tf_state", stateContent).Error
+		// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+		// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+		// Safe to delete after confirming no regressions.
+		// // 更新workspace的tf_state
+		// return tx.Model(workspace).Update("tf_state", stateContent).Error
+		return nil
 	})
 }
 

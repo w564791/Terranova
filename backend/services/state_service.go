@@ -148,12 +148,15 @@ func (s *StateService) UploadState(
 		return nil, fmt.Errorf("failed to save state version: %w", err)
 	}
 
-	// 9. 更新 workspace 的 tf_state
-	if err := s.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
-		Update("tf_state", models.JSONB(stateContent)).Error; err != nil {
-		log.Printf("Warning: failed to update workspace tf_state: %v", err)
-	}
+	// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+	// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+	// Safe to delete after confirming no regressions.
+	// // 9. 更新 workspace 的 tf_state
+	// if err := s.db.Model(&models.Workspace{}).
+	// 	Where("workspace_id = ?", workspaceID).
+	// 	Update("tf_state", models.JSONB(stateContent)).Error; err != nil {
+	// 	log.Printf("Warning: failed to update workspace tf_state: %v", err)
+	// }
 
 	// 10. 记录审计日志
 	s.logAudit("state_upload", workspaceID, userID,
@@ -281,12 +284,15 @@ func (s *StateService) RollbackState(
 		return nil, fmt.Errorf("failed to save rollback version: %w", err)
 	}
 
-	// 8. 更新 workspace 的 tf_state
-	if err := s.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
-		Update("tf_state", targetState.Content).Error; err != nil {
-		log.Printf("Warning: failed to update workspace tf_state: %v", err)
-	}
+	// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+	// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+	// Safe to delete after confirming no regressions.
+	// // 8. 更新 workspace 的 tf_state
+	// if err := s.db.Model(&models.Workspace{}).
+	// 	Where("workspace_id = ?", workspaceID).
+	// 	Update("tf_state", targetState.Content).Error; err != nil {
+	// 	log.Printf("Warning: failed to update workspace tf_state: %v", err)
+	// }
 
 	// 9. 记录审计日志
 	s.logAudit("state_rollback", workspaceID, userID,

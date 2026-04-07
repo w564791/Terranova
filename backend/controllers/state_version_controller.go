@@ -555,17 +555,20 @@ func (svc *StateVersionController) RollbackState(c *gin.Context) {
 		return
 	}
 
-	// 回滚state
-	if err := svc.db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspace.WorkspaceID).
-		Update("tf_state", stateVersion.Content).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "回滚失败",
-			"timestamp": time.Now().Format(time.RFC3339),
-		})
-		return
-	}
+	// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+	// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+	// Safe to delete after confirming no regressions.
+	// // 回滚state
+	// if err := svc.db.Model(&models.Workspace{}).
+	// 	Where("workspace_id = ?", workspace.WorkspaceID).
+	// 	Update("tf_state", stateVersion.Content).Error; err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{
+	// 		"code":      500,
+	// 		"message":   "回滚失败",
+	// 		"timestamp": time.Now().Format(time.RFC3339),
+	// 	})
+	// 	return
+	// }
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,

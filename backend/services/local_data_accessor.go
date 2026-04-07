@@ -133,13 +133,15 @@ func (a *LocalDataAccessor) GetLatestStateVersion(workspaceID string) (*models.W
 
 // UpdateWorkspaceState 更新 Workspace 的 State
 func (a *LocalDataAccessor) UpdateWorkspaceState(workspaceID string, stateContent map[string]interface{}) error {
-	db := a.getDB()
-
-	if err := db.Model(&models.Workspace{}).
-		Where("workspace_id = ?", workspaceID).
-		Update("tf_state", stateContent).Error; err != nil {
-		return fmt.Errorf("failed to update workspace state: %w", err)
-	}
+	// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+	// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+	// Safe to delete after confirming no regressions.
+	// db := a.getDB()
+	// if err := db.Model(&models.Workspace{}).
+	// 	Where("workspace_id = ?", workspaceID).
+	// 	Update("tf_state", stateContent).Error; err != nil {
+	// 	return fmt.Errorf("failed to update workspace state: %w", err)
+	// }
 
 	return nil
 }
@@ -437,11 +439,14 @@ func (a *LocalDataAccessor) PromoteTempState(workspaceID string, recordID uint) 
 			return fmt.Errorf("failed to read promoted state: %w", err)
 		}
 
-		if err := tx.Model(&models.Workspace{}).
-			Where("workspace_id = ?", workspaceID).
-			Update("tf_state", record.Content).Error; err != nil {
-			return fmt.Errorf("failed to update workspace state: %w", err)
-		}
+		// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+		// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+		// Safe to delete after confirming no regressions.
+		// if err := tx.Model(&models.Workspace{}).
+		// 	Where("workspace_id = ?", workspaceID).
+		// 	Update("tf_state", record.Content).Error; err != nil {
+		// 	return fmt.Errorf("failed to update workspace state: %w", err)
+		// }
 
 		return nil
 	})
@@ -472,9 +477,13 @@ func (a *LocalDataAccessor) CleanupOrphanedTempStates(workspaceID string) error 
 							if err := tx.Model(&orphan).Update("is_temp", false).Error; err != nil {
 								return err
 							}
-							return tx.Model(&models.Workspace{}).
-								Where("workspace_id = ?", workspaceID).
-								Update("tf_state", orphan.Content).Error
+							// [2026-04-07] Disabled: tf_state column is write-only (0 reads across entire codebase).
+							// State is served from workspace_state_versions table. Commenting out to reduce write IO.
+							// Safe to delete after confirming no regressions.
+							// return tx.Model(&models.Workspace{}).
+							// 	Where("workspace_id = ?", workspaceID).
+							// 	Update("tf_state", orphan.Content).Error
+							return nil
 						}); err != nil {
 							log.Printf("[StateWatcher] Failed to promote orphaned temp state #%d: %v", orphan.ID, err)
 						} else {
