@@ -117,29 +117,6 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
     };
   };
 
-  const fetchOutputs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs`, {
-        headers: getAuthHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.code === 200) {
-          const fetchedOutputs = data.outputs || [];
-          setOriginalOutputs(fetchedOutputs);
-          return fetchedOutputs;
-        }
-      }
-      return [];
-    } catch (error) {
-      console.error('Failed to fetch outputs:', error);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId]);
-
   const fetchOutputsCombined = useCallback(async () => {
     setLoading(true);
     try {

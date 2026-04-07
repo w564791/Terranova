@@ -105,7 +105,11 @@ func (h *TFStateBackendHandler) getCrossWorkspaceState(c *gin.Context, targetWsI
 
 	// 3. Get configured outputs to build allowed key set
 	var configuredOutputs []models.WorkspaceOutput
-	h.db.Where("workspace_id = ?", targetWsID).Find(&configuredOutputs)
+	if err := h.db.Where("workspace_id = ?", targetWsID).Find(&configuredOutputs).Error; err != nil {
+		log.Printf("[CrossWorkspaceState] Failed to query configured outputs for %s: %v", targetWsID, err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to query outputs configuration"})
+		return
+	}
 
 	allowedKeys := make(map[string]bool, len(configuredOutputs))
 	for _, o := range configuredOutputs {
