@@ -5255,47 +5255,51 @@ func (s *TerraformExecutor) generateRemoteDataTFJSONWithLogging(
 
 	// 构建TF配置
 	tfConfig := make(map[string]interface{})
-	dataBlocks := make(map[string]interface{})
+	remoteStateBlocks := make(map[string]interface{})
 	localBlocks := make(map[string]interface{})
 
 	for _, rd := range remoteDataConfig {
 		dataName := getString(rd, "data_name")
-		token := getString(rd, "token")
-		url := getString(rd, "url")
 		sourceWorkspaceID := getString(rd, "source_workspace_id")
 
-		if dataName == "" || token == "" || url == "" {
+		if dataName == "" || sourceWorkspaceID == "" {
 			logger.Warn("Invalid remote data config, skipping: %v", rd)
 			continue
 		}
 
-		// 生成data "http" block
-		dataBlockName := fmt.Sprintf("remote_%s", sanitizeNameForTF(dataName))
+		// Derive base server URL from own stateBackendURL
+		// stateBackendURL format: "https://platform:port/api/v1/terraform/state/ws-self"
+		baseIdx := strings.LastIndex(s.stateBackendURL, "/api/v1/terraform/state/")
+		if baseIdx < 0 {
+			logger.Warn("Cannot parse stateBackendURL for remote data, skipping: %s", s.stateBackendURL)
+			continue
+		}
+		stateURL := s.stateBackendURL[:baseIdx] + "/api/v1/terraform/state/" + sourceWorkspaceID
 
-		dataBlocks[dataBlockName] = []map[string]interface{}{
-			{
-				"url": url,
-				"request_headers": map[string]interface{}{
-					"Authorization": fmt.Sprintf("Bearer %s", token),
-				},
+		blockName := fmt.Sprintf("remote_%s", sanitizeNameForTF(dataName))
+
+		remoteStateBlocks[blockName] = map[string]interface{}{
+			"backend": "http",
+			"config": map[string]interface{}{
+				"address": stateURL,
 			},
 		}
 
-		// 生成local block
-		localBlocks[dataName] = fmt.Sprintf("${jsondecode(data.http.%s.response_body).outputs}", dataBlockName)
+		localBlocks[dataName] = fmt.Sprintf(
+			"${data.terraform_remote_state.%s.outputs}", blockName)
 
-		logger.Info("✓ Added remote data reference: %s -> %s", dataName, sourceWorkspaceID)
+		logger.Info("Added remote data reference: %s -> %s", dataName, sourceWorkspaceID)
 	}
 
 	// 只有当有有效的data blocks时才生成文件
-	if len(dataBlocks) == 0 {
+	if len(remoteStateBlocks) == 0 {
 		logger.Warn("No valid remote data blocks generated")
 		return nil
 	}
 
 	// 构建完整的TF配置
 	tfConfig["data"] = map[string]interface{}{
-		"http": dataBlocks,
+		"terraform_remote_state": remoteStateBlocks,
 	}
 
 	if len(localBlocks) > 0 {

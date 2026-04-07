@@ -492,33 +492,14 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 	var remoteDataList []models.WorkspaceRemoteData
 	h.db.Where("workspace_id = ?", workspace.WorkspaceID).Find(&remoteDataList)
 
-	// Generate remote data config with tokens for agent
+	// Build remote data config for agent (no tokens needed - reuses TF_HTTP_* env vars)
 	var remoteDataConfig []gin.H
-	if len(remoteDataList) > 0 {
-		// Get platform base URL
-		platformConfigService := services.NewPlatformConfigService(h.db)
-		baseURL := platformConfigService.GetBaseURL()
-
-		// Create RemoteDataTFGenerator to generate tokens
-		generator := services.NewRemoteDataTFGenerator(h.db, baseURL)
-
-		for _, rd := range remoteDataList {
-			// Generate token for each remote data reference
-			token, err := generator.GenerateTokenForAgent(workspace.WorkspaceID, rd.SourceWorkspaceID, &taskID)
-			if err != nil {
-				// Log error but continue
-				log.Printf("[Agent] Failed to generate token for remote data %s: %v", rd.RemoteDataID, err)
-				continue
-			}
-
-			remoteDataConfig = append(remoteDataConfig, gin.H{
-				"remote_data_id":      rd.RemoteDataID,
-				"source_workspace_id": rd.SourceWorkspaceID,
-				"data_name":           rd.DataName,
-				"token":               token,
-				"url":                 fmt.Sprintf("%s/api/v1/workspaces/%s/state-outputs/full", baseURL, rd.SourceWorkspaceID),
-			})
-		}
+	for _, rd := range remoteDataList {
+		remoteDataConfig = append(remoteDataConfig, gin.H{
+			"remote_data_id":      rd.RemoteDataID,
+			"source_workspace_id": rd.SourceWorkspaceID,
+			"data_name":           rd.DataName,
+		})
 	}
 
 	// Get latest state version

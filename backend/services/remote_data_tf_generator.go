@@ -30,7 +30,8 @@ func NewRemoteDataTFGenerator(db *gorm.DB, baseURL string) *RemoteDataTFGenerato
 	}
 }
 
-// generateToken 生成临时访问token
+// Deprecated: generateToken is no longer used. Remote data now uses terraform_remote_state
+// with TF_HTTP_* env var auth. Kept for cleanup of legacy tokens.
 func (g *RemoteDataTFGenerator) generateToken(
 	workspaceID string,
 	sourceWorkspaceID string,
@@ -71,20 +72,19 @@ func (g *RemoteDataTFGenerator) generateToken(
 	return token, nil
 }
 
-// GenerateRemoteDataTFWithLogging 生成remote_data.tf文件（带日志）
+// GenerateRemoteDataTFWithLogging generates remote_data.tf.json using terraform_remote_state.
+// Credentials are provided by TF_HTTP_USERNAME/TF_HTTP_PASSWORD env vars (same as own state backend).
 func (g *RemoteDataTFGenerator) GenerateRemoteDataTFWithLogging(
 	workspaceID string,
 	workDir string,
 	taskID *uint,
 	logger *TerraformLogger,
 ) error {
-	// 查询workspace的remote data配置
 	var remoteDataList []models.WorkspaceRemoteData
 	if err := g.db.Where("workspace_id = ?", workspaceID).Find(&remoteDataList).Error; err != nil {
 		return fmt.Errorf("failed to get remote data list: %w", err)
 	}
 
-	// 如果没有配置remote data，不生成文件
 	if len(remoteDataList) == 0 {
 		logger.Debug("No remote data configured, skipping remote_data.tf generation")
 		return nil
@@ -92,57 +92,39 @@ func (g *RemoteDataTFGenerator) GenerateRemoteDataTFWithLogging(
 
 	logger.Info("Generating remote_data.tf with %d remote data references...", len(remoteDataList))
 
-	// 构建TF配置
 	tfConfig := make(map[string]interface{})
-	dataBlocks := make(map[string]interface{})
+	remoteStateBlocks := make(map[string]interface{})
 	localBlocks := make(map[string]interface{})
 
 	for _, rd := range remoteDataList {
-		// 为每个remote data生成临时token
-		token, err := g.generateToken(workspaceID, rd.SourceWorkspaceID, taskID)
-		if err != nil {
-			logger.Warn("Failed to generate token for remote data %s: %v", rd.RemoteDataID, err)
-			continue
-		}
+		stateURL := fmt.Sprintf("%s/api/v1/terraform/state/%s", g.baseURL, rd.SourceWorkspaceID)
+		blockName := fmt.Sprintf("remote_%s", sanitizeName(rd.DataName))
 
-		logger.Debug("Generated token for remote data %s (expires: %s, max_uses: %d)",
-			rd.DataName, token.ExpiresAt.Format(time.RFC3339), token.MaxUses)
-
-		// 生成data "http" block
-		dataBlockName := fmt.Sprintf("remote_%s", sanitizeName(rd.DataName))
-		url := fmt.Sprintf("%s/api/v1/workspaces/%s/state-outputs/full", g.baseURL, rd.SourceWorkspaceID)
-
-		dataBlocks[dataBlockName] = []map[string]interface{}{
-			{
-				"url": url,
-				"request_headers": map[string]interface{}{
-					"Authorization": fmt.Sprintf("Bearer %s", token.Token),
-				},
+		remoteStateBlocks[blockName] = map[string]interface{}{
+			"backend": "http",
+			"config": map[string]interface{}{
+				"address": stateURL,
 			},
 		}
 
-		// 生成local block
-		localBlocks[rd.DataName] = fmt.Sprintf("${jsondecode(data.http.%s.response_body).outputs}", dataBlockName)
+		localBlocks[rd.DataName] = fmt.Sprintf(
+			"${data.terraform_remote_state.%s.outputs}", blockName)
 
-		logger.Info("✓ Added remote data reference: %s -> %s", rd.DataName, rd.SourceWorkspaceID)
+		logger.Info("Added remote data reference: %s -> %s", rd.DataName, rd.SourceWorkspaceID)
 	}
 
-	// 只有当有有效的data blocks时才生成文件
-	if len(dataBlocks) == 0 {
+	if len(remoteStateBlocks) == 0 {
 		logger.Warn("No valid remote data blocks generated")
 		return nil
 	}
 
-	// 构建完整的TF配置
 	tfConfig["data"] = map[string]interface{}{
-		"http": dataBlocks,
+		"terraform_remote_state": remoteStateBlocks,
 	}
-
 	if len(localBlocks) > 0 {
 		tfConfig["locals"] = localBlocks
 	}
 
-	// 写入文件
 	filePath := filepath.Join(workDir, "remote_data.tf.json")
 	content, err := json.MarshalIndent(tfConfig, "", "  ")
 	if err != nil {
@@ -153,7 +135,7 @@ func (g *RemoteDataTFGenerator) GenerateRemoteDataTFWithLogging(
 		return fmt.Errorf("failed to write remote_data.tf.json: %w", err)
 	}
 
-	logger.Info("✓ Generated remote_data.tf.json (%.1f KB)", float64(len(content))/1024)
+	logger.Info("Generated remote_data.tf.json (%.1f KB)", float64(len(content))/1024)
 	return nil
 }
 
@@ -173,8 +155,8 @@ func sanitizeName(name string) string {
 	return result
 }
 
-// GenerateTokenForAgent 为Agent模式生成临时token
-// 这个方法在服务端调用，生成的token会通过API传递给Agent
+// Deprecated: GenerateTokenForAgent is no longer used. Remote data now uses terraform_remote_state
+// with TF_HTTP_* env var auth. Kept for cleanup of legacy tokens.
 func (g *RemoteDataTFGenerator) GenerateTokenForAgent(workspaceID, sourceWorkspaceID string, taskID *uint) (string, error) {
 	token, err := g.generateToken(workspaceID, sourceWorkspaceID, taskID)
 	if err != nil {
