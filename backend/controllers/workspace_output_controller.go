@@ -29,6 +29,111 @@ func generateOutputID() string {
 	return fmt.Sprintf("output-%s", uuid.New().String()[:12])
 }
 
+// GetOutputsCombined returns outputs config merged with state values and resource list
+func (c *WorkspaceOutputController) GetOutputsCombined(ctx *gin.Context) {
+	workspaceIDParam := ctx.Param("id")
+	if workspaceIDParam == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid workspace ID"})
+		return
+	}
+
+	var workspace models.Workspace
+	if err := c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "workspace not found"})
+			return
+		}
+	}
+
+	// 1. Fetch configured outputs
+	var configuredOutputs []models.WorkspaceOutput
+	c.db.Where("workspace_id = ?", workspace.WorkspaceID).
+		Order("resource_name ASC, output_name ASC").
+		Find(&configuredOutputs)
+
+	// 2. Fetch latest state version
+	var stateVersion models.WorkspaceStateVersion
+	var stateOutputsMap map[string]interface{}
+	var stateMeta gin.H
+
+	if err := c.db.Where("workspace_id = ?", workspace.WorkspaceID).
+		Order("version DESC").First(&stateVersion).Error; err == nil && stateVersion.Content != nil {
+		if outputsRaw, ok := stateVersion.Content["outputs"].(map[string]interface{}); ok {
+			stateOutputsMap = outputsRaw
+		}
+		stateMeta = gin.H{
+			"terraform_version": stateVersion.Content["terraform_version"],
+			"serial":            stateVersion.Content["serial"],
+			"version":           stateVersion.Content["version"],
+			"lineage":           stateVersion.Content["lineage"],
+		}
+	}
+	if stateMeta == nil {
+		stateMeta = gin.H{}
+	}
+	if stateOutputsMap == nil {
+		stateOutputsMap = make(map[string]interface{})
+	}
+
+	// 3. Merge: for each configured output, find its value in state
+	type OutputCombined struct {
+		models.WorkspaceOutput
+		StateKey      string      `json:"state_key"`
+		StateValue    interface{} `json:"state_value"`
+		HasStateValue bool        `json:"has_state_value"`
+	}
+
+	merged := make([]OutputCombined, 0, len(configuredOutputs))
+	for _, output := range configuredOutputs {
+		stateKey := output.StateKey()
+		item := OutputCombined{
+			WorkspaceOutput: output,
+			StateKey:        stateKey,
+		}
+
+		if stateOutput, exists := stateOutputsMap[stateKey]; exists {
+			if outputMap, ok := stateOutput.(map[string]interface{}); ok {
+				value, hasValue := outputMap["value"]
+				if hasValue && value != nil {
+					item.HasStateValue = true
+					if !output.Sensitive {
+						item.StateValue = value
+					}
+				}
+			}
+		}
+
+		merged = append(merged, item)
+	}
+
+	// 4. Fetch resources with output count (single query, no N+1)
+	type ResourceWithCount struct {
+		ResourceID   string `json:"resource_id"`
+		ResourceName string `json:"resource_name"`
+		ResourceType string `json:"resource_type"`
+		OutputCount  int64  `json:"output_count"`
+	}
+	var resources []ResourceWithCount
+	c.db.Raw(`
+		SELECT r.resource_id, r.resource_name, r.resource_type,
+		       COUNT(o.id) as output_count
+		FROM workspace_resources r
+		LEFT JOIN workspace_outputs o
+		    ON o.workspace_id = r.workspace_id AND o.resource_name = r.resource_name
+		WHERE r.workspace_id = ? AND r.is_active = true
+		GROUP BY r.resource_id, r.resource_name, r.resource_type
+		ORDER BY r.resource_name ASC
+	`, workspace.WorkspaceID).Scan(&resources)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":       200,
+		"outputs":    merged,
+		"resources":  resources,
+		"state_meta": stateMeta,
+		"total":      len(merged),
+	})
+}
+
 // ListOutputs 获取workspace的outputs列表
 // @Summary 获取Outputs列表
 // @Description 获取工作空间的所有Outputs配置

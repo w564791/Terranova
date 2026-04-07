@@ -1035,6 +1035,15 @@ func setupWorkspaceOutputRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMid
 		outputController.ListOutputs,
 	)
 
+	// Get combined outputs (config + state values + resources) - READ level
+	workspaces.GET("/:id/outputs/combined",
+		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+		}),
+		outputController.GetOutputsCombined,
+	)
+
 	// Get state outputs - READ level (WebUI使用，不返回sensitive数据)
 	workspaces.GET("/:id/state-outputs",
 		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
