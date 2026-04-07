@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,24 @@ type WorkspaceOutput struct {
 // IsStaticOutput 判断是否为静态输出
 func (o *WorkspaceOutput) IsStaticOutput() bool {
 	return o.ResourceName == "" || o.ResourceName == StaticOutputResourceName
+}
+
+// StateKey generates the key for this output in Terraform state JSON.
+// Static outputs: "static-{output_name}"
+// Resource outputs: "{module_name}-{output_name}" (module_name extracted from output_value)
+// This matches the output block naming in resource_service.go GenerateWorkspaceOutputsHCL.
+func (o *WorkspaceOutput) StateKey() string {
+	if o.IsStaticOutput() {
+		return "static-" + o.OutputName
+	}
+	moduleName := o.ResourceName
+	if strings.HasPrefix(o.OutputValue, "module.") {
+		parts := strings.Split(o.OutputValue, ".")
+		if len(parts) >= 2 {
+			moduleName = parts[1]
+		}
+	}
+	return moduleName + "-" + o.OutputName
 }
 
 // TableName 指定表名
