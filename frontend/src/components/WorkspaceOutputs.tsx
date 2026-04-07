@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Card, Button, Input, Select, Switch, message, Empty, Spin, Tag, Tooltip, Typography, Space, Popconfirm, Tabs, AutoComplete } from 'antd';
 import { PlusOutlined, DeleteOutlined, SaveOutlined, ReloadOutlined, CopyOutlined, UndoOutlined, CloudDownloadOutlined } from '@ant-design/icons';
 import styles from './WorkspaceOutputs.module.css';
@@ -62,23 +62,12 @@ interface AvailableOutput {
   reference: string;
 }
 
-interface ResourceAvailableOutputs {
-  resourceName: string;
-  resourceId: string;
-  resourceType: string;
-  moduleName: string;
-  moduleId?: number;
-  outputs: AvailableOutput[];
-}
-
 interface WorkspaceOutputsProps {
   workspaceId: string;
 }
 
 const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  
   // 从URL获取子标签，默认为outputs
   const subTabFromUrl = searchParams.get('subtab') || 'outputs';
   const [activeSubTab, setActiveSubTab] = useState(subTabFromUrl);
