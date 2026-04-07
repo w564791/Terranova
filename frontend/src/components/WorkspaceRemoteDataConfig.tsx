@@ -761,7 +761,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
                     {item.available_outputs && item.available_outputs.length > 0 ? (
                       <div className={styles.outputsUsageList}>
                         {item.available_outputs.map(output => {
-                          const code = `\${local.${item.data_name}.${output.key}.value}`;
+                          const code = `\${data.terraform_remote_state.remote_${item.data_name.replace(/[^a-zA-Z0-9_]/g, '_')}.outputs["${output.key}"]}`;
                           const outputKey = `${item.remote_data_id}-${output.key}`;
                           const isExpanded = expandedOutputs.has(outputKey);
                           const hasValue = !output.sensitive && output.value !== undefined;
