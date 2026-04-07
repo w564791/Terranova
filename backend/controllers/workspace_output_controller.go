@@ -806,11 +806,14 @@ func (c *WorkspaceOutputController) GetAvailableOutputs(ctx *gin.Context) {
 		}
 	}
 
-	// 获取workspace的活跃资源列表（包含 tf_code）
+	// Support filtering by resource_name for on-demand loading
+	resourceNameFilter := ctx.Query("resource_name")
+	resourceQuery := c.db.Where("workspace_id = ? AND is_active = ?", workspace.WorkspaceID, true)
+	if resourceNameFilter != "" {
+		resourceQuery = resourceQuery.Where("resource_name = ?", resourceNameFilter)
+	}
 	var resources []models.WorkspaceResource
-	if err := c.db.Where("workspace_id = ? AND is_active = ?", workspace.WorkspaceID, true).
-		Order("resource_name ASC").
-		Find(&resources).Error; err != nil {
+	if err := resourceQuery.Order("resource_name ASC").Find(&resources).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": "获取资源列表失败",

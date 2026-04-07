@@ -87,7 +87,7 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
   const [originalOutputs, setOriginalOutputs] = useState<WorkspaceOutput[]>([]);
   const [stateMeta, setStateMeta] = useState<{ terraform_version?: string; serial?: number; version?: number; lineage?: string } | null>(null);
   const [resources, setResources] = useState<ResourceForOutput[]>([]);
-  const [availableOutputs, setAvailableOutputs] = useState<ResourceAvailableOutputs[]>([]);
+  const [availableOutputsCache, setAvailableOutputsCache] = useState<Map<string, AvailableOutput[]>>(new Map());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(new Set());
@@ -171,37 +171,36 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
     }
   }, [workspaceId]);
 
-  // 获取可用的模块输出（用于智能提示）
-  const fetchAvailableOutputs = useCallback(async () => {
+  const fetchAvailableOutputsForResource = useCallback(async (resourceName: string) => {
+    if (availableOutputsCache.has(resourceName)) return;
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/available-outputs`, {
-        headers: getAuthHeaders(),
-      });
+      const response = await fetch(
+        `/api/v1/workspaces/${workspaceId}/available-outputs?resource_name=${encodeURIComponent(resourceName)}`,
+        { headers: getAuthHeaders() }
+      );
       if (response.ok) {
         const data = await response.json();
-        if (data.code === 200) {
-          setAvailableOutputs(data.resources || []);
+        if (data.code === 200 && data.resources?.length > 0) {
+          setAvailableOutputsCache(prev => new Map(prev).set(resourceName, data.resources[0].outputs || []));
         }
       }
     } catch (error) {
-      console.error('Failed to fetch available outputs:', error);
+      console.error('Failed to fetch available outputs for resource:', error);
     }
-  }, [workspaceId]);
+  }, [workspaceId, availableOutputsCache]);
 
   // 根据资源名称获取可用的输出列表
   const getAvailableOutputsForResource = useCallback((resourceName: string): AvailableOutput[] => {
-    const resourceOutputs = availableOutputs.find(r => r.resourceName === resourceName);
-    return resourceOutputs?.outputs || [];
-  }, [availableOutputs]);
+    return availableOutputsCache.get(resourceName) || [];
+  }, [availableOutputsCache]);
 
 
   useEffect(() => {
     const loadData = async () => {
       await fetchOutputsCombined();
-      fetchAvailableOutputs();
     };
     loadData();
-  }, [fetchOutputsCombined, fetchAvailableOutputs]);
+  }, [fetchOutputsCombined]);
 
   // 检查是否有未保存的更改
   const hasChanges = useCallback(() => {
@@ -269,15 +268,20 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
   const handleUpdateRow = (index: number, field: keyof EditableOutput, value: any) => {
     const newOutputs = [...outputs];
     const output = newOutputs[index];
-    
+
     // Sensitive 开关一旦打开就不能关闭
     if (field === 'sensitive' && output.sensitive && !value) {
       message.warning('Sensitive flag cannot be disabled once enabled');
       return;
     }
-    
+
+    // Trigger on-demand loading of available outputs when resource is selected
+    if (field === 'resource_name' && value) {
+      fetchAvailableOutputsForResource(value as string);
+    }
+
     (output as any)[field] = value;
-    
+
     // 如果是资源名称变化，自动更新output_value
     if (field === 'resource_name' || field === 'output_name') {
       // 查找资源以获取正确的 resource_id
@@ -289,12 +293,12 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
         output.output_value = `module.${output.resource_name}.${output.output_name}`;
       }
     }
-    
+
     // 标记为已修改（如果不是新建的）
     if (!output.isNew) {
       output.isModified = true;
     }
-    
+
     setOutputs(newOutputs);
   };
 
