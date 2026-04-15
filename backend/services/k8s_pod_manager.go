@@ -556,6 +556,9 @@ func (m *K8sPodManager) ReconcilePods(ctx context.Context, poolID string) error 
 
 // syncTaskStatusToSlots 从数据库同步任务状态到槽位
 func (m *K8sPodManager) syncTaskStatusToSlots(ctx context.Context, poolID string) error {
+	// 记录查询时间点，用于防止释放查询之后新分配的 slot（竞态保护）
+	queryTime := time.Now()
+
 	// 获取所有分配到此pool的running/apply_pending任务
 	var tasks []models.WorkspaceTask
 	err := m.db.WithContext(ctx).
@@ -596,6 +599,13 @@ func (m *K8sPodManager) syncTaskStatusToSlots(ctx context.Context, poolID string
 
 			taskStatus, exists := taskStatusMap[*slot.TaskID]
 			if !exists {
+				// 竞态保护：只释放 DB 查询之前就已存在的 slot
+				// 查询之后新分配的 slot 可能还没写入 DB，不能误释放
+				if slot.UpdatedAt.After(queryTime) {
+					log.Printf("[PodManager] Slot %d on pod %s (task %d) assigned after DB query, skipping release",
+						i, pod.PodName, *slot.TaskID)
+					continue
+				}
 				// 任务已完成或不存在，释放槽位
 				log.Printf("[PodManager] Task %d no longer active, releasing slot %d on pod %s",
 					*slot.TaskID, i, pod.PodName)

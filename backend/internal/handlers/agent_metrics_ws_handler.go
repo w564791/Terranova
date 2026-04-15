@@ -15,6 +15,7 @@ var agentMetricsUpgrader = gorillaws.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin:     checkWebSocketOrigin,
+	Subprotocols:    []string{"access_token"},
 }
 
 // AgentMetricsWSHandler handles WebSocket connections for agent metrics

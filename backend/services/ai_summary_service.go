@@ -1126,22 +1126,134 @@ func hasModifyAction(raw json.RawMessage) bool {
 	return false
 }
 
-// hasCMDBNotFound checks whether any query_resource_attributes call returned found=false.
+// hasCMDBNotFound checks whether any query_resource_attributes call returned found=false
+// for a NEW reference (i.e. one that appears in new code, not just in old code being removed).
+// If a not-found query only appears in old code (from query_resource_code_diff), it is a
+// corrective change (e.g. fixing a typo) and is excluded from triggering R2.
 func hasCMDBNotFound(raw json.RawMessage) bool {
 	if len(raw) == 0 {
 		return false
 	}
+
 	var calls []struct {
-		ToolName string `json:"tool_name"`
-		Result   struct {
-			Found *bool `json:"found"`
-		} `json:"result"`
+		ToolName string          `json:"tool_name"`
+		Params   json.RawMessage `json:"params"`
+		Result   json.RawMessage `json:"result"`
 	}
 	if err := json.Unmarshal(raw, &calls); err != nil {
 		return false
 	}
+
+	// Collect not-found queries from query_resource_attributes
+	var notFoundQueries []string
 	for _, c := range calls {
-		if c.ToolName == "query_resource_attributes" && c.Result.Found != nil && !*c.Result.Found {
+		if c.ToolName != "query_resource_attributes" {
+			continue
+		}
+		var result struct {
+			Found *bool `json:"found"`
+		}
+		var params struct {
+			Query string `json:"query"`
+		}
+		if json.Unmarshal(c.Result, &result) != nil || result.Found == nil || *result.Found {
+			continue
+		}
+		if json.Unmarshal(c.Params, &params) != nil || params.Query == "" {
+			continue
+		}
+		notFoundQueries = append(notFoundQueries, params.Query)
+	}
+
+	if len(notFoundQueries) == 0 {
+		return false
+	}
+
+	// Collect old/new string leaves from query_resource_code_diff results
+	var oldLeaves, newLeaves []string
+	for _, c := range calls {
+		if c.ToolName != "query_resource_code_diff" {
+			continue
+		}
+		var result struct {
+			HasChanges bool `json:"has_changes"`
+			Diff       []struct {
+				Old json.RawMessage `json:"old"`
+				New json.RawMessage `json:"new"`
+			} `json:"diff"`
+		}
+		if json.Unmarshal(c.Result, &result) != nil || !result.HasChanges {
+			continue
+		}
+		for _, d := range result.Diff {
+			oldLeaves = append(oldLeaves, collectStringLeaves(d.Old)...)
+			newLeaves = append(newLeaves, collectStringLeaves(d.New)...)
+		}
+	}
+
+	// No code diff data → fall back to current behavior
+	if len(oldLeaves) == 0 && len(newLeaves) == 0 {
+		return true
+	}
+
+	// Check each not-found query against old/new code
+	for _, q := range notFoundQueries {
+		inOld := leafContains(oldLeaves, q)
+		inNew := leafContains(newLeaves, q)
+
+		if inOld && !inNew {
+			// Old reference being removed (corrective change) → skip
+			log.Printf("[RiskScorer] R2 excluding not-found %q: found in old code only (corrective)", q)
+			continue
+		}
+		// New reference not found, or ambiguous → real risk
+		log.Printf("[RiskScorer] R2 keeping not-found %q: inOld=%v, inNew=%v", q, inOld, inNew)
+		return true
+	}
+
+	log.Printf("[RiskScorer] R2 all %d not-found queries are corrective old references, skipping", len(notFoundQueries))
+	return false
+}
+
+// collectStringLeaves recursively extracts all string values from a JSON tree.
+func collectStringLeaves(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var leaves []string
+
+	// Try string
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return []string{s}
+	}
+
+	// Try object
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) == nil {
+		for _, v := range obj {
+			leaves = append(leaves, collectStringLeaves(v)...)
+		}
+		return leaves
+	}
+
+	// Try array
+	var arr []json.RawMessage
+	if json.Unmarshal(raw, &arr) == nil {
+		for _, v := range arr {
+			leaves = append(leaves, collectStringLeaves(v)...)
+		}
+		return leaves
+	}
+
+	return nil
+}
+
+// leafContains checks if query appears as a substring in any leaf string.
+func leafContains(leaves []string, query string) bool {
+	for _, leaf := range leaves {
+		if strings.Contains(leaf, query) {
 			return true
 		}
 	}

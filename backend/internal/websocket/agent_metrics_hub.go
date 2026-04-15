@@ -3,11 +3,17 @@ package websocket
 import (
 	"encoding/json"
 	"log"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
+
+	"iac-platform/internal/pgpubsub"
 )
+
+const metricsChannel = "agent_metrics_broadcast"
 
 // AgentMetricsHub 管理agent metrics的WebSocket连接
 type AgentMetricsHub struct {
@@ -28,6 +34,10 @@ type AgentMetricsHub struct {
 
 	// 保护map的互斥锁
 	mu sync.RWMutex
+
+	// 跨副本广播
+	db      *gorm.DB
+	podName string
 }
 
 // PoolWebSocketClient 包含pool_id和websocket连接的结构
@@ -87,7 +97,7 @@ func (h *AgentMetricsHub) Run() {
 			}
 			h.poolClients[poolClient.PoolID][poolClient.Conn] = true
 			h.mu.Unlock()
-			log.Printf(" Agent metrics client registered: pool=%s, total=%d",
+			log.Printf("[AgentMetricsHub] Client registered: pool=%s, total=%d",
 				poolClient.PoolID, len(h.poolClients[poolClient.PoolID]))
 
 			// 发送当前pool的所有agent metrics给新连接的客户端
@@ -99,7 +109,7 @@ func (h *AgentMetricsHub) Run() {
 				if _, ok := clients[poolClient.Conn]; ok {
 					delete(clients, poolClient.Conn)
 					poolClient.Conn.Close()
-					log.Printf("❌ Agent metrics client unregistered: pool=%s, remaining=%d",
+					log.Printf("[AgentMetricsHub] Client unregistered: pool=%s, remaining=%d",
 						poolClient.PoolID, len(clients))
 
 					// 如果该pool没有客户端了，删除map entry
@@ -132,18 +142,64 @@ func (h *AgentMetricsHub) UnregisterConn(poolID string, conn *websocket.Conn) {
 	}
 }
 
-// BroadcastMetrics 广播agent metrics更新
-func (h *AgentMetricsHub) BroadcastMetrics(poolID string, metrics *AgentMetrics) {
-	// 更新存储的metrics
+// crossReplicaMetrics PG NOTIFY payload
+type crossReplicaMetrics struct {
+	SourcePod string        `json:"source_pod"`
+	PoolID    string        `json:"pool_id"`
+	Metrics   *AgentMetrics `json:"metrics"`
+}
+
+// SetupCrossReplicaListener configures PG NOTIFY for metrics broadcasting across replicas.
+func (h *AgentMetricsHub) SetupCrossReplicaListener(ps *pgpubsub.PubSub, db *gorm.DB) {
+	h.db = db
+	h.podName = os.Getenv("POD_NAME")
+	if h.podName == "" {
+		h.podName, _ = os.Hostname()
+	}
+
+	ps.Subscribe(metricsChannel, func(payload string) {
+		var msg crossReplicaMetrics
+		if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+			return
+		}
+		if msg.SourcePod == h.podName {
+			return
+		}
+		// Apply metrics from other replica locally (no re-broadcast)
+		h.applyMetrics(msg.PoolID, msg.Metrics)
+	})
+
+	log.Printf("[AgentMetricsHub] Cross-replica listener setup: podName=%s", h.podName)
+}
+
+// applyMetrics updates local cache and pushes to local WebSocket clients.
+func (h *AgentMetricsHub) applyMetrics(poolID string, metrics *AgentMetrics) {
 	h.mu.Lock()
 	h.agentMetrics[metrics.AgentID] = metrics
 	h.mu.Unlock()
 
-	// 广播给订阅该pool的所有客户端
 	h.broadcast <- AgentMetricsMessage{
 		Type:    "metrics_update",
 		PoolID:  poolID,
 		Metrics: metrics,
+	}
+}
+
+// BroadcastMetrics 广播agent metrics更新（本地 + 跨副本）
+func (h *AgentMetricsHub) BroadcastMetrics(poolID string, metrics *AgentMetrics) {
+	// 本地广播
+	h.applyMetrics(poolID, metrics)
+
+	// 跨副本广播
+	if h.db != nil {
+		msg := crossReplicaMetrics{
+			SourcePod: h.podName,
+			PoolID:    poolID,
+			Metrics:   metrics,
+		}
+		if err := pgpubsub.Notify(h.db, metricsChannel, msg); err != nil {
+			log.Printf("[AgentMetricsHub] Failed to broadcast metrics via PG NOTIFY: %v", err)
+		}
 	}
 }
 
@@ -177,7 +233,7 @@ func (h *AgentMetricsHub) handleBroadcast(message AgentMetricsMessage) {
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("❌ Failed to marshal agent metrics message: %v", err)
+		log.Printf("[AgentMetricsHub] Failed to marshal agent metrics message: %v", err)
 		return
 	}
 
@@ -186,7 +242,7 @@ func (h *AgentMetricsHub) handleBroadcast(message AgentMetricsMessage) {
 
 	for conn := range clients {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Printf("  Failed to send message to client: %v", err)
+			log.Printf("[AgentMetricsHub] Failed to send message to client: %v", err)
 			// 连接出错，将在下次心跳时被清理
 		}
 	}
@@ -216,14 +272,14 @@ func (h *AgentMetricsHub) sendCurrentMetrics(poolID string, conn *websocket.Conn
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("❌ Failed to marshal initial metrics: %v", err)
+		log.Printf("[AgentMetricsHub] Failed to marshal initial metrics: %v", err)
 		return
 	}
 
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		log.Printf("  Failed to send initial metrics: %v", err)
+		log.Printf("[AgentMetricsHub] Failed to send initial metrics: %v", err)
 	} else {
-		log.Printf("📤 Sent initial metrics to client: pool=%s, count=%d", poolID, len(metricsToSend))
+		log.Printf("[AgentMetricsHub] Sent initial metrics to client: pool=%s, count=%d", poolID, len(metricsToSend))
 	}
 }
 
@@ -237,7 +293,7 @@ func (h *AgentMetricsHub) cleanupExpiredMetrics() {
 		now := time.Now()
 		for agentID, metrics := range h.agentMetrics {
 			if now.Sub(metrics.LastUpdateTime) > 5*time.Minute {
-				log.Printf("🧹 Cleaning up expired metrics for agent: %s", agentID)
+				log.Printf("[AgentMetricsHub] Cleaning up expired metrics for agent: %s", agentID)
 				delete(h.agentMetrics, agentID)
 			}
 		}

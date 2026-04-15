@@ -505,14 +505,20 @@ func (h *RawAgentCCHandler) handleTaskCompleted(agentConn *RawAgentConnection, p
 	// Apply 完成后的 Server 端处理（CMDB 同步 + Run Triggers）
 	go h.postApplyCompletionTasks(uint(taskID))
 
-	// K8s Slot 释放 + 触发下个任务（幂等，与 HTTP handler 重复触发不冲突）
+	// K8s Slot 管理 + 触发下个任务
 	if h.taskQueueManager != nil {
-		go h.taskQueueManager.ReleaseTaskSlot(uint(taskID))
 		go func() {
 			var task models.WorkspaceTask
-			if err := h.db.First(&task, uint(taskID)).Error; err == nil {
-				h.taskQueueManager.TryExecuteNextTask(task.WorkspaceID)
+			if err := h.db.First(&task, uint(taskID)).Error; err != nil {
+				return
 			}
+			// plan_and_apply 任务 plan 完成后进入 apply_pending，slot 应 reserve 而非 release
+			if task.Status == models.TaskStatusApplyPending {
+				h.taskQueueManager.ReserveSlotForApplyPending(task.ID)
+			} else {
+				h.taskQueueManager.ReleaseTaskSlot(task.ID)
+			}
+			h.taskQueueManager.TryExecuteNextTask(task.WorkspaceID)
 		}()
 	}
 }
