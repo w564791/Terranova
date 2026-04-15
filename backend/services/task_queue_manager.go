@@ -519,7 +519,13 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 					}
 				}
 
-				log.Printf("[TaskQueue] Found reserved slot %d on pod %s for apply_pending task %d (will reuse for apply)",
+				// Transition slot from reserved back to running for apply execution
+				pod.mu.Lock()
+				pod.Slots[slotID].Status = "running"
+				pod.Slots[slotID].UpdatedAt = time.Now()
+				pod.mu.Unlock()
+
+				log.Printf("[TaskQueue] Found reserved slot %d on pod %s for apply_pending task %d (reused, status -> running)",
 					slotID, pod.PodName, task.ID)
 			} else {
 				// No reserved slot found - Pod was deleted
@@ -1331,7 +1337,62 @@ func (m *TaskQueueManager) ReserveSlotForApplyPending(taskID uint) error {
 	// Find the Pod and slot for this task
 	pod, slotID, err := m.k8sDeploymentSvc.podManager.FindPodByTaskID(taskID)
 	if err != nil {
-		log.Printf("[TaskQueue] Warning: Task %d not found in any slot, cannot reserve", taskID)
+		// Slot not found in memory - may have been released by race condition or this is a different replica.
+		// Fallback: query DB for agent_id, find the pod, and rebuild the slot.
+		log.Printf("[TaskQueue] Task %d not found in any slot, attempting DB fallback to rebuild slot", taskID)
+
+		var task models.WorkspaceTask
+		if dbErr := m.db.Select("id, agent_id, task_type").Where("id = ?", taskID).First(&task).Error; dbErr != nil {
+			log.Printf("[TaskQueue] Warning: Task %d not found in DB: %v", taskID, dbErr)
+			return nil
+		}
+		if task.AgentID == nil || *task.AgentID == "" {
+			log.Printf("[TaskQueue] Warning: Task %d has no agent_id, cannot rebuild slot", taskID)
+			return nil
+		}
+
+		// Agent → Pod mapping is per-replica in-memory, so FindPodByAgentID may fail
+		// on a different replica. Query DB for agent's name (= pod name) instead.
+		var agent models.Agent
+		if dbErr := m.db.Select("name").Where("agent_id = ?", *task.AgentID).First(&agent).Error; dbErr != nil {
+			log.Printf("[TaskQueue] Warning: Agent %s not found in DB for task %d: %v", *task.AgentID, taskID, dbErr)
+			return nil
+		}
+		podName := agent.Name
+
+		m.k8sDeploymentSvc.podManager.mu.RLock()
+		pod, exists := m.k8sDeploymentSvc.podManager.pods[podName]
+		m.k8sDeploymentSvc.podManager.mu.RUnlock()
+		if !exists {
+			log.Printf("[TaskQueue] Warning: Pod %s not found in PodManager for task %d", podName, taskID)
+			return nil
+		}
+
+		// Find an idle slot on this pod and assign + reserve it
+		pod.mu.Lock()
+		foundSlot := -1
+		for i, slot := range pod.Slots {
+			if slot.Status == "idle" {
+				foundSlot = i
+				break
+			}
+		}
+		if foundSlot == -1 {
+			pod.mu.Unlock()
+			log.Printf("[TaskQueue] Warning: No idle slot on pod %s to rebuild reservation for task %d", pod.PodName, taskID)
+			return nil
+		}
+		pod.Slots[foundSlot] = PodSlot{
+			SlotID:    foundSlot,
+			TaskID:    &taskID,
+			TaskType:  string(task.TaskType),
+			Status:    "reserved",
+			UpdatedAt: time.Now(),
+		}
+		pod.mu.Unlock()
+
+		log.Printf("[TaskQueue] Rebuilt reserved slot %d on pod %s for apply_pending task %d (DB fallback via agent %s)",
+			foundSlot, pod.PodName, taskID, *task.AgentID)
 		return nil
 	}
 

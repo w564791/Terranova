@@ -926,35 +926,35 @@ func (s *K8sDeploymentService) AutoScalePods(ctx context.Context, pool *models.A
 			// 每个 running 的 plan_and_apply 任务需要 1 个 Pod
 			// 每个 unblocked pending 的 plan_and_apply 任务也需要 1 个 Pod
 
-			// 统计有 running 任务的 Pod 数量
+			// 统计被占用的 Pod 数量（有 running 或 reserved slot 的 Pod）
 			pods := s.podManager.ListPods(pool.PoolID)
-			podsWithRunningTasks := 0
+			occupiedPods := 0
 			for _, pod := range pods {
 				pod.mu.RLock()
-				hasRunning := false
+				isOccupied := false
 				for _, slot := range pod.Slots {
-					if slot.Status == "running" {
-						hasRunning = true
+					if slot.Status == "running" || slot.Status == "reserved" {
+						isOccupied = true
 						break
 					}
 				}
 				pod.mu.RUnlock()
 
-				if hasRunning {
-					podsWithRunningTasks++
+				if isOccupied {
+					occupiedPods++
 				}
 			}
 
-			// 需要的总 Pod 数 = 有 running 任务的 Pod 数 + unblocked pending 任务数
-			requiredPods := podsWithRunningTasks + int(unblockedPendingPlanAndApplyCount)
+			// 需要的总 Pod 数 = 被占用的 Pod 数 + unblocked pending 任务数
+			requiredPods := occupiedPods + int(unblockedPendingPlanAndApplyCount)
 
 			if requiredPods > currentPodCount {
 				desiredPodCount = requiredPods
 				if desiredPodCount > k8sConfig.MaxReplicas {
 					desiredPodCount = k8sConfig.MaxReplicas
 				}
-				log.Printf("[K8sPodService] Pool %s needs %d pods (running_pods=%d + unblocked_pending=%d), current=%d, scaling to %d",
-					pool.PoolID, requiredPods, podsWithRunningTasks, unblockedPendingPlanAndApplyCount, currentPodCount, desiredPodCount)
+				log.Printf("[K8sPodService] Pool %s needs %d pods (occupied_pods=%d + unblocked_pending=%d), current=%d, scaling to %d",
+					pool.PoolID, requiredPods, occupiedPods, unblockedPendingPlanAndApplyCount, currentPodCount, desiredPodCount)
 
 				// 跳过后续的利用率检查，直接执行扩容
 				goto performScaling

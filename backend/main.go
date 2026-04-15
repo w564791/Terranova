@@ -176,6 +176,7 @@ func main() {
 
 	// 初始化Agent Metrics Hub（所有副本运行）
 	agentMetricsHub := websocket.NewAgentMetricsHub()
+	agentMetricsHub.SetupCrossReplicaListener(pubsub, db)
 	go agentMetricsHub.Run()
 	log.Println("Agent Metrics Hub initialized and running")
 

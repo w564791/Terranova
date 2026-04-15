@@ -124,11 +124,12 @@ const AgentPoolDetail: React.FC = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const hostname = window.location.hostname;
     const apiPort = window.location.port === '5173' ? '8080' : window.location.port;
-    const wsUrl = `${protocol}//${hostname}:${apiPort}/api/v1/ws/agent-pools/${poolId}/metrics?token=${encodeURIComponent(token)}`;
-    
-    console.log(`🔌 [AgentMetrics] WebSocket URL: ${wsUrl.replace(/token=[^&]+/, 'token=***')}`); // Hide token in logs
-    
-    const ws = new WebSocket(wsUrl);
+    const wsUrl = `${protocol}//${hostname}:${apiPort}/api/v1/ws/agent-pools/${poolId}/metrics`;
+
+    console.log(`[AgentMetrics] WebSocket URL: ${wsUrl}`);
+
+    // 使用 Sec-WebSocket-Protocol 传递 token（与其他 WebSocket 连接一致）
+    const ws = new WebSocket(wsUrl, ['access_token', token]);
 
     ws.onopen = () => {
       console.log(` [AgentMetrics] WebSocket connected successfully for pool: ${poolId}`);
