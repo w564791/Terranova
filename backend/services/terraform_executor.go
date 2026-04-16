@@ -1231,7 +1231,7 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	// 解析资源变更统计
 	if planJSON != nil {
-		add, change, destroy := s.parsePlanChanges(planJSON)
+		add, change, destroy := s.parsePlanChanges(planJSON, task.TaskType == models.TaskTypeDriftCheck)
 		task.ChangesAdd = add
 		task.ChangesChange = change
 		task.ChangesDestroy = destroy
@@ -1264,7 +1264,7 @@ func (s *TerraformExecutor) ExecutePlan(
 			// Agent 模式：在本地解析 plan_json，然后通过 API 上传解析结果
 			if planJSON != nil {
 				// 解析 resource_changes
-				resourceChanges := s.parseResourceChangesFromPlanJSON(planJSON)
+				resourceChanges := s.parseResourceChangesFromPlanJSON(planJSON, task.TaskType == models.TaskTypeDriftCheck)
 
 				// 通过 API 上传解析结果
 				if err := s.uploadResourceChanges(task.ID, resourceChanges); err != nil {
@@ -3466,7 +3466,9 @@ func (s *TerraformExecutor) mergeTFCode(target, source map[string]interface{}) {
 }
 
 // parsePlanChanges 解析Plan JSON获取资源变更统计
-func (s *TerraformExecutor) parsePlanChanges(planJSON map[string]interface{}) (int, int, int) {
+// isDriftCheck: only drift_check tasks should count resource_drift as changes.
+// For plan/plan_and_apply tasks, resource_drift is informational only (matches TFE behavior).
+func (s *TerraformExecutor) parsePlanChanges(planJSON map[string]interface{}, isDriftCheck bool) (int, int, int) {
 	add, change, destroy := 0, 0, 0
 
 	if resourceChanges, ok := planJSON["resource_changes"].([]interface{}); ok {
@@ -3491,9 +3493,9 @@ func (s *TerraformExecutor) parsePlanChanges(planJSON map[string]interface{}) (i
 	}
 
 	// Drift check (-refresh-only): changes are in resource_drift, not resource_changes.
-	// Only count resource_drift when resource_changes has no real changes (refresh-only mode).
-	// In normal plan mode, resource_changes already incorporates drift — merging would double-count.
-	if add+change+destroy == 0 {
+	// Only count resource_drift for drift_check tasks.
+	// For plan/plan_and_apply, resource_drift is informational — not counted as changes (TFE behavior).
+	if isDriftCheck && add+change+destroy == 0 {
 		if resourceDrift, ok := planJSON["resource_drift"].([]interface{}); ok {
 			for _, rd := range resourceDrift {
 				if driftMap, ok := rd.(map[string]interface{}); ok {
@@ -4596,35 +4598,38 @@ func (s *TerraformExecutor) extractTerraformOutputs(
 // ============================================================================
 
 // parseResourceChangesFromPlanJSON 从 plan_json 解析资源变更
-func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string]interface{}) []map[string]interface{} {
+// isDriftCheck: only drift_check tasks should fall back to resource_drift (TFE behavior).
+func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string]interface{}, isDriftCheck bool) []map[string]interface{} {
 	var resourceChanges []map[string]interface{}
 
 	changes, _ := planJSON["resource_changes"].([]interface{})
 
 	// For refresh-only plans (drift check), resource_changes is all no-op.
-	// Only fall back to resource_drift when there are no real changes.
-	// In normal plan mode, resource_changes already incorporates drift — merging would double-count.
-	hasRealChanges := false
-	for _, item := range changes {
-		if rc, ok := item.(map[string]interface{}); ok {
-			if ch, ok := rc["change"].(map[string]interface{}); ok {
-				if acts, ok := ch["actions"].([]interface{}); ok {
-					for _, a := range acts {
-						if s, ok := a.(string); ok && s != "no-op" && s != "read" {
-							hasRealChanges = true
-							break
+	// Only fall back to resource_drift for drift_check tasks.
+	// For plan/plan_and_apply, resource_drift is informational — not included (TFE behavior).
+	if isDriftCheck {
+		hasRealChanges := false
+		for _, item := range changes {
+			if rc, ok := item.(map[string]interface{}); ok {
+				if ch, ok := rc["change"].(map[string]interface{}); ok {
+					if acts, ok := ch["actions"].([]interface{}); ok {
+						for _, a := range acts {
+							if actionStr, ok := a.(string); ok && actionStr != "no-op" && actionStr != "read" {
+								hasRealChanges = true
+								break
+							}
 						}
 					}
 				}
 			}
+			if hasRealChanges {
+				break
+			}
 		}
-		if hasRealChanges {
-			break
-		}
-	}
-	if !hasRealChanges {
-		if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
-			changes = driftChanges
+		if !hasRealChanges {
+			if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
+				changes = driftChanges
+			}
 		}
 	}
 

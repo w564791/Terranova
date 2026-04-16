@@ -1050,6 +1050,7 @@ CREATE TABLE public.ai_error_analyses (
     prevention text,
     severity character varying(20),
     analysis_duration integer,
+    process_log text,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -8488,7 +8489,7 @@ SELECT pg_catalog.setval('public.ai_configs_id_seq', (SELECT MAX(id) FROM public
 -- Data for Name: ai_error_analyses; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.ai_error_analyses (id, task_id, user_id, error_message, error_type, root_cause, solutions, prevention, severity, analysis_duration, created_at) FROM stdin;
+COPY public.ai_error_analyses (id, task_id, user_id, error_message, error_type, root_cause, solutions, prevention, severity, analysis_duration, process_log, created_at) FROM stdin;
 \.
 
 

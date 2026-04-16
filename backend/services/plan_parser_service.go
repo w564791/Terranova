@@ -36,6 +36,8 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 
+	isDriftCheck := task.TaskType == models.TaskTypeDriftCheck
+
 	// 2. 检查是否已有plan_json（优先使用已保存的plan_json）
 	if task.PlanJSON != nil && len(task.PlanJSON) > 0 {
 		log.Printf("Using existing plan_json from database for task %d", taskID)
@@ -44,7 +46,7 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 		planJSON := map[string]interface{}(task.PlanJSON)
 
 		// 解析 resource_changes
-		resourceChanges, err := s.parseResourceChanges(planJSON)
+		resourceChanges, err := s.parseResourceChanges(planJSON, isDriftCheck)
 		if err != nil {
 			return fmt.Errorf("failed to parse resource changes: %w", err)
 		}
@@ -80,7 +82,7 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 	}
 
 	// 解析 resource_changes
-	resourceChanges, err := s.parseResourceChanges(planJSON)
+	resourceChanges, err := s.parseResourceChanges(planJSON, isDriftCheck)
 	if err != nil {
 		return fmt.Errorf("failed to parse resource changes: %w", err)
 	}
@@ -145,36 +147,38 @@ func (s *PlanParserService) executeTerraformShowJSON(planFile string) (map[strin
 }
 
 // parseResourceChanges 解析resource_changes数组
-func (s *PlanParserService) parseResourceChanges(planJSON map[string]interface{}) ([]*models.WorkspaceTaskResourceChange, error) {
+// isDriftCheck: only drift_check tasks should fall back to resource_drift (TFE behavior).
+func (s *PlanParserService) parseResourceChanges(planJSON map[string]interface{}, isDriftCheck bool) ([]*models.WorkspaceTaskResourceChange, error) {
 	resourceChanges := []*models.WorkspaceTaskResourceChange{}
 
 	changes, _ := planJSON["resource_changes"].([]interface{})
 
-	// Filter out no-op actions to check if there are real changes
-	hasRealChanges := false
-	for _, item := range changes {
-		if rc, ok := item.(map[string]interface{}); ok {
-			if ch, ok := rc["change"].(map[string]interface{}); ok {
-				if actions, ok := ch["actions"].([]interface{}); ok {
-					for _, a := range actions {
-						if s, ok := a.(string); ok && s != "no-op" && s != "read" {
-							hasRealChanges = true
-							break
+	// For refresh-only plans (drift check), resource_changes is all no-op.
+	// Only fall back to resource_drift for drift_check tasks.
+	// For plan/plan_and_apply, resource_drift is informational — not included (TFE behavior).
+	if isDriftCheck {
+		hasRealChanges := false
+		for _, item := range changes {
+			if rc, ok := item.(map[string]interface{}); ok {
+				if ch, ok := rc["change"].(map[string]interface{}); ok {
+					if actions, ok := ch["actions"].([]interface{}); ok {
+						for _, a := range actions {
+							if actionStr, ok := a.(string); ok && actionStr != "no-op" && actionStr != "read" {
+								hasRealChanges = true
+								break
+							}
 						}
 					}
 				}
 			}
+			if hasRealChanges {
+				break
+			}
 		}
-		if hasRealChanges {
-			break
-		}
-	}
-
-	// For refresh-only plans (drift check), resource_changes is all no-op.
-	// Fall back to resource_drift. Don't merge in normal plans to avoid double-counting.
-	if !hasRealChanges {
-		if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
-			changes = driftChanges
+		if !hasRealChanges {
+			if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
+				changes = driftChanges
+			}
 		}
 	}
 

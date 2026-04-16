@@ -214,10 +214,25 @@ docker-push-arm64: ## 构建 arm64 后端镜像并推送
 		$(DOCKER_BUILD_ARGS) \
 		--push backend/
 	@echo "推送完成"
+docker-push-amd64: ## 构建 amd64 后端镜像并推送
+	@echo "构建并推送: $(IMAGE_SERVER):$(VERSION) [linux/amd64]"
+	docker buildx build --platform linux/amd64 \
+		-t $(IMAGE_SERVER):$(VERSION) \
+		-t $(IMAGE_SERVER):latest \
+		$(DOCKER_BUILD_ARGS) \
+		--push backend/
+	@echo "推送完成"
 
 docker-push-frontend-arm64: ## 构建 arm64 前端镜像并推送
 	@echo "构建并推送: $(IMAGE_FRONTEND):$(VERSION) [linux/arm64]"
 	docker buildx build --platform linux/arm64 \
+		-t $(IMAGE_FRONTEND):$(VERSION) \
+		-t $(IMAGE_FRONTEND):latest \
+		--push frontend/
+	@echo "推送完成"
+docker-push-frontend-amd64: ## 构建 amd64 前端镜像并推送
+	@echo "构建并推送: $(IMAGE_FRONTEND):$(VERSION) [linux/amd64]"
+	docker buildx build --platform linux/amd64 \
 		-t $(IMAGE_FRONTEND):$(VERSION) \
 		-t $(IMAGE_FRONTEND):latest \
 		--push frontend/

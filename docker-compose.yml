@@ -52,8 +52,6 @@ services:
       DB_PORT: "5432"
       DB_SSLMODE: disable
       JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret-key}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE} 
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY} ## value form https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-sk-placeholder-set-in-env}
     ports:
       - "${SERVER_PORT:-8080}:8080"

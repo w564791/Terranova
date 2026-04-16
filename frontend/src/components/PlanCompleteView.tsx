@@ -180,13 +180,27 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
     });
   };
 
+  // 复制到剪贴板（兼容 HTTP 非安全上下文）
   const copyToClipboard = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
       setCopySuccess(`Copied ${label}`);
       setTimeout(() => setCopySuccess(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+      setCopySuccess('Failed to copy');
+      setTimeout(() => setCopySuccess(null), 2000);
     }
   };
 
