@@ -11,10 +11,12 @@ console.log('Workspaces component loaded');
 interface WorkspaceWithStatus extends Workspace {
   latestRunStatus?: string;
   latestRunId?: number;
+  latestRunTaskType?: string;
   latestApplyTime?: string;
   // 后端返回的字段
   latest_run_status?: string;
   latest_run_id?: number;
+  latest_run_task_type?: string;
   latest_apply_time?: string;
 }
 
@@ -126,6 +128,7 @@ const Workspaces: React.FC = () => {
         // 映射后端返回的字段到前端使用的字段名
         latestRunStatus: w.latest_run_status || w.latestRunStatus,
         latestRunId: w.latest_run_id || w.latestRunId,
+        latestRunTaskType: w.latest_run_task_type || w.latestRunTaskType,
         latestApplyTime: w.latest_apply_time || w.latestApplyTime
       }));
       
@@ -590,9 +593,14 @@ const Workspaces: React.FC = () => {
                     <div className={styles.colStatus}>
                       {workspace.latestRunStatus && (
                         <span className={`${styles.statusBadge} ${styles[`status-${workspace.latestRunStatus}`]}`}>
-                          {(workspace.latestRunStatus === 'applied' || workspace.latestRunStatus === 'success') && (
+                          {workspace.latestRunStatus === 'applied' && (
                             <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Applied</>
                           )}
+                          {workspace.latestRunStatus === 'success' && (workspace.latestRunTaskType === 'plan' ? (
+                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Planned</>
+                          ) : (
+                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Applied</>
+                          ))}
                           {workspace.latestRunStatus === 'failed' && (
                             <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Failed</>
                           )}

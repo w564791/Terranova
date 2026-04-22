@@ -69,6 +69,7 @@ interface WorkspaceOverview {
     id: number;
     task_type: string;
     message: string;
+    description: string;
     created_by: string;
     status: string;
     plan_duration: number;
@@ -110,10 +111,6 @@ const WorkspaceDetail: React.FC = () => {
   const [lockReason, setLockReason] = useState('');
   const [lockLoading, setLockLoading] = useState(false);
   const [showNewRunDialog, setShowNewRunDialog] = useState(false);
-  
-  // 全局Latest Run状态（Overview和Runs标签页共享）
-  const [globalLatestRun, setGlobalLatestRun] = useState<any>(null);
-  const prevGlobalLatestRunRef = React.useRef<any>(null);
   
   // 全局Resources状态（Overview标签页使用）
   const [globalResources, setGlobalResources] = useState<any[]>([]);
@@ -210,64 +207,34 @@ const WorkspaceDetail: React.FC = () => {
     }
   }, [id]);
   
-  // 全局Latest Run获取函数（Overview和Runs标签页共享）
-  const fetchGlobalLatestRun = React.useCallback(async () => {
+  // Overview 数据刷新函数（供轮询使用）
+  const refreshOverview = React.useCallback(async () => {
     if (!id) return;
-    
     try {
-      // 获取所有任务的第一页（不带时间过滤）
-      const params = new URLSearchParams({
-        page: '1',
-        page_size: '10',
-      });
-      
-      const data: any = await api.get(`/workspaces/${id}/tasks?${params.toString()}`);
-      
-      if (data && data.tasks && data.tasks.length > 0) {
-        const allTasks = data.tasks;
-        
-        // 优先级：1. Needs Attention任务(会卡住后续任务) 2. Running任务 3. 已完成任务 4. Pending/Waiting
-        const needsAttentionTask = allTasks.find((t: any) =>
-          t.status === 'apply_pending' || t.status === 'decision_required'
-        );
-
-        if (needsAttentionTask) {
-          const prev = prevGlobalLatestRunRef.current;
-          if (!prev || prev.id !== needsAttentionTask.id || prev.status !== needsAttentionTask.status) {
-            console.log('[Global] Updating Latest Run to needs attention task:', needsAttentionTask.id);
-            setGlobalLatestRun(needsAttentionTask);
-            prevGlobalLatestRunRef.current = needsAttentionTask;
-          }
-          return;
-        }
-
-        const runningTask = allTasks.find((t: any) => t.status === 'running');
-        if (runningTask) {
-          const prev = prevGlobalLatestRunRef.current;
-          if (!prev || prev.id !== runningTask.id || prev.status !== runningTask.status) {
-            console.log('[Global] Updating Latest Run to running task:', runningTask.id);
-            setGlobalLatestRun(runningTask);
-            prevGlobalLatestRunRef.current = runningTask;
-          }
-          return;
-        }
-
-        // 优先选择非 pending/waiting 的最新任务
-        const completedTask = allTasks.find((t: any) =>
-          t.status !== 'pending' && t.status !== 'waiting'
-        );
-        const latestTask = completedTask || allTasks[0];
-        const prev = prevGlobalLatestRunRef.current;
-        if (!prev || prev.id !== latestTask.id || prev.status !== latestTask.status) {
-          console.log('[Global] Updating Latest Run to latest task:', latestTask.id);
-          setGlobalLatestRun(latestTask);
-          prevGlobalLatestRunRef.current = latestTask;
-        }
-      }
+      const overviewData: any = await api.get(`/workspaces/${id}/overview`);
+      setOverview(overviewData.data || overviewData);
     } catch (error) {
-      console.error('Failed to fetch global latest run:', error);
+      console.error('Failed to refresh overview:', error);
     }
   }, [id]);
+
+  // 父级轮询：任何 tab 下都让 overview.latest_run 跟随 incomplete 任务实时更新
+  const parentIncompleteSignatureRef = React.useRef<string>('');
+  const handleParentIncompleteTasksUpdate = React.useCallback((incompleteTasks: any[]) => {
+    const signature = incompleteTasks
+      .map(t => `${t.id}:${t.status}:${t.changes_add ?? 0}:${t.changes_change ?? 0}:${t.changes_destroy ?? 0}`)
+      .join('|');
+    if (signature === parentIncompleteSignatureRef.current) return;
+    parentIncompleteSignatureRef.current = signature;
+    refreshOverview();
+  }, [refreshOverview]);
+
+  useTaskAutoRefresh({
+    workspaceId: id || '',
+    enabled: !!id,
+    onUpdate: handleParentIncompleteTasksUpdate,
+    interval: 5000,
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -278,13 +245,10 @@ const WorkspaceDetail: React.FC = () => {
         const workspaceData: any = await api.get(`/workspaces/${id}`);
         setWorkspace(workspaceData.data || workspaceData);
         
-        // 获取overview数据
+        // 获取overview数据（overview.latest_run 为全局 Latest Run 的唯一数据源）
         const overviewData: any = await api.get(`/workspaces/${id}/overview`);
         setOverview(overviewData.data || overviewData);
-        
-        // 获取全局Latest Run
-        await fetchGlobalLatestRun();
-        
+
         // 获取全局Resources
         await fetchGlobalResources();
         
@@ -329,9 +293,6 @@ const WorkspaceDetail: React.FC = () => {
       //         setOverview(newOverview);
       //       }
       //       
-      //       // 刷新全局Latest Run
-      //       await fetchGlobalLatestRun();
-      //       
       //       // 刷新全局Resources
       //       await fetchGlobalResources();
       //       
@@ -351,16 +312,16 @@ const WorkspaceDetail: React.FC = () => {
 
   // 检查是否有未完成的PLAN_AND_APPLY任务
   const hasActivePlanAndApplyTask = React.useMemo(() => {
-    if (!globalLatestRun) return false;
-    
-    // 检查最新任务是否是PLAN_AND_APPLY且未完成
-    if (globalLatestRun.task_type === 'plan_and_apply') {
+    const latestRun = overview?.latest_run;
+    if (!latestRun) return false;
+
+    if (latestRun.task_type === 'plan_and_apply') {
       const nonFinalStatuses = ['pending', 'waiting', 'running', 'plan_completed', 'apply_pending'];
-      return nonFinalStatuses.includes(globalLatestRun.status);
+      return nonFinalStatuses.includes(latestRun.status);
     }
-    
+
     return false;
-  }, [globalLatestRun]);
+  }, [overview?.latest_run]);
 
   const handleLockWorkspace = () => {
     // 如果有活跃的PLAN_AND_APPLY任务，不允许操作
@@ -425,24 +386,16 @@ const WorkspaceDetail: React.FC = () => {
   };
 
   const handleNewRunSuccess = async () => {
-    // 刷新overview数据和全局Latest Run
-    try {
-      const overviewData: any = await api.get(`/workspaces/${id}/overview`);
-      setOverview(overviewData.data || overviewData);
-      
-      // 刷新全局Latest Run
-      await fetchGlobalLatestRun();
-    } catch (error) {
-      console.error('Failed to refresh overview:', error);
-    }
+    await refreshOverview();
   };
 
   const renderTabContent = () => {
+    const latestRun = overview?.latest_run ?? null;
     switch (activeTab) {
       case 'overview':
-        return <OverviewTab overview={overview} workspace={workspace} globalLatestRun={globalLatestRun} globalResources={globalResources} globalResourcesTotal={globalResourcesTotal} currentStateResourcesCount={currentStateResourcesCount} workspaceId={id!} onTabChange={handleTabChange} />;
+        return <OverviewTab overview={overview} workspace={workspace} latestRun={latestRun} globalResources={globalResources} globalResourcesTotal={globalResourcesTotal} currentStateResourcesCount={currentStateResourcesCount} workspaceId={id!} onTabChange={handleTabChange} />;
       case 'runs':
-        return <RunsTab workspaceId={id!} globalLatestRun={globalLatestRun} />;
+        return <RunsTab workspaceId={id!} latestRun={latestRun} onLatestRunChange={refreshOverview} />;
       case 'states':
         return <StatesTab workspaceId={id!} />;
       case 'resources':
@@ -714,19 +667,19 @@ const formatRelativeTime = (dateString: string | null) => {
 };
 
 // Overview标签页组件
-const OverviewTab: React.FC<{ 
-  overview: WorkspaceOverview | null; 
+const OverviewTab: React.FC<{
+  overview: WorkspaceOverview | null;
   workspace: Workspace | null;
-  globalLatestRun: any;
+  latestRun: any;
   globalResources: any[];
   globalResourcesTotal: number;
   currentStateResourcesCount: number;
   workspaceId: string;
   onTabChange: (tab: TabType) => void;
-}> = ({ 
-  overview, 
+}> = ({
+  overview,
   workspace,
-  globalLatestRun,
+  latestRun,
   globalResources,
   globalResourcesTotal,
   currentStateResourcesCount,
@@ -819,56 +772,56 @@ const OverviewTab: React.FC<{
             </a>
           </div>
           
-          {globalLatestRun ? (
-            <Link 
-              to={`/workspaces/${workspaceId}/tasks/${globalLatestRun.id}`}
+          {latestRun ? (
+            <Link
+              to={`/workspaces/${workspaceId}/tasks/${latestRun.id}`}
               className={styles.latestRunCompact}
             >
               {/* 左侧状态指示条 */}
-              <div className={`${styles.statusIndicator} ${styles[`indicator-${getStatusCategory(globalLatestRun.status)}`]}`}></div>
+              <div className={`${styles.statusIndicator} ${styles[`indicator-${getStatusCategory(latestRun.status)}`]}`}></div>
               {/* 左侧头像 */}
               <div className={styles.runAvatar}>
                 <span className={styles.avatarIcon}>👤</span>
               </div>
-              
+
               {/* 中间内容区 */}
               <div className={styles.runMainContent}>
                 {/* 第一行：标题 + CURRENT标签 */}
                 <div className={styles.runTitleRow}>
                   <span className={styles.runTitleText}>
-                    {globalLatestRun.description || 'Triggered via UI'}
+                    {latestRun.message || latestRun.description || 'Triggered via UI'}
                   </span>
                   <span className={styles.currentBadge}>CURRENT</span>
                 </div>
-                
+
                 {/* 第二行：元信息 */}
                 <div className={styles.runMetaRow}>
-                  <span className={styles.runIdMeta}>#{globalLatestRun.id}</span>
+                  <span className={styles.runIdMeta}>#{latestRun.id}</span>
                   <span className={styles.metaSeparator}>|</span>
                   <span className={styles.runUserMeta}>
-                    {globalLatestRun.created_by_username || globalLatestRun.created_by || 'system'} triggered via UI
+                    {latestRun.created_by_username || latestRun.created_by || 'system'} triggered via UI
                   </span>
-                  {(globalLatestRun.changes_add !== undefined || globalLatestRun.changes_change !== undefined || globalLatestRun.changes_destroy !== undefined) && (
+                  {(latestRun.changes_add !== undefined || latestRun.changes_change !== undefined || latestRun.changes_destroy !== undefined) && (
                     <>
                       <span className={styles.metaSeparator}>|</span>
                       <span className={styles.runChangesMeta}>
-                        <span className={styles.changeAddMeta}>+{globalLatestRun.changes_add || 0}</span>
-                        <span className={styles.changeModifyMeta}>~{globalLatestRun.changes_change || 0}</span>
-                        <span className={styles.changeDestroyMeta}>-{globalLatestRun.changes_destroy || 0}</span>
+                        <span className={styles.changeAddMeta}>+{latestRun.changes_add || 0}</span>
+                        <span className={styles.changeModifyMeta}>~{latestRun.changes_change || 0}</span>
+                        <span className={styles.changeDestroyMeta}>-{latestRun.changes_destroy || 0}</span>
                       </span>
                     </>
                   )}
                 </div>
               </div>
-              
+
               {/* 右侧状态区 */}
               <div className={styles.runStatusArea}>
-                <span className={`${styles.runStatusBadge} ${styles[`statusBadge-${getStatusCategory(globalLatestRun.status)}`]}`}>
-                  {globalLatestRun.status === 'applied' || globalLatestRun.status === 'success' ? '✓ ' : ''}
-                  {getFinalStatus(globalLatestRun)}
+                <span className={`${styles.runStatusBadge} ${styles[`statusBadge-${getStatusCategory(latestRun.status)}`]}`}>
+                  {latestRun.status === 'applied' || latestRun.status === 'success' ? '✓ ' : ''}
+                  {getFinalStatus(latestRun)}
                 </span>
                 <span className={styles.runTimeMeta}>
-                  {formatRelativeTime(globalLatestRun.created_at)}
+                  {formatRelativeTime(latestRun.created_at)}
                 </span>
               </div>
             </Link>
@@ -1067,7 +1020,7 @@ interface Run {
 type FilterType = 'all' | 'needs_attention' | 'errored' | 'running' | 'on_hold' | 'success' | 'cancelled';
 type TimeFilter = 'all' | 'today' | '24h' | '7d' | '30d' | 'custom';
 
-const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ workspaceId, globalLatestRun }) => {
+const RunsTab: React.FC<{ workspaceId: string; latestRun: any; onLatestRunChange: () => void }> = ({ workspaceId, latestRun, onLatestRunChange }) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   
@@ -1108,37 +1061,51 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
   // 使用ref存储上一次的数据，用于精确比较
   const prevAllRunsRef = React.useRef<Run[]>([]);
 
+  // 轮询签名：incomplete 任务的 id/status/changes 拼接，变化时同步刷新 overview
+  const prevIncompleteSignatureRef = React.useRef<string>('');
+
   // Auto-refresh incomplete tasks
   const handleIncompleteTasksUpdate = React.useCallback((incompleteTasks: any[]) => {
     if (incompleteTasks.length === 0) return;
 
+    const signature = incompleteTasks
+      .map(t => `${t.id}:${t.status}:${t.changes_add ?? 0}:${t.changes_change ?? 0}:${t.changes_destroy ?? 0}`)
+      .join('|');
+    const signatureChanged = signature !== prevIncompleteSignatureRef.current;
+
     setRuns(prevRuns => {
       // Create a map of incomplete tasks by ID
       const incompleteMap = new Map(incompleteTasks.map(task => [task.id, task]));
-      
+
       // Update existing runs with new data from incomplete tasks
       const updatedRuns = prevRuns.map(run => {
         const updated = incompleteMap.get(run.id);
         return updated || run;
       });
-      
+
       // Check if any changes were made
       const hasChanges = updatedRuns.some((run, index) => {
         const prev = prevRuns[index];
-        return !prev || run.status !== prev.status || 
+        return !prev || run.status !== prev.status ||
                run.changes_add !== prev.changes_add ||
                run.changes_change !== prev.changes_change ||
                run.changes_destroy !== prev.changes_destroy;
       });
-      
+
       if (hasChanges) {
         console.log('[RunsTab] Updated incomplete tasks in list');
         return updatedRuns;
       }
-      
+
       return prevRuns;
     });
-  }, []);
+
+    // 在 updater 外触发 overview 刷新，让 Latest Run badge 跟着轮询同步更新
+    if (signatureChanged) {
+      prevIncompleteSignatureRef.current = signature;
+      onLatestRunChange();
+    }
+  }, [onLatestRunChange]);
 
   // Enable auto-refresh (only when no filters/search are active to avoid confusion)
   const autoRefreshEnabled = filter === 'all' && timeFilter === 'all' && !searchQuery;
@@ -1427,60 +1394,60 @@ const RunsTab: React.FC<{ workspaceId: string; globalLatestRun: any }> = ({ work
       />
 
       {/* Latest Run - 使用全局Latest Run，与Overview页面完全一致 */}
-      {globalLatestRun && (
+      {latestRun && (
         <div className={styles.latestRunSection}>
           <div className={styles.latestRunHeader}>
             <h2 className={styles.latestRunTitle}>Latest Run</h2>
           </div>
-          <Link 
-            to={`/workspaces/${workspaceId}/tasks/${globalLatestRun.id}`}
+          <Link
+            to={`/workspaces/${workspaceId}/tasks/${latestRun.id}`}
             className={styles.latestRunCompact}
           >
             {/* 左侧状态指示条 */}
-            <div className={`${styles.statusIndicator} ${styles[`indicator-${getStatusCategory(globalLatestRun.status)}`]}`}></div>
+            <div className={`${styles.statusIndicator} ${styles[`indicator-${getStatusCategory(latestRun.status)}`]}`}></div>
             {/* 左侧头像 */}
             <div className={styles.runAvatar}>
               <span className={styles.avatarIcon}>👤</span>
             </div>
-            
+
             {/* 中间内容区 */}
             <div className={styles.runMainContent}>
               {/* 第一行：标题 + CURRENT标签 */}
               <div className={styles.runTitleRow}>
                 <span className={styles.runTitleText}>
-                  {globalLatestRun.description || 'Triggered via UI'}
+                  {latestRun.message || latestRun.description || 'Triggered via UI'}
                 </span>
                 <span className={styles.currentBadge}>CURRENT</span>
               </div>
-              
+
               {/* 第二行：元信息 */}
               <div className={styles.runMetaRow}>
-                <span className={styles.runIdMeta}>#{globalLatestRun.id}</span>
+                <span className={styles.runIdMeta}>#{latestRun.id}</span>
                 <span className={styles.metaSeparator}>|</span>
                 <span className={styles.runUserMeta}>
-                  {globalLatestRun.created_by_username || globalLatestRun.created_by || 'system'} triggered via UI
+                  {latestRun.created_by_username || latestRun.created_by || 'system'} triggered via UI
                 </span>
-                {(globalLatestRun.changes_add !== undefined || globalLatestRun.changes_change !== undefined || globalLatestRun.changes_destroy !== undefined) && (
+                {(latestRun.changes_add !== undefined || latestRun.changes_change !== undefined || latestRun.changes_destroy !== undefined) && (
                   <>
                     <span className={styles.metaSeparator}>|</span>
                     <span className={styles.runChangesMeta}>
-                      <span className={styles.changeAddMeta}>+{globalLatestRun.changes_add || 0}</span>
-                      <span className={styles.changeModifyMeta}>~{globalLatestRun.changes_change || 0}</span>
-                      <span className={styles.changeDestroyMeta}>-{globalLatestRun.changes_destroy || 0}</span>
+                      <span className={styles.changeAddMeta}>+{latestRun.changes_add || 0}</span>
+                      <span className={styles.changeModifyMeta}>~{latestRun.changes_change || 0}</span>
+                      <span className={styles.changeDestroyMeta}>-{latestRun.changes_destroy || 0}</span>
                     </span>
                   </>
                 )}
               </div>
             </div>
-            
+
             {/* 右侧状态区 */}
             <div className={styles.runStatusArea}>
-              <span className={`${styles.runStatusBadge} ${styles[`statusBadge-${getStatusCategory(globalLatestRun.status)}`]}`}>
-                {globalLatestRun.status === 'applied' || globalLatestRun.status === 'success' ? '✓ ' : ''}
-                {getFinalStatus(globalLatestRun)}
+              <span className={`${styles.runStatusBadge} ${styles[`statusBadge-${getStatusCategory(latestRun.status)}`]}`}>
+                {latestRun.status === 'applied' || latestRun.status === 'success' ? '✓ ' : ''}
+                {getFinalStatus(latestRun)}
               </span>
               <span className={styles.runTimeMeta}>
-                {formatRelativeTime(globalLatestRun.created_at)}
+                {formatRelativeTime(latestRun.created_at)}
               </span>
             </div>
           </Link>

@@ -30,6 +30,7 @@ type LatestRunInfo struct {
 	ID             uint      `json:"id"`
 	TaskType       string    `json:"task_type"` // 添加task_type字段
 	Message        string    `json:"message"`
+	Description    string    `json:"description"`
 	CreatedBy      string    `json:"created_by"`
 	Status         string    `json:"status"`
 	PlanDuration   int       `json:"plan_duration"`  // 秒
@@ -43,10 +44,10 @@ type LatestRunInfo struct {
 // WorkspaceOverviewResponse Overview响应
 type WorkspaceOverviewResponse struct {
 	// 基本信息
-	ID               uint    `json:"id"`           // 数字ID (内部使用)
-	WorkspaceID      string  `json:"workspace_id"` // 语义化ID (对外使用)
-	Name             string  `json:"name"`
-	Description      string  `json:"description"`
+	ID               uint         `json:"id"`           // 数字ID (内部使用)
+	WorkspaceID      string       `json:"workspace_id"` // 语义化ID (对外使用)
+	Name             string       `json:"name"`
+	Description      string       `json:"description"`
 	LockID           *string      `json:"lock_id"`
 	LockInfo         models.JSONB `json:"lock_info"`
 	LockedByUsername string       `json:"locked_by_username,omitempty"` // 锁定者用户名
@@ -89,7 +90,7 @@ func (s *WorkspaceOverviewService) GetWorkspaceOverview(workspaceID string) (*Wo
 	err := s.db.Where("workspace_id = ?", workspaceID).
 		Order("version DESC").
 		First(&stateVersion).Error
-	
+
 	if err == nil && stateVersion.Content != nil {
 		// 实时从 state JSON 的 resources 数组计算资源数量
 		if resources, ok := stateVersion.Content["resources"].([]interface{}); ok {
@@ -164,9 +165,7 @@ func (s *WorkspaceOverviewService) getLatestRun(workspaceID string) (*LatestRunI
 	err := s.db.Where("workspace_id = ? AND task_type != ?", workspaceID, models.TaskTypeDriftCheck).
 		Order(`CASE
 			WHEN status IN ('apply_pending', 'decision_required') THEN 0
-			WHEN status = 'running' THEN 1
-			WHEN status IN ('pending', 'waiting') THEN 3
-			ELSE 2
+			ELSE 1
 		END, created_at DESC`).
 		Take(&task).Error
 
@@ -196,6 +195,7 @@ func (s *WorkspaceOverviewService) getLatestRun(workspaceID string) (*LatestRunI
 		ID:             task.ID,
 		TaskType:       string(task.TaskType), // 添加task_type
 		Message:        fmt.Sprintf("%s task", task.TaskType),
+		Description:    task.Description,
 		CreatedBy:      createdBy,
 		Status:         string(task.Status),
 		PlanDuration:   planDuration,

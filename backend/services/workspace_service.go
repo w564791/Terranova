@@ -199,9 +199,11 @@ type WorkspaceListItem struct {
 // WorkspaceWithStatus 包含状态信息的工作空间（不包含tf_state等大字段）
 type WorkspaceWithStatus struct {
 	WorkspaceListItem
-	LatestRunStatus string     `json:"latest_run_status,omitempty"`
-	LatestRunID     uint       `json:"latest_run_id,omitempty"`
-	LatestApplyTime *time.Time `json:"latest_apply_time,omitempty"`
+	LatestRunStatus    string     `json:"latest_run_status,omitempty"`
+	LatestRunID        uint       `json:"latest_run_id,omitempty"`
+	LatestRunTaskType  string     `json:"latest_run_task_type,omitempty"`
+	LatestRunCreatedAt *time.Time `json:"latest_run_created_at,omitempty"`
+	LatestApplyTime    *time.Time `json:"latest_apply_time,omitempty"`
 }
 
 // toWorkspaceListItem 将Workspace转换为WorkspaceListItem（排除tf_state等大字段）
@@ -272,25 +274,24 @@ func (ws *WorkspaceService) SearchWorkspacesWithStatus(search string, page, size
 		Status      string     `gorm:"column:status"`
 		TaskType    string     `gorm:"column:task_type"`
 		CompletedAt *time.Time `gorm:"column:completed_at"`
+		CreatedAt   time.Time  `gorm:"column:created_at"`
 	}
 
 	var latestTasks []LatestTaskInfo
 
 	// 使用 DISTINCT ON 获取每个工作空间的最新任务（PostgreSQL 特性）
 	// 排除 drift_check 任务，因为它是后台静默运行的，不应影响 workspace 状态显示
-	// 优先级：1. Needs Attention(会卡住后续任务) 2. Running 3. 已完成 4. Pending/Waiting(仅当无其他任务时)
+	// 优先级：1. Needs Attention(会卡住后续任务) 2. 按最近创建时间
 	subQuery := `
 		SELECT DISTINCT ON (workspace_id)
-			workspace_id, id, status, task_type, completed_at
+			workspace_id, id, status, task_type, completed_at, created_at
 		FROM workspace_tasks
 		WHERE workspace_id IN (?)
 			AND task_type != 'drift_check'
 		ORDER BY workspace_id,
 			CASE
 				WHEN status IN ('apply_pending', 'decision_required') THEN 0
-				WHEN status = 'running' THEN 1
-				WHEN status IN ('pending', 'waiting') THEN 3
-				ELSE 2
+				ELSE 1
 			END,
 			created_at DESC
 	`
@@ -334,6 +335,8 @@ func (ws *WorkspaceService) SearchWorkspacesWithStatus(search string, page, size
 		if task, ok := taskMap[w.WorkspaceID]; ok {
 			result[i].LatestRunStatus = task.Status
 			result[i].LatestRunID = task.TaskID
+			result[i].LatestRunTaskType = task.TaskType
+			result[i].LatestRunCreatedAt = &task.CreatedAt
 		}
 		if applyTime, ok := applyTimeMap[w.WorkspaceID]; ok {
 			result[i].LatestApplyTime = applyTime
