@@ -229,6 +229,25 @@
   color: #9ca3af;
 }
 
+.expandToggle {
+  margin-left: auto;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #6b7280;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.expandToggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
 .resultDetailPanel {
   margin-top: 12px;
   padding-top: 12px;
@@ -367,6 +386,15 @@
   padding: 4px 10px;
   background: #fef3c7;
   color: #b45309;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.deletedBadge {
+  padding: 4px 10px;
+  background: #fee2e2;
+  color: #b91c1c;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;

@@ -597,6 +597,10 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 				WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
 				ELSE NULL
 			END as jump_url,
+			CASE
+				WHEN wr.id IS NOT NULL AND wr.is_active = false THEN true
+				ELSE false
+			END as is_resource_deleted,
 			CASE 
 				WHEN ri.cloud_resource_id = ? THEN 1.0
 				WHEN ri.cloud_resource_name = ? THEN 0.9
@@ -612,7 +616,7 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 				ELSE 0.1
 			END as match_rank
 		`, query, query, query, query+"%", query+"%", query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
-		Joins("LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id AND ri.source_type = 'terraform' AND ri.root_module_name LIKE '%\\_' || wr.resource_name AND wr.is_active = true").
+		Joins("LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id AND ri.source_type = 'terraform' AND ri.root_module_name LIKE '%\\_' || wr.resource_name").
 		Joins("LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id").
 		Joins("LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id").
 		Where("ri.resource_mode = ?", "managed").
@@ -632,11 +636,26 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 		db = db.Where("ri.resource_type = ?", resourceType)
 	}
 
-	// 排序：内部数据（terraform）优先，然后按匹配度排序
-	if err := db.Order("ri.source_type ASC, match_rank DESC, ri.cloud_resource_name").
-		Limit(limit).
-		Scan(&results).Error; err != nil {
+	// 排序：内部数据（terraform）优先，同一 ri 下未删除的 wr 优先，然后按匹配度排序
+	// 不加 LIMIT，在 Go 层去重后再截断（JOIN 可能产生同 ri.id 的多行）
+	var rawResults []models.ResourceSearchResult
+	if err := db.Order("ri.source_type ASC, is_resource_deleted ASC, match_rank DESC, ri.cloud_resource_name").
+		Scan(&rawResults).Error; err != nil {
 		return nil, err
+	}
+
+	// 按 workspace_id + terraform_address 去重（等价于 ri.id 唯一性）
+	seen := make(map[string]bool)
+	for _, r := range rawResults {
+		key := r.WorkspaceID + "|" + r.TerraformAddress
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		results = append(results, r)
+		if len(results) >= limit {
+			break
+		}
 	}
 
 	return results, nil

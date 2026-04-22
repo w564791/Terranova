@@ -958,21 +958,21 @@ const CMDB: React.FC = () => {
   const [expandedDetail, setExpandedDetail] = useState<any>(null);
   const [expandedDetailLoading, setExpandedDetailLoading] = useState(false);
 
-  const handleResultClick = async (result: ResourceSearchResult, index: number) => {
-    // 有 jump_url 的直接跳转（terraform 资源）
+  // 点卡片主体：有 jump_url 跳转，否则不响应
+  const handleResultClick = (result: ResourceSearchResult) => {
     if (result.jump_url) {
       navigate(result.jump_url);
-      return;
     }
+  };
 
-    // 已展开则收起
+  // 点倒三角：展开/收起瀑布详情
+  const handleToggleExpand = async (result: ResourceSearchResult, index: number) => {
     if (expandedResultIndex === index) {
       setExpandedResultIndex(null);
       setExpandedDetail(null);
       return;
     }
 
-    // 展开并加载详情
     setExpandedResultIndex(index);
     setExpandedDetail(null);
     try {
@@ -1551,8 +1551,8 @@ const CMDB: React.FC = () => {
                     <div
                       key={`${result.workspace_id}-${result.terraform_address}-${index}`}
                       className={`${result.jump_url ? styles.resultItemClickable : styles.resultItem} ${expandedResultIndex === index ? styles.resultItemExpanded : ''}`}
-                      onClick={() => handleResultClick(result, index)}
-                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleResultClick(result)}
+                      style={{ cursor: result.jump_url ? 'pointer' : 'default' }}
                     >
                       <div className={styles.resultHeader}>
                         <span className={styles.resourceType}>
@@ -1568,9 +1568,25 @@ const CMDB: React.FC = () => {
                             {result.workspace_name || result.workspace_id}
                           </span>
                         )}
-                        {!result.jump_url && (
-                          <span className={styles.expandHint}>{expandedResultIndex === index ? '▲' : '▼'}</span>
+                        {result.is_resource_deleted && (
+                          <span
+                            className={styles.deletedBadge}
+                            title="平台资源已删除，Terraform 尚未 apply"
+                          >
+                            已删除
+                          </span>
                         )}
+                        <button
+                          type="button"
+                          className={styles.expandToggle}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleExpand(result, index);
+                          }}
+                          title={expandedResultIndex === index ? '点击收起' : '点击展开详情'}
+                        >
+                          {expandedResultIndex === index ? '▲' : '▼'}
+                        </button>
                       </div>
                       <h4 className={styles.resourceName}>
                         {result.cloud_resource_name || result.resource_name}
@@ -1622,26 +1638,17 @@ const CMDB: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Inline detail panel (accordion) */}
+                      {/* Inline detail panel (accordion) - 仅展示 summary 和 tags，不暴露内部字段 */}
                       {expandedResultIndex === index && (
                         <div className={styles.resultDetailPanel} onClick={(e) => e.stopPropagation()}>
                           {expandedDetailLoading ? (
                             <div className={styles.resultDetailLoading}>Loading...</div>
                           ) : expandedDetail ? (
                             <>
-                              {expandedDetail.attributes && Object.keys(expandedDetail.attributes).length > 0 && (
+                              {expandedDetail.resource_summary && (
                                 <div className={styles.resultDetailSection}>
-                                  <div className={styles.resultDetailTitle}>Attributes</div>
-                                  <div className={styles.resultDetailGrid}>
-                                    {Object.entries(expandedDetail.attributes).map(([key, value]) => (
-                                      <div key={key} className={styles.resultDetailRow}>
-                                        <span className={styles.resultDetailKey}>{key}</span>
-                                        <span className={styles.resultDetailValue}>
-                                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <div className={styles.resultDetailTitle}>Summary</div>
+                                  <div className={styles.resultDetailSummary}>{expandedDetail.resource_summary}</div>
                                 </div>
                               )}
                               {expandedDetail.tags && Object.keys(expandedDetail.tags).length > 0 && (
@@ -1657,11 +1664,8 @@ const CMDB: React.FC = () => {
                                   </div>
                                 </div>
                               )}
-                              {expandedDetail.resource_summary && (
-                                <div className={styles.resultDetailSection}>
-                                  <div className={styles.resultDetailTitle}>Summary</div>
-                                  <div className={styles.resultDetailSummary}>{expandedDetail.resource_summary}</div>
-                                </div>
+                              {!expandedDetail.resource_summary && (!expandedDetail.tags || Object.keys(expandedDetail.tags).length === 0) && (
+                                <div className={styles.resultDetailLoading}>No summary available</div>
                               )}
                             </>
                           ) : (

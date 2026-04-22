@@ -111,6 +111,7 @@ type ResourceSearchResult struct {
 	PlatformResourceID   *uint   `json:"platform_resource_id,omitempty" gorm:"column:platform_resource_id"`
 	PlatformResourceName string  `json:"platform_resource_name,omitempty" gorm:"column:platform_resource_name"`
 	JumpURL              string  `json:"jump_url,omitempty" gorm:"column:jump_url"`
+	IsResourceDeleted    bool    `json:"is_resource_deleted" gorm:"column:is_resource_deleted"`
 	MatchRank            float32 `json:"match_rank" gorm:"column:match_rank"`
 
 	// 外部数据源相关字段

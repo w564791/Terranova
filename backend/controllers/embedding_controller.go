@@ -432,6 +432,7 @@ type SearchResult struct {
 	CloudRegion        string  `json:"cloud_region"`
 	PlatformResourceID *uint   `json:"platform_resource_id"`
 	JumpURL            string  `json:"jump_url"`
+	IsResourceDeleted  bool    `json:"is_resource_deleted"`
 	ResourceSummary    string  `json:"resource_summary,omitempty"`
 	Similarity         float64 `json:"similarity"`
 }
@@ -631,6 +632,10 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 				WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
 				ELSE NULL
 			END as jump_url,
+			CASE
+				WHEN wr.id IS NOT NULL AND wr.is_active = false THEN true
+				ELSE false
+			END as is_resource_deleted,
 			1 - (ri.embedding <=> $1::vector) as similarity
 		FROM resource_index ri
 		LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id
@@ -638,7 +643,6 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 		LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id
 			AND ri.source_type = 'terraform'
 			AND ri.root_module_name LIKE '%\_' || wr.resource_name
-			AND wr.is_active = true
 		WHERE ri.embedding IS NOT NULL
 		  AND ri.resource_mode = 'managed'
 		  AND 1 - (ri.embedding <=> $1::vector) >= $2
@@ -667,14 +671,20 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 		return nil, fmt.Errorf("向量搜索失败: %w", err)
 	}
 
-	// 按 ri.id 去重（LEFT JOIN workspace_resources 可能产生多行）
-	seen := make(map[uint]bool)
+	// 按 ri.id 去重（LEFT JOIN workspace_resources 可能产生多行：
+	// 同一 resource_name 若存在 active+inactive 两条 wr，活跃那条优先）
+	idxByID := make(map[uint]int)
 	results := make([]SearchResult, 0, len(rawResults))
 	for _, r := range rawResults {
-		if !seen[r.ID] {
-			seen[r.ID] = true
-			results = append(results, r)
+		if idx, ok := idxByID[r.ID]; ok {
+			// 已有记录：若当前行更优（未删除 < 已删除），则替换
+			if results[idx].IsResourceDeleted && !r.IsResourceDeleted {
+				results[idx] = r
+			}
+			continue
 		}
+		idxByID[r.ID] = len(results)
+		results = append(results, r)
 	}
 	return results, nil
 }
@@ -716,6 +726,7 @@ func (c *EmbeddingController) doKeywordSearch(req VectorSearchRequest) ([]Search
 			CloudRegion:        r.CloudRegion,
 			PlatformResourceID: r.PlatformResourceID,
 			JumpURL:            r.JumpURL,
+			IsResourceDeleted:  r.IsResourceDeleted,
 			ResourceSummary:    r.ResourceSummary,
 			Similarity:         0,
 		})

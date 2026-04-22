@@ -93,6 +93,7 @@ export interface ResourceSearchResult {
   platform_resource_id?: number;
   platform_resource_name?: string;
   jump_url?: string;
+  is_resource_deleted?: boolean;
   match_rank: number;
   // 外部数据源相关字段
   source_type?: string;           // terraform 或 external
