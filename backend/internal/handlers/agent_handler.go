@@ -521,10 +521,10 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 
 	// Dynamically resolve provider config from global templates if applicable
 	providerConfig := workspace.ProviderConfig
-	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
-	if len(templateIDs) > 0 {
+	instances := workspace.ProviderInstances.GetProviderInstances()
+	if len(instances) > 0 {
 		ptService := services.NewProviderTemplateService(h.db)
-		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		resolved, err := ptService.ResolveProviderConfigFromInstances(instances)
 		if err != nil {
 			log.Printf("[Agent] Failed to resolve provider config for workspace %s: %v", workspace.WorkspaceID, err)
 		} else if resolved != nil {

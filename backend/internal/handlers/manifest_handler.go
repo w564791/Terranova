@@ -2528,10 +2528,10 @@ func (h *ManifestHandler) createTaskSnapshot(task *models.WorkspaceTask, workspa
 	// 2. Snapshot Provider config（模板模式下动态解析）
 	// NOTE: Variable snapshots are now created BEFORE task creation via VariableSnapshotService
 	providerConfig := workspace.ProviderConfig
-	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
-	if len(templateIDs) > 0 {
+	instances := workspace.ProviderInstances.GetProviderInstances()
+	if len(instances) > 0 {
 		ptService := services.NewProviderTemplateService(h.db)
-		resolved, resolveErr := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		resolved, resolveErr := ptService.ResolveProviderConfigFromInstances(instances)
 		if resolveErr != nil {
 			log.Printf("Failed to resolve provider templates for snapshot: %v", resolveErr)
 		} else if resolved != nil {

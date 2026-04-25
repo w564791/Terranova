@@ -90,7 +90,6 @@ func (s *ProviderTemplateService) Create(req *models.CreateProviderTemplateReque
 		Name:         req.Name,
 		Type:         req.Type,
 		Source:       req.Source,
-		Alias:        req.Alias,
 		Config:       models.JSONB(req.Config),
 		Version:      req.Version,
 		ConstraintOp: req.ConstraintOp,
@@ -136,10 +135,6 @@ func (s *ProviderTemplateService) Update(id uint, req *models.UpdateProviderTemp
 
 	if req.Source != nil {
 		updates["source"] = *req.Source
-	}
-
-	if req.Alias != nil {
-		updates["alias"] = *req.Alias
 	}
 
 	if req.Config != nil {
@@ -244,64 +239,133 @@ func (s *ProviderTemplateService) Delete(id uint) error {
 }
 
 // CheckTemplateInUse 检查模板是否被workspace使用
+// 用 jsonb_build_array + jsonb_build_object 让 PG 自己构造 jsonb，
+// 避免 Go 侧 marshal 产物在 ?::jsonb 处的类型歧义
 func (s *ProviderTemplateService) CheckTemplateInUse(id uint) bool {
 	var count int64
 	s.db.Model(&models.Workspace{}).
-		Where("provider_template_ids @> ?::jsonb", fmt.Sprintf("[%d]", id)).
+		Where("provider_instances @> jsonb_build_array(jsonb_build_object('template_id', ?::int))", id).
 		Count(&count)
 	return count > 0
 }
 
-// ResolveProviderConfig 解析Provider配置
-func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, overrides map[string]interface{}) (map[string]interface{}, error) {
-	if len(templateIDs) == 0 {
+// ValidateInstanceAliases 按 provider type 校验 alias 唯一性
+// Terraform 规则：同一 type 下最多一个无 alias 的默认 provider，其余 alias 不能重名
+func (s *ProviderTemplateService) ValidateInstanceAliases(instances []models.ProviderInstance) error {
+	if len(instances) == 0 {
+		return nil
+	}
+
+	templateIDSet := make(map[uint]struct{})
+	for _, inst := range instances {
+		templateIDSet[inst.TemplateID] = struct{}{}
+	}
+	templateIDs := make([]uint, 0, len(templateIDSet))
+	for id := range templateIDSet {
+		templateIDs = append(templateIDs, id)
+	}
+
+	templates, err := s.GetByIDs(templateIDs)
+	if err != nil {
+		return fmt.Errorf("failed to load provider templates: %w", err)
+	}
+	templateType := make(map[uint]string, len(templates))
+	for _, tmpl := range templates {
+		templateType[tmpl.ID] = tmpl.Type
+	}
+
+	// key: provider type
+	seenAliases := make(map[string]map[string]struct{})
+	defaultCount := make(map[string]int)
+
+	for _, inst := range instances {
+		pType, ok := templateType[inst.TemplateID]
+		if !ok {
+			return fmt.Errorf("provider 模板 %d 不存在", inst.TemplateID)
+		}
+		if inst.Alias == "" {
+			defaultCount[pType]++
+			if defaultCount[pType] > 1 {
+				return fmt.Errorf("provider 类型 %q 只允许一个默认实例（无 alias），其余必须设置 alias", pType)
+			}
+			continue
+		}
+		if seenAliases[pType] == nil {
+			seenAliases[pType] = make(map[string]struct{})
+		}
+		if _, dup := seenAliases[pType][inst.Alias]; dup {
+			return fmt.Errorf("provider 类型 %q 下 alias %q 重复", pType, inst.Alias)
+		}
+		seenAliases[pType][inst.Alias] = struct{}{}
+	}
+
+	return nil
+}
+
+// ResolveProviderConfigFromInstances 从 provider instances 解析 provider 配置
+// 输出 provider.tf.json 兼容格式
+func (s *ProviderTemplateService) ResolveProviderConfigFromInstances(instances []models.ProviderInstance) (map[string]interface{}, error) {
+	if len(instances) == 0 {
 		return nil, nil
+	}
+
+	// 收集唯一 template ID
+	templateIDSet := make(map[uint]struct{})
+	for _, inst := range instances {
+		templateIDSet[inst.TemplateID] = struct{}{}
+	}
+	templateIDs := make([]uint, 0, len(templateIDSet))
+	for id := range templateIDSet {
+		templateIDs = append(templateIDs, id)
 	}
 
 	templates, err := s.GetByIDs(templateIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load provider templates: %w", err)
 	}
-
 	if len(templates) == 0 {
 		return nil, nil
+	}
+
+	// 按 ID 索引模板
+	templateMap := make(map[uint]models.ProviderTemplate)
+	for _, tmpl := range templates {
+		templateMap[tmpl.ID] = tmpl
 	}
 
 	providerBlock := make(map[string][]interface{})
 	requiredProviders := make(map[string]interface{})
 
-	for _, tmpl := range templates {
-		// 深拷贝Config
-		config := deepCopyJSONB(tmpl.Config)
-
-		// 如果模板设置了 alias，先注入（作为基础值）
-		if tmpl.Alias != "" {
-			config["alias"] = tmpl.Alias
+	for _, inst := range instances {
+		tmpl, ok := templateMap[inst.TemplateID]
+		if !ok {
+			continue // 跳过引用已删除模板的实例
 		}
 
-		// 应用覆盖（workspace 级别，优先级高于模板）
-		tidStr := fmt.Sprintf("%d", tmpl.ID)
-		if overrides != nil {
-			if tmplOverrides, ok := overrides[tidStr]; ok {
-				if overrideMap, ok := tmplOverrides.(map[string]interface{}); ok {
-					for k, v := range overrideMap {
-						config[k] = v
-					}
-				}
+		config := deepCopyJSONB(tmpl.Config)
+
+		// 注入 workspace 级 alias
+		if inst.Alias != "" {
+			config["alias"] = inst.Alias
+		}
+
+		// 应用 instance 级 overrides（最高优先级）
+		if inst.Overrides != nil {
+			for k, v := range inst.Overrides {
+				config[k] = v
 			}
 		}
 
-		// 清理空 alias（workspace 显式清除或未设置时不输出 alias 字段）
+		// 清理空 alias
 		if alias, ok := config["alias"]; ok {
 			if alias == "" || alias == nil {
 				delete(config, "alias")
 			}
 		}
 
-		// 追加到同类型 provider 数组（支持多个同类型 provider，如多个 aws 用 alias 区分）
 		providerBlock[tmpl.Type] = append(providerBlock[tmpl.Type], config)
 
-		// required_providers 每种类型只需一条（source + version 约束相同）
+		// required_providers: 每个 type 只生成一条
 		if _, exists := requiredProviders[tmpl.Type]; !exists {
 			rpEntry := make(map[string]interface{})
 			rpEntry["source"] = tmpl.Source
@@ -318,7 +382,6 @@ func (s *ProviderTemplateService) ResolveProviderConfig(templateIDs []uint, over
 		}
 	}
 
-	// 转换 providerBlock 为 map[string]interface{} 以匹配 JSON 输出格式
 	providerOut := make(map[string]interface{})
 	for k, v := range providerBlock {
 		providerOut[k] = v

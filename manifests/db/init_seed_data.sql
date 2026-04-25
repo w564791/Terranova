@@ -5689,7 +5689,6 @@ CREATE TABLE public.provider_templates (
     name character varying(100) NOT NULL,
     type character varying(50) NOT NULL,
     source character varying(200) NOT NULL,
-    alias character varying(50),
     config jsonb NOT NULL DEFAULT '{}',
     version character varying(50),
     constraint_op character varying(10),
@@ -5742,13 +5741,6 @@ COMMENT ON COLUMN public.provider_templates.version IS 'Provider version number 
 --
 
 COMMENT ON COLUMN public.provider_templates.constraint_op IS 'Version constraint operator: ~>, >=, =, etc. (optional)';
-
-
---
--- Name: COLUMN provider_templates.alias; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.provider_templates.alias IS 'Terraform provider alias for multi-provider-per-type (optional, main provider has no alias)';
 
 
 --
@@ -7628,8 +7620,7 @@ CREATE TABLE public.workspaces (
     cmdb_sync_triggered_by character varying(20),
     cmdb_sync_started_at timestamp without time zone,
     cmdb_sync_completed_at timestamp without time zone,
-    provider_template_ids jsonb,
-    provider_overrides jsonb
+    provider_instances jsonb
 );
 
 
@@ -7816,17 +7807,10 @@ COMMENT ON COLUMN public.workspaces.drift_check_interval IS '检测间隔（分�
 
 
 --
--- Name: COLUMN workspaces.provider_template_ids; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN workspaces.provider_instances; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.workspaces.provider_template_ids IS 'JSON array of referenced provider template IDs';
-
-
---
--- Name: COLUMN workspaces.provider_overrides; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.workspaces.provider_overrides IS 'Per-template-ID field overrides applied on top of templates';
+COMMENT ON COLUMN public.workspaces.provider_instances IS 'Provider instance array: [{template_id, alias, overrides}]. Same template can be instantiated multiple times with different aliases.';
 
 
 --
@@ -9403,7 +9387,7 @@ COPY public.projects (id, org_id, name, display_name, description, is_default, i
 -- Data for Name: provider_templates; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.provider_templates (id, name, type, source, alias, config, version, constraint_op, is_default, enabled, description, created_by, created_at, updated_at) FROM stdin;
+COPY public.provider_templates (id, name, type, source, config, version, constraint_op, is_default, enabled, description, created_by, created_at, updated_at) FROM stdin;
 \.
 
 

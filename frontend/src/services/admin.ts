@@ -56,12 +56,12 @@ export interface TerraformVersionsResponse {
 }
 
 // Provider模板
+// alias 归属 workspace 实例级，模板不再承载 alias
 export interface ProviderTemplate {
   id: number;
   name: string;
   type: string;
   source: string;
-  alias: string;
   config: Record<string, any>;
   version: string;
   constraint_op: string;
@@ -77,7 +77,6 @@ export interface CreateProviderTemplateRequest {
   name: string;
   type: string;
   source: string;
-  alias?: string;
   config: Record<string, any>;
   version?: string;
   constraint_op?: string;
@@ -89,7 +88,6 @@ export interface UpdateProviderTemplateRequest {
   name?: string;
   type?: string;
   source?: string;
-  alias?: string;
   config?: Record<string, any>;
   version?: string;
   constraint_op?: string;

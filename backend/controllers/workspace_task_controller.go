@@ -1515,10 +1515,10 @@ func createTaskSnapshot(db *gorm.DB, task *models.WorkspaceTask, workspace *mode
 	// 2. 快照Provider配置（模板模式下动态解析，确保使用最新模板数据）
 	// NOTE: Variable snapshots are now created BEFORE task creation via VariableSnapshotService
 	providerConfig := workspace.ProviderConfig
-	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
-	if len(templateIDs) > 0 {
+	instances := workspace.ProviderInstances.GetProviderInstances()
+	if len(instances) > 0 {
 		ptService := services.NewProviderTemplateService(db)
-		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		resolved, err := ptService.ResolveProviderConfigFromInstances(instances)
 		if err != nil {
 			return fmt.Errorf("failed to resolve provider config from templates: %w", err)
 		}

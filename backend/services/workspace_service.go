@@ -175,6 +175,7 @@ type WorkspaceListItem struct {
 	LockID                 *string               `json:"lock_id"`
 	LockInfo               models.JSONB          `json:"lock_info"`
 	ProviderConfig         models.JSONB          `json:"provider_config"`
+	ProviderInstances      models.JSONB          `json:"provider_instances"`
 	InitConfig             models.JSONB          `json:"init_config"`
 	RetryEnabled           bool                  `json:"retry_enabled"`
 	MaxRetries             int                   `json:"max_retries"`
@@ -227,6 +228,7 @@ func toWorkspaceListItem(w models.Workspace) WorkspaceListItem {
 		LockID:                 w.LockID,
 		LockInfo:               w.LockInfo,
 		ProviderConfig:         w.ProviderConfig,
+		ProviderInstances:      w.ProviderInstances,
 		InitConfig:             w.InitConfig,
 		RetryEnabled:           w.RetryEnabled,
 		MaxRetries:             w.MaxRetries,

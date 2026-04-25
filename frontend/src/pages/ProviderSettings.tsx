@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { adminService, type ProviderTemplate } from '../services/admin';
+import type { ProviderInstance } from '../services/workspaces';
 import { JsonEditor } from '../components/DynamicForm/JsonEditor';
 import api from '../services/api';
 import styles from './ProviderSettings.module.css';
@@ -12,13 +13,18 @@ interface ProviderSettingsProps {
   workspaceId: string;
 }
 
+// 内部用于列表 key，渲染阶段生成；不会发送到后端
+type InstanceView = ProviderInstance & { _key: string };
+
+let instanceKeyCounter = 0;
+const makeKey = () => `inst-${Date.now()}-${++instanceKeyCounter}`;
+
 const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
   const { showToast } = useToast();
 
   const [mode, setMode] = useState<ProviderMode>('none');
   const [availableTemplates, setAvailableTemplates] = useState<ProviderTemplate[]>([]);
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
-  const [overrides, setOverrides] = useState<Record<string, Record<string, any>>>({});
+  const [instances, setInstances] = useState<InstanceView[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,14 +33,17 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
   const [customJson, setCustomJson] = useState('');
   const [jsonError, setJsonError] = useState('');
 
-  // Collapsible override sections
-  const [expandedTemplates, setExpandedTemplates] = useState<Set<number>>(new Set());
+  // Instance card 折叠状态
+  const [expandedInstances, setExpandedInstances] = useState<Set<string>>(new Set());
+
+  // Add Provider dropdown 开关
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Fetch workspace data and available templates in parallel
       const [workspaceRes, templatesRes] = await Promise.all([
         api.get(`/workspaces/${workspaceId}`),
         adminService.getProviderTemplates({ enabled: true }),
@@ -44,30 +53,35 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
       const templates = templatesRes.items || [];
       setAvailableTemplates(templates);
 
-      // Determine initial mode
-      const templateIds = workspace.provider_template_ids;
+      const rawInstances: ProviderInstance[] = Array.isArray(workspace.provider_instances)
+        ? workspace.provider_instances
+        : [];
       const providerConfig = workspace.provider_config;
-      const providerOverrides = workspace.provider_overrides;
 
-      if (Array.isArray(templateIds) && templateIds.length > 0) {
-        // Template mode
+      if (rawInstances.length > 0) {
         setMode('template');
-        setSelectedTemplateIds(templateIds);
-        setOverrides(providerOverrides || {});
-        setExpandedTemplates(new Set());
+        setInstances(
+          rawInstances.map((inst) => ({
+            template_id: inst.template_id,
+            alias: inst.alias ?? '',
+            overrides: inst.overrides ?? {},
+            _key: makeKey(),
+          }))
+        );
       } else if (
         providerConfig &&
         typeof providerConfig === 'object' &&
         Object.keys(providerConfig).length > 0
       ) {
-        // Custom mode
         setMode('custom');
         setCustomJson(JSON.stringify(providerConfig, null, 2));
+        setInstances([]);
       } else {
-        // None mode
         setMode('none');
+        setInstances([]);
       }
 
+      setExpandedInstances(new Set());
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to fetch provider config:', error);
@@ -81,15 +95,24 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
     fetchConfig();
   }, [fetchConfig]);
 
-  // Mode change handler
+  // 点击外部关闭 dropdown
+  useEffect(() => {
+    if (!showAddDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowAddDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAddDropdown]);
+
   const handleModeChange = (newMode: ProviderMode) => {
     if (newMode === mode) return;
     setMode(newMode);
     setHasChanges(true);
 
-    if (newMode === 'template') {
-      // Keep existing selections if any
-    } else if (newMode === 'custom') {
+    if (newMode === 'custom') {
       if (!customJson) {
         setCustomJson('{\n  \n}');
       }
@@ -97,101 +120,85 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
     }
   };
 
-  // Template selection handler
-  const handleTemplateToggle = (templateId: number) => {
-    setSelectedTemplateIds((prev) => {
-      if (prev.includes(templateId)) {
-        // Remove the template and its overrides
-        const newOverrides = { ...overrides };
-        delete newOverrides[String(templateId)];
-        setOverrides(newOverrides);
-        return prev.filter((id) => id !== templateId);
-      } else {
-        // Add the template
-        setExpandedTemplates((exp) => new Set([...exp, templateId]));
-        return [...prev, templateId];
-      }
+  const handleAddInstance = (template: ProviderTemplate) => {
+    const newInst: InstanceView = {
+      template_id: template.id,
+      alias: '',
+      overrides: {},
+      _key: makeKey(),
+    };
+    setInstances((prev) => [...prev, newInst]);
+    setExpandedInstances((prev) => new Set([...prev, newInst._key]));
+    setShowAddDropdown(false);
+    setHasChanges(true);
+  };
+
+  const handleRemoveInstance = (key: string) => {
+    setInstances((prev) => prev.filter((inst) => inst._key !== key));
+    setExpandedInstances((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
     });
     setHasChanges(true);
   };
 
-  // Override change handler
-  const handleOverrideChange = (templateId: number, key: string, value: string) => {
-    const template = availableTemplates.find((t) => t.id === templateId);
-    if (!template) return;
+  const handleAliasChange = (key: string, alias: string) => {
+    setInstances((prev) =>
+      prev.map((inst) => (inst._key === key ? { ...inst, alias } : inst))
+    );
+    setHasChanges(true);
+  };
 
-    const tidStr = String(templateId);
-
-    setOverrides((prev) => {
-      const templateOverrides = { ...(prev[tidStr] || {}) };
-
-      // Alias is always stored as a string and kept in overrides even when empty
-      // (empty string tells backend to clear any legacy template-level alias)
-      if (key === 'alias') {
-        templateOverrides[key] = value;
-      } else {
-        const templateValue = template.config[key];
-        // If value matches template default, remove the override
+  const handleOverrideChange = (key: string, fieldKey: string, value: string) => {
+    setInstances((prev) =>
+      prev.map((inst) => {
+        if (inst._key !== key) return inst;
+        const template = availableTemplates.find((t) => t.id === inst.template_id);
+        const templateValue = template?.config[fieldKey];
         const defaultStr =
           templateValue != null && typeof templateValue === 'object'
             ? JSON.stringify(templateValue)
             : String(templateValue ?? '');
+        const nextOverrides = { ...inst.overrides };
         if (value === defaultStr) {
-          delete templateOverrides[key];
+          delete nextOverrides[fieldKey];
         } else {
-          // Try to parse as JSON/number/boolean for storage
-          templateOverrides[key] = parseValue(value);
+          nextOverrides[fieldKey] = parseValue(value);
         }
-      }
-
-      const newOverrides = { ...prev };
-      if (Object.keys(templateOverrides).length === 0) {
-        delete newOverrides[tidStr];
-      } else {
-        newOverrides[tidStr] = templateOverrides;
-      }
-      return newOverrides;
-    });
+        return { ...inst, overrides: nextOverrides };
+      })
+    );
     setHasChanges(true);
   };
 
-  // Reset a single override to template default
-  const handleResetOverride = (templateId: number, key: string) => {
-    const tidStr = String(templateId);
-    setOverrides((prev) => {
-      const templateOverrides = { ...(prev[tidStr] || {}) };
-      delete templateOverrides[key];
-
-      const newOverrides = { ...prev };
-      if (Object.keys(templateOverrides).length === 0) {
-        delete newOverrides[tidStr];
-      } else {
-        newOverrides[tidStr] = templateOverrides;
-      }
-      return newOverrides;
-    });
+  const handleResetOverride = (key: string, fieldKey: string) => {
+    setInstances((prev) =>
+      prev.map((inst) => {
+        if (inst._key !== key) return inst;
+        const nextOverrides = { ...inst.overrides };
+        delete nextOverrides[fieldKey];
+        return { ...inst, overrides: nextOverrides };
+      })
+    );
     setHasChanges(true);
   };
 
-  // Toggle expand/collapse for a template override section
-  const toggleExpanded = (templateId: number) => {
-    setExpandedTemplates((prev) => {
+  const toggleExpanded = (key: string) => {
+    setExpandedInstances((prev) => {
       const next = new Set(prev);
-      if (next.has(templateId)) {
-        next.delete(templateId);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(templateId);
+        next.add(key);
       }
       return next;
     });
   };
 
-  // Custom JSON change handler
   const handleCustomJsonChange = (value: string) => {
     setCustomJson(value);
     setHasChanges(true);
-
-    // Validate JSON
     if (value.trim()) {
       try {
         JSON.parse(value);
@@ -204,82 +211,72 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
     }
   };
 
-  // Save handler
+  // 前端即时校验 alias 唯一性（后端会再校验一次）
+  const validateAliases = (): string | null => {
+    const typeMap: Record<string, { aliases: Set<string>; defaultCount: number }> = {};
+    for (const inst of instances) {
+      const tmpl = availableTemplates.find((t) => t.id === inst.template_id);
+      if (!tmpl) continue;
+      if (!typeMap[tmpl.type]) {
+        typeMap[tmpl.type] = { aliases: new Set(), defaultCount: 0 };
+      }
+      const bucket = typeMap[tmpl.type];
+      const alias = inst.alias.trim();
+      if (alias === '') {
+        bucket.defaultCount++;
+        if (bucket.defaultCount > 1) {
+          return `provider type "${tmpl.type}" 只允许一个默认实例（无 alias），其余必须设置 alias`;
+        }
+      } else {
+        if (bucket.aliases.has(alias)) {
+          return `provider type "${tmpl.type}" 下 alias "${alias}" 重复`;
+        }
+        bucket.aliases.add(alias);
+      }
+    }
+    return null;
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
       let payload: Record<string, any> = {};
 
       if (mode === 'template') {
-        // Validate alias uniqueness per provider type
-        const aliasErrors: string[] = [];
-        const typeAliasMap: Record<string, { aliases: string[]; defaultCount: number }> = {};
-
-        selectedTemplateIds.forEach(id => {
-          const tmpl = availableTemplates.find(t => t.id === id);
-          if (!tmpl) return;
-          if (!typeAliasMap[tmpl.type]) {
-            typeAliasMap[tmpl.type] = { aliases: [], defaultCount: 0 };
-          }
-          const alias = overrides[String(id)]?.alias ?? '';
-          if (alias) {
-            if (typeAliasMap[tmpl.type].aliases.includes(alias)) {
-              aliasErrors.push(`${tmpl.type}: alias "${alias}" 重复`);
-            }
-            typeAliasMap[tmpl.type].aliases.push(alias);
-          } else {
-            typeAliasMap[tmpl.type].defaultCount++;
-            if (typeAliasMap[tmpl.type].defaultCount > 1) {
-              aliasErrors.push(`${tmpl.type}: 只允许一个默认 Provider（无 alias），其余必须设置 alias`);
-            }
-          }
-        });
-
-        if (aliasErrors.length > 0) {
-          showToast(aliasErrors.join('; '), 'error');
+        const aliasError = validateAliases();
+        if (aliasError) {
+          showToast(aliasError, 'error');
           return;
         }
-
         payload = {
-          provider_template_ids: selectedTemplateIds,
-          provider_overrides: Object.keys(overrides).length > 0 ? overrides : null,
-          provider_config: null,
+          provider_instances: instances.map(({ _key, ...rest }) => ({
+            ...rest,
+            alias: rest.alias.trim(),
+          })),
         };
       } else if (mode === 'custom') {
-        // Validate JSON before saving
-        if (customJson.trim()) {
-          try {
-            const parsed = JSON.parse(customJson);
-            payload = {
-              provider_config: parsed,
-              provider_template_ids: [],
-              provider_overrides: null,
-            };
-          } catch {
-            showToast('Invalid JSON in custom configuration', 'error');
-            return;
-          }
-        } else {
+        if (!customJson.trim()) {
+          showToast('Custom configuration 不能为空；如需清除 provider 配置请切换到 None 模式', 'error');
+          return;
+        }
+        try {
           payload = {
-            provider_config: null,
-            provider_template_ids: [],
-            provider_overrides: null,
+            provider_config: JSON.parse(customJson),
           };
+        } catch {
+          showToast('Invalid JSON in custom configuration', 'error');
+          return;
         }
       } else {
-        // None mode
+        // None mode: 发空 instances，后端会连带清 provider_config
         payload = {
-          provider_template_ids: [],
-          provider_config: null,
-          provider_overrides: null,
+          provider_instances: [],
         };
       }
 
       await api.patch(`/workspaces/${workspaceId}`, payload);
       showToast('Provider configuration saved', 'success');
       setHasChanges(false);
-
-      // Reload to confirm
       await fetchConfig();
     } catch (error) {
       console.error('Failed to save provider config:', error);
@@ -289,7 +286,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
     }
   };
 
-  // Group templates by type
+  // Add dropdown 的模板按 type 分组
   const templatesByType = availableTemplates.reduce<Record<string, ProviderTemplate[]>>(
     (acc, template) => {
       const type = template.type || 'other';
@@ -323,7 +320,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
           <div className={styles.modeContent}>
             <span className={styles.modeTitle}>Use Global Templates</span>
             <span className={styles.modeDescription}>
-              Select from admin-managed provider templates with optional overrides
+              Add provider instances from admin-managed templates; same template can be added multiple times with different aliases
             </span>
           </div>
         </label>
@@ -369,7 +366,6 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
         </label>
       </div>
 
-      {/* Security Notice */}
       {(mode === 'template' || mode === 'custom') && (
         <div className={styles.securityNotice}>
           <strong>Security:</strong> 请勿在 Provider 配置中存放密钥、密码等敏感数据。
@@ -378,85 +374,121 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
         </div>
       )}
 
-      {/* Template Mode UI */}
+      {/* Template Mode: Instance list */}
       {mode === 'template' && (
         <div className={styles.templateSection}>
-          {Object.keys(templatesByType).length === 0 ? (
+          {availableTemplates.length === 0 ? (
             <div className={styles.infoBox}>
-              No enabled provider templates available. Ask your administrator to create provider
-              templates in Global Settings.
+              No enabled provider templates available. Ask your administrator to create provider templates in Global Settings.
             </div>
           ) : (
-            Object.entries(templatesByType).map(([type, templates]) => (
-              <div key={type} className={styles.templateGroup}>
-                <h4 className={styles.templateGroupTitle}>{type.toUpperCase()}</h4>
-                <div className={styles.templateList}>
-                  {templates.map((template) => {
-                    const isSelected = selectedTemplateIds.includes(template.id);
-                    const isExpanded = expandedTemplates.has(template.id);
-                    const tidStr = String(template.id);
-                    const templateOverrides = overrides[tidStr] || {};
-                    const configKeys = Object.keys(template.config || {});
+            <>
+              <div className={styles.addProviderRow} ref={dropdownRef}>
+                <button
+                  type="button"
+                  className={styles.addProviderButton}
+                  onClick={() => setShowAddDropdown((v) => !v)}
+                >
+                  + Add Provider
+                </button>
+                {showAddDropdown && (
+                  <div className={styles.addProviderDropdown}>
+                    {Object.keys(templatesByType).length === 0 ? (
+                      <div className={styles.addProviderEmpty}>No templates available</div>
+                    ) : (
+                      Object.entries(templatesByType).map(([type, tmpls]) => (
+                        <div key={type} className={styles.addProviderDropdownGroup}>
+                          <div className={styles.addProviderDropdownGroupTitle}>
+                            {type.toUpperCase()}
+                          </div>
+                          {tmpls.map((tmpl) => (
+                            <button
+                              key={tmpl.id}
+                              type="button"
+                              className={styles.addProviderDropdownItem}
+                              onClick={() => handleAddInstance(tmpl)}
+                            >
+                              <span>
+                                {tmpl.name}
+                                {tmpl.is_default && (
+                                  <span className={styles.defaultBadge} style={{ marginLeft: 8 }}>
+                                    Default
+                                  </span>
+                                )}
+                              </span>
+                              <span className={styles.addProviderDropdownItemMeta}>
+                                {tmpl.source}
+                                {tmpl.version &&
+                                  ` ${tmpl.constraint_op || '~>'} ${tmpl.version}`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {instances.length === 0 ? (
+                <div className={styles.infoBox}>
+                  <div className={styles.infoIcon}>i</div>
+                  <div className={styles.infoContent}>
+                    <strong>No provider instances configured</strong>
+                    <p>
+                      Click "Add Provider" to add an instance from a global template. Same
+                      template can be added multiple times with different aliases.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.instanceList}>
+                  {instances.map((inst) => {
+                    const template = availableTemplates.find((t) => t.id === inst.template_id);
+                    const configKeys = Object.keys(template?.config || {});
+                    const isExpanded = expandedInstances.has(inst._key);
 
                     return (
-                      <div
-                        key={template.id}
-                        className={`${styles.templateCard} ${isSelected ? styles.selected : ''}`}
-                      >
-                        <div className={styles.templateHeader}>
-                          <label className={styles.templateCheckbox}>
+                      <div key={inst._key} className={styles.instanceCard}>
+                        <div className={styles.instanceHeader}>
+                          <div className={styles.instanceTitle}>
+                            <span>{template?.name ?? `(模板 #${inst.template_id} 已删除)`}</span>
+                            {template && (
+                              <span className={styles.typeBadge}>{template.type}</span>
+                            )}
+                            {inst.alias && (
+                              <span className={styles.defaultBadge}>alias: {inst.alias}</span>
+                            )}
+                          </div>
+                          <div className={styles.aliasField}>
+                            <label className={styles.aliasLabel}>alias:</label>
                             <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleTemplateToggle(template.id)}
+                              type="text"
+                              className={styles.aliasInput}
+                              value={inst.alias}
+                              onChange={(e) => handleAliasChange(inst._key, e.target.value)}
+                              placeholder="默认实例（留空）"
                             />
-                            <div className={styles.templateInfo}>
-                              <span className={styles.templateName}>
-                                {template.name}
-                                {isSelected && templateOverrides.alias && (
-                                  <span className={styles.defaultBadge}>alias: {templateOverrides.alias}</span>
-                                )}
-                                {template.is_default && (
-                                  <span className={styles.defaultBadge}>Default</span>
-                                )}
-                              </span>
-                              <span className={styles.templateMeta}>
-                                {template.source}
-                                {template.version &&
-                                  ` ${template.constraint_op || '~>'} ${template.version}`}
-                              </span>
-                              {template.description && (
-                                <span className={styles.templateDescription}>
-                                  {template.description}
-                                </span>
-                              )}
-                            </div>
-                          </label>
-                          {isSelected && (
-                            <div className={styles.aliasField}>
-                              <label className={styles.aliasLabel}>alias:</label>
-                              <input
-                                type="text"
-                                className={styles.aliasInput}
-                                value={templateOverrides.alias ?? ''}
-                                onChange={(e) => handleOverrideChange(template.id, 'alias', e.target.value)}
-                                placeholder="默认 Provider（无需 alias）"
-                              />
-                            </div>
-                          )}
-                          {isSelected && configKeys.length > 0 && (
+                          </div>
+                          {configKeys.length > 0 && (
                             <button
                               type="button"
                               className={styles.expandButton}
-                              onClick={() => toggleExpanded(template.id)}
+                              onClick={() => toggleExpanded(inst._key)}
                             >
                               {isExpanded ? 'Hide Overrides' : 'Show Overrides'}
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className={styles.removeInstanceButton}
+                            onClick={() => handleRemoveInstance(inst._key)}
+                          >
+                            Remove
+                          </button>
                         </div>
 
-                        {/* Override Section */}
-                        {isSelected && isExpanded && configKeys.length > 0 && (
+                        {template && isExpanded && configKeys.length > 0 && (
                           <div className={styles.overrideSection}>
                             <div className={styles.overrideSectionHeader}>
                               <span className={styles.overrideSectionTitle}>
@@ -466,12 +498,10 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                                 Modify values to override template defaults
                               </span>
                             </div>
-                            {configKeys.filter(key => key !== 'alias').map((key) => {
+                            {configKeys.map((key) => {
                               const templateValue = template.config[key];
-                              const isOverridden = key in templateOverrides;
-                              const rawValue = isOverridden
-                                ? templateOverrides[key]
-                                : templateValue;
+                              const isOverridden = key in inst.overrides;
+                              const rawValue = isOverridden ? inst.overrides[key] : templateValue;
                               const displayValue =
                                 rawValue != null && typeof rawValue === 'object'
                                   ? JSON.stringify(rawValue)
@@ -498,7 +528,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                                     className={`${styles.overrideInput} ${isOverridden ? styles.overriddenInput : ''}`}
                                     value={displayValue}
                                     onChange={(e) =>
-                                      handleOverrideChange(template.id, key, e.target.value)
+                                      handleOverrideChange(inst._key, key, e.target.value)
                                     }
                                     placeholder={placeholderValue}
                                   />
@@ -506,7 +536,7 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                                     <button
                                       type="button"
                                       className={styles.resetButton}
-                                      onClick={() => handleResetOverride(template.id, key)}
+                                      onClick={() => handleResetOverride(inst._key, key)}
                                       title="Reset to template default"
                                     >
                                       Reset
@@ -521,8 +551,8 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
                     );
                   })}
                 </div>
-              </div>
-            ))
+              )}
+            </>
           )}
         </div>
       )}
@@ -561,7 +591,6 @@ const ProviderSettings: React.FC<ProviderSettingsProps> = ({ workspaceId }) => {
         </div>
       )}
 
-      {/* Save Actions */}
       <div className={styles.actions}>
         <button
           onClick={handleSave}

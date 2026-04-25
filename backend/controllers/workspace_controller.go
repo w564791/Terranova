@@ -205,12 +205,16 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		}
 	}
 
-	// 动态解析 provider_config：如果有模板引用，实时从全局模板解析
+	// 动态解析 provider_config：如果有模板实例引用，实时从全局模板解析
 	providerConfig := workspace.ProviderConfig
-	templateIDs := workspace.ProviderTemplateIDs.GetTemplateIDs()
-	if len(templateIDs) > 0 {
+	instances := workspace.ProviderInstances.GetProviderInstances()
+	// 保证前端拿到的始终是数组，而不是 JSONB 空 map {}
+	if instances == nil {
+		instances = []models.ProviderInstance{}
+	}
+	if len(instances) > 0 {
 		ptService := services.NewProviderTemplateService(wc.workspaceService.GetDB())
-		resolved, err := ptService.ResolveProviderConfig(templateIDs, workspace.ProviderOverrides.GetOverridesMap())
+		resolved, err := ptService.ResolveProviderConfigFromInstances(instances)
 		if err != nil {
 			log.Printf("Failed to resolve provider config for workspace %s: %v", workspaceID, err)
 			// 解析失败时回退到存储的 provider_config
@@ -237,8 +241,7 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		"tags":                     workspace.Tags,
 		"variables":                workspace.SystemVariables,
 		"provider_config":          services.FilterTemplateSensitiveInfo(providerConfig),
-		"provider_template_ids":    workspace.ProviderTemplateIDs,
-		"provider_overrides":       services.FilterTemplateSensitiveInfo(workspace.ProviderOverrides),
+		"provider_instances":       instances,
 		"notify_settings":          workspace.NotifySettings,
 		"state":                    workspace.State,
 		"lock_id":                  workspace.LockID,
@@ -295,21 +298,22 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 // @Security BearerAuth
 func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 	var req struct {
-		Name             string                 `json:"name" binding:"required"`
-		Description      string                 `json:"description"`
-		ExecutionMode    string                 `json:"execution_mode" binding:"required"`
-		AgentPoolID      *uint                  `json:"agent_pool_id"`
-		K8sConfigID      *uint                  `json:"k8s_config_id"`
-		AutoApply        bool                   `json:"auto_apply"`
-		PlanOnly         bool                   `json:"plan_only"`
-		TerraformVersion string                 `json:"terraform_version"`
-		Workdir          string                 `json:"workdir"`
-		StateBackend     string                 `json:"state_backend" binding:"required"`
-		StateConfig      map[string]interface{} `json:"state_config"`
-		Tags             map[string]interface{} `json:"tags"`
-		Variables        map[string]interface{} `json:"variables"`
-		ProviderConfig   map[string]interface{} `json:"provider_config"`
-		NotifySettings   map[string]interface{} `json:"notify_settings"`
+		Name              string                    `json:"name" binding:"required"`
+		Description       string                    `json:"description"`
+		ExecutionMode     string                    `json:"execution_mode" binding:"required"`
+		AgentPoolID       *uint                     `json:"agent_pool_id"`
+		K8sConfigID       *uint                     `json:"k8s_config_id"`
+		AutoApply         bool                      `json:"auto_apply"`
+		PlanOnly          bool                      `json:"plan_only"`
+		TerraformVersion  string                    `json:"terraform_version"`
+		Workdir           string                    `json:"workdir"`
+		StateBackend      string                    `json:"state_backend" binding:"required"`
+		StateConfig       map[string]interface{}    `json:"state_config"`
+		Tags              map[string]interface{}    `json:"tags"`
+		Variables         map[string]interface{}    `json:"variables"`
+		ProviderConfig    map[string]interface{}    `json:"provider_config"`
+		ProviderInstances []models.ProviderInstance `json:"provider_instances"`
+		NotifySettings    map[string]interface{}    `json:"notify_settings"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -366,6 +370,27 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		req.StateBackend = "local"
 	}
 
+	// Provider 配置互斥：create 阶段如果提交 provider_instances，就不允许同时提 provider_config
+	if req.ProviderConfig != nil && len(req.ProviderInstances) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "provider_config 与 provider_instances 不能同时提交",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	if len(req.ProviderInstances) > 0 {
+		ptService := services.NewProviderTemplateService(wc.workspaceService.GetDB())
+		if err := ptService.ValidateInstanceAliases(req.ProviderInstances); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":      400,
+				"message":   err.Error(),
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			return
+		}
+	}
+
 	workspace := &models.Workspace{
 		Name:             req.Name,
 		Description:      req.Description,
@@ -382,6 +407,14 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		ProviderConfig:   req.ProviderConfig,
 		NotifySettings:   req.NotifySettings,
 		State:            models.WorkspaceStateCreated,
+	}
+
+	// provider_instances 需要走 JSONB 自定义类型写入
+	if len(req.ProviderInstances) > 0 {
+		instancesJSON, _ := json.Marshal(req.ProviderInstances)
+		var jb models.JSONB
+		_ = jb.Scan(instancesJSON)
+		workspace.ProviderInstances = jb
 	}
 
 	// 如果提供了variables，设置系统变量
@@ -469,21 +502,20 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 	log.Printf("UpdateWorkspace called: workspace_id=%s, method=%s", workspaceID, c.Request.Method)
 
 	var req struct {
-		Name                   string                 `json:"name"`
-		Description            string                 `json:"description"`
-		TerraformVersion       string                 `json:"terraform_version"`
-		ExecutionMode          string                 `json:"execution_mode"`
-		AgentPoolID            *uint                  `json:"agent_pool_id"`
-		K8sConfigID            *uint                  `json:"k8s_config_id"`
-		Workdir                string                 `json:"workdir"`
-		AutoApply              *bool                  `json:"auto_apply"`
-		UIMode                 string                 `json:"ui_mode"`
-		ShowUnchangedResources *bool                  `json:"show_unchanged_resources"`
-		Tags                   map[string]interface{} `json:"tags"`
-		ProviderConfig         map[string]interface{} `json:"provider_config"`
-		ProviderTemplateIDs    []uint                 `json:"provider_template_ids"`
-		ProviderOverrides      map[string]interface{} `json:"provider_overrides"`
-		NotifySettings         map[string]interface{} `json:"notify_settings"`
+		Name                   string                    `json:"name"`
+		Description            string                    `json:"description"`
+		TerraformVersion       string                    `json:"terraform_version"`
+		ExecutionMode          string                    `json:"execution_mode"`
+		AgentPoolID            *uint                     `json:"agent_pool_id"`
+		K8sConfigID            *uint                     `json:"k8s_config_id"`
+		Workdir                string                    `json:"workdir"`
+		AutoApply              *bool                     `json:"auto_apply"`
+		UIMode                 string                    `json:"ui_mode"`
+		ShowUnchangedResources *bool                     `json:"show_unchanged_resources"`
+		Tags                   map[string]interface{}    `json:"tags"`
+		ProviderConfig         map[string]interface{}    `json:"provider_config"`
+		ProviderInstances      []models.ProviderInstance `json:"provider_instances"`
+		NotifySettings         map[string]interface{}    `json:"notify_settings"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -552,32 +584,50 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 	if req.Tags != nil {
 		updates["tags"] = req.Tags
 	}
+	// Provider 配置三种模式互斥：template（instances）、custom（config）、none
+	// 前端约定：
+	//   template → 提交 {"provider_instances": [{...}, ...]}
+	//   custom   → 提交 {"provider_config": {...}}
+	//   none     → 提交 {"provider_instances": []}（空数组触发清空 provider_config）
+	// 后端在写入其中一个字段时主动清空另一个，避免数据残留。
+	if req.ProviderConfig != nil && req.ProviderInstances != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "provider_config 与 provider_instances 不能同时提交",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	// 注意：互斥清空用 gorm.Expr("NULL")，不依赖 GORM 对 map nil 值的行为（版本敏感）
 	if req.ProviderConfig != nil {
 		pcJSON, _ := json.Marshal(req.ProviderConfig)
 		updates["provider_config"] = gorm.Expr("?::jsonb", string(pcJSON))
-		// 计算 provider_config 的 hash，用于优化 terraform init -upgrade
 		hash := calculateProviderConfigHash(req.ProviderConfig)
 		if hash != "" {
 			updates["provider_config_hash"] = hash
 			log.Printf("Calculated provider_config_hash: %s", hash[:16]+"...")
-		}
-	}
-	// 处理provider模板引用
-	if req.ProviderTemplateIDs != nil {
-		// []uint must be explicitly marshaled to JSON for JSONB column;
-		// GORM map-based updates don't invoke the column type's Value() method.
-		templateIDsJSON, _ := json.Marshal(req.ProviderTemplateIDs)
-		updates["provider_template_ids"] = gorm.Expr("?::jsonb", string(templateIDsJSON))
-
-		// 模板模式下清空 provider_config，读取时动态解析
-		if len(req.ProviderTemplateIDs) > 0 {
-			updates["provider_config"] = nil
+		} else {
 			updates["provider_config_hash"] = ""
 		}
+		// 切到 custom 模式，清空 template 模式的实例
+		updates["provider_instances"] = gorm.Expr("NULL")
 	}
-	if req.ProviderOverrides != nil {
-		overridesJSON, _ := json.Marshal(req.ProviderOverrides)
-		updates["provider_overrides"] = gorm.Expr("?::jsonb", string(overridesJSON))
+	if req.ProviderInstances != nil {
+		// 校验同 type 下 alias 唯一性
+		ptService := services.NewProviderTemplateService(wc.workspaceService.GetDB())
+		if err := ptService.ValidateInstanceAliases(req.ProviderInstances); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":      400,
+				"message":   err.Error(),
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			return
+		}
+		instancesJSON, _ := json.Marshal(req.ProviderInstances)
+		updates["provider_instances"] = gorm.Expr("?::jsonb", string(instancesJSON))
+		// 切到 template 或 none 模式，清空 custom 模式的配置和 hash
+		updates["provider_config"] = gorm.Expr("NULL")
+		updates["provider_config_hash"] = ""
 	}
 	if req.NotifySettings != nil {
 		updates["notify_settings"] = req.NotifySettings

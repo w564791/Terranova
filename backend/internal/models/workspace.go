@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -116,34 +117,32 @@ func (j JSONB) UnwrapArray() ([]byte, error) {
 	return json.Marshal(j)
 }
 
-// GetTemplateIDs 从 JSONB 中提取 provider_template_ids 为 []uint
-func (j JSONB) GetTemplateIDs() []uint {
-	if j == nil {
-		return nil
-	}
-
-	raw, err := j.UnwrapArray()
-	if err != nil {
-		return nil
-	}
-
-	var ids []uint
-	if err := json.Unmarshal(raw, &ids); err != nil {
-		return nil
-	}
-	return ids
+// ProviderInstance 表示 workspace 中的一个 provider 实例
+// 引用全局模板，附加 workspace 级的 alias 和 overrides
+type ProviderInstance struct {
+	TemplateID uint                   `json:"template_id"`
+	Alias      string                 `json:"alias"`
+	Overrides  map[string]interface{} `json:"overrides"`
 }
 
-// GetOverridesMap 从 JSONB 中提取 provider_overrides 为 map[string]interface{}
-func (j JSONB) GetOverridesMap() map[string]interface{} {
+// GetProviderInstances 从 JSONB 中提取 provider_instances 为 []ProviderInstance
+// 解析失败返回 nil 并打日志：上游无法区分"没配置"和"数据损坏"，
+// 但 plan 会在 resolve 阶段因 provider 缺失报错，日志给排障留线索
+func (j JSONB) GetProviderInstances() []ProviderInstance {
 	if j == nil {
 		return nil
 	}
-	// JSONB 本身就是 map[string]interface{}，但要排除 _array 包装
-	if _, ok := j["_array"]; ok && len(j) == 1 {
+	raw, err := j.UnwrapArray()
+	if err != nil {
+		log.Printf("GetProviderInstances: unwrap JSONB failed: %v", err)
 		return nil
 	}
-	return map[string]interface{}(j)
+	var instances []ProviderInstance
+	if err := json.Unmarshal(raw, &instances); err != nil {
+		log.Printf("GetProviderInstances: unmarshal failed: %v, raw=%s", err, string(raw))
+		return nil
+	}
+	return instances
 }
 
 // WorkspaceVariableArray 自定义WorkspaceVariable数组类型（用于JSONB存储）
@@ -208,9 +207,9 @@ type Workspace struct {
 	// Provider配置
 	ProviderConfig JSONB `json:"provider_config" gorm:"type:jsonb"`
 
-	// Provider模板引用
-	ProviderTemplateIDs JSONB `json:"provider_template_ids" gorm:"type:jsonb"` // 引用的全局模板ID列表
-	ProviderOverrides   JSONB `json:"provider_overrides" gorm:"type:jsonb"`    // 按provider类型的字段覆盖
+	// Provider实例数组: [{template_id, alias, overrides}]
+	// 同一模板可被多次实例化，每个实例独立设置 alias 和 overrides
+	ProviderInstances JSONB `json:"provider_instances" gorm:"type:jsonb"`
 
 	// Provider配置变更跟踪（用于优化 terraform init -upgrade）
 	ProviderConfigHash       string `json:"provider_config_hash" gorm:"type:varchar(64)"`        // provider_config 的 SHA256 hash

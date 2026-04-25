@@ -478,6 +478,163 @@
 }
 
 /* ==============================
+   Add Provider Row (instance mode)
+   ============================== */
+.addProviderRow {
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.addProviderButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-white);
+  border: 1px dashed var(--color-blue-400);
+  color: var(--color-blue-600);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addProviderButton:hover {
+  background: var(--color-blue-50);
+  border-color: var(--color-blue-500);
+}
+
+.addProviderDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  min-width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+}
+
+.addProviderDropdownGroup {
+  padding: 4px 0;
+}
+
+.addProviderDropdownGroupTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 10px;
+}
+
+.addProviderDropdownItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-gray-800);
+  transition: background 0.15s;
+}
+
+.addProviderDropdownItem:hover {
+  background: var(--color-gray-50);
+}
+
+.addProviderDropdownItemMeta {
+  font-size: 11px;
+  color: var(--color-gray-500);
+  font-family: var(--font-mono);
+}
+
+.addProviderEmpty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--color-gray-500);
+}
+
+/* ==============================
+   Instance Card
+   ============================== */
+.instanceList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.instanceCard {
+  border: 1px solid var(--color-gray-200);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--color-white);
+  transition: box-shadow 0.15s;
+}
+
+.instanceCard:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.instanceHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.instanceTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.typeBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-gray-700);
+  background: var(--color-gray-100);
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.removeInstanceButton {
+  background: none;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--color-gray-500);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.removeInstanceButton:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+/* ==============================
    Responsive
    ============================== */
 @media (max-width: 768px) {

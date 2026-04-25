@@ -17,7 +17,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
     name: '',
     type: '',
     source: '',
-    alias: '',
     config: '{}',
     version: '',
     constraint_op: '~>',
@@ -48,7 +47,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
       name: '',
       type: '',
       source: '',
-      alias: '',
       config: '{}',
       version: '',
       constraint_op: '',
@@ -70,7 +68,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
       name: template.name,
       type: template.type,
       source: template.source,
-      alias: template.alias ?? '',
       config: JSON.stringify(template.config, null, 2),
       version: template.version,
       constraint_op: template.constraint_op ?? '',
@@ -129,7 +126,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
           name: formData.name,
           type: formData.type,
           source: formData.source,
-          alias: '',
           config: parsedConfig,
           version: formData.version,
           constraint_op: formData.constraint_op,
@@ -143,7 +139,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
           name: formData.name,
           type: formData.type,
           source: formData.source,
-          alias: '',
           config: parsedConfig,
           version: formData.version,
           constraint_op: formData.constraint_op,
@@ -269,23 +264,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
                   {!formErrors.source && <span className={styles.hint}>Terraform Registry 中的 Provider 路径</span>}
                 </div>
 
-                {/* Alias */}
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Alias</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={formData.alias}
-                    onChange={(e) => setFormData({ ...formData, alias: e.target.value })}
-                    placeholder="例如：west, secondary"
-                    disabled
-                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                  />
-                  <span className={styles.hint}>
-                    Alias 只能在 Workspace Provider 设置中配置，不同 Workspace 可为同一模板分配不同的 alias
-                  </span>
-                </div>
-
                 {/* 版本 + 约束 */}
                 <div className={styles.formGroup}>
                   <label className={styles.label}>版本</label>
@@ -406,7 +384,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
                 <th>名称</th>
                 <th>类型</th>
                 <th>Source</th>
-                <th>Alias</th>
                 <th>版本</th>
                 <th>状态</th>
                 <th>默认</th>
@@ -424,13 +401,6 @@ const ProviderTemplatesAdmin: React.FC = () => {
                   </td>
                   <td>
                     <span className={styles.sourceCell}>{template.source}</span>
-                  </td>
-                  <td>
-                    {template.alias ? (
-                      <span className={styles.aliasBadge}>{template.alias}</span>
-                    ) : (
-                      <span style={{ color: 'var(--color-gray-400)' }}>-</span>
-                    )}
                   </td>
                   <td>
                     {template.version ? (

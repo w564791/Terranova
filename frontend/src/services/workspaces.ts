@@ -1,5 +1,13 @@
 import api from './api';
 
+// Provider 实例：引用全局 provider 模板，附加 workspace 级 alias 和 overrides
+// 同一模板可被多次实例化（例如多 region 的 aws provider）
+export interface ProviderInstance {
+  template_id: number;
+  alias: string;
+  overrides: Record<string, any>;
+}
+
 export interface Workspace {
   id: number;
   workspace_id?: string;
@@ -18,8 +26,7 @@ export interface Workspace {
   tags?: Record<string, any>;
   variables?: Record<string, any>;
   provider_config?: Record<string, any>;
-  provider_template_ids?: number[] | null;
-  provider_overrides?: Record<string, Record<string, any>> | null;
+  provider_instances?: ProviderInstance[];
   notify_settings?: Record<string, any>;
   state: string;
   lock_id?: string;
