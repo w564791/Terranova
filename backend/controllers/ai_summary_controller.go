@@ -426,14 +426,13 @@ func (c *AISummaryController) BypassAIIncomplete(ctx *gin.Context) {
 	// Write audit log
 	userID, _ := ctx.Get("user_id")
 	userIDStr, _ := userID.(string)
-	var userIDUint *uint
-	if uid, err := strconv.ParseUint(userIDStr, 10, 64); err == nil {
-		uidVal := uint(uid)
-		userIDUint = &uidVal
+	var userIDPtr *string
+	if userIDStr != "" {
+		userIDPtr = &userIDStr
 	}
 	taskIDUint := uint(taskID)
 	c.db.Create(&models.AuditLog{
-		UserID:       userIDUint,
+		UserID:       userIDPtr,
 		Action:       "bypass_ai_incomplete",
 		ResourceType: "plan_summary",
 		ResourceID:   &taskIDUint,

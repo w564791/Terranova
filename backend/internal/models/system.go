@@ -18,7 +18,7 @@ type SystemConfig struct {
 
 type AuditLog struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
-	UserID       *uint          `json:"user_id"`
+	UserID       *string        `json:"user_id" gorm:"type:varchar(20)"` // 语义化用户 ID (e.g. user-xxxx);DB 早就是 varchar(20)
 	Action       string         `json:"action" gorm:"not null"`
 	ResourceType string         `json:"resource_type" gorm:"not null"`
 	ResourceID   *uint          `json:"resource_id"`
