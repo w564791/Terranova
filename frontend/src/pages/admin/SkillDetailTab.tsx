@@ -3,7 +3,8 @@ import { Select, Segmented, Table, Tag, Tooltip, Spin, Empty } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
-import { getCapabilityDetail, getAssessmentOverview, getTopViolations, CapabilityDetail, VersionStats, AssessmentRecord, FeedbackMatrix, TopViolation } from '../../services/skillAssessment';
+import { getCapabilityDetail, getAssessmentOverview, getTopViolations } from '../../services/skillAssessment';
+import type { CapabilityDetail, VersionStats, AssessmentRecord, FeedbackMatrix, TopViolation } from '../../services/skillAssessment';
 import styles from './SkillQualityDashboard.module.css';
 
 const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (

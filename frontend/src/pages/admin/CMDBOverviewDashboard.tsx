@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Spin, Pagination } from 'antd';
-import { cmdbService, CMDBOverview, CMDBRecentSync, CMDBSearchAnalytics } from '../../services/cmdb';
+import { cmdbService } from '../../services/cmdb';
+import type { CMDBOverview, CMDBRecentSync, CMDBSearchAnalytics } from '../../services/cmdb';
 import styles from './CMDBOverviewDashboard.module.css';
 
 const CMDBOverviewDashboard: React.FC = () => {

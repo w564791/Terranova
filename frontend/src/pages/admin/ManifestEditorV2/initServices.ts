@@ -24,6 +24,21 @@ import getSnippetsServiceOverride from '@codingame/monaco-vscode-snippets-servic
 // 默认主题扩展(自带 dark-plus / light-plus 等)
 import '@codingame/monaco-vscode-theme-defaults-default-extension'
 
+// Monaco Worker 注册: vscode-api 不会自动配置 MonacoEnvironment.getWorker,
+// 我们用 Vite 的 ?worker 后缀让 Vite 自己 bundle worker 文件。
+// 不写这段会报 "Could not create web worker(s). Falling back to main thread"
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { MonacoEnvironment: object }).MonacoEnvironment = {
+    getWorker(_moduleId: string, _label: string) {
+      // 我们目前不启用 ts/json/css/html 等专属 worker (用不到),
+      // 全部 fallback 到 editor.worker
+      return new EditorWorker()
+    },
+  }
+}
+
 let initPromise: Promise<void> | null = null
 
 /**
