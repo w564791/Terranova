@@ -155,7 +155,22 @@
 }
 .treeNode .chevron.empty { visibility: hidden; }
 .treeNode .icon { width: 16px; display: inline-flex; align-items: center; justify-content: center; }
-.treeNode .name { flex: 1; }
+.treeNode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+.rowActions {
+  display: inline-flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.treeNode:hover .rowActions { opacity: 1; }
+.rowActions .codicon {
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.rowActions .codicon:hover { background: var(--hover); color: var(--fg-active); }
 
 .iconTf  { color: #844fba; }
 .iconYml { color: #cb2c25; }

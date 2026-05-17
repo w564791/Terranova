@@ -7,6 +7,9 @@ import {
   Popconfirm,
   Tooltip,
   Dropdown,
+  Modal,
+  Form,
+  message,
 } from 'antd';
 import {
   PlusOutlined,
@@ -19,7 +22,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import type { Manifest } from '../../services/manifestApi';
-import { listManifests, deleteManifest, exportManifestZip } from '../../services/manifestApi';
+import { listManifests, deleteManifest, exportManifestZip, createManifest } from '../../services/manifestApi';
 import { iamService } from '../../services/iam';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -48,6 +51,9 @@ const ManifestManagement: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingManifest, setDeletingManifest] = useState<Manifest | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm] = Form.useForm<{ name: string; description?: string }>();
 
   // 加载组织列表
   useEffect(() => {
@@ -110,6 +116,28 @@ const ManifestManagement: React.FC = () => {
       fetchManifests();
     } catch (error: any) {
       toast.error('删除失败: ' + (error.message || '未知错误'));
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      const values = await createForm.validateFields();
+      setCreating(true);
+      const m = await createManifest(orgId, {
+        name: values.name,
+        description: values.description ?? '',
+      });
+      message.success('已创建,正在跳转编辑器');
+      setCreateOpen(false);
+      createForm.resetFields();
+      navigate(`/admin/manifests-v2/${m.id}/edit?org=${selectedOrgId}`);
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message;
+      // form validation 错误有 errorFields 字段, 不弹 message
+      if (err?.errorFields) return;
+      if (msg) message.error('创建失败: ' + msg);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -207,7 +235,10 @@ const ManifestManagement: React.FC = () => {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => navigate(`/admin/manifests/new?org=${selectedOrgId}`)}
+            onClick={() => {
+              createForm.resetFields();
+              setCreateOpen(true);
+            }}
             disabled={!selectedOrgId}
           >
             New Manifest
@@ -269,7 +300,10 @@ const ManifestManagement: React.FC = () => {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => navigate(`/admin/manifests/new?org=${selectedOrgId}`)}
+              onClick={() => {
+                createForm.resetFields();
+                setCreateOpen(true);
+              }}
               disabled={!selectedOrgId}
             >
               Create Manifest
@@ -480,6 +514,36 @@ const ManifestManagement: React.FC = () => {
           setDeletingManifest(null);
         }}
       />
+      {/* 创建 Manifest 弹窗 */}
+      <Modal
+        title="新建 Manifest"
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        okText="创建"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <p style={{ color: '#999', marginBottom: 16 }}>
+          创建后会自动跳转到 VS Code Web 编辑器,你可以在那里写 .tf 文件、发布版本、部署到 workspace。
+        </p>
+        <Form form={createForm} layout="vertical" preserve={false}>
+          <Form.Item
+            label="名称"
+            name="name"
+            rules={[
+              { required: true, message: '请输入名称' },
+              { max: 255, message: '不超过 255 字符' },
+            ]}
+          >
+            <Input placeholder="例如: aws-vpc-stack" autoFocus />
+          </Form.Item>
+          <Form.Item label="描述 (可选)" name="description">
+            <Input.TextArea rows={3} placeholder="这个 manifest 的用途简介" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };
