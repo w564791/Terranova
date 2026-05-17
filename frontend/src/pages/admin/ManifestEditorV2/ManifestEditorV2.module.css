@@ -1,0 +1,221 @@
+/* Manifest Editor v2 — VS Code Web 视觉, 1:1 对齐 demo */
+
+.root {
+  --bg-titlebar:        #3c3c3c;
+  --bg-activitybar:     #333333;
+  --bg-sidebar:         #252526;
+  --bg-editor:          #1e1e1e;
+  --bg-statusbar:       #007acc;
+  --bg-tab-active:      #1e1e1e;
+  --bg-tab-inactive:    #2d2d2d;
+  --bg-toolbar:         #2d2d2d;
+  --fg-default:         #cccccc;
+  --fg-muted:           #858585;
+  --fg-active:          #ffffff;
+  --border:             #1f1f1f;
+  --accent:             #007acc;
+  --accent-warn:        #cca700;
+  --hover:              #2a2d2e;
+  --selected:           #094771;
+  --btn-primary:        #0e639c;
+  --btn-primary-hover:  #1177bb;
+  --btn-secondary:      #3a3d41;
+  --btn-secondary-hover:#45494e;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: var(--fg-default);
+  background: var(--bg-editor);
+  font-size: 13px;
+  user-select: none;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 30px 35px 1fr 22px;
+  grid-template-columns: 48px 260px 1fr;
+  grid-template-areas:
+    "title title title"
+    "toolbar toolbar toolbar"
+    "activity sidebar editor"
+    "status status status";
+}
+
+.root * { box-sizing: border-box; }
+
+/* ===== title bar ===== */
+.titleBar {
+  grid-area: title;
+  background: var(--bg-titlebar);
+  color: var(--fg-default);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.traffic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; }
+.traffic span { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.traffic .red    { background: #ff5f57; }
+.traffic .yellow { background: #febc2e; }
+.traffic .green  { background: #28c840; }
+.breadcrumb { color: var(--fg-default); }
+.breadcrumb .muted { color: var(--fg-muted); }
+.breadcrumb .badge {
+  display: inline-block;
+  background: var(--accent-warn); color: #1e1e1e;
+  border-radius: 3px; padding: 1px 6px; font-size: 11px; margin-left: 8px;
+  font-weight: 600;
+}
+
+/* ===== toolbar ===== */
+.toolbar {
+  grid-area: toolbar;
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 12px;
+  gap: 10px;
+}
+.toolbar .group { display: flex; align-items: center; gap: 6px; }
+.toolbar .group + .group { border-left: 1px solid var(--border); padding-left: 10px; margin-left: 4px; }
+.toolbar button {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--btn-secondary); color: var(--fg-default);
+  border: none; padding: 5px 10px; border-radius: 3px;
+  font-size: 12px; cursor: pointer;
+  font-family: inherit;
+}
+.toolbar button:hover:not(:disabled) { background: var(--btn-secondary-hover); }
+.toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+.toolbar button.primary { background: var(--btn-primary); color: white; }
+.toolbar button.primary:hover:not(:disabled) { background: var(--btn-primary-hover); }
+.toolbar .spacer { flex: 1; }
+.toolbar .meta { color: var(--fg-muted); font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.toolbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-warn); display: inline-block; }
+.toolbar .dot.saved { background: #4ec9b0; }
+
+/* ===== activity bar ===== */
+.activityBar {
+  grid-area: activity;
+  background: var(--bg-activitybar);
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: 8px; gap: 4px;
+}
+.activityBar .item {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--fg-muted);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+.activityBar .item .codicon { font-size: 22px; }
+.activityBar .item:hover { color: var(--fg-active); }
+.activityBar .item.active { color: var(--fg-active); border-left-color: var(--fg-active); }
+.activityBar .item.disabled { color: #4a4a4a; cursor: not-allowed; }
+.activityBar .spacer { flex: 1; }
+
+/* ===== side bar ===== */
+.sideBar {
+  grid-area: sidebar;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sideBar .header {
+  padding: 8px 12px 4px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--fg-default);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.sideBar .header .actions { display: flex; gap: 4px; }
+.sideBar .header .actions .codicon {
+  cursor: pointer; padding: 2px 4px; border-radius: 3px; color: var(--fg-default);
+  font-size: 14px;
+}
+.sideBar .header .actions .codicon:hover { background: var(--hover); }
+.sideBar .project {
+  padding: 4px 8px 4px 12px; font-size: 11px;
+  text-transform: uppercase; color: var(--fg-default); font-weight: 600;
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+}
+.sideBar .tree { flex: 1; overflow-y: auto; padding-bottom: 8px; }
+
+.treeNode {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 8px; cursor: pointer;
+  color: var(--fg-default); font-size: 13px;
+  line-height: 22px; height: 22px;
+  white-space: nowrap;
+}
+.treeNode:hover { background: var(--hover); }
+.treeNode.selected { background: var(--selected); }
+.treeNode .chevron {
+  width: 12px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.treeNode .chevron.empty { visibility: hidden; }
+.treeNode .icon { width: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.treeNode .name { flex: 1; }
+
+.iconTf  { color: #844fba; }
+.iconYml { color: #cb2c25; }
+.iconMd  { color: #519aba; }
+.iconSh  { color: #89e051; }
+.iconBin { color: #6d8086; }
+.iconFolder { color: #dcb67a; }
+
+/* ===== editor area ===== */
+.editorArea {
+  grid-area: editor;
+  display: grid;
+  grid-template-rows: 35px 1fr;
+  overflow: hidden;
+  background: var(--bg-editor);
+}
+.tabs {
+  display: flex; align-items: stretch;
+  background: var(--bg-tab-inactive);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 12px; height: 35px;
+  font-size: 13px; color: var(--fg-muted);
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  background: var(--bg-tab-inactive);
+  user-select: none;
+}
+.tab.active { background: var(--bg-tab-active); color: var(--fg-active); }
+.tab .close {
+  width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 3px; opacity: 0;
+}
+.tab.active .close, .tab:hover .close { opacity: 1; }
+.tab .close:hover { background: var(--hover); }
+
+.editorHost { width: 100%; height: 100%; position: relative; }
+
+/* ===== status bar ===== */
+.statusBar {
+  grid-area: status;
+  background: var(--bg-statusbar);
+  display: flex; align-items: center;
+  padding: 0 8px; font-size: 12px; color: white;
+  gap: 14px;
+}
+.statusBar .item { display: inline-flex; align-items: center; gap: 4px; }
+.statusBar .spacer { flex: 1; }
+.statusBar .item .codicon { font-size: 13px; }
+
+/* ===== loading / error overlay ===== */
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-editor);
+  color: var(--fg-muted);
+  font-size: 13px;
+  z-index: 50;
+}
+.overlay.error { color: #f48771; font-family: monospace; padding: 16px; align-items: flex-start; white-space: pre-wrap; }
