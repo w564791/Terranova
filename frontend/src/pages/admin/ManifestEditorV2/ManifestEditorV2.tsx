@@ -14,6 +14,8 @@ import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
 import { ensureVscodeServicesReady } from './initServices'
+import { registerHclLanguage } from './hclLanguage'
+import { registerHclProviders } from './hclProviders'
 import {
   listFiles,
   readFile,
@@ -55,6 +57,10 @@ export default function ManifestEditorV2() {
     ensureVscodeServicesReady()
       .then(() => {
         if (cancelled || !containerRef.current) return
+        // 注册 HCL 语言 + 高亮 (idempotent, 全进程一次)
+        registerHclLanguage()
+        // 注册 4 个 demo provider (Completion / Hover / InlayHint / CodeAction)
+        registerHclProviders()
         editorRef.current = monaco.editor.create(containerRef.current, {
           value: '',
           language: 'plaintext',

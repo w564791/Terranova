@@ -230,4 +230,19 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 		iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
 		deploysH.VarsetReverseLookup,
 	)
+
+	// === Manifest 编辑器 IntelliSense 用的只读 module/demo 摘要 (spec §7.6) ===
+	editorH := handlers.NewManifestEditorHandler(db)
+	editor := r.Group("/manifest-editor")
+	editor.Use(middleware.JWTAuth())
+	{
+		editor.GET("/modules",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			editorH.ListModules,
+		)
+		editor.GET("/modules/:module_id/demos",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			editorH.ListDemos,
+		)
+	}
 }
