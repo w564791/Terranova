@@ -41,6 +41,7 @@ export default function ManifestEditorV2() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [bootError, setBootError] = useState<string | null>(null)
+  const [manifestMissing, setManifestMissing] = useState(false)
   const [files, setFiles] = useState<ManifestFileEntry[]>([])
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [currentFile, setCurrentFile] = useState<string | null>(null)
@@ -57,13 +58,11 @@ export default function ManifestEditorV2() {
         editorRef.current = monaco.editor.create(containerRef.current, {
           value: '',
           language: 'plaintext',
-          theme: 'Default Dark Modern',
+          // 设 fallback monaco 默认主题 'vs-dark', 即使 vscode-api 主题加载失败也保持深色
+          // (vscode-api 加载成功后会自动切到 'Default Dark+', 不冲突)
+          theme: 'vs-dark',
           automaticLayout: true,
-          minimap: { enabled: true },
-          fontSize: 13,
           fontFamily: 'Menlo, Monaco, "Cascadia Code", Consolas, "Courier New", monospace',
-          tabSize: 2,
-          renderWhitespace: 'selection',
         })
         editorRef.current.onDidChangeCursorPosition((e) => {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
@@ -98,6 +97,7 @@ export default function ManifestEditorV2() {
     listFiles(ctx)
       .then((items) => {
         if (cancelled) return
+        setManifestMissing(false)
         setFiles(items)
         // 自动打开第一个 .tf, 否则第一个文件
         const firstTf = items.find((f) => f.path.endsWith('.tf'))
@@ -107,9 +107,12 @@ export default function ManifestEditorV2() {
         }
       })
       .catch((err: unknown) => {
-        // 列表失败不致命, 显示空文件树
+        if (cancelled) return
+        // axios 全局 interceptor 把 error 拦成 errorMessage 字符串,这里拿不到
+        // status code,凡是 listFiles 失败统一当作"未就绪/未授权",显示友好提示。
         // eslint-disable-next-line no-console
-        console.warn('[ManifestEditorV2] list files failed', err)
+        console.warn('[ManifestEditorV2] list files unavailable:', err)
+        setManifestMissing(true)
       })
     return () => {
       cancelled = true
@@ -279,7 +282,14 @@ export default function ManifestEditorV2() {
           <span>{manifestId.toUpperCase()}</span>
         </div>
         <div className={styles.tree}>
-          {files.length === 0 && (
+          {manifestMissing && (
+            <div style={{ padding: '8px 12px', color: '#cca700', fontSize: 12, lineHeight: 1.5 }}>
+              Manifest <code style={{ color: '#cccccc' }}>{manifestId}</code> 不存在或无权访问。
+              <br />
+              此页面是 vscode-api 集成的脚手架沙箱。
+            </div>
+          )}
+          {!manifestMissing && files.length === 0 && (
             <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12 }}>
               草稿为空,在编辑器内输入即自动保存
             </div>

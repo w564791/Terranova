@@ -14,7 +14,9 @@
  *  - snippets:      vscode 真品 snippet 引擎(我们的 demo 插入会更稳)
  */
 import { initialize as initializeMonacoServices, LogLevel } from '@codingame/monaco-vscode-api'
-import getConfigurationServiceOverride from '@codingame/monaco-vscode-configuration-service-override'
+import getConfigurationServiceOverride, {
+  initUserConfiguration,
+} from '@codingame/monaco-vscode-configuration-service-override'
 import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-service-override'
 import getLanguagesServiceOverride from '@codingame/monaco-vscode-languages-service-override'
 import getTextmateServiceOverride from '@codingame/monaco-vscode-textmate-service-override'
@@ -23,6 +25,21 @@ import getSnippetsServiceOverride from '@codingame/monaco-vscode-snippets-servic
 
 // 默认主题扩展(自带 dark-plus / light-plus 等)
 import '@codingame/monaco-vscode-theme-defaults-default-extension'
+
+// Manifest 编辑器默认 vscode 用户配置
+const DEFAULT_USER_CONFIG = JSON.stringify({
+  // 主题: 必须用 vscode 内置主题真实 ID, 别瞎写 'Default Dark Modern'
+  // 'Default Dark+' 是 dark-plus 主题的官方 displayName
+  'workbench.colorTheme': 'Default Dark+',
+  'editor.fontSize': 13,
+  'editor.tabSize': 2,
+  'editor.insertSpaces': true,
+  'editor.minimap.enabled': true,
+  'editor.renderWhitespace': 'selection',
+  'editor.bracketPairColorization.enabled': true,
+  'files.autoSave': 'off', // 我们自己用 1s debounce 走 PUT API
+  'editor.semanticHighlighting.enabled': true,
+})
 
 // Monaco Worker 注册: vscode-api 不会自动配置 MonacoEnvironment.getWorker,
 // 我们用 Vite 的 ?worker 后缀让 Vite 自己 bundle worker 文件。
@@ -39,6 +56,9 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// 模块级单例(全进程一份)。React 19 严格模式 + HMR 都会重复 mount,
+// 这里必须保证 initialize() 只被调用一次,否则 vscode-api 会抛
+// "Services are already initialized"。
 let initPromise: Promise<void> | null = null
 
 /**
@@ -48,28 +68,51 @@ let initPromise: Promise<void> | null = null
 export function ensureVscodeServicesReady(): Promise<void> {
   if (initPromise) return initPromise
 
-  initPromise = initializeMonacoServices(
-    {
-      ...getConfigurationServiceOverride(),
-      ...getKeybindingsServiceOverride(),
-      ...getLanguagesServiceOverride(),
-      ...getTextmateServiceOverride(),
-      ...getThemeServiceOverride(),
-      ...getSnippetsServiceOverride(),
-    },
-    undefined,
-    {
-      productConfiguration: {
-        nameShort: 'Terranova Manifest Editor',
-        nameLong: 'Terranova Manifest Editor',
-      },
-      developmentOptions: {
-        logLevel: LogLevel.Warning,
-      },
-    },
-  ).then(() => {
-    // 这里之后可以加全局 register 命令、加载 vsix 扩展等
-  })
+  // 关键: configuration override 必须最先就位 + 在 initialize *之前* 写入
+  // 用户配置, 否则 theme service 启动时拿不到 colorTheme 设置, 默认走白色 vs theme
+  initPromise = (async () => {
+    // 注意: HMR 替换本模块时,模块级 initPromise 会被重置为 null,但 vscode-api
+    // 的全局状态不会。因此第二次调 initializeMonacoServices 会抛
+    // "Services are already initialized"。捕获这种错误当作 idempotent 成功。
+    try {
+      await initializeMonacoServices(
+        {
+          ...getConfigurationServiceOverride(),
+          ...getKeybindingsServiceOverride(),
+          ...getLanguagesServiceOverride(),
+          ...getTextmateServiceOverride(),
+          ...getThemeServiceOverride(),
+          ...getSnippetsServiceOverride(),
+        },
+        undefined,
+        {
+          productConfiguration: {
+            nameShort: 'Terranova Manifest Editor',
+            nameLong: 'Terranova Manifest Editor',
+          },
+          developmentOptions: {
+            logLevel: LogLevel.Warning,
+          },
+        },
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('already initialized')) {
+        // HMR 重入或 React 严格模式双 mount,vscode-api 已 init 过,跳过
+        // eslint-disable-next-line no-console
+        console.debug('[ManifestEditorV2] vscode-api already initialized, skipping')
+      } else {
+        throw err
+      }
+    }
+    // 写入默认配置(含 colorTheme), theme service 会自动 reload。
+    // initUserConfiguration 是写文件操作, 重入安全。
+    try {
+      await initUserConfiguration(DEFAULT_USER_CONFIG)
+    } catch {
+      // 同上, 配置已存在不报错
+    }
+  })()
 
   return initPromise
 }
