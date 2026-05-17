@@ -120,17 +120,11 @@ CREATE INDEX IF NOT EXISTS idx_mdv_varset ON public.manifest_deployment_varsets 
 ALTER TABLE public.manifest_versions
     ADD COLUMN IF NOT EXISTS changelog TEXT;
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_manifest_versions_name
+    ON public.manifest_versions (manifest_id, version);
+
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints
-        WHERE constraint_name = 'uq_manifest_versions_name'
-    ) THEN
-        -- 旧表可能有重复 (manifest_id, version),先去重再加 UNIQUE
-        -- 由于旧画布从未生产使用，直接加索引；如有冲突运维介入
-        CREATE UNIQUE INDEX uq_manifest_versions_name
-            ON public.manifest_versions (manifest_id, version);
-    END IF;
 
     -- version 格式 CHECK: 仅对新写入生效，旧数据用 NOT VALID 容忍
     IF NOT EXISTS (
@@ -148,6 +142,7 @@ END $$;
 -- 4. manifest_deployments 改造
 -- =============================================================================
 -- 4.1 workspace_id 类型修正: int → varchar(50) 对齐全平台语义ID
+-- 旧 FK 指向 workspaces(id) 即 uint PK,改类型前必须 drop FK
 DO $$
 DECLARE
     col_type TEXT;
@@ -159,15 +154,35 @@ BEGIN
       AND column_name = 'workspace_id';
 
     IF col_type = 'integer' OR col_type = 'bigint' THEN
-        -- backfill: int workspace_id → workspaces.workspace_id (string)
-        -- 旧 manifest 画布从未生产使用，缺失数据空翻译失败时降级为字符串化原值
+        -- 1. drop 旧 FK
         ALTER TABLE public.manifest_deployments
-            ALTER COLUMN workspace_id TYPE VARCHAR(50)
-            USING COALESCE(
-                (SELECT w.workspace_id FROM public.workspaces w WHERE w.id = manifest_deployments.workspace_id::int),
-                manifest_deployments.workspace_id::text
+            DROP CONSTRAINT IF EXISTS manifest_deployments_workspace_id_fkey;
+
+        -- 2. backfill: 用 workspaces.workspace_id 翻译 (旧 int FK 指向 workspaces.id)
+        --    ALTER COLUMN ... USING 不允许子查询,所以分两步:
+        --    a) 先通过 UPDATE 把 int 翻译成字符串列(临时存到一个新列)
+        --    b) 再 ALTER 列类型把数字字符串转 varchar(50)
+        ALTER TABLE public.manifest_deployments
+            ADD COLUMN workspace_id_new VARCHAR(50);
+
+        UPDATE public.manifest_deployments md
+            SET workspace_id_new = COALESCE(
+                (SELECT w.workspace_id FROM public.workspaces w WHERE w.id = md.workspace_id),
+                md.workspace_id::text
             );
-        RAISE NOTICE 'manifest_deployments.workspace_id 已从 int 转为 varchar(50)';
+
+        -- 3. drop 旧列 + 重命名新列
+        ALTER TABLE public.manifest_deployments DROP COLUMN workspace_id;
+        ALTER TABLE public.manifest_deployments RENAME COLUMN workspace_id_new TO workspace_id;
+        ALTER TABLE public.manifest_deployments ALTER COLUMN workspace_id SET NOT NULL;
+
+        -- 4. 重建索引
+        CREATE INDEX IF NOT EXISTS idx_manifest_deployments_workspace_id
+            ON public.manifest_deployments (workspace_id);
+
+        -- 5. 不重建 FK:workspaces.workspace_id 在 model 里有 uniqueIndex,
+        --    本期保守走业务层校验,避免与现有 cascade 行为冲突
+        RAISE NOTICE 'manifest_deployments.workspace_id 已从 int 转为 varchar(50);旧 FK 已 drop';
     END IF;
 END $$;
 
