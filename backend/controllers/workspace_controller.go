@@ -363,12 +363,11 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 	if req.TerraformVersion == "" {
 		req.TerraformVersion = "latest"
 	}
-	if req.Workdir == "" {
-		req.Workdir = "/workspace"
-	}
 	if req.StateBackend == "" {
 		req.StateBackend = "local"
 	}
+	// req.Workdir: 字段已废弃, 创建时强制清空 (manifest 部署在 install 时单独管理子目录)
+	req.Workdir = ""
 
 	// Provider 配置互斥：create 阶段如果提交 provider_instances，就不允许同时提 provider_config
 	if req.ProviderConfig != nil && len(req.ProviderInstances) > 0 {
@@ -569,9 +568,7 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 	if req.K8sConfigID != nil {
 		updates["k8s_config_id"] = req.K8sConfigID
 	}
-	if req.Workdir != "" {
-		updates["workdir"] = req.Workdir
-	}
+	// req.Workdir 已废弃, 不再接受用户更新
 	if req.AutoApply != nil {
 		updates["auto_apply"] = *req.AutoApply
 	}

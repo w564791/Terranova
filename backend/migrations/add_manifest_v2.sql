@@ -238,6 +238,14 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_manifest_deployment
     ON public.workspaces (manifest_deployment_id) WHERE manifest_deployment_id IS NOT NULL;
 
 -- =============================================================================
+-- 6. workspace_tasks: 加 external_files 字段(Manifest Run 按钮使用)
+-- =============================================================================
+ALTER TABLE public.workspace_tasks
+    ADD COLUMN IF NOT EXISTS external_files JSONB;
+
+COMMENT ON COLUMN public.workspace_tasks.external_files IS 'Manifest [Run] 按钮临时文件: [{path, content_b64}],executor 走 Run 分支用此而不读 manifest_files,任务跑完即抛';
+
+-- =============================================================================
 -- 注释
 -- =============================================================================
 COMMENT ON TABLE  public.manifest_files                IS 'Manifest 文件存储: 草稿 (version_id NULL + owner_user_id 非空) 与 published 快照 (version_id 非空 + owner_user_id NULL) 统一存放';

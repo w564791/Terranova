@@ -403,6 +403,13 @@ type WorkspaceTask struct {
 	// 后台任务标记（drift_check 等后台任务不显示在任务列表中）
 	IsBackground bool `json:"is_background" gorm:"default:false;index"` // 是否为后台任务
 
+	// Manifest Run 临时文件: manifest 编辑器 [Run] 按钮触发 plan-only 时,
+	// 把当前用户私有草稿全量上传到这里,executor 走 Run 分支(完全忽略
+	// workspace.ManifestDeploymentID)用 ExternalFiles 跑 plan。任务跑完即抛,
+	// 不污染 manifest_files / workspace 任何持久状态。
+	// 数据格式: [{"path": "main.tf", "content_b64": "..."}]
+	ExternalFiles JSONB `json:"external_files,omitempty" gorm:"type:jsonb"`
+
 	// HTTP State Backend token (store SHA256 hash, not the raw token)
 	StateTokenHash string `json:"-" gorm:"type:varchar(64);index"`
 

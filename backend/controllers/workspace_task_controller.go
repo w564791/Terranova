@@ -92,11 +92,24 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		Description        string  `json:"description"`
 		RunType            string  `json:"run_type"`             // "plan" 或 "plan_and_apply"
 		VariableSnapshotID *string `json:"variable_snapshot_id"` // 可选，API 用户可传已有 vsnap_id
+		// Manifest Run: 当前用户草稿上传 (Run 按钮专用,只允许 plan,不允许 plan_and_apply)
+		ExternalFiles []struct {
+			Path       string `json:"path"`
+			ContentB64 string `json:"content_b64"`
+		} `json:"external_files,omitempty"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		// 如果没有请求体，继续执行（description是可选的）
 		req.Description = ""
 		req.RunType = "plan" // 默认为plan
+	}
+
+	// external_files 仅允许 plan 任务(Run 按钮语义)
+	if len(req.ExternalFiles) > 0 && req.RunType != "plan" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "external_files only supported for plan tasks (manifest Run)",
+		})
+		return
 	}
 
 	// 如果没有指定run_type，默认为plan
@@ -164,6 +177,23 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		}
 	}
 
+	// external_files (Manifest Run): 序列化为 JSONB 写入 task
+	var externalFilesJSONB models.JSONB
+	if len(req.ExternalFiles) > 0 {
+		efs := make([]map[string]string, 0, len(req.ExternalFiles))
+		for _, f := range req.ExternalFiles {
+			efs = append(efs, map[string]string{
+				"path":        f.Path,
+				"content_b64": f.ContentB64,
+			})
+		}
+		// gorm JSONB: marshal 后 unmarshal 成 map slice 风格
+		raw, _ := json.Marshal(efs)
+		var tmp []interface{}
+		_ = json.Unmarshal(raw, &tmp)
+		externalFilesJSONB = models.JSONB{"files": tmp}
+	}
+
 	// 创建任务（只创建一个任务）
 	task := &models.WorkspaceTask{
 		WorkspaceID:        workspace.WorkspaceID,
@@ -174,6 +204,7 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		Stage:              "pending",
 		Description:        req.Description,
 		VariableSnapshotID: vsnapID,
+		ExternalFiles:      externalFilesJSONB,
 	}
 
 	if err := c.db.Create(task).Error; err != nil {
