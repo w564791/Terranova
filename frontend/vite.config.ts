@@ -73,15 +73,20 @@ export default defineConfig({
         //  - 减小单 chunk 体积, 让 rollup 不一次性持有所有 AST,降低 OOM 风险
         //  - 浏览器可并行下载, 缓存命中率更高(只改业务代码不重打 monaco)
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('@codingame/monaco-vscode')) return 'vscode-api'
-            if (id.includes('vscode-textmate') || id.includes('vscode-oniguruma')) return 'vscode-textmate'
-            if (id.includes('monaco-editor')) return 'monaco-editor'
-            if (id.includes('@vscode/codicons')) return 'codicons'
-            if (id.includes('antd') || id.includes('@ant-design')) return 'antd'
-            if (id.includes('react-dom')) return 'react-dom'
-            if (id.includes('@xyflow/react')) return 'xyflow'
+          if (!id.includes('node_modules')) return undefined
+          // React 必须留在 主 chunk,否则 antd 加载时 React 还没初始化会炸
+          // ('Cannot set properties of undefined setting Children')。
+          if (id.includes('/react/') || id.includes('/react-dom/') ||
+              id.includes('/scheduler/') || id.includes('/react-router')) {
+            return undefined
           }
+          // monaco-vscode-api 系列拆分,避免 rollup 一次性 hold 14MB AST OOM
+          if (id.includes('@codingame/monaco-vscode')) return 'vscode-api'
+          if (id.includes('vscode-textmate') || id.includes('vscode-oniguruma')) return 'vscode-textmate'
+          if (id.includes('monaco-editor')) return 'monaco-editor'
+          if (id.includes('@vscode/codicons')) return 'codicons'
+          if (id.includes('@xyflow/react')) return 'xyflow'
+          // antd / @ant-design 不再独立拆,跟 React 留同 chunk 避免 hoisting 顺序坑
           return undefined
         },
       },
