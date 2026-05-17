@@ -189,6 +189,16 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		return
 	}
 
+	writeManifestAudit(h.db, auditResourceManifestDeployment, "deployment.install", userID, map[string]interface{}{
+		"manifest_id":     manifestID,
+		"deployment_id":   deploymentID,
+		"workspace_id":    req.WorkspaceID,
+		"version_id":      req.VersionID,
+		"version":         version.Version,
+		"resources_added": len(resourceRefs),
+		"varset_count":    len(req.Varsets),
+	})
+
 	c.JSON(http.StatusCreated, gin.H{
 		"deployment_id":   deploymentID,
 		"version":         version.Version,
@@ -329,6 +339,15 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	writeManifestAudit(h.db, auditResourceManifestDeployment, "deployment.upgrade", userID, map[string]interface{}{
+		"manifest_id":     manifestID,
+		"deployment_id":   deploymentID,
+		"workspace_id":    dep.WorkspaceID,
+		"old_version_id":  dep.VersionID,
+		"new_version_id":  req.TargetVersionID,
+		"new_version":     version.Version,
+		"varset_count":    len(req.Varsets),
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"deployment_id": deploymentID,
 		"version":       version.Version,
@@ -340,6 +359,7 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 	manifestID := c.Param("id")
+	userID := c.GetString("user_id")
 
 	var dep models.ManifestDeployment
 	if err := h.db.Where("id = ? AND manifest_id = ?", deploymentID, manifestID).First(&dep).Error; err != nil {
@@ -378,6 +398,12 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	writeManifestAudit(h.db, auditResourceManifestDeployment, "deployment.uninstall", userID, map[string]interface{}{
+		"manifest_id":   manifestID,
+		"deployment_id": deploymentID,
+		"workspace_id":  dep.WorkspaceID,
+		"version_id":    dep.VersionID,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"deployment_id": deploymentID,
 		"workspace_id":  dep.WorkspaceID,

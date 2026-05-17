@@ -161,6 +161,13 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		return
 	}
 
+	writeManifestAudit(h.db, auditResourceManifestVersion, "version.publish", userID, map[string]interface{}{
+		"manifest_id": manifestID,
+		"version_id":  newVersionID,
+		"version":     req.Version,
+		"changelog":   req.Changelog,
+	})
+
 	resp := gin.H{
 		"id":         newVersionID,
 		"version":    req.Version,
