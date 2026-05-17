@@ -88,6 +88,117 @@ export async function resetDraftFrom(
   await api.post(`${basePath(ctx)}/draft/_reset_from?version_id=${encodeURIComponent(versionId)}`)
 }
 
+// =============================================================================
+// 版本 / 部署
+// =============================================================================
+
+export interface ManifestVersion {
+  id: string
+  manifest_id: string
+  version: string
+  changelog: string
+  is_draft: boolean
+  created_by: string
+  created_at: string
+}
+
+export interface ManifestDeployment {
+  id: string
+  manifest_id: string
+  version_id: string
+  workspace_id: string
+  status: 'active' | 'uninstalled' | string
+  variable_overrides?: Record<string, unknown>
+  deployed_by: string
+  deployed_at?: string
+}
+
+export interface PublishVersionRequest {
+  version: string
+  changelog?: string
+}
+
+export async function listVersions(ctx: ManifestEditorContext): Promise<ManifestVersion[]> {
+  const data = (await api.get(`${basePath(ctx)}/v2/versions`)) as { versions?: ManifestVersion[] }
+  return data.versions ?? []
+}
+
+export async function publishVersion(
+  ctx: ManifestEditorContext,
+  body: PublishVersionRequest,
+): Promise<ManifestVersion> {
+  return (await api.post(`${basePath(ctx)}/v2/versions`, body)) as ManifestVersion
+}
+
+export async function listDeployments(ctx: ManifestEditorContext): Promise<ManifestDeployment[]> {
+  const data = (await api.get(`${basePath(ctx)}/v2/deployments`)) as {
+    deployments?: ManifestDeployment[]
+  }
+  return data.deployments ?? []
+}
+
+export interface DeploymentVarsetEntry {
+  varset_id: string
+  priority: number
+}
+
+export interface InstallDeploymentRequest {
+  version_id: string
+  workspace_id: string
+  varsets: DeploymentVarsetEntry[]
+  variable_overrides?: Record<string, string>
+}
+
+export async function installDeployment(
+  ctx: ManifestEditorContext,
+  body: InstallDeploymentRequest,
+) {
+  return await api.post(`${basePath(ctx)}/v2/deployments/install`, body)
+}
+
+export interface UpgradeDeploymentRequest {
+  target_version_id: string
+  varsets: DeploymentVarsetEntry[]
+  variable_overrides?: Record<string, string>
+}
+
+export async function upgradeDeployment(
+  ctx: ManifestEditorContext,
+  deploymentId: string,
+  body: UpgradeDeploymentRequest,
+) {
+  return await api.post(`${basePath(ctx)}/v2/deployments/${deploymentId}/upgrade`, body)
+}
+
+export async function uninstallDeployment(
+  ctx: ManifestEditorContext,
+  deploymentId: string,
+) {
+  return await api.post(`${basePath(ctx)}/v2/deployments/${deploymentId}/uninstall`)
+}
+
+// =============================================================================
+// Run (调 workspace 现有 plan-only,带 external_files)
+// =============================================================================
+
+export interface RunPlanRequest {
+  workspace_id: string
+  external_files: { path: string; content_b64: string }[]
+}
+
+export async function runPlanWithDraft(req: RunPlanRequest) {
+  // 注意路径: 用 workspace 现有的 task 创建路径,不在 manifest namespace 下
+  return await api.post(`/workspaces/${req.workspace_id}/tasks/plan`, {
+    description: 'Manifest Run (草稿预览)',
+    run_type: 'plan',
+    external_files: req.external_files,
+  })
+}
+
+// =============================================================================
+// 工具: 路径 → 编辑器语言
+// =============================================================================
+
 /** 路径 → 编辑器语言(PR2-C 会精细化, 当前最小集) */
 export function languageOfPath(path: string): string {
   if (path.endsWith('.tf') || path.endsWith('.tfvars') || path.endsWith('.hcl')) return 'hcl'

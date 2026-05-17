@@ -16,6 +16,9 @@ import '@vscode/codicons/dist/codicon.css'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
+import PublishVersionDialog from './PublishVersionDialog'
+import DeployDialog from './DeployDialog'
+import RunDialog from './RunDialog'
 import {
   listFiles,
   readFile,
@@ -44,6 +47,9 @@ export default function ManifestEditorV2() {
 
   const [bootError, setBootError] = useState<string | null>(null)
   const [manifestMissing, setManifestMissing] = useState(false)
+  const [publishOpen, setPublishOpen] = useState(false)
+  const [deployOpen, setDeployOpen] = useState(false)
+  const [runOpen, setRunOpen] = useState(false)
   const [files, setFiles] = useState<ManifestFileEntry[]>([])
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [currentFile, setCurrentFile] = useState<string | null>(null)
@@ -243,13 +249,26 @@ export default function ManifestEditorV2() {
         </div>
         <div className={styles.spacer} />
         <div className={styles.group}>
-          <button title="对当前草稿在已部署 workspace 跑 plan-only 检测" disabled>
+          <button
+            title="对当前草稿在已部署 workspace 跑 plan-only 检测"
+            disabled={manifestMissing}
+            onClick={() => setRunOpen(true)}
+          >
             <i className="codicon codicon-play" /> Run
           </button>
-          <button title="把当前草稿固化为新的不可变版本" disabled>
+          <button
+            title="把当前草稿固化为新的不可变版本"
+            disabled={manifestMissing}
+            onClick={() => setPublishOpen(true)}
+          >
             <i className="codicon codicon-tag" /> 发布版本
           </button>
-          <button className={styles.primary} title="把已发布版本部署到 Workspace" disabled>
+          <button
+            className={styles.primary}
+            title="把已发布版本部署到 Workspace"
+            disabled={manifestMissing}
+            onClick={() => setDeployOpen(true)}
+          >
             <i className="codicon codicon-rocket" /> 部署到 Workspace
           </button>
         </div>
@@ -365,6 +384,23 @@ export default function ManifestEditorV2() {
         <span className={styles.item}>LF</span>
         <span className={styles.item}>{currentFile ? languageDisplay(currentFile) : ''}</span>
       </div>
+
+      {/* === 弹窗 === */}
+      <PublishVersionDialog
+        open={publishOpen}
+        ctx={ctx}
+        onClose={() => setPublishOpen(false)}
+      />
+      <DeployDialog
+        open={deployOpen}
+        ctx={ctx}
+        onClose={() => setDeployOpen(false)}
+      />
+      <RunDialog
+        open={runOpen}
+        ctx={ctx}
+        onClose={() => setRunOpen(false)}
+      />
     </div>
   )
 }
