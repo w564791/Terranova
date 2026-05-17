@@ -9,7 +9,7 @@
  * HCL 高亮在 PR2-C。
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
@@ -35,9 +35,14 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export default function ManifestEditorV2() {
   const params = useParams<{ id: string; org_id?: string }>()
+  const [searchParams] = useSearchParams()
   const manifestId = params.id || 'sandbox'
-  // org_id 路由暂未带,先从 localStorage 取(项目其他页面也是这模式)
-  const orgId = params.org_id || localStorage.getItem('current_org_id') || '1'
+  // org_id 多源 fallback: path param > query string ?org= > localStorage > '1'
+  const orgId =
+    params.org_id ||
+    searchParams.get('org') ||
+    localStorage.getItem('current_org_id') ||
+    '1'
   const ctx: ManifestEditorContext = { orgId, manifestId }
 
   const containerRef = useRef<HTMLDivElement | null>(null)

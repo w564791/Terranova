@@ -280,7 +280,7 @@ const ManifestManagement: React.FC = () => {
             {manifests.map((manifest, index) => (
               <Link
                 key={manifest.id}
-                to={`/admin/manifests/${manifest.id}/edit?org=${selectedOrgId}`}
+                to={`/admin/manifests-v2/${manifest.id}/edit?org=${selectedOrgId}`}
                 className={styles.manifestItem}
               >
                 {/* 左侧状态指示条 */}
@@ -338,13 +338,15 @@ const ManifestManagement: React.FC = () => {
                           key: 'edit',
                           icon: <EditOutlined />,
                           label: 'Edit',
-                          onClick: () => navigate(`/admin/manifests/${manifest.id}/edit?org=${selectedOrgId}`),
+                          onClick: () => navigate(`/admin/manifests-v2/${manifest.id}/edit?org=${selectedOrgId}`),
                         },
                         {
                           key: 'deploy',
                           icon: <RocketOutlined />,
                           label: 'Deploy',
-                          onClick: () => navigate(`/admin/manifests/${manifest.id}/deploy?org=${selectedOrgId}`),
+                          // 新版部署在编辑器内的"部署到 Workspace"弹窗中完成,
+                          // 这里直接进 v2 编辑器,用户在编辑器内点按钮触发部署
+                          onClick: () => navigate(`/admin/manifests-v2/${manifest.id}/edit?org=${selectedOrgId}`),
                         },
                         {
                           key: 'export',

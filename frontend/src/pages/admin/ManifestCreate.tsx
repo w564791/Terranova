@@ -100,7 +100,7 @@ const ManifestCreate: React.FC = () => {
       const manifest = await importManifestHCL(orgId, hclContent, values.name);
       toast.success(`导入成功，已解析 Manifest`);
       // 跳转到编辑页面
-      navigate(`/admin/manifests/${manifest.id}/edit?org=${orgId}`);
+      navigate(`/admin/manifests-v2/${manifest.id}/edit?org=${orgId}`);
     } catch (error: any) {
       toast.error('导入失败: ' + (error.message || '未知错误'));
     } finally {
@@ -338,7 +338,7 @@ module "ec2" {
                       const manifest = await importManifestJSON(orgId, jsonContent, values.name);
                       toast.success(`导入成功，已恢复 Manifest 画布数据`);
                       // 跳转到编辑页面
-                      navigate(`/admin/manifests/${manifest.id}/edit?org=${orgId}`);
+                      navigate(`/admin/manifests-v2/${manifest.id}/edit?org=${orgId}`);
                     } catch (error: any) {
                       toast.error('导入失败: ' + (error.message || '未知错误'));
                     } finally {
