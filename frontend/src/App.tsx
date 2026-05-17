@@ -62,6 +62,7 @@ import PlatformConfig from './pages/admin/PlatformConfig';
 import ManifestManagement from './pages/admin/ManifestManagement';
 import ManifestCreate from './pages/admin/ManifestCreate';
 import ManifestEditor from './pages/admin/ManifestEditor';
+import ManifestEditorV2 from './pages/admin/ManifestEditorV2/ManifestEditorV2';
 import ManifestDeploy from './pages/admin/ManifestDeploy';
 import IAMLayout from './components/IAMLayout';
 import SwaggerUI from './pages/SwaggerUI';
@@ -197,6 +198,18 @@ const App: FC = () => {
               <Route path="/admin/manifests/:id/edit" element={
                 <ProtectedRoute>
                   <ManifestEditor />
+                </ProtectedRoute>
+              } />
+
+              {/* Manifest 编辑器 v2 (vscode-api,B2 模式) - 重构中,先临时路由用于 sanity */}
+              <Route path="/admin/manifests-v2/:id/edit" element={
+                <ProtectedRoute>
+                  <ManifestEditorV2 />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/manifests-v2/_sandbox" element={
+                <ProtectedRoute>
+                  <ManifestEditorV2 />
                 </ProtectedRoute>
               } />
               
