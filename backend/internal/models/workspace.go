@@ -271,6 +271,11 @@ type Workspace struct {
 	CMDBSyncStartedAt   *time.Time `json:"cmdb_sync_started_at"`                                      // 同步开始时间
 	CMDBSyncCompletedAt *time.Time `json:"cmdb_sync_completed_at"`                                    // 同步完成时间
 
+	// Manifest 软链接(workspace 装了 manifest 时三列同生同死;一致性 CHECK 见 migration)
+	ManifestDeploymentID *string `json:"manifest_deployment_id,omitempty" gorm:"type:varchar(36);index"` // 关联 manifest_deployments.id
+	ManifestActiveTag    *string `json:"manifest_active_tag,omitempty" gorm:"type:varchar(50)"`          // 当前激活的 vX.Y.Z
+	ManifestSubpath      *string `json:"manifest_subpath,omitempty" gorm:"type:varchar(512)"`            // terraform 执行子目录,空 = manifest 根
+
 	// 关联
 	AgentPoolID        *uint                 `json:"agent_pool_id" gorm:"index"`                    // Agent Pool ID (deprecated, use CurrentPoolID)
 	CurrentPoolID      *string               `json:"current_pool_id" gorm:"type:varchar(50);index"` // Current Pool ID (pool-level authorization)

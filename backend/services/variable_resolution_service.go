@@ -142,7 +142,25 @@ func (s *VariableResolutionService) ResolveDisplay(workspaceID string) ([]Effect
 // ResolveExecution returns final effective variables as []WorkspaceVariable with FULL values (including sensitive).
 // Used by execution path (LocalDataAccessor) — NEVER mask values here.
 func (s *VariableResolutionService) ResolveExecution(workspaceID string) ([]models.WorkspaceVariable, error) {
-	candidates, err := s.collectAllCandidates(workspaceID)
+	return s.ResolveExecutionWithExtra(workspaceID, nil, nil)
+}
+
+// ResolveExecutionWithExtra 在常规优先级链基础上,把 manifest deployment 选定的 varset 与
+// variable_overrides 注入。优先级:
+//
+//	低 → global varset → project varset → workspace-attached varset
+//	→ deployment varset (extraVarsetIDs,数组顺序即 priority 从低到高)
+//	→ workspace own variable
+//	→ deployment variable_overrides (overrides,最高)
+//
+// extraVarsetIDs:已按 priority ASC 排序好的 varset id 列表
+// overrides: deployment 的 variable_overrides(扁平 key=value),不含敏感值
+func (s *VariableResolutionService) ResolveExecutionWithExtra(
+	workspaceID string,
+	extraVarsetIDs []string,
+	overrides map[string]string,
+) ([]models.WorkspaceVariable, error) {
+	candidates, err := s.collectAllCandidatesWithExtra(workspaceID, extraVarsetIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +177,7 @@ func (s *VariableResolutionService) ResolveExecution(workspaceID string) ([]mode
 			VariableID:   c.VariableID,
 			WorkspaceID:  workspaceID,
 			Key:          c.Key,
-			Value:        c.Value, // Full value, never masked
+			Value:        c.Value,
 			VariableType: c.VariableType,
 			ValueFormat:  c.ValueFormat,
 			Sensitive:    c.Sensitive,
@@ -167,7 +185,56 @@ func (s *VariableResolutionService) ResolveExecution(workspaceID string) ([]mode
 			Version:      c.Version,
 		})
 	}
+
+	// overrides 最后注入,直接覆盖同 key
+	for k, v := range overrides {
+		// overrides 不存敏感值(spec §11.3),按 terraform 类型归类用 Terraform
+		// 已存在则覆盖,不存在则追加
+		found := false
+		for i := range result {
+			if result[i].Key == k {
+				result[i].Value = v
+				result[i].Sensitive = false
+				result[i].VariableID = "override-" + k
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, models.WorkspaceVariable{
+				VariableID:   "override-" + k,
+				WorkspaceID:  workspaceID,
+				Key:          k,
+				Value:        v,
+				VariableType: models.VariableTypeTerraform,
+				Sensitive:    false,
+			})
+		}
+	}
+
 	return result, nil
+}
+
+// ResolveDisplayWithExtra 与 ResolveDisplay 类似,但接受 manifest deployment 注入的
+// extraVarsetIDs 与 overrides。敏感值仍然 mask。
+func (s *VariableResolutionService) ResolveDisplayWithExtra(
+	workspaceID string,
+	extraVarsetIDs []string,
+	overrides map[string]string,
+) (map[string]string, error) {
+	full, err := s.ResolveExecutionWithExtra(workspaceID, extraVarsetIDs, overrides)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(full))
+	for _, v := range full {
+		if v.Sensitive {
+			out[v.Key] = ""
+			continue
+		}
+		out[v.Key] = v.Value
+	}
+	return out, nil
 }
 
 // ResolveFlat returns only the final effective variables as key->value map, filtered by variable type.
@@ -190,6 +257,14 @@ func (s *VariableResolutionService) ResolveFlat(workspaceID string, varType mode
 
 // collectAllCandidates collects variables from all layers in priority order (low to high).
 func (s *VariableResolutionService) collectAllCandidates(workspaceID string) ([]variableCandidate, error) {
+	return s.collectAllCandidatesWithExtra(workspaceID, nil)
+}
+
+// collectAllCandidatesWithExtra 在原优先级链中,在 workspace-attached 与 workspace own 之间
+// 插入 manifest deployment 选定的 varset (extraVarsetIDs)。
+func (s *VariableResolutionService) collectAllCandidatesWithExtra(
+	workspaceID string, extraVarsetIDs []string,
+) ([]variableCandidate, error) {
 	var candidates []variableCandidate
 
 	// Step 1: Global variable sets
@@ -228,6 +303,15 @@ func (s *VariableResolutionService) collectAllCandidates(workspaceID string) ([]
 	}
 	candidates = append(candidates, wsCandidates...)
 
+	// Step 4.5 (新): manifest deployment 选定的 varsets
+	if len(extraVarsetIDs) > 0 {
+		extraCandidates, err := s.collectExtraVarsets(extraVarsetIDs)
+		if err != nil {
+			return nil, fmt.Errorf("collecting deployment varsets: %w", err)
+		}
+		candidates = append(candidates, extraCandidates...)
+	}
+
 	// Step 5: Workspace's own variables
 	ownCandidates, err := s.collectWorkspaceOwnVariables(workspaceID)
 	if err != nil {
@@ -236,6 +320,52 @@ func (s *VariableResolutionService) collectAllCandidates(workspaceID string) ([]
 	candidates = append(candidates, ownCandidates...)
 
 	return candidates, nil
+}
+
+// collectExtraVarsets 加载指定 varset 列表的变量,按入参顺序压栈
+// (调用方按 priority ASC 排序传入,数字大者最后压栈,后续覆盖语义自然成立)
+func (s *VariableResolutionService) collectExtraVarsets(varsetIDs []string) ([]variableCandidate, error) {
+	if len(varsetIDs) == 0 {
+		return nil, nil
+	}
+	var varsets []models.VariableSet
+	if err := s.db.Where("varset_id IN ? AND is_deleted = ?", varsetIDs, false).
+		Find(&varsets).Error; err != nil {
+		return nil, err
+	}
+	// 转 map 便于按入参顺序遍历
+	vsByID := make(map[string]models.VariableSet, len(varsets))
+	for _, vs := range varsets {
+		vsByID[vs.VarsetID] = vs
+	}
+	varsMap, err := s.batchLoadVarsetVariables(varsetIDs)
+	if err != nil {
+		return nil, err
+	}
+	var out []variableCandidate
+	for _, id := range varsetIDs {
+		vs, ok := vsByID[id]
+		if !ok {
+			continue
+		}
+		for _, v := range varsMap[id] {
+			out = append(out, variableCandidate{
+				VariableID:   v.VariableID,
+				Key:          v.Key,
+				Value:        v.Value,
+				Version:      v.Version,
+				VariableType: v.VariableType,
+				ValueFormat:  v.ValueFormat,
+				Sensitive:    v.Sensitive,
+				Description:  v.Description,
+				SourceType:   "varset",
+				SourceID:     vs.VarsetID,
+				SourceName:   vs.Name,
+				ScopeLevel:   "manifest_deployment",
+			})
+		}
+	}
+	return out, nil
 }
 
 // collectGlobalVarsets loads global variable sets and their active variables.

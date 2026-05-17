@@ -441,6 +441,17 @@ func (a *RemoteDataAccessor) ParsePlanChanges(taskID uint, planOutput string) er
 }
 
 // ============================================================================
+// Manifest 相关
+// ============================================================================
+
+// GetManifestFilesByTag Agent 模式占位:由 platform 通过 GetTaskData 把 manifest_files 一次性
+// 下发到 Agent 节点工作目录,Agent 模式不再单独查询。返回空切片,executor 在分支 2 通过
+// stagedManifestFiles 字段读取。
+func (a *RemoteDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error) {
+	return nil, fmt.Errorf("GetManifestFilesByTag not supported in remote mode; use GetTaskData payload instead")
+}
+
+// ============================================================================
 // Transaction 支持
 // ============================================================================
 

@@ -204,6 +204,63 @@ func (s *TerraformExecutor) CleanupWorkspace(workDir string) error {
 // 配置文件生成
 // ============================================================================
 
+// workspaceUsesManifest 判定 workspace 是否处于 manifest-managed 状态
+func (s *TerraformExecutor) workspaceUsesManifest(workspace *models.Workspace) bool {
+	return workspace != nil &&
+		workspace.ManifestDeploymentID != nil && *workspace.ManifestDeploymentID != "" &&
+		workspace.ManifestActiveTag != nil && *workspace.ManifestActiveTag != ""
+}
+
+// writeManifestFiles 把 manifest_files 全量落盘到 workDir,保留目录结构。
+// 任务执行时 cd 到 subpath (在 RunDir 中处理),terraform 自然解析相对引用。
+func (s *TerraformExecutor) writeManifestFiles(workspace *models.Workspace, workDir string) error {
+	files, err := s.dataAccessor.GetManifestFilesByTag(*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
+	if err != nil {
+		return fmt.Errorf("load manifest files: %w", err)
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no manifest files found for deployment=%s tag=%s",
+			*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
+	}
+	for _, f := range files {
+		target := filepath.Join(workDir, f.Path)
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
+		}
+		if err := os.WriteFile(target, f.Content, 0644); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+	}
+	log.Printf("[manifest] wrote %d files to %s (deployment=%s, tag=%s, subpath=%s)",
+		len(files), workDir,
+		*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag,
+		safeStringPtr(workspace.ManifestSubpath))
+	return nil
+}
+
+// ResolveRunDir 任务执行时调用,返回 terraform 实际执行的目录(workDir + subpath)
+// 非 manifest-managed workspace 直接返回 workDir
+//
+// TODO(PR1.5):本 PR 仅落盘 manifest_files 到 workDir,subpath 切换工作目录尚未接入
+// 6 处 cmd.Dir 调用点。当 manifest 内容只在根目录时(默认),不影响。后续在独立 PR
+// 把 cmd.Dir 全部替换为 ResolveRunDir(workspace, workDir)。
+func (s *TerraformExecutor) ResolveRunDir(workspace *models.Workspace, workDir string) string {
+	if !s.workspaceUsesManifest(workspace) {
+		return workDir
+	}
+	if workspace.ManifestSubpath == nil || *workspace.ManifestSubpath == "" {
+		return workDir
+	}
+	return filepath.Join(workDir, *workspace.ManifestSubpath)
+}
+
+func safeStringPtr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 // GenerateConfigFiles 生成所有配置文件
 func (s *TerraformExecutor) GenerateConfigFiles(
 	workspace *models.Workspace,
@@ -216,15 +273,21 @@ func (s *TerraformExecutor) GenerateConfigFiles(
 		}
 	}
 
-	// 1. 生成 main.tf.json
-	// 优先从资源聚合生成，如果没有资源则使用workspace.TFCode
-	mainTF, err := s.generateMainTF(workspace)
-	if err != nil {
-		return fmt.Errorf("failed to generate main.tf: %w", err)
-	}
-
-	if err := s.writeJSONFile(workDir, "main.tf.json", mainTF); err != nil {
-		return fmt.Errorf("failed to write main.tf.json: %w", err)
+	// 1. 生成 main.tf.json (或 manifest 路径直接落盘 .tf 文件)
+	if s.workspaceUsesManifest(workspace) {
+		// Manifest 路径(分支 2):全量落盘 manifest_files,跳过 main.tf.json 聚合
+		if err := s.writeManifestFiles(workspace, workDir); err != nil {
+			return fmt.Errorf("failed to write manifest files: %w", err)
+		}
+	} else {
+		// 原有路径(分支 3):从 workspace_resources 聚合 main.tf.json
+		mainTF, err := s.generateMainTF(workspace)
+		if err != nil {
+			return fmt.Errorf("failed to generate main.tf: %w", err)
+		}
+		if err := s.writeJSONFile(workDir, "main.tf.json", mainTF); err != nil {
+			return fmt.Errorf("failed to write main.tf.json: %w", err)
+		}
 	}
 
 	// 2. 生成 provider.tf.json

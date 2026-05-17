@@ -20,6 +20,10 @@ func RegisterManifestRoutes(r *gin.RouterGroup, db *gorm.DB, queueManager TaskQu
 		manifestHandler.SetQueueManager(queueManager)
 	}
 
+	// ========== 新版 manifest (VS Code Web 工作区,软链接架构) ==========
+	registerManifestV2Routes(r, db, iamMiddleware)
+	// =================================================================
+
 	// Organization 级别的 Manifest 路由 - 使用SYSTEM_SETTINGS权限
 	orgManifests := r.Group("/organizations/:org_id/manifests")
 	orgManifests.Use(middleware.JWTAuth())
@@ -117,4 +121,113 @@ func RegisterManifestRoutes(r *gin.RouterGroup, db *gorm.DB, queueManager TaskQu
 
 	// 注意：Workspace 视角的 Manifest 路由已在 router_workspace.go 中注册
 	// 这里不再重复注册，避免路由冲突
+}
+
+// registerManifestV2Routes 注册 manifest 重构后的新版路由
+//
+//	/organizations/:org_id/manifests/:id/files                    草稿与版本文件 CRUD
+//	/organizations/:org_id/manifests/:id/files/*path
+//	/organizations/:org_id/manifests/:id/draft/_reset_from        重置草稿到指定 published 版本
+//	/organizations/:org_id/manifests/:id/draft/_export            导出当前用户草稿为 zip
+//	/organizations/:org_id/manifests/:id/v2/versions              新版本列表 / 发布
+//	/organizations/:org_id/manifests/:id/v2/versions/:version_id  版本详情/diff/zip 导出
+//	/organizations/:org_id/manifests/:id/v2/deployments           新部署 install/upgrade/uninstall
+//	/organizations/:org_id/manifests/:id/v2/deployments/...
+//
+// 新版路由暂用 /v2 前缀避免与旧 manifest_handler 注册的路由冲突;PR4 切换时去掉前缀。
+// 文件路径与 draft 路由因旧 handler 没有同名,直接注册不冲突。
+func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
+	filesH := handlers.NewManifestFilesHandler(db)
+	versionsH := handlers.NewManifestVersionsHandler(db)
+	deploysH := handlers.NewManifestDeploymentsV2Handler(db)
+
+	g := r.Group("/organizations/:org_id/manifests/:id")
+	g.Use(middleware.JWTAuth())
+	{
+		// === 文件 CRUD (草稿区,作用于当前用户私有副本) ===
+		g.GET("/files",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			filesH.ListFiles,
+		)
+		g.GET("/files/*path",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			filesH.ReadFile,
+		)
+		g.PUT("/files/*path",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			middleware.LimitRequestBodySize(handlers.ManifestMaxFileSize),
+			filesH.PutFile,
+		)
+		g.DELETE("/files/*path",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			filesH.DeleteFile,
+		)
+		g.POST("/files/_move",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			filesH.MoveFile,
+		)
+		g.POST("/draft/_reset_from",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			filesH.ResetDraftFromVersion,
+		)
+		g.POST("/draft/_export",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			filesH.ExportDraft,
+		)
+
+		// === 版本(新设计:仅读 + 发布;旧版本走老 manifest_handler 直至 PR4) ===
+		g.GET("/v2/versions",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			versionsH.ListVersions,
+		)
+		g.GET("/v2/versions/:version_id",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			versionsH.GetVersion,
+		)
+		g.POST("/v2/versions",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			versionsH.PublishVersion,
+		)
+		g.GET("/v2/versions/:version_id/diff",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			versionsH.DiffVersions,
+		)
+		g.POST("/v2/versions/:version_id/files/_export",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			versionsH.ExportVersion,
+		)
+
+		// === 部署(新设计 install/upgrade/uninstall,纯元信息) ===
+		g.GET("/v2/deployments",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			deploysH.ListDeployments,
+		)
+		g.GET("/v2/deployments/:deployment_id",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			deploysH.GetDeployment,
+		)
+		g.POST("/v2/deployments/install",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			deploysH.Install,
+		)
+		g.POST("/v2/deployments/:deployment_id/upgrade",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			deploysH.Upgrade,
+		)
+		g.POST("/v2/deployments/:deployment_id/uninstall",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			deploysH.Uninstall,
+		)
+		g.POST("/v2/deployments/:deployment_id/variable-preview",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			deploysH.VariablePreview,
+		)
+	}
+
+	// === Variable Set 反向关联 (用于 varset 详情页 "被以下 deployment 使用") ===
+	r.GET("/variable-sets/:varset_id/manifest-deployments",
+		middleware.JWTAuth(),
+		iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+		deploysH.VarsetReverseLookup,
+	)
 }

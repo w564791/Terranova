@@ -35,12 +35,13 @@ type ManifestVersion struct {
 	ID         string          `json:"id" gorm:"primaryKey;size:36"`              // 格式: mfv-{ulid}
 	ManifestID string          `json:"manifest_id" gorm:"size:36;not null;index"` // 所属 Manifest
 	Version    string          `json:"version" gorm:"size:50;not null"`           // 版本号，如 v1.0.0, draft
-	CanvasData json.RawMessage `json:"canvas_data" gorm:"type:jsonb;not null"`    // 画布数据
-	Nodes      json.RawMessage `json:"nodes" gorm:"type:jsonb;not null"`          // 节点配置
-	Edges      json.RawMessage `json:"edges" gorm:"type:jsonb;not null"`          // 连接关系
-	Variables  json.RawMessage `json:"variables" gorm:"type:jsonb"`               // 可配置变量
-	HCLContent string          `json:"hcl_content" gorm:"type:text"`              // 生成的 HCL
-	IsDraft    bool            `json:"is_draft" gorm:"default:true;index"`        // 是否为草稿
+	CanvasData json.RawMessage `json:"canvas_data,omitempty" gorm:"type:jsonb"`   // 画布数据(旧字段,PR4 drop)
+	Nodes      json.RawMessage `json:"nodes,omitempty" gorm:"type:jsonb"`         // 节点配置(旧字段,PR4 drop)
+	Edges      json.RawMessage `json:"edges,omitempty" gorm:"type:jsonb"`         // 连接关系(旧字段,PR4 drop)
+	Variables  json.RawMessage `json:"variables" gorm:"type:jsonb"`               // 该版本声明的 Terraform input variables 元信息(.tf 静态解析)
+	HCLContent string          `json:"hcl_content,omitempty" gorm:"type:text"`    // 生成的 HCL(旧字段,PR4 drop)
+	Changelog  string          `json:"changelog" gorm:"type:text"`                // 发布说明
+	IsDraft    bool            `json:"is_draft" gorm:"default:true;index"`        // 是否为草稿(新设计统一靠 manifest_files.version_id IS NULL,此字段 PR4 drop)
 	CreatedBy  string          `json:"created_by" gorm:"size:20;not null"`        // 创建者
 	CreatedAt  time.Time       `json:"created_at" gorm:"autoCreateTime"`          // 创建时间
 
@@ -54,17 +55,17 @@ func (ManifestVersion) TableName() string {
 
 // ManifestDeployment Manifest 部署记录
 type ManifestDeployment struct {
-	ID                string          `json:"id" gorm:"primaryKey;size:36"`                // 格式: mfd-{ulid}
-	ManifestID        string          `json:"manifest_id" gorm:"size:36;not null;index"`   // 所属 Manifest
-	VersionID         string          `json:"version_id" gorm:"size:36;not null"`          // 部署的版本
-	WorkspaceID       int             `json:"workspace_id" gorm:"not null;index"`          // 目标 Workspace
-	VariableOverrides json.RawMessage `json:"variable_overrides" gorm:"type:jsonb"`        // 变量覆盖
-	Status            string          `json:"status" gorm:"size:20;default:pending;index"` // pending, deploying, deployed, failed
-	LastTaskID        *int            `json:"last_task_id" gorm:""`                        // 最后一次部署的任务 ID
-	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`         // 部署者
-	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                         // 部署时间
-	CreatedAt         time.Time       `json:"created_at" gorm:"autoCreateTime"`            // 创建时间
-	UpdatedAt         time.Time       `json:"updated_at" gorm:"autoUpdateTime"`            // 更新时间
+	ID                string          `json:"id" gorm:"primaryKey;size:36"`                              // 格式: mfd-{ulid}
+	ManifestID        string          `json:"manifest_id" gorm:"size:36;not null;index"`                 // 所属 Manifest
+	VersionID         string          `json:"version_id" gorm:"size:36;not null"`                        // 部署的版本
+	WorkspaceID       string          `json:"workspace_id" gorm:"type:varchar(50);not null;index"`       // 目标 Workspace 语义化ID(对齐全平台)
+	VariableOverrides json.RawMessage `json:"variable_overrides" gorm:"type:jsonb"`                      // 应急变量覆盖(扁平 key->string,优先级最高)
+	Status            string          `json:"status" gorm:"size:20;default:active;index"`                // active, uninstalled
+	LastTaskID        *int            `json:"last_task_id" gorm:""`                                      // 最后一次部署的任务 ID
+	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`                       // 部署者
+	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                                       // 部署时间
+	CreatedAt         time.Time       `json:"created_at" gorm:"autoCreateTime"`                          // 创建时间
+	UpdatedAt         time.Time       `json:"updated_at" gorm:"autoUpdateTime"`                          // 更新时间
 
 	// 关联
 	Version   *ManifestVersion             `json:"version,omitempty" gorm:"foreignKey:VersionID"`
@@ -200,7 +201,7 @@ type PublishManifestVersionRequest struct {
 // CreateManifestDeploymentRequest 创建部署请求
 type CreateManifestDeploymentRequest struct {
 	VersionID         string          `json:"version_id" binding:"required"`
-	WorkspaceID       int             `json:"workspace_id" binding:"required"`
+	WorkspaceID       string          `json:"workspace_id" binding:"required"` // 语义化ID ws-xxx
 	VariableOverrides json.RawMessage `json:"variable_overrides"`
 	AutoApply         bool            `json:"auto_apply"` // 是否自动 Apply
 	PlanOnly          bool            `json:"plan_only"`  // 仅 Plan
@@ -249,7 +250,11 @@ const (
 	ManifestStatusPublished = "published"
 	ManifestStatusArchived  = "archived"
 
-	// 部署状态
+	// 部署状态(新设计)
+	DeploymentStatusActive      = "active"
+	DeploymentStatusUninstalled = "uninstalled"
+
+	// 部署状态(旧画布,兼容期保留;新代码不再写入)
 	DeploymentStatusPending   = "pending"
 	DeploymentStatusDeploying = "deploying"
 	DeploymentStatusDeployed  = "deployed"

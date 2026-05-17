@@ -51,6 +51,9 @@ type DataAccessor interface {
 	// Plan parsing
 	ParsePlanChanges(taskID uint, planOutput string) error
 
+	// Manifest 相关 (新设计 manifest_files 软链接架构)
+	GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error)
+
 	// Transaction 支持
 	BeginTransaction() (DataAccessor, error)
 	Commit() error

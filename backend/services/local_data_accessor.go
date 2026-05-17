@@ -544,6 +544,24 @@ func (a *LocalDataAccessor) ParsePlanChanges(taskID uint, planOutput string) err
 }
 
 // ============================================================================
+// Manifest 相关
+// ============================================================================
+
+// GetManifestFilesByTag 通过 deployment 与 tag 拉取该 manifest 版本的全部文件
+func (a *LocalDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error) {
+	var files []models.ManifestFile
+	err := a.getDB().Raw(`
+		SELECT mf.*
+		  FROM manifest_files mf
+		  JOIN manifest_versions mv ON mv.id = mf.version_id
+		  JOIN manifest_deployments md ON md.version_id = mv.id
+		 WHERE md.id = ? AND mv.version = ?
+		 ORDER BY mf.path ASC
+	`, deploymentID, tag).Scan(&files).Error
+	return files, err
+}
+
+// ============================================================================
 // Transaction 支持
 // ============================================================================
 
