@@ -66,6 +66,26 @@ export default defineConfig({
 
   build: {
     target: 'esnext',
+    chunkSizeWarningLimit: 5000, // monaco-vscode-api 主 chunk 较大,提高警告阈值
+    rollupOptions: {
+      output: {
+        // 把 monaco / vscode-api / antd 拆成独立 chunk:
+        //  - 减小单 chunk 体积, 让 rollup 不一次性持有所有 AST,降低 OOM 风险
+        //  - 浏览器可并行下载, 缓存命中率更高(只改业务代码不重打 monaco)
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@codingame/monaco-vscode')) return 'vscode-api'
+            if (id.includes('vscode-textmate') || id.includes('vscode-oniguruma')) return 'vscode-textmate'
+            if (id.includes('monaco-editor')) return 'monaco-editor'
+            if (id.includes('@vscode/codicons')) return 'codicons'
+            if (id.includes('antd') || id.includes('@ant-design')) return 'antd'
+            if (id.includes('react-dom')) return 'react-dom'
+            if (id.includes('@xyflow/react')) return 'xyflow'
+          }
+          return undefined
+        },
+      },
+    },
   },
 
   server: {
