@@ -444,6 +444,75 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"variables": values})
 }
 
+// GetWorkspaceManifestSummary 给 workspace 资源页/banner 用的轻量摘要
+// GET /workspaces/:workspace_id/manifest-summary
+//
+// workspace 视角下,active manifest 软链接已在 workspaces 表;这个端点把
+// deployment 与 manifest 的关键展示字段一次性返回,避免前端做 N 次反查。
+func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Context) {
+	workspaceID := c.Param("workspace_id")
+
+	type result struct {
+		WorkspaceID    string  `json:"workspace_id"`
+		HasManifest    bool    `json:"has_manifest"`
+		DeploymentID   string  `json:"deployment_id,omitempty"`
+		ActiveTag      string  `json:"active_tag,omitempty"`
+		Subpath        *string `json:"subpath,omitempty"`
+		ManifestID     string  `json:"manifest_id,omitempty"`
+		ManifestName   string  `json:"manifest_name,omitempty"`
+		OrgID          int     `json:"org_id,omitempty"`
+		Status         string  `json:"status,omitempty"`
+	}
+	out := result{WorkspaceID: workspaceID, HasManifest: false}
+
+	// 1. 拿 workspace 软链接
+	type wsRow struct {
+		ManifestDeploymentID *string
+		ManifestActiveTag    *string
+		ManifestSubpath      *string
+	}
+	var ws wsRow
+	if err := h.db.Table("workspaces").
+		Select("manifest_deployment_id, manifest_active_tag, manifest_subpath").
+		Where("workspace_id = ?", workspaceID).
+		Take(&ws).Error; err != nil {
+		c.JSON(http.StatusOK, out) // workspace 不存在或无字段, 静默返回 has_manifest=false
+		return
+	}
+
+	if ws.ManifestDeploymentID == nil || *ws.ManifestDeploymentID == "" {
+		c.JSON(http.StatusOK, out)
+		return
+	}
+	out.HasManifest = true
+	out.DeploymentID = *ws.ManifestDeploymentID
+	if ws.ManifestActiveTag != nil {
+		out.ActiveTag = *ws.ManifestActiveTag
+	}
+	out.Subpath = ws.ManifestSubpath
+
+	// 2. JOIN manifest_deployments → manifests 拿 manifest 名字与 org
+	type joinRow struct {
+		ManifestID   string
+		ManifestName string
+		OrgID        int
+		Status       string
+	}
+	var jr joinRow
+	if err := h.db.Table("manifest_deployments md").
+		Select("md.manifest_id, m.name as manifest_name, m.organization_id as org_id, md.status").
+		Joins("JOIN manifests m ON m.id = md.manifest_id").
+		Where("md.id = ?", *ws.ManifestDeploymentID).
+		Take(&jr).Error; err == nil {
+		out.ManifestID = jr.ManifestID
+		out.ManifestName = jr.ManifestName
+		out.OrgID = jr.OrgID
+		out.Status = jr.Status
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
 // VarsetReverseLookup 列出使用某 varset 的 active deployment
 // GET /variable-sets/:varset_id/manifest-deployments
 func (h *ManifestDeploymentsV2Handler) VarsetReverseLookup(c *gin.Context) {

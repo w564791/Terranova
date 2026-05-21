@@ -45,6 +45,10 @@ export interface Workspace {
   };
   ui_mode?: 'console' | 'structured';
   show_unchanged_resources?: boolean;
+  // Manifest 软链接 (PR1.5 后端字段)
+  manifest_deployment_id?: string | null;
+  manifest_active_tag?: string | null;
+  manifest_subpath?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -231,6 +231,12 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 		deploysH.VarsetReverseLookup,
 	)
 
+	// === Workspace 视角的 manifest 摘要 (资源页徽章 / 顶部 banner 共用) ===
+	r.GET("/workspaces/:workspace_id/manifest-summary",
+		middleware.JWTAuth(),
+		deploysH.GetWorkspaceManifestSummary,
+	)
+
 	// === Manifest 编辑器 IntelliSense 用的只读 module/demo 摘要 (spec §7.6) ===
 	editorH := handlers.NewManifestEditorHandler(db)
 	editor := r.Group("/manifest-editor")
