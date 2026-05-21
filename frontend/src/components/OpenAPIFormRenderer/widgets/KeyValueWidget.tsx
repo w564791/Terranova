@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState, useRef } from 'react';
 import { Form, Input, Button, Space, Tag, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 
 interface KeyValuePair {
   key: string;

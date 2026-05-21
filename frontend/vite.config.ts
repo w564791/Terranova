@@ -85,7 +85,6 @@ export default defineConfig({
           if (id.includes('vscode-textmate') || id.includes('vscode-oniguruma')) return 'vscode-textmate'
           if (id.includes('monaco-editor')) return 'monaco-editor'
           if (id.includes('@vscode/codicons')) return 'codicons'
-          if (id.includes('@xyflow/react')) return 'xyflow'
           // antd / @ant-design 不再独立拆,跟 React 留同 chunk 避免 hoisting 顺序坑
           return undefined
         },

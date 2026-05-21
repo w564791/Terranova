@@ -28,7 +28,6 @@
     "@types/react-datepicker": "^6.2.0",
     "@types/react-resizable": "^3.0.8",
     "@vscode/codicons": "^0.0.45",
-    "@xyflow/react": "^12.10.0",
     "antd": "^5.27.4",
     "axios": "^1.12.2",
     "jszip": "^3.10.1",

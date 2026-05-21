@@ -17,7 +17,6 @@ import {
   DeleteOutlined,
   RocketOutlined,
   ExportOutlined,
-  ImportOutlined,
   MoreOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -225,13 +224,6 @@ const ManifestManagement: React.FC = () => {
           )}
         </div>
         <div className={styles.headerRight}>
-          <Button
-            icon={<ImportOutlined />}
-            onClick={() => navigate(`/admin/manifests/new?org=${selectedOrgId}&tab=import`)}
-            disabled={!selectedOrgId}
-          >
-            Import HCL
-          </Button>
           <Button
             type="primary"
             icon={<PlusOutlined />}

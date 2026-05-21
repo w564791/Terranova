@@ -3,7 +3,7 @@ import { Form, AutoComplete, Select, Spin, Tag, Tooltip, Input } from 'antd';
 import { DatabaseOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { cmdbService, type ResourceSearchResult } from '../../../services/cmdb';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 
 // CMDB 字段定义
 const CMDB_FIELD_LABELS: Record<string, string> = {

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { Form, Input, Tag, Tooltip } from 'antd';
 import { LinkOutlined, WarningOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 
 const { TextArea } = Input;
 

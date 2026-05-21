@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Form, InputNumber, Input, Tag, Tooltip, Button, Space } from 'antd';
 import { LinkOutlined, SwapOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 
 /**
  * NumberWidget - 数字输入组件
