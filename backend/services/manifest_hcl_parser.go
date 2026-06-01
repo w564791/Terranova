@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // ManifestResourceRef 浅 parse 抽出的 resource/module 引用
@@ -82,6 +83,117 @@ func ParseManifestResources(scopeFiles map[string][]byte, subpath string) []Mani
 	}
 
 	return refs
+}
+
+// ManifestVariableMeta 从 variable block 浅 parse 出的 input variable 元信息
+//
+// 平台不维护类型系统(workspace/varset 变量都是 key->value),这里同样不做 cty 求值:
+// TypeRaw / DefaultRaw 仅存 HCL 表达式的原始源码字符串供 UI 展示。
+type ManifestVariableMeta struct {
+	Name        string `json:"name"`                  // 变量名
+	Description string `json:"description,omitempty"` // description = "..." 的字面量
+	Required    bool   `json:"required"`              // 无 default 即 required
+	Sensitive   bool   `json:"sensitive,omitempty"`   // sensitive = true
+	TypeRaw     string `json:"type_raw,omitempty"`    // type 表达式原始源码,如 "string" / "list(string)"
+	DefaultRaw  string `json:"default_raw,omitempty"` // default 表达式原始源码;无 default 则空
+}
+
+// ParseManifestVariables 浅 parse 一组 .tf 文件,提取顶层 variable block 的元信息。
+//
+//   - 仅扫根目录顶层 .tf(与 terraform 默认行为一致,不递归子目录;manifest 发布时
+//     还不知道 deployment 的 subpath,故固定按根目录全部顶层 .tf 取并集)
+//   - type / default 只取原始源码字符串,不做类型求值(复杂表达式也不会解析失败)
+//   - description / sensitive 尝试取字面量,取不到则留默认值
+//   - 半成品 HCL(块未闭合等)skip,不阻塞调用方
+//
+// scopeFiles 是 (path -> raw bytes) 映射,通常对应 manifest_files 拉到的内容。
+func ParseManifestVariables(scopeFiles map[string][]byte) []ManifestVariableMeta {
+	parser := hclparse.NewParser()
+	var metas []ManifestVariableMeta
+	seen := make(map[string]bool) // 同名变量去重(多文件声明只取首个)
+
+	for path, content := range scopeFiles {
+		// 复用 resource 的 scope 规则(根目录顶层 .tf),subpath 传空 = 根目录
+		if !shouldParseForResources(path, "") {
+			continue
+		}
+
+		file, diags := parser.ParseHCL(content, path)
+		if diags.HasErrors() || file == nil {
+			continue
+		}
+
+		schema := &hcl.BodySchema{
+			Blocks: []hcl.BlockHeaderSchema{
+				{Type: "variable", LabelNames: []string{"name"}},
+			},
+		}
+		bodyContent, _, partDiags := file.Body.PartialContent(schema)
+		if partDiags.HasErrors() || bodyContent == nil {
+			continue
+		}
+
+		for _, block := range bodyContent.Blocks {
+			if block.Type != "variable" || len(block.Labels) < 1 {
+				continue
+			}
+			name := block.Labels[0]
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+
+			meta := ManifestVariableMeta{Name: name, Required: true}
+
+			// variable block body 里关心的属性
+			attrSchema := &hcl.BodySchema{
+				Attributes: []hcl.AttributeSchema{
+					{Name: "type"},
+					{Name: "description"},
+					{Name: "default"},
+					{Name: "sensitive"},
+				},
+			}
+			attrContent, _, _ := block.Body.PartialContent(attrSchema)
+			if attrContent == nil {
+				metas = append(metas, meta)
+				continue
+			}
+
+			if a, ok := attrContent.Attributes["type"]; ok {
+				meta.TypeRaw = rawExprSource(content, a.Expr)
+			}
+			if a, ok := attrContent.Attributes["default"]; ok {
+				meta.DefaultRaw = rawExprSource(content, a.Expr)
+				meta.Required = false // 有 default 即非必填
+			}
+			if a, ok := attrContent.Attributes["description"]; ok {
+				if v, vdiags := a.Expr.Value(nil); !vdiags.HasErrors() && v.Type() == cty.String {
+					meta.Description = v.AsString()
+				}
+			}
+			if a, ok := attrContent.Attributes["sensitive"]; ok {
+				if v, vdiags := a.Expr.Value(nil); !vdiags.HasErrors() && v.Type() == cty.Bool {
+					meta.Sensitive = v.True()
+				}
+			}
+
+			metas = append(metas, meta)
+		}
+	}
+
+	return metas
+}
+
+// rawExprSource 用表达式的源码区间从原始内容里切出原文,去掉首尾空白。
+// 取不到(range 越界等)时退回空串。
+func rawExprSource(content []byte, expr hcl.Expression) string {
+	rng := expr.Range()
+	start, end := rng.Start.Byte, rng.End.Byte
+	if start < 0 || end > len(content) || start >= end {
+		return ""
+	}
+	return strings.TrimSpace(string(content[start:end]))
 }
 
 // shouldParseForResources 仅顶层 .tf 文件 (在 subpath 下) 才扫

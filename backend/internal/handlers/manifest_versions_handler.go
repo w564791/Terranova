@@ -3,6 +3,7 @@ package handlers
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"iac-platform/internal/models"
+	"iac-platform/services"
 )
 
 // ManifestVersionsHandler 处理 manifest 版本读 / 发布 / diff / export
@@ -119,7 +121,11 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	}
 
 	newVersionID := generateManifestVersionID()
-	hclParseFailed := false
+
+	// (best-effort) HCL 静态解析提取 input variables 元信息(spec §7.6/§8.2)
+	// 失败不阻塞发布:variablesJSON 留空,前端拿不到提示但发布照常成功。
+	// 只扫 .tf 文件,二进制 / .tfvars 等不参与。
+	variablesJSON, hclParseFailed := extractDraftVariablesJSON(h.db, manifestID, userID)
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 写 manifest_versions
@@ -128,6 +134,7 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 			ManifestID: manifestID,
 			Version:    req.Version,
 			Changelog:  req.Changelog,
+			Variables:  variablesJSON,
 			CreatedBy:  userID,
 			CreatedAt:  time.Now(),
 		}
@@ -146,11 +153,6 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		`, newVersionID, manifestID, userID).Error; err != nil {
 			return err
 		}
-
-		// 3. (best-effort) HCL 静态解析提取 input variables 元信息
-		// 失败不阻塞发布(spec §8.2)
-		// TODO(PR3): 实现 extractVariablesMetadata,把结果写入 v.Variables
-		_ = hclParseFailed
 
 		return nil
 	})
@@ -178,6 +180,37 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		resp["warning"] = "HCL parse failed, variables metadata not extracted"
 	}
 	c.JSON(http.StatusCreated, resp)
+}
+
+// extractDraftVariablesJSON 读当前用户草稿的 .tf 文件,浅 parse variable block,
+// 返回 (variables 元信息 JSON, 是否解析出错)。
+//
+// best-effort 语义:任何一步失败都返回 (nil, true),由调用方决定是否在响应里加 warning,
+// 不阻塞发布。无 variable 声明时返回 ("[]", false)。
+func extractDraftVariablesJSON(db *gorm.DB, manifestID, userID string) (json.RawMessage, bool) {
+	var files []models.ManifestFile
+	if err := db.Select("path, content").
+		Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL", manifestID, userID).
+		Where("path LIKE ?", "%.tf").
+		Find(&files).Error; err != nil {
+		return nil, true
+	}
+
+	scope := make(map[string][]byte, len(files))
+	for _, f := range files {
+		scope[f.Path] = f.Content
+	}
+
+	metas := services.ParseManifestVariables(scope)
+	if metas == nil {
+		metas = []services.ManifestVariableMeta{}
+	}
+
+	raw, err := json.Marshal(metas)
+	if err != nil {
+		return nil, true
+	}
+	return json.RawMessage(raw), false
 }
 
 // ExportVersion 导出某 version 全部文件为 zip

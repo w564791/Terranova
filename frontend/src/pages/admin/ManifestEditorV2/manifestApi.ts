@@ -92,12 +92,23 @@ export async function resetDraftFrom(
 // 版本 / 部署
 // =============================================================================
 
+// manifest 版本声明的 input variable 元信息(发布时由后端浅 parse variable block 得到)
+// 平台不维护类型系统: type_raw / default_raw 是 HCL 表达式原始源码字符串,仅供展示。
+export interface ManifestVariableMeta {
+  name: string
+  description?: string
+  required: boolean
+  sensitive?: boolean
+  type_raw?: string
+  default_raw?: string
+}
+
 export interface ManifestVersion {
   id: string
   manifest_id: string
   version: string
   changelog: string
-  is_draft: boolean
+  variables?: ManifestVariableMeta[] | null
   created_by: string
   created_at: string
 }

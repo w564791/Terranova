@@ -73,6 +73,12 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
     )
   }, [workspaceId, deployments])
 
+  // 选中版本声明的 input variables(发布时静态解析得到),供用户对照该喂哪些变量
+  const selectedVersionVars = useMemo(() => {
+    const v = versions.find((x) => x.id === versionId)
+    return v?.variables ?? []
+  }, [versions, versionId])
+
   const targetMode: 'install' | 'upgrade' | 'foreign' = useMemo(() => {
     if (!workspaceId) return 'install'
     if (activeDeploymentForWs) return 'upgrade'
@@ -218,6 +224,43 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
             placeholder="vX.Y.Z"
             disabled={loading || versions.length === 0}
           />
+          {versionId && selectedVersionVars.length > 0 && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 10px',
+                background: '#fafafa',
+                border: '1px solid #f0f0f0',
+                borderRadius: 4,
+              }}
+            >
+              <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>
+                该版本声明的输入变量{' '}
+                <span style={{ color: '#aaa' }}>
+                  (red = 必填,需由 workspace/varset 提供值)
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {selectedVersionVars.map((v) => (
+                  <Tag
+                    key={v.name}
+                    color={v.required ? 'red' : 'default'}
+                    title={
+                      (v.type_raw ? `type: ${v.type_raw}\n` : '') +
+                      (v.default_raw ? `default: ${v.default_raw}\n` : '') +
+                      (v.description ? `\n${v.description}` : '')
+                    }
+                    style={{ margin: 0 }}
+                  >
+                    {v.name}
+                    {v.sensitive && (
+                      <span style={{ color: '#fa8c16', marginLeft: 4 }}>·敏感</span>
+                    )}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
         </Form.Item>
 
         <Form.Item label="目标 Workspace">
