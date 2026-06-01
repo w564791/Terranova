@@ -31,17 +31,16 @@ func (Manifest) TableName() string {
 }
 
 // ManifestVersion Manifest 版本
+//
+// 新模型下版本只是 manifest_files 快照的元信息行,文件内容存 manifest_files
+// (version_id = 本行 id)。画布相关旧字段 (canvas_data/nodes/edges/hcl_content/is_draft)
+// 已在 PR4 移除。
 type ManifestVersion struct {
 	ID         string          `json:"id" gorm:"primaryKey;size:36"`              // 格式: mfv-{ulid}
 	ManifestID string          `json:"manifest_id" gorm:"size:36;not null;index"` // 所属 Manifest
-	Version    string          `json:"version" gorm:"size:50;not null"`           // 版本号，如 v1.0.0, draft
-	CanvasData json.RawMessage `json:"canvas_data,omitempty" gorm:"type:jsonb"`   // 画布数据(旧字段,PR4 drop)
-	Nodes      json.RawMessage `json:"nodes,omitempty" gorm:"type:jsonb"`         // 节点配置(旧字段,PR4 drop)
-	Edges      json.RawMessage `json:"edges,omitempty" gorm:"type:jsonb"`         // 连接关系(旧字段,PR4 drop)
+	Version    string          `json:"version" gorm:"size:50;not null"`           // 版本号，如 v1.0.0
 	Variables  json.RawMessage `json:"variables" gorm:"type:jsonb"`               // 该版本声明的 Terraform input variables 元信息(.tf 静态解析)
-	HCLContent string          `json:"hcl_content,omitempty" gorm:"type:text"`    // 生成的 HCL(旧字段,PR4 drop)
 	Changelog  string          `json:"changelog" gorm:"type:text"`                // 发布说明
-	IsDraft    bool            `json:"is_draft" gorm:"default:true;index"`        // 是否为草稿(新设计统一靠 manifest_files.version_id IS NULL,此字段 PR4 drop)
 	CreatedBy  string          `json:"created_by" gorm:"size:20;not null"`        // 创建者
 	CreatedAt  time.Time       `json:"created_at" gorm:"autoCreateTime"`          // 创建时间
 
@@ -96,80 +95,6 @@ func (ManifestDeploymentResource) TableName() string {
 	return "manifest_deployment_resources"
 }
 
-// ========== JSONB 数据结构 ==========
-
-// ManifestNode 节点配置
-type ManifestNode struct {
-	ID             string                 `json:"id"`                       // 节点唯一标识
-	Type           string                 `json:"type"`                     // module, variable
-	ModuleID       *int                   `json:"module_id,omitempty"`      // 关联的平台 Module ID
-	IsLinked       bool                   `json:"is_linked"`                // 是否已关联平台 Module
-	LinkStatus     string                 `json:"link_status"`              // linked, unlinked, mismatch
-	ModuleSource   string                 `json:"module_source,omitempty"`  // Module source
-	ModuleVersion  string                 `json:"module_version,omitempty"` // Module 版本
-	InstanceName   string                 `json:"instance_name"`            // 实例名称
-	ResourceName   string                 `json:"resource_name"`            // 资源名称
-	RawSource      string                 `json:"raw_source,omitempty"`     // 原始 source
-	RawVersion     string                 `json:"raw_version,omitempty"`    // 原始 version
-	RawConfig      map[string]interface{} `json:"raw_config,omitempty"`     // 原始配置
-	Position       ManifestNodePosition   `json:"position"`                 // 位置信息
-	Config         map[string]interface{} `json:"config"`                   // 配置参数
-	ConfigComplete bool                   `json:"config_complete"`          // 参数是否完整
-	Ports          []ManifestPort         `json:"ports"`                    // 暴露的端口
-}
-
-// ManifestNodePosition 节点位置
-type ManifestNodePosition struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-// ManifestPort 端口定义
-type ManifestPort struct {
-	ID          string `json:"id"`                    // 端口 ID
-	Type        string `json:"type"`                  // input, output
-	Name        string `json:"name"`                  // 变量名
-	DataType    string `json:"data_type,omitempty"`   // 数据类型
-	Description string `json:"description,omitempty"` // 描述
-}
-
-// ManifestEdge 连接关系
-type ManifestEdge struct {
-	ID         string            `json:"id"`                   // 连接 ID
-	Type       string            `json:"type"`                 // dependency, variable_binding
-	Source     ManifestEdgePoint `json:"source"`               // 源节点
-	Target     ManifestEdgePoint `json:"target"`               // 目标节点
-	Expression string            `json:"expression,omitempty"` // 变量绑定表达式
-}
-
-// ManifestEdgePoint 连接端点
-type ManifestEdgePoint struct {
-	NodeID string `json:"node_id"`           // 节点 ID
-	PortID string `json:"port_id,omitempty"` // 端口 ID
-}
-
-// ManifestVariable 可配置变量
-type ManifestVariable struct {
-	Name        string      `json:"name"`                  // 变量名
-	Type        string      `json:"type"`                  // string, number, bool, list, map
-	Description string      `json:"description,omitempty"` // 描述
-	Default     interface{} `json:"default,omitempty"`     // 默认值
-	Required    bool        `json:"required"`              // 是否必填
-	Sensitive   bool        `json:"sensitive,omitempty"`   // 是否敏感
-}
-
-// ManifestCanvasData 画布数据
-type ManifestCanvasData struct {
-	Viewport ManifestViewport `json:"viewport"` // 视口
-	Zoom     float64          `json:"zoom"`     // 缩放比例
-}
-
-// ManifestViewport 视口
-type ManifestViewport struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
 // ========== 请求/响应结构 ==========
 
 // CreateManifestRequest 创建 Manifest 请求
@@ -183,14 +108,6 @@ type UpdateManifestRequest struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Status      string `json:"status,omitempty"` // draft, published, archived
-}
-
-// SaveManifestVersionRequest 保存版本请求
-type SaveManifestVersionRequest struct {
-	CanvasData json.RawMessage `json:"canvas_data" binding:"required"`
-	Nodes      json.RawMessage `json:"nodes" binding:"required"`
-	Edges      json.RawMessage `json:"edges" binding:"required"`
-	Variables  json.RawMessage `json:"variables"`
 }
 
 // PublishManifestVersionRequest 发布版本请求

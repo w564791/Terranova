@@ -128,7 +128,6 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 			ManifestID: manifestID,
 			Version:    req.Version,
 			Changelog:  req.Changelog,
-			IsDraft:    false,
 			CreatedBy:  userID,
 			CreatedAt:  time.Now(),
 		}

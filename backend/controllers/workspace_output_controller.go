@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -832,79 +831,17 @@ func (c *WorkspaceOutputController) GetAvailableOutputs(ctx *gin.Context) {
 		}
 	}
 
-	// 收集所有 ManifestDeploymentID
-	deploymentIDs := make(map[string]bool)
-	resourceDeploymentMap := make(map[string]string) // resource_id -> deployment_id
-	for _, resource := range resources {
-		if resource.ManifestDeploymentID != nil && *resource.ManifestDeploymentID != "" {
-			deploymentIDs[*resource.ManifestDeploymentID] = true
-			resourceDeploymentMap[resource.ResourceID] = *resource.ManifestDeploymentID
-		}
-	}
-
-	// 获取 ManifestDeploymentResource 和 ManifestDeployment 信息
+	// resource_id -> module info
+	// 新模型下 manifest 部署不再写画布 nodes / manifest_deployment_resources,
+	// 资源到 module 的映射统一从资源版本的 tf_code 里解析 module source 得到。
 	type ResourceModuleInfo struct {
 		ModuleID   uint
 		ModuleName string
 		Schema     *models.Schema
 	}
-	resourceModuleMap := make(map[string]ResourceModuleInfo) // resource_id -> module info
+	resourceModuleMap := make(map[string]ResourceModuleInfo)
 
-	for deploymentID := range deploymentIDs {
-		// 获取部署信息
-		var deployment models.ManifestDeployment
-		if err := c.db.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
-			continue
-		}
-
-		// 获取 ManifestVersion
-		var manifestVersion models.ManifestVersion
-		if err := c.db.Where("id = ?", deployment.VersionID).First(&manifestVersion).Error; err != nil {
-			continue
-		}
-
-		// 解析 ManifestVersion 的 nodes 获取模块信息
-		if manifestVersion.Nodes != nil {
-			var nodesArray []interface{}
-			if err := json.Unmarshal(manifestVersion.Nodes, &nodesArray); err == nil {
-				for _, nodeData := range nodesArray {
-					if nodeMap, ok := nodeData.(map[string]interface{}); ok {
-						nodeID, _ := nodeMap["id"].(string)
-						moduleIDFloat, hasModuleID := nodeMap["module_id"].(float64)
-
-						if hasModuleID && moduleIDFloat > 0 {
-							moduleID := uint(moduleIDFloat)
-
-							// 查找对应的 ManifestDeploymentResource
-							var mdr models.ManifestDeploymentResource
-							if err := c.db.Where("deployment_id = ? AND node_id = ?", deploymentID, nodeID).First(&mdr).Error; err == nil {
-								// 获取模块信息
-								var module models.Module
-								if err := c.db.First(&module, moduleID).Error; err == nil {
-									// 获取模块的活跃schema (优先v2)
-									var schema models.Schema
-									err := c.db.Where("module_id = ? AND status = ?", moduleID, "active").
-										Order("CASE WHEN schema_version = 'v2' THEN 0 ELSE 1 END, created_at DESC").
-										First(&schema).Error
-
-									info := ResourceModuleInfo{
-										ModuleID:   moduleID,
-										ModuleName: module.Name,
-									}
-									if err == nil {
-										info.Schema = &schema
-									}
-									resourceModuleMap[mdr.ResourceID] = info
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 对于没有通过 Manifest 部署的资源，尝试从 tf_code 中提取 module source 并查找对应的 module
+	// 从 tf_code 中提取 module source 并查找对应的 module
 	for _, resource := range resources {
 		// 如果已经有 module 信息，跳过
 		if _, ok := resourceModuleMap[resource.ResourceID]; ok {
