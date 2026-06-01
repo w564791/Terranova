@@ -16,19 +16,16 @@ type TaskQueueManagerInterface interface {
 // RegisterManifestRoutes 注册 Manifest 相关路由
 func RegisterManifestRoutes(r *gin.RouterGroup, db *gorm.DB, queueManager TaskQueueManagerInterface, iamMiddleware *middleware.IAMPermissionMiddleware) {
 	manifestHandler := handlers.NewManifestHandler(db)
-	if queueManager != nil {
-		manifestHandler.SetQueueManager(queueManager)
-	}
 
 	// ========== 新版 manifest (VS Code Web 工作区,软链接架构) ==========
 	registerManifestV2Routes(r, db, iamMiddleware)
 	// =================================================================
 
-	// Organization 级别的 Manifest 路由 - 使用SYSTEM_SETTINGS权限
+	// Organization 级别的 Manifest 顶层 CRUD - 使用 SYSTEM_SETTINGS 权限
+	// (文件/版本/部署写操作全部走 registerManifestV2Routes)
 	orgManifests := r.Group("/organizations/:org_id/manifests")
 	orgManifests.Use(middleware.JWTAuth())
 	{
-		// Manifest CRUD
 		orgManifests.GET("",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
 			manifestHandler.ListManifests,
@@ -49,73 +46,9 @@ func RegisterManifestRoutes(r *gin.RouterGroup, db *gorm.DB, queueManager TaskQu
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
 			manifestHandler.DeleteManifest,
 		)
-
-		// 草稿管理
-		orgManifests.PUT("/:id/draft",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
-			manifestHandler.SaveManifestDraft,
-		)
-
-		// 版本管理
-		orgManifests.GET("/:id/versions",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			manifestHandler.ListManifestVersions,
-		)
-		orgManifests.POST("/:id/versions",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
-			manifestHandler.PublishManifestVersion,
-		)
-		orgManifests.GET("/:id/versions/:version_id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			manifestHandler.GetManifestVersion,
-		)
-
-		// 部署管理
-		orgManifests.GET("/:id/deployments",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			manifestHandler.ListManifestDeployments,
-		)
-		orgManifests.POST("/:id/deployments",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
-			manifestHandler.CreateManifestDeployment,
-		)
-		orgManifests.GET("/:id/deployments/:deployment_id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			manifestHandler.GetManifestDeployment,
-		)
-		orgManifests.PUT("/:id/deployments/:deployment_id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
-			manifestHandler.UpdateManifestDeployment,
-		)
-		orgManifests.DELETE("/:id/deployments/:deployment_id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
-			manifestHandler.DeleteManifestDeployment,
-		)
-		orgManifests.GET("/:id/deployments/:deployment_id/resources",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			manifestHandler.GetManifestDeploymentResources,
-		)
-		orgManifests.POST("/:id/deployments/:deployment_id/uninstall",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
-			manifestHandler.UninstallManifestDeployment,
-		)
-
-		// 导入导出
-		orgManifests.GET("/:id/export",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			manifestHandler.ExportManifestHCL,
-		)
 		orgManifests.GET("/:id/export-zip",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
 			manifestHandler.ExportManifestZip,
-		)
-		orgManifests.POST("/import",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
-			manifestHandler.ImportManifestHCL,
-		)
-		orgManifests.POST("/import-json",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
-			manifestHandler.ImportManifestJSON,
 		)
 	}
 
