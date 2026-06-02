@@ -6,7 +6,8 @@
  * 能力: layout shell + 文件树 + tab + Monaco(HCL 高亮 + 4 个 provider)接 manifest_files;
  * Toolbar 三按钮 Run / 发布 / 部署 分别挂 RunDialog / PublishVersionDialog / DeployDialog。
  */
-import { useEffect, useRef, useState, useCallback } from 'react'
+import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
@@ -22,6 +23,7 @@ import {
   listFiles,
   readFile,
   putFile,
+  putFileB64,
   deleteFile,
   moveFile,
   languageOfPath,
@@ -31,8 +33,24 @@ import {
 import styles from './ManifestEditorV2.module.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
+// 单文件上限,与后端 MANIFEST_MAX_FILE_SIZE 默认值(1MB)对齐
+const MANIFEST_MAX_FILE_SIZE = 1024 * 1024
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+// fileToBase64 读本地 File 为 base64(去掉 data URL 前缀),用于拖拽上传
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const res = reader.result as string
+      const comma = res.indexOf(',')
+      resolve(comma >= 0 ? res.slice(comma + 1) : res)
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
 
 export default function ManifestEditorV2() {
   const params = useParams<{ id: string; org_id?: string }>()
@@ -68,6 +86,14 @@ export default function ManifestEditorV2() {
   const [currentFile, setCurrentFile] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [cursor, setCursor] = useState({ line: 1, col: 1 })
+  // 有未保存修改的文件(tab 显示白点);autosave 成功后移除
+  const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set())
+  // 当前打开的是二进制文件(spec §5.2 走只读视图,隐藏 Monaco)
+  const [binaryView, setBinaryView] = useState<{ path: string; size: number; mime: string } | null>(null)
+  // 文件树展开的目录(默认全展开);collapsedDirs 记录被手动折叠的目录,默认不在集合即展开
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
+  // 拖拽上传:鼠标拖文件悬停在文件树上时高亮
+  const [dragOver, setDragOver] = useState(false)
 
   // ========== 初始化: 起 vscode-api + 创建编辑器 ==========
   useEffect(() => {
@@ -80,12 +106,25 @@ export default function ManifestEditorV2() {
         registerHclLanguage()
         // 注册 4 个 demo provider (Completion / Hover / InlayHint / CodeAction)
         registerHclProviders()
+        // spec §10.3.3: Inlay Hint (· N demos) 不用 monaco 默认灰,覆盖为高对比青绿,
+        // 让 demo 标签看起来既"是信息"也"是按钮"。
+        monaco.editor.defineTheme('vs-dark-manifest', {
+          base: 'vs-dark',
+          inherit: true,
+          rules: [],
+          colors: {
+            'editorInlayHint.foreground': '#4ec9b0',
+            'editorInlayHint.background': '#4ec9b022',
+            'editorInlayHint.typeForeground': '#4ec9b0',
+            'editorInlayHint.typeBackground': '#4ec9b022',
+          },
+        })
         editorRef.current = monaco.editor.create(containerRef.current, {
           value: '',
           language: 'plaintext',
-          // 设 fallback monaco 默认主题 'vs-dark', 即使 vscode-api 主题加载失败也保持深色
-          // (vscode-api 加载成功后会自动切到 'Default Dark+', 不冲突)
-          theme: 'vs-dark',
+          // fallback 主题:即使 vscode-api 主题加载失败也保持深色 + Inlay Hint 青绿
+          // (vscode-api 加载成功后会自动切到 'Default Dark+',不冲突)
+          theme: 'vs-dark-manifest',
           automaticLayout: true,
           fontFamily: 'Menlo, Monaco, "Cascadia Code", Consolas, "Courier New", monospace',
         })
@@ -93,7 +132,15 @@ export default function ManifestEditorV2() {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
         })
         editorRef.current.onDidChangeModelContent(() => {
-          if (!currentFileRef.current) return
+          const p = currentFileRef.current
+          if (!p) return
+          // 标记该文件为 dirty(tab 显示白点),autosave 成功后清除
+          setDirtyFiles((prev) => {
+            if (prev.has(p)) return prev
+            const next = new Set(prev)
+            next.add(p)
+            return next
+          })
           setSaveStatus('saving')
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
           saveTimerRef.current = setTimeout(() => {
@@ -163,15 +210,24 @@ export default function ManifestEditorV2() {
       setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
       setCurrentFile(path)
 
+      // 二进制文件:spec §5.2 走只读视图,不灌进 Monaco
+      const meta = files.find((f) => f.path === path)
+      if (meta?.is_binary) {
+        setBinaryView({ path, size: meta.size, mime: meta.mime })
+        return
+      }
+      setBinaryView(null)
+
       let content = fileContentCache.current.get(path)
       if (content === undefined) {
         try {
           const f = await readFile(ctx, path)
+          // 列表元信息没标 binary 但后端读出来是 binary 时兜底
           if (f.is_binary) {
-            content = ''
-          } else {
-            content = f.content ?? ''
+            setBinaryView({ path, size: f.size, mime: f.mime })
+            return
           }
+          content = f.content ?? ''
           fileContentCache.current.set(path, content)
         } catch (err) {
           // eslint-disable-next-line no-console
@@ -187,7 +243,7 @@ export default function ManifestEditorV2() {
       old?.dispose()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [orgId, manifestId],
+    [orgId, manifestId, files],
   )
 
   // ========== 关闭 tab ==========
@@ -221,6 +277,13 @@ export default function ManifestEditorV2() {
     try {
       await putFile(ctx, path, value)
       setSaveStatus('saved')
+      // 保存成功 → 清除 dirty 标记
+      setDirtyFiles((prev) => {
+        if (!prev.has(path)) return prev
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[ManifestEditorV2] save failed', err)
@@ -349,6 +412,139 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renamingPath, renameValue, currentFile, ctx, validatePath])
 
+  const fileTree = useMemo(() => buildFileTree(files.map((f) => f.path)), [files])
+
+  const toggleDir = useCallback((dirPath: string) => {
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev)
+      if (next.has(dirPath)) next.delete(dirPath)
+      else next.add(dirPath)
+      return next
+    })
+  }, [])
+
+  // ========== 拖拽上传本地文件(spec §4.3)==========
+  const handleDropFiles = useCallback(
+    async (dropped: FileList) => {
+      setDragOver(false)
+      const list = Array.from(dropped)
+      let ok = 0
+      for (const file of list) {
+        if (file.size > MANIFEST_MAX_FILE_SIZE) {
+          message.error(`${file.name} 超过 ${MANIFEST_MAX_FILE_SIZE / 1024 / 1024}MB,跳过`)
+          continue
+        }
+        const errMsg = validatePath(file.name)
+        if (errMsg) {
+          message.error(`${file.name}: ${errMsg}`)
+          continue
+        }
+        try {
+          const b64 = await fileToBase64(file)
+          await putFileB64(ctx, file.name, b64)
+          ok++
+        } catch (err: any) {
+          message.error(`${file.name} 上传失败: ${err?.message ?? err}`)
+        }
+      }
+      if (ok > 0) {
+        message.success(`已上传 ${ok} 个文件`)
+        setManifestMissing(false)
+        const items = await listFiles(ctx)
+        setFiles(items)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ctx, validatePath],
+  )
+
+  // 递归渲染文件树节点。depth 控制缩进(每层 +12px,与 VS Code 一致)
+  const renderTreeNodes = (nodes: TreeNode[], depth: number): ReactNode =>
+    nodes.map((node) => {
+      const indent = 8 + depth * 12
+      if (node.type === 'dir') {
+        const collapsed = collapsedDirs.has(node.path)
+        return (
+          <div key={`dir:${node.path}`}>
+            <div
+              className={styles.treeNode}
+              style={{ paddingLeft: indent }}
+              onClick={() => toggleDir(node.path)}
+            >
+              <span className={styles.chevron}>
+                <i className={`codicon ${collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'}`} />
+              </span>
+              <span className={styles.icon}>
+                <i className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} ${styles.iconFolder}`} />
+              </span>
+              <span className={styles.name}>{node.name}</span>
+            </div>
+            {!collapsed && node.children && renderTreeNodes(node.children, depth + 1)}
+          </div>
+        )
+      }
+      // file
+      return (
+        <div
+          key={`file:${node.path}`}
+          className={`${styles.treeNode} ${currentFile === node.path ? styles.selected : ''}`}
+          style={{ paddingLeft: indent }}
+          onClick={() => {
+            if (renamingPath === node.path) return
+            void openFile(node.path)
+          }}
+        >
+          <span className={`${styles.chevron} ${styles.empty}`} />
+          <span className={styles.icon}>
+            <i className={`codicon ${iconClassFor(node.path)}`} />
+          </span>
+          {renamingPath === node.path ? (
+            <input
+              className={styles.inlineInput}
+              autoFocus
+              value={renameValue}
+              onChange={(e) => {
+                setRenameValue(e.target.value)
+                if (inlineError) setInlineError(null)
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void commitRenameFile()
+                else if (e.key === 'Escape') {
+                  setRenamingPath(null)
+                  setInlineError(null)
+                }
+              }}
+              onBlur={() => {
+                if ((renameValue || '').trim() && renameValue !== node.path) void commitRenameFile()
+                else setRenamingPath(null)
+              }}
+            />
+          ) : (
+            <span className={styles.name}>{node.name}</span>
+          )}
+          <span className={styles.rowActions}>
+            <i
+              className="codicon codicon-edit"
+              title="重命名"
+              onClick={(e) => {
+                e.stopPropagation()
+                startRename(node.path)
+              }}
+            />
+            <i
+              className="codicon codicon-trash"
+              title="删除"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDeleteFile(node.path)
+              }}
+            />
+          </span>
+        </div>
+      )
+    })
+
   // ========== 渲染 ==========
   return (
     <div className={styles.root}>
@@ -436,6 +632,24 @@ export default function ManifestEditorV2() {
               onClick={startCreateFile}
             />
             <i
+              className="codicon codicon-collapse-all"
+              title="折叠全部目录"
+              onClick={() => {
+                // 折叠所有目录(把当前树里所有 dir path 塞进 collapsedDirs)
+                const allDirs = new Set<string>()
+                const walk = (nodes: TreeNode[]) => {
+                  for (const n of nodes) {
+                    if (n.type === 'dir') {
+                      allDirs.add(n.path)
+                      if (n.children) walk(n.children)
+                    }
+                  }
+                }
+                walk(fileTree)
+                setCollapsedDirs(allDirs)
+              }}
+            />
+            <i
               className="codicon codicon-refresh"
               title="刷新"
               onClick={() => {
@@ -453,7 +667,25 @@ export default function ManifestEditorV2() {
           <i className="codicon codicon-chevron-down" />
           <span>{manifestId.toUpperCase()}</span>
         </div>
-        <div className={styles.tree}>
+        <div
+          className={`${styles.tree} ${dragOver ? styles.dragOver : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            if (!dragOver) setDragOver(true)
+          }}
+          onDragLeave={(e) => {
+            // 仅当离开整个 tree 容器(而非内部子元素)时才取消高亮
+            if (e.currentTarget === e.target) setDragOver(false)
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              void handleDropFiles(e.dataTransfer.files)
+            } else {
+              setDragOver(false)
+            }
+          }}
+        >
           {manifestMissing && (
             <div style={{ padding: '8px 12px', color: '#cca700', fontSize: 12, lineHeight: 1.5 }}>
               Manifest <code style={{ color: '#cccccc' }}>{manifestId}</code> 不存在或无权访问。
@@ -499,67 +731,7 @@ export default function ManifestEditorV2() {
             </div>
           )}
 
-          {files
-            .slice()
-            .sort((a, b) => a.path.localeCompare(b.path))
-            .map((f) => (
-              <div
-                key={f.path}
-                className={`${styles.treeNode} ${currentFile === f.path ? styles.selected : ''}`}
-                onClick={() => {
-                  if (renamingPath === f.path) return
-                  void openFile(f.path)
-                }}
-              >
-                <span className={`${styles.chevron} ${styles.empty}`} />
-                <span className={styles.icon}>
-                  <i className={`codicon ${iconClassFor(f.path)}`} />
-                </span>
-                {renamingPath === f.path ? (
-                  <input
-                    className={styles.inlineInput}
-                    autoFocus
-                    value={renameValue}
-                    onChange={(e) => {
-                      setRenameValue(e.target.value)
-                      if (inlineError) setInlineError(null)
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void commitRenameFile()
-                      else if (e.key === 'Escape') {
-                        setRenamingPath(null)
-                        setInlineError(null)
-                      }
-                    }}
-                    onBlur={() => {
-                      if ((renameValue || '').trim() && renameValue !== f.path) void commitRenameFile()
-                      else setRenamingPath(null)
-                    }}
-                  />
-                ) : (
-                  <span className={styles.name}>{f.path}</span>
-                )}
-                <span className={styles.rowActions}>
-                  <i
-                    className="codicon codicon-edit"
-                    title="重命名"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      startRename(f.path)
-                    }}
-                  />
-                  <i
-                    className="codicon codicon-trash"
-                    title="删除"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteFile(f.path)
-                    }}
-                  />
-                </span>
-              </div>
-            ))}
+          {renderTreeNodes(fileTree, 0)}
 
           {inlineError && (creating !== null || renamingPath !== null) && (
             <div style={{ padding: '2px 12px 6px 28px', color: '#f48771', fontSize: 11 }}>
@@ -574,11 +746,13 @@ export default function ManifestEditorV2() {
           {openTabs.map((path) => (
             <div
               key={path}
-              className={`${styles.tab} ${currentFile === path ? styles.active : ''}`}
+              className={`${styles.tab} ${currentFile === path ? styles.active : ''} ${dirtyFiles.has(path) ? styles.dirty : ''}`}
               onClick={() => void openFile(path)}
             >
               <i className={`codicon ${iconClassFor(path)}`} />
               <span>{path.split('/').pop()}</span>
+              {/* dirty 白点(有未保存修改时显示);非 dirty 时显示关闭按钮 */}
+              <span className={styles.dirtyDot} />
               <span
                 className={styles.close}
                 onClick={(e) => {
@@ -597,7 +771,20 @@ export default function ManifestEditorV2() {
               {`vscode-api 初始化失败:\n\n${bootError}`}
             </div>
           ) : null}
-          <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+          {/* 二进制文件只读视图(spec §5.2):覆盖在 Monaco 之上 */}
+          {binaryView && currentFile === binaryView.path ? (
+            <div className={styles.binaryView}>
+              <i className="codicon codicon-file-binary" />
+              <div>该文件是二进制文件,不在编辑器中显示。</div>
+              <div className={styles.binaryMeta}>
+                {binaryView.mime} · {formatBytes(binaryView.size)}
+              </div>
+            </div>
+          ) : null}
+          <div
+            ref={containerRef}
+            style={{ width: '100%', height: '100%', visibility: binaryView && currentFile === binaryView.path ? 'hidden' : 'visible' }}
+          />
         </div>
       </div>
 
@@ -637,6 +824,62 @@ export default function ManifestEditorV2() {
 }
 
 // ========== 工具 ==========
+
+// 文件树节点。dir 的 path 是目录前缀(如 "modules/vpc"),file 的 path 是完整路径。
+interface TreeNode {
+  type: 'dir' | 'file'
+  name: string // 该层显示名(目录段名 / 文件名)
+  path: string
+  children?: TreeNode[]
+}
+
+// buildFileTree 从扁平 path 列表构建目录树。spec §5.1/§22: 顶层目录无白名单限制,
+// 任意命名/任意嵌套。目录在前、文件在后,各自按名字排序。
+function buildFileTree(paths: string[]): TreeNode[] {
+  type DirAcc = { dirs: Map<string, DirAcc>; files: string[] }
+  const root: DirAcc = { dirs: new Map(), files: [] }
+
+  for (const full of paths) {
+    const parts = full.split('/')
+    let node = root
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i]
+      if (!node.dirs.has(seg)) node.dirs.set(seg, { dirs: new Map(), files: [] })
+      node = node.dirs.get(seg)!
+    }
+    node.files.push(full)
+  }
+
+  const build = (acc: DirAcc, prefix: string): TreeNode[] => {
+    const dirNodes: TreeNode[] = [...acc.dirs.keys()]
+      .sort((a, b) => a.localeCompare(b))
+      .map((seg) => {
+        const childPrefix = prefix ? `${prefix}/${seg}` : seg
+        return {
+          type: 'dir' as const,
+          name: seg,
+          path: childPrefix,
+          children: build(acc.dirs.get(seg)!, childPrefix),
+        }
+      })
+    const fileNodes: TreeNode[] = acc.files
+      .sort((a, b) => a.localeCompare(b))
+      .map((full) => ({
+        type: 'file' as const,
+        name: full.split('/').pop() || full,
+        path: full,
+      }))
+    return [...dirNodes, ...fileNodes]
+  }
+
+  return build(root, '')
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
 
 function iconClassFor(path: string): string {
   if (path.endsWith('.tf') || path.endsWith('.tfvars') || path.endsWith('.hcl')) return 'codicon-symbol-namespace'

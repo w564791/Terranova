@@ -63,6 +63,15 @@ export async function putFile(
   await api.put(`${basePath(ctx)}/files/${encodeURIComponent(path)}`, { content })
 }
 
+/** 上传草稿单文件(二进制安全,走 content_b64);用于拖拽上传本地文件 */
+export async function putFileB64(
+  ctx: ManifestEditorContext,
+  path: string,
+  contentB64: string,
+): Promise<void> {
+  await api.put(`${basePath(ctx)}/files/${encodeURIComponent(path)}`, { content_b64: contentB64 })
+}
+
 /** 删除草稿单文件 */
 export async function deleteFile(
   ctx: ManifestEditorContext,

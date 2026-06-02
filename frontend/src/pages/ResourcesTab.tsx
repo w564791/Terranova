@@ -362,7 +362,13 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
               : '点击"Add Resources"按钮添加第一个资源'}
           </p>
           {!searchTerm && (
-            <button onClick={handleAddResource} className={styles.emptyButton}>
+            <button
+              onClick={handleAddResource}
+              className={styles.emptyButton}
+              disabled={isManifestManaged}
+              title={isManifestManaged ? '此 workspace 由 Manifest 管理,资源变更请到 manifest 编辑器' : undefined}
+              style={isManifestManaged ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            >
               + Add Resources
             </button>
           )}
