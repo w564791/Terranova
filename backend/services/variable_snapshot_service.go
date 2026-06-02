@@ -20,9 +20,23 @@ func NewVariableSnapshotService(db *gorm.DB) *VariableSnapshotService {
 // CreateSnapshot creates a variable snapshot for a workspace.
 // Uses ResolveDisplay to get effective variables with SourceType.
 // Returns vsnap_id (nil if no variables) and item count.
+//
+// 若 workspace 当前有 active manifest deployment,deployment 选定的 varsets 会被折进
+// 优先级链一并快照(它们是带 version 的 varset 变量,可被引用机制固化)。
+// deployment 的 variable_overrides 不在这里 —— 它无 variable_id,由任务行的
+// variable_overrides 列单独快照(见 workspace_task_controller)。
 func (s *VariableSnapshotService) CreateSnapshot(workspaceID string, createdBy *string) (*string, int, error) {
 	resolver := NewVariableResolutionService(s.db)
-	display, err := resolver.ResolveDisplay(workspaceID)
+
+	// 折入 active deployment 的 varsets(overrides 单独处理,见上注释)
+	extraVarsetIDs, _, exErr := resolver.GetActiveDeploymentExtras(workspaceID)
+	if exErr != nil {
+		// best-effort: 拿不到 deployment 信息不阻塞快照,退回无 extra
+		log.Printf("[WARN] resolve active deployment extras for %s failed: %v", workspaceID, exErr)
+		extraVarsetIDs = nil
+	}
+
+	display, err := resolver.resolveDisplayWithExtraVarsets(workspaceID, extraVarsetIDs)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to resolve variables: %w", err)
 	}

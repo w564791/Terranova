@@ -410,6 +410,13 @@ type WorkspaceTask struct {
 	// 数据格式: [{"path": "main.tf", "content_b64": "..."}]
 	ExternalFiles JSONB `json:"external_files,omitempty" gorm:"type:jsonb"`
 
+	// Manifest deployment 变量应急覆盖快照: 任务创建时把当时 active deployment 的
+	// variable_overrides(扁平 key=string,最高优先级)固化到任务行;执行时 overlay 到
+	// 解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——
+	// overrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。
+	// 数据格式: {"key": "value"}
+	VariableOverrides JSONB `json:"variable_overrides,omitempty" gorm:"type:jsonb"`
+
 	// HTTP State Backend token (store SHA256 hash, not the raw token)
 	StateTokenHash string `json:"-" gorm:"type:varchar(64);index"`
 

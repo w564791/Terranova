@@ -14,8 +14,9 @@ import (
 // 直接访问数据库
 type LocalDataAccessor struct {
 	db           *gorm.DB
-	tx           *gorm.DB                  // 用于事务支持
+	tx           *gorm.DB                   // 用于事务支持
 	snapshotVars []models.WorkspaceVariable // cached snapshot variables
+	overrides    map[string]string          // manifest deployment 应急覆盖(最高优先级,仅 Terraform 变量)
 }
 
 // NewLocalDataAccessor 创建 Local 数据访问器
@@ -75,6 +76,40 @@ func (a *LocalDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
 	return nil
 }
 
+// SetVariableOverrides 注入 manifest deployment 应急覆盖(最高优先级)。
+func (a *LocalDataAccessor) SetVariableOverrides(overrides map[string]string) {
+	a.overrides = overrides
+}
+
+// applyOverrides 把 overrides overlay 到已解析的 Terraform 变量上(最高优先级)。
+// 仅作用于 Terraform 变量;已存在则覆盖值并清敏感标记(overrides 不存敏感值),
+// 不存在则追加。返回新切片,不改入参。
+func (a *LocalDataAccessor) applyOverrides(vars []models.WorkspaceVariable, varType models.VariableType) []models.WorkspaceVariable {
+	if len(a.overrides) == 0 || varType != models.VariableTypeTerraform {
+		return vars
+	}
+	seen := make(map[string]int, len(vars))
+	for i, v := range vars {
+		seen[v.Key] = i
+	}
+	for k, val := range a.overrides {
+		if idx, ok := seen[k]; ok {
+			vars[idx].Value = val
+			vars[idx].Sensitive = false
+			vars[idx].VariableID = "override-" + k
+		} else {
+			vars = append(vars, models.WorkspaceVariable{
+				VariableID:   "override-" + k,
+				Key:          k,
+				Value:        val,
+				VariableType: models.VariableTypeTerraform,
+				Sensitive:    false,
+			})
+		}
+	}
+	return vars
+}
+
 // GetWorkspaceVariables 获取 Workspace 变量列表（含 Variable Set 合并，优先级解析后的最终结果）
 // 注意：此方法用于执行路径，必须返回真实值（包括 sensitive），不能清空。
 func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error) {
@@ -86,7 +121,7 @@ func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType mo
 				filtered = append(filtered, v)
 			}
 		}
-		return filtered, nil
+		return a.applyOverrides(filtered, varType), nil
 	}
 
 	// Fallback: live resolution (for cases without snapshot)
@@ -102,7 +137,7 @@ func (a *LocalDataAccessor) GetWorkspaceVariables(workspaceID string, varType mo
 			variables = append(variables, v)
 		}
 	}
-	return variables, nil
+	return a.applyOverrides(variables, varType), nil
 }
 
 // ============================================================================

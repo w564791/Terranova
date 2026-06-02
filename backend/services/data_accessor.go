@@ -14,6 +14,9 @@ type DataAccessor interface {
 	GetWorkspaceResources(workspaceID string) ([]models.WorkspaceResource, error)
 	GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error)
 	LoadSnapshot(vsnapID string, db *gorm.DB) error
+	// SetVariableOverrides 设置 manifest deployment 应急覆盖(最高优先级,仅 Terraform 变量),
+	// executor 在任务执行前从任务行 variable_overrides 快照注入。空 map 等价于不覆盖。
+	SetVariableOverrides(overrides map[string]string)
 	LockWorkspace(workspaceID string, lockInfo map[string]interface{}) error
 	UnlockWorkspace(workspaceID string) error
 	UpdateWorkspaceFields(workspaceID string, updates map[string]interface{}) error

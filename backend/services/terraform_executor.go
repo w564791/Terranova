@@ -224,6 +224,23 @@ func taskUsesExternalFiles(task *models.WorkspaceTask) bool {
 	return ok && len(files) > 0
 }
 
+// taskVariableOverrides 从任务行 variable_overrides(JSONB,任务创建时快照)取出扁平 key=string。
+// 返回 nil 表示无覆盖。值非 string 时按 fmt 兜底。
+func taskVariableOverrides(task *models.WorkspaceTask) map[string]string {
+	if task == nil || len(task.VariableOverrides) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(task.VariableOverrides))
+	for k, v := range task.VariableOverrides {
+		if sv, ok := v.(string); ok {
+			out[k] = sv
+		} else {
+			out[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	return out
+}
+
 // writeExternalFiles 把 task.ExternalFiles 全量落 workDir(Run 第三分支)
 //
 // ExternalFiles 格式: { "files": [ {"path":"main.tf","content_b64":"..."}, ... ] }
@@ -928,6 +945,8 @@ func (s *TerraformExecutor) ExecutePlan(
 			log.Printf("[INFO] Loaded variable snapshot %s for task %d", *task.VariableSnapshotID, task.ID)
 		}
 	}
+	// Manifest deployment 应急覆盖(任务创建时已快照到任务行)overlay 到 Terraform 变量
+	s.dataAccessor.SetVariableOverrides(taskVariableOverrides(task))
 
 	// 读取TF_LOG（从DataAccessor，使用snapshot缓存）
 	tfLogLevel := "info"
@@ -2301,6 +2320,8 @@ func (s *TerraformExecutor) ExecuteApply(
 			log.Printf("[INFO] Loaded variable snapshot %s for task %d", *task.VariableSnapshotID, task.ID)
 		}
 	}
+	// Manifest deployment 应急覆盖(任务创建时已快照到任务行)overlay 到 Terraform 变量
+	s.dataAccessor.SetVariableOverrides(taskVariableOverrides(task))
 
 	// 清理可能存在的孤儿 temp state 记录
 	if cleanupErr := s.dataAccessor.CleanupOrphanedTempStates(task.WorkspaceID); cleanupErr != nil {

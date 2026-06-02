@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
 
@@ -66,7 +67,17 @@ func (c *variableCandidate) compositeKey() string {
 
 // ResolveDisplay returns the full list of effective variables with override markers for the frontend.
 func (s *VariableResolutionService) ResolveDisplay(workspaceID string) ([]EffectiveVariable, error) {
-	candidates, err := s.collectAllCandidates(workspaceID)
+	return s.resolveDisplayWithExtraVarsets(workspaceID, nil)
+}
+
+// resolveDisplayWithExtraVarsets 与 ResolveDisplay 相同,但额外把 manifest deployment 选定的
+// varsets(extraVarsetIDs,按 priority ASC)折进优先级链(第 4 层之后、workspace own 之前)。
+// 供任务变量快照创建复用:deployment varsets 本身是带 version 的 varset 变量,可被快照引用机制
+// 原样固化。注意 variable_overrides 不在这里处理(它无 variable_id,无法做引用快照)。
+func (s *VariableResolutionService) resolveDisplayWithExtraVarsets(
+	workspaceID string, extraVarsetIDs []string,
+) ([]EffectiveVariable, error) {
+	candidates, err := s.collectAllCandidatesWithExtra(workspaceID, extraVarsetIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -366,6 +377,55 @@ func (s *VariableResolutionService) collectExtraVarsets(varsetIDs []string) ([]v
 		}
 	}
 	return out, nil
+}
+
+// GetActiveDeploymentExtras 返回 workspace 当前 active manifest deployment 注入到优先级链的
+// 额外变量来源:按 priority ASC 排序的 varset id 列表 + variable_overrides(扁平 key=value)。
+//
+// 无 active deployment 时返回 (nil, nil, nil)。供任务变量快照创建与执行路径复用,
+// 确保 deployment 选定的 varsets / overrides 真正参与 plan/apply,而不只是 install 对话框预览。
+func (s *VariableResolutionService) GetActiveDeploymentExtras(
+	workspaceID string,
+) (extraVarsetIDs []string, overrides map[string]string, err error) {
+	var dep models.ManifestDeployment
+	res := s.db.Where("workspace_id = ? AND status = ?", workspaceID, models.DeploymentStatusActive).
+		Order("deployed_at DESC").
+		Limit(1).
+		Find(&dep)
+	if res.Error != nil {
+		return nil, nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, nil, nil
+	}
+
+	// varsets 按 priority ASC(数字大者优先级高 → 后压栈 → 覆盖语义成立)
+	var links []models.ManifestDeploymentVarset
+	if err := s.db.Where("deployment_id = ?", dep.ID).
+		Order("priority ASC").
+		Find(&links).Error; err != nil {
+		return nil, nil, err
+	}
+	for _, l := range links {
+		extraVarsetIDs = append(extraVarsetIDs, l.VarsetID)
+	}
+
+	// variable_overrides: JSONB 解出扁平 key=string
+	if len(dep.VariableOverrides) > 0 {
+		var raw map[string]interface{}
+		if jsonErr := json.Unmarshal(dep.VariableOverrides, &raw); jsonErr == nil {
+			overrides = make(map[string]string, len(raw))
+			for k, v := range raw {
+				if sv, ok := v.(string); ok {
+					overrides[k] = sv
+				} else {
+					overrides[k] = fmt.Sprintf("%v", v)
+				}
+			}
+		}
+	}
+
+	return extraVarsetIDs, overrides, nil
 }
 
 // collectGlobalVarsets loads global variable sets and their active variables.

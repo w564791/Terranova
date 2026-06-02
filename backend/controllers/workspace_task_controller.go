@@ -187,11 +187,20 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 				"content_b64": f.ContentB64,
 			})
 		}
-		// gorm JSONB: marshal 后 unmarshal 成 map slice 风格
-		raw, _ := json.Marshal(efs)
-		var tmp []interface{}
-		_ = json.Unmarshal(raw, &tmp)
-		externalFilesJSONB = models.JSONB{"files": tmp}
+		externalFilesJSONB = models.JSONB{"files": efs}
+	}
+
+	// Manifest deployment variable_overrides 快照: 任务创建时固化当时 active deployment 的
+	// 应急覆盖(最高优先级),执行时 overlay。与 vsnap(varset/workspace 变量引用快照)互补。
+	var overridesJSONB models.JSONB
+	if _, extraOverrides, ovErr := services.NewVariableResolutionService(c.db).
+		GetActiveDeploymentExtras(workspace.WorkspaceID); ovErr != nil {
+		log.Printf("[WARN] resolve deployment overrides for %s failed: %v", workspace.WorkspaceID, ovErr)
+	} else if len(extraOverrides) > 0 {
+		overridesJSONB = make(models.JSONB, len(extraOverrides))
+		for k, v := range extraOverrides {
+			overridesJSONB[k] = v
+		}
 	}
 
 	// 创建任务（只创建一个任务）
@@ -205,6 +214,7 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		Description:        req.Description,
 		VariableSnapshotID: vsnapID,
 		ExternalFiles:      externalFilesJSONB,
+		VariableOverrides:  overridesJSONB,
 	}
 
 	if err := c.db.Create(task).Error; err != nil {

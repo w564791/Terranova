@@ -173,6 +173,10 @@ func (a *RemoteDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
 	return nil
 }
 
+// SetVariableOverrides no-op: 远程/Agent 模式不支持 manifest deployment 覆盖
+// (manifest 工作区当前不在 Agent 模式执行,变量由 task payload 提供)。
+func (a *RemoteDataAccessor) SetVariableOverrides(overrides map[string]string) {}
+
 // ============================================================================
 // State 相关
 // ============================================================================
