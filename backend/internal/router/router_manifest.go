@@ -165,7 +165,9 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	)
 
 	// === Workspace 视角的 manifest 摘要 (资源页徽章 / 顶部 banner 共用) ===
-	r.GET("/workspaces/:workspace_id/manifest-summary",
+	// 注意: 参数名必须用 :id,与 router_workspace.go 已注册的 /workspaces/:id 一致;
+	// gin 不允许同一前缀下出现不同名通配符(:id vs :workspace_id 会 panic)。
+	r.GET("/workspaces/:id/manifest-summary",
 		middleware.JWTAuth(),
 		deploysH.GetWorkspaceManifestSummary,
 	)

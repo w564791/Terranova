@@ -460,7 +460,8 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 // workspace 视角下,active manifest 软链接已在 workspaces 表;这个端点把
 // deployment 与 manifest 的关键展示字段一次性返回,避免前端做 N 次反查。
 func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Context) {
-	workspaceID := c.Param("workspace_id")
+	// 路由用 :id(与 /workspaces/:id 前缀一致,避免 gin 通配符冲突 panic)
+	workspaceID := c.Param("id")
 
 	type result struct {
 		WorkspaceID    string  `json:"workspace_id"`
