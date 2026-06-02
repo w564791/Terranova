@@ -11,7 +11,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
-import { Modal, Form, Input, message } from 'antd'
+import { Modal, message } from 'antd'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
@@ -56,10 +56,13 @@ export default function ManifestEditorV2() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [deployOpen, setDeployOpen] = useState(false)
   const [runOpen, setRunOpen] = useState(false)
-  const [newFileOpen, setNewFileOpen] = useState(false)
-  const [newFileForm] = Form.useForm<{ path: string }>()
+  // 内联新建/重命名(VS Code 风格,不弹窗):
+  //   creating !== null  → 文件树顶部出现一个输入行,值即 creating
+  //   renamingPath        → 该行 name 就地变输入框,值即 renameValue
+  const [creating, setCreating] = useState<string | null>(null)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
-  const [renameForm] = Form.useForm<{ to: string }>()
+  const [renameValue, setRenameValue] = useState('')
+  const [inlineError, setInlineError] = useState<string | null>(null)
   const [files, setFiles] = useState<ManifestFileEntry[]>([])
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [currentFile, setCurrentFile] = useState<string | null>(null)
@@ -226,27 +229,50 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, manifestId])
 
-  // ========== 新建文件 ==========
-  const handleCreateFile = useCallback(async () => {
+  // 路径合法性校验(与后端 normalizeAndValidatePath 对齐),返回错误文案或 null
+  const validatePath = useCallback(
+    (raw: string, opts?: { excludeSelf?: string }): string | null => {
+      const v = (raw || '').trim()
+      if (!v) return '请输入文件名'
+      if (!/^[A-Za-z0-9_\-./]+$/.test(v)) return '只允许字母数字 _ - . /'
+      if (v.startsWith('/')) return '不允许绝对路径'
+      if (v.endsWith('/')) return '不能以 / 结尾'
+      if (v.split('/').some((s) => s === '.' || s === '..')) return '不允许 . 或 .. 路径段'
+      if (v.length > 256) return '路径过长 (>256)'
+      if (files.some((f) => f.path === v && v !== opts?.excludeSelf)) return '已存在同名文件'
+      return null
+    },
+    [files],
+  )
+
+  // ========== 新建文件(内联确认)==========
+  const commitCreateFile = useCallback(async () => {
+    const path = (creating || '').trim()
+    const errMsg = validatePath(path)
+    if (errMsg) {
+      setInlineError(errMsg)
+      return
+    }
     try {
-      const { path } = await newFileForm.validateFields()
-      // 草稿区私有,后端会同步建条目;先 PUT 空内容
       await putFile(ctx, path, '')
-      message.success(`已创建 ${path}`)
-      newFileForm.resetFields()
-      setNewFileOpen(false)
+      setCreating(null)
+      setInlineError(null)
       setManifestMissing(false)
-      // 刷新文件树 + 自动打开
       const items = await listFiles(ctx)
       setFiles(items)
       void openFile(path)
     } catch (err: any) {
-      if (err?.errorFields) return
       const msg = typeof err === 'string' ? err : err?.message
-      if (msg) message.error(`创建失败: ${msg}`)
+      setInlineError(msg ?? '创建失败')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, manifestId, newFileForm])
+  }, [creating, ctx, validatePath])
+
+  const startCreateFile = useCallback(() => {
+    setRenamingPath(null)
+    setInlineError(null)
+    setCreating('')
+  }, [])
 
   // ========== 删除文件 ==========
   const handleDeleteFile = useCallback(
@@ -283,38 +309,45 @@ export default function ManifestEditorV2() {
     [orgId, manifestId, currentFile],
   )
 
-  // ========== 重命名文件 ==========
-  const handleRenameFile = useCallback(async () => {
+  const startRename = useCallback((path: string) => {
+    setCreating(null)
+    setInlineError(null)
+    setRenameValue(path)
+    setRenamingPath(path)
+  }, [])
+
+  // ========== 重命名文件(内联确认)==========
+  const commitRenameFile = useCallback(async () => {
     const fromPath = renamingPath
     if (!fromPath) return
+    const to = (renameValue || '').trim()
+    if (to === fromPath) {
+      setRenamingPath(null)
+      setInlineError(null)
+      return
+    }
+    const errMsg = validatePath(to, { excludeSelf: fromPath })
+    if (errMsg) {
+      setInlineError(errMsg)
+      return
+    }
     try {
-      const { to } = await renameForm.validateFields()
-      if (to === fromPath) {
-        setRenamingPath(null)
-        return
-      }
       await moveFile(ctx, fromPath, to)
-      // 转移内存缓存
       const cached = fileContentCache.current.get(fromPath)
       fileContentCache.current.delete(fromPath)
       if (cached !== undefined) fileContentCache.current.set(to, cached)
-      // 转移打开 tab
       setOpenTabs((prev) => prev.map((p) => (p === fromPath ? to : p)))
-      if (currentFile === fromPath) {
-        setCurrentFile(to)
-      }
+      if (currentFile === fromPath) setCurrentFile(to)
       const items = await listFiles(ctx)
       setFiles(items)
-      message.success(`已重命名为 ${to}`)
-      renameForm.resetFields()
       setRenamingPath(null)
+      setInlineError(null)
     } catch (err: any) {
-      if (err?.errorFields) return
       const msg = typeof err === 'string' ? err : err?.message
-      if (msg) message.error(`重命名失败: ${msg}`)
+      setInlineError(msg ?? '重命名失败')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, manifestId, renamingPath, currentFile, renameForm])
+  }, [renamingPath, renameValue, currentFile, ctx, validatePath])
 
   // ========== 渲染 ==========
   return (
@@ -400,10 +433,7 @@ export default function ManifestEditorV2() {
             <i
               className="codicon codicon-new-file"
               title="新建文件"
-              onClick={() => {
-                newFileForm.resetFields()
-                setNewFileOpen(true)
-              }}
+              onClick={startCreateFile}
             />
             <i
               className="codicon codicon-refresh"
@@ -431,11 +461,44 @@ export default function ManifestEditorV2() {
               此页面是 vscode-api 集成的脚手架沙箱。
             </div>
           )}
-          {!manifestMissing && files.length === 0 && (
+          {!manifestMissing && files.length === 0 && creating === null && (
             <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12 }}>
-              草稿为空,在编辑器内输入即自动保存
+              草稿为空,点上方 + 新建文件,或在编辑器内输入即自动保存
             </div>
           )}
+
+          {/* 内联新建行(VS Code 风格): + 后直接在树里出现输入框 */}
+          {creating !== null && (
+            <div className={styles.treeNode}>
+              <span className={`${styles.chevron} ${styles.empty}`} />
+              <span className={styles.icon}>
+                <i className={`codicon ${iconClassFor(creating || 'x.tf')}`} />
+              </span>
+              <input
+                className={styles.inlineInput}
+                autoFocus
+                value={creating}
+                placeholder="文件名,如 main.tf"
+                onChange={(e) => {
+                  setCreating(e.target.value)
+                  if (inlineError) setInlineError(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void commitCreateFile()
+                  else if (e.key === 'Escape') {
+                    setCreating(null)
+                    setInlineError(null)
+                  }
+                }}
+                onBlur={() => {
+                  // 失焦: 有内容则尝试提交,空则取消(VS Code 行为)
+                  if ((creating || '').trim()) void commitCreateFile()
+                  else setCreating(null)
+                }}
+              />
+            </div>
+          )}
+
           {files
             .slice()
             .sort((a, b) => a.path.localeCompare(b.path))
@@ -443,21 +506,47 @@ export default function ManifestEditorV2() {
               <div
                 key={f.path}
                 className={`${styles.treeNode} ${currentFile === f.path ? styles.selected : ''}`}
-                onClick={() => void openFile(f.path)}
+                onClick={() => {
+                  if (renamingPath === f.path) return
+                  void openFile(f.path)
+                }}
               >
                 <span className={`${styles.chevron} ${styles.empty}`} />
                 <span className={styles.icon}>
                   <i className={`codicon ${iconClassFor(f.path)}`} />
                 </span>
-                <span className={styles.name}>{f.path}</span>
+                {renamingPath === f.path ? (
+                  <input
+                    className={styles.inlineInput}
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => {
+                      setRenameValue(e.target.value)
+                      if (inlineError) setInlineError(null)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void commitRenameFile()
+                      else if (e.key === 'Escape') {
+                        setRenamingPath(null)
+                        setInlineError(null)
+                      }
+                    }}
+                    onBlur={() => {
+                      if ((renameValue || '').trim() && renameValue !== f.path) void commitRenameFile()
+                      else setRenamingPath(null)
+                    }}
+                  />
+                ) : (
+                  <span className={styles.name}>{f.path}</span>
+                )}
                 <span className={styles.rowActions}>
                   <i
                     className="codicon codicon-edit"
                     title="重命名"
                     onClick={(e) => {
                       e.stopPropagation()
-                      renameForm.setFieldsValue({ to: f.path })
-                      setRenamingPath(f.path)
+                      startRename(f.path)
                     }}
                   />
                   <i
@@ -471,6 +560,12 @@ export default function ManifestEditorV2() {
                 </span>
               </div>
             ))}
+
+          {inlineError && (creating !== null || renamingPath !== null) && (
+            <div style={{ padding: '2px 12px 6px 28px', color: '#f48771', fontSize: 11 }}>
+              {inlineError}
+            </div>
+          )}
         </div>
       </div>
 
@@ -537,73 +632,6 @@ export default function ManifestEditorV2() {
         ctx={ctx}
         onClose={() => setRunOpen(false)}
       />
-
-      {/* 新建文件 */}
-      <Modal
-        title="新建文件"
-        open={newFileOpen}
-        onCancel={() => setNewFileOpen(false)}
-        onOk={handleCreateFile}
-        okText="创建"
-        cancelText="取消"
-        destroyOnClose
-      >
-        <Form form={newFileForm} layout="vertical" preserve={false}>
-          <Form.Item
-            label="文件路径"
-            name="path"
-            rules={[
-              { required: true, message: '请输入路径' },
-              {
-                pattern: /^[A-Za-z0-9_\-./]+$/,
-                message: '只允许字母数字 _ - . / ,不允许空格或其他特殊字符',
-              },
-              {
-                validator(_, value: string) {
-                  if (!value) return Promise.resolve()
-                  if (value.startsWith('/'))
-                    return Promise.reject(new Error('不允许绝对路径'))
-                  if (value.split('/').some((s) => s === '.' || s === '..'))
-                    return Promise.reject(new Error('不允许 . 或 .. 路径段'))
-                  if (value.length > 256)
-                    return Promise.reject(new Error('路径过长 (>256)'))
-                  return Promise.resolve()
-                },
-              },
-            ]}
-            extra="例如: main.tf / variables.tf / modules/vpc/main.tf"
-          >
-            <Input placeholder="main.tf" autoFocus />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 重命名文件 */}
-      <Modal
-        title={`重命名 ${renamingPath ?? ''}`}
-        open={renamingPath !== null}
-        onCancel={() => setRenamingPath(null)}
-        onOk={handleRenameFile}
-        okText="重命名"
-        cancelText="取消"
-        destroyOnClose
-      >
-        <Form form={renameForm} layout="vertical" preserve={false}>
-          <Form.Item
-            label="新路径"
-            name="to"
-            rules={[
-              { required: true, message: '请输入新路径' },
-              {
-                pattern: /^[A-Za-z0-9_\-./]+$/,
-                message: '只允许字母数字 _ - . / ',
-              },
-            ]}
-          >
-            <Input autoFocus />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   )
 }

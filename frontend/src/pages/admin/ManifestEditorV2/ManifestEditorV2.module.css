@@ -157,6 +157,21 @@
 .treeNode .icon { width: 16px; display: inline-flex; align-items: center; justify-content: center; }
 .treeNode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 
+/* 内联新建/重命名输入框: VS Code 风格,就地在文件树行里编辑,不弹窗 */
+.inlineInput {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input, #3c3c3c);
+  color: var(--fg-default, #cccccc);
+  border: 1px solid var(--focus-border, #007fd4);
+  border-radius: 2px;
+  outline: none;
+  font-size: 13px;
+  line-height: 18px;
+  padding: 0 4px;
+  font-family: inherit;
+}
+
 .rowActions {
   display: inline-flex;
   gap: 4px;
