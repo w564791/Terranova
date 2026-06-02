@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -841,45 +842,64 @@ func (c *WorkspaceOutputController) GetAvailableOutputs(ctx *gin.Context) {
 	}
 	resourceModuleMap := make(map[string]ResourceModuleInfo)
 
-	// 从 tf_code 中提取 module source 并查找对应的 module
-	for _, resource := range resources {
-		// 如果已经有 module 信息，跳过
-		if _, ok := resourceModuleMap[resource.ResourceID]; ok {
-			continue
-		}
-
-		// 从资源版本的 tf_code 中提取 module source
-		version := resourceVersionMap[resource.ResourceID]
-		if version == nil || version.TFCode == nil {
-			continue
-		}
-
-		// 解析 tf_code 获取 module source
-		moduleSource := c.extractModuleSourceFromTFCode(version.TFCode)
+	// module source → ResourceModuleInfo(平台 module + 活跃 schema)。复用闭包,
+	// 让 tf_code 路径与 manifest 路径共享同一套查找逻辑。
+	resolveModuleInfo := func(moduleSource string) (ResourceModuleInfo, bool) {
 		if moduleSource == "" {
-			continue
+			return ResourceModuleInfo{}, false
 		}
-
-		// 根据 module_source 查找对应的 module
 		var module models.Module
 		if err := c.db.Where("module_source = ? OR source = ?", moduleSource, moduleSource).First(&module).Error; err != nil {
-			continue
+			return ResourceModuleInfo{}, false
 		}
-
-		// 获取模块的活跃schema (优先v2)
 		var schema models.Schema
 		err := c.db.Where("module_id = ? AND status = ?", module.ID, "active").
 			Order("CASE WHEN schema_version = 'v2' THEN 0 ELSE 1 END, created_at DESC").
 			First(&schema).Error
-
-		info := ResourceModuleInfo{
-			ModuleID:   module.ID,
-			ModuleName: module.Name,
-		}
+		info := ResourceModuleInfo{ModuleID: module.ID, ModuleName: module.Name}
 		if err == nil {
 			info.Schema = &schema
 		}
-		resourceModuleMap[resource.ResourceID] = info
+		return info, true
+	}
+
+	// 路径 A: 普通 UI 资源 —— 从资源版本 tf_code 提取 module source
+	for _, resource := range resources {
+		if _, ok := resourceModuleMap[resource.ResourceID]; ok {
+			continue
+		}
+		version := resourceVersionMap[resource.ResourceID]
+		if version == nil || version.TFCode == nil {
+			continue
+		}
+		if info, ok := resolveModuleInfo(c.extractModuleSourceFromTFCode(version.TFCode)); ok {
+			resourceModuleMap[resource.ResourceID] = info
+		}
+	}
+
+	// 路径 B: manifest-managed workspace —— manifest 资源无 tf_code,
+	// 从 active version 的 manifest_files 浅 parse module 实例的 source,
+	// 把 "module.<name>" 资源映射回平台 module → schema → outputs。
+	if workspace.ManifestDeploymentID != nil && *workspace.ManifestDeploymentID != "" &&
+		workspace.ManifestActiveTag != nil && *workspace.ManifestActiveTag != "" {
+		moduleSources := c.parseManifestModuleSources(*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag, workspace.ManifestSubpath)
+		if len(moduleSources) > 0 {
+			for _, resource := range resources {
+				if _, ok := resourceModuleMap[resource.ResourceID]; ok {
+					continue
+				}
+				// manifest module 实例 resource_id = "module.<name>"
+				name := strings.TrimPrefix(resource.ResourceID, "module.")
+				if name == resource.ResourceID {
+					continue // 非 module 资源
+				}
+				if src, ok := moduleSources[name]; ok {
+					if info, ok := resolveModuleInfo(src); ok {
+						resourceModuleMap[resource.ResourceID] = info
+					}
+				}
+			}
+		}
 	}
 
 	// 构建响应
@@ -927,6 +947,36 @@ func (c *WorkspaceOutputController) GetAvailableOutputs(ctx *gin.Context) {
 }
 
 // extractModuleSourceFromTFCode 从 tf_code 中提取 module source
+// parseManifestModuleSources 拉 active manifest version 的 manifest_files,浅 parse 出
+// module 实例的 (instance_name -> source) 映射。供 manifest-managed workspace 的输出提示
+// 把 "module.<name>" 资源映射回平台 module。tag → version_id 通过 deployment+version JOIN。
+func (c *WorkspaceOutputController) parseManifestModuleSources(deploymentID, tag string, subpath *string) map[string]string {
+	// deployment → version_id;再用 tag 校验(active_tag 与 deployment.version 应一致)
+	var dep models.ManifestDeployment
+	if err := c.db.Where("id = ?", deploymentID).First(&dep).Error; err != nil {
+		return nil
+	}
+	var rows []models.ManifestFile
+	if err := c.db.Select("path, content").
+		Where("manifest_id = ? AND version_id = ?", dep.ManifestID, dep.VersionID).
+		Where("path LIKE ?", "%.tf").
+		Find(&rows).Error; err != nil {
+		return nil
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	scope := make(map[string][]byte, len(rows))
+	for _, r := range rows {
+		scope[r.Path] = r.Content
+	}
+	sp := ""
+	if subpath != nil {
+		sp = *subpath
+	}
+	return services.ParseManifestModuleSources(scope, sp)
+}
+
 func (c *WorkspaceOutputController) extractModuleSourceFromTFCode(tfCode models.JSONB) string {
 	if tfCode == nil {
 		return ""

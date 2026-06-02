@@ -21,6 +21,26 @@ type ManifestResourceRef struct {
 	File string // 来自哪个文件(便于 UI 展示)
 }
 
+// WorkspaceResourceID 返回该 ref 落 workspace_resources 时的 resource_id。
+//   - resource 块: "<type>.<name>" (如 aws_vpc.main),对齐 terraform 资源地址
+//   - module 块:   "module.<name>" (如 module.network),对齐 terraform module 地址
+func (r ManifestResourceRef) WorkspaceResourceID() string {
+	if r.Kind == "module" {
+		return "module." + r.Name
+	}
+	return r.Type + "." + r.Name
+}
+
+// WorkspaceResourceType 返回落表用的 resource_type。
+// module 块没有真实资源类型,统一用 "module" 占位(具体 module source 由输出提示
+// 端点从 manifest_files 实时解析,不冗余存这里)。
+func (r ManifestResourceRef) WorkspaceResourceType() string {
+	if r.Kind == "module" {
+		return "module"
+	}
+	return r.Type
+}
+
 // ParseManifestResources 浅 parse 一组 .tf 文件,只取 top-level resource / module block 的标签。
 //
 // - 仅扫顶层 .tf 文件(模块内部资源不展开,那是 terraform 自己的事)
@@ -32,6 +52,10 @@ type ManifestResourceRef struct {
 func ParseManifestResources(scopeFiles map[string][]byte, subpath string) []ManifestResourceRef {
 	parser := hclparse.NewParser()
 	var refs []ManifestResourceRef
+	// 去重: 同一 (kind, type, name) 只保留首次出现。两个文件声明同名 resource 在
+	// 单文件维度各自合法,但落 workspace_resources 时 resource_id=<type>.<name> 唯一,
+	// 不去重会插入重复行,且 upgrade reconcile 的 map 会漏删(spec: best-effort 视图)。
+	seen := make(map[string]bool)
 
 	subpath = strings.TrimSuffix(subpath, "/")
 
@@ -62,6 +86,11 @@ func ParseManifestResources(scopeFiles map[string][]byte, subpath string) []Mani
 			switch block.Type {
 			case "resource":
 				if len(block.Labels) >= 2 {
+					key := "resource\x00" + block.Labels[0] + "\x00" + block.Labels[1]
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
 					refs = append(refs, ManifestResourceRef{
 						Kind: "resource",
 						Type: block.Labels[0],
@@ -71,6 +100,11 @@ func ParseManifestResources(scopeFiles map[string][]byte, subpath string) []Mani
 				}
 			case "module":
 				if len(block.Labels) >= 1 {
+					key := "module\x00\x00" + block.Labels[0]
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
 					refs = append(refs, ManifestResourceRef{
 						Kind: "module",
 						Type: "",
@@ -83,6 +117,58 @@ func ParseManifestResources(scopeFiles map[string][]byte, subpath string) []Mani
 	}
 
 	return refs
+}
+
+// ParseManifestModuleSources 浅 parse 一组 .tf 文件,提取顶层 module block 的
+// (instance_name -> source) 映射。供 workspace 输出提示把 manifest-managed 资源
+// (无 tf_code)映射回平台 module → schema → outputs。
+//
+// 只取 subpath 直接下层 .tf(与执行/解析 scope 一致);source 取字面量字符串,
+// 非字面量(引用变量等)跳过;半成品 HCL skip。同名 module 取首个。
+func ParseManifestModuleSources(scopeFiles map[string][]byte, subpath string) map[string]string {
+	parser := hclparse.NewParser()
+	out := make(map[string]string)
+	subpath = strings.TrimSuffix(subpath, "/")
+
+	for path, content := range scopeFiles {
+		if !shouldParseForResources(path, subpath) {
+			continue
+		}
+		file, diags := parser.ParseHCL(content, path)
+		if diags.HasErrors() || file == nil {
+			continue
+		}
+		schema := &hcl.BodySchema{
+			Blocks: []hcl.BlockHeaderSchema{
+				{Type: "module", LabelNames: []string{"name"}},
+			},
+		}
+		bodyContent, _, partDiags := file.Body.PartialContent(schema)
+		if partDiags.HasErrors() || bodyContent == nil {
+			continue
+		}
+		for _, block := range bodyContent.Blocks {
+			if block.Type != "module" || len(block.Labels) < 1 {
+				continue
+			}
+			name := block.Labels[0]
+			if _, ok := out[name]; ok {
+				continue
+			}
+			attrContent, _, _ := block.Body.PartialContent(&hcl.BodySchema{
+				Attributes: []hcl.AttributeSchema{{Name: "source"}},
+			})
+			if attrContent == nil {
+				continue
+			}
+			if a, ok := attrContent.Attributes["source"]; ok {
+				if v, vdiags := a.Expr.Value(nil); !vdiags.HasErrors() && v.Type() == cty.String {
+					out[name] = v.AsString()
+				}
+			}
+		}
+	}
+	return out
 }
 
 // ManifestVariableMeta 从 variable block 浅 parse 出的 input variable 元信息
@@ -194,6 +280,12 @@ func rawExprSource(content []byte, expr hcl.Expression) string {
 		return ""
 	}
 	return strings.TrimSpace(string(content[start:end]))
+}
+
+// IsTopLevelTFUnderSubpath 判断 path 是否为 subpath 直接下层(非递归)的 .tf 文件。
+// 导出供 deployment install 的 subpath 存在性校验复用,确保校验范围与实际解析/执行一致。
+func IsTopLevelTFUnderSubpath(path, subpath string) bool {
+	return shouldParseForResources(path, subpath)
 }
 
 // shouldParseForResources 仅顶层 .tf 文件 (在 subpath 下) 才扫

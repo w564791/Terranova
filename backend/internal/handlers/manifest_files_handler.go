@@ -345,6 +345,15 @@ func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// draft.reset 是破坏性操作(用某版本整体覆盖当前用户草稿),审计。
+	// 注: draft.save(PutFile)是 1s 自动保存高频私有写,无审计价值,故不逐次记录。
+	writeManifestAudit(h.db, auditResourceManifestDraft, "draft.reset", userID, map[string]interface{}{
+		"manifest_id": manifestID,
+		"reset_from":  versionID,
+		"version":     v.Version,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"reset_from": versionID})
 }
 

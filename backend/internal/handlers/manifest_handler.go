@@ -197,6 +197,12 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 		return
 	}
 
+	writeManifestAudit(h.db, auditResourceManifest, "manifest.create", userID, map[string]interface{}{
+		"manifest_id":     manifest.ID,
+		"organization_id": orgID,
+		"name":            manifest.Name,
+	})
+
 	c.JSON(http.StatusCreated, manifest)
 }
 
@@ -286,6 +292,12 @@ func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 		return
 	}
 
+	writeManifestAudit(h.db, auditResourceManifest, "manifest.delete", c.GetString("user_id"), map[string]interface{}{
+		"manifest_id":     id,
+		"organization_id": orgID,
+		"name":            manifest.Name,
+	})
+
 	c.Status(http.StatusNoContent)
 }
 
@@ -348,7 +360,13 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 		return
 	}
 	if len(rows) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No files to export"})
+		// 私有草稿模型下,无 published 版本时只能导出"自己的"草稿;若调用者没有草稿
+		// (常见于他人创建、尚未发布的 manifest),给出可操作的提示而非裸 404。
+		msg := "No files to export"
+		if label == "draft" {
+			msg = "this manifest has no published version and you have no draft of it yet; open it in the editor to create a draft, or publish a version first"
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": msg})
 		return
 	}
 

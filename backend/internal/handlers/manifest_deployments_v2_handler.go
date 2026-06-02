@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -160,15 +161,13 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 			}
 		}
 
-		// 3. 浅 parse 结果写 workspace_resources
+		// 3. 浅 parse 结果写 workspace_resources(resource 块与 module 块都写,
+		//    module 实例 resource_id="module.<name>",输出提示端点据此解析 source)
 		for _, ref := range resourceRefs {
-			if ref.Kind != "resource" {
-				continue
-			}
 			row := models.WorkspaceResource{
 				WorkspaceID:          req.WorkspaceID,
-				ResourceID:           fmt.Sprintf("%s.%s", ref.Type, ref.Name),
-				ResourceType:         ref.Type,
+				ResourceID:           ref.WorkspaceResourceID(),
+				ResourceType:         ref.WorkspaceResourceType(),
 				ResourceName:         ref.Name,
 				IsActive:             true,
 				ManifestDeploymentID: &deploymentID,
@@ -298,13 +297,10 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 			oldSet[r.ResourceID] = r.ID
 		}
 
-		// 新资源 set (resource_id = "<type>.<name>")
+		// 新资源 set (resource 块 "<type>.<name>" + module 块 "module.<name>")
 		newSet := make(map[string]bool)
 		for _, ref := range newRefs {
-			if ref.Kind != "resource" {
-				continue
-			}
-			newSet[fmt.Sprintf("%s.%s", ref.Type, ref.Name)] = true
+			newSet[ref.WorkspaceResourceID()] = true
 		}
 
 		// 删除旧集合中存在、新集合不存在的
@@ -317,17 +313,14 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		}
 		// 插入新集合中存在、旧集合不存在的
 		for _, ref := range newRefs {
-			if ref.Kind != "resource" {
-				continue
-			}
-			rid := fmt.Sprintf("%s.%s", ref.Type, ref.Name)
+			rid := ref.WorkspaceResourceID()
 			if _, ok := oldSet[rid]; ok {
 				continue
 			}
 			if err := tx.Create(&models.WorkspaceResource{
 				WorkspaceID:          dep.WorkspaceID,
 				ResourceID:           rid,
-				ResourceType:         ref.Type,
+				ResourceType:         ref.WorkspaceResourceType(),
 				ResourceName:         ref.Name,
 				IsActive:             true,
 				ManifestDeploymentID: &deploymentID,
@@ -582,18 +575,26 @@ func (h *ManifestDeploymentsV2Handler) workspaceIsEmpty(workspaceID string, ws *
 	return true, ""
 }
 
-// subpathExistsInVersion: 校验 subpath 下至少有一个 .tf 文件
+// subpathExistsInVersion: 校验 subpath 直接下层(非递归)至少有一个 .tf 文件。
+//
+// 必须与执行/解析的 scope 语义一致: terraform 在 cd subpath 后只读该目录顶层 .tf,
+// 不递归子目录。所以这里也只认 subpath 的直接子级 .tf —— 用 ParseManifestResources
+// 同款 shouldParse 规则,避免"深层嵌套 .tf 让校验通过、实际 plan 目录却为空"。
 func (h *ManifestDeploymentsV2Handler) subpathExistsInVersion(manifestID, versionID, subpath string) bool {
-	var n int64
-	prefix := subpath
-	if prefix != "" && prefix[len(prefix)-1] != '/' {
-		prefix = prefix + "/"
-	}
-	h.db.Model(&models.ManifestFile{}).
+	var rows []models.ManifestFile
+	if err := h.db.Select("path").
 		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Where("path LIKE ?", prefix+"%.tf").
-		Count(&n)
-	return n > 0
+		Where("path LIKE ?", "%.tf").
+		Find(&rows).Error; err != nil {
+		return false
+	}
+	sp := strings.TrimSuffix(subpath, "/")
+	for _, r := range rows {
+		if services.IsTopLevelTFUnderSubpath(r.Path, sp) {
+			return true
+		}
+	}
+	return false
 }
 
 // shallowParseVersionResources 拉 version 的 manifest_files,浅 parse 出 resource/module refs
