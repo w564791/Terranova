@@ -197,9 +197,12 @@ func (h *ManifestFilesHandler) PutFile(c *gin.Context) {
 	}
 
 	// UPSERT 走部分唯一索引 uq_mf_draft (manifest_id, owner_user_id, path) WHERE version_id IS NULL
+	// 必须用 TargetWhere(= ON CONFLICT (...) WHERE <谓词>,匹配部分索引),不能用 Where。
+	// Where 会落到 DO UPDATE ... WHERE,那里 version_id 同时存在于目标表与 excluded 伪表,
+	// 触发 "column reference version_id is ambiguous"。
 	if err := h.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "manifest_id"}, {Name: "owner_user_id"}, {Name: "path"}},
-		Where:   clause.Where{Exprs: []clause.Expression{clause.Eq{Column: "version_id", Value: nil}}},
+		Columns:     []clause.Column{{Name: "manifest_id"}, {Name: "owner_user_id"}, {Name: "path"}},
+		TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Eq{Column: "version_id", Value: nil}}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"content", "mime", "size", "is_binary", "updated_at",
 		}),
