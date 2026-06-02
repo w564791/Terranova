@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 )
@@ -28,11 +29,12 @@ import (
 // 关键性质: 这三个写动作都是纯元信息操作(无 terraform 调用,不动云端)。
 // 真实云端变更靠 workspace 现有 plan / plan+apply 任务。
 type ManifestDeploymentsV2Handler struct {
-	db *gorm.DB
+	db   *gorm.DB
+	perm *middleware.IAMPermissionMiddleware // 用于 deployment 写动作叠加目标 workspace 权限
 }
 
-func NewManifestDeploymentsV2Handler(db *gorm.DB) *ManifestDeploymentsV2Handler {
-	return &ManifestDeploymentsV2Handler{db: db}
+func NewManifestDeploymentsV2Handler(db *gorm.DB, perm *middleware.IAMPermissionMiddleware) *ManifestDeploymentsV2Handler {
+	return &ManifestDeploymentsV2Handler{db: db, perm: perm}
 }
 
 // ListDeployments 列出某 manifest 的所有 deployment
@@ -73,6 +75,11 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// 叠加目标 workspace 写权限(组织级 manifest 权限之外,还需对该 workspace 有 WRITE)
+	if h.perm != nil && !h.perm.RequireWorkspacePermission(c, req.WorkspaceID, "WRITE") {
+		return // 403 已写
 	}
 
 	// 校验 version 属于本 manifest 且非草稿
@@ -229,6 +236,11 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		return
 	}
 
+	// 叠加目标 workspace 写权限(workspace 藏在 deployment 记录里,需在此校验)
+	if h.perm != nil && !h.perm.RequireWorkspacePermission(c, dep.WorkspaceID, "WRITE") {
+		return // 403 已写
+	}
+
 	// 校验 target version 属于本 manifest
 	var version models.ManifestVersion
 	if err := h.db.Where("id = ? AND manifest_id = ?", req.TargetVersionID, manifestID).First(&version).Error; err != nil {
@@ -369,6 +381,11 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 	if dep.Status != models.DeploymentStatusActive {
 		c.JSON(http.StatusConflict, gin.H{"error": "deployment is not active"})
 		return
+	}
+
+	// 叠加目标 workspace 写权限(workspace 藏在 deployment 记录里,需在此校验)
+	if h.perm != nil && !h.perm.RequireWorkspacePermission(c, dep.WorkspaceID, "WRITE") {
+		return // 403 已写
 	}
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {

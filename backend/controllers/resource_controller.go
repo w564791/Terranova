@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"iac-platform/internal/models"
 	"iac-platform/services"
@@ -159,7 +160,13 @@ func (c *ResourceController) AddResource(ctx *gin.Context) {
 	)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// manifest-managed / 资源已存在 等冲突类错误返回 409,其余 500
+		msg := err.Error()
+		if strings.Contains(msg, "managed by a manifest") || strings.Contains(msg, "already exists") {
+			ctx.JSON(http.StatusConflict, gin.H{"error": msg})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": msg})
 		return
 	}
 

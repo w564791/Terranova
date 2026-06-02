@@ -72,7 +72,7 @@ func RegisterManifestRoutes(r *gin.RouterGroup, db *gorm.DB, queueManager TaskQu
 func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
 	filesH := handlers.NewManifestFilesHandler(db)
 	versionsH := handlers.NewManifestVersionsHandler(db)
-	deploysH := handlers.NewManifestDeploymentsV2Handler(db)
+	deploysH := handlers.NewManifestDeploymentsV2Handler(db, iamMiddleware)
 
 	g := r.Group("/organizations/:org_id/manifests/:id")
 	g.Use(middleware.JWTAuth())
