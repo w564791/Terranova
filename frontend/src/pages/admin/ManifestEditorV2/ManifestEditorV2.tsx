@@ -1,12 +1,10 @@
 /**
  * Manifest Editor v2 — VS Code Web 工作区(B2 模式)
  *
- * 视觉 1:1 对齐 manifest-vscode-mockup.html demo。
- * 数据接 PR1 实现的 manifest_files API。
+ * 视觉 1:1 对齐 manifest-vscode-mockup.html demo,数据接 manifest_files API。
  *
- * 当前阶段(PR2-B 验收): layout shell + 文件树 + tab + Monaco 接 manifest_files。
- * Toolbar 三按钮(Run/发布/部署)是占位,弹窗在 PR2-D。
- * HCL 高亮在 PR2-C。
+ * 能力: layout shell + 文件树 + tab + Monaco(HCL 高亮 + 4 个 provider)接 manifest_files;
+ * Toolbar 三按钮 Run / 发布 / 部署 分别挂 RunDialog / PublishVersionDialog / DeployDialog。
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
