@@ -28,10 +28,13 @@ import {
   deleteFile,
   deleteDir,
   moveFile,
+  listVersions,
   languageOfPath,
   type ManifestFileEntry,
   type ManifestEditorContext,
+  type ManifestVersion,
 } from './manifestApi'
+import { exportManifestZip } from '../../../services/manifestApi'
 import styles from './ManifestEditorV2.module.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
@@ -104,6 +107,10 @@ export default function ManifestEditorV2() {
   const [ghostDir, setGhostDir] = useState<string | null>(null)
   // 内联新建目录输入:!== null 时 sidebar 顶部出现目录名输入行
   const [creatingDir, setCreatingDir] = useState<string | null>(null)
+  // sidebar 当前视图:explorer(文件树) | history(版本历史)
+  const [activeView, setActiveView] = useState<'explorer' | 'history'>('explorer')
+  const [versions, setVersions] = useState<ManifestVersion[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
 
   // ========== 初始化: 起 vscode-api + 创建编辑器 ==========
   useEffect(() => {
@@ -358,6 +365,42 @@ export default function ManifestEditorV2() {
     await flushSaveRef.current()
     navigate('/admin/manifests')
   }, [navigate])
+
+  // 拉已发布版本列表(切到历史视图 / 发布后刷新时调)
+  const loadVersions = useCallback(() => {
+    setVersionsLoading(true)
+    listVersions(ctx)
+      .then((vs) => setVersions(vs))
+      .catch(() => setVersions([]))
+      .finally(() => setVersionsLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx])
+
+  // 切到历史视图时拉一次
+  useEffect(() => {
+    if (activeView === 'history') loadVersions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView])
+
+  // 导出某版本为 zip(走 api client 带 token,不能用裸 <a href> 否则 401)
+  const exportVersion = useCallback(
+    async (versionId: string, label: string) => {
+      try {
+        const blob = await exportManifestZip(String(orgId), manifestId, versionId)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${manifestId}-${label}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (err: any) {
+        message.error(`导出失败: ${err?.message ?? err}`)
+      }
+    },
+    [orgId, manifestId],
+  )
 
   // 路径合法性校验(与后端 normalizeAndValidatePath 对齐),返回错误文案或 null
   const validatePath = useCallback(
@@ -786,25 +829,37 @@ export default function ManifestEditorV2() {
       </div>
 
       <div className={styles.activityBar}>
-        <div className={`${styles.item} ${styles.active}`} title="资源管理器">
+        <div
+          className={`${styles.item} ${activeView === 'explorer' ? styles.active : ''}`}
+          title="资源管理器"
+          role="button"
+          onClick={() => setActiveView('explorer')}
+        >
           <i className="codicon codicon-files" />
         </div>
-        <div className={styles.item} title="搜索">
+        <div className={`${styles.item} ${styles.disabled}`} title="搜索 (用编辑器内 Cmd+F)">
           <i className="codicon codicon-search" />
         </div>
         <div className={`${styles.item} ${styles.disabled}`} title="源代码管理 (本期不启用 — 直接存 Postgres)">
           <i className="codicon codicon-source-control" />
         </div>
-        <div className={styles.item} title="版本与部署历史">
+        <div
+          className={`${styles.item} ${activeView === 'history' ? styles.active : ''}`}
+          title="版本历史"
+          role="button"
+          onClick={() => setActiveView('history')}
+        >
           <i className="codicon codicon-history" />
         </div>
         <div className={styles.spacer} />
-        <div className={styles.item} title="配置">
+        <div className={`${styles.item} ${styles.disabled}`} title="配置">
           <i className="codicon codicon-settings-gear" />
         </div>
       </div>
 
       <div className={styles.sideBar}>
+        {activeView === 'explorer' && (
+        <>
         <div className={styles.header}>
           <span>资源管理器</span>
           <span className={styles.actions}>
@@ -930,6 +985,51 @@ export default function ManifestEditorV2() {
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {activeView === 'history' && (
+          <>
+            <div className={styles.header}>
+              <span>版本历史</span>
+              <span className={styles.actions}>
+                <i className="codicon codicon-refresh" title="刷新" onClick={loadVersions} />
+              </span>
+            </div>
+            <div className={styles.tree}>
+              {versionsLoading && (
+                <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12 }}>加载中...</div>
+              )}
+              {!versionsLoading && versions.length === 0 && (
+                <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12, lineHeight: 1.5 }}>
+                  还没有已发布版本。
+                  <br />
+                  点顶栏「发布版本」把当前草稿固化为 vX.Y.Z。
+                </div>
+              )}
+              {!versionsLoading &&
+                versions.map((v) => (
+                  <div key={v.id} className={styles.versionRow}>
+                    <div className={styles.versionHead}>
+                      <i className="codicon codicon-tag" style={{ color: '#4ec9b0' }} />
+                      <span className={styles.versionTag}>{v.version}</span>
+                      <i
+                        className={`codicon codicon-cloud-download ${styles.versionExport}`}
+                        title="导出该版本为 zip"
+                        role="button"
+                        onClick={() => void exportVersion(v.id, v.version)}
+                      />
+                    </div>
+                    {v.changelog && <div className={styles.versionChangelog}>{v.changelog}</div>}
+                    <div className={styles.versionMeta}>
+                      {v.created_by}
+                      {v.created_at ? ` · ${new Date(v.created_at).toLocaleString()}` : ''}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className={styles.editorArea}>
@@ -999,6 +1099,10 @@ export default function ManifestEditorV2() {
         open={publishOpen}
         ctx={ctx}
         onClose={() => setPublishOpen(false)}
+        onPublished={() => {
+          // 发布成功后刷新历史(若历史面板正开着)
+          if (activeView === 'history') loadVersions()
+        }}
       />
       <DeployDialog
         open={deployOpen}

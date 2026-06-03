@@ -260,6 +260,29 @@ export function registerHclCompletion(): void {
             }),
           )
         } else if (block.kind === 'resource' || block.kind === 'data' || block.kind === 'module') {
+          // module 块固有字段 source / version(排在 meta 参数前)
+          if (block.kind === 'module') {
+            suggestions.push({
+              label: 'source',
+              kind: monaco.languages.CompletionItemKind.Property,
+              detail: 'module source',
+              insertText: 'source = "${1}"',
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              // 插入后立刻触发建议,弹出 source 引号内的平台 module 列表
+              command: { id: 'editor.action.triggerSuggest', title: '' },
+              range,
+              sortText: '5a_source',
+            })
+            suggestions.push({
+              label: 'version',
+              kind: monaco.languages.CompletionItemKind.Property,
+              detail: 'module version',
+              insertText: 'version = "${1}"',
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              range,
+              sortText: '5b_version',
+            })
+          }
           // 资源/数据/模块块内 → meta 参数
           META_ARGS.forEach((a) =>
             suggestions.push({

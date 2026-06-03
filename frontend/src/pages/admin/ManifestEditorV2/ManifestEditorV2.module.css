@@ -165,6 +165,21 @@
 .treeNode.deleting { background: rgba(244, 135, 113, 0.12); }
 .treeNode.deleting .rowActions { opacity: 1; }
 
+/* ===== 版本历史面板 ===== */
+.versionRow {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #2b2b2b);
+}
+.versionHead { display: flex; align-items: center; gap: 6px; }
+.versionTag { font-weight: 600; color: var(--fg-default, #cccccc); font-size: 13px; }
+.versionExport {
+  margin-left: auto; cursor: pointer; color: var(--fg-muted, #858585);
+  padding: 2px 4px; border-radius: 3px;
+}
+.versionExport:hover { background: var(--hover, #2a2d2e); color: var(--fg-default, #cccccc); }
+.versionChangelog { color: var(--fg-default, #cccccc); font-size: 12px; margin: 4px 0 2px; line-height: 1.4; }
+.versionMeta { color: var(--fg-muted, #858585); font-size: 11px; }
+
 /* 内联新建/重命名输入框: VS Code 风格,就地在文件树行里编辑,不弹窗 */
 .inlineInput {
   flex: 1;
