@@ -52,8 +52,15 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
     Promise.all([
       listVersions(ctx).catch(() => []),
       listDeployments(ctx).catch(() => []),
-      workspaceService.getWorkspaces().then((r) => r.data).catch(() => []),
-      variableSetService.list().then((r) => r.items).catch(() => []),
+      // /workspaces 响应是 {code, data:{items:[...]}};取 data.items,带数组兜底
+      workspaceService
+        .getWorkspaces()
+        .then((r) => {
+          const d: any = (r as any)?.data
+          return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
+        })
+        .catch(() => []),
+      variableSetService.list().then((r) => r.items ?? []).catch(() => []),
     ])
       .then(([v, d, w, vs]) => {
         setVersions(v)
@@ -76,7 +83,8 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
   // 选中版本声明的 input variables(发布时静态解析得到),供用户对照该喂哪些变量
   const selectedVersionVars = useMemo(() => {
     const v = versions.find((x) => x.id === versionId)
-    return v?.variables ?? []
+    // variables 是后端 JSONB,理论上恒为数组,但防御性兜底避免 .map 崩
+    return Array.isArray(v?.variables) ? v!.variables : []
   }, [versions, versionId])
 
   const targetMode: 'install' | 'upgrade' | 'foreign' = useMemo(() => {

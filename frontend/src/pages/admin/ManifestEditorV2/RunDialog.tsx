@@ -45,11 +45,18 @@ export default function RunDialog({ open, ctx, onClose }: Props) {
     setLoading(true)
     Promise.all([
       listDeployments(ctx).catch(() => []),
-      workspaceService.getWorkspaces().then((r) => r.data).catch(() => []),
+      // /workspaces 响应是 {code, data:{items:[...]}};取 data.items,带数组兜底
+      workspaceService
+        .getWorkspaces()
+        .then((r) => {
+          const d: any = (r as any)?.data
+          return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
+        })
+        .catch(() => []),
     ])
       .then(([deployments, workspaces]) => {
         const wsByID = new Map<string, Workspace>()
-        workspaces.forEach((w) => {
+        ;(workspaces as Workspace[]).forEach((w) => {
           wsByID.set(w.workspace_id || String(w.id), w)
         })
         const list: RunTarget[] = deployments
