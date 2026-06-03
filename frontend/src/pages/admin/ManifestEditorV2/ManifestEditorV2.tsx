@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
@@ -57,6 +57,7 @@ function fileToBase64(file: File): Promise<string> {
 export default function ManifestEditorV2() {
   const params = useParams<{ id: string; org_id?: string }>()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const manifestId = params.id || 'sandbox'
   // org_id 多源 fallback: path param > query string ?org= > localStorage > '1'
   const orgId =
@@ -155,8 +156,14 @@ export default function ManifestEditorV2() {
           setSaveStatus('saving')
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
           saveTimerRef.current = setTimeout(() => {
-            void saveCurrentFile()
+            void flushSaveRef.current()
           }, AUTOSAVE_DEBOUNCE_MS)
+        })
+
+        // 劫持 Cmd/Ctrl+S:立即保存当前文件,阻止浏览器"保存网页"。
+        // 用 ref 调最新 save 逻辑(addCommand 注册一次,闭包会过期)。
+        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          void flushSaveRef.current()
         })
       })
       .catch((err: unknown) => {
@@ -172,6 +179,18 @@ export default function ManifestEditorV2() {
       editorRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 窗口级 Cmd/Ctrl+S 拦截:焦点不在 Monaco 内(如文件树)时也阻止浏览器"保存网页"
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault()
+        void flushSaveRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
   // ========== 加载文件树 ==========
@@ -209,6 +228,11 @@ export default function ManifestEditorV2() {
     currentFileRef.current = currentFile
   }, [currentFile])
 
+  // flushSaveRef: 立即保存"当前 model 的内容到当前 path",取消 pending 防抖。
+  // 用 ref 持有,避免一次性注册的编辑器监听器/快捷键拿到 stale 闭包。
+  // 切文件前必须 flush,否则 1s 防抖未触发时切走会丢上一个文件的修改。
+  const flushSaveRef = useRef<() => Promise<void>>(async () => {})
+
   const openFile = useCallback(
     async (path: string) => {
       // 等编辑器创建完成
@@ -217,6 +241,11 @@ export default function ManifestEditorV2() {
       }
       const ed = editorRef.current
       if (!ed) return
+
+      // 切到新文件前,先把上一个文件的待保存内容刷盘(防 1s 防抖窗口内切走丢改动)
+      if (currentFileRef.current && currentFileRef.current !== path) {
+        await flushSaveRef.current()
+      }
 
       setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
       setCurrentFile(path)
@@ -265,11 +294,13 @@ export default function ManifestEditorV2() {
         if (path === currentFile) {
           const fallback = next[0] ?? null
           if (fallback) {
-            void openFile(fallback)
+            void openFile(fallback) // openFile 内部会先 flush 当前文件
           } else {
-            setCurrentFile(null)
-            const m = editorRef.current?.getModel()
-            m?.setValue('')
+            // 关掉最后一个 tab:先 flush 再清空(防丢未保存改动)
+            void flushSaveRef.current().then(() => {
+              setCurrentFile(null)
+              editorRef.current?.getModel()?.setValue('')
+            })
           }
         }
         return next
@@ -280,9 +311,16 @@ export default function ManifestEditorV2() {
 
   // ========== 保存当前文件 ==========
   const saveCurrentFile = useCallback(async () => {
+    // 取消 pending 防抖(无论是 flush 还是 Cmd+S 主动触发,都应吃掉排队的那次)
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
     const path = currentFileRef.current
     const ed = editorRef.current
     if (!path || !ed) return
+    // dirty 才需要写;非 dirty 的 flush 直接跳过,省一次 PUT
+    if (!dirtyFilesRef.current.has(path)) return
     const value = ed.getModel()?.getValue() ?? ''
     fileContentCache.current.set(path, value)
     try {
@@ -302,6 +340,21 @@ export default function ManifestEditorV2() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, manifestId])
+
+  // 让一次性注册的监听器/快捷键始终调到最新 saveCurrentFile
+  const dirtyFilesRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    dirtyFilesRef.current = dirtyFiles
+  }, [dirtyFiles])
+  useEffect(() => {
+    flushSaveRef.current = saveCurrentFile
+  }, [saveCurrentFile])
+
+  // 关闭编辑器(左上红灯):先 flush 当前文件,再返回 manifest 列表
+  const handleClose = useCallback(async () => {
+    await flushSaveRef.current()
+    navigate('/admin/manifests')
+  }, [navigate])
 
   // 路径合法性校验(与后端 normalizeAndValidatePath 对齐),返回错误文案或 null
   const validatePath = useCallback(
@@ -671,7 +724,12 @@ export default function ManifestEditorV2() {
     <div className={styles.root}>
       <div className={styles.titleBar}>
         <div className={styles.traffic}>
-          <span className={styles.red} />
+          <span
+            className={styles.red}
+            title="关闭编辑器(返回 Manifest 列表)"
+            role="button"
+            onClick={() => void handleClose()}
+          />
           <span className={styles.yellow} />
           <span className={styles.green} />
         </div>

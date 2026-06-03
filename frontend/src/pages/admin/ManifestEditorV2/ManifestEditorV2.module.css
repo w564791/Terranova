@@ -54,7 +54,8 @@
 }
 .traffic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; }
 .traffic span { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
-.traffic .red    { background: #ff5f57; }
+.traffic .red    { background: #ff5f57; cursor: pointer; }
+.traffic .red:hover { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35); }
 .traffic .yellow { background: #febc2e; }
 .traffic .green  { background: #28c840; }
 .breadcrumb { color: var(--fg-default); }
