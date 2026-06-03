@@ -16,6 +16,7 @@ import { Modal, message } from 'antd'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
+import { registerHclCompletion } from './hclCompletion'
 import PublishVersionDialog from './PublishVersionDialog'
 import DeployDialog from './DeployDialog'
 import RunDialog from './RunDialog'
@@ -106,6 +107,8 @@ export default function ManifestEditorV2() {
         registerHclLanguage()
         // 注册 4 个 demo provider (Completion / Hover / InlayHint / CodeAction)
         registerHclProviders()
+        // 通用 HCL 补全 (Tier1 关键字/骨架 + Tier2 引用 + Tier3 平台 module 属性)
+        registerHclCompletion()
         // spec §10.3.3: Inlay Hint (· N demos) 不用 monaco 默认灰,覆盖为高对比青绿,
         // 让 demo 标签看起来既"是信息"也"是按钮"。
         monaco.editor.defineTheme('vs-dark-manifest', {

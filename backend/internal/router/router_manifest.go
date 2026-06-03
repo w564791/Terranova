@@ -185,5 +185,9 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
 			editorH.ListDemos,
 		)
+		editor.GET("/modules/:module_id/inputs",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			editorH.ListModuleInputs,
+		)
 	}
 }

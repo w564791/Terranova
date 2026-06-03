@@ -150,5 +150,95 @@ func (h *ManifestEditorHandler) ListDemos(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"demos": out})
 }
 
+// ModuleInputField 编辑器补全用的 module 输入变量定义
+type ModuleInputField struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`        // string / number / boolean / object / array
+	Required    bool   `json:"required"`
+	Description string `json:"description"`
+	Default     string `json:"default,omitempty"` // 有默认值时的展示字符串(原样,仅提示)
+}
+
+// ListModuleInputs GET /manifest-editor/modules/:module_id/inputs
+//
+// 从 module 活跃 schema 的 OpenAPI 定义提取输入变量(name/type/required/description),
+// 供编辑器在 module 块内做属性补全(Tier3)。数据源与输出提示同款:
+// components.schemas.ModuleInput.properties + required 数组。
+func (h *ManifestEditorHandler) ListModuleInputs(c *gin.Context) {
+	idStr := c.Param("module_id")
+	moduleID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid module_id"})
+		return
+	}
+
+	// 活跃 schema, 优先 v2
+	var schema models.Schema
+	if err := h.db.Where("module_id = ? AND status = ?", uint(moduleID), "active").
+		Order("CASE WHEN schema_version = 'v2' THEN 0 ELSE 1 END, created_at DESC").
+		First(&schema).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusOK, gin.H{"inputs": []ModuleInputField{}})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"inputs": extractModuleInputs(schema.OpenAPISchema)})
+}
+
+// extractModuleInputs 从 OpenAPI schema 的 components.schemas.ModuleInput 提取输入变量。
+func extractModuleInputs(schema models.JSONB) []ModuleInputField {
+	out := []ModuleInputField{}
+	components, ok := schema["components"].(map[string]interface{})
+	if !ok {
+		return out
+	}
+	schemas, ok := components["schemas"].(map[string]interface{})
+	if !ok {
+		return out
+	}
+	moduleInput, ok := schemas["ModuleInput"].(map[string]interface{})
+	if !ok {
+		return out
+	}
+
+	// required 名单
+	requiredSet := map[string]bool{}
+	if reqArr, ok := moduleInput["required"].([]interface{}); ok {
+		for _, r := range reqArr {
+			if s, ok := r.(string); ok {
+				requiredSet[s] = true
+			}
+		}
+	}
+
+	props, ok := moduleInput["properties"].(map[string]interface{})
+	if !ok {
+		return out
+	}
+	for name, raw := range props {
+		p, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		field := ModuleInputField{Name: name, Required: requiredSet[name]}
+		if t, ok := p["type"].(string); ok {
+			field.Type = t
+		}
+		if d, ok := p["description"].(string); ok {
+			field.Description = d
+		}
+		if dv, ok := p["default"]; ok {
+			if b, mErr := json.Marshal(dv); mErr == nil {
+				field.Default = string(b)
+			}
+		}
+		out = append(out, field)
+	}
+	return out
+}
+
 // 占位防 lint: models 包导入不能为空
 var _ = models.ModuleDemo{}

@@ -30,9 +30,19 @@ export interface DemoSummary {
   change_summary: string
 }
 
+// module 输入变量定义(Tier3 属性补全用),来自 /manifest-editor/modules/:id/inputs
+export interface ModuleInputField {
+  name: string
+  type: string
+  required: boolean
+  description: string
+  default?: string
+}
+
 const CACHE_TTL_MS = 60_000
 let modulesCache: { at: number; data: ModuleSummary[] } | null = null
 const demosCache = new Map<number, { at: number; data: DemoSummary[] }>()
+const inputsCache = new Map<number, { at: number; data: ModuleInputField[] }>()
 
 function isFresh(at: number) {
   return Date.now() - at < CACHE_TTL_MS
@@ -72,6 +82,24 @@ export async function fetchDemos(moduleId: number): Promise<DemoSummary[]> {
   }
 }
 
+export async function fetchInputs(moduleId: number): Promise<ModuleInputField[]> {
+  const cached = inputsCache.get(moduleId)
+  if (cached && isFresh(cached.at)) {
+    return cached.data
+  }
+  try {
+    const data = (await api.get(`/manifest-editor/modules/${moduleId}/inputs`)) as {
+      inputs?: ModuleInputField[]
+    }
+    const inputs = data.inputs ?? []
+    inputsCache.set(moduleId, { at: Date.now(), data: inputs })
+    return inputs
+  } catch {
+    inputsCache.set(moduleId, { at: Date.now(), data: [] })
+    return []
+  }
+}
+
 /** 同步访问已缓存数据(provider 用,避免每次 await) */
 export function getCachedModules(): ModuleSummary[] {
   return modulesCache?.data ?? []
@@ -81,8 +109,14 @@ export function getCachedDemos(moduleId: number): DemoSummary[] {
   return demosCache.get(moduleId)?.data ?? []
 }
 
-/** 后台预热: 进入编辑器时调一次,把 modules + 每个 module 的 demos 都拉好 */
+export function getCachedInputs(moduleId: number): ModuleInputField[] {
+  return inputsCache.get(moduleId)?.data ?? []
+}
+
+/** 后台预热: 进入编辑器时调一次,把 modules + 每个 module 的 demos/inputs 都拉好 */
 export async function warmUpCache(): Promise<void> {
   const modules = await fetchModules()
-  await Promise.all(modules.map((m) => fetchDemos(m.module_id)))
+  await Promise.all(
+    modules.flatMap((m) => [fetchDemos(m.module_id), fetchInputs(m.module_id)]),
+  )
 }
