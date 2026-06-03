@@ -221,6 +221,7 @@ func (s *PlanParserService) parseResourceChanges(planJSON map[string]interface{}
 			Action:          action,
 			ChangesBefore:   convertToJSONB(change["before"]),
 			ChangesAfter:    convertToJSONB(change["after"]),
+			AfterUnknown:    convertToJSONB(change["after_unknown"]),
 			ApplyStatus:     "pending",
 		}
 

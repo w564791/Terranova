@@ -529,6 +529,7 @@ type WorkspaceTaskResourceChange struct {
 	Action        string `json:"action" gorm:"type:varchar(20);not null;index"` // create/update/delete/replace
 	ChangesBefore JSONB  `json:"changes_before" gorm:"type:jsonb"`              // before 数据（完整）
 	ChangesAfter  JSONB  `json:"changes_after" gorm:"type:jsonb"`               // after 数据（完整）
+	AfterUnknown  JSONB  `json:"after_unknown" gorm:"type:jsonb"`               // 标记哪些字段为 known after apply
 
 	// Apply 阶段状态（用于实时更新）
 	ApplyStatus      string     `json:"apply_status" gorm:"type:varchar(20);default:pending;index"` // pending/applying/completed/failed

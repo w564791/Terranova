@@ -27,8 +27,9 @@ interface ResourceChange {
   action: string;
   changes_before: Record<string, any>;
   changes_after: Record<string, any>;
+  after_unknown: Record<string, any>;
   apply_status: string;
-  resource_id?: string; // AWS/云资源的实际 ID（如 i-xxx, lt-xxx 等）
+  resource_id?: string;
 }
 
 interface OutputChange {

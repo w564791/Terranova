@@ -7231,6 +7231,7 @@ CREATE TABLE public.workspace_task_resource_changes (
     action character varying(20) NOT NULL,
     changes_before jsonb,
     changes_after jsonb,
+    after_unknown jsonb,
     apply_status character varying(20) DEFAULT 'pending'::character varying,
     apply_started_at timestamp without time zone,
     apply_completed_at timestamp without time zone,

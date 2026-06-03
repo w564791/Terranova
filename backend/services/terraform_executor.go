@@ -4901,6 +4901,7 @@ func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string
 			"action":           action,
 			"changes_before":   change["before"],
 			"changes_after":    change["after"],
+			"after_unknown":    change["after_unknown"],
 		}
 
 		resourceChanges = append(resourceChanges, resourceChange)
