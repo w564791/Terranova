@@ -41,8 +41,9 @@ function basePath(ctx: ManifestEditorContext) {
 
 /** 列文件树(草稿区, 自动绑定当前登录用户) */
 export async function listFiles(ctx: ManifestEditorContext): Promise<ManifestFileEntry[]> {
-  const { data } = await api.get(`${basePath(ctx)}/files`)
-  return data.files || []
+  // 注意: api 响应拦截器已返回 response.data,所以这里拿到的就是后端 JSON 体 {files:[...]}
+  const body = (await api.get(`${basePath(ctx)}/files`)) as { files?: ManifestFileEntry[] }
+  return body.files || []
 }
 
 /** 读单文件(text 直接返回 content, binary 走 content_b64) */
@@ -50,8 +51,8 @@ export async function readFile(
   ctx: ManifestEditorContext,
   path: string,
 ): Promise<ManifestFileContent> {
-  const { data } = await api.get(`${basePath(ctx)}/files/${encodeURIComponent(path)}`)
-  return data
+  // 拦截器已解包,直接就是 ManifestFileContent
+  return (await api.get(`${basePath(ctx)}/files/${encodeURIComponent(path)}`)) as ManifestFileContent
 }
 
 /** 写入草稿单文件 */
