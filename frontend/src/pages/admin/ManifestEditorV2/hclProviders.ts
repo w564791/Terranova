@@ -100,13 +100,13 @@ export function registerHclProviders(): void {
           suggestions.push({
             label: {
               label: `${m.source} · ${d.name}`,
-              description: d.is_default ? '★ 默认' : 'demo',
+              description: d.is_default ? '默认 demo' : 'demo',
             },
             kind: monaco.languages.CompletionItemKind.Snippet,
             documentation: {
               value: `**${m.description || m.name}**\n\n${d.change_summary || d.description}\n\n\`\`\`hcl\n${renderDemoToPreview(m, d)}\n\`\`\``,
             },
-            detail: `📋 ${m.source}`,
+            detail: m.source,
             insertText: renderDemoToSnippet(m, d),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             range,
@@ -170,7 +170,7 @@ export function registerHclProviders(): void {
           : '_(该 module 暂无 demo)_'
       return {
         contents: [
-          { value: `### 📦 ${mod.source}` },
+          { value: `### ${mod.source}` },
           { value: `${mod.description || mod.name}\n\nLatest: \`${mod.latest_version}\`` },
           { value: demoHint },
         ],
@@ -213,7 +213,7 @@ export function registerHclProviders(): void {
 
         // 构 tooltip
         const tooltipLines = [
-          `### 📋 ${mod.source} · 选择 demo 应用`,
+          `### ${mod.source} · 选择 demo 应用`,
           ``,
           `_点击下方任一项,该 \`module "${instanceName}"\` 块整段会被替换为该 demo:_`,
           ``,
@@ -230,7 +230,7 @@ export function registerHclProviders(): void {
               },
             ]),
           )
-          const star = d.is_default ? '★ ' : ''
+          const star = d.is_default ? '(默认) ' : ''
           tooltipLines.push(
             `- ${star}[**${d.name}**](command:manifestInsertDemo?${args} "应用此 demo")  \n  ${d.change_summary || d.description || ''}`,
           )
@@ -306,7 +306,7 @@ export function registerHclProviders(): void {
         lines[blockEnd].length + 1,
       )
       const actions: monaco.languages.CodeAction[] = demos.map((d) => ({
-        title: `💡 应用 demo: ${d.name}${d.is_default ? ' ★' : ''}`,
+        title: `应用 demo: ${d.name}${d.is_default ? ' (默认)' : ''}`,
         kind: 'quickfix',
         isPreferred: d.is_default,
         edit: {
