@@ -308,6 +308,45 @@ func (h *ManifestFilesHandler) MoveFile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"from": from, "to": to})
 }
 
+// DeleteDir 删除目录:删当前用户草稿里 path 以 "<dir>/" 开头的所有文件。
+// 目录在本模型是虚拟的(无目录实体),所以删目录 = 批量删前缀下文件,一次事务。
+func (h *ManifestFilesHandler) DeleteDir(c *gin.Context) {
+	manifestID := c.Param("id")
+	userID := c.GetString("user_id")
+
+	var req struct {
+		Dir string `json:"dir" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	dir, err := normalizeAndValidatePath(req.Dir)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// LIKE 前缀,转义 _ % \ 通配符,避免 "my_app" 误匹配 "myXapp"
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(dir)
+	pattern := escaped + "/%"
+
+	res := h.db.Where(
+		`manifest_id = ? AND owner_user_id = ? AND version_id IS NULL AND path LIKE ? ESCAPE '\'`,
+		manifestID, userID, pattern,
+	).Delete(&models.ManifestFile{})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "directory not found or empty"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted_dir": dir, "files_removed": res.RowsAffected})
+}
+
 // ResetDraftFromVersion 用某 published 版本覆盖当前用户草稿
 func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 	manifestID := c.Param("id")

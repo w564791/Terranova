@@ -81,6 +81,14 @@ export async function deleteFile(
   await api.delete(`${basePath(ctx)}/files/${encodeURIComponent(path)}`)
 }
 
+/** 删除整个目录(删该前缀下所有草稿文件) */
+export async function deleteDir(
+  ctx: ManifestEditorContext,
+  dir: string,
+): Promise<void> {
+  await api.post(`${basePath(ctx)}/files/_delete_dir`, { dir })
+}
+
 /** 重命名 / 移动 */
 export async function moveFile(
   ctx: ManifestEditorContext,

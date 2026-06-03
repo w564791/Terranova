@@ -59,24 +59,28 @@ func (h *ManifestEditorHandler) ListModules(c *gin.Context) {
 	}
 
 	type row struct {
-		ID            uint   `gorm:"column:id"`
-		Name          string `gorm:"column:name"`
-		Source        string `gorm:"column:source"`
-		Version       string `gorm:"column:version"`
-		Description   string `gorm:"column:description"`
-		DemoCount     int64  `gorm:"column:demo_count"`
+		ID          uint   `gorm:"column:id"`
+		Name        string `gorm:"column:name"`
+		Source      string `gorm:"column:source"`
+		Version     string `gorm:"column:version"`
+		Description string `gorm:"column:description"`
+		DemoCount   int64  `gorm:"column:demo_count"`
 	}
 	var rows []row
 
+	// source 用 module_source(真实 terraform source,如 terraform-aws-modules/ec2-instance/aws),
+	// 不是 modules.source(那是导入方式标识 tf-file-import)。module_source 为空时回退 source。
 	query := h.db.Table("modules m").
-		Select(`m.id, m.name, m.source, m.version, m.description,
+		Select(`m.id, m.name,
+				COALESCE(NULLIF(m.module_source, ''), m.source) AS source,
+				m.version, m.description,
 				COALESCE((SELECT COUNT(*) FROM module_demos d
 						   WHERE d.module_id = m.id AND d.is_active = true), 0) AS demo_count`).
 		Where("m.status = ?", "active")
 
 	if q != "" {
 		like := "%" + q + "%"
-		query = query.Where("m.name ILIKE ? OR m.source ILIKE ? OR m.description ILIKE ?", like, like, like)
+		query = query.Where("m.name ILIKE ? OR m.module_source ILIKE ? OR m.source ILIKE ? OR m.description ILIKE ?", like, like, like, like)
 	}
 
 	if err := query.

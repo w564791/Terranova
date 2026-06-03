@@ -12,7 +12,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
-import { Modal, message } from 'antd'
+import { message } from 'antd'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
@@ -26,6 +26,7 @@ import {
   putFile,
   putFileB64,
   deleteFile,
+  deleteDir,
   moveFile,
   languageOfPath,
   type ManifestFileEntry,
@@ -95,6 +96,13 @@ export default function ManifestEditorV2() {
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
   // 拖拽上传:鼠标拖文件悬停在文件树上时高亮
   const [dragOver, setDragOver] = useState(false)
+  // 内联删除确认:pendingDelete={path, isDir} → 该行变 "确认删除? ✓ ✗"
+  // (antd v5 静态 Modal.confirm 在 React19 下静默失效,改树内联确认)
+  const [pendingDelete, setPendingDelete] = useState<{ path: string; isDir: boolean } | null>(null)
+  // 幽灵目录:新建文件夹时树里临时出现的空目录前缀(建文件后实体化,刷新即消失)
+  const [ghostDir, setGhostDir] = useState<string | null>(null)
+  // 内联新建目录输入:!== null 时 sidebar 顶部出现目录名输入行
+  const [creatingDir, setCreatingDir] = useState<string | null>(null)
 
   // ========== 初始化: 起 vscode-api + 创建编辑器 ==========
   useEffect(() => {
@@ -313,7 +321,9 @@ export default function ManifestEditorV2() {
 
   // ========== 新建文件(内联确认)==========
   const commitCreateFile = useCallback(async () => {
-    const path = (creating || '').trim()
+    const raw = (creating || '').trim()
+    // 在幽灵目录下新建时,自动加目录前缀
+    const path = ghostDir && !raw.includes('/') ? `${ghostDir}/${raw}` : raw
     const errMsg = validatePath(path)
     if (errMsg) {
       setInlineError(errMsg)
@@ -322,6 +332,7 @@ export default function ManifestEditorV2() {
     try {
       await putFile(ctx, path, '')
       setCreating(null)
+      setGhostDir(null) // 文件已实体化,幽灵目录转正
       setInlineError(null)
       setManifestMissing(false)
       const items = await listFiles(ctx)
@@ -332,48 +343,85 @@ export default function ManifestEditorV2() {
       setInlineError(msg ?? '创建失败')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creating, ctx, validatePath])
+  }, [creating, ghostDir, ctx, validatePath])
 
   const startCreateFile = useCallback(() => {
     setRenamingPath(null)
+    setCreatingDir(null)
     setInlineError(null)
     setCreating('')
   }, [])
 
-  // ========== 删除文件 ==========
-  const handleDeleteFile = useCallback(
-    (path: string) => {
-      Modal.confirm({
-        title: '删除文件?',
-        content: `确认删除 ${path}?(仅作用于当前用户私有草稿)`,
-        okText: '删除',
-        okButtonProps: { danger: true },
-        cancelText: '取消',
-        onOk: async () => {
-          try {
-            await deleteFile(ctx, path)
-            fileContentCache.current.delete(path)
-            // 关闭对应 tab
-            setOpenTabs((prev) => prev.filter((p) => p !== path))
-            if (currentFile === path) {
-              setCurrentFile(null)
-              const m = editorRef.current?.getModel()
-              m?.setValue('')
-            }
-            // 刷新文件树
-            const items = await listFiles(ctx)
-            setFiles(items)
-            message.success('已删除')
-          } catch (err: any) {
-            const msg = typeof err === 'string' ? err : err?.message
-            message.error(`删除失败: ${msg ?? '未知错误'}`)
-          }
-        },
+  // ========== 新建目录(幽灵目录)==========
+  const startCreateDir = useCallback(() => {
+    setRenamingPath(null)
+    setCreating(null)
+    setInlineError(null)
+    setCreatingDir('')
+  }, [])
+
+  // 确认目录名 → 设为幽灵目录 + 立即在该目录下起新建文件输入
+  const commitCreateDir = useCallback(() => {
+    const dir = (creatingDir || '').trim().replace(/\/+$/, '')
+    if (!dir) {
+      setCreatingDir(null)
+      return
+    }
+    // 校验目录路径(按文件路径规则,目录段不允许 . ..)
+    const errMsg = validatePath(dir + '/placeholder')
+    if (errMsg) {
+      setInlineError(errMsg)
+      return
+    }
+    setCreatingDir(null)
+    setInlineError(null)
+    setGhostDir(dir)
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev)
+      next.delete(dir) // 确保展开
+      return next
+    })
+    setCreating('') // 直接进入"在该目录下新建文件"
+  }, [creatingDir, validatePath])
+
+  // ========== 删除文件 / 目录(内联确认)==========
+  // 关闭"匹配 path(文件)或 path 前缀(目录)"的所有 tab + 清缓存
+  const forgetPaths = useCallback(
+    (match: (p: string) => boolean) => {
+      fileContentCache.current.forEach((_v, k) => {
+        if (match(k)) fileContentCache.current.delete(k)
       })
+      setOpenTabs((prev) => prev.filter((p) => !match(p)))
+      if (currentFileRef.current && match(currentFileRef.current)) {
+        setCurrentFile(null)
+        editorRef.current?.getModel()?.setValue('')
+      }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [orgId, manifestId, currentFile],
+    [],
   )
+
+  const confirmDelete = useCallback(async () => {
+    const target = pendingDelete
+    if (!target) return
+    try {
+      if (target.isDir) {
+        await deleteDir(ctx, target.path)
+        const prefix = target.path + '/'
+        forgetPaths((p) => p === target.path || p.startsWith(prefix))
+      } else {
+        await deleteFile(ctx, target.path)
+        forgetPaths((p) => p === target.path)
+      }
+      const items = await listFiles(ctx)
+      setFiles(items)
+      setPendingDelete(null)
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message
+      message.error(`删除失败: ${msg ?? '未知错误'}`)
+      setPendingDelete(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDelete, ctx, forgetPaths])
 
   const startRename = useCallback((path: string) => {
     setCreating(null)
@@ -415,7 +463,10 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renamingPath, renameValue, currentFile, ctx, validatePath])
 
-  const fileTree = useMemo(() => buildFileTree(files.map((f) => f.path)), [files])
+  const fileTree = useMemo(
+    () => buildFileTree(files.map((f) => f.path), ghostDir),
+    [files, ghostDir],
+  )
 
   const toggleDir = useCallback((dirPath: string) => {
     setCollapsedDirs((prev) => {
@@ -461,16 +512,63 @@ export default function ManifestEditorV2() {
     [ctx, validatePath],
   )
 
+  // 内联删除确认 UI(文件/目录共用):替换该行右侧操作区
+  const deleteConfirmActions = (
+    <span className={styles.rowActions} style={{ opacity: 1 }} onClick={(e) => e.stopPropagation()}>
+      <span style={{ color: '#f48771', fontSize: 11, marginRight: 4 }}>删除?</span>
+      <i className="codicon codicon-check" title="确认删除" style={{ color: '#f48771' }} onClick={() => void confirmDelete()} />
+      <i className="codicon codicon-close" title="取消" onClick={() => setPendingDelete(null)} />
+    </span>
+  )
+
+  // 新建文件输入行(在指定缩进下渲染,供根目录与幽灵目录复用)
+  const newFileInputRow = (indent: number) => (
+    <div className={styles.treeNode} style={{ paddingLeft: indent }}>
+      <span className={`${styles.chevron} ${styles.empty}`} />
+      <span className={styles.icon}>
+        <i className={`codicon ${iconClassFor(creating || 'x.tf')}`} />
+      </span>
+      <input
+        className={styles.inlineInput}
+        autoFocus
+        value={creating ?? ''}
+        placeholder="文件名,如 main.tf"
+        onChange={(e) => {
+          setCreating(e.target.value)
+          if (inlineError) setInlineError(null)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void commitCreateFile()
+          else if (e.key === 'Escape') {
+            setCreating(null)
+            setGhostDir(null)
+            setInlineError(null)
+          }
+        }}
+        onBlur={() => {
+          if ((creating || '').trim()) void commitCreateFile()
+          else {
+            setCreating(null)
+            setGhostDir(null)
+          }
+        }}
+      />
+    </div>
+  )
+
   // 递归渲染文件树节点。depth 控制缩进(每层 +12px,与 VS Code 一致)
   const renderTreeNodes = (nodes: TreeNode[], depth: number): ReactNode =>
     nodes.map((node) => {
       const indent = 8 + depth * 12
       if (node.type === 'dir') {
         const collapsed = collapsedDirs.has(node.path)
+        const deleting = pendingDelete?.isDir && pendingDelete.path === node.path
+        // 在该目录下新建文件:creating 进行中且 ghostDir 指向本目录
+        const childInput = creating !== null && ghostDir === node.path
         return (
           <div key={`dir:${node.path}`}>
             <div
-              className={styles.treeNode}
+              className={`${styles.treeNode} ${deleting ? styles.deleting : ''}`}
               style={{ paddingLeft: indent }}
               onClick={() => toggleDir(node.path)}
             >
@@ -481,16 +579,32 @@ export default function ManifestEditorV2() {
                 <i className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} ${styles.iconFolder}`} />
               </span>
               <span className={styles.name}>{node.name}</span>
+              {deleting ? (
+                deleteConfirmActions
+              ) : (
+                <span className={styles.rowActions}>
+                  <i
+                    className="codicon codicon-trash"
+                    title="删除整个目录"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPendingDelete({ path: node.path, isDir: true })
+                    }}
+                  />
+                </span>
+              )}
             </div>
             {!collapsed && node.children && renderTreeNodes(node.children, depth + 1)}
+            {!collapsed && childInput && newFileInputRow(8 + (depth + 1) * 12)}
           </div>
         )
       }
       // file
+      const deleting = !pendingDelete?.isDir && pendingDelete?.path === node.path
       return (
         <div
           key={`file:${node.path}`}
-          className={`${styles.treeNode} ${currentFile === node.path ? styles.selected : ''}`}
+          className={`${styles.treeNode} ${currentFile === node.path ? styles.selected : ''} ${deleting ? styles.deleting : ''}`}
           style={{ paddingLeft: indent }}
           onClick={() => {
             if (renamingPath === node.path) return
@@ -526,24 +640,28 @@ export default function ManifestEditorV2() {
           ) : (
             <span className={styles.name}>{node.name}</span>
           )}
-          <span className={styles.rowActions}>
-            <i
-              className="codicon codicon-edit"
-              title="重命名"
-              onClick={(e) => {
-                e.stopPropagation()
-                startRename(node.path)
-              }}
-            />
-            <i
-              className="codicon codicon-trash"
-              title="删除"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleDeleteFile(node.path)
-              }}
-            />
-          </span>
+          {deleting ? (
+            deleteConfirmActions
+          ) : (
+            <span className={styles.rowActions}>
+              <i
+                className="codicon codicon-edit"
+                title="重命名"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  startRename(node.path)
+                }}
+              />
+              <i
+                className="codicon codicon-trash"
+                title="删除"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPendingDelete({ path: node.path, isDir: false })
+                }}
+              />
+            </span>
+          )}
         </div>
       )
     })
@@ -635,6 +753,11 @@ export default function ManifestEditorV2() {
               onClick={startCreateFile}
             />
             <i
+              className="codicon codicon-new-folder"
+              title="新建文件夹"
+              onClick={startCreateDir}
+            />
+            <i
               className="codicon codicon-collapse-all"
               title="折叠全部目录"
               onClick={() => {
@@ -696,43 +819,47 @@ export default function ManifestEditorV2() {
               此页面是 vscode-api 集成的脚手架沙箱。
             </div>
           )}
-          {!manifestMissing && files.length === 0 && creating === null && (
+          {!manifestMissing && files.length === 0 && creating === null && creatingDir === null && ghostDir === null && (
             <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12 }}>
-              草稿为空,点上方 + 新建文件,或在编辑器内输入即自动保存
+              草稿为空,点上方 + 新建文件 / 新建文件夹,或在编辑器内输入即自动保存
             </div>
           )}
 
-          {/* 内联新建行(VS Code 风格): + 后直接在树里出现输入框 */}
-          {creating !== null && (
-            <div className={styles.treeNode}>
-              <span className={`${styles.chevron} ${styles.empty}`} />
+          {/* 内联新建目录输入行 */}
+          {creatingDir !== null && (
+            <div className={styles.treeNode} style={{ paddingLeft: 8 }}>
+              <span className={styles.chevron}>
+                <i className="codicon codicon-chevron-right" />
+              </span>
               <span className={styles.icon}>
-                <i className={`codicon ${iconClassFor(creating || 'x.tf')}`} />
+                <i className={`codicon codicon-folder ${styles.iconFolder}`} />
               </span>
               <input
                 className={styles.inlineInput}
                 autoFocus
-                value={creating}
-                placeholder="文件名,如 main.tf"
+                value={creatingDir}
+                placeholder="目录名,如 modules/vpc"
                 onChange={(e) => {
-                  setCreating(e.target.value)
+                  setCreatingDir(e.target.value)
                   if (inlineError) setInlineError(null)
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') void commitCreateFile()
+                  if (e.key === 'Enter') commitCreateDir()
                   else if (e.key === 'Escape') {
-                    setCreating(null)
+                    setCreatingDir(null)
                     setInlineError(null)
                   }
                 }}
                 onBlur={() => {
-                  // 失焦: 有内容则尝试提交,空则取消(VS Code 行为)
-                  if ((creating || '').trim()) void commitCreateFile()
-                  else setCreating(null)
+                  if ((creatingDir || '').trim()) commitCreateDir()
+                  else setCreatingDir(null)
                 }}
               />
             </div>
           )}
+
+          {/* 根目录新建文件输入行(在幽灵目录下新建时不在这里,而在树内对应目录下)*/}
+          {creating !== null && ghostDir === null && newFileInputRow(8)}
 
           {renderTreeNodes(fileTree, 0)}
 
@@ -838,20 +965,26 @@ interface TreeNode {
 
 // buildFileTree 从扁平 path 列表构建目录树。spec §5.1/§22: 顶层目录无白名单限制,
 // 任意命名/任意嵌套。目录在前、文件在后,各自按名字排序。
-function buildFileTree(paths: string[]): TreeNode[] {
+// ghostDir 非空时确保该空目录也出现在树里(新建目录的临时态)。
+function buildFileTree(paths: string[], ghostDir?: string | null): TreeNode[] {
   type DirAcc = { dirs: Map<string, DirAcc>; files: string[] }
   const root: DirAcc = { dirs: new Map(), files: [] }
 
-  for (const full of paths) {
-    const parts = full.split('/')
+  const ensureDir = (segs: string[]) => {
     let node = root
-    for (let i = 0; i < parts.length - 1; i++) {
-      const seg = parts[i]
+    for (const seg of segs) {
       if (!node.dirs.has(seg)) node.dirs.set(seg, { dirs: new Map(), files: [] })
       node = node.dirs.get(seg)!
     }
-    node.files.push(full)
+    return node
   }
+
+  for (const full of paths) {
+    const parts = full.split('/')
+    ensureDir(parts.slice(0, -1)).files.push(full)
+  }
+  // 幽灵目录:即使没有文件也建出目录节点
+  if (ghostDir) ensureDir(ghostDir.split('/'))
 
   const build = (acc: DirAcc, prefix: string): TreeNode[] => {
     const dirNodes: TreeNode[] = [...acc.dirs.keys()]

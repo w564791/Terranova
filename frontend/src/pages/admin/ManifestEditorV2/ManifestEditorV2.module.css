@@ -160,6 +160,9 @@
 .treeNode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 /* 目录图标用 VS Code 的暖黄色 */
 .iconFolder { color: #dcb67a; }
+/* 内联删除确认中的行:淡红底强调 */
+.treeNode.deleting { background: rgba(244, 135, 113, 0.12); }
+.treeNode.deleting .rowActions { opacity: 1; }
 
 /* 内联新建/重命名输入框: VS Code 风格,就地在文件树行里编辑,不弹窗 */
 .inlineInput {
