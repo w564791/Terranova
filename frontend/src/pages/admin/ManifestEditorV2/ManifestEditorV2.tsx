@@ -139,6 +139,9 @@ export default function ManifestEditorV2() {
           theme: 'vs-dark-manifest',
           automaticLayout: true,
           fontFamily: 'Menlo, Monaco, "Cascadia Code", Consolas, "Courier New", monospace',
+          // 关掉 Code Action 灯泡图标:它显示在行首 gutter,会和 source 等代码文字重叠。
+          // Code Action provider 本身保留,用户仍可用 Cmd+. 或右键触发"应用 demo"。
+          lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
         })
         editorRef.current.onDidChangeCursorPosition((e) => {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
