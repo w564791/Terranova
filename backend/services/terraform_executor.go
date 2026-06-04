@@ -1374,9 +1374,10 @@ func (s *TerraformExecutor) ExecutePlan(
 		}
 	}()
 
-	// 等待命令完成
-	cmdErr := cmd.Wait()
+	// 先等读取 goroutine 把 stdout/stderr 读到 EOF，再 cmd.Wait()。
+	// cmd.Wait() 会在进程退出后关闭 pipe，若先 Wait 会丢弃未读完的缓冲输出（日志截断）。
 	wg.Wait()
+	cmdErr := cmd.Wait()
 
 	duration := time.Since(startTime)
 
@@ -2850,9 +2851,10 @@ func (s *TerraformExecutor) ExecuteApply(
 		}
 	}()
 
-	// 等待命令完成
-	cmdErr := cmd.Wait()
+	// 先等读取 goroutine 把 stdout/stderr 读到 EOF，再 cmd.Wait()。
+	// cmd.Wait() 会在进程退出后关闭 pipe，若先 Wait 会丢弃未读完的缓冲输出（日志截断）。
 	wg.Wait()
+	cmdErr := cmd.Wait()
 
 	duration := time.Since(startTime)
 
@@ -4511,9 +4513,10 @@ plugin_cache_may_break_dependency_lock_file = true
 		}
 	}()
 
-	// 等待命令完成
-	cmdErr := cmd.Wait()
+	// 先等读取 goroutine 把 stdout/stderr 读到 EOF，再 cmd.Wait()。
+	// cmd.Wait() 会在进程退出后关闭 pipe，若先 Wait 会丢弃未读完的缓冲输出（日志截断）。
 	wg.Wait()
+	cmdErr := cmd.Wait()
 
 	duration := time.Since(startTime)
 
