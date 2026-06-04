@@ -326,7 +326,9 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
     const afterUnknown = resource.after_unknown || {};
 
     const knownEntries = Object.entries(after).filter(([k, v]) => !isEmptyValue(v) && afterUnknown[k] !== true);
-    const unknownKeys = Object.keys(afterUnknown).filter(k => !!afterUnknown[k]);
+    const knownKeySet = new Set(knownEntries.map(([k]) => k));
+    // 已经以真实值显示过的字段不再重复显示为 "Known after apply"
+    const unknownKeys = Object.keys(afterUnknown).filter(k => !!afterUnknown[k] && !knownKeySet.has(k));
 
     if (knownEntries.length === 0 && unknownKeys.length === 0) {
       return null;
