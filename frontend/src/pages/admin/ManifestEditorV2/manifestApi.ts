@@ -269,5 +269,9 @@ export function languageOfPath(path: string): string {
   if (path.endsWith('.json')) return 'json'
   if (path.endsWith('.yaml') || path.endsWith('.yml')) return 'yaml'
   if (path.endsWith('.sh') || path.endsWith('.tpl')) return 'shellscript'
+  if (path.endsWith('.xml')) return 'xml'
+  if (path.endsWith('.html') || path.endsWith('.htm')) return 'html'
+  if (path.endsWith('.toml')) return 'ini' // monaco 无 toml,ini 高亮近似
+  if (path.endsWith('.env') || path.endsWith('.conf') || path.endsWith('.ini')) return 'ini'
   return 'plaintext'
 }

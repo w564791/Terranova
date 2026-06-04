@@ -76,6 +76,9 @@ export default function ManifestEditorV2() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const fileContentCache = useRef<Map<string, string>>(new Map())
+  // 每文件一个 model(保留 undo 历史)+ viewState(保留光标/滚动),切 tab 回到原状态
+  const modelCache = useRef<Map<string, monaco.editor.ITextModel>>(new Map())
+  const viewStateCache = useRef<Map<string, monaco.editor.ICodeEditorViewState | null>>(new Map())
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // diff 视图:独立的 Monaco DiffEditor 实例 + 宿主容器(与普通编辑器并存,按需显隐)
   const diffContainerRef = useRef<HTMLDivElement | null>(null)
@@ -167,6 +170,20 @@ export default function ManifestEditorV2() {
           // 关掉 Code Action 灯泡图标:它显示在行首 gutter,会和 source 等代码文字重叠。
           // Code Action provider 本身保留,用户仍可用 Cmd+. 或右键触发"应用 demo"。
           lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
+          // ===== VS Code 基础编辑体验补齐 =====
+          wordBasedSuggestions: 'allDocuments', // 页面内已有单词自动补全(与 HCL provider 候选合并)
+          quickSuggestions: { other: true, comments: false, strings: false },
+          suggestOnTriggerCharacters: true,
+          suggestSelection: 'first',
+          folding: true, // 代码折叠
+          foldingStrategy: 'indentation', // HCL 无 LSP,按缩进折叠
+          stickyScroll: { enabled: true }, // 顶部显示当前嵌套块(resource/module)上下文
+          scrollBeyondLastLine: true,
+          renderWhitespace: 'selection',
+          cursorBlinking: 'smooth',
+          autoClosingBrackets: 'languageDefined', // 括号/引号自动闭合(规则来自 hclLanguage 配置)
+          tabSize: 2,
+          insertSpaces: true, // 与 DEFAULT_USER_CONFIG 一致,双保险
         })
         editorRef.current.onDidChangeCursorPosition((e) => {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
@@ -193,6 +210,14 @@ export default function ManifestEditorV2() {
         editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
           void flushSaveRef.current()
         })
+        // Cmd/Ctrl+W:关闭当前 tab(diff tab 或普通文件 tab),用 ref 避免 stale 闭包
+        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => {
+          closeCurrentTabRef.current()
+        })
+        // Cmd/Ctrl+/ 切换行注释:Monaco 内置 action,显式绑定确保生效
+        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
+          editorRef.current?.getAction('editor.action.commentLine')?.run()
+        })
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
@@ -210,6 +235,10 @@ export default function ManifestEditorV2() {
       dm?.modified?.dispose()
       diffEditorRef.current?.dispose()
       diffEditorRef.current = null
+      // 释放所有缓存的 model
+      modelCache.current.forEach((m) => m.dispose())
+      modelCache.current.clear()
+      viewStateCache.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -265,6 +294,8 @@ export default function ManifestEditorV2() {
   // 用 ref 持有,避免一次性注册的编辑器监听器/快捷键拿到 stale 闭包。
   // 切文件前必须 flush,否则 1s 防抖未触发时切走会丢上一个文件的修改。
   const flushSaveRef = useRef<() => Promise<void>>(async () => {})
+  // 关闭"当前" tab(diff 优先,否则当前文件),用 ref 给一次性注册的快捷键调最新逻辑
+  const closeCurrentTabRef = useRef<() => void>(() => {})
 
   const openFile = useCallback(
     async (path: string) => {
@@ -278,9 +309,10 @@ export default function ManifestEditorV2() {
       // 打开普通文件 → 退出 diff 视图
       setActiveDiffKey(null)
 
-      // 切到新文件前,先把上一个文件的待保存内容刷盘(防 1s 防抖窗口内切走丢改动)
+      // 切到新文件前:① flush 上个文件待保存内容 ② 存它的 viewState(光标/滚动)
       if (currentFileRef.current && currentFileRef.current !== path) {
         await flushSaveRef.current()
+        viewStateCache.current.set(currentFileRef.current, ed.saveViewState())
       }
 
       setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
@@ -294,33 +326,50 @@ export default function ManifestEditorV2() {
       }
       setBinaryView(null)
 
-      let content = fileContentCache.current.get(path)
-      if (content === undefined) {
-        try {
-          const f = await readFile(ctx, path)
-          // 列表元信息没标 binary 但后端读出来是 binary 时兜底
-          if (f.is_binary) {
-            setBinaryView({ path, size: f.size, mime: f.mime })
+      // model 复用:命中缓存直接用(保留 undo 历史 + 内容);否则读内容建 model
+      let model = modelCache.current.get(path)
+      if (!model) {
+        let content = fileContentCache.current.get(path)
+        if (content === undefined) {
+          try {
+            const f = await readFile(ctx, path)
+            // 列表元信息没标 binary 但后端读出来是 binary 时兜底
+            if (f.is_binary) {
+              setBinaryView({ path, size: f.size, mime: f.mime })
+              return
+            }
+            content = f.content ?? ''
+            fileContentCache.current.set(path, content)
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[ManifestEditorV2] read file failed', err)
             return
           }
-          content = f.content ?? ''
-          fileContentCache.current.set(path, content)
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('[ManifestEditorV2] read file failed', err)
-          return
         }
+        model = monaco.editor.createModel(content, languageOfPath(path))
+        modelCache.current.set(path, model)
       }
 
-      const lang = languageOfPath(path)
-      const old = ed.getModel()
-      const model = monaco.editor.createModel(content, lang)
+      // 不再 dispose 旧 model(由 modelCache 持有,关 tab 时才 dispose)
       ed.setModel(model)
-      old?.dispose()
+      const vs = viewStateCache.current.get(path)
+      if (vs) ed.restoreViewState(vs)
+      ed.focus()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [orgId, manifestId, files],
   )
+
+  // 释放某 path 的编辑器资源(model dispose + 清三类缓存),关 tab / 删文件时调
+  const disposeFileResources = useCallback((path: string) => {
+    const m = modelCache.current.get(path)
+    if (m) {
+      m.dispose()
+      modelCache.current.delete(path)
+    }
+    viewStateCache.current.delete(path)
+    fileContentCache.current.delete(path)
+  }, [])
 
   // ========== 关闭 tab ==========
   const closeTab = useCallback(
@@ -330,19 +379,24 @@ export default function ManifestEditorV2() {
         if (path === currentFile) {
           const fallback = next[0] ?? null
           if (fallback) {
-            void openFile(fallback) // openFile 内部会先 flush 当前文件
+            // 先切到 fallback(openFile 会 flush + setModel 到 fallback),再 dispose 被关文件的 model
+            void openFile(fallback).then(() => disposeFileResources(path))
           } else {
-            // 关掉最后一个 tab:先 flush 再清空(防丢未保存改动)
+            // 关掉最后一个 tab:先 flush 再清空,然后 dispose
             void flushSaveRef.current().then(() => {
               setCurrentFile(null)
-              editorRef.current?.getModel()?.setValue('')
+              editorRef.current?.setModel(null)
+              disposeFileResources(path)
             })
           }
+        } else {
+          // 关的不是当前文件,直接 dispose
+          disposeFileResources(path)
         }
         return next
       })
     },
-    [currentFile, openFile],
+    [currentFile, openFile, disposeFileResources],
   )
 
   // ========== 保存当前文件 ==========
@@ -385,6 +439,26 @@ export default function ManifestEditorV2() {
   useEffect(() => {
     flushSaveRef.current = saveCurrentFile
   }, [saveCurrentFile])
+
+  // 让 Cmd+W 快捷键始终调最新的"关当前 tab"逻辑(diff tab 优先,否则当前文件)
+  useEffect(() => {
+    closeCurrentTabRef.current = () => {
+      if (activeDiffKey) closeDiffTab(activeDiffKey)
+      else if (currentFileRef.current) closeTab(currentFileRef.current)
+    }
+  })
+
+  // 窗口级 Cmd/Ctrl+W 拦截:阻止浏览器关闭标签页,改为关编辑器内当前 tab
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault()
+        closeCurrentTabRef.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // 关闭编辑器(左上红灯):先 flush 当前文件,再返回 manifest 列表
   const handleClose = useCallback(async () => {
@@ -551,16 +625,24 @@ export default function ManifestEditorV2() {
             await putFile(ctx, f.path, base.content ?? '')
           }
         }
-        // 清缓存 + 若该文件正打开则刷新编辑器内容
+        // 内容已在服务端还原,缓存的 model/content 已过期 → dispose 让重开时重建
+        const wasOpen = currentFileRef.current === f.path
+        if (wasOpen) editorRef.current?.setModel(null)
         fileContentCache.current.delete(f.path)
-        if (currentFileRef.current === f.path) {
-          // 重新打开以加载还原后的内容(added 被删则关闭 tab)
+        const m = modelCache.current.get(f.path)
+        if (m) {
+          m.dispose()
+          modelCache.current.delete(f.path)
+        }
+        viewStateCache.current.delete(f.path)
+        if (wasOpen) {
           if (f.state === 'added') {
+            // added 被撤销 = 删除该文件 → 关 tab
             setOpenTabs((prev) => prev.filter((p) => p !== f.path))
             setCurrentFile(null)
-            editorRef.current?.getModel()?.setValue('')
           } else {
-            void openFile(f.path)
+            setCurrentFile(null)
+            void openFile(f.path) // 重建 model 显示还原后内容
           }
         }
         setPendingDiscard(null)
@@ -714,14 +796,24 @@ export default function ManifestEditorV2() {
   // 关闭"匹配 path(文件)或 path 前缀(目录)"的所有 tab + 清缓存
   const forgetPaths = useCallback(
     (match: (p: string) => boolean) => {
+      // 若当前编辑器正显示被删文件,先把 model 卸下,再 dispose(否则 dispose 已 set 的 model 会报错)
+      if (currentFileRef.current && match(currentFileRef.current)) {
+        editorRef.current?.setModel(null)
+        setCurrentFile(null)
+      }
       fileContentCache.current.forEach((_v, k) => {
         if (match(k)) fileContentCache.current.delete(k)
       })
+      modelCache.current.forEach((m, k) => {
+        if (match(k)) {
+          m.dispose()
+          modelCache.current.delete(k)
+        }
+      })
+      viewStateCache.current.forEach((_v, k) => {
+        if (match(k)) viewStateCache.current.delete(k)
+      })
       setOpenTabs((prev) => prev.filter((p) => !match(p)))
-      if (currentFileRef.current && match(currentFileRef.current)) {
-        setCurrentFile(null)
-        editorRef.current?.getModel()?.setValue('')
-      }
     },
     [],
   )
@@ -773,15 +865,27 @@ export default function ManifestEditorV2() {
     }
     try {
       await moveFile(ctx, fromPath, to)
+      // 转移内容缓存;model 因语言可能随扩展名变,直接 dispose 让新 path 懒重建
       const cached = fileContentCache.current.get(fromPath)
       fileContentCache.current.delete(fromPath)
       if (cached !== undefined) fileContentCache.current.set(to, cached)
+      const oldModel = modelCache.current.get(fromPath)
+      const wasCurrent = currentFile === fromPath
+      if (wasCurrent) editorRef.current?.setModel(null)
+      if (oldModel) {
+        oldModel.dispose()
+        modelCache.current.delete(fromPath)
+      }
+      viewStateCache.current.delete(fromPath)
       setOpenTabs((prev) => prev.map((p) => (p === fromPath ? to : p)))
-      if (currentFile === fromPath) setCurrentFile(to)
       const items = await listFiles(ctx)
       setFiles(items)
       setRenamingPath(null)
       setInlineError(null)
+      if (wasCurrent) {
+        setCurrentFile(null)
+        void openFile(to) // 重建 model(新语言)并显示
+      }
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message
       setInlineError(msg ?? '重命名失败')
