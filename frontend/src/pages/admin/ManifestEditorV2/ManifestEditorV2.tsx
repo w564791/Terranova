@@ -192,22 +192,8 @@ export default function ManifestEditorV2() {
         editorRef.current.onDidChangeCursorPosition((e) => {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
         })
-        editorRef.current.onDidChangeModelContent(() => {
-          const p = currentFileRef.current
-          if (!p) return
-          // 标记该文件为 dirty(tab 显示白点),autosave 成功后清除
-          setDirtyFiles((prev) => {
-            if (prev.has(p)) return prev
-            const next = new Set(prev)
-            next.add(p)
-            return next
-          })
-          setSaveStatus('saving')
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-          saveTimerRef.current = setTimeout(() => {
-            void flushSaveRef.current()
-          }, AUTOSAVE_DEBOUNCE_MS)
-        })
+        // 注:脏检测不挂编辑器实例,而是每个 model 自己 onDidChangeContent(openFile 建 model 时绑定)。
+        // 编辑器级监听依赖 currentFileRef,一旦 diff 让位/撤销/删除把 currentFile 置 null 就整条失效。
 
         // 劫持 Cmd/Ctrl+S:立即保存当前文件,阻止浏览器"保存网页"。
         // 用 ref 调最新 save 逻辑(addCommand 注册一次,闭包会过期)。
@@ -363,6 +349,21 @@ export default function ManifestEditorV2() {
         }
         model = monaco.editor.createModel(content, languageOfPath(path))
         modelCache.current.set(path, model)
+        // 脏检测挂在 model 上,path 由闭包捕获 —— 不依赖 currentFileRef,
+        // 即使 currentFile 被置 null(diff 让位/撤销/删除)也能正确标记。
+        model.onDidChangeContent(() => {
+          setDirtyFiles((prev) => {
+            if (prev.has(path)) return prev
+            const next = new Set(prev)
+            next.add(path)
+            return next
+          })
+          setSaveStatus('saving')
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+          saveTimerRef.current = setTimeout(() => {
+            void flushSaveRef.current()
+          }, AUTOSAVE_DEBOUNCE_MS)
+        })
       }
 
       // 不再 dispose 旧 model(由 modelCache 持有,关 tab 时才 dispose)
@@ -474,6 +475,15 @@ export default function ManifestEditorV2() {
         next.delete(path)
         return next
       })
+      // 历史视图下:草稿已落库,刷新"未提交更改"列表(直接拉 diff,不走 loadDraftDiff 以免再次 flush 递归)
+      if (activeViewRef.current === 'history') {
+        try {
+          const r = await diffDraft(ctx)
+          setDraftDiff({ baseVersionId: r.baseVersionId, files: r.files.filter((f) => f.state !== 'unchanged') })
+        } catch {
+          /* 刷新失败不影响保存本身 */
+        }
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[ManifestEditorV2] save failed', err)
@@ -487,6 +497,11 @@ export default function ManifestEditorV2() {
   useEffect(() => {
     dirtyFilesRef.current = dirtyFiles
   }, [dirtyFiles])
+  // autosave 回调里读当前视图(决定是否刷新未提交列表),用 ref 避免 stale 闭包
+  const activeViewRef = useRef(activeView)
+  useEffect(() => {
+    activeViewRef.current = activeView
+  }, [activeView])
   useEffect(() => {
     flushSaveRef.current = saveCurrentFile
   }, [saveCurrentFile])
