@@ -180,6 +180,23 @@
 .versionChangelog { color: var(--fg-default, #cccccc); font-size: 12px; margin: 4px 0 2px; line-height: 1.4; }
 .versionMeta { color: var(--fg-muted, #858585); font-size: 11px; }
 
+/* 历史面板:分区标题 / 变更文件行 */
+.changesHeader {
+  padding: 6px 12px 4px; font-size: 11px; font-weight: 600;
+  color: var(--fg-muted, #858585); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.changeRow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 12px 2px 20px; cursor: pointer;
+  font-size: 13px; color: var(--fg-default, #cccccc);
+  line-height: 20px; white-space: nowrap; overflow: hidden;
+}
+.changeRow:hover { background: var(--hover, #2a2d2e); }
+.changeBadge { width: 12px; text-align: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+.changeName { overflow: hidden; text-overflow: ellipsis; }
+.versionChanges { padding: 2px 0 4px; }
+.changeEmpty { padding: 2px 12px 4px 20px; color: var(--fg-muted, #858585); font-size: 12px; }
+
 /* 内联新建/重命名输入框: VS Code 风格,就地在文件树行里编辑,不弹窗 */
 .inlineInput {
   flex: 1;

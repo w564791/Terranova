@@ -29,10 +29,13 @@ import {
   deleteDir,
   moveFile,
   listVersions,
+  diffVersions,
+  diffDraft,
   languageOfPath,
   type ManifestFileEntry,
   type ManifestEditorContext,
   type ManifestVersion,
+  type DiffEntry,
 } from './manifestApi'
 import { exportManifestZip } from '../../../services/manifestApi'
 import styles from './ManifestEditorV2.module.css'
@@ -74,6 +77,9 @@ export default function ManifestEditorV2() {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const fileContentCache = useRef<Map<string, string>>(new Map())
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // diff 视图:独立的 Monaco DiffEditor 实例 + 宿主容器(与普通编辑器并存,按需显隐)
+  const diffContainerRef = useRef<HTMLDivElement | null>(null)
+  const diffEditorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
 
   const [bootError, setBootError] = useState<string | null>(null)
   const [manifestMissing, setManifestMissing] = useState(false)
@@ -111,6 +117,16 @@ export default function ManifestEditorV2() {
   const [activeView, setActiveView] = useState<'explorer' | 'history'>('explorer')
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
+  // diff tab: 打开一个左旧右新的对比视图。key 唯一标识,激活时显示 DiffEditor、隐藏普通编辑器。
+  //   title 显示在 tab 上,如 "main.tf (草稿 ↔ v1.2.0)"
+  type DiffTab = { key: string; title: string; path: string; leftRef: string; rightRef: string }
+  const [diffTabs, setDiffTabs] = useState<DiffTab[]>([])
+  const [activeDiffKey, setActiveDiffKey] = useState<string | null>(null)
+  // 历史面板"未提交更改"区:当前用户草稿 vs 最新已发布版本
+  const [draftDiff, setDraftDiff] = useState<{ baseVersionId: string; files: DiffEntry[] }>({ baseVersionId: '', files: [] })
+  // 版本行展开:versionId -> 该版本 vs 上一版本的变更文件
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null)
+  const [versionDiffCache, setVersionDiffCache] = useState<Record<string, DiffEntry[]>>({})
 
   // ========== 初始化: 起 vscode-api + 创建编辑器 ==========
   useEffect(() => {
@@ -187,6 +203,11 @@ export default function ManifestEditorV2() {
       cancelled = true
       editorRef.current?.dispose()
       editorRef.current = null
+      const dm = diffEditorRef.current?.getModel()
+      dm?.original?.dispose()
+      dm?.modified?.dispose()
+      diffEditorRef.current?.dispose()
+      diffEditorRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -251,6 +272,9 @@ export default function ManifestEditorV2() {
       }
       const ed = editorRef.current
       if (!ed) return
+
+      // 打开普通文件 → 退出 diff 视图
+      setActiveDiffKey(null)
 
       // 切到新文件前,先把上一个文件的待保存内容刷盘(防 1s 防抖窗口内切走丢改动)
       if (currentFileRef.current && currentFileRef.current !== path) {
@@ -376,11 +400,54 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
-  // 切到历史视图时拉一次
+  // 拉"未提交更改"(草稿 vs 最新已发布版本),只取真正有变更的
+  const loadDraftDiff = useCallback(() => {
+    diffDraft(ctx)
+      .then((r) => setDraftDiff({ baseVersionId: r.baseVersionId, files: r.files.filter((f) => f.state !== 'unchanged') }))
+      .catch(() => setDraftDiff({ baseVersionId: '', files: [] }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx])
+
+  // 切到历史视图时拉版本列表 + 未提交更改
   useEffect(() => {
-    if (activeView === 'history') loadVersions()
+    if (activeView === 'history') {
+      loadVersions()
+      loadDraftDiff()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView])
+
+  // 展开某版本 → 拉它 vs 上一版本(SemVer 排序紧邻的前一个)的变更文件
+  const toggleVersionExpand = useCallback(
+    (v: ManifestVersion) => {
+      if (expandedVersion === v.id) {
+        setExpandedVersion(null)
+        return
+      }
+      setExpandedVersion(v.id)
+      if (versionDiffCache[v.id]) return
+      // versions 已按 SemVer 降序(新→旧),找紧邻的下一个(更旧)作为 base
+      const idx = versions.findIndex((x) => x.id === v.id)
+      const prev = idx >= 0 && idx < versions.length - 1 ? versions[idx + 1] : null
+      if (!prev) {
+        // 没有更早版本 → 该版本是首个,全部算新增(用空 base 对比)
+        setVersionDiffCache((c) => ({ ...c, [v.id]: [] }))
+        return
+      }
+      diffVersions(ctx, v.id, prev.id)
+        .then((files) => setVersionDiffCache((c) => ({ ...c, [v.id]: files.filter((f) => f.state !== 'unchanged') })))
+        .catch(() => setVersionDiffCache((c) => ({ ...c, [v.id]: [] })))
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expandedVersion, versionDiffCache, versions, ctx],
+  )
+
+  // diff 宿主从 display:none 显示出来时,Monaco 需要重新 layout 才能正确铺满
+  useEffect(() => {
+    if (activeDiffKey) {
+      requestAnimationFrame(() => diffEditorRef.current?.layout())
+    }
+  }, [activeDiffKey])
 
   // 导出某版本为 zip(走 api client 带 token,不能用裸 <a href> 否则 401)
   const exportVersion = useCallback(
@@ -400,6 +467,91 @@ export default function ManifestEditorV2() {
       }
     },
     [orgId, manifestId],
+  )
+
+  // 懒创建 Monaco DiffEditor(首次打开 diff 时),宿主 diffContainerRef
+  const ensureDiffEditor = useCallback(() => {
+    if (diffEditorRef.current || !diffContainerRef.current) return diffEditorRef.current
+    diffEditorRef.current = monaco.editor.createDiffEditor(diffContainerRef.current, {
+      theme: 'vs-dark-manifest',
+      automaticLayout: true,
+      readOnly: true, // diff 只读(对比用,不在此编辑)
+      originalEditable: false,
+      renderSideBySide: true,
+      fontFamily: 'Menlo, Monaco, "Cascadia Code", Consolas, "Courier New", monospace',
+    })
+    return diffEditorRef.current
+  }, [])
+
+  // 打开一个 diff tab:左=base(rightRef 实际是 base 旧内容)... 统一约定:
+  //   leftRef = 旧(base), rightRef = 新(target);Monaco original=左=旧,modified=右=新
+  const openDiff = useCallback(
+    async (path: string, leftRef: string, rightRef: string, title: string) => {
+      const key = `diff::${leftRef}::${rightRef}::${path}`
+      // 切走普通编辑器前先 flush(避免丢草稿改动)
+      if (currentFileRef.current) await flushSaveRef.current()
+      try {
+        // 两侧内容:ref 为 '__absent__' 表示该侧不存在(added/removed)
+        const fetchSide = async (ref: string): Promise<string> => {
+          if (ref === '__absent__') return ''
+          const f = await readFile(ctx, path, ref)
+          return f.is_binary ? '(binary file)' : f.content ?? ''
+        }
+        const [leftContent, rightContent] = await Promise.all([fetchSide(leftRef), fetchSide(rightRef)])
+        const lang = languageOfPath(path)
+        const ed = ensureDiffEditor()
+        if (!ed) return
+        const oldModel = ed.getModel()
+        ed.setModel({
+          original: monaco.editor.createModel(leftContent, lang),
+          modified: monaco.editor.createModel(rightContent, lang),
+        })
+        oldModel?.original?.dispose()
+        oldModel?.modified?.dispose()
+        setDiffTabs((prev) => (prev.some((t) => t.key === key) ? prev : [...prev, { key, title, path, leftRef, rightRef }]))
+        setActiveDiffKey(key)
+        setCurrentFile(null) // 普通编辑器让位
+        setBinaryView(null)
+      } catch (err: any) {
+        message.error(`打开 diff 失败: ${err?.message ?? err}`)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ctx, ensureDiffEditor],
+  )
+
+  // 关闭 diff tab
+  const closeDiffTab = useCallback((key: string) => {
+    setDiffTabs((prev) => prev.filter((t) => t.key !== key))
+    setActiveDiffKey((cur) => (cur === key ? null : cur))
+  }, [])
+
+  // 渲染历史面板里的一条变更文件行。点击打开 diff(左=base 旧,右=target 新)。
+  //   targetRef: 'draft' 或 version_id;baseRef: 对比基线 version_id(可空=无基线)
+  //   added → base 侧不存在;removed → target 侧不存在
+  const renderChangeRow = useCallback(
+    (f: DiffEntry, targetRef: string, baseRef: string) => {
+      const badge = { added: 'A', removed: 'D', changed: 'M', unchanged: ' ' }[f.state]
+      const badgeColor = { added: '#4ec9b0', removed: '#f48771', changed: '#e2c08d', unchanged: '#858585' }[f.state]
+      const leftRef = f.state === 'added' ? '__absent__' : baseRef || '__absent__'
+      const rightRef = f.state === 'removed' ? '__absent__' : targetRef
+      const baseLabel = baseRef ? baseRef.slice(0, 8) : '∅'
+      const targetLabel = targetRef === 'draft' ? '草稿' : targetRef.slice(0, 8)
+      const title = `${f.path.split('/').pop()} (${baseLabel} ↔ ${targetLabel})`
+      return (
+        <div
+          key={`${targetRef}:${f.path}`}
+          className={styles.changeRow}
+          title={f.path}
+          onClick={() => void openDiff(f.path, leftRef, rightRef, title)}
+        >
+          <span className={styles.changeBadge} style={{ color: badgeColor }}>{badge}</span>
+          <span className={styles.changeName}>{f.path}</span>
+        </div>
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [openDiff],
   )
 
   // 路径合法性校验(与后端 normalizeAndValidatePath 对齐),返回错误文案或 null
@@ -993,10 +1145,30 @@ export default function ManifestEditorV2() {
             <div className={styles.header}>
               <span>版本历史</span>
               <span className={styles.actions}>
-                <i className="codicon codicon-refresh" title="刷新" onClick={loadVersions} />
+                <i
+                  className="codicon codicon-refresh"
+                  title="刷新"
+                  onClick={() => {
+                    loadVersions()
+                    loadDraftDiff()
+                  }}
+                />
               </span>
             </div>
             <div className={styles.tree}>
+              {/* 未提交更改:草稿 vs 最新已发布版本 */}
+              <div className={styles.changesHeader}>
+                未提交更改{draftDiff.files.length > 0 ? ` (${draftDiff.files.length})` : ''}
+              </div>
+              {draftDiff.files.length === 0 && (
+                <div style={{ padding: '4px 12px 8px', color: '#858585', fontSize: 12 }}>
+                  草稿与最新版本一致,无未提交更改。
+                </div>
+              )}
+              {draftDiff.files.map((f) => renderChangeRow(f, 'draft', draftDiff.baseVersionId))}
+
+              {/* 已发布版本 */}
+              <div className={styles.changesHeader}>已发布版本</div>
               {versionsLoading && (
                 <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12 }}>加载中...</div>
               )}
@@ -1008,25 +1180,50 @@ export default function ManifestEditorV2() {
                 </div>
               )}
               {!versionsLoading &&
-                versions.map((v) => (
-                  <div key={v.id} className={styles.versionRow}>
-                    <div className={styles.versionHead}>
-                      <i className="codicon codicon-tag" style={{ color: '#4ec9b0' }} />
-                      <span className={styles.versionTag}>{v.version}</span>
-                      <i
-                        className={`codicon codicon-cloud-download ${styles.versionExport}`}
-                        title="导出该版本为 zip"
-                        role="button"
-                        onClick={() => void exportVersion(v.id, v.version)}
-                      />
+                versions.map((v, idx) => {
+                  const expanded = expandedVersion === v.id
+                  const prev = idx < versions.length - 1 ? versions[idx + 1] : null
+                  const changes = versionDiffCache[v.id]
+                  return (
+                    <div key={v.id} className={styles.versionRow}>
+                      <div
+                        className={styles.versionHead}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => toggleVersionExpand(v)}
+                      >
+                        <i className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ color: '#858585' }} />
+                        <i className="codicon codicon-tag" style={{ color: '#4ec9b0' }} />
+                        <span className={styles.versionTag}>{v.version}</span>
+                        <i
+                          className={`codicon codicon-cloud-download ${styles.versionExport}`}
+                          title="导出该版本为 zip"
+                          role="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void exportVersion(v.id, v.version)
+                          }}
+                        />
+                      </div>
+                      {v.changelog && <div className={styles.versionChangelog}>{v.changelog}</div>}
+                      <div className={styles.versionMeta}>
+                        {v.created_by}
+                        {v.created_at ? ` · ${new Date(v.created_at).toLocaleString()}` : ''}
+                      </div>
+                      {expanded && (
+                        <div className={styles.versionChanges}>
+                          {!prev && <div className={styles.changeEmpty}>首个版本,无可对比的上一版本。</div>}
+                          {prev && changes === undefined && <div className={styles.changeEmpty}>加载中...</div>}
+                          {prev && changes && changes.length === 0 && (
+                            <div className={styles.changeEmpty}>与上一版本 {prev.version} 无文件变更。</div>
+                          )}
+                          {prev &&
+                            changes &&
+                            changes.map((f) => renderChangeRow(f, v.id, prev.id))}
+                        </div>
+                      )}
                     </div>
-                    {v.changelog && <div className={styles.versionChangelog}>{v.changelog}</div>}
-                    <div className={styles.versionMeta}>
-                      {v.created_by}
-                      {v.created_at ? ` · ${new Date(v.created_at).toLocaleString()}` : ''}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
             </div>
           </>
         )}
@@ -1037,7 +1234,7 @@ export default function ManifestEditorV2() {
           {openTabs.map((path) => (
             <div
               key={path}
-              className={`${styles.tab} ${currentFile === path ? styles.active : ''} ${dirtyFiles.has(path) ? styles.dirty : ''}`}
+              className={`${styles.tab} ${currentFile === path && !activeDiffKey ? styles.active : ''} ${dirtyFiles.has(path) ? styles.dirty : ''}`}
               onClick={() => void openFile(path)}
             >
               <i className={`codicon ${iconClassFor(path)}`} />
@@ -1055,6 +1252,27 @@ export default function ManifestEditorV2() {
               </span>
             </div>
           ))}
+          {/* diff tabs */}
+          {diffTabs.map((t) => (
+            <div
+              key={t.key}
+              className={`${styles.tab} ${activeDiffKey === t.key ? styles.active : ''}`}
+              onClick={() => setActiveDiffKey(t.key)}
+              title={t.title}
+            >
+              <i className="codicon codicon-git-compare" />
+              <span>{t.title}</span>
+              <span
+                className={styles.close}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeDiffTab(t.key)
+                }}
+              >
+                <i className="codicon codicon-close" />
+              </span>
+            </div>
+          ))}
         </div>
         <div className={styles.editorHost}>
           {bootError ? (
@@ -1063,7 +1281,7 @@ export default function ManifestEditorV2() {
             </div>
           ) : null}
           {/* 二进制文件只读视图(spec §5.2):覆盖在 Monaco 之上 */}
-          {binaryView && currentFile === binaryView.path ? (
+          {!activeDiffKey && binaryView && currentFile === binaryView.path ? (
             <div className={styles.binaryView}>
               <i className="codicon codicon-file-binary" />
               <div>该文件是二进制文件,不在编辑器中显示。</div>
@@ -1072,9 +1290,23 @@ export default function ManifestEditorV2() {
               </div>
             </div>
           ) : null}
+          {/* diff 宿主:激活 diff tab 时显示,盖在普通编辑器之上 */}
+          <div
+            ref={diffContainerRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: activeDiffKey ? 'block' : 'none',
+            }}
+          />
           <div
             ref={containerRef}
-            style={{ width: '100%', height: '100%', visibility: binaryView && currentFile === binaryView.path ? 'hidden' : 'visible' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              visibility:
+                activeDiffKey || (binaryView && currentFile === binaryView.path) ? 'hidden' : 'visible',
+            }}
           />
         </div>
       </div>
@@ -1100,8 +1332,11 @@ export default function ManifestEditorV2() {
         ctx={ctx}
         onClose={() => setPublishOpen(false)}
         onPublished={() => {
-          // 发布成功后刷新历史(若历史面板正开着)
-          if (activeView === 'history') loadVersions()
+          // 发布成功后刷新历史 + 未提交更改(发布后草稿通常与新版本一致)
+          if (activeView === 'history') {
+            loadVersions()
+            loadDraftDiff()
+          }
         }}
       />
       <DeployDialog

@@ -3,6 +3,8 @@ package handlers
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -248,7 +250,67 @@ func (h *ManifestVersionsHandler) ExportVersion(c *gin.Context) {
 	c.Data(http.StatusOK, "application/zip", buf.Bytes())
 }
 
-// DiffVersions 简单文件级 diff: 返回两版本的文件列表差异(不做内容 line diff,前端 Monaco 自己做)
+// diffEntry 文件级变更条目(target 相对 base)
+type diffEntry struct {
+	Path  string `json:"path"`
+	State string `json:"state"` // added | removed | changed | unchanged
+}
+
+// computeFileDiff 真内容比对两组文件(target=A 相对 base=B):
+//   - added:    A 有 B 无
+//   - removed:  B 有 A 无
+//   - changed:  两边都有但内容不同(SHA-256 比对)
+//   - unchanged:两边都有且内容相同
+//
+// 返回按 path 升序的扁平列表(含 unchanged,前端可自行过滤);changed 比对用 hash 避免传全量内容。
+func computeFileDiff(targetFiles, baseFiles []models.ManifestFile) []diffEntry {
+	hashOf := func(b []byte) string {
+		s := sha256.Sum256(b)
+		return hex.EncodeToString(s[:])
+	}
+	type meta struct{ hash string }
+	aMap := make(map[string]meta, len(targetFiles))
+	for _, f := range targetFiles {
+		aMap[f.Path] = meta{hash: hashOf(f.Content)}
+	}
+	bMap := make(map[string]meta, len(baseFiles))
+	for _, f := range baseFiles {
+		bMap[f.Path] = meta{hash: hashOf(f.Content)}
+	}
+
+	pathSet := make(map[string]struct{}, len(aMap)+len(bMap))
+	for p := range aMap {
+		pathSet[p] = struct{}{}
+	}
+	for p := range bMap {
+		pathSet[p] = struct{}{}
+	}
+	paths := make([]string, 0, len(pathSet))
+	for p := range pathSet {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	out := make([]diffEntry, 0, len(paths))
+	for _, p := range paths {
+		a, inA := aMap[p]
+		b, inB := bMap[p]
+		switch {
+		case inA && !inB:
+			out = append(out, diffEntry{Path: p, State: "added"})
+		case !inA && inB:
+			out = append(out, diffEntry{Path: p, State: "removed"})
+		case a.hash != b.hash:
+			out = append(out, diffEntry{Path: p, State: "changed"})
+		default:
+			out = append(out, diffEntry{Path: p, State: "unchanged"})
+		}
+	}
+	return out
+}
+
+// DiffVersions 两个已发布版本的文件级真内容比对(target=:version_id 相对 base=?against)
+// GET /manifests/:id/v2/versions/:version_id/diff?against=<version_id>
 func (h *ManifestVersionsHandler) DiffVersions(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
@@ -259,43 +321,43 @@ func (h *ManifestVersionsHandler) DiffVersions(c *gin.Context) {
 	}
 
 	var aFiles, bFiles []models.ManifestFile
-	h.db.Select("path, mime, size, is_binary").
-		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Order("path ASC").Find(&aFiles)
-	h.db.Select("path, mime, size, is_binary").
-		Where("manifest_id = ? AND version_id = ?", manifestID, against).
-		Order("path ASC").Find(&bFiles)
+	h.db.Select("path, content").
+		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).Find(&aFiles)
+	h.db.Select("path, content").
+		Where("manifest_id = ? AND version_id = ?", manifestID, against).Find(&bFiles)
 
-	aMap := make(map[string]models.ManifestFile, len(aFiles))
-	for _, f := range aFiles {
-		aMap[f.Path] = f
-	}
-	bMap := make(map[string]models.ManifestFile, len(bFiles))
-	for _, f := range bFiles {
-		bMap[f.Path] = f
-	}
+	c.JSON(http.StatusOK, gin.H{"files": computeFileDiff(aFiles, bFiles)})
+}
 
-	type entry struct {
-		Path  string `json:"path"`
-		State string `json:"state"` // added | removed | maybe_changed
-	}
-	var added, removed, maybe []entry
-	for p := range aMap {
-		if _, ok := bMap[p]; !ok {
-			added = append(added, entry{Path: p, State: "added"})
-		} else {
-			maybe = append(maybe, entry{Path: p, State: "maybe_changed"})
+// DiffDraft 当前用户草稿 vs 某版本(默认最新已发布)的文件级真内容比对(target=草稿 相对 base=版本)
+// GET /manifests/:id/v2/draft/diff?against=<version_id>  (against 省略时取最新已发布版本)
+func (h *ManifestVersionsHandler) DiffDraft(c *gin.Context) {
+	manifestID := c.Param("id")
+	userID := c.GetString("user_id")
+	against := c.Query("against")
+
+	// against 省略 → 最新已发布版本(无已发布版本则 base 为空,草稿全部算 added)
+	baseVersionID := against
+	if baseVersionID == "" {
+		var latest models.ManifestVersion
+		if err := h.db.Where("manifest_id = ? AND version <> ?", manifestID, "draft").
+			Order("created_at DESC").First(&latest).Error; err == nil {
+			baseVersionID = latest.ID
 		}
 	}
-	for p := range bMap {
-		if _, ok := aMap[p]; !ok {
-			removed = append(removed, entry{Path: p, State: "removed"})
-		}
+
+	var draftFiles, baseFiles []models.ManifestFile
+	h.db.Select("path, content").
+		Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL", manifestID, userID).
+		Find(&draftFiles)
+	if baseVersionID != "" {
+		h.db.Select("path, content").
+			Where("manifest_id = ? AND version_id = ?", manifestID, baseVersionID).Find(&baseFiles)
 	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"added":         added,
-		"removed":       removed,
-		"maybe_changed": maybe,
+		"base_version_id": baseVersionID,
+		"files":           computeFileDiff(draftFiles, baseFiles),
 	})
 }
 

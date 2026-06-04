@@ -50,9 +50,11 @@ export async function listFiles(ctx: ManifestEditorContext): Promise<ManifestFil
 export async function readFile(
   ctx: ManifestEditorContext,
   path: string,
+  ref?: string, // 版本 ref: 省略/'draft'=当前用户草稿; 否则 version_id
 ): Promise<ManifestFileContent> {
+  const qs = ref && ref !== 'draft' ? `?version=${encodeURIComponent(ref)}` : ''
   // 拦截器已解包,直接就是 ManifestFileContent
-  return (await api.get(`${basePath(ctx)}/files/${encodeURIComponent(path)}`)) as ManifestFileContent
+  return (await api.get(`${basePath(ctx)}/files/${encodeURIComponent(path)}${qs}`)) as ManifestFileContent
 }
 
 /** 写入草稿单文件 */
@@ -157,6 +159,38 @@ export async function publishVersion(
   body: PublishVersionRequest,
 ): Promise<ManifestVersion> {
   return (await api.post(`${basePath(ctx)}/v2/versions`, body)) as ManifestVersion
+}
+
+// 文件级变更条目(target 相对 base)
+export type DiffState = 'added' | 'removed' | 'changed' | 'unchanged'
+export interface DiffEntry {
+  path: string
+  state: DiffState
+}
+
+// 两个已发布版本 diff(target=versionId 相对 base=against)
+export async function diffVersions(
+  ctx: ManifestEditorContext,
+  versionId: string,
+  against: string,
+): Promise<DiffEntry[]> {
+  const data = (await api.get(
+    `${basePath(ctx)}/v2/versions/${versionId}/diff?against=${encodeURIComponent(against)}`,
+  )) as { files?: DiffEntry[] }
+  return data.files ?? []
+}
+
+// 当前用户草稿 vs 某版本(against 省略=最新已发布)diff
+export async function diffDraft(
+  ctx: ManifestEditorContext,
+  against?: string,
+): Promise<{ baseVersionId: string; files: DiffEntry[] }> {
+  const qs = against ? `?against=${encodeURIComponent(against)}` : ''
+  const data = (await api.get(`${basePath(ctx)}/v2/draft/diff${qs}`)) as {
+    base_version_id?: string
+    files?: DiffEntry[]
+  }
+  return { baseVersionId: data.base_version_id ?? '', files: data.files ?? [] }
 }
 
 export async function listDeployments(ctx: ManifestEditorContext): Promise<ManifestDeployment[]> {

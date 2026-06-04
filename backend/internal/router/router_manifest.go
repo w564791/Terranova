@@ -129,6 +129,10 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
 			versionsH.DiffVersions,
 		)
+		g.GET("/v2/draft/diff",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			versionsH.DiffDraft,
+		)
 		g.POST("/v2/versions/:version_id/files/_export",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
 			versionsH.ExportVersion,
