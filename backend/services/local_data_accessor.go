@@ -652,7 +652,9 @@ func (a *LocalDataAccessor) getDB() *gorm.DB {
 }
 
 // UpdateResourceStatus 更新资源状态
-func (a *LocalDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, status, action string) error {
+// resourceID 为完成行实时捕获的云端资源 ID，非空时一并写入 resource_id；
+// 为空时不覆盖已有值（保持幂等，末尾 state 提取仍可补全）。
+func (a *LocalDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, status, action, resourceID string) error {
 	db := a.getDB()
 
 	// 查找资源记录
@@ -677,6 +679,10 @@ func (a *LocalDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, s
 
 	if status == "completed" {
 		updates["apply_completed_at"] = now
+	}
+
+	if resourceID != "" {
+		updates["resource_id"] = resourceID
 	}
 
 	if err := db.Model(&resource).Updates(updates).Error; err != nil {

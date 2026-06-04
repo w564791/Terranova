@@ -552,13 +552,17 @@ func (c *AgentAPIClient) GetPoolSecrets() (map[string]interface{}, error) {
 }
 
 // UpdateResourceStatus 更新资源状态（Agent 模式）
-func (c *AgentAPIClient) UpdateResourceStatus(taskID uint, resourceAddress, status, action string) error {
+// resourceID 为完成行实时捕获的云端资源 ID，可为空。
+func (c *AgentAPIClient) UpdateResourceStatus(taskID uint, resourceAddress, status, action, resourceID string) error {
 	path := fmt.Sprintf("/api/v1/agents/tasks/%d/resource-status", taskID)
 
 	payload := map[string]interface{}{
 		"resource_address": resourceAddress,
 		"apply_status":     status,
 		"action":           action,
+	}
+	if resourceID != "" {
+		payload["resource_id"] = resourceID
 	}
 
 	_, err := c.doRequest("POST", path, payload)

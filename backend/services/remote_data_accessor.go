@@ -514,7 +514,8 @@ func getMap(m map[string]interface{}, key string) map[string]interface{} {
 }
 
 // UpdateResourceStatus 更新资源状态（Agent 模式）
-func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, status, action string) error {
+// resourceID 为完成行实时捕获的云端资源 ID，可为空。
+func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, status, action, resourceID string) error {
 	// Agent 模式：通过 WebSocket 发送资源状态更新
 	// 这会被 C&C 通道的 forwardLogsToServer 捕获并转发到服务器
 	if a.streamManager != nil {
@@ -526,6 +527,9 @@ func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, 
 				"resource_address": resourceAddress,
 				"apply_status":     status,
 				"action":           action,
+			}
+			if resourceID != "" {
+				data["resource_id"] = resourceID
 			}
 
 			dataJSON, _ := json.Marshal(data)
@@ -542,7 +546,7 @@ func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, 
 	}
 
 	// 如果 streamManager 不可用，回退到 HTTP API
-	return a.apiClient.UpdateResourceStatus(taskID, resourceAddress, status, action)
+	return a.apiClient.UpdateResourceStatus(taskID, resourceAddress, status, action, resourceID)
 }
 
 // GetResourceByVersion 根据版本号获取资源（Agent模式）

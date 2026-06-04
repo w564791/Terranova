@@ -49,7 +49,8 @@ type DataAccessor interface {
 	GetResourceByVersion(resourceID string, version int) (*models.WorkspaceResource, error)
 	CheckResourceVersionExists(resourceID string, versionID uint) (bool, error)
 	CheckResourceVersionExistsByVersion(resourceID string, version int) (bool, error)
-	UpdateResourceStatus(taskID uint, resourceAddress, status, action string) error
+	// resourceID 为完成行实时捕获的云端资源 ID，可为空（空时不覆盖已有 resource_id）
+	UpdateResourceStatus(taskID uint, resourceAddress, status, action, resourceID string) error
 
 	// Plan parsing
 	ParsePlanChanges(taskID uint, planOutput string) error

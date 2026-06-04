@@ -942,6 +942,7 @@ func (h *RawAgentCCHandler) handleResourceStatusUpdate(taskID uint, jsonData str
 	resourceAddress, _ := data["resource_address"].(string)
 	applyStatus, _ := data["apply_status"].(string)
 	action, _ := data["action"].(string)
+	resourceID, _ := data["resource_id"].(string) // 可选：完成行实时捕获的云端资源 ID
 
 	if resourceAddress == "" || applyStatus == "" {
 		log.Printf("[Raw] Invalid resource_status_update data: address=%s, status=%s", resourceAddress, applyStatus)
@@ -961,11 +962,47 @@ func (h *RawAgentCCHandler) handleResourceStatusUpdate(taskID uint, jsonData str
 		updates["apply_completed_at"] = now
 	}
 
+	if resourceID != "" {
+		updates["resource_id"] = resourceID
+	}
+
 	if err := h.db.Model(&models.WorkspaceTaskResourceChange{}).
 		Where("task_id = ? AND resource_address = ?", taskID, resourceAddress).
 		Updates(updates).Error; err != nil {
 		log.Printf("[Raw] Failed to update resource status in DB: %v", err)
 		return
+	}
+
+	// 实时捕获到 id 时，广播 resource_id_update 让前端立即刷新该行 ID。
+	// 前端按 resource_address 匹配（id 仅 fallback），无需重查 DB 主键。
+	if resourceID != "" && h.streamManager != nil {
+		idData := map[string]interface{}{
+			"task_id":          taskID,
+			"resource_address": resourceAddress,
+			"resource_id":      resourceID,
+		}
+		idJSON, _ := json.Marshal(idData)
+
+		// 本地副本的前端客户端
+		if stream := h.streamManager.GetOrCreate(taskID); stream != nil {
+			stream.BroadcastLocal(services.OutputMessage{
+				Type:      "resource_id_update",
+				Line:      string(idJSON),
+				Timestamp: time.Now(),
+			})
+		}
+
+		// 跨副本转发：与 resource_status_update 一致，经 PG NOTIFY 投递到其他副本，
+		// 否则前端连在非 C&C 副本时收不到实时 ID。
+		forwardMsg := LogStreamForwardMessage{
+			TaskID:    taskID,
+			Type:      "resource_id_update",
+			Line:      string(idJSON),
+			SourcePod: h.podName,
+		}
+		if err := pgpubsub.Notify(h.db, LogStreamForwardChannel, forwardMsg); err != nil {
+			log.Printf("[LogStream] Failed to forward resource_id_update via PG NOTIFY for task %d: %v", taskID, err)
+		}
 	}
 
 	log.Printf("[Raw] Updated resource %s status to %s (task %d, action=%s)", resourceAddress, applyStatus, taskID, action)
