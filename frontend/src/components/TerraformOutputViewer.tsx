@@ -119,7 +119,9 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       if (!userSelectedAll && isConnected && !isCompleted) {
         // summary 阶段默认折叠，不自动跳转
         const collapsedStages = ['post_plan_summary', 'post_apply_summary'];
-        if (!collapsedStages.includes(latestActiveStage)) {
+        // 只切换到真实存在日志的阶段。apply_pending/plan_completed 等是任务生命周期
+        // 状态，不是日志 stage，切过去会把所有日志过滤掉导致空白。
+        if (stages.has(latestActiveStage) && !collapsedStages.includes(latestActiveStage)) {
           console.log('[TerraformOutputViewer] Auto-switching to stage:', latestActiveStage);
           setFilterStage(latestActiveStage);
         }
