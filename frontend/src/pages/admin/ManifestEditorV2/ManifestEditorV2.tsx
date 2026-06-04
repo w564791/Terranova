@@ -400,11 +400,16 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
-  // 拉"未提交更改"(草稿 vs 最新已发布版本),只取真正有变更的
-  const loadDraftDiff = useCallback(() => {
-    diffDraft(ctx)
-      .then((r) => setDraftDiff({ baseVersionId: r.baseVersionId, files: r.files.filter((f) => f.state !== 'unchanged') }))
-      .catch(() => setDraftDiff({ baseVersionId: '', files: [] }))
+  // 拉"未提交更改"(草稿 vs 最新已发布版本),只取真正有变更的。
+  // 先 flush 当前文件的待保存内容(autosave 是 1s 防抖,不 flush 会读到旧草稿、漏掉刚改的差异)。
+  const loadDraftDiff = useCallback(async () => {
+    await flushSaveRef.current()
+    try {
+      const r = await diffDraft(ctx)
+      setDraftDiff({ baseVersionId: r.baseVersionId, files: r.files.filter((f) => f.state !== 'unchanged') })
+    } catch {
+      setDraftDiff({ baseVersionId: '', files: [] })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
@@ -412,7 +417,7 @@ export default function ManifestEditorV2() {
   useEffect(() => {
     if (activeView === 'history') {
       loadVersions()
-      loadDraftDiff()
+      void loadDraftDiff()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView])
