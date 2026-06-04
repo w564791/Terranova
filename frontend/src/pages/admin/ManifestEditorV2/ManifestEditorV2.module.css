@@ -193,7 +193,15 @@
 }
 .changeRow:hover { background: var(--hover, #2a2d2e); }
 .changeBadge { width: 12px; text-align: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
-.changeName { overflow: hidden; text-overflow: ellipsis; }
+.changeName { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+/* 撤销按钮:hover 行才显示(VS Code 行为) */
+.changeActions {
+  display: inline-flex; gap: 4px; opacity: 0; flex-shrink: 0;
+  transition: opacity 0.1s ease;
+}
+.changeRow:hover .changeActions { opacity: 1; }
+.changeActions .codicon { padding: 2px 4px; border-radius: 3px; }
+.changeActions .codicon:hover { background: var(--hover, #2a2d2e); }
 .versionChanges { padding: 2px 0 4px; }
 .changeEmpty { padding: 2px 12px 4px 20px; color: var(--fg-muted, #858585); font-size: 12px; }
 

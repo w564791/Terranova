@@ -127,6 +127,8 @@ export default function ManifestEditorV2() {
   // 版本行展开:versionId -> 该版本 vs 上一版本的变更文件
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null)
   const [versionDiffCache, setVersionDiffCache] = useState<Record<string, DiffEntry[]>>({})
+  // 未提交更改行的内联撤销确认:pendingDiscard = 该文件 path(仅草稿区可撤销)
+  const [pendingDiscard, setPendingDiscard] = useState<string | null>(null)
 
   // ========== 初始化: 起 vscode-api + 创建编辑器 ==========
   useEffect(() => {
@@ -531,9 +533,55 @@ export default function ManifestEditorV2() {
     setActiveDiffKey((cur) => (cur === key ? null : cur))
   }, [])
 
+  // 撤销某文件的未提交更改:把草稿里该文件还原到 base 版本(最新已发布)。
+  //   changed → 用 base 内容覆盖草稿;added → 删草稿该文件;removed → 从 base 恢复到草稿。
+  const discardDraftFile = useCallback(
+    async (f: DiffEntry, baseRef: string) => {
+      try {
+        if (f.state === 'added') {
+          // base 没有 → 删掉草稿里这个新增文件
+          await deleteFile(ctx, f.path)
+        } else {
+          // changed / removed → 取 base 内容写回草稿
+          if (!baseRef) throw new Error('无基线版本可还原')
+          const base = await readFile(ctx, f.path, baseRef)
+          if (base.is_binary) {
+            await putFileB64(ctx, f.path, base.content_b64 ?? '')
+          } else {
+            await putFile(ctx, f.path, base.content ?? '')
+          }
+        }
+        // 清缓存 + 若该文件正打开则刷新编辑器内容
+        fileContentCache.current.delete(f.path)
+        if (currentFileRef.current === f.path) {
+          // 重新打开以加载还原后的内容(added 被删则关闭 tab)
+          if (f.state === 'added') {
+            setOpenTabs((prev) => prev.filter((p) => p !== f.path))
+            setCurrentFile(null)
+            editorRef.current?.getModel()?.setValue('')
+          } else {
+            void openFile(f.path)
+          }
+        }
+        setPendingDiscard(null)
+        // 刷新文件树 + 未提交更改列表
+        const items = await listFiles(ctx)
+        setFiles(items)
+        void loadDraftDiff()
+        message.success(`已撤销 ${f.path} 的更改`)
+      } catch (err: any) {
+        message.error(`撤销失败: ${err?.message ?? err}`)
+        setPendingDiscard(null)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ctx],
+  )
+
   // 渲染历史面板里的一条变更文件行。点击打开 diff(左=base 旧,右=target 新)。
   //   targetRef: 'draft' 或 version_id;baseRef: 对比基线 version_id(可空=无基线)
   //   added → base 侧不存在;removed → target 侧不存在
+  //   仅草稿区(targetRef==='draft')显示撤销按钮(已发布版本不可变,不能撤销)
   const renderChangeRow = useCallback(
     (f: DiffEntry, targetRef: string, baseRef: string) => {
       const badge = { added: 'A', removed: 'D', changed: 'M', unchanged: ' ' }[f.state]
@@ -543,6 +591,8 @@ export default function ManifestEditorV2() {
       const baseLabel = baseRef ? baseRef.slice(0, 8) : '∅'
       const targetLabel = targetRef === 'draft' ? '草稿' : targetRef.slice(0, 8)
       const title = `${f.path.split('/').pop()} (${baseLabel} ↔ ${targetLabel})`
+      const canDiscard = targetRef === 'draft'
+      const confirming = pendingDiscard === f.path
       return (
         <div
           key={`${targetRef}:${f.path}`}
@@ -552,11 +602,31 @@ export default function ManifestEditorV2() {
         >
           <span className={styles.changeBadge} style={{ color: badgeColor }}>{badge}</span>
           <span className={styles.changeName}>{f.path}</span>
+          {canDiscard && (
+            confirming ? (
+              <span className={styles.changeActions} style={{ opacity: 1 }} onClick={(e) => e.stopPropagation()}>
+                <span style={{ color: '#e2c08d', fontSize: 11, marginRight: 2 }}>撤销?</span>
+                <i className="codicon codicon-check" title="确认撤销" style={{ color: '#e2c08d' }} onClick={() => void discardDraftFile(f, baseRef)} />
+                <i className="codicon codicon-close" title="取消" onClick={() => setPendingDiscard(null)} />
+              </span>
+            ) : (
+              <span className={styles.changeActions}>
+                <i
+                  className="codicon codicon-discard"
+                  title="撤销此文件的未提交更改(还原到最新版本)"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPendingDiscard(f.path)
+                  }}
+                />
+              </span>
+            )
+          )}
         </div>
       )
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [openDiff],
+    [openDiff, pendingDiscard, discardDraftFile],
   )
 
   // 路径合法性校验(与后端 normalizeAndValidatePath 对齐),返回错误文案或 null
