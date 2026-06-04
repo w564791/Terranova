@@ -321,3 +321,48 @@
   z-index: 50;
 }
 .overlay.error { color: #f48771; font-family: monospace; padding: 16px; align-items: flex-start; white-space: pre-wrap; }
+
+/* ===== 跨文件搜索面板 ===== */
+.searchPanel { flex: 1; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.searchInputRow { display: flex; align-items: center; gap: 4px; }
+.searchInput {
+  flex: 1; min-width: 0; height: 26px;
+  background: var(--bg-input, #3c3c3c); color: var(--fg-default, #cccccc);
+  border: 1px solid transparent; border-radius: 2px; outline: none;
+  padding: 0 6px; font-size: 13px; font-family: inherit;
+}
+.searchInput:focus { border-color: var(--focus-border, #007fd4); }
+.searchInputError { border-color: #f48771; }
+.searchToggles { display: inline-flex; gap: 2px; flex-shrink: 0; }
+.searchToggle {
+  width: 22px; height: 22px; border: none; border-radius: 3px; cursor: pointer;
+  background: transparent; color: var(--fg-muted, #858585);
+  font-size: 11px; font-weight: 700; font-family: inherit; line-height: 1;
+}
+.searchToggle:hover { background: var(--hover, #2a2d2e); }
+.searchToggleOn { background: rgba(0,127,212,0.35); color: var(--fg-default, #cccccc); }
+.searchReplaceToggle { cursor: pointer; color: var(--fg-muted, #858585); width: 16px; text-align: center; }
+.searchReplaceAll {
+  height: 26px; padding: 0 8px; border: none; border-radius: 2px; cursor: pointer;
+  background: var(--accent, #0e639c); color: #fff; font-size: 12px; flex-shrink: 0;
+}
+.searchReplaceAll:disabled { opacity: 0.4; cursor: not-allowed; }
+.searchSummary { font-size: 11px; color: var(--fg-muted, #858585); padding: 2px 2px; }
+.searchResults { flex: 1; }
+.searchFileRow {
+  display: flex; align-items: center; gap: 6px; padding: 3px 4px;
+  font-size: 13px; color: var(--fg-default, #cccccc); cursor: default;
+}
+.searchFileName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchFileCount { color: var(--fg-muted, #858585); font-size: 11px; }
+.searchMatchRow {
+  display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 24px;
+  font-size: 12px; color: var(--fg-muted, #bbb); cursor: pointer; white-space: pre;
+  overflow: hidden;
+}
+.searchMatchRow:hover { background: var(--hover, #2a2d2e); }
+.searchMatchPreview { flex: 1; overflow: hidden; text-overflow: ellipsis; font-family: Menlo, Monaco, monospace; }
+.searchMatchHit { background: rgba(234,179,102,0.4); color: var(--fg-default, #cccccc); border-radius: 2px; }
+.searchMatchSkipped { opacity: 0.45; text-decoration: line-through; }
+.searchMatchSkip { color: var(--fg-muted, #858585); padding: 2px; border-radius: 3px; flex-shrink: 0; }
+.searchMatchSkip:hover { background: var(--hover, #2a2d2e); }

@@ -20,6 +20,7 @@ import { registerHclCompletion } from './hclCompletion'
 import PublishVersionDialog from './PublishVersionDialog'
 import DeployDialog from './DeployDialog'
 import RunDialog from './RunDialog'
+import SearchPanel from './SearchPanel'
 import {
   listFiles,
   readFile,
@@ -116,8 +117,9 @@ export default function ManifestEditorV2() {
   const [ghostDir, setGhostDir] = useState<string | null>(null)
   // 内联新建目录输入:!== null 时 sidebar 顶部出现目录名输入行
   const [creatingDir, setCreatingDir] = useState<string | null>(null)
-  // sidebar 当前视图:explorer(文件树) | history(版本历史)
-  const [activeView, setActiveView] = useState<'explorer' | 'history'>('explorer')
+  // sidebar 当前视图:explorer(文件树) | search(搜索) | history(版本历史)
+  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'history'>('explorer')
+  const [searchShowReplace, setSearchShowReplace] = useState(false) // Cmd+Shift+H 进来时默认展开替换
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
   // diff tab: 打开一个左旧右新的对比视图。key 唯一标识,激活时显示 DiffEditor、隐藏普通编辑器。
@@ -218,6 +220,15 @@ export default function ManifestEditorV2() {
         editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
           editorRef.current?.getAction('editor.action.commentLine')?.run()
         })
+        // Cmd/Ctrl+Shift+F 跨文件搜索;Cmd/Ctrl+Shift+H 跨文件替换(用 ref 调最新逻辑)
+        editorRef.current.addCommand(
+          monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF,
+          () => openSearchRef.current(false),
+        )
+        editorRef.current.addCommand(
+          monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyH,
+          () => openSearchRef.current(true),
+        )
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
@@ -296,6 +307,8 @@ export default function ManifestEditorV2() {
   const flushSaveRef = useRef<() => Promise<void>>(async () => {})
   // 关闭"当前" tab(diff 优先,否则当前文件),用 ref 给一次性注册的快捷键调最新逻辑
   const closeCurrentTabRef = useRef<() => void>(() => {})
+  // 打开搜索视图(withReplace=true 默认展开替换),用 ref 给快捷键调
+  const openSearchRef = useRef<(withReplace: boolean) => void>(() => {})
 
   const openFile = useCallback(
     async (path: string) => {
@@ -358,6 +371,42 @@ export default function ManifestEditorV2() {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [orgId, manifestId, files],
+  )
+
+  // 搜索结果点击:打开文件并定位到行列(选中匹配片段 + 滚动居中)
+  const openAt = useCallback(
+    async (path: string, line: number, column: number, endColumn: number) => {
+      await openFile(path)
+      const ed = editorRef.current
+      if (!ed) return
+      const range = new monaco.Range(line, column, line, endColumn)
+      ed.setSelection(range)
+      ed.revealRangeInCenter(range)
+      ed.focus()
+    },
+    [openFile],
+  )
+
+  // 全局替换落库后:被改文件的缓存 model 过期 → dispose,重开/未提交 diff 自然刷新
+  const refreshAfterReplace = useCallback(
+    (changedPaths: string[]) => {
+      for (const p of changedPaths) {
+        const isOpen = currentFileRef.current === p
+        if (isOpen) editorRef.current?.setModel(null)
+        const m = modelCache.current.get(p)
+        if (m) {
+          m.dispose()
+          modelCache.current.delete(p)
+        }
+        fileContentCache.current.delete(p)
+        viewStateCache.current.delete(p)
+        if (isOpen) {
+          setCurrentFile(null)
+          void openFile(p)
+        }
+      }
+    },
+    [openFile],
   )
 
   // 释放某 path 的编辑器资源(model dispose + 清三类缓存),关 tab / 删文件时调
@@ -445,6 +494,14 @@ export default function ManifestEditorV2() {
     closeCurrentTabRef.current = () => {
       if (activeDiffKey) closeDiffTab(activeDiffKey)
       else if (currentFileRef.current) closeTab(currentFileRef.current)
+    }
+  })
+
+  // Cmd+Shift+F/H:切到搜索视图(H 默认展开替换)
+  useEffect(() => {
+    openSearchRef.current = (withReplace: boolean) => {
+      setSearchShowReplace(withReplace)
+      setActiveView('search')
     }
   })
 
@@ -1168,7 +1225,15 @@ export default function ManifestEditorV2() {
         >
           <i className="codicon codicon-files" />
         </div>
-        <div className={`${styles.item} ${styles.disabled}`} title="搜索 (用编辑器内 Cmd+F)">
+        <div
+          className={`${styles.item} ${activeView === 'search' ? styles.active : ''}`}
+          title="跨文件搜索 (Cmd/Ctrl+Shift+F)"
+          role="button"
+          onClick={() => {
+            setSearchShowReplace(false)
+            setActiveView('search')
+          }}
+        >
           <i className="codicon codicon-search" />
         </div>
         <div className={`${styles.item} ${styles.disabled}`} title="源代码管理 (本期不启用 — 直接存 Postgres)">
@@ -1189,6 +1254,14 @@ export default function ManifestEditorV2() {
       </div>
 
       <div className={styles.sideBar}>
+        {activeView === 'search' && (
+          <SearchPanel
+            ctx={ctx}
+            showReplace={searchShowReplace}
+            onOpenAt={(p, line, col, endCol) => void openAt(p, line, col, endCol)}
+            onAfterReplace={(changed) => refreshAfterReplace(changed)}
+          />
+        )}
         {activeView === 'explorer' && (
         <>
         <div className={styles.header}>
