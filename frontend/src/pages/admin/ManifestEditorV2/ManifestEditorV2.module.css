@@ -121,7 +121,15 @@
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
+/* 侧栏右缘拖拽条:覆盖在右边界,hover/拖拽时高亮(VS Code sash) */
+.sidebarResizer {
+  position: absolute; top: 0; right: -2px; bottom: 0; width: 4px;
+  cursor: col-resize; z-index: 20;
+}
+.sidebarResizer:hover { background: var(--accent, #007acc); }
+.sidebarResizer:active { background: var(--accent, #007acc); }
 .sideBar .header {
   padding: 8px 12px 4px; font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.5px; color: var(--fg-default);
@@ -322,47 +330,73 @@
 }
 .overlay.error { color: #f48771; font-family: monospace; padding: 16px; align-items: flex-start; white-space: pre-wrap; }
 
-/* ===== 跨文件搜索面板 ===== */
-.searchPanel { flex: 1; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
-.searchInputRow { display: flex; align-items: center; gap: 4px; }
-.searchInput {
-  flex: 1; min-width: 0; height: 26px;
-  background: var(--bg-input, #3c3c3c); color: var(--fg-default, #cccccc);
-  border: 1px solid transparent; border-radius: 2px; outline: none;
-  padding: 0 6px; font-size: 13px; font-family: inherit;
+/* ===== 跨文件搜索面板(对齐 VS Code)===== */
+.searchPanel { flex: 1; overflow-y: auto; padding: 4px 12px 8px; display: flex; flex-direction: column; gap: 4px; }
+.searchInputRow { display: flex; align-items: flex-start; gap: 4px; }
+/* 折叠箭头列(替换切换),固定窄宽,与下方替换行的占位对齐 */
+.searchToggleReplace {
+  width: 16px; flex-shrink: 0; cursor: pointer; color: var(--fg-muted, #858585);
+  display: flex; align-items: center; justify-content: center; height: 24px; font-size: 14px;
 }
-.searchInput:focus { border-color: var(--focus-border, #007fd4); }
-.searchInputError { border-color: #f48771; }
-.searchToggles { display: inline-flex; gap: 2px; flex-shrink: 0; }
-.searchToggle {
-  width: 22px; height: 22px; border: none; border-radius: 3px; cursor: pointer;
-  background: transparent; color: var(--fg-muted, #858585);
-  font-size: 11px; font-weight: 700; font-family: inherit; line-height: 1;
+.searchToggleReplace:hover { color: var(--fg-default, #cccccc); }
+.searchToggleSpacer { width: 16px; flex-shrink: 0; }
+/* 输入框容器:VS Code 风格,图标贴在框内右侧 */
+.searchField {
+  flex: 1; min-width: 0; position: relative; display: flex; align-items: center;
+  background: var(--bg-input, #3c3c3c);
+  border: 1px solid var(--input-border, #3c3c3c);
+  border-radius: 2px; min-height: 24px;
 }
-.searchToggle:hover { background: var(--hover, #2a2d2e); }
-.searchToggleOn { background: rgba(0,127,212,0.35); color: var(--fg-default, #cccccc); }
-.searchReplaceToggle { cursor: pointer; color: var(--fg-muted, #858585); width: 16px; text-align: center; }
-.searchReplaceAll {
-  height: 26px; padding: 0 8px; border: none; border-radius: 2px; cursor: pointer;
-  background: var(--accent, #0e639c); color: #fff; font-size: 12px; flex-shrink: 0;
+.searchField:focus-within { border-color: var(--accent, #007acc); }
+.searchFieldError { border-color: #be1100; }
+.searchFieldError:focus-within { border-color: #be1100; }
+.searchFieldInput {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: var(--fg-default, #cccccc); font-size: 13px; font-family: inherit;
+  padding: 2px 6px; height: 22px;
 }
-.searchReplaceAll:disabled { opacity: 0.4; cursor: not-allowed; }
-.searchSummary { font-size: 11px; color: var(--fg-muted, #858585); padding: 2px 2px; }
+.searchFieldInput::placeholder { color: var(--fg-muted, #858585); }
+.searchFieldIcons { display: inline-flex; align-items: center; gap: 1px; padding-right: 2px; flex-shrink: 0; }
+/* 框内开关图标(Aa / 全字 / 正则 / 全部替换)*/
+.searchOpt {
+  width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 3px; cursor: pointer; color: var(--fg-muted, #999); font-size: 16px;
+  border: 1px solid transparent;
+}
+.searchOpt:hover { background: rgba(255,255,255,0.1); color: var(--fg-default, #ccc); }
+.searchOptOn { background: rgba(0,122,204,0.4); color: #fff; border-color: rgba(0,122,204,0.8); }
+.searchOptOn:hover { background: rgba(0,122,204,0.5); }
+.searchOptDisabled { opacity: 0.35; cursor: default; pointer-events: none; }
+
+.searchSummary { font-size: 12px; color: var(--fg-muted, #858585); padding: 4px 0 2px 20px; }
 .searchResults { flex: 1; }
 .searchFileRow {
-  display: flex; align-items: center; gap: 6px; padding: 3px 4px;
+  display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 6px;
   font-size: 13px; color: var(--fg-default, #cccccc); cursor: default;
+  height: 22px; line-height: 22px;
 }
+.searchFileRow .codicon { color: var(--fg-muted, #858585); font-size: 16px; }
 .searchFileName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.searchFileCount { color: var(--fg-muted, #858585); font-size: 11px; }
+.searchFileCount {
+  min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px;
+  background: rgba(255,255,255,0.12); color: var(--fg-default, #ccc);
+  font-size: 11px; line-height: 16px; text-align: center;
+}
 .searchMatchRow {
-  display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 24px;
-  font-size: 12px; color: var(--fg-muted, #bbb); cursor: pointer; white-space: pre;
-  overflow: hidden;
+  display: flex; align-items: center; gap: 6px; padding: 0 4px 0 26px;
+  font-size: 13px; color: var(--fg-default, #ccc); cursor: pointer;
+  height: 22px; line-height: 22px; overflow: hidden;
 }
 .searchMatchRow:hover { background: var(--hover, #2a2d2e); }
-.searchMatchPreview { flex: 1; overflow: hidden; text-overflow: ellipsis; font-family: Menlo, Monaco, monospace; }
-.searchMatchHit { background: rgba(234,179,102,0.4); color: var(--fg-default, #cccccc); border-radius: 2px; }
+.searchMatchPreview {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: Menlo, Monaco, "Cascadia Code", Consolas, monospace; font-size: 12px;
+}
+.searchMatchHit { background: rgba(234,179,102,0.35); color: var(--fg-default, #fff); border-radius: 2px; }
 .searchMatchSkipped { opacity: 0.45; text-decoration: line-through; }
-.searchMatchSkip { color: var(--fg-muted, #858585); padding: 2px; border-radius: 3px; flex-shrink: 0; }
-.searchMatchSkip:hover { background: var(--hover, #2a2d2e); }
+.searchMatchSkip {
+  opacity: 0; color: var(--fg-muted, #858585); padding: 2px; border-radius: 3px;
+  flex-shrink: 0; font-size: 14px;
+}
+.searchMatchRow:hover .searchMatchSkip { opacity: 1; }
+.searchMatchSkip:hover { background: var(--hover, #2a2d2e); color: var(--fg-default, #ccc); }

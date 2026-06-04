@@ -120,6 +120,8 @@ export default function ManifestEditorV2() {
   // sidebar 当前视图:explorer(文件树) | search(搜索) | history(版本历史)
   const [activeView, setActiveView] = useState<'explorer' | 'search' | 'history'>('explorer')
   const [searchShowReplace, setSearchShowReplace] = useState(false) // Cmd+Shift+H 进来时默认展开替换
+  // 侧栏宽度可拖拽(VS Code 行为),限 170–600px
+  const [sidebarWidth, setSidebarWidth] = useState(260)
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
   // diff tab: 打开一个左旧右新的对比视图。key 唯一标识,激活时显示 DiffEditor、隐藏普通编辑器。
@@ -516,6 +518,28 @@ export default function ManifestEditorV2() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  // 侧栏宽度拖拽:按住分隔条横向拖,限 170–600px
+  const startSidebarResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = sidebarWidth
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(600, Math.max(170, startW + (ev.clientX - startX)))
+      setSidebarWidth(w)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      editorRef.current?.layout() // 拖完让 Monaco 重新布局
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [sidebarWidth])
 
   // 关闭编辑器(左上红灯):先 flush 当前文件,再返回 manifest 列表
   const handleClose = useCallback(async () => {
@@ -1155,7 +1179,10 @@ export default function ManifestEditorV2() {
 
   // ========== 渲染 ==========
   return (
-    <div className={styles.root}>
+    <div
+      className={styles.root}
+      style={{ gridTemplateColumns: `48px ${sidebarWidth}px 1fr` }}
+    >
       <div className={styles.titleBar}>
         <div className={styles.traffic}>
           <span
@@ -1479,6 +1506,8 @@ export default function ManifestEditorV2() {
             </div>
           </>
         )}
+        {/* 侧栏右缘拖拽条:调整 sidebar 宽度 */}
+        <div className={styles.sidebarResizer} onMouseDown={startSidebarResize} />
       </div>
 
       <div className={styles.editorArea}>
