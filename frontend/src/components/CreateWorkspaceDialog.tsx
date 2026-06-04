@@ -35,7 +35,7 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     auto_apply: false,
     plan_only: false,
     terraform_version: 'latest',
-    workdir: '/workspace',
+    manifest_subpath: '',
   });
 
   // 加载表单数据
@@ -156,7 +156,7 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         auto_apply: false,
         plan_only: false,
         terraform_version: 'latest',
-        workdir: '/workspace',
+        manifest_subpath: '',
       });
       setErrors({});
       
@@ -374,17 +374,17 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>工作目录</label>
+            <label className={styles.label}>Manifest 子目录 (Subpath)</label>
             <input
               type="text"
-              value={workspaceData.workdir}
-              onChange={(e) => handleFieldChange('workdir', e.target.value)}
+              value={workspaceData.manifest_subpath}
+              onChange={(e) => handleFieldChange('manifest_subpath', e.target.value)}
               className={styles.input}
-              placeholder="/workspace"
+              placeholder="留空 = manifest 根目录,如 envs/prod"
               disabled={isSubmitting}
             />
             <div className={styles.hint}>
-              Terraform执行的工作目录
+              装 manifest 时 terraform 在此子目录执行(cd subpath)。留空表示根目录;install 后不可改。
             </div>
           </div>
         </div>

@@ -23,7 +23,7 @@ const CreateWorkspace: React.FC = () => {
     state_backend: 'local',
     auto_apply: false,
     terraform_version: 'latest',
-    workdir: '/workspace',
+    manifest_subpath: '',
   });
 
   const [tagPairs, setTagPairs] = useState<Array<{ key: string; value: string }>>([
