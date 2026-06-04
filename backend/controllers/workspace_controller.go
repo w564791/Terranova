@@ -52,6 +52,14 @@ func ptrIfNonEmpty(s string) *string {
 	return &s
 }
 
+// derefOr 解引用 *string,nil 时返回 fallback
+func derefOr(p *string, fallback string) string {
+	if p == nil {
+		return fallback
+	}
+	return *p
+}
+
 // calculateProviderConfigHash 计算 provider_config 的 SHA256 hash
 // 用于跟踪 provider 配置变更，优化 terraform init -upgrade
 func calculateProviderConfigHash(config interface{}) string {
@@ -268,8 +276,8 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		"auto_apply":               workspace.AutoApply,
 		"plan_only":                workspace.PlanOnly,
 		"terraform_version":        workspace.TerraformVersion,
-		"workdir":                  workspace.Workdir,
-		"manifest_subpath":         workspace.ManifestSubpath,
+		// 对外把 manifest_subpath 列回显为 workdir(前端字段名),保证表单往返一致
+		"workdir":                  derefOr(workspace.ManifestSubpath, ""),
 		"manifest_deployment_id":   workspace.ManifestDeploymentID,
 		"state_backend":            workspace.StateBackend,
 		"state_config":             workspace.StateConfig,
@@ -341,8 +349,7 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		AutoApply         bool                      `json:"auto_apply"`
 		PlanOnly          bool                      `json:"plan_only"`
 		TerraformVersion  string                    `json:"terraform_version"`
-		Workdir           string                    `json:"workdir"`
-		ManifestSubpath   string                    `json:"manifest_subpath"` // manifest 模式 terraform 执行子目录(空=根);install 后不可改
+		Workdir           string                    `json:"workdir"` // 仅 manifest 模式生效:作为 terraform 执行子目录,存入 manifest_subpath 列
 		StateBackend      string                    `json:"state_backend" binding:"required"`
 		StateConfig       map[string]interface{}    `json:"state_config"`
 		Tags              map[string]interface{}    `json:"tags"`
@@ -402,13 +409,12 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 	if req.StateBackend == "" {
 		req.StateBackend = "local"
 	}
-	// req.Workdir: 旧字段已废弃, 创建时强制清空。manifest 模式工作目录改由 manifest_subpath 承担。
-	req.Workdir = ""
-	// manifest_subpath 归一化:去首尾 / (空=manifest 根目录),禁绝对路径/. ..段
-	subpath, subErr := normalizeManifestSubpath(req.ManifestSubpath)
+	// workdir 仅 manifest 模式生效:作为 terraform 执行子目录,归一化后存入 manifest_subpath 列。
+	// (列名沿用 manifest_subpath;对前端/用户呈现为 workdir。空=manifest 根目录)
+	subpath, subErr := normalizeManifestSubpath(req.Workdir)
 	if subErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400, "message": "manifest_subpath 非法: " + subErr.Error(),
+			"code": 400, "message": "workdir 非法: " + subErr.Error(),
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return
@@ -444,7 +450,7 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		AutoApply:        req.AutoApply,
 		PlanOnly:         req.PlanOnly,
 		TerraformVersion: req.TerraformVersion,
-		Workdir:          req.Workdir,
+		// workdir 值存进 manifest_subpath 列(executor 实际读取的字段);workdir 列本身留空不用
 		ManifestSubpath:  ptrIfNonEmpty(subpath),
 		StateBackend:     req.StateBackend,
 		StateConfig:      req.StateConfig,
@@ -498,7 +504,7 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		"auto_apply":        workspace.AutoApply,
 		"plan_only":         workspace.PlanOnly,
 		"terraform_version": workspace.TerraformVersion,
-		"workdir":           workspace.Workdir,
+		"workdir":           derefOr(workspace.ManifestSubpath, ""),
 		"state_backend":     workspace.StateBackend,
 		"state_config":      workspace.StateConfig,
 		"tags":              workspace.Tags,
@@ -553,8 +559,7 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 		ExecutionMode          string                    `json:"execution_mode"`
 		AgentPoolID            *uint                     `json:"agent_pool_id"`
 		K8sConfigID            *uint                     `json:"k8s_config_id"`
-		Workdir                string                    `json:"workdir"`
-		ManifestSubpath        *string                   `json:"manifest_subpath"` // 指针区分"未提供"与"设空";装了 manifest 后拒绝改
+		Workdir                *string                   `json:"workdir"` // 指针区分"未提供"与"设空";仅 manifest 模式生效,值存 manifest_subpath 列;装了 manifest 后拒改
 		AutoApply              *bool                     `json:"auto_apply"`
 		UIMode                 string                    `json:"ui_mode"`
 		ShowUnchangedResources *bool                     `json:"show_unchanged_resources"`
@@ -615,9 +620,9 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 	if req.K8sConfigID != nil {
 		updates["k8s_config_id"] = req.K8sConfigID
 	}
-	// req.Workdir 旧字段已废弃, 不再接受用户更新(被 manifest_subpath 取代)
-	// manifest_subpath: 仅未装 manifest 时可改(spec §3.2: install 后不可改);装了则拒绝
-	if req.ManifestSubpath != nil {
+	// workdir 仅 manifest 模式生效,值存 manifest_subpath 列。
+	// spec §3.2: install 后不可改 —— 已装 manifest(manifest_deployment_id 非空)则拒绝(409)。
+	if req.Workdir != nil {
 		var ws models.Workspace
 		if err := wc.workspaceService.GetDB().
 			Select("manifest_deployment_id").
@@ -631,15 +636,15 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 		}
 		if ws.ManifestDeploymentID != nil && *ws.ManifestDeploymentID != "" {
 			c.JSON(http.StatusConflict, gin.H{
-				"code": 409, "message": "该 workspace 已装 manifest,subpath 不可更改;需 uninstall 后重新 install",
+				"code": 409, "message": "该 workspace 已装 manifest,工作目录不可更改;需 uninstall 后重新 install",
 				"timestamp": time.Now().Format(time.RFC3339),
 			})
 			return
 		}
-		subpath, subErr := normalizeManifestSubpath(*req.ManifestSubpath)
+		subpath, subErr := normalizeManifestSubpath(*req.Workdir)
 		if subErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"code": 400, "message": "manifest_subpath 非法: " + subErr.Error(),
+				"code": 400, "message": "workdir 非法: " + subErr.Error(),
 				"timestamp": time.Now().Format(time.RFC3339),
 			})
 			return

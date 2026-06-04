@@ -49,8 +49,8 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
   const [currentPoolId, setCurrentPoolId] = useState<string | undefined>();
   const [terraformVersion, setTerraformVersion] = useState('latest');
   const [availableTerraformVersions, setAvailableTerraformVersions] = useState<TerraformVersion[]>([]);
-  // manifest 模式 terraform 执行子目录(取代已废弃的 workdir);装了 manifest 后只读锁定
-  const [manifestSubpath, setManifestSubpath] = useState('');
+  // 工作目录:仅 manifest 模式下生效(作为 terraform 执行子目录);装了 manifest 后只读锁定
+  const [workdir, setWorkdir] = useState('');
   const [manifestManaged, setManifestManaged] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
   const [uiMode, setUiMode] = useState<'console' | 'structured'>('console');
@@ -167,7 +167,7 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
       setK8sConfigId(workspace.k8s_config_id);
       setCurrentPoolId(workspace.current_pool_id);
       setTerraformVersion(workspace.terraform_version || 'latest');
-      setManifestSubpath(workspace.manifest_subpath || '');
+      setWorkdir(workspace.workdir || '');
       setManifestManaged(!!workspace.manifest_deployment_id);
       setAutoApply(workspace.auto_apply || false);
       setUiMode(workspace.ui_mode || 'console');
@@ -248,8 +248,8 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
         agent_pool_id: executionMode === 'agent' ? agentPoolId : undefined,
         k8s_config_id: executionMode === 'k8s' ? k8sConfigId : undefined,
         terraform_version: terraformVersion,
-        // 仅未装 manifest 时提交 subpath(装了后端会拒;不提交避免无谓 409)
-        ...(manifestManaged ? {} : { manifest_subpath: manifestSubpath }),
+        // workdir 仅 manifest 模式生效;装了 manifest 后端会拒改,不提交避免无谓 409
+        ...(manifestManaged ? {} : { workdir }),
         auto_apply: autoApply,
         ui_mode: uiMode,
         show_unchanged_resources: showUnchangedResources,
@@ -590,23 +590,23 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
                 </div>
 
                 <div className={styles.field}>
-                  <label className={styles.label}>Manifest 子目录 (Subpath)</label>
+                  <label className={styles.label}>Terraform Working Directory</label>
                   <input
                     type="text"
-                    value={manifestSubpath}
+                    value={workdir}
                     onChange={(e) => {
-                      setManifestSubpath(e.target.value);
+                      setWorkdir(e.target.value);
                       setHasChanges(true);
                     }}
                     className={styles.input}
-                    placeholder="留空 = manifest 根目录,如 envs/prod"
+                    placeholder="/"
                     disabled={manifestManaged}
                     style={manifestManaged ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                   <div className={styles.hint}>
                     {manifestManaged
-                      ? '已装 manifest,subpath 锁定;如需更改请先在 manifest 编辑器卸载该 workspace 的部署。'
-                      : '装 manifest 时 terraform 在此子目录执行(cd subpath)。留空表示 manifest 根目录。install 后不可改。'}
+                      ? '已装 manifest,工作目录已锁定;如需更改请先卸载该 workspace 的 manifest 部署。'
+                      : '仅在 manifest 模式下生效:作为 terraform 执行的子目录(留空 = manifest 根目录)。装 manifest 后不可改。'}
                   </div>
                 </div>
               </div>

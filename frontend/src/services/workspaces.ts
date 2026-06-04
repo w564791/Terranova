@@ -62,8 +62,7 @@ export interface CreateWorkspaceRequest {
   auto_apply?: boolean;
   plan_only?: boolean;
   terraform_version?: string;
-  workdir?: string; // 已废弃,后端忽略;保留避免破坏存量调用
-  manifest_subpath?: string; // manifest 模式 terraform 执行子目录(空=根);install 后不可改
+  workdir?: string; // 仅 manifest 模式生效:terraform 执行子目录(后端存 manifest_subpath 列);install 后不可改
   state_backend: string;
   state_config?: Record<string, any>;
   tags?: Record<string, any>;
