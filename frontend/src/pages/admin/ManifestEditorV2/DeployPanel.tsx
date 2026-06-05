@@ -21,6 +21,7 @@ import {
   listVersions,
   listDeployments,
   listVersionWorkdirs,
+  getDeploymentVarsets,
   installDeployment,
   upgradeDeployment,
   uninstallDeployment,
@@ -54,6 +55,8 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
   const [versionId, setVersionId] = useState<string | undefined>()
   const [workspaceId, setWorkspaceId] = useState<string | undefined>()
   const [varsetIds, setVarsetIds] = useState<string[]>([])
+  // 该 workspace 当前已装 deployment 的 varset 关联(upgrade 对比基线;升级表单预填)
+  const [currentVarsetIds, setCurrentVarsetIds] = useState<string[]>([])
   // install 的执行子目录(workdir):'' = 根。来自该版本可用目录列表。
   const [workdir, setWorkdir] = useState<string>('')
   const [workdirs, setWorkdirs] = useState<string[]>([''])
@@ -96,11 +99,37 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
     return activeDeploymentForWs ? 'upgrade' : 'install'
   }, [workspaceId, activeDeploymentForWs])
 
-  // 选中版本是否与该 workspace 当前已装版本一致(一致则无需升级,避免"看起来还能升级"的错觉)
+  // 选中已装 workspace 时:拉它当前关联的 varset,预填表单 + 作为 upgrade 对比基线
+  useEffect(() => {
+    if (!activeDeploymentForWs) {
+      setCurrentVarsetIds([])
+      return
+    }
+    let cancelled = false
+    getDeploymentVarsets(ctx, activeDeploymentForWs.id)
+      .then((ids) => {
+        if (cancelled) return
+        setCurrentVarsetIds(ids)
+        setVarsetIds(ids) // 预填已关联的 varset,用户在此基础上增删
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentVarsetIds([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ctx, activeDeploymentForWs])
+
+  // upgrade 的"无需变更":版本一致 **且** varset 关联也没变。任一变化即可 Upgrade。
   const sameVersion = useMemo(
     () => !!activeDeploymentForWs && activeDeploymentForWs.version_id === versionId,
     [activeDeploymentForWs, versionId],
   )
+  const sameVarsets = useMemo(() => {
+    if (varsetIds.length !== currentVarsetIds.length) return false
+    return varsetIds.every((id, i) => id === currentVarsetIds[i])
+  }, [varsetIds, currentVarsetIds])
+  const noChange = sameVersion && sameVarsets
 
   // install 模式下:版本变更时拉该版本可用 workdir 目录,默认选根 ''
   useEffect(() => {
@@ -244,8 +273,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
       }
       return (
         <Space>
-          {sameVersion && (
-            <span style={{ color: '#52c41a', marginRight: 4 }}>当前已是该版本,无需升级</span>
+          {noChange && (
+            <span style={{ color: '#52c41a', marginRight: 4 }}>
+              版本与 varset 关联均无变化,无需更新
+            </span>
           )}
           <Button onClick={onClose}>取消</Button>
           <Button danger onClick={() => setConfirmingUninstall(true)} loading={submitting}>
@@ -255,10 +286,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
             type="primary"
             onClick={handleUpgrade}
             loading={submitting}
-            disabled={sameVersion}
-            title={sameVersion ? '已是该版本,请选择更高版本再升级' : undefined}
+            disabled={noChange}
+            title={noChange ? '版本与 varset 都没变,改了再更新' : '应用版本 / varset 变更'}
           >
-            Upgrade
+            {sameVersion ? '更新 varset 关联' : 'Upgrade'}
           </Button>
         </Space>
       )

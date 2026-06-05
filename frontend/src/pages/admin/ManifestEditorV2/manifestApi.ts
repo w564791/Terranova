@@ -225,6 +225,20 @@ export interface DeploymentVarsetEntry {
   priority: number
 }
 
+// 取某 deployment 详情 + 已关联的 varset(按 priority 升序),用于 upgrade 表单预填。
+export async function getDeploymentVarsets(
+  ctx: ManifestEditorContext,
+  deploymentId: string,
+): Promise<string[]> {
+  const data = (await api.get(`${basePath(ctx)}/v2/deployments/${deploymentId}`)) as {
+    varsets?: { varset_id: string; priority: number }[]
+  }
+  return (data.varsets ?? [])
+    .slice()
+    .sort((a, b) => a.priority - b.priority)
+    .map((v) => v.varset_id)
+}
+
 export interface InstallDeploymentRequest {
   version_id: string
   workspace_id: string
