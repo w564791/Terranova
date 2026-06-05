@@ -149,12 +149,14 @@ export default function ManifestEditorV2() {
   const [ghostDir, setGhostDir] = useState<string | null>(null)
   // 内联新建目录输入:!== null 时 sidebar 顶部出现目录名输入行
   const [creatingDir, setCreatingDir] = useState<string | null>(null)
-  // 右键菜单:{x,y,target}。target 描述右键对象(文件/目录/空白)
+  // 文件树右键菜单:{x,y,target}。target 描述右键对象(文件/目录/空白)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
     target: { kind: 'file' | 'dir' | 'blank'; path: string }
   } | null>(null)
+  // 编辑器 tab 右键菜单:{x,y,path}(被右键的 tab)
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null)
   // 文件树键盘导航当前焦点节点(path)
   const [focusedPath, setFocusedPath] = useState<string | null>(null)
   // 拖拽移动:正在拖的节点 + 当前 hover 的放置目标目录(高亮用)
@@ -598,6 +600,60 @@ export default function ManifestEditorV2() {
     },
     [currentFile, openFile, disposeFileResources],
   )
+
+  // 批量关闭一组 tab(关闭其他/左侧/右侧/全部/全部已保存 共用)。
+  // toClose: 要关闭的 path 集合。会 dispose 资源,并把 currentFile 切到剩余 tab(无则清空)。
+  const closeTabs = useCallback(
+    (toClose: string[]) => {
+      if (toClose.length === 0) return
+      const closeSet = new Set(toClose)
+      setOpenTabs((prev) => {
+        const next = prev.filter((p) => !closeSet.has(p))
+        const curClosed = currentFileRef.current != null && closeSet.has(currentFileRef.current)
+        if (curClosed) {
+          const fallback = next[0] ?? null
+          if (fallback) {
+            void openFile(fallback).then(() => toClose.forEach(disposeFileResources))
+          } else {
+            void flushSaveRef.current().then(() => {
+              setCurrentFile(null)
+              editorRef.current?.setModel(null)
+              toClose.forEach(disposeFileResources)
+            })
+          }
+        } else {
+          toClose.forEach(disposeFileResources)
+        }
+        return next
+      })
+    },
+    [openFile, disposeFileResources],
+  )
+
+  // tab 右键菜单的各动作(基于右键的那个 tab path)
+  const closeOtherTabs = useCallback(
+    (keep: string) => closeTabs(openTabs.filter((p) => p !== keep)),
+    [openTabs, closeTabs],
+  )
+  const closeTabsToRight = useCallback(
+    (path: string) => {
+      const i = openTabs.indexOf(path)
+      if (i >= 0) closeTabs(openTabs.slice(i + 1))
+    },
+    [openTabs, closeTabs],
+  )
+  const closeTabsToLeft = useCallback(
+    (path: string) => {
+      const i = openTabs.indexOf(path)
+      if (i > 0) closeTabs(openTabs.slice(0, i))
+    },
+    [openTabs, closeTabs],
+  )
+  const closeSavedTabs = useCallback(
+    () => closeTabs(openTabs.filter((p) => !dirtyFiles.has(p))),
+    [openTabs, dirtyFiles, closeTabs],
+  )
+  const closeAllTabs = useCallback(() => closeTabs([...openTabs]), [openTabs, closeTabs])
 
   // ========== 保存当前文件 ==========
   const saveCurrentFile = useCallback(async () => {
@@ -1489,6 +1545,32 @@ export default function ManifestEditorV2() {
     [],
   )
 
+  // 编辑器 tab 右键菜单项
+  const buildTabMenuItems = useCallback(
+    (path: string): ContextMenuItem[] => {
+      const i = openTabs.indexOf(path)
+      const hasOther = openTabs.length > 1
+      const hasRight = i >= 0 && i < openTabs.length - 1
+      const hasLeft = i > 0
+      const hasSaved = openTabs.some((p) => !dirtyFiles.has(p))
+      return [
+        { label: '关闭', icon: 'close', onClick: () => closeTab(path) },
+        { label: '关闭其他', icon: 'close-all', disabled: !hasOther, onClick: () => closeOtherTabs(path) },
+        { label: '关闭右侧', icon: 'arrow-right', disabled: !hasRight, onClick: () => closeTabsToRight(path) },
+        { label: '关闭左侧', icon: 'arrow-left', disabled: !hasLeft, onClick: () => closeTabsToLeft(path) },
+        {
+          label: '关闭全部已保存',
+          icon: 'save-all',
+          separatorBefore: true,
+          disabled: !hasSaved,
+          onClick: () => closeSavedTabs(),
+        },
+        { label: '关闭全部', icon: 'close-all', onClick: () => closeAllTabs() },
+      ]
+    },
+    [openTabs, dirtyFiles, closeTab, closeOtherTabs, closeTabsToRight, closeTabsToLeft, closeSavedTabs, closeAllTabs],
+  )
+
   const fileTree = useMemo(
     () => buildFileTree(files.map((f) => f.path), ghostDir),
     [files, ghostDir],
@@ -2299,6 +2381,10 @@ export default function ManifestEditorV2() {
               key={path}
               className={`${styles.tab} ${currentFile === path && !activeDiffKey ? styles.active : ''} ${dirtyFiles.has(path) ? styles.dirty : ''}`}
               onClick={() => void openFile(path)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setTabMenu({ x: e.clientX, y: e.clientY, path })
+              }}
             >
               <i className={`codicon ${iconClassFor(path)}`} />
               <span>{path.split('/').pop()}</span>
@@ -2421,6 +2507,15 @@ export default function ManifestEditorV2() {
           y={contextMenu.y}
           items={buildMenuItems(contextMenu.target)}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {/* 编辑器 tab 右键菜单 */}
+      {tabMenu && (
+        <TreeContextMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          items={buildTabMenuItems(tabMenu.path)}
+          onClose={() => setTabMenu(null)}
         />
       )}
     </div>
