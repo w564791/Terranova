@@ -57,11 +57,14 @@ func NewApplyOutputParser(taskID uint, db *gorm.DB, streamManager *OutputStreamM
 		streamManager: streamManager,
 
 		// 编译正则表达式
+		// 完成行 terraform 会同时打印 id，如：
+		//   addr: Creation complete after 2s [id=bucket-name]
+		// id 捕获组可选（部分资源不打 id），匹配不到时仅更新状态。
 		creatingRegex:   regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Creating\.\.\.`),
 		modifyingRegex:  regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Modifying\.\.\.`),
 		destroyingRegex: regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Destroying\.\.\.`),
-		createdRegex:    regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Creation complete after`),
-		modifiedRegex:   regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Modifications complete after`),
+		createdRegex:    regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Creation complete after(?:.*?\[id=([^\]]*)\])?`),
+		modifiedRegex:   regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Modifications complete after(?:.*?\[id=([^\]]*)\])?`),
 		destroyedRegex:  regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Destruction complete after`),
 	}
 }
@@ -74,12 +77,12 @@ func NewApplyOutputParserWithAccessor(taskID uint, dataAccessor DataAccessor, st
 		dataAccessor:  dataAccessor,
 		streamManager: streamManager,
 
-		// 编译正则表达式
+		// 编译正则表达式（id 捕获组可选，见上方说明）
 		creatingRegex:   regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Creating\.\.\.`),
 		modifyingRegex:  regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Modifying\.\.\.`),
 		destroyingRegex: regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Destroying\.\.\.`),
-		createdRegex:    regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Creation complete after`),
-		modifiedRegex:   regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Modifications complete after`),
+		createdRegex:    regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Creation complete after(?:.*?\[id=([^\]]*)\])?`),
+		modifiedRegex:   regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Modifications complete after(?:.*?\[id=([^\]]*)\])?`),
 		destroyedRegex:  regexp.MustCompile(`^([a-zA-Z0-9_\-\.\[\]"]+):\s+Destruction complete after`),
 	}
 }
@@ -93,43 +96,54 @@ func (p *ApplyOutputParser) ParseLine(line string) {
 		matches := p.creatingRegex.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			resourceAddress := matches[1]
-			p.updateResourceStatus(resourceAddress, "applying", "create")
+			p.updateResourceStatus(resourceAddress, "applying", "create", "")
 		}
 	} else if p.modifyingRegex.MatchString(line) {
 		matches := p.modifyingRegex.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			resourceAddress := matches[1]
-			p.updateResourceStatus(resourceAddress, "applying", "update")
+			p.updateResourceStatus(resourceAddress, "applying", "update", "")
 		}
 	} else if p.destroyingRegex.MatchString(line) {
 		matches := p.destroyingRegex.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			resourceAddress := matches[1]
-			p.updateResourceStatus(resourceAddress, "applying", "delete")
+			p.updateResourceStatus(resourceAddress, "applying", "delete", "")
 		}
 	} else if p.createdRegex.MatchString(line) {
 		matches := p.createdRegex.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			resourceAddress := matches[1]
-			p.updateResourceStatus(resourceAddress, "completed", "create")
+			// matches[2] 为可选的 [id=...] 捕获，未匹配时为空串
+			resourceID := ""
+			if len(matches) > 2 {
+				resourceID = matches[2]
+			}
+			p.updateResourceStatus(resourceAddress, "completed", "create", resourceID)
 		}
 	} else if p.modifiedRegex.MatchString(line) {
 		matches := p.modifiedRegex.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			resourceAddress := matches[1]
-			p.updateResourceStatus(resourceAddress, "completed", "update")
+			resourceID := ""
+			if len(matches) > 2 {
+				resourceID = matches[2]
+			}
+			p.updateResourceStatus(resourceAddress, "completed", "update", resourceID)
 		}
 	} else if p.destroyedRegex.MatchString(line) {
 		matches := p.destroyedRegex.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			resourceAddress := matches[1]
-			p.updateResourceStatus(resourceAddress, "completed", "delete")
+			p.updateResourceStatus(resourceAddress, "completed", "delete", "")
 		}
 	}
 }
 
 // updateResourceStatus 更新资源状态
-func (p *ApplyOutputParser) updateResourceStatus(resourceAddress, status, action string) {
+// resourceID 为从完成行实时捕获的云端资源 ID（如 bucket 名），可能为空（部分资源不打 id）；
+// 为空时不覆盖已有 resource_id，保持幂等。
+func (p *ApplyOutputParser) updateResourceStatus(resourceAddress, status, action, resourceID string) {
 	// 使用 DataAccessor 更新资源状态（支持 Local 和 Agent 模式）
 	if p.dataAccessor == nil {
 		log.Printf("[Warning] DataAccessor is nil, skipping resource status update for %s", resourceAddress)
@@ -137,7 +151,7 @@ func (p *ApplyOutputParser) updateResourceStatus(resourceAddress, status, action
 	}
 
 	// 通过 DataAccessor 更新资源状态
-	if err := p.dataAccessor.UpdateResourceStatus(p.taskID, resourceAddress, status, action); err != nil {
+	if err := p.dataAccessor.UpdateResourceStatus(p.taskID, resourceAddress, status, action, resourceID); err != nil {
 		log.Printf("Warning: Failed to update resource status for %s: %v", resourceAddress, err)
 		return
 	}
@@ -150,6 +164,10 @@ func (p *ApplyOutputParser) updateResourceStatus(resourceAddress, status, action
 			First(&resource).Error; err == nil {
 			// 通过WebSocket推送状态更新
 			p.broadcastResourceUpdate(&resource)
+			// 实时捕获到 id 时，额外推送 resource_id_update 让前端立即刷新该行 ID
+			if resourceID != "" && resource.ResourceID != nil && *resource.ResourceID != "" {
+				p.broadcastResourceIDUpdate(p.taskID, &resource)
+			}
 		}
 	}
 
@@ -183,6 +201,36 @@ func (p *ApplyOutputParser) broadcastResourceUpdate(resource *models.WorkspaceTa
 	}
 
 	stream.Broadcast(message)
+}
+
+// broadcastResourceIDUpdate 广播资源 ID 更新（resource_id_update），让前端实时刷新该行 ID
+func (p *ApplyOutputParser) broadcastResourceIDUpdate(taskID uint, resource *models.WorkspaceTaskResourceChange) {
+	if p.streamManager == nil {
+		return
+	}
+
+	stream := p.streamManager.GetOrCreate(taskID)
+	if stream == nil {
+		return
+	}
+
+	data := map[string]interface{}{
+		"task_id":          taskID,
+		"id":               resource.ID,
+		"resource_address": resource.ResourceAddress,
+		"resource_id":      resource.ResourceID,
+	}
+
+	dataJSON, _ := json.Marshal(data)
+
+	message := OutputMessage{
+		Type:      "resource_id_update",
+		Line:      string(dataJSON),
+		Timestamp: time.Now(),
+	}
+
+	stream.Broadcast(message)
+	log.Printf("[WebSocket] Broadcasted realtime resource ID update for %s: %v", resource.ResourceAddress, resource.ResourceID)
 }
 
 // ExtractResourceDetailsFromState 从State提取资源详情（只提取resource_id）

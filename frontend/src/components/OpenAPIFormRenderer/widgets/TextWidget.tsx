@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { Form, Input, Tag, Tooltip } from 'antd';
 import { LinkOutlined, WarningOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 import type { Rule } from 'antd/es/form';
 
 // 占位符检测正则表达式

@@ -45,6 +45,10 @@ export interface Workspace {
   };
   ui_mode?: 'console' | 'structured';
   show_unchanged_resources?: boolean;
+  // Manifest 软链接 (PR1.5 后端字段)
+  manifest_deployment_id?: string | null;
+  manifest_active_tag?: string | null;
+  manifest_subpath?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,7 +62,7 @@ export interface CreateWorkspaceRequest {
   auto_apply?: boolean;
   plan_only?: boolean;
   terraform_version?: string;
-  workdir?: string;
+  workdir?: string; // 仅 manifest 模式生效:terraform 执行子目录(后端存 manifest_subpath 列);install 后不可改
   state_backend: string;
   state_config?: Record<string, any>;
   tags?: Record<string, any>;

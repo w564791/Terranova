@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import api from '../services/api';
-import { variableSetService, EffectiveVariable } from '../services/variableSets';
+import { variableSetService } from '../services/variableSets';
+import type { EffectiveVariable } from '../services/variableSets';
 import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './WorkspaceDetail.module.css';
 

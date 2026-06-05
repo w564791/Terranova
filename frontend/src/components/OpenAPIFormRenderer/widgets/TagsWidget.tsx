@@ -2,7 +2,7 @@ import React, { useCallback, useState, useRef } from 'react';
 import { Form, Select, Tag, Tooltip } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 
 /**
  * TagsWidget - 标签输入组件

@@ -4,6 +4,7 @@ import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import api from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useWorkspaceManifestSummary } from '../hooks/useWorkspaceManifestSummary';
 import styles from './ResourcesTab.module.css';
 
 interface Resource {
@@ -60,6 +61,9 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [exporting, setExporting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Manifest 软链接信息(workspace 装了 manifest 时用作徽章 / banner / 锁定按钮)
+  const { summary: manifestSummary } = useWorkspaceManifestSummary(workspaceId);
+  const isManifestManaged = manifestSummary?.has_manifest ?? false;
 
   useEffect(() => {
     fetchResources();
@@ -238,10 +242,67 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
           <p className={styles.subtitle}>
             管理Workspace中的所有资源配置
           </p>
+          {isManifestManaged && manifestSummary && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 12px',
+                background: '#1e3a5f',
+                border: '1px solid #2d5a8f',
+                borderRadius: 4,
+                color: '#cce0ff',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span>📦</span>
+              <span>
+                此 workspace 由 Manifest{' '}
+                <strong style={{ color: '#fff' }}>
+                  {manifestSummary.manifest_name ?? manifestSummary.manifest_id}
+                </strong>{' '}
+                @ <strong style={{ color: '#fff' }}>{manifestSummary.active_tag}</strong> 管理。
+                资源变更请在 manifest 编辑器中统一修改。
+              </span>
+              <span style={{ flex: 1 }} />
+              {manifestSummary.manifest_id && manifestSummary.org_id && (
+                <button
+                  style={{
+                    background: '#0e639c',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '4px 12px',
+                    borderRadius: 3,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                  }}
+                  onClick={() =>
+                    navigate(
+                      `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}`,
+                    )
+                  }
+                >
+                  打开编辑器
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className={styles.headerRight}>
           <div className={styles.splitButtonContainer} ref={dropdownRef}>
-            <button onClick={handleAddResource} className={styles.addButton}>
+            <button
+              onClick={handleAddResource}
+              className={styles.addButton}
+              disabled={isManifestManaged}
+              style={isManifestManaged ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+              title={
+                isManifestManaged
+                  ? '此 workspace 由 Manifest 管理,资源变更请到 manifest 编辑器统一修改'
+                  : ''
+              }
+            >
               + Add Resources
             </button>
             <button 
@@ -301,7 +362,13 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
               : '点击"Add Resources"按钮添加第一个资源'}
           </p>
           {!searchTerm && (
-            <button onClick={handleAddResource} className={styles.emptyButton}>
+            <button
+              onClick={handleAddResource}
+              className={styles.emptyButton}
+              disabled={isManifestManaged}
+              title={isManifestManaged ? '此 workspace 由 Manifest 管理,资源变更请到 manifest 编辑器' : undefined}
+              style={isManifestManaged ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            >
               + Add Resources
             </button>
           )}
@@ -327,8 +394,29 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
                 <div className={styles.resourceName}>
                   {resource.resource_name}
                   {resource.manifest_deployment_id && (
-                    <span className={styles.manifestBadge} title={`Manifest 部署: ${resource.manifest_deployment_id}`}>
-                      📦 Manifest
+                    <span
+                      className={styles.manifestBadge}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (manifestSummary?.manifest_id && manifestSummary?.org_id) {
+                          navigate(
+                            `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}`,
+                          );
+                        }
+                      }}
+                      style={{ cursor: manifestSummary?.manifest_id ? 'pointer' : 'default' }}
+                      title={
+                        manifestSummary?.manifest_name
+                          ? `来自 Manifest ${manifestSummary.manifest_name} @ ${manifestSummary.active_tag ?? ''}\n点击跳转到 manifest 编辑器`
+                          : `Manifest 部署: ${resource.manifest_deployment_id}`
+                      }
+                    >
+                      📦 {manifestSummary?.manifest_name ?? 'Manifest'}
+                      {manifestSummary?.active_tag && (
+                        <span style={{ opacity: 0.7, marginLeft: 4 }}>
+                          {manifestSummary.active_tag}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>

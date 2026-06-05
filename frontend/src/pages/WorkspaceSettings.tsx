@@ -49,7 +49,9 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
   const [currentPoolId, setCurrentPoolId] = useState<string | undefined>();
   const [terraformVersion, setTerraformVersion] = useState('latest');
   const [availableTerraformVersions, setAvailableTerraformVersions] = useState<TerraformVersion[]>([]);
-  const [workdir, setWorkdir] = useState('/workspace');
+  // 工作目录:仅 manifest 模式下生效(作为 terraform 执行子目录);装了 manifest 后只读锁定
+  const [workdir, setWorkdir] = useState('');
+  const [manifestManaged, setManifestManaged] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
   const [uiMode, setUiMode] = useState<'console' | 'structured'>('console');
   const [showUnchangedResources, setShowUnchangedResources] = useState(false);
@@ -165,7 +167,8 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
       setK8sConfigId(workspace.k8s_config_id);
       setCurrentPoolId(workspace.current_pool_id);
       setTerraformVersion(workspace.terraform_version || 'latest');
-      setWorkdir(workspace.workdir || '/workspace');
+      setWorkdir(workspace.workdir || '');
+      setManifestManaged(!!workspace.manifest_deployment_id);
       setAutoApply(workspace.auto_apply || false);
       setUiMode(workspace.ui_mode || 'console');
       setShowUnchangedResources(workspace.show_unchanged_resources || false);
@@ -245,7 +248,8 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
         agent_pool_id: executionMode === 'agent' ? agentPoolId : undefined,
         k8s_config_id: executionMode === 'k8s' ? k8sConfigId : undefined,
         terraform_version: terraformVersion,
-        workdir,
+        // workdir 仅 manifest 模式生效;装了 manifest 后端会拒改,不提交避免无谓 409
+        ...(manifestManaged ? {} : { workdir }),
         auto_apply: autoApply,
         ui_mode: uiMode,
         show_unchanged_resources: showUnchangedResources,
@@ -596,9 +600,13 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
                     }}
                     className={styles.input}
                     placeholder="/"
+                    disabled={manifestManaged}
+                    style={manifestManaged ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                   <div className={styles.hint}>
-                    Directory path where Terraform configuration files are located
+                    {manifestManaged
+                      ? '已装 manifest,工作目录已锁定;如需更改请先卸载该 workspace 的 manifest 部署。'
+                      : '仅在 manifest 模式下生效:作为 terraform 执行的子目录(留空 = manifest 根目录)。装 manifest 后不可改。'}
                   </div>
                 </div>
               </div>

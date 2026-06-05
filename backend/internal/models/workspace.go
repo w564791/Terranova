@@ -271,6 +271,11 @@ type Workspace struct {
 	CMDBSyncStartedAt   *time.Time `json:"cmdb_sync_started_at"`                                      // 同步开始时间
 	CMDBSyncCompletedAt *time.Time `json:"cmdb_sync_completed_at"`                                    // 同步完成时间
 
+	// Manifest 软链接(workspace 装了 manifest 时三列同生同死;一致性 CHECK 见 migration)
+	ManifestDeploymentID *string `json:"manifest_deployment_id,omitempty" gorm:"type:varchar(36);index"` // 关联 manifest_deployments.id
+	ManifestActiveTag    *string `json:"manifest_active_tag,omitempty" gorm:"type:varchar(50)"`          // 当前激活的 vX.Y.Z
+	ManifestSubpath      *string `json:"manifest_subpath,omitempty" gorm:"type:varchar(512)"`            // terraform 执行子目录,空 = manifest 根
+
 	// 关联
 	AgentPoolID        *uint                 `json:"agent_pool_id" gorm:"index"`                    // Agent Pool ID (deprecated, use CurrentPoolID)
 	CurrentPoolID      *string               `json:"current_pool_id" gorm:"type:varchar(50);index"` // Current Pool ID (pool-level authorization)
@@ -398,6 +403,20 @@ type WorkspaceTask struct {
 	// 后台任务标记（drift_check 等后台任务不显示在任务列表中）
 	IsBackground bool `json:"is_background" gorm:"default:false;index"` // 是否为后台任务
 
+	// Manifest Run 临时文件: manifest 编辑器 [Run] 按钮触发 plan-only 时,
+	// 把当前用户私有草稿全量上传到这里,executor 走 Run 分支(完全忽略
+	// workspace.ManifestDeploymentID)用 ExternalFiles 跑 plan。任务跑完即抛,
+	// 不污染 manifest_files / workspace 任何持久状态。
+	// 数据格式: [{"path": "main.tf", "content_b64": "..."}]
+	ExternalFiles JSONB `json:"external_files,omitempty" gorm:"type:jsonb"`
+
+	// Manifest deployment 变量应急覆盖快照: 任务创建时把当时 active deployment 的
+	// variable_overrides(扁平 key=string,最高优先级)固化到任务行;执行时 overlay 到
+	// 解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——
+	// overrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。
+	// 数据格式: {"key": "value"}
+	VariableOverrides JSONB `json:"variable_overrides,omitempty" gorm:"type:jsonb"`
+
 	// HTTP State Backend token (store SHA256 hash, not the raw token)
 	StateTokenHash string `json:"-" gorm:"type:varchar(64);index"`
 
@@ -510,6 +529,7 @@ type WorkspaceTaskResourceChange struct {
 	Action        string `json:"action" gorm:"type:varchar(20);not null;index"` // create/update/delete/replace
 	ChangesBefore JSONB  `json:"changes_before" gorm:"type:jsonb"`              // before 数据（完整）
 	ChangesAfter  JSONB  `json:"changes_after" gorm:"type:jsonb"`               // after 数据（完整）
+	AfterUnknown  JSONB  `json:"after_unknown" gorm:"type:jsonb"`               // 标记哪些字段为 known after apply
 
 	// Apply 阶段状态（用于实时更新）
 	ApplyStatus      string     `json:"apply_status" gorm:"type:varchar(20);default:pending;index"` // pending/applying/completed/failed

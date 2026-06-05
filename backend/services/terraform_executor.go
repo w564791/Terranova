@@ -204,59 +204,223 @@ func (s *TerraformExecutor) CleanupWorkspace(workDir string) error {
 // 配置文件生成
 // ============================================================================
 
-// GenerateConfigFiles 生成所有配置文件
+// workspaceUsesManifest 判定 workspace 是否处于 manifest-managed 状态
+//
+// 注意: Run 任务带 ExternalFiles 时,即使 workspace 装了 manifest,executor 也不应
+// 拉 manifest_files (会被 ExternalFiles 覆盖产生混乱)。判断走 isRunTask 优先,
+// 调用方(ExecutePlan / GenerateConfigFiles)在落盘 ExternalFiles 后此函数应返回 false。
+func (s *TerraformExecutor) workspaceUsesManifest(workspace *models.Workspace) bool {
+	return workspace != nil &&
+		workspace.ManifestDeploymentID != nil && *workspace.ManifestDeploymentID != "" &&
+		workspace.ManifestActiveTag != nil && *workspace.ManifestActiveTag != ""
+}
+
+// taskUsesExternalFiles 判定该 task 是否携带 external_files (Manifest [Run])
+func taskUsesExternalFiles(task *models.WorkspaceTask) bool {
+	if task == nil || task.ExternalFiles == nil {
+		return false
+	}
+	files, ok := task.ExternalFiles["files"].([]interface{})
+	return ok && len(files) > 0
+}
+
+// taskVariableOverrides 从任务行 variable_overrides(JSONB,任务创建时快照)取出扁平 key=string。
+// 返回 nil 表示无覆盖。值非 string 时按 fmt 兜底。
+func taskVariableOverrides(task *models.WorkspaceTask) map[string]string {
+	if task == nil || len(task.VariableOverrides) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(task.VariableOverrides))
+	for k, v := range task.VariableOverrides {
+		if sv, ok := v.(string); ok {
+			out[k] = sv
+		} else {
+			out[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	return out
+}
+
+// writeExternalFiles 把 task.ExternalFiles 全量落 workDir(Run 第三分支)
+//
+// ExternalFiles 格式: { "files": [ {"path":"main.tf","content_b64":"..."}, ... ] }
+func (s *TerraformExecutor) writeExternalFiles(task *models.WorkspaceTask, workDir string) error {
+	if !taskUsesExternalFiles(task) {
+		return nil
+	}
+	files, _ := task.ExternalFiles["files"].([]interface{})
+	for _, item := range files {
+		entry, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		path, _ := entry["path"].(string)
+		contentB64, _ := entry["content_b64"].(string)
+		if path == "" {
+			continue
+		}
+		content, err := base64.StdEncoding.DecodeString(contentB64)
+		if err != nil {
+			return fmt.Errorf("decode external file %s: %w", path, err)
+		}
+		target := filepath.Join(workDir, path)
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
+		}
+		if err := os.WriteFile(target, content, 0644); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+	}
+	log.Printf("[manifest-run] wrote %d external files to %s", len(files), workDir)
+	return nil
+}
+
+// writeManifestFiles 把 manifest_files 全量落盘到 workDir,保留目录结构。
+// 任务执行时 cd 到 subpath (在 RunDir 中处理),terraform 自然解析相对引用。
+func (s *TerraformExecutor) writeManifestFiles(workspace *models.Workspace, workDir string) error {
+	files, err := s.dataAccessor.GetManifestFilesByTag(*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
+	if err != nil {
+		return fmt.Errorf("load manifest files: %w", err)
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no manifest files found for deployment=%s tag=%s",
+			*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
+	}
+	for _, f := range files {
+		target := filepath.Join(workDir, f.Path)
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
+		}
+		if err := os.WriteFile(target, f.Content, 0644); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+	}
+	log.Printf("[manifest] wrote %d files to %s (deployment=%s, tag=%s, subpath=%s)",
+		len(files), workDir,
+		*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag,
+		safeStringPtr(workspace.ManifestSubpath))
+	return nil
+}
+
+// ResolveRunDir 返回 terraform 实际执行目录 = workDir + ManifestSubpath。
+//
+// 所有 cmd.Dir / 辅助 .tf 文件落盘 / lock 文件 都走 runDir;manifest_files 与
+// ExternalFiles(Run 草稿)按原 path 落到 workDir 顶层,保留 subpath/main.tf 结构
+// 与 ../../modules/shared 相对引用。Manifest 部署任务与 Run 草稿预览都按 subpath
+// 执行(Run 任务清 deployment/tag 但保留 subpath);无 subpath 则返回 workDir。
+func (s *TerraformExecutor) ResolveRunDir(workspace *models.Workspace, workDir string) string {
+	// 只要设了 ManifestSubpath 就 cd 进该子目录 —— 不再依赖 deployment/tag。
+	// 这样 Manifest 部署任务与 Run 草稿预览(tag 已清、subpath 保留)都进 subpath;
+	// UI 资源 / 普通 workspace(无 subpath)返回 workDir。
+	if workspace == nil || workspace.ManifestSubpath == nil || *workspace.ManifestSubpath == "" {
+		return workDir
+	}
+	return filepath.Join(workDir, *workspace.ManifestSubpath)
+}
+
+func safeStringPtr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// GenerateConfigFiles 生成所有配置文件 (无 task 上下文,manifest-managed 时拉 manifest_files)
 func (s *TerraformExecutor) GenerateConfigFiles(
 	workspace *models.Workspace,
 	workDir string,
 ) error {
+	return s.GenerateConfigFilesForTask(workspace, nil, workDir)
+}
+
+// GenerateConfigFilesForTask 生成所有配置文件,优先级:
+//
+//  1. task.ExternalFiles 非空 → 走 Run 分支:落 ExternalFiles 到 workDir,跳过 manifest_files / main.tf
+//  2. workspace 装了 manifest → 走 Manifest 分支:全量落 manifest_files
+//  3. 其他 → 原有 UI 资源聚合 main.tf.json
+//
+// 目录策略:
+//   - workDir = 临时根目录 (e.g. /tmp/wd-xxx)
+//   - runDir  = terraform 实际跑命令的目录 = workDir + workspace.ManifestSubpath
+//     (Run 草稿预览也走 subpath:清 deployment/tag 但保留 subpath)
+//   - manifest_files / ExternalFiles 按 path 字段落盘到 workDir 顶层 (保留 subpath/main.tf
+//     结构,方便 ../../modules/shared 这类相对引用)
+//   - 辅助文件 (provider.tf.json / variables.tf.json / variables.tfvars /
+//     outputs.tf.json / remote_data.tf.json / backend.tf.json / main.tf.json)
+//     落盘到 runDir,这样 terraform 在 runDir 跑时能看到
+func (s *TerraformExecutor) GenerateConfigFilesForTask(
+	workspace *models.Workspace,
+	task *models.WorkspaceTask,
+	workDir string,
+) error {
+	usesExternal := taskUsesExternalFiles(task)
+
+	if usesExternal {
+		// Run 第三分支: ExternalFiles 落 workDir,完全忽略 workspace.ManifestDeploymentID
+		if err := s.writeExternalFiles(task, workDir); err != nil {
+			return fmt.Errorf("failed to write external files: %w", err)
+		}
+	} else if s.workspaceUsesManifest(workspace) {
+		// Manifest 路径(分支 2): 拉 manifest_files 全量落盘
+		if err := s.writeManifestFiles(workspace, workDir); err != nil {
+			return fmt.Errorf("failed to write manifest files: %w", err)
+		}
+	}
+
+	// 辅助文件落到 runDir = workDir + ManifestSubpath(Run/Manifest 都走 subpath,
+	// 与命令执行目录一致;无 subpath 时 = workDir)。
+	runDir := s.ResolveRunDir(workspace, workDir)
+	if err := os.MkdirAll(runDir, 0755); err != nil {
+		return fmt.Errorf("ensure runDir %s: %w", runDir, err)
+	}
+
 	// 0. Generate backend.tf.json (HTTP state backend)
 	if s.stateBackendURL != "" {
-		if err := s.generateBackendTFJSON(workDir); err != nil {
+		if err := s.generateBackendTFJSON(runDir); err != nil {
 			return fmt.Errorf("failed to write backend.tf.json: %w", err)
 		}
 	}
 
-	// 1. 生成 main.tf.json
-	// 优先从资源聚合生成，如果没有资源则使用workspace.TFCode
-	mainTF, err := s.generateMainTF(workspace)
-	if err != nil {
-		return fmt.Errorf("failed to generate main.tf: %w", err)
-	}
-
-	if err := s.writeJSONFile(workDir, "main.tf.json", mainTF); err != nil {
-		return fmt.Errorf("failed to write main.tf.json: %w", err)
+	// 1. main.tf.json: 仅 UI 资源分支(非 Run、非 manifest-managed)才聚合
+	if !usesExternal && !s.workspaceUsesManifest(workspace) {
+		mainTF, err := s.generateMainTF(workspace)
+		if err != nil {
+			return fmt.Errorf("failed to generate main.tf: %w", err)
+		}
+		if err := s.writeJSONFile(runDir, "main.tf.json", mainTF); err != nil {
+			return fmt.Errorf("failed to write main.tf.json: %w", err)
+		}
 	}
 
 	// 2. 生成 provider.tf.json
-	// 清理空的terraform块，避免Terraform尝试读取不存在的backend state
 	if workspace.ProviderConfig != nil && len(workspace.ProviderConfig) > 0 {
 		cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
-		if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
+		if err := s.writeJSONFile(runDir, "provider.tf.json", cleanedProviderConfig); err != nil {
 			return fmt.Errorf("failed to write provider.tf.json: %w", err)
 		}
 	}
 
 	// 3. 生成 variables.tf.json
-	if err := s.generateVariablesTFJSON(workspace, workDir); err != nil {
+	if err := s.generateVariablesTFJSON(workspace, runDir); err != nil {
 		return fmt.Errorf("failed to write variables.tf.json: %w", err)
 	}
 
 	// 4. 生成 variables.tfvars
-	if err := s.generateVariablesTFVars(workspace, workDir); err != nil {
+	if err := s.generateVariablesTFVars(workspace, runDir); err != nil {
 		return fmt.Errorf("failed to write variables.tfvars: %w", err)
 	}
 
 	// 5. 生成 outputs.tf.json（如果有配置outputs）
-	if err := s.generateOutputsTFJSON(workspace, workDir); err != nil {
+	if err := s.generateOutputsTFJSON(workspace, runDir); err != nil {
 		return fmt.Errorf("failed to write outputs.tf.json: %w", err)
 	}
 
 	// 6. 生成 remote_data.tf.json（如果有配置远程数据引用）
-	if err := s.generateRemoteDataTFJSON(workspace, workDir, nil); err != nil {
+	if err := s.generateRemoteDataTFJSON(workspace, runDir, nil); err != nil {
 		return fmt.Errorf("failed to write remote_data.tf.json: %w", err)
 	}
 
-	log.Printf("Generated all config files in %s", workDir)
+	log.Printf("Generated all config files in %s (runDir=%s)", workDir, runDir)
 	return nil
 }
 
@@ -587,7 +751,7 @@ func (s *TerraformExecutor) TerraformInit(
 	}
 
 	cmd := exec.CommandContext(ctx, terraformCmd, args...)
-	cmd.Dir = workDir
+	cmd.Dir = s.ResolveRunDir(workspace, workDir)
 
 	// 设置环境变量
 	cmd.Env = s.buildEnvironmentVariables(workspace)
@@ -760,6 +924,8 @@ func (s *TerraformExecutor) ExecutePlan(
 			log.Printf("[INFO] Loaded variable snapshot %s for task %d", *task.VariableSnapshotID, task.ID)
 		}
 	}
+	// Manifest deployment 应急覆盖(任务创建时已快照到任务行)overlay 到 Terraform 变量
+	s.dataAccessor.SetVariableOverrides(taskVariableOverrides(task))
 
 	// 读取TF_LOG（从DataAccessor，使用snapshot缓存）
 	tfLogLevel := "info"
@@ -962,8 +1128,16 @@ func (s *TerraformExecutor) ExecutePlan(
 	}
 
 	// 1.7 生成配置文件
+	// Manifest [Run] 草稿预览任务: 清掉 deployment/tag,使 GenerateConfigFiles 不去
+	//   拉已发布的 manifest_files(改走 ExternalFiles 草稿内容);但**保留 ManifestSubpath**,
+	//   让 terraform 仍在该子目录跑(与真实部署一致,否则会读到根目录无关 .tf)。
+	// 注意:这是栈上副本,不会影响数据库 workspace 行。
+	if taskUsesExternalFiles(task) {
+		workspace.ManifestDeploymentID = nil
+		workspace.ManifestActiveTag = nil
+	}
 	logger.Info("Generating configuration files from resources...")
-	if err := s.GenerateConfigFilesWithLogging(workspace, workDir, logger); err != nil {
+	if err := s.GenerateConfigFilesForTaskWithLogging(workspace, task, workDir, logger); err != nil {
 		logger.LogError("fetching", err, map[string]interface{}{
 			"workspace_id": workspace.WorkspaceID,
 			"work_dir":     workDir,
@@ -989,9 +1163,10 @@ func (s *TerraformExecutor) ExecutePlan(
 		return err
 	}
 
-	// 1.9 恢复 .terraform.lock.hcl 文件（加速 terraform init）
+	// 1.9 恢复 .terraform.lock.hcl 文件（加速 terraform init）。lock 落到 runDir(=subpath),
+	// 与 terraform init 的实际 cwd 一致,否则 subpath 内 init 拿不到缓存。
 	logger.Info("Restoring terraform lock file...")
-	s.restoreTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
+	s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
 
 	logger.Info("Configuration fetch completed successfully")
 	logger.StageEnd("fetching")
@@ -1109,7 +1284,7 @@ func (s *TerraformExecutor) ExecutePlan(
 	logger.Info("Executing: %s plan with %d arguments", terraformCmd, len(args))
 
 	cmd := exec.CommandContext(ctx, terraformCmd, args...)
-	cmd.Dir = workDir
+	cmd.Dir = s.ResolveRunDir(workspace, workDir)
 	cmd.Env = s.buildEnvironmentVariables(workspace)
 
 	// 使用Pipe实时捕获输出
@@ -1178,9 +1353,10 @@ func (s *TerraformExecutor) ExecutePlan(
 		}
 	}()
 
-	// 等待命令完成
-	cmdErr := cmd.Wait()
+	// 先等读取 goroutine 把 stdout/stderr 读到 EOF，再 cmd.Wait()。
+	// cmd.Wait() 会在进程退出后关闭 pipe，若先 Wait 会丢弃未读完的缓冲输出（日志截断）。
 	wg.Wait()
+	cmdErr := cmd.Wait()
 
 	duration := time.Since(startTime)
 
@@ -1561,7 +1737,7 @@ func (s *TerraformExecutor) GeneratePlanJSON(
 	}
 
 	cmd := exec.CommandContext(ctx, terraformCmd, "show", "-json", planFile)
-	cmd.Dir = workDir
+	cmd.Dir = s.ResolveRunDir(workspace, workDir)
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -2124,6 +2300,8 @@ func (s *TerraformExecutor) ExecuteApply(
 			log.Printf("[INFO] Loaded variable snapshot %s for task %d", *task.VariableSnapshotID, task.ID)
 		}
 	}
+	// Manifest deployment 应急覆盖(任务创建时已快照到任务行)overlay 到 Terraform 变量
+	s.dataAccessor.SetVariableOverrides(taskVariableOverrides(task))
 
 	// 清理可能存在的孤儿 temp state 记录
 	if cleanupErr := s.dataAccessor.CleanupOrphanedTempStates(task.WorkspaceID); cleanupErr != nil {
@@ -2348,9 +2526,9 @@ func (s *TerraformExecutor) ExecuteApply(
 			return err
 		}
 
-		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）
+		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）。lock 落 runDir(=subpath)。
 		logger.Info("Restoring terraform lock file...")
-		s.restoreTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
+		s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
 	}
 
 	logger.Info("Configuration fetch completed successfully")
@@ -2563,7 +2741,7 @@ func (s *TerraformExecutor) ExecuteApply(
 	logger.Info("Executing: %s apply -no-color -auto-approve plan.out", terraformCmd)
 
 	cmd := exec.CommandContext(ctx, terraformCmd, args...)
-	cmd.Dir = workDir
+	cmd.Dir = s.ResolveRunDir(workspace, workDir)
 	cmd.Env = s.buildEnvironmentVariables(workspace)
 
 	// 使用Pipe实时捕获输出
@@ -2652,9 +2830,10 @@ func (s *TerraformExecutor) ExecuteApply(
 		}
 	}()
 
-	// 等待命令完成
-	cmdErr := cmd.Wait()
+	// 先等读取 goroutine 把 stdout/stderr 读到 EOF，再 cmd.Wait()。
+	// cmd.Wait() 会在进程退出后关闭 pipe，若先 Wait 会丢弃未读完的缓冲输出（日志截断）。
 	wg.Wait()
+	cmdErr := cmd.Wait()
 
 	duration := time.Since(startTime)
 
@@ -2710,7 +2889,7 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	// 提取terraform outputs
 	logger.Info("Extracting terraform outputs...")
-	outputs, err := s.extractTerraformOutputs(ctx, workDir)
+	outputs, err := s.extractTerraformOutputs(ctx, workDir, workspace)
 	if err != nil {
 		logger.Warn("Failed to extract outputs: %v", err)
 	} else if len(outputs) > 0 {
@@ -3823,46 +4002,75 @@ func (s *TerraformExecutor) GenerateConfigFilesWithLogging(
 	workDir string,
 	logger *TerraformLogger,
 ) error {
+	return s.GenerateConfigFilesForTaskWithLogging(workspace, nil, workDir, logger)
+}
+
+// GenerateConfigFilesForTaskWithLogging 生成配置文件（带详细日志,带 task 上下文用于 Run 分支）
+//
+// 目录策略与 GenerateConfigFiles 一致;Run 任务时 ExternalFiles 落 workDir 顶层,
+// 调用方应在调用前已把 workspace 上的 manifest 软链接字段清空(参见 ExecutePlan)。
+func (s *TerraformExecutor) GenerateConfigFilesForTaskWithLogging(
+	workspace *models.Workspace,
+	task *models.WorkspaceTask,
+	workDir string,
+	logger *TerraformLogger,
+) error {
+	usesExternal := taskUsesExternalFiles(task)
+
+	if usesExternal {
+		if err := s.writeExternalFiles(task, workDir); err != nil {
+			return fmt.Errorf("failed to write external files: %w", err)
+		}
+		logger.Info("✓ Wrote external files (Manifest [Run] task)")
+	} else if s.workspaceUsesManifest(workspace) {
+		if err := s.writeManifestFiles(workspace, workDir); err != nil {
+			return fmt.Errorf("failed to write manifest files: %w", err)
+		}
+		logger.Info("✓ Wrote manifest files (deployment=%s, tag=%s)",
+			safeStringPtr(workspace.ManifestDeploymentID),
+			safeStringPtr(workspace.ManifestActiveTag))
+	}
+
+	// 辅助文件落到 runDir = workDir + ManifestSubpath(Run/Manifest 都走 subpath,
+	// 与命令执行目录一致;无 subpath 时 = workDir)。
+	runDir := s.ResolveRunDir(workspace, workDir)
+	if err := os.MkdirAll(runDir, 0755); err != nil {
+		return fmt.Errorf("ensure runDir %s: %w", runDir, err)
+	}
+
 	// 0. Generate backend.tf.json (HTTP state backend)
 	if s.stateBackendURL != "" {
-		if err := s.generateBackendTFJSON(workDir); err != nil {
+		if err := s.generateBackendTFJSON(runDir); err != nil {
 			return fmt.Errorf("failed to write backend.tf.json: %w", err)
 		}
 		logger.Info("Generated backend.tf.json (HTTP state backend)")
 	}
 
-	logger.Debug("Aggregating TF code from resources...")
-
-	// 1. 生成 main.tf.json
-	mainTF, err := s.generateMainTF(workspace)
-	if err != nil {
-		return fmt.Errorf("failed to generate main.tf: %w", err)
+	// 1. main.tf.json: 仅 UI 资源分支(非 Run、非 manifest-managed)才聚合
+	if !usesExternal && !s.workspaceUsesManifest(workspace) {
+		logger.Debug("Aggregating TF code from resources...")
+		mainTF, err := s.generateMainTF(workspace)
+		if err != nil {
+			return fmt.Errorf("failed to generate main.tf: %w", err)
+		}
+		if err := s.writeJSONFile(runDir, "main.tf.json", mainTF); err != nil {
+			return fmt.Errorf("failed to write main.tf.json: %w", err)
+		}
+		mainTFData, _ := json.MarshalIndent(mainTF, "", "  ")
+		logger.Info("✓ Generated main.tf.json (%.1f KB)", float64(len(mainTFData))/1024)
+		logger.Trace("========== main.tf.json Content ==========")
+		logger.Trace("%s", string(mainTFData))
+		logger.Trace("==========================================")
 	}
-
-	if err := s.writeJSONFile(workDir, "main.tf.json", mainTF); err != nil {
-		return fmt.Errorf("failed to write main.tf.json: %w", err)
-	}
-
-	// 计算文件大小
-	mainTFData, _ := json.MarshalIndent(mainTF, "", "  ")
-	logger.Info("✓ Generated main.tf.json (%.1f KB)", float64(len(mainTFData))/1024)
-
-	// 只在TRACE级别打印完整内容
-	logger.Trace("========== main.tf.json Content ==========")
-	logger.Trace("%s", string(mainTFData))
-	logger.Trace("==========================================")
 
 	// 2. 生成 provider.tf.json
-	// 清理空的terraform块，避免Terraform尝试读取不存在的backend state
 	if workspace.ProviderConfig != nil && len(workspace.ProviderConfig) > 0 {
 		cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
-		if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
+		if err := s.writeJSONFile(runDir, "provider.tf.json", cleanedProviderConfig); err != nil {
 			return fmt.Errorf("failed to write provider.tf.json: %w", err)
 		}
 		providerData, _ := json.MarshalIndent(cleanedProviderConfig, "", "  ")
 		logger.Info("✓ Generated provider.tf.json")
-
-		// 只在TRACE级别打印完整内容
 		logger.Trace("========== provider.tf.json Content ==========")
 		logger.Trace("%s", string(providerData))
 		logger.Trace("==============================================")
@@ -3871,11 +4079,10 @@ func (s *TerraformExecutor) GenerateConfigFilesWithLogging(
 	}
 
 	// 3. 生成 variables.tf.json
-	if err := s.generateVariablesTFJSON(workspace, workDir); err != nil {
+	if err := s.generateVariablesTFJSON(workspace, runDir); err != nil {
 		return fmt.Errorf("failed to write variables.tf.json: %w", err)
 	}
 
-	// 获取变量数量（使用 DataAccessor）
 	variables, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform)
 	varCount := len(variables)
 	sensitiveCount := 0
@@ -3887,46 +4094,38 @@ func (s *TerraformExecutor) GenerateConfigFilesWithLogging(
 		}
 	}
 	logger.Info("✓ Generated variables.tf.json (%d variables)", varCount)
-
-	// 只在TRACE级别打印完整内容
-	varsTFData, _ := os.ReadFile(filepath.Join(workDir, "variables.tf.json"))
+	varsTFData, _ := os.ReadFile(filepath.Join(runDir, "variables.tf.json"))
 	logger.Trace("========== variables.tf.json Content ==========")
 	logger.Trace("%s", string(varsTFData))
 	logger.Trace("===============================================")
 
 	// 4. 生成 variables.tfvars
-	if err := s.generateVariablesTFVars(workspace, workDir); err != nil {
+	if err := s.generateVariablesTFVars(workspace, runDir); err != nil {
 		return fmt.Errorf("failed to write variables.tfvars: %w", err)
 	}
-
 	logger.Info("✓ Generated variables.tfvars (%d assignments, %d sensitive)", varCount, sensitiveCount)
-
-	// 只在TRACE级别打印完整内容（脱敏处理）
-	varsTFVarsData, _ := os.ReadFile(filepath.Join(workDir, "variables.tfvars"))
+	varsTFVarsData, _ := os.ReadFile(filepath.Join(runDir, "variables.tfvars"))
 	if s.db != nil {
 		maskedContent := s.maskSensitiveVariables(string(varsTFVarsData), workspace.WorkspaceID)
 		logger.Trace("========== variables.tfvars Content (sensitive values masked) ==========")
 		logger.Trace("%s", maskedContent)
 		logger.Trace("=========================================================================")
 	} else {
-		// Agent 模式下跳过脱敏（因为 maskSensitiveVariables 使用 s.db）
 		logger.Trace("========== variables.tfvars Content ==========")
 		logger.Trace("%s", string(varsTFVarsData))
 		logger.Trace("==============================================")
 	}
 
 	// 5. 生成 outputs.tf.json（如果有配置outputs）
-	if err := s.generateOutputsTFJSONWithLogger(workspace, workDir, logger); err != nil {
+	if err := s.generateOutputsTFJSONWithLogger(workspace, runDir, logger); err != nil {
 		return fmt.Errorf("failed to write outputs.tf.json: %w", err)
 	}
 
 	// 6. 生成 remote_data.tf.json（如果有配置远程数据引用）
-	if err := s.generateRemoteDataTFJSONWithLogging(workspace, workDir, nil, logger); err != nil {
+	if err := s.generateRemoteDataTFJSONWithLogging(workspace, runDir, nil, logger); err != nil {
 		return fmt.Errorf("failed to write remote_data.tf.json: %w", err)
 	}
-
-	// 检查是否生成了 remote_data.tf.json
-	remoteDataFile := filepath.Join(workDir, "remote_data.tf.json")
+	remoteDataFile := filepath.Join(runDir, "remote_data.tf.json")
 	if _, err := os.Stat(remoteDataFile); err == nil {
 		remoteDataData, _ := os.ReadFile(remoteDataFile)
 		logger.Info("✓ Generated remote_data.tf.json (%.1f KB)", float64(len(remoteDataData))/1024)
@@ -4222,7 +4421,7 @@ plugin_cache_may_break_dependency_lock_file = true
 	}
 
 	cmd := exec.CommandContext(ctx, terraformCmd, args...)
-	cmd.Dir = workDir
+	cmd.Dir = s.ResolveRunDir(workspace, workDir)
 	cmd.Env = s.buildEnvironmentVariables(workspace)
 
 	// 添加插件缓存目录（仅当不是使用全局缓存时才需要添加）
@@ -4289,9 +4488,10 @@ plugin_cache_may_break_dependency_lock_file = true
 		}
 	}()
 
-	// 等待命令完成
-	cmdErr := cmd.Wait()
+	// 先等读取 goroutine 把 stdout/stderr 读到 EOF，再 cmd.Wait()。
+	// cmd.Wait() 会在进程退出后关闭 pipe，若先 Wait 会丢弃未读完的缓冲输出（日志截断）。
 	wg.Wait()
+	cmdErr := cmd.Wait()
 
 	duration := time.Since(startTime)
 
@@ -4318,8 +4518,8 @@ plugin_cache_may_break_dependency_lock_file = true
 		s.updateLastInitHash(workspace, logger)
 	}
 
-	// 保存 .terraform.lock.hcl 文件到数据库（用于下次 init 加速）
-	s.saveTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
+	// 保存 .terraform.lock.hcl 文件到数据库（用于下次 init 加速）。lock 由 init 写在 runDir(=subpath)。
+	s.saveTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
 
 	return nil
 }
@@ -4570,6 +4770,7 @@ func (s *TerraformExecutor) SaveNewStateVersionWithLogging(
 func (s *TerraformExecutor) extractTerraformOutputs(
 	ctx context.Context,
 	workDir string,
+	workspace *models.Workspace,
 ) (map[string]interface{}, error) {
 	terraformCmd := "terraform"
 	if s.downloader != nil {
@@ -4578,7 +4779,7 @@ func (s *TerraformExecutor) extractTerraformOutputs(
 	}
 
 	cmd := exec.CommandContext(ctx, terraformCmd, "output", "-json")
-	cmd.Dir = workDir
+	cmd.Dir = s.ResolveRunDir(workspace, workDir)
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -4678,6 +4879,7 @@ func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string
 			"action":           action,
 			"changes_before":   change["before"],
 			"changes_after":    change["after"],
+			"after_unknown":    change["after_unknown"],
 		}
 
 		resourceChanges = append(resourceChanges, resourceChange)
@@ -5465,6 +5667,10 @@ func sanitizeNameForTF(name string) string {
 }
 
 // GenerateConfigFilesFromSnapshot 从快照数据生成配置文件
+//
+// 目录策略:
+//   - manifest-managed workspace: 仍把 manifest_files 全量落 workDir,辅助文件落 runDir
+//   - 非 manifest workspace: 走 snapshot resources 聚合 main.tf.json,辅助文件落 runDir
 func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 	workspace *models.Workspace,
 	resources []models.WorkspaceResource,
@@ -5474,9 +5680,23 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 ) error {
 	logger.Debug("Generating config files from snapshot data...")
 
+	if s.workspaceUsesManifest(workspace) {
+		if err := s.writeManifestFiles(workspace, workDir); err != nil {
+			return fmt.Errorf("failed to write manifest files: %w", err)
+		}
+		logger.Info("✓ Wrote manifest files (deployment=%s, tag=%s)",
+			safeStringPtr(workspace.ManifestDeploymentID),
+			safeStringPtr(workspace.ManifestActiveTag))
+	}
+
+	runDir := s.ResolveRunDir(workspace, workDir)
+	if err := os.MkdirAll(runDir, 0755); err != nil {
+		return fmt.Errorf("ensure runDir %s: %w", runDir, err)
+	}
+
 	// 0. Generate backend.tf.json (HTTP state backend)
 	if s.stateBackendURL != "" {
-		if err := s.generateBackendTFJSON(workDir); err != nil {
+		if err := s.generateBackendTFJSON(runDir); err != nil {
 			return fmt.Errorf("failed to write backend.tf.json: %w", err)
 		}
 		logger.Info("Generated backend.tf.json (HTTP state backend)")
@@ -5489,24 +5709,23 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 	}
 	logger.Debug("Resolved %d variables from snapshot", len(snapshotVariables))
 
-	// 1. 生成 main.tf.json（从快照的资源列表）
-	mainTF, err := s.generateMainTFFromResources(resources)
-	if err != nil {
-		return fmt.Errorf("failed to generate main.tf from snapshot: %w", err)
+	// 1. 非 manifest 路径生成 main.tf.json（从快照的资源列表）
+	if !s.workspaceUsesManifest(workspace) {
+		mainTF, err := s.generateMainTFFromResources(resources)
+		if err != nil {
+			return fmt.Errorf("failed to generate main.tf from snapshot: %w", err)
+		}
+		if err := s.writeJSONFile(runDir, "main.tf.json", mainTF); err != nil {
+			return fmt.Errorf("failed to write main.tf.json: %w", err)
+		}
+		mainTFData, _ := json.MarshalIndent(mainTF, "", "  ")
+		logger.Info("✓ Generated main.tf.json from snapshot (%.1f KB)", float64(len(mainTFData))/1024)
 	}
-
-	if err := s.writeJSONFile(workDir, "main.tf.json", mainTF); err != nil {
-		return fmt.Errorf("failed to write main.tf.json: %w", err)
-	}
-
-	mainTFData, _ := json.MarshalIndent(mainTF, "", "  ")
-	logger.Info("✓ Generated main.tf.json from snapshot (%.1f KB)", float64(len(mainTFData))/1024)
 
 	// 2. 生成 provider.tf.json（从快照）
-	// 清理空的terraform块，避免Terraform尝试读取不存在的backend state
 	if workspace.ProviderConfig != nil && len(workspace.ProviderConfig) > 0 {
 		cleanedProviderConfig := s.cleanProviderConfig(workspace.ProviderConfig)
-		if err := s.writeJSONFile(workDir, "provider.tf.json", cleanedProviderConfig); err != nil {
+		if err := s.writeJSONFile(runDir, "provider.tf.json", cleanedProviderConfig); err != nil {
 			return fmt.Errorf("failed to write provider.tf.json: %w", err)
 		}
 		logger.Info("✓ Generated provider.tf.json from snapshot")
@@ -5533,12 +5752,11 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 		config := map[string]interface{}{
 			"variable": variablesDef,
 		}
-		if err := s.writeJSONFile(workDir, "variables.tf.json", config); err != nil {
+		if err := s.writeJSONFile(runDir, "variables.tf.json", config); err != nil {
 			return fmt.Errorf("failed to write variables.tf.json: %w", err)
 		}
 		logger.Info("✓ Generated variables.tf.json from snapshot (%d variables)", len(variablesDef))
 	} else {
-		// 如果没有变量，不生成 variables.tf.json 文件
 		logger.Info("No terraform variables in snapshot, skipping variables.tf.json generation")
 	}
 
@@ -5550,8 +5768,6 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 		if v.Sensitive {
 			sensitiveCount++
 		}
-
-		// 根据ValueFormat处理
 		if v.ValueFormat == models.ValueFormatHCL {
 			trimmedValue := strings.TrimSpace(v.Value)
 			needsQuotes := !strings.HasPrefix(trimmedValue, "{") &&
@@ -5574,7 +5790,7 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 		}
 	}
 
-	if err := s.writeFile(workDir, "variables.tfvars", tfvars.String()); err != nil {
+	if err := s.writeFile(runDir, "variables.tfvars", tfvars.String()); err != nil {
 		return fmt.Errorf("failed to write variables.tfvars: %w", err)
 	}
 	logger.Info("✓ Generated variables.tfvars from snapshot (%d assignments, %d sensitive)",

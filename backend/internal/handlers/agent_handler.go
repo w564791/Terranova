@@ -1450,6 +1450,7 @@ func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
 			Action          string                 `json:"action"`
 			ChangesBefore   map[string]interface{} `json:"changes_before"`
 			ChangesAfter    map[string]interface{} `json:"changes_after"`
+			AfterUnknown    map[string]interface{} `json:"after_unknown"`
 		} `json:"resource_changes"`
 	}
 
@@ -1484,6 +1485,7 @@ func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
 			Action:          rc.Action,
 			ChangesBefore:   rc.ChangesBefore,
 			ChangesAfter:    rc.ChangesAfter,
+			AfterUnknown:    rc.AfterUnknown,
 			ApplyStatus:     "pending",
 		}
 

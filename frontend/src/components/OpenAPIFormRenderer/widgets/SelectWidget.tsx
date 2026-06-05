@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { Form, Select, Spin, Tag, Tooltip, Button } from 'antd';
 import { LinkOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { WidgetProps, SelectOption, ExternalDataSource } from '../types';
-import { ModuleReferencePopover } from '../../ManifestEditor/ModuleReferencePopover';
+import { ModuleReferencePopover } from '../../ModuleReference/ModuleReferencePopover';
 import { useSingleDataSource } from '../useExternalDataSource';
 
 const { Option } = Select;

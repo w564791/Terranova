@@ -48,6 +48,22 @@ func (s *ResourceService) AddResource(
 ) (*models.WorkspaceResource, error) {
 	resourceID := fmt.Sprintf("%s.%s", resourceType, resourceName)
 
+	// manifest-managed workspace 禁止再添加 UI 资源(spec §3.2 约束3)。
+	// workspace 装了 manifest 后,资源由 manifest 编辑器统一管理;后端硬拦,
+	// 防止绕过前端禁用按钮直接 POST。
+	var managed struct {
+		ManifestDeploymentID *string
+	}
+	if err := s.db.Model(&models.Workspace{}).
+		Select("manifest_deployment_id").
+		Where("workspace_id = ?", workspaceID).
+		Scan(&managed).Error; err != nil {
+		return nil, err
+	}
+	if managed.ManifestDeploymentID != nil && *managed.ManifestDeploymentID != "" {
+		return nil, fmt.Errorf("workspace is managed by a manifest deployment; add or change resources in the manifest editor")
+	}
+
 	// 检查资源是否已存在
 	var existing models.WorkspaceResource
 	err := s.db.Where("workspace_id = ? AND resource_id = ?", workspaceID, resourceID).

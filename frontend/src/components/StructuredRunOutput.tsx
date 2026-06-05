@@ -27,8 +27,9 @@ interface ResourceChange {
   action: string;
   changes_before: Record<string, any>;
   changes_after: Record<string, any>;
+  after_unknown: Record<string, any>;
   apply_status: string;
-  resource_id?: string; // AWS/云资源的实际 ID（如 i-xxx, lt-xxx 等）
+  resource_id?: string;
 }
 
 interface OutputChange {
@@ -160,6 +161,21 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
       loadResourceChanges();
     }
   }, [task.id, task.status, workspaceId]); // 添加workspaceId依赖
+
+  // Apply 期间轮询兜底：实时更新靠 WebSocket（resource_status_update/resource_id_update），
+  // 但 WS 可能晚连/丢消息/错过早期广播，导致卡片停在首次拉取的 pending 快照。
+  // 这里每 3s 静默重拉一次 /resource-changes，保证最终一致，不依赖 WS 不丢。
+  useEffect(() => {
+    const inApply = task.status === 'running' &&
+      (task.stage === 'applying' || task.stage === 'pre_apply' || task.stage === 'restoring_plan');
+    if (!inApply) return;
+
+    const interval = setInterval(() => {
+      loadResourceChanges(true); // silent：不闪 loading
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [task.id, task.status, task.stage, workspaceId]);
 
   // Apply 完成后，从 state 获取实际的 output 值
   useEffect(() => {
@@ -416,16 +432,19 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
     return 'pending';
   };
 
-  const loadResourceChanges = async () => {
-    console.log('🔍 loadResourceChanges called');
+  // silent=true 用于 apply 期间的轮询兜底：不触发 loading 态，避免每次轮询闪烁 spinner
+  const loadResourceChanges = async (silent = false) => {
+    console.log('🔍 loadResourceChanges called', silent ? '(silent poll)' : '');
     console.log('Task ID:', task.id);
     console.log('Workspace ID:', workspaceId);
     console.log('Task status:', task.status);
-    
+
     try {
-      setLoading(true);
-      console.log('✓ Loading state set to true');
-      
+      if (!silent) {
+        setLoading(true);
+        console.log('✓ Loading state set to true');
+      }
+
       const apiUrl = `/workspaces/${workspaceId}/tasks/${task.id}/resource-changes`;
       console.log('📡 Making API request to:', apiUrl);
       

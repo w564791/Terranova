@@ -99,9 +99,9 @@ const SmartLogViewer: React.FC<Props> = ({ taskId, viewMode = 'plan', onStageCha
   console.log('[SmartLogViewer] Rendering decision - status:', taskStatus, 'type:', taskType);
   
   // 如果任务正在运行或等待中，使用WebSocket实时查看
-  // apply_pending 也走 WebSocket（AI summary 可能仍在实时输出）
-  // 如果 stream 为空（刷新后 stream 已关闭），TerraformOutputViewer 会通过 onEmpty 回调降级到 HTTP
-  if (!forceHttp && (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting' || taskStatus === 'apply_pending')) {
+  // apply_pending 不走 WebSocket：plan 已完成、stream 已关闭，完整日志已在 DB，
+  // 直接走下面的 StageLogViewer (HTTP) 读 plan_output，避免空流降级延迟。
+  if (!forceHttp && (taskStatus === 'running' || taskStatus === 'pending' || taskStatus === 'waiting')) {
     console.log('[SmartLogViewer] Using TerraformOutputViewer (WebSocket)');
     return <TerraformOutputViewer taskId={taskId} onStageChange={onStageChange} currentTaskStage={currentTaskStage} onEmpty={() => {
       console.log('[SmartLogViewer] WebSocket stream empty, falling back to HTTP');

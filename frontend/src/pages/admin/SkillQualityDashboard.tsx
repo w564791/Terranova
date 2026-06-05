@@ -5,7 +5,8 @@ import SkillDetailTab from './SkillDetailTab';
 import SummaryQualityTab from './SummaryQualityTab';
 import type { ColumnsType } from 'antd/es/table';
 import { useSearchParams } from 'react-router-dom';
-import { getAssessmentOverview, AssessmentOverview, CapabilityStats, RecentFailure, DailyTrendItem } from '../../services/skillAssessment';
+import { getAssessmentOverview } from '../../services/skillAssessment';
+import type { AssessmentOverview, CapabilityStats, RecentFailure, DailyTrendItem } from '../../services/skillAssessment';
 import styles from './SkillQualityDashboard.module.css';
 
 const timeRangeMap: Record<string, number> = {

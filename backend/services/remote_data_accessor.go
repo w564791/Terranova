@@ -173,6 +173,10 @@ func (a *RemoteDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
 	return nil
 }
 
+// SetVariableOverrides no-op: 远程/Agent 模式不支持 manifest deployment 覆盖
+// (manifest 工作区当前不在 Agent 模式执行,变量由 task payload 提供)。
+func (a *RemoteDataAccessor) SetVariableOverrides(overrides map[string]string) {}
+
 // ============================================================================
 // State 相关
 // ============================================================================
@@ -441,6 +445,17 @@ func (a *RemoteDataAccessor) ParsePlanChanges(taskID uint, planOutput string) er
 }
 
 // ============================================================================
+// Manifest 相关
+// ============================================================================
+
+// GetManifestFilesByTag Agent 模式占位:由 platform 通过 GetTaskData 把 manifest_files 一次性
+// 下发到 Agent 节点工作目录,Agent 模式不再单独查询。返回空切片,executor 在分支 2 通过
+// stagedManifestFiles 字段读取。
+func (a *RemoteDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error) {
+	return nil, fmt.Errorf("GetManifestFilesByTag not supported in remote mode; use GetTaskData payload instead")
+}
+
+// ============================================================================
 // Transaction 支持
 // ============================================================================
 
@@ -499,7 +514,8 @@ func getMap(m map[string]interface{}, key string) map[string]interface{} {
 }
 
 // UpdateResourceStatus 更新资源状态（Agent 模式）
-func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, status, action string) error {
+// resourceID 为完成行实时捕获的云端资源 ID，可为空。
+func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, status, action, resourceID string) error {
 	// Agent 模式：通过 WebSocket 发送资源状态更新
 	// 这会被 C&C 通道的 forwardLogsToServer 捕获并转发到服务器
 	if a.streamManager != nil {
@@ -511,6 +527,9 @@ func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, 
 				"resource_address": resourceAddress,
 				"apply_status":     status,
 				"action":           action,
+			}
+			if resourceID != "" {
+				data["resource_id"] = resourceID
 			}
 
 			dataJSON, _ := json.Marshal(data)
@@ -527,7 +546,7 @@ func (a *RemoteDataAccessor) UpdateResourceStatus(taskID uint, resourceAddress, 
 	}
 
 	// 如果 streamManager 不可用，回退到 HTTP API
-	return a.apiClient.UpdateResourceStatus(taskID, resourceAddress, status, action)
+	return a.apiClient.UpdateResourceStatus(taskID, resourceAddress, status, action, resourceID)
 }
 
 // GetResourceByVersion 根据版本号获取资源（Agent模式）

@@ -195,6 +195,10 @@ type WorkspaceListItem struct {
 	AgentPoolID            *uint                 `json:"agent_pool_id"`
 	CurrentPoolID          *string               `json:"current_pool_id"`
 	K8sConfigID            *uint                 `json:"k8s_config_id"`
+	// Manifest 软链接 (PR1.5 后端字段)
+	ManifestDeploymentID *string `json:"manifest_deployment_id,omitempty"`
+	ManifestActiveTag    *string `json:"manifest_active_tag,omitempty"`
+	ManifestSubpath      *string `json:"manifest_subpath,omitempty"`
 }
 
 // WorkspaceWithStatus 包含状态信息的工作空间（不包含tf_state等大字段）
@@ -248,6 +252,9 @@ func toWorkspaceListItem(w models.Workspace) WorkspaceListItem {
 		AgentPoolID:            w.AgentPoolID,
 		CurrentPoolID:          w.CurrentPoolID,
 		K8sConfigID:            w.K8sConfigID,
+		ManifestDeploymentID:   w.ManifestDeploymentID,
+		ManifestActiveTag:      w.ManifestActiveTag,
+		ManifestSubpath:        w.ManifestSubpath,
 	}
 }
 

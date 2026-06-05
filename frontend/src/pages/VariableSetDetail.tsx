@@ -6,6 +6,7 @@ import type { VariableSet, VarsetVariable, VarsetAssignment } from '../services/
 import { getProjects, type Project } from '../services/projects';
 import { workspaceService, type Workspace } from '../services/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog';
+import VarsetManifestDeployments from './VarsetManifestDeployments';
 import styles from './Admin.module.css';
 
 const VariableSetDetail: React.FC = () => {
@@ -311,6 +312,9 @@ const VariableSetDetail: React.FC = () => {
             {saving ? 'Saving...' : 'Save variable set'}
           </button>
         </div>
+
+        {/* 反向关联: 哪些 manifest deployment 在用本 varset (PR3-4) */}
+        {varsetId && <VarsetManifestDeployments varsetId={varsetId} />}
       </div>
 
       <ConfirmDialog isOpen={deleteVarDialog} title={`Delete "${varToDelete?.key}"`} confirmText="Confirm" cancelText="Cancel" type="danger" onConfirm={confirmDeleteVar} onCancel={() => { setDeleteVarDialog(false); setVarToDelete(null); }}>

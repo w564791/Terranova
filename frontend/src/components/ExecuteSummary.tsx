@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getPlanSummary, getApplySummary,
   retryPlanSummary, retryApplySummary,
@@ -44,6 +44,12 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [runningElapsed, setRunningElapsed] = useState(0);
+  // 轮询控制:pollTimerRef 持有 pending 的 setTimeout(卸载/换任务时清掉,避免离开页面后仍打 plan-summary);
+  // notFoundTriesRef 给 404(摘要还没生成)轮询设上限,防止 AI 未配置/manifest Run 无摘要时无限轮询。
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notFoundTriesRef = useRef(0);
+  const cancelledRef = useRef(false);
+  const MAX_NOT_FOUND_TRIES = 12; // 5s × 12 = 1 分钟内摘要还没出现就停轮询
 
   // Track elapsed time when summary is running
   useEffect(() => {
@@ -72,35 +78,69 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
     }
   };
 
+  // 安排下一次轮询(统一走 pollTimerRef,卸载时可取消)
+  const scheduleNextPoll = useCallback((delay: number) => {
+    if (cancelledRef.current) return;
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = setTimeout(() => {
+      void fetchSummaryRef.current();
+    }, delay);
+  }, []);
+
   const fetchSummary = useCallback(async () => {
+    if (cancelledRef.current) return;
     try {
       setError(null);
       const result = stage === 'plan'
         ? await getPlanSummary(workspaceId, taskId)
         : await getApplySummary(workspaceId, taskId);
+      if (cancelledRef.current) return;
       setSummary(result);
+      notFoundTriesRef.current = 0; // 拿到摘要后重置 404 计数
 
       // 如果还在运行中，继续轮询
       if (result.status === 'running' || result.status === 'pending') {
-        setTimeout(fetchSummary, 3000);
+        scheduleNextPoll(3000);
       }
     } catch (err: any) {
+      if (cancelledRef.current) return;
       // 注意：api 拦截器的 error 已被转为字符串（errorMessage），不是原始 error 对象
-      // 404 = summary 还没生成，继续轮询
+      // 404 = summary 还没生成,有限次重试(AI 未配置 / manifest Run 无摘要时不无限轮询)
       const errStr = typeof err === 'string' ? err : (err?.message || '');
       if (errStr.includes('not found') || errStr.includes('404')) {
-        setTimeout(fetchSummary, 5000);
+        notFoundTriesRef.current += 1;
+        if (notFoundTriesRef.current <= MAX_NOT_FOUND_TRIES) {
+          scheduleNextPoll(5000);
+        }
+        // 超过上限:停止轮询,不报错(摘要本就可能不存在)
       } else {
         setError('获取摘要失败');
       }
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, taskId, stage]);
+  }, [workspaceId, taskId, stage, scheduleNextPoll]);
+
+  // 用 ref 让 scheduleNextPoll 始终调到最新 fetchSummary(避免把 fetchSummary 写进自身依赖)
+  const fetchSummaryRef = useRef(fetchSummary);
+  useEffect(() => {
+    fetchSummaryRef.current = fetchSummary;
+  }, [fetchSummary]);
 
   useEffect(() => {
+    cancelledRef.current = false;
+    notFoundTriesRef.current = 0;
     fetchSummary();
-  }, [fetchSummary]);
+    return () => {
+      // 卸载 / 换任务:取消轮询,避免离开页面后仍持续打 plan-summary
+      cancelledRef.current = true;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, taskId, stage]);
 
   const handleRetry = async () => {
     try {

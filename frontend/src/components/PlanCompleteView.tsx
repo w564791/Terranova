@@ -11,6 +11,7 @@ interface ResourceChange {
   action: string;
   changes_before: Record<string, any>;
   changes_after: Record<string, any>;
+  after_unknown: Record<string, any>;
   apply_status: string;
 }
 
@@ -322,22 +323,25 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
   // 渲染 CREATE 资源的属性
   const renderCreateBody = (resource: ResourceChange) => {
     const after = resource.changes_after || {};
-    const entries = Object.entries(after).filter(([_, v]) => !isEmptyValue(v));
-    
-    if (entries.length === 0) {
+    const afterUnknown = resource.after_unknown || {};
+
+    const knownEntries = Object.entries(after).filter(([k, v]) => !isEmptyValue(v) && afterUnknown[k] !== true);
+    const knownKeySet = new Set(knownEntries.map(([k]) => k));
+    // 已经以真实值显示过的字段不再重复显示为 "Known after apply"
+    const unknownKeys = Object.keys(afterUnknown).filter(k => !!afterUnknown[k] && !knownKeySet.has(k));
+
+    if (knownEntries.length === 0 && unknownKeys.length === 0) {
       return null;
     }
 
-    // 分离简单值和复杂对象
-    const simpleEntries = entries.filter(([_, v]) => !isComplexObject(v));
-    const complexEntries = entries.filter(([_, v]) => isComplexObject(v) && typeof v === 'object' && !Array.isArray(v));
-    const arrayEntries = entries.filter(([_, v]) => Array.isArray(v));
+    const simpleEntries = knownEntries.filter(([_, v]) => !isComplexObject(v));
+    const complexEntries = knownEntries.filter(([_, v]) => isComplexObject(v) && typeof v === 'object' && !Array.isArray(v));
+    const arrayEntries = knownEntries.filter(([_, v]) => Array.isArray(v));
 
     return (
       <>
         <div className={styles.sectionLabel}>Resource will be created:</div>
-        
-        {/* 简单属性 - 紧凑的表格布局 */}
+
         {simpleEntries.length > 0 && (
           <div className={styles.simpleAttrsGrid}>
             {simpleEntries.map(([key, value]) => (
@@ -350,12 +354,10 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
           </div>
         )}
 
-        {/* 复杂对象 - 嵌套展示 */}
-        {complexEntries.map(([key, value]) => 
+        {complexEntries.map(([key, value]) =>
           renderNestedChanges(key, {}, value as Record<string, any>, 'create')
         )}
 
-        {/* 数组 */}
         {arrayEntries.map(([key, value]) => (
           <div key={key} className={styles.simpleAttrRow}>
             <span className={styles.attrIcon}>+</span>
@@ -363,6 +365,18 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
             {renderValue(value, 'create')}
           </div>
         ))}
+
+        {unknownKeys.length > 0 && (
+          <div className={styles.simpleAttrsGrid}>
+            {unknownKeys.map(key => (
+              <div key={key} className={styles.simpleAttrRow}>
+                <span className={styles.attrIcon}>+</span>
+                <span className={styles.attrKey}>{key}:</span>
+                <span className={styles.knownAfterApply}>Known after apply</span>
+              </div>
+            ))}
+          </div>
+        )}
       </>
     );
   };
@@ -413,9 +427,16 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
 
   // 渲染 UPDATE/REPLACE 资源的属性
   const renderUpdateBody = (resource: ResourceChange) => {
+    const afterUnknown = resource.after_unknown || {};
     const { changed, unchanged } = computeChanges(resource.changes_before, resource.changes_after, resource.action);
-    
-    if (changed.length === 0) {
+
+    const extraUnknownKeys = Object.keys(afterUnknown).filter(k =>
+      !!afterUnknown[k] &&
+      !changed.some(c => c.key === k) &&
+      !unchanged.includes(k)
+    );
+
+    if (changed.length === 0 && extraUnknownKeys.length === 0) {
       return <div className={styles.emptyMessage}>No changes detected</div>;
     }
 
@@ -423,10 +444,10 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
     const simpleChanges = changed.filter(c => 
       !isComplexObject(c.before) && !isComplexObject(c.after)
     );
-    const complexChanges = changed.filter(c => 
+    const complexChanges = changed.filter(c =>
       (isComplexObject(c.before) || isComplexObject(c.after)) &&
-      (typeof c.before === 'object' && !Array.isArray(c.before)) ||
-      (typeof c.after === 'object' && !Array.isArray(c.after))
+      ((typeof c.before === 'object' && c.before !== null && !Array.isArray(c.before)) ||
+       (typeof c.after === 'object' && c.after !== null && !Array.isArray(c.after)))
     );
     const arrayChanges = changed.filter(c =>
       Array.isArray(c.before) || Array.isArray(c.after)
@@ -492,22 +513,34 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
           </div>
         ))}
 
+        {extraUnknownKeys.length > 0 && (
+          <div className={styles.changesTable}>
+            {extraUnknownKeys.map(key => (
+              <div key={key} className={styles.changeRow}>
+                <span className={`${styles.changeIcon} ${styles.iconModify}`}>~</span>
+                <span className={styles.changeKey}>{key} =</span>
+                <span className={styles.knownAfterApply}>Known after apply</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 未变更属性折叠 */}
         {unchanged.length > 0 && (
           <>
-            <div 
-              className={styles.unchangedToggle} 
+            <div
+              className={styles.unchangedToggle}
               onClick={() => toggleUnchanged(resource.id)}
             >
               <span className={styles.toggleIcon}>
                 {showUnchanged.has(resource.id) ? '▼' : '▶'}
               </span>
-              {showUnchanged.has(resource.id) 
+              {showUnchanged.has(resource.id)
                 ? `Hide ${unchanged.length} unchanged elements`
                 : `Show ${unchanged.length} unchanged elements`
               }
             </div>
-            
+
             {showUnchanged.has(resource.id) && (
               <div className={styles.unchangedList}>
                 {unchanged.map(key => (

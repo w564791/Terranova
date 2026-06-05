@@ -60,9 +60,7 @@ import NotificationManagement from './pages/admin/NotificationManagement';
 import NotificationForm from './pages/admin/NotificationForm';
 import PlatformConfig from './pages/admin/PlatformConfig';
 import ManifestManagement from './pages/admin/ManifestManagement';
-import ManifestCreate from './pages/admin/ManifestCreate';
-import ManifestEditor from './pages/admin/ManifestEditor';
-import ManifestDeploy from './pages/admin/ManifestDeploy';
+import ManifestEditorV2 from './pages/admin/ManifestEditorV2/ManifestEditorV2';
 import IAMLayout from './components/IAMLayout';
 import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
@@ -186,31 +184,21 @@ const App: FC = () => {
                 <Route path="global/settings/mfa" element={<MFAConfig />} />
                 <Route path="global/settings/sso" element={<SSOConfig />} />
                 <Route path="admin/manifests" element={<ManifestManagement />} />
-                <Route path="admin/manifests/new" element={<ManifestCreate />} />
                 <Route path="api-docs" element={<SwaggerUI />} />
                 <Route path="settings" element={<PersonalSettings />} />
                 <Route path="settings/mfa" element={<MFASetup />} />
                 <Route path="cmdb" element={<CMDB />} />
               </Route>
               
-              {/* Manifest 编辑器 - 独立全屏路由 */}
-              <Route path="/admin/manifests/:id/edit" element={
+              {/* Manifest 编辑器 (vscode-api B2 模式,VS Code Web 工作区) */}
+              <Route path="/admin/manifests-v2/:id/edit" element={
                 <ProtectedRoute>
-                  <ManifestEditor />
+                  <ManifestEditorV2 />
                 </ProtectedRoute>
               } />
-              
-              {/* Manifest 部署页面 */}
-              <Route path="/admin/manifests/:id/deploy" element={
+              <Route path="/admin/manifests-v2/_sandbox" element={
                 <ProtectedRoute>
-                  <ManifestDeploy />
-                </ProtectedRoute>
-              } />
-              
-              {/* Manifest 部署页面（复数形式，兼容） */}
-              <Route path="/admin/manifests/:id/deployments" element={
-                <ProtectedRoute>
-                  <ManifestDeploy />
+                  <ManifestEditorV2 />
                 </ProtectedRoute>
               } />
               

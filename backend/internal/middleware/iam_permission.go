@@ -175,6 +175,73 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 	}
 }
 
+// RequireWorkspacePermission 在 handler 内部对"运行时才知道的 workspace"做权限校验。
+//
+// 用于 manifest 部署类操作(install/upgrade/uninstall):目标 workspace 藏在请求体或
+// deployment 记录里,路由中间件拿不到,只能在 handler 取到 workspaceID 后调用本方法。
+// 校验 WORKSPACE_MANAGEMENT@WORKSPACE 维度(与 router_workspace.go 的 workspace 写操作一致)。
+//
+// 通过返回 true;失败时已写 403/401/500 响应并返回 false,调用方应直接 return。
+// 系统管理员直接放行。
+func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
+	c *gin.Context, workspaceID string, requiredLevel string,
+) bool {
+	if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
+		return true
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401, "message": "User not authenticated", "timestamp": time.Now(),
+		})
+		return false
+	}
+
+	rt, err := valueobject.ParseResourceType("WORKSPACE_MANAGEMENT")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Invalid resource type", "timestamp": time.Now(),
+		})
+		return false
+	}
+	rl, err := valueobject.ParsePermissionLevel(requiredLevel)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "Invalid permission level", "timestamp": time.Now(),
+		})
+		return false
+	}
+
+	req := &service.CheckPermissionRequest{
+		UserID:        userID.(string),
+		ResourceType:  rt,
+		ScopeType:     valueobject.ScopeTypeWorkspace,
+		ScopeIDStr:    workspaceID, // workspace 语义化ID (ws-xxx)
+		RequiredLevel: rl,
+	}
+	result, err := m.permissionChecker.CheckPermission(c.Request.Context(), req)
+	if err != nil {
+		log.Printf("[IAM] Workspace permission check failed for user %s ws %s: %v", userID, workspaceID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Permission check failed", "timestamp": time.Now(),
+		})
+		return false
+	}
+	if !result.IsAllowed {
+		denyMsg := fmt.Sprintf("Permission denied on workspace %s (required: %s, effective: %s)",
+			workspaceID, requiredLevel, result.EffectiveLevel.String())
+		c.Set("error", denyMsg)
+		c.JSON(http.StatusForbidden, gin.H{
+			"code": 403, "message": "Permission denied", "deny_reason": result.DenyReason,
+			"required_level": requiredLevel, "effective_level": result.EffectiveLevel.String(),
+			"timestamp": time.Now(),
+		})
+		return false
+	}
+	return true
+}
+
 // RequireAnyPermission 要求任意一个权限即可（OR逻辑）
 func (m *IAMPermissionMiddleware) RequireAnyPermission(
 	permissions []PermissionRequirement,

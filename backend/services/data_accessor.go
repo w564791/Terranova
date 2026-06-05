@@ -14,6 +14,9 @@ type DataAccessor interface {
 	GetWorkspaceResources(workspaceID string) ([]models.WorkspaceResource, error)
 	GetWorkspaceVariables(workspaceID string, varType models.VariableType) ([]models.WorkspaceVariable, error)
 	LoadSnapshot(vsnapID string, db *gorm.DB) error
+	// SetVariableOverrides 设置 manifest deployment 应急覆盖(最高优先级,仅 Terraform 变量),
+	// executor 在任务执行前从任务行 variable_overrides 快照注入。空 map 等价于不覆盖。
+	SetVariableOverrides(overrides map[string]string)
 	LockWorkspace(workspaceID string, lockInfo map[string]interface{}) error
 	UnlockWorkspace(workspaceID string) error
 	UpdateWorkspaceFields(workspaceID string, updates map[string]interface{}) error
@@ -46,10 +49,14 @@ type DataAccessor interface {
 	GetResourceByVersion(resourceID string, version int) (*models.WorkspaceResource, error)
 	CheckResourceVersionExists(resourceID string, versionID uint) (bool, error)
 	CheckResourceVersionExistsByVersion(resourceID string, version int) (bool, error)
-	UpdateResourceStatus(taskID uint, resourceAddress, status, action string) error
+	// resourceID 为完成行实时捕获的云端资源 ID，可为空（空时不覆盖已有 resource_id）
+	UpdateResourceStatus(taskID uint, resourceAddress, status, action, resourceID string) error
 
 	// Plan parsing
 	ParsePlanChanges(taskID uint, planOutput string) error
+
+	// Manifest 相关 (新设计 manifest_files 软链接架构)
+	GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error)
 
 	// Transaction 支持
 	BeginTransaction() (DataAccessor, error)

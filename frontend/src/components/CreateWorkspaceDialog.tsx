@@ -35,7 +35,7 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     auto_apply: false,
     plan_only: false,
     terraform_version: 'latest',
-    workdir: '/workspace',
+    workdir: '',
   });
 
   // 加载表单数据
@@ -156,7 +156,7 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         auto_apply: false,
         plan_only: false,
         terraform_version: 'latest',
-        workdir: '/workspace',
+        workdir: '',
       });
       setErrors({});
       
@@ -380,11 +380,11 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
               value={workspaceData.workdir}
               onChange={(e) => handleFieldChange('workdir', e.target.value)}
               className={styles.input}
-              placeholder="/workspace"
+              placeholder="/"
               disabled={isSubmitting}
             />
             <div className={styles.hint}>
-              Terraform执行的工作目录
+              仅在 manifest 模式下生效:作为 terraform 执行的子目录(留空 = manifest 根目录)
             </div>
           </div>
         </div>
