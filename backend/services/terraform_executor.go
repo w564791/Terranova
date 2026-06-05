@@ -302,34 +302,20 @@ func (s *TerraformExecutor) writeManifestFiles(workspace *models.Workspace, work
 	return nil
 }
 
-// ResolveRunDir 任务执行时调用,返回 terraform 实际执行的目录(workDir + subpath)
-// 非 manifest-managed workspace 直接返回 workDir
+// ResolveRunDir 返回 terraform 实际执行目录 = workDir + ManifestSubpath。
 //
-// 所有 cmd.Dir / 辅助 .tf 文件落盘 都走 runDir;manifest_files 内容仍按原 path
-// 落到 workDir 顶层(保留 subpath/main.tf 与 ../../modules/shared 相对引用)
-//
-// 注意: 调用方在 task 上下文已知 (ExecutePlan / ExecuteApply) 应使用
-// resolveRunDirForTask(task, workspace, workDir) 以正确处理 Manifest [Run] 分支
-// (ExternalFiles 不走 subpath)。
+// 所有 cmd.Dir / 辅助 .tf 文件落盘 / lock 文件 都走 runDir;manifest_files 与
+// ExternalFiles(Run 草稿)按原 path 落到 workDir 顶层,保留 subpath/main.tf 结构
+// 与 ../../modules/shared 相对引用。Manifest 部署任务与 Run 草稿预览都按 subpath
+// 执行(Run 任务清 deployment/tag 但保留 subpath);无 subpath 则返回 workDir。
 func (s *TerraformExecutor) ResolveRunDir(workspace *models.Workspace, workDir string) string {
-	if !s.workspaceUsesManifest(workspace) {
-		return workDir
-	}
-	if workspace.ManifestSubpath == nil || *workspace.ManifestSubpath == "" {
+	// 只要设了 ManifestSubpath 就 cd 进该子目录 —— 不再依赖 deployment/tag。
+	// 这样 Manifest 部署任务与 Run 草稿预览(tag 已清、subpath 保留)都进 subpath;
+	// UI 资源 / 普通 workspace(无 subpath)返回 workDir。
+	if workspace == nil || workspace.ManifestSubpath == nil || *workspace.ManifestSubpath == "" {
 		return workDir
 	}
 	return filepath.Join(workDir, *workspace.ManifestSubpath)
-}
-
-// resolveRunDirForTask 在 task 上下文已知时正确处理三分支
-//   - Run: ExternalFiles 落 workDir 顶层,runDir = workDir
-//   - Manifest: workDir + ManifestSubpath
-//   - UI 资源: runDir = workDir
-func (s *TerraformExecutor) resolveRunDirForTask(task *models.WorkspaceTask, workspace *models.Workspace, workDir string) string {
-	if taskUsesExternalFiles(task) {
-		return workDir
-	}
-	return s.ResolveRunDir(workspace, workDir)
 }
 
 func safeStringPtr(p *string) string {
@@ -356,9 +342,9 @@ func (s *TerraformExecutor) GenerateConfigFiles(
 // 目录策略:
 //   - workDir = 临时根目录 (e.g. /tmp/wd-xxx)
 //   - runDir  = terraform 实际跑命令的目录 = workDir + workspace.ManifestSubpath
-//     (Run 分支不走 subpath,直接 runDir = workDir)
-//   - manifest_files 按 path 字段落盘到 workDir 顶层 (保留 subpath/main.tf 结构,
-//     方便 ../../modules/shared 这类相对引用)
+//     (Run 草稿预览也走 subpath:清 deployment/tag 但保留 subpath)
+//   - manifest_files / ExternalFiles 按 path 字段落盘到 workDir 顶层 (保留 subpath/main.tf
+//     结构,方便 ../../modules/shared 这类相对引用)
 //   - 辅助文件 (provider.tf.json / variables.tf.json / variables.tfvars /
 //     outputs.tf.json / remote_data.tf.json / backend.tf.json / main.tf.json)
 //     落盘到 runDir,这样 terraform 在 runDir 跑时能看到
@@ -381,16 +367,9 @@ func (s *TerraformExecutor) GenerateConfigFilesForTask(
 		}
 	}
 
-	// 辅助文件目标目录:
-	//   - Run 分支: runDir = workDir (ExternalFiles 落 workDir 顶层)
-	//   - Manifest 分支: workDir + ManifestSubpath
-	//   - UI 资源分支: runDir = workDir
-	var runDir string
-	if usesExternal {
-		runDir = workDir
-	} else {
-		runDir = s.ResolveRunDir(workspace, workDir)
-	}
+	// 辅助文件落到 runDir = workDir + ManifestSubpath(Run/Manifest 都走 subpath,
+	// 与命令执行目录一致;无 subpath 时 = workDir)。
+	runDir := s.ResolveRunDir(workspace, workDir)
 	if err := os.MkdirAll(runDir, 0755); err != nil {
 		return fmt.Errorf("ensure runDir %s: %w", runDir, err)
 	}
@@ -1149,14 +1128,13 @@ func (s *TerraformExecutor) ExecutePlan(
 	}
 
 	// 1.7 生成配置文件
-	// Manifest [Run] 任务: 临时清掉 workspace 上的 manifest 软链接,使后续
-	//   ResolveRunDir / GenerateConfigFiles 都把它当作"无 manifest 上下文",
-	//   ExternalFiles 落 workDir 顶层、辅助文件也在 workDir、cmd.Dir = workDir。
+	// Manifest [Run] 草稿预览任务: 清掉 deployment/tag,使 GenerateConfigFiles 不去
+	//   拉已发布的 manifest_files(改走 ExternalFiles 草稿内容);但**保留 ManifestSubpath**,
+	//   让 terraform 仍在该子目录跑(与真实部署一致,否则会读到根目录无关 .tf)。
 	// 注意:这是栈上副本,不会影响数据库 workspace 行。
 	if taskUsesExternalFiles(task) {
 		workspace.ManifestDeploymentID = nil
 		workspace.ManifestActiveTag = nil
-		workspace.ManifestSubpath = nil
 	}
 	logger.Info("Generating configuration files from resources...")
 	if err := s.GenerateConfigFilesForTaskWithLogging(workspace, task, workDir, logger); err != nil {
@@ -1185,9 +1163,10 @@ func (s *TerraformExecutor) ExecutePlan(
 		return err
 	}
 
-	// 1.9 恢复 .terraform.lock.hcl 文件（加速 terraform init）
+	// 1.9 恢复 .terraform.lock.hcl 文件（加速 terraform init）。lock 落到 runDir(=subpath),
+	// 与 terraform init 的实际 cwd 一致,否则 subpath 内 init 拿不到缓存。
 	logger.Info("Restoring terraform lock file...")
-	s.restoreTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
+	s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
 
 	logger.Info("Configuration fetch completed successfully")
 	logger.StageEnd("fetching")
@@ -2547,9 +2526,9 @@ func (s *TerraformExecutor) ExecuteApply(
 			return err
 		}
 
-		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）
+		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）。lock 落 runDir(=subpath)。
 		logger.Info("Restoring terraform lock file...")
-		s.restoreTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
+		s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
 	}
 
 	logger.Info("Configuration fetch completed successfully")
@@ -4052,13 +4031,9 @@ func (s *TerraformExecutor) GenerateConfigFilesForTaskWithLogging(
 			safeStringPtr(workspace.ManifestActiveTag))
 	}
 
-	// runDir: Run 分支固定 = workDir (ExternalFiles 在顶层),其他走 ResolveRunDir
-	var runDir string
-	if usesExternal {
-		runDir = workDir
-	} else {
-		runDir = s.ResolveRunDir(workspace, workDir)
-	}
+	// 辅助文件落到 runDir = workDir + ManifestSubpath(Run/Manifest 都走 subpath,
+	// 与命令执行目录一致;无 subpath 时 = workDir)。
+	runDir := s.ResolveRunDir(workspace, workDir)
 	if err := os.MkdirAll(runDir, 0755); err != nil {
 		return fmt.Errorf("ensure runDir %s: %w", runDir, err)
 	}
@@ -4543,8 +4518,8 @@ plugin_cache_may_break_dependency_lock_file = true
 		s.updateLastInitHash(workspace, logger)
 	}
 
-	// 保存 .terraform.lock.hcl 文件到数据库（用于下次 init 加速）
-	s.saveTerraformLockHCL(workDir, workspace.WorkspaceID, logger)
+	// 保存 .terraform.lock.hcl 文件到数据库（用于下次 init 加速）。lock 由 init 写在 runDir(=subpath)。
+	s.saveTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
 
 	return nil
 }
