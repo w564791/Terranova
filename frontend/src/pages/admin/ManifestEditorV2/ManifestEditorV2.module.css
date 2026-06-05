@@ -30,6 +30,7 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  position: relative; /* 供 AI 工具(生成面板/问题面板)绝对定位锚点 */
   display: grid;
   grid-template-rows: 30px 35px 1fr 22px;
   grid-template-columns: 48px 260px 1fr;

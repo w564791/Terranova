@@ -101,6 +101,27 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			aiCMDBSkillController.GenerateConfigWithCMDBSkillSSE,
 		)
 
+		// ========== Manifest AI 路由（生成/修复 + 检查）==========
+		manifestAIController := controllers.NewManifestAIController(db)
+
+		// manifest 资源生成/修复（SSE）- 使用AI_ANALYSIS权限
+		ai.POST("/manifest/generate-resource-sse",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			manifestAIController.GenerateResourceSSE,
+		)
+
+		// manifest 草稿检查（SSE）- 使用AI_ANALYSIS权限
+		ai.POST("/manifest/check-sse",
+			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+			}),
+			manifestAIController.CheckDraftSSE,
+		)
+
 		// 预览组装后的 Prompt（调试用）
 		ai.POST("/skill/preview-prompt",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{

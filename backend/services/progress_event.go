@@ -24,8 +24,20 @@ type ProgressEvent struct {
 	CMDBLookups []CMDBLookupResult     `json:"cmdb_lookups,omitempty"` // CMDB 查询结果
 	UsageLogID  string                 `json:"usage_log_id,omitempty"` // Skill 使用日志 ID（用于前端行为上报）
 
+	// Manifest AI 完成时的数据
+	HCL    string          `json:"hcl,omitempty"`    // manifest 资源生成结果（HCL 文本）
+	Issues []ManifestIssue `json:"issues,omitempty"` // manifest check 结果（问题列表）
+
 	// 错误时的数据
 	Error string `json:"error,omitempty"` // 错误信息
+}
+
+// ManifestIssue manifest check 发现的单条问题
+type ManifestIssue struct {
+	File    string `json:"file"`    // 文件路径（打包内容来源）
+	Line    int    `json:"line"`    // 行号（从 1 开始，0 表示无法定位）
+	Level   string `json:"level"`   // 严重级别: error | warning | info
+	Message string `json:"message"` // 问题描述
 }
 
 // ProgressCallback 进度回调函数类型

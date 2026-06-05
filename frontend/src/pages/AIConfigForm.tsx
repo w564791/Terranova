@@ -1056,7 +1056,9 @@ const AIConfigForm = () => {
             formData.capabilities.includes(CAPABILITIES.INTENT_ASSERTION) ||
             formData.capabilities.includes(CAPABILITIES.SUMMARY) ||
             formData.capabilities.includes(CAPABILITIES.SKILL_RULE_EVALUATION) ||
-            formData.capabilities.includes(CAPABILITIES.SKILL_SEMANTIC_EVALUATION)) && (
+            formData.capabilities.includes(CAPABILITIES.SKILL_SEMANTIC_EVALUATION) ||
+            formData.capabilities.includes(CAPABILITIES.MANIFEST_RESOURCE_GENERATION) ||
+            formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) && (
             <div style={{ 
               border: '1px solid #722ed1', 
               borderRadius: '8px', 

@@ -341,6 +341,8 @@ export const CAPABILITIES = {
   SKILL_SEMANTIC_EVALUATION: 'skill_semantic_evaluation',
   SUMMARY_RULE_EVALUATION: 'summary_rule_evaluation',
   SUMMARY_SEMANTIC_EVALUATION: 'summary_semantic_evaluation',
+  MANIFEST_RESOURCE_GENERATION: 'manifest_resource_generation',
+  MANIFEST_CHECK: 'manifest_check',
 } as const;
 
 // 能力场景标签映射
@@ -360,6 +362,8 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Skill 语义评估 (L3)',
   [CAPABILITIES.SUMMARY_RULE_EVALUATION]: '摘要规则评估 (L2)',
   [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: '摘要语义评估 (L3)',
+  [CAPABILITIES.MANIFEST_RESOURCE_GENERATION]: 'Manifest 资源生成',
+  [CAPABILITIES.MANIFEST_CHECK]: 'Manifest 草稿检查',
 };
 
 // 能力场景描述映射
@@ -379,6 +383,8 @@ export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Layer 3 语义质量评估：评估 AI 输出的表述质量、信息量和用户可读性',
   [CAPABILITIES.SUMMARY_RULE_EVALUATION]: 'Layer 2 摘要规则评估：检查 CMDB 资源摘要是否严格遵守生成 Prompt 的所有规则',
   [CAPABILITIES.SUMMARY_SEMANTIC_EVALUATION]: 'Layer 3 摘要语义评估：评估 CMDB 资源摘要的内容准确性、完整性和幻觉检测',
+  [CAPABILITIES.MANIFEST_RESOURCE_GENERATION]: 'Manifest 编辑器：根据描述生成/修复 Terraform 资源，优先复用 Module 库',
+  [CAPABILITIES.MANIFEST_CHECK]: 'Manifest 编辑器：检查草稿/选区的基本问题，返回结构化问题列表',
 };
 
 // 每个能力场景的默认 Prompt 模板

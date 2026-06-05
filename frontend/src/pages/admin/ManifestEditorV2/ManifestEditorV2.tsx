@@ -33,6 +33,7 @@ import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
+import ManifestAiTools, { type EditorBridge } from './ManifestAiTools'
 import {
   listFiles,
   readFile,
@@ -718,6 +719,40 @@ export default function ManifestEditorV2() {
     navBackRef.current = navigateBack
     navForwardRef.current = navigateForward
   }, [navigateBack, navigateForward])
+
+  // AI 工具桥接:用现有 editorRef / openAt 拼出 EditorBridge,供 ManifestAiTools 解耦调用
+  const aiBridge: EditorBridge = useMemo(
+    () => ({
+      contextIds: { organization_id: String(orgId) },
+      getActiveFilePath: () => currentFileRef.current,
+      getSelectionInfo: () => {
+        const ed = editorRef.current
+        const sel = ed?.getSelection()
+        if (!ed || !sel || sel.isEmpty()) return null
+        const text = ed.getModel()?.getValueInRange(sel) ?? ''
+        if (!text) return null
+        return {
+          text,
+          filePath: currentFileRef.current ?? '(unknown)',
+          startLine: sel.startLineNumber,
+          endLine: sel.endLineNumber,
+        }
+      },
+      getActiveFileContent: () => editorRef.current?.getModel()?.getValue() ?? '',
+      insertText: (text: string) => {
+        const ed = editorRef.current
+        if (!ed) return
+        const sel = ed.getSelection()
+        if (!sel) return
+        ed.executeEdits('manifest-ai', [{ range: sel, text, forceMoveMarkers: true }])
+        ed.focus()
+      },
+      revealAt: (path: string, line: number) => {
+        void openAt(path, line, 1, 1)
+      },
+    }),
+    [orgId, openAt],
+  )
 
   // 全量重建「转到定义」索引:拉所有 .tf 文件内容(已打开的优先用 live model,其余 readFile)。
   // 文件树结构变化(新建/删除/重命名/刷新)后跑一次;编辑中的增量更新见 model.onDidChangeContent。
@@ -2021,6 +2056,7 @@ export default function ManifestEditorV2() {
         </div>
         <div className={styles.spacer} />
         <div className={styles.group}>
+          <ManifestAiTools bridge={aiBridge} disabled={manifestMissing} />
           <button
             title="对当前草稿在已部署 workspace 跑 plan-only 检测"
             disabled={manifestMissing}
