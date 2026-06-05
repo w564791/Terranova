@@ -75,7 +75,8 @@ func (h *ManifestEditorHandler) ListModules(c *gin.Context) {
 				COALESCE(NULLIF(m.module_source, ''), m.source) AS source,
 				m.version, m.description,
 				COALESCE((SELECT COUNT(*) FROM module_demos d
-						   WHERE d.module_id = m.id AND d.is_active = true), 0) AS demo_count`).
+						   WHERE d.module_id = m.id AND d.is_active = true
+						     AND d.module_version_id = m.default_version_id), 0) AS demo_count`).
 		Where("m.status = ?", "active")
 
 	if q != "" {
@@ -125,11 +126,16 @@ func (h *ManifestEditorHandler) ListDemos(c *gin.Context) {
 		// 在没有显式标记时,把第一个 demo 当作默认
 	}
 	var rows []row
+	// 按 source+version 语义:只返回该 module "当前版本" 的 demo,而非跨所有版本的并集。
+	// 当前版本 = modules.default_version_id(与模块库页面默认展示的版本一致);
+	// 据此过滤 module_demos.module_version_id,自然排除未绑版本的孤儿 demo。
 	if err := h.db.Table("module_demos d").
 		Select(`d.id AS demo_id, d.name, d.description,
 				v.config_data, v.change_summary`).
 		Joins("LEFT JOIN module_demo_versions v ON v.id = d.current_version_id").
+		Joins("JOIN modules m ON m.id = d.module_id").
 		Where("d.module_id = ? AND d.is_active = true", uint(moduleID)).
+		Where("d.module_version_id = m.default_version_id").
 		Order("d.created_at ASC").
 		Scan(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

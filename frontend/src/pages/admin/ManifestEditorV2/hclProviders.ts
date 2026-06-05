@@ -104,7 +104,7 @@ export function registerHclProviders(): void {
             },
             kind: monaco.languages.CompletionItemKind.Snippet,
             documentation: {
-              value: `**${m.description || m.name}**\n\n${d.change_summary || d.description}\n\n\`\`\`hcl\n${renderDemoToPreview(m, d)}\n\`\`\``,
+              value: `**${m.description || m.name}**\n\n${d.description || d.change_summary || ''}\n\n\`\`\`hcl\n${renderDemoToPreview(m, d)}\n\`\`\``,
             },
             detail: m.source,
             insertText: renderDemoToSnippet(m, d),
@@ -231,8 +231,9 @@ export function registerHclProviders(): void {
             ]),
           )
           const star = d.is_default ? '(默认) ' : ''
+          // 列表显示 demo 名称 + demo 描述(不是版本变更摘要 change_summary)
           tooltipLines.push(
-            `- ${star}[**${d.name}**](command:manifestInsertDemo?${args} "应用此 demo")  \n  ${d.change_summary || d.description || ''}`,
+            `- ${star}[**${d.name}**](command:manifestInsertDemo?${args} "应用此 demo")  \n  ${d.description || ''}`,
           )
         })
 
