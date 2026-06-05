@@ -39,6 +39,12 @@ export interface CreateManifestRequest {
   description?: string;
 }
 
+export interface UpdateManifestRequest {
+  name?: string;
+  description?: string;
+  status?: 'draft' | 'published' | 'archived';
+}
+
 export interface ManifestListResponse {
   items: Manifest[];
   total: number;
@@ -62,6 +68,18 @@ export const createManifest = async (
   data: CreateManifestRequest
 ): Promise<Manifest> => {
   return api.post(`/organizations/${orgId}/manifests`, data);
+};
+
+export const getManifest = async (orgId: string, id: string): Promise<Manifest> => {
+  return api.get(`/organizations/${orgId}/manifests/${id}`);
+};
+
+export const updateManifest = async (
+  orgId: string,
+  id: string,
+  data: UpdateManifestRequest
+): Promise<Manifest> => {
+  return api.put(`/organizations/${orgId}/manifests/${id}`, data);
 };
 
 export const deleteManifest = async (orgId: string, id: string): Promise<void> => {

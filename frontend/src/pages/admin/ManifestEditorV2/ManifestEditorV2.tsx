@@ -52,7 +52,7 @@ import {
   type DiffEntry,
 } from './manifestApi'
 import { workspaceService } from '../../../services/workspaces'
-import { exportManifestZip } from '../../../services/manifestApi'
+import { exportManifestZip, getManifest, updateManifest } from '../../../services/manifestApi'
 import styles from './ManifestEditorV2.module.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
@@ -156,6 +156,12 @@ export default function ManifestEditorV2() {
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
   const [wsNameById, setWsNameById] = useState<Record<string, string>>({})
   const [deployLoading, setDeployLoading] = useState(false)
+  // manifest 元信息(名称/描述),顶栏就地编辑。null=未加载
+  const [manifestName, setManifestName] = useState<string>('')
+  const [manifestDesc, setManifestDesc] = useState<string>('')
+  // 顶栏就地编辑:'name' | 'desc' | null
+  const [editingMeta, setEditingMeta] = useState<'name' | 'desc' | null>(null)
+  const [metaDraft, setMetaDraft] = useState('')
   // diff tab: 打开一个左旧右新的对比视图。key 唯一标识,激活时显示 DiffEditor、隐藏普通编辑器。
   //   title 显示在 tab 上,如 "main.tf (草稿 ↔ v1.2.0)"
   type DiffTab = { key: string; title: string; path: string; leftRef: string; rightRef: string }
@@ -715,12 +721,66 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
-  // 挂载即拉版本 + 部署(DRAFT 徽标按"是否已有发布版本"判断,不必等进历史视图)
+  // 挂载即拉版本 + 部署 + manifest 元信息(名称/描述,供顶栏就地编辑)
   useEffect(() => {
     loadVersions()
     loadDeployments()
+    getManifest(String(orgId), manifestId)
+      .then((m) => {
+        setManifestName(m.name ?? '')
+        setManifestDesc(m.description ?? '')
+      })
+      .catch(() => {
+        setManifestName('')
+        setManifestDesc('')
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifestId, orgId])
+
+  // 顶栏就地编辑:开始编辑某字段(name/desc)
+  const startEditMeta = useCallback(
+    (field: 'name' | 'desc') => {
+      setMetaDraft(field === 'name' ? manifestName : manifestDesc)
+      setEditingMeta(field)
+    },
+    [manifestName, manifestDesc],
+  )
+
+  // 提交元信息编辑(失焦或回车):仅在变化时调 UpdateManifest
+  const commitEditMeta = useCallback(async () => {
+    const field = editingMeta
+    if (!field) return
+    const val = metaDraft.trim()
+    const cur = field === 'name' ? manifestName : manifestDesc
+    setEditingMeta(null)
+    if (val === cur) return
+    if (field === 'name' && val === '') {
+      message.warning('名称不能为空')
+      return
+    }
+    if (field === 'name' && val.length > 255) {
+      message.warning('名称不超过 255 字符')
+      return
+    }
+    if (field === 'desc' && val.length > 1024) {
+      message.warning('描述不超过 1024 字符')
+      return
+    }
+    // 乐观更新本地,失败回滚
+    const prev = cur
+    if (field === 'name') setManifestName(val)
+    else setManifestDesc(val)
+    try {
+      await updateManifest(String(orgId), manifestId, field === 'name' ? { name: val } : { description: val })
+      message.success(field === 'name' ? '名称已更新' : '描述已更新')
+    } catch (err) {
+      if (field === 'name') setManifestName(prev)
+      else setManifestDesc(prev)
+      const msg = typeof err === 'string' ? err : (err as Error)?.message
+      message.error(`更新失败: ${msg ?? '未知错误'}`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingMeta, metaDraft, manifestName, manifestDesc, orgId, manifestId])
 
   // 切到历史视图时刷新版本 + 未提交更改;切到部署视图时刷新部署列表
   useEffect(() => {
@@ -1353,11 +1413,53 @@ export default function ManifestEditorV2() {
           <span className={styles.muted}> › </span>
           <span className={styles.muted}>manifests</span>
           <span className={styles.muted}> › </span>
-          <span>{manifestId}</span>
+          {/* 名称就地编辑:点击变输入框(无名称时回退显示 manifestId) */}
+          {editingMeta === 'name' ? (
+            <input
+              className={styles.metaInput}
+              value={metaDraft}
+              autoFocus
+              maxLength={255}
+              onChange={(e) => setMetaDraft(e.target.value)}
+              onBlur={() => void commitEditMeta()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void commitEditMeta()
+                else if (e.key === 'Escape') setEditingMeta(null)
+              }}
+            />
+          ) : (
+            <span className={styles.metaName} title="点击编辑名称" onClick={() => startEditMeta('name')}>
+              {manifestName || manifestId}
+            </span>
+          )}
           {/* 徽标反映真实状态:有已发布版本 → 显示最新版本号;否则 DRAFT(从未发布) */}
           <span className={styles.badge} title={versions.length > 0 ? '最新已发布版本' : '尚未发布任何版本'}>
             {versions.length > 0 ? versions[0].version : 'DRAFT'}
           </span>
+          {/* 描述就地编辑:点击变输入框;空描述显示"添加描述"占位 */}
+          {editingMeta === 'desc' ? (
+            <input
+              className={`${styles.metaInput} ${styles.metaInputDesc}`}
+              value={metaDraft}
+              autoFocus
+              maxLength={1024}
+              placeholder="描述(≤1024)"
+              onChange={(e) => setMetaDraft(e.target.value)}
+              onBlur={() => void commitEditMeta()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void commitEditMeta()
+                else if (e.key === 'Escape') setEditingMeta(null)
+              }}
+            />
+          ) : (
+            <span
+              className={styles.metaDesc}
+              title={manifestDesc || '点击添加描述'}
+              onClick={() => startEditMeta('desc')}
+            >
+              {manifestDesc || '添加描述'}
+            </span>
+          )}
         </div>
       </div>
 

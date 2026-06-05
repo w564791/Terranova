@@ -66,6 +66,26 @@
   border-radius: 3px; padding: 1px 6px; font-size: 11px; margin-left: 8px;
   font-weight: 600;
 }
+/* 顶栏就地编辑:名称/描述 */
+.breadcrumb { display: inline-flex; align-items: center; max-width: 70vw; }
+.metaName {
+  color: var(--fg-default); cursor: text; padding: 1px 4px; border-radius: 3px;
+  max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.metaName:hover { background: rgba(255,255,255,0.08); }
+.metaDesc {
+  color: var(--fg-muted); cursor: text; padding: 1px 4px; border-radius: 3px;
+  margin-left: 8px; font-size: 12px;
+  max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.metaDesc:hover { background: rgba(255,255,255,0.08); color: var(--fg-default); }
+.metaInput {
+  background: var(--bg-input, #3c3c3c); color: var(--fg-default, #ccc);
+  border: 1px solid var(--focus-border, #007fd4); border-radius: 2px;
+  outline: none; font-size: 13px; font-family: inherit; line-height: 18px;
+  padding: 0 4px; min-width: 140px;
+}
+.metaInputDesc { min-width: 240px; margin-left: 8px; font-size: 12px; }
 
 /* ===== toolbar ===== */
 .toolbar {
