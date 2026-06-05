@@ -347,6 +347,88 @@ func (h *ManifestFilesHandler) DeleteDir(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"deleted_dir": dir, "files_removed": res.RowsAffected})
 }
 
+// MoveDir 按前缀批量移动目录:把 from/ 前缀下所有草稿文件 path 改为 to/ 前缀(事务原子)。
+// 用于文件树拖拽移动文件夹。目标前缀下若已存在同名文件则整体失败(报错不覆盖)。
+func (h *ManifestFilesHandler) MoveDir(c *gin.Context) {
+	manifestID := c.Param("id")
+	userID := c.GetString("user_id")
+
+	var req struct {
+		From string `json:"from" binding:"required"`
+		To   string `json:"to" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	from, err := normalizeAndValidatePath(req.From)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "from: " + err.Error()})
+		return
+	}
+	to, err := normalizeAndValidatePath(req.To)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "to: " + err.Error()})
+		return
+	}
+	if from == to {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "from == to"})
+		return
+	}
+	// 禁止移进自身子目录(to 以 from/ 开头会无限嵌套)
+	if strings.HasPrefix(to+"/", from+"/") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot move a directory into itself"})
+		return
+	}
+
+	var moved int64
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		// 拉 from/ 前缀下所有草稿文件
+		escFrom := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(from)
+		var rows []models.ManifestFile
+		if err := tx.Where(
+			`manifest_id = ? AND owner_user_id = ? AND version_id IS NULL AND path LIKE ? ESCAPE '\'`,
+			manifestID, userID, escFrom+"/%",
+		).Find(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		// 逐个改前缀,先检查目标不存在(冲突即整体失败)
+		for _, r := range rows {
+			newPath := to + strings.TrimPrefix(r.Path, from)
+			var existing int64
+			tx.Model(&models.ManifestFile{}).
+				Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL AND path = ?",
+					manifestID, userID, newPath).
+				Count(&existing)
+			if existing > 0 {
+				return fmt.Errorf("target path already exists: %s", newPath)
+			}
+			if err := tx.Model(&models.ManifestFile{}).
+				Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL AND path = ?",
+					manifestID, userID, r.Path).
+				Update("path", newPath).Error; err != nil {
+				return err
+			}
+			moved++
+		}
+		return nil
+	})
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "source directory not found or empty"})
+		} else {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"from": from, "to": to, "files_moved": moved})
+}
+
 // ResetDraftFromVersion 用某 published 版本覆盖当前用户草稿
 func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 	manifestID := c.Param("id")

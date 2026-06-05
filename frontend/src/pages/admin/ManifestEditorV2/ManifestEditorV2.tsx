@@ -32,6 +32,7 @@ import PublishVersionDialog from './PublishVersionDialog'
 import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
+import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
 import {
   listFiles,
   readFile,
@@ -40,6 +41,7 @@ import {
   deleteFile,
   deleteDir,
   moveFile,
+  moveDir,
   listVersions,
   listDeployments,
   diffVersions,
@@ -89,6 +91,7 @@ export default function ManifestEditorV2() {
   const ctx: ManifestEditorContext = { orgId, manifestId }
 
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const treeRef = useRef<HTMLDivElement | null>(null) // 文件树容器(键盘导航需聚焦它才收 keydown)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const fileContentCache = useRef<Map<string, string>>(new Map())
   // 每文件一个 model(保留 undo 历史)+ viewState(保留光标/滚动),切 tab 回到原状态
@@ -145,6 +148,24 @@ export default function ManifestEditorV2() {
   const [ghostDir, setGhostDir] = useState<string | null>(null)
   // 内联新建目录输入:!== null 时 sidebar 顶部出现目录名输入行
   const [creatingDir, setCreatingDir] = useState<string | null>(null)
+  // 右键菜单:{x,y,target}。target 描述右键对象(文件/目录/空白)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    target: { kind: 'file' | 'dir' | 'blank'; path: string }
+  } | null>(null)
+  // 文件树键盘导航当前焦点节点(path)
+  const [focusedPath, setFocusedPath] = useState<string | null>(null)
+  // 拖拽移动:正在拖的节点 + 当前 hover 的放置目标目录(高亮用)
+  const draggingRef = useRef<{ path: string; isDir: boolean } | null>(null)
+  const [dragOverDir, setDragOverDir] = useState<string | null>(null)
+  // 复制/剪切剪贴板(单文件)。菜单在右键打开时即时读取 ref,无需 state 驱动重渲染。
+  const clipboardRef = useRef<{ path: string; mode: 'copy' | 'cut' } | null>(null)
+  // 跨文件导航历史栈(Cmd+←/→)。NavLoc 记 path + 光标/滚动 viewState
+  const navStackRef = useRef<{
+    back: { path: string; viewState: monaco.editor.ICodeEditorViewState | null }[]
+    fwd: { path: string; viewState: monaco.editor.ICodeEditorViewState | null }[]
+  }>({ back: [], fwd: [] })
   // sidebar 当前视图:explorer(文件树) | search(搜索) | deploy(已部署 workspace) | history(版本历史)
   const [activeView, setActiveView] = useState<'explorer' | 'search' | 'deploy' | 'history'>('explorer')
   const [searchShowReplace, setSearchShowReplace] = useState(false) // Cmd+Shift+H 进来时默认展开替换
@@ -257,6 +278,13 @@ export default function ManifestEditorV2() {
           monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyH,
           () => openSearchRef.current(true),
         )
+        // Cmd/Ctrl+←/→ 跨文件导航回退/前进(覆盖默认"光标到行首/行尾",行首行尾可用 Home/End)
+        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () =>
+          navBackRef.current(),
+        )
+        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () =>
+          navForwardRef.current(),
+        )
 
         // 跨文件「转到定义」路由:目标 model 非当前文件时(manifest:/<path>),
         // 拦截跳转 → 用 openFile 打开目标文件 → 定位到定义行列。同文件跳转 monaco 原生处理。
@@ -361,9 +389,12 @@ export default function ManifestEditorV2() {
   const closeCurrentTabRef = useRef<() => void>(() => {})
   // 打开搜索视图(withReplace=true 默认展开替换),用 ref 给快捷键调
   const openSearchRef = useRef<(withReplace: boolean) => void>(() => {})
+  // 导航回退/前进的 ref(一次性注册的快捷键调最新逻辑)
+  const navBackRef = useRef<() => void>(() => {})
+  const navForwardRef = useRef<() => void>(() => {})
 
   const openFile = useCallback(
-    async (path: string) => {
+    async (path: string, opts?: { fromNav?: boolean }) => {
       // 等编辑器创建完成
       if (!editorRef.current) {
         await ensureVscodeServicesReady()
@@ -377,7 +408,14 @@ export default function ManifestEditorV2() {
       // 切到新文件前:① flush 上个文件待保存内容 ② 存它的 viewState(光标/滚动)
       if (currentFileRef.current && currentFileRef.current !== path) {
         await flushSaveRef.current()
-        viewStateCache.current.set(currentFileRef.current, ed.saveViewState())
+        const vs = ed.saveViewState()
+        viewStateCache.current.set(currentFileRef.current, vs)
+        // 导航历史:正常跳转(非回退/前进)时,记录离开前的位置,清空 fwd
+        if (!opts?.fromNav) {
+          navStackRef.current.back.push({ path: currentFileRef.current, viewState: vs })
+          if (navStackRef.current.back.length > 50) navStackRef.current.back.shift()
+          navStackRef.current.fwd = []
+        }
       }
 
       setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
@@ -465,6 +503,39 @@ export default function ManifestEditorV2() {
     },
     [openFile],
   )
+
+  // ========== 跨文件导航回退/前进(Cmd+←/→)==========
+  // 跳到历史位置:打开目标文件(fromNav 避免再次记录)并恢复其 viewState
+  const goToNavLoc = useCallback(
+    async (loc: { path: string; viewState: monaco.editor.ICodeEditorViewState | null }) => {
+      await openFile(loc.path, { fromNav: true })
+      const ed = editorRef.current
+      if (ed && loc.viewState) ed.restoreViewState(loc.viewState)
+      ed?.focus()
+    },
+    [openFile],
+  )
+  const navigateBack = useCallback(() => {
+    const st = navStackRef.current
+    if (st.back.length === 0) return
+    const ed = editorRef.current
+    // 当前位置压入 fwd,再回退
+    if (ed && currentFileRef.current) {
+      st.fwd.push({ path: currentFileRef.current, viewState: ed.saveViewState() })
+    }
+    const loc = st.back.pop()!
+    void goToNavLoc(loc)
+  }, [goToNavLoc])
+  const navigateForward = useCallback(() => {
+    const st = navStackRef.current
+    if (st.fwd.length === 0) return
+    const ed = editorRef.current
+    if (ed && currentFileRef.current) {
+      st.back.push({ path: currentFileRef.current, viewState: ed.saveViewState() })
+    }
+    const loc = st.fwd.pop()!
+    void goToNavLoc(loc)
+  }, [goToNavLoc])
 
   // 全局替换落库后:被改文件的缓存 model 过期 → dispose,重开/未提交 diff 自然刷新
   const refreshAfterReplace = useCallback(
@@ -585,6 +656,11 @@ export default function ManifestEditorV2() {
   useEffect(() => {
     openFileRef.current = openFile
   }, [openFile])
+  // 让一次性注册的 Cmd+←/→ 始终调最新导航逻辑
+  useEffect(() => {
+    navBackRef.current = navigateBack
+    navForwardRef.current = navigateForward
+  }, [navigateBack, navigateForward])
 
   // 全量重建「转到定义」索引:拉所有 .tf 文件内容(已打开的优先用 live model,其余 readFile)。
   // 文件树结构变化(新建/删除/重命名/刷新)后跑一次;编辑中的增量更新见 model.onDidChangeContent。
@@ -1052,24 +1128,58 @@ export default function ManifestEditorV2() {
     setRenamingPath(null)
     setCreatingDir(null)
     setInlineError(null)
+    setGhostDir(null) // 根目录新建
+    setCreating('')
+  }, [])
+
+  // 在指定目录下新建文件(目录行 hover 按钮 / 右键菜单):复用 ghostDir 机制
+  const startCreateFileIn = useCallback((dir: string) => {
+    setRenamingPath(null)
+    setCreatingDir(null)
+    setInlineError(null)
+    setGhostDir(dir)
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev)
+      next.delete(dir)
+      return next
+    })
     setCreating('')
   }, [])
 
   // ========== 新建目录(幽灵目录)==========
+  // createDirParentRef: 新建子目录时的父前缀(空=根)。在 commitCreateDir 里拼接。
+  const createDirParentRef = useRef<string>('')
   const startCreateDir = useCallback(() => {
     setRenamingPath(null)
     setCreating(null)
     setInlineError(null)
+    createDirParentRef.current = ''
+    setCreatingDir('')
+  }, [])
+
+  // 在指定目录下新建子目录
+  const startCreateDirIn = useCallback((parent: string) => {
+    setRenamingPath(null)
+    setCreating(null)
+    setInlineError(null)
+    createDirParentRef.current = parent
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev)
+      next.delete(parent)
+      return next
+    })
     setCreatingDir('')
   }, [])
 
   // 确认目录名 → 设为幽灵目录 + 立即在该目录下起新建文件输入
   const commitCreateDir = useCallback(() => {
-    const dir = (creatingDir || '').trim().replace(/\/+$/, '')
-    if (!dir) {
+    const raw = (creatingDir || '').trim().replace(/\/+$/, '')
+    if (!raw) {
       setCreatingDir(null)
       return
     }
+    const parent = createDirParentRef.current
+    const dir = parent ? `${parent}/${raw}` : raw
     // 校验目录路径(按文件路径规则,目录段不允许 . ..)
     const errMsg = validatePath(dir + '/placeholder')
     if (errMsg) {
@@ -1188,6 +1298,184 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renamingPath, renameValue, currentFile, ctx, validatePath])
 
+  // ========== 复制 / 剪切 / 粘贴(单文件)==========
+  const copyFile = useCallback((path: string) => {
+    clipboardRef.current = { path, mode: 'copy' }
+  }, [])
+  const cutFile = useCallback((path: string) => {
+    clipboardRef.current = { path, mode: 'cut' }
+  }, [])
+
+  // 在 dir 下为 base 名找一个不冲突的路径(冲突则在扩展名前加 -copy)
+  const uniquePathIn = useCallback(
+    (dir: string, base: string): string => {
+      const dot = base.lastIndexOf('.')
+      const stem = dot > 0 ? base.slice(0, dot) : base
+      const ext = dot > 0 ? base.slice(dot) : ''
+      let candidate = dir ? `${dir}/${base}` : base
+      while (files.some((f) => f.path === candidate)) {
+        const next = `${stem}-copy${ext}`
+        candidate = dir ? `${dir}/${next}` : next
+        base = next // 继续叠加 -copy-copy 直到不冲突
+      }
+      return candidate
+    },
+    [files],
+  )
+
+  // 把"单文件移动"在前端缓存里同步(model/viewState/openTabs/currentFile)
+  const syncCachesAfterMove = useCallback(
+    (from: string, to: string) => {
+      const cached = fileContentCache.current.get(from)
+      fileContentCache.current.delete(from)
+      if (cached !== undefined) fileContentCache.current.set(to, cached)
+      const oldModel = modelCache.current.get(from)
+      const wasCurrent = currentFileRef.current === from
+      if (wasCurrent) editorRef.current?.setModel(null)
+      if (oldModel) {
+        oldModel.dispose()
+        modelCache.current.delete(from)
+      }
+      viewStateCache.current.delete(from)
+      setOpenTabs((prev) => prev.map((p) => (p === from ? to : p)))
+      return wasCurrent
+    },
+    [],
+  )
+
+  // 粘贴到目录 dir('' = 根)
+  const pasteInto = useCallback(
+    async (dir: string) => {
+      const cb = clipboardRef.current
+      if (!cb) return
+      const base = cb.path.split('/').pop() || cb.path
+      const to = uniquePathIn(dir, base)
+      try {
+        if (cb.mode === 'copy') {
+          const f = await readFile(ctx, cb.path)
+          if (f.is_binary) await putFileB64(ctx, to, f.content_b64 ?? '')
+          else await putFile(ctx, to, f.content ?? '')
+        } else {
+          // cut = 移动
+          await moveFile(ctx, cb.path, to)
+          syncCachesAfterMove(cb.path, to)
+          clipboardRef.current = null
+        }
+        const items = await listFiles(ctx)
+        setFiles(items)
+        void openFile(to)
+        message.success(cb.mode === 'copy' ? '已粘贴副本' : '已移动')
+      } catch (err: any) {
+        const msg = typeof err === 'string' ? err : err?.message
+        message.error(`粘贴失败: ${msg ?? '未知错误'}`)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ctx, uniquePathIn, syncCachesAfterMove, openFile],
+  )
+
+  // ========== 拖拽移动文件/文件夹到目标目录 ==========
+  const moveNodeTo = useCallback(
+    async (src: { path: string; isDir: boolean }, destDir: string) => {
+      const base = src.path.split('/').pop() || src.path
+      const srcParent = src.path.includes('/') ? src.path.slice(0, src.path.lastIndexOf('/')) : ''
+      // 非法/无效目标:原位、目录拖进自身或子目录
+      if (destDir === srcParent) return
+      if (src.isDir && (destDir === src.path || destDir.startsWith(src.path + '/'))) return
+      const to = destDir ? `${destDir}/${base}` : base
+      if (to === src.path) return
+      try {
+        if (src.isDir) {
+          await moveDir(ctx, src.path, to)
+          // 目录下所有缓存项前缀迁移
+          const affected: string[] = []
+          modelCache.current.forEach((_m, k) => {
+            if (k === src.path || k.startsWith(src.path + '/')) affected.push(k)
+          })
+          fileContentCache.current.forEach((_v, k) => {
+            if ((k === src.path || k.startsWith(src.path + '/')) && !affected.includes(k)) affected.push(k)
+          })
+          for (const oldP of affected) {
+            const newP = to + oldP.slice(src.path.length)
+            syncCachesAfterMove(oldP, newP)
+          }
+        } else {
+          await moveFile(ctx, src.path, to)
+          syncCachesAfterMove(src.path, to)
+        }
+        const items = await listFiles(ctx)
+        setFiles(items)
+        // 展开目标目录
+        if (destDir) setCollapsedDirs((prev) => {
+          const next = new Set(prev)
+          next.delete(destDir)
+          return next
+        })
+        message.success('已移动')
+      } catch (err: any) {
+        const msg = typeof err === 'string' ? err : err?.message
+        message.error(`移动失败: ${msg ?? '未知错误'}`)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ctx, syncCachesAfterMove],
+  )
+
+  // ========== 右键菜单项组装 ==========
+  const buildMenuItems = useCallback(
+    (target: { kind: 'file' | 'dir' | 'blank'; path: string }): ContextMenuItem[] => {
+      const cb = clipboardRef.current
+      const items: ContextMenuItem[] = []
+      if (target.kind === 'file') {
+        const dir = target.path.includes('/') ? target.path.slice(0, target.path.lastIndexOf('/')) : ''
+        items.push({ label: '打开', icon: 'go-to-file', onClick: () => void openFile(target.path) })
+        items.push({ label: '重命名', icon: 'edit', onClick: () => startRename(target.path) })
+        items.push({
+          label: '删除',
+          icon: 'trash',
+          danger: true,
+          onClick: () => setPendingDelete({ path: target.path, isDir: false }),
+        })
+        items.push({ label: '复制', icon: 'copy', separatorBefore: true, onClick: () => copyFile(target.path) })
+        items.push({ label: '剪切', icon: 'combine', onClick: () => cutFile(target.path) })
+        if (cb) items.push({ label: '粘贴到所在目录', icon: 'clippy', onClick: () => void pasteInto(dir) })
+        items.push({
+          label: '复制路径',
+          icon: 'link',
+          separatorBefore: true,
+          onClick: () => void navigator.clipboard?.writeText(target.path),
+        })
+      } else if (target.kind === 'dir') {
+        items.push({ label: '新建文件', icon: 'new-file', onClick: () => startCreateFileIn(target.path) })
+        items.push({ label: '新建文件夹', icon: 'new-folder', onClick: () => startCreateDirIn(target.path) })
+        if (cb)
+          items.push({ label: '粘贴', icon: 'clippy', onClick: () => void pasteInto(target.path) })
+        items.push({
+          label: '删除整个目录',
+          icon: 'trash',
+          danger: true,
+          separatorBefore: true,
+          onClick: () => setPendingDelete({ path: target.path, isDir: true }),
+        })
+      } else {
+        items.push({ label: '新建文件', icon: 'new-file', onClick: () => startCreateFile() })
+        items.push({ label: '新建文件夹', icon: 'new-folder', onClick: () => startCreateDir() })
+        if (cb) items.push({ label: '粘贴', icon: 'clippy', onClick: () => void pasteInto('') })
+      }
+      return items
+    },
+    [openFile, startRename, copyFile, cutFile, pasteInto, startCreateFileIn, startCreateDirIn, startCreateFile, startCreateDir],
+  )
+
+  const onTreeContextMenu = useCallback(
+    (e: React.MouseEvent, target: { kind: 'file' | 'dir' | 'blank'; path: string }) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setContextMenu({ x: e.clientX, y: e.clientY, target })
+    },
+    [],
+  )
+
   const fileTree = useMemo(
     () => buildFileTree(files.map((f) => f.path), ghostDir),
     [files, ghostDir],
@@ -1201,6 +1489,93 @@ export default function ManifestEditorV2() {
       return next
     })
   }, [])
+
+  // 当前可见(展开态下)的扁平节点序列,用于键盘上下导航
+  const visibleNodes = useMemo(() => {
+    const out: { path: string; isDir: boolean }[] = []
+    const walk = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        out.push({ path: n.path, isDir: n.type === 'dir' })
+        if (n.type === 'dir' && !collapsedDirs.has(n.path) && n.children) walk(n.children)
+      }
+    }
+    walk(fileTree)
+    return out
+  }, [fileTree, collapsedDirs])
+
+  // 文件树键盘导航(容器 onKeyDown):↑↓ 移动焦点,←→ 折叠/展开,Enter 打开,F2/Delete,Cmd+CXV
+  const onTreeKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // 内联输入(新建/重命名)进行中时,不接管按键
+      if (creating !== null || creatingDir !== null || renamingPath) return
+      const cur = focusedPath
+      const idx = visibleNodes.findIndex((n) => n.path === cur)
+      const node = idx >= 0 ? visibleNodes[idx] : null
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && (e.key === 'c' || e.key === 'C')) {
+        if (node && !node.isDir) { e.preventDefault(); copyFile(node.path) }
+        return
+      }
+      if (mod && (e.key === 'x' || e.key === 'X')) {
+        if (node && !node.isDir) { e.preventDefault(); cutFile(node.path) }
+        return
+      }
+      if (mod && (e.key === 'v' || e.key === 'V')) {
+        if (node) {
+          e.preventDefault()
+          const destDir = node.isDir ? node.path : node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : ''
+          void pasteInto(destDir)
+        }
+        return
+      }
+      switch (e.key) {
+        case 'ArrowDown': {
+          e.preventDefault()
+          const next = visibleNodes[Math.min(visibleNodes.length - 1, idx + 1)] ?? visibleNodes[0]
+          if (next) setFocusedPath(next.path)
+          break
+        }
+        case 'ArrowUp': {
+          e.preventDefault()
+          const prev = visibleNodes[Math.max(0, idx - 1)] ?? visibleNodes[0]
+          if (prev) setFocusedPath(prev.path)
+          break
+        }
+        case 'ArrowRight':
+          if (node?.isDir) {
+            e.preventDefault()
+            if (collapsedDirs.has(node.path)) toggleDir(node.path)
+          }
+          break
+        case 'ArrowLeft':
+          if (node?.isDir && !collapsedDirs.has(node.path)) {
+            e.preventDefault()
+            toggleDir(node.path)
+          } else if (node) {
+            // 文件 / 已折叠目录:焦点跳到父目录
+            const parent = node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : ''
+            if (parent) { e.preventDefault(); setFocusedPath(parent) }
+          }
+          break
+        case 'Enter':
+          if (node) {
+            e.preventDefault()
+            if (node.isDir) toggleDir(node.path)
+            else void openFile(node.path)
+          }
+          break
+        case 'F2':
+          if (node && !node.isDir) { e.preventDefault(); startRename(node.path) }
+          break
+        case 'Delete':
+        case 'Backspace':
+          if (node) { e.preventDefault(); setPendingDelete({ path: node.path, isDir: node.isDir }) }
+          break
+      }
+    },
+    [creating, creatingDir, renamingPath, focusedPath, visibleNodes, collapsedDirs, toggleDir, openFile, startRename, copyFile, cutFile, pasteInto],
+  )
 
   // ========== 拖拽上传本地文件(spec §4.3)==========
   const handleDropFiles = useCallback(
@@ -1293,9 +1668,38 @@ export default function ManifestEditorV2() {
         return (
           <div key={`dir:${node.path}`}>
             <div
-              className={`${styles.treeNode} ${deleting ? styles.deleting : ''}`}
+              className={`${styles.treeNode} ${deleting ? styles.deleting : ''} ${focusedPath === node.path ? styles.focused : ''} ${dragOverDir === node.path ? styles.dragOverNode : ''}`}
               style={{ paddingLeft: indent }}
-              onClick={() => toggleDir(node.path)}
+              draggable
+              onDragStart={(e) => {
+                draggingRef.current = { path: node.path, isDir: true }
+                e.dataTransfer.setData('application/x-manifest-node', node.path)
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+              onDragOver={(e) => {
+                if (draggingRef.current) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setDragOverDir(node.path)
+                }
+              }}
+              onDragLeave={() => setDragOverDir((d) => (d === node.path ? null : d))}
+              onDrop={(e) => {
+                const src = draggingRef.current
+                if (src) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setDragOverDir(null)
+                  draggingRef.current = null
+                  void moveNodeTo(src, node.path)
+                }
+              }}
+              onClick={() => {
+                setFocusedPath(node.path)
+                treeRef.current?.focus()
+                toggleDir(node.path)
+              }}
+              onContextMenu={(e) => onTreeContextMenu(e, { kind: 'dir', path: node.path })}
             >
               <span className={styles.chevron}>
                 <i className={`codicon ${collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'}`} />
@@ -1308,6 +1712,22 @@ export default function ManifestEditorV2() {
                 deleteConfirmActions
               ) : (
                 <span className={styles.rowActions}>
+                  <i
+                    className="codicon codicon-new-file"
+                    title="在此目录下新建文件"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      startCreateFileIn(node.path)
+                    }}
+                  />
+                  <i
+                    className="codicon codicon-new-folder"
+                    title="在此目录下新建文件夹"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      startCreateDirIn(node.path)
+                    }}
+                  />
                   <i
                     className="codicon codicon-trash"
                     title="删除整个目录"
@@ -1329,12 +1749,20 @@ export default function ManifestEditorV2() {
       return (
         <div
           key={`file:${node.path}`}
-          className={`${styles.treeNode} ${currentFile === node.path ? styles.selected : ''} ${deleting ? styles.deleting : ''}`}
+          className={`${styles.treeNode} ${currentFile === node.path ? styles.selected : ''} ${focusedPath === node.path ? styles.focused : ''} ${deleting ? styles.deleting : ''}`}
           style={{ paddingLeft: indent }}
+          draggable={renamingPath !== node.path}
+          onDragStart={(e) => {
+            draggingRef.current = { path: node.path, isDir: false }
+            e.dataTransfer.setData('application/x-manifest-node', node.path)
+            e.dataTransfer.effectAllowed = 'move'
+          }}
           onClick={() => {
             if (renamingPath === node.path) return
+            setFocusedPath(node.path)
             void openFile(node.path)
           }}
+          onContextMenu={(e) => onTreeContextMenu(e, { kind: 'file', path: node.path })}
         >
           <span className={`${styles.chevron} ${styles.empty}`} />
           <span className={styles.icon}>
@@ -1605,10 +2033,18 @@ export default function ManifestEditorV2() {
           <span>{manifestId.toUpperCase()}</span>
         </div>
         <div
+          ref={treeRef}
           className={`${styles.tree} ${dragOver ? styles.dragOver : ''}`}
+          tabIndex={0}
+          onKeyDown={onTreeKeyDown}
+          onContextMenu={(e) => {
+            // 空白区右键(事件未被节点 stopPropagation 拦下)
+            onTreeContextMenu(e, { kind: 'blank', path: '' })
+          }}
           onDragOver={(e) => {
             e.preventDefault()
-            if (!dragOver) setDragOver(true)
+            // 外部文件拖入才高亮整树(内部节点移动由目录行自己高亮)
+            if (!draggingRef.current && !dragOver) setDragOver(true)
           }}
           onDragLeave={(e) => {
             // 仅当离开整个 tree 容器(而非内部子元素)时才取消高亮
@@ -1616,6 +2052,14 @@ export default function ManifestEditorV2() {
           }}
           onDrop={(e) => {
             e.preventDefault()
+            // 内部节点拖到树空白处 = 移到根目录
+            const src = draggingRef.current
+            if (src) {
+              draggingRef.current = null
+              setDragOverDir(null)
+              void moveNodeTo(src, '')
+              return
+            }
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               void handleDropFiles(e.dataTransfer.files)
             } else {
@@ -1935,6 +2379,16 @@ export default function ManifestEditorV2() {
         ctx={ctx}
         onClose={() => setRunOpen(false)}
       />
+
+      {/* 文件树右键菜单(自建轻量菜单)*/}
+      {contextMenu && (
+        <TreeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={buildMenuItems(contextMenu.target)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }

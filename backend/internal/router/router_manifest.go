@@ -99,6 +99,10 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
 			filesH.MoveFile,
 		)
+		g.POST("/files/_move_dir",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			filesH.MoveDir,
+		)
 		g.POST("/files/_delete_dir",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
 			filesH.DeleteDir,

@@ -91,13 +91,22 @@ export async function deleteDir(
   await api.post(`${basePath(ctx)}/files/_delete_dir`, { dir })
 }
 
-/** 重命名 / 移动 */
+/** 重命名 / 移动(单文件) */
 export async function moveFile(
   ctx: ManifestEditorContext,
   from: string,
   to: string,
 ): Promise<void> {
   await api.post(`${basePath(ctx)}/files/_move`, { from, to })
+}
+
+/** 移动整个目录(按前缀批量移动草稿文件,后端事务原子,冲突即整体失败) */
+export async function moveDir(
+  ctx: ManifestEditorContext,
+  from: string,
+  to: string,
+): Promise<void> {
+  await api.post(`${basePath(ctx)}/files/_move_dir`, { from, to })
 }
 
 /** 用某 published 版本覆盖当前用户草稿 */
