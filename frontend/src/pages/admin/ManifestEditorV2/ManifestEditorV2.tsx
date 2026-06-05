@@ -90,6 +90,7 @@ export default function ManifestEditorV2() {
     '1'
   const ctx: ManifestEditorContext = { orgId, manifestId }
 
+  const rootRef = useRef<HTMLDivElement | null>(null) // 根容器(全屏目标)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const treeRef = useRef<HTMLDivElement | null>(null) // 文件树容器(键盘导航需聚焦它才收 keydown)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -747,6 +748,16 @@ export default function ManifestEditorV2() {
     await flushSaveRef.current()
     navigate('/admin/manifests')
   }, [navigate])
+
+  // 全屏(左上绿灯):切换浏览器全屏(整个编辑器页面)
+  const toggleFullscreen = useCallback(() => {
+    const el = rootRef.current ?? document.documentElement
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.()
+    } else {
+      void el.requestFullscreen?.()
+    }
+  }, [])
 
   // 拉已发布版本列表(切到历史视图 / 发布后刷新时调)
   const loadVersions = useCallback(() => {
@@ -1471,6 +1482,8 @@ export default function ManifestEditorV2() {
     (e: React.MouseEvent, target: { kind: 'file' | 'dir' | 'blank'; path: string }) => {
       e.preventDefault()
       e.stopPropagation()
+      // 右键即把焦点高亮移到该节点(否则选中框还停在上一个打开的文件上)
+      setFocusedPath(target.kind === 'blank' ? null : target.path)
       setContextMenu({ x: e.clientX, y: e.clientY, target })
     },
     [],
@@ -1822,6 +1835,7 @@ export default function ManifestEditorV2() {
   // ========== 渲染 ==========
   return (
     <div
+      ref={rootRef}
       className={styles.root}
       style={{ gridTemplateColumns: `48px ${sidebarWidth}px 1fr` }}
     >
@@ -1834,7 +1848,27 @@ export default function ManifestEditorV2() {
             onClick={() => void handleClose()}
           />
           <span className={styles.yellow} />
-          <span className={styles.green} />
+          <span
+            className={styles.green}
+            title="全屏 / 退出全屏"
+            role="button"
+            onClick={toggleFullscreen}
+          />
+        </div>
+        {/* 导航后退/前进(中间偏左),复用 Cmd+←/→ 逻辑 */}
+        <div className={styles.navArrows}>
+          <i
+            className="codicon codicon-arrow-left"
+            title="后退(上一个位置)"
+            role="button"
+            onClick={() => navBackRef.current()}
+          />
+          <i
+            className="codicon codicon-arrow-right"
+            title="前进(下一个位置)"
+            role="button"
+            onClick={() => navForwardRef.current()}
+          />
         </div>
         <div className={styles.breadcrumb}>
           <span className={styles.muted}>Terranova</span>
