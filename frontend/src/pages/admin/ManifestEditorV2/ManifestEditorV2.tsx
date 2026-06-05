@@ -17,6 +17,16 @@ import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
 import { registerHclCompletion } from './hclCompletion'
+import {
+  registerHclDefinition,
+  pathToManifestUri,
+  manifestUriToPath,
+  buildDefinitionIndex,
+  indexFile,
+  removePathFromIndex,
+  emptyIndex,
+  type DefinitionIndex,
+} from './hclDefinitions'
 import PublishVersionDialog from './PublishVersionDialog'
 import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
@@ -84,6 +94,12 @@ export default function ManifestEditorV2() {
   // diff 视图:独立的 Monaco DiffEditor 实例 + 宿主容器(与普通编辑器并存,按需显隐)
   const diffContainerRef = useRef<HTMLDivElement | null>(null)
   const diffEditorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
+  // 跨文件「转到定义」索引(var./local. → 定义位置)。provider 读 ref.current 拿最新。
+  const defIndexRef = useRef<DefinitionIndex>(emptyIndex())
+  // editor opener(跨文件跳转路由)的 disposable,卸载时释放
+  const openerDisposableRef = useRef<monaco.IDisposable | null>(null)
+  // openFile 的 ref:一次性注册的 opener 需调最新 openFile,避免 stale 闭包
+  const openFileRef = useRef<(path: string) => Promise<void>>(async () => {})
 
   const [bootError, setBootError] = useState<string | null>(null)
   const [manifestMissing, setManifestMissing] = useState(false)
@@ -150,6 +166,8 @@ export default function ManifestEditorV2() {
         registerHclProviders()
         // 通用 HCL 补全 (Tier1 关键字/骨架 + Tier2 引用 + Tier3 平台 module 属性)
         registerHclCompletion()
+        // var./local. 「转到定义」+ hover 提示(provider 读 defIndexRef.current 拿最新索引)
+        registerHclDefinition({ getIndex: () => defIndexRef.current })
         // spec §10.3.3: Inlay Hint (· N demos) 不用 monaco 默认灰,覆盖为高对比青绿,
         // 让 demo 标签看起来既"是信息"也"是按钮"。
         monaco.editor.defineTheme('vs-dark-manifest', {
@@ -217,6 +235,28 @@ export default function ManifestEditorV2() {
           monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyH,
           () => openSearchRef.current(true),
         )
+
+        // 跨文件「转到定义」路由:目标 model 非当前文件时(manifest:/<path>),
+        // 拦截跳转 → 用 openFile 打开目标文件 → 定位到定义行列。同文件跳转 monaco 原生处理。
+        openerDisposableRef.current = monaco.editor.registerEditorOpener({
+          openCodeEditor: async (_source, resource, selectionOrPosition) => {
+            const path = manifestUriToPath(resource)
+            if (path === null) return false // 非 manifest 资源,交还默认处理
+            await openFileRef.current(path)
+            const ed = editorRef.current
+            if (ed && selectionOrPosition) {
+              if (monaco.Range.isIRange(selectionOrPosition)) {
+                ed.setSelection(selectionOrPosition)
+                ed.revealRangeInCenter(selectionOrPosition)
+              } else {
+                ed.setPosition(selectionOrPosition)
+                ed.revealPositionInCenter(selectionOrPosition)
+              }
+            }
+            ed?.focus()
+            return true
+          },
+        })
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
@@ -234,6 +274,8 @@ export default function ManifestEditorV2() {
       dm?.modified?.dispose()
       diffEditorRef.current?.dispose()
       diffEditorRef.current = null
+      openerDisposableRef.current?.dispose()
+      openerDisposableRef.current = null
       // 释放所有缓存的 model
       modelCache.current.forEach((m) => m.dispose())
       modelCache.current.clear()
@@ -347,7 +389,10 @@ export default function ManifestEditorV2() {
             return
           }
         }
-        model = monaco.editor.createModel(content, languageOfPath(path))
+        // 用可反解路径的稳定 URI(manifest:/<path>),让跨文件「转到定义」能定位目标文件。
+        // 复用已存在的同 URI model(理论上不会有,兜底防重复 URI 抛错)。
+        const uri = pathToManifestUri(path)
+        model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(content, languageOfPath(path), uri)
         modelCache.current.set(path, model)
         // 脏检测挂在 model 上,path 由闭包捕获 —— 不依赖 currentFileRef,
         // 即使 currentFile 被置 null(diff 让位/撤销/删除)也能正确标记。
@@ -358,6 +403,11 @@ export default function ManifestEditorV2() {
             next.add(path)
             return next
           })
+          // 增量更新「转到定义」索引:该文件的 var/local 定义随编辑实时刷新
+          if (path.endsWith('.tf') && model) {
+            removePathFromIndex(defIndexRef.current, path)
+            indexFile(defIndexRef.current, path, model.getValue())
+          }
           setSaveStatus('saving')
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
           saveTimerRef.current = setTimeout(() => {
@@ -505,6 +555,35 @@ export default function ManifestEditorV2() {
   useEffect(() => {
     flushSaveRef.current = saveCurrentFile
   }, [saveCurrentFile])
+  // 让一次性注册的 editor opener(跨文件跳转)始终调到最新 openFile
+  useEffect(() => {
+    openFileRef.current = openFile
+  }, [openFile])
+
+  // 全量重建「转到定义」索引:拉所有 .tf 文件内容(已打开的优先用 live model,其余 readFile)。
+  // 文件树结构变化(新建/删除/重命名/刷新)后跑一次;编辑中的增量更新见 model.onDidChangeContent。
+  const rebuildDefIndex = useCallback(async () => {
+    const tfFiles = files.filter((f) => f.type === 'file' && f.path.endsWith('.tf') && !f.is_binary)
+    const entries = await Promise.all(
+      tfFiles.map(async (f) => {
+        // 已打开文件用 live model 内容(含未保存改动);否则读草稿
+        const model = modelCache.current.get(f.path)
+        if (model) return { path: f.path, content: model.getValue() }
+        try {
+          const r = await readFile(ctx, f.path)
+          return { path: f.path, content: r.is_binary ? '' : r.content ?? '' }
+        } catch {
+          return { path: f.path, content: '' }
+        }
+      }),
+    )
+    defIndexRef.current = buildDefinitionIndex(entries)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, orgId, manifestId])
+
+  useEffect(() => {
+    void rebuildDefIndex()
+  }, [rebuildDefIndex])
 
   // 让 Cmd+W 快捷键始终调最新的"关当前 tab"逻辑(diff tab 优先,否则当前文件)
   useEffect(() => {
