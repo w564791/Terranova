@@ -212,8 +212,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
   const handleInstall = () => void doInstall(false)
   const handleInstallAndRun = () => void doInstall(true)
 
-  const handleUpgrade = async () => {
+  // upgrade 核心:andRun=true 时更新后立即 Plan+Apply 并跳任务页。
+  const doUpgrade = async (andRun: boolean) => {
     if (!versionId || !activeDeploymentForWs) return
+    const wsId = activeDeploymentForWs.workspace_id
     const varsets: DeploymentVarsetEntry[] = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
     setSubmitting(true)
     try {
@@ -221,13 +223,42 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
         target_version_id: versionId,
         varsets,
       })
-      message.success('已 upgrade,请到 workspace 跑 Plan+Apply')
-      reset()
-      onDeployed?.()
-      onClose()
+      if (andRun) {
+        const taskId = await triggerWorkspacePlanApply(wsId)
+        message.success('已更新并触发 Plan+Apply,跳转任务页查看')
+        reset()
+        onDeployed?.()
+        onClose()
+        navigate(taskId ? `/workspaces/${wsId}/tasks/${taskId}` : `/workspaces/${wsId}`)
+      } else {
+        message.success('已更新,请到 workspace 跑 Plan+Apply')
+        reset()
+        onDeployed?.()
+        onClose()
+      }
     } catch (err) {
       const msg = typeof err === 'string' ? err : (err as Error)?.message
-      message.error(`Upgrade 失败: ${msg ?? '未知错误'}`)
+      message.error(`${andRun ? '更新并运行' : '更新'} 失败: ${msg ?? '未知错误'}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+  const handleUpgrade = () => void doUpgrade(false)
+  const handleUpgradeAndRun = () => void doUpgrade(true)
+
+  // 仅运行:不改部署,直接对该 workspace 触发一次 Plan+Apply(无变更时用)
+  const handleRunOnly = async () => {
+    if (!activeDeploymentForWs) return
+    const wsId = activeDeploymentForWs.workspace_id
+    setSubmitting(true)
+    try {
+      const taskId = await triggerWorkspacePlanApply(wsId)
+      message.success('已触发 Plan+Apply,跳转任务页查看')
+      onClose()
+      navigate(taskId ? `/workspaces/${wsId}/tasks/${taskId}` : `/workspaces/${wsId}`)
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : (err as Error)?.message
+      message.error(`运行失败: ${msg ?? '未知错误'}`)
     } finally {
       setSubmitting(false)
     }
@@ -273,24 +304,25 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
       }
       return (
         <Space>
-          {noChange && (
-            <span style={{ color: '#52c41a', marginRight: 4 }}>
-              版本与 varset 关联均无变化,无需更新
-            </span>
-          )}
           <Button onClick={onClose}>取消</Button>
           <Button danger onClick={() => setConfirmingUninstall(true)} loading={submitting}>
-            Uninstall
+            卸载
           </Button>
-          <Button
-            type="primary"
-            onClick={handleUpgrade}
-            loading={submitting}
-            disabled={noChange}
-            title={noChange ? '版本与 varset 都没变,改了再更新' : '应用版本 / varset 变更'}
-          >
-            {sameVersion ? '更新 varset 关联' : 'Upgrade'}
-          </Button>
+          {noChange ? (
+            // 无任何变更:只给"运行"(直接 Plan+Apply,不走 upgrade)
+            <Button type="primary" onClick={handleRunOnly} loading={submitting}>
+              运行 (Plan+Apply)
+            </Button>
+          ) : (
+            <>
+              <Button onClick={handleUpgrade} loading={submitting}>
+                更新
+              </Button>
+              <Button type="primary" onClick={handleUpgradeAndRun} loading={submitting}>
+                更新并运行
+              </Button>
+            </>
+          )}
         </Space>
       )
     }
