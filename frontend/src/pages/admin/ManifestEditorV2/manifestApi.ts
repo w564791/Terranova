@@ -180,6 +180,17 @@ export async function diffVersions(
   return data.files ?? []
 }
 
+// 列某版本里可用的 workdir 目录(直接含 .tf 的目录,根用 '')。供 install 选执行子目录。
+export async function listVersionWorkdirs(
+  ctx: ManifestEditorContext,
+  versionId: string,
+): Promise<string[]> {
+  const data = (await api.get(`${basePath(ctx)}/v2/versions/${versionId}/workdirs`)) as {
+    workdirs?: string[]
+  }
+  return data.workdirs && data.workdirs.length > 0 ? data.workdirs : ['']
+}
+
 // 当前用户草稿 vs 某版本(against 省略=最新已发布)diff
 export async function diffDraft(
   ctx: ManifestEditorContext,
@@ -210,6 +221,8 @@ export interface InstallDeploymentRequest {
   workspace_id: string
   varsets: DeploymentVarsetEntry[]
   variable_overrides?: Record<string, string>
+  // terraform 执行子目录(空串=根)。省略则后端沿用 workspace 已有 manifest_subpath。
+  workdir?: string
 }
 
 export async function installDeployment(

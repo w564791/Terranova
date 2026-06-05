@@ -4,7 +4,7 @@
  * 视觉 1:1 对齐 manifest-vscode-mockup.html demo,数据接 manifest_files API。
  *
  * 能力: layout shell + 文件树 + tab + Monaco(HCL 高亮 + 4 个 provider)接 manifest_files;
- * Toolbar 三按钮 Run / 发布 / 部署 分别挂 RunDialog / PublishVersionDialog / DeployDialog。
+ * Toolbar 三按钮 Run / 发布 / 部署 分别挂 RunDialog / PublishVersionDialog / DeployPanel(覆盖编辑区)。
  */
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
@@ -18,7 +18,7 @@ import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
 import { registerHclCompletion } from './hclCompletion'
 import PublishVersionDialog from './PublishVersionDialog'
-import DeployDialog from './DeployDialog'
+import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
 import {
@@ -1601,9 +1601,15 @@ export default function ManifestEditorV2() {
               width: '100%',
               height: '100%',
               visibility:
-                activeDiffKey || (binaryView && currentFile === binaryView.path) ? 'hidden' : 'visible',
+                activeDiffKey || deployOpen || (binaryView && currentFile === binaryView.path)
+                  ? 'hidden'
+                  : 'visible',
             }}
           />
+          {/* 部署面板:点「部署到 Workspace」时盖住编辑区(非弹窗)。只在 open 时挂载,关闭即卸载重置。 */}
+          {deployOpen && (
+            <DeployPanel ctx={ctx} onClose={() => setDeployOpen(false)} />
+          )}
         </div>
       </div>
 
@@ -1634,11 +1640,6 @@ export default function ManifestEditorV2() {
             loadDraftDiff()
           }
         }}
-      />
-      <DeployDialog
-        open={deployOpen}
-        ctx={ctx}
-        onClose={() => setDeployOpen(false)}
       />
       <RunDialog
         open={runOpen}

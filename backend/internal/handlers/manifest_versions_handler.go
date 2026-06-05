@@ -76,6 +76,39 @@ func (h *ManifestVersionsHandler) GetVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, v)
 }
 
+// ListWorkdirs 列出某版本里所有"直接含 .tf 文件"的目录(去重升序,根用 "")。
+// 供部署 install 时让用户选 terraform 执行子目录(workdir)。
+func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
+	manifestID := c.Param("id")
+	versionID := c.Param("version_id")
+
+	// 校验版本存在且属于本 manifest
+	var v models.ManifestVersion
+	if err := h.db.Select("id").Where("id = ? AND manifest_id = ?", versionID, manifestID).First(&v).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	// 只取 .tf 路径(目录推断不需要内容)
+	var rows []models.ManifestFile
+	if err := h.db.Select("path").
+		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
+		Where("path LIKE ?", "%.tf").
+		Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	scope := make(map[string][]byte, len(rows))
+	for _, r := range rows {
+		scope[r.Path] = nil
+	}
+	c.JSON(http.StatusOK, gin.H{"workdirs": services.ListWorkdirs(scope)})
+}
+
 // PublishVersion 把当前用户草稿快照为新版本
 func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	manifestID := c.Param("id")

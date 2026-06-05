@@ -72,6 +72,10 @@ type InstallDeploymentRequest struct {
 	WorkspaceID       string                  `json:"workspace_id" binding:"required"` // ws-xxx 语义化ID
 	Varsets           []DeploymentVarsetEntry `json:"varsets"`
 	VariableOverrides map[string]string       `json:"variable_overrides"`
+	// Workdir 可选:terraform 执行子目录(归一化后存入 workspaces.manifest_subpath)。
+	// 省略(nil)= 沿用 workspace 记录里已有的 ManifestSubpath(向后兼容);
+	// 非 nil(含空串)= 以本次值为准(空串 => 根目录)。
+	Workdir *string `json:"workdir"`
 }
 
 // UpgradeDeploymentRequest upgrade 请求

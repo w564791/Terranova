@@ -114,16 +114,32 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		return
 	}
 
-	// 校验 subpath 在 manifest_files 内存在(若设置了)
-	if ws.ManifestSubpath != nil && *ws.ManifestSubpath != "" {
-		if !h.subpathExistsInVersion(manifestID, req.VersionID, *ws.ManifestSubpath) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("subpath %q not found in version %s (must contain at least one .tf)", *ws.ManifestSubpath, req.VersionID)})
+	// 计算 effective subpath(terraform 执行子目录):
+	//   req.Workdir 非 nil → 以本次值为准(归一化+校验,绝不信前端原值)
+	//   req.Workdir 为 nil → 沿用 workspace 记录里已有的 ManifestSubpath(向后兼容)
+	var effectiveSubpath string
+	if req.Workdir != nil {
+		s, normErr := services.NormalizeManifestSubpath(*req.Workdir)
+		if normErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "workdir 非法: " + normErr.Error()})
+			return
+		}
+		effectiveSubpath = s
+	} else {
+		effectiveSubpath = derefStr(ws.ManifestSubpath)
+	}
+
+	// 校验 subpath 在 manifest_files 内存在(若非根)
+	if effectiveSubpath != "" {
+		if !h.subpathExistsInVersion(manifestID, req.VersionID, effectiveSubpath) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("subpath %q not found in version %s (must contain at least one .tf)", effectiveSubpath, req.VersionID)})
 			return
 		}
 	}
 
-	// 拉 manifest_files 浅 parse
-	resourceRefs, err := h.shallowParseVersionResources(manifestID, req.VersionID, ws.ManifestSubpath)
+	// 拉 manifest_files 浅 parse(按 effective subpath)
+	subpathPtr := ptrIfNonEmptyStr(effectiveSubpath)
+	resourceRefs, err := h.shallowParseVersionResources(manifestID, req.VersionID, subpathPtr)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -178,13 +194,19 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 			}
 		}
 
-		// 4. 更新 workspaces 三列
+		// 4. 更新 workspaces 三列(含 manifest_subpath:effective 为空写 NULL)
+		wsUpdates := map[string]interface{}{
+			"manifest_deployment_id": deploymentID,
+			"manifest_active_tag":    version.Version,
+		}
+		if effectiveSubpath == "" {
+			wsUpdates["manifest_subpath"] = gorm.Expr("NULL")
+		} else {
+			wsUpdates["manifest_subpath"] = effectiveSubpath
+		}
 		if err := tx.Model(&models.Workspace{}).
 			Where("workspace_id = ?", req.WorkspaceID).
-			Updates(map[string]interface{}{
-				"manifest_deployment_id": deploymentID,
-				"manifest_active_tag":    version.Version,
-			}).Error; err != nil {
+			Updates(wsUpdates).Error; err != nil {
 			return err
 		}
 		return nil
@@ -616,4 +638,20 @@ func (h *ManifestDeploymentsV2Handler) shallowParseVersionResources(
 		sp = *subpath
 	}
 	return services.ParseManifestResources(scope, sp), nil
+}
+
+// derefStr 解引用 *string,nil 返回空串
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// ptrIfNonEmptyStr 空串 => nil,否则返回指针
+func ptrIfNonEmptyStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

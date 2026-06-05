@@ -5,11 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"iac-platform/internal/application/service"
@@ -21,28 +19,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// normalizeManifestSubpath 归一化 workspace 的 manifest 执行子目录。
-// 空 => "" (manifest 根)。禁绝对路径、. / .. 段、超长。与后端 manifest 文件路径规则一致。
-func normalizeManifestSubpath(raw string) (string, error) {
-	s := strings.TrimSpace(raw)
-	s = strings.ReplaceAll(s, "\\", "/")
-	s = strings.Trim(s, "/")
-	if s == "" {
-		return "", nil
-	}
-	if len(s) > 512 {
-		return "", errors.New("路径过长 (>512)")
-	}
-	for _, seg := range strings.Split(s, "/") {
-		if seg == "." || seg == ".." {
-			return "", errors.New("不允许 . 或 .. 路径段")
-		}
-		if seg == "" {
-			return "", errors.New("路径段不能为空")
-		}
-	}
-	return s, nil
-}
+// 归一化 manifest 执行子目录的逻辑已搬到 services.NormalizeManifestSubpath,
+// 供 deployment install 与 workspace CRUD 共用同一套规则。
 
 // ptrIfNonEmpty 空串 => nil,否则返回指针(对齐 ManifestSubpath *string,空=NULL)
 func ptrIfNonEmpty(s string) *string {
@@ -411,7 +389,7 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 	}
 	// workdir 仅 manifest 模式生效:作为 terraform 执行子目录,归一化后存入 manifest_subpath 列。
 	// (列名沿用 manifest_subpath;对前端/用户呈现为 workdir。空=manifest 根目录)
-	subpath, subErr := normalizeManifestSubpath(req.Workdir)
+	subpath, subErr := services.NormalizeManifestSubpath(req.Workdir)
 	if subErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400, "message": "workdir 非法: " + subErr.Error(),
@@ -641,7 +619,7 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 			})
 			return
 		}
-		subpath, subErr := normalizeManifestSubpath(*req.Workdir)
+		subpath, subErr := services.NormalizeManifestSubpath(*req.Workdir)
 		if subErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code": 400, "message": "workdir 非法: " + subErr.Error(),
