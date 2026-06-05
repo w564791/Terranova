@@ -15,6 +15,7 @@
  * 仅在 ManifestEditorV2 内挂载;只在 open 时渲染,故数据在挂载时加载即可。
  */
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Form, Select, Tag, Alert, Button, Space, message } from 'antd'
 import {
   listVersions,
@@ -23,6 +24,7 @@ import {
   installDeployment,
   upgradeDeployment,
   uninstallDeployment,
+  triggerWorkspacePlanApply,
   type ManifestEditorContext,
   type ManifestVersion,
   type ManifestDeployment,
@@ -40,6 +42,7 @@ interface Props {
 }
 
 export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
+  const navigate = useNavigate()
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -93,6 +96,12 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
     return activeDeploymentForWs ? 'upgrade' : 'install'
   }, [workspaceId, activeDeploymentForWs])
 
+  // 选中版本是否与该 workspace 当前已装版本一致(一致则无需升级,避免"看起来还能升级"的错觉)
+  const sameVersion = useMemo(
+    () => !!activeDeploymentForWs && activeDeploymentForWs.version_id === versionId,
+    [activeDeploymentForWs, versionId],
+  )
+
   // install 模式下:版本变更时拉该版本可用 workdir 目录,默认选根 ''
   useEffect(() => {
     if (!versionId || targetMode !== 'install') return
@@ -133,10 +142,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
     setWorkdir('')
   }
 
-  const handleInstall = async () => {
+  // install 核心:成功返回 true。andRun=true 时安装后立即触发 Plan+Apply 并跳转任务页。
+  const doInstall = async (andRun: boolean): Promise<boolean> => {
     if (!versionId || !workspaceId) {
       message.warning('请选择版本与 workspace')
-      return
+      return false
     }
     const varsets: DeploymentVarsetEntry[] = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
     setSubmitting(true)
@@ -147,17 +157,31 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
         varsets,
         workdir, // '' = 根
       })
-      message.success('已 install,请到 workspace 跑 Plan+Apply 落地云端')
-      reset()
-      onDeployed?.()
-      onClose()
+      if (andRun) {
+        const taskId = await triggerWorkspacePlanApply(workspaceId)
+        message.success('已部署并触发 Plan+Apply,跳转任务页查看')
+        reset()
+        onDeployed?.()
+        onClose()
+        navigate(taskId ? `/workspaces/${workspaceId}/tasks/${taskId}` : `/workspaces/${workspaceId}`)
+      } else {
+        message.success('已 install,请到 workspace 跑 Plan+Apply 落地云端')
+        reset()
+        onDeployed?.()
+        onClose()
+      }
+      return true
     } catch (err) {
       const msg = typeof err === 'string' ? err : (err as Error)?.message
-      message.error(`Install 失败: ${msg ?? '未知错误'}`)
+      message.error(`${andRun ? '部署并运行' : 'Install'} 失败: ${msg ?? '未知错误'}`)
+      return false
     } finally {
       setSubmitting(false)
     }
   }
+
+  const handleInstall = () => void doInstall(false)
+  const handleInstallAndRun = () => void doInstall(true)
 
   const handleUpgrade = async () => {
     if (!versionId || !activeDeploymentForWs) return
@@ -220,11 +244,20 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
       }
       return (
         <Space>
+          {sameVersion && (
+            <span style={{ color: '#52c41a', marginRight: 4 }}>当前已是该版本,无需升级</span>
+          )}
           <Button onClick={onClose}>取消</Button>
           <Button danger onClick={() => setConfirmingUninstall(true)} loading={submitting}>
             Uninstall
           </Button>
-          <Button type="primary" onClick={handleUpgrade} loading={submitting}>
+          <Button
+            type="primary"
+            onClick={handleUpgrade}
+            loading={submitting}
+            disabled={sameVersion}
+            title={sameVersion ? '已是该版本,请选择更高版本再升级' : undefined}
+          >
             Upgrade
           </Button>
         </Space>
@@ -233,8 +266,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed }: Props) {
     return (
       <Space>
         <Button onClick={onClose}>取消</Button>
-        <Button type="primary" onClick={handleInstall} loading={submitting}>
+        <Button onClick={handleInstall} loading={submitting}>
           Install
+        </Button>
+        <Button type="primary" onClick={handleInstallAndRun} loading={submitting}>
+          部署并运行 (Plan+Apply)
         </Button>
       </Space>
     )

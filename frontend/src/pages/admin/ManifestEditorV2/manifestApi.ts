@@ -280,6 +280,19 @@ export async function runPlanWithDraft(req: RunPlanRequest) {
   })
 }
 
+// 在已装 manifest 的 workspace 触发一次 Plan+Apply(部署并运行)。
+// 不带 external_files → 走 manifest 分支,按已发布版本 + subpath 执行。返回 task id。
+export async function triggerWorkspacePlanApply(
+  workspaceId: string,
+  description?: string,
+): Promise<string | number | undefined> {
+  const resp = (await api.post(`/workspaces/${workspaceId}/tasks/plan`, {
+    description: description || 'Manifest 部署并运行 (Plan+Apply)',
+    run_type: 'plan_and_apply',
+  })) as { task?: { id?: number | string }; task_id?: number | string; id?: number | string }
+  return resp.task?.id ?? resp.task_id ?? resp.id
+}
+
 // =============================================================================
 // 工具: 路径 → 编辑器语言
 // =============================================================================
