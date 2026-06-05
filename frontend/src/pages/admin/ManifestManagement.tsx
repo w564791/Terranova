@@ -329,7 +329,8 @@ const ManifestManagement: React.FC = () => {
                     <span className={styles.manifestId}>{manifest.id}</span>
                     <span className={styles.metaSeparator}>|</span>
                     <span className={styles.manifestVersion}>
-                      v{manifest.latest_version?.version || 'draft'}
+                      {/* version 字段本身已含 'v' 前缀(如 v1.0.5),不要再补 v */}
+                      {manifest.latest_version?.version || 'draft'}
                     </span>
                     {manifest.description && (
                       <>
@@ -531,8 +532,12 @@ const ManifestManagement: React.FC = () => {
           >
             <Input placeholder="例如: aws-vpc-stack" autoFocus />
           </Form.Item>
-          <Form.Item label="描述 (可选)" name="description">
-            <Input.TextArea rows={3} placeholder="这个 manifest 的用途简介" />
+          <Form.Item
+            label="描述 (可选)"
+            name="description"
+            rules={[{ max: 1024, message: '不超过 1024 字符' }]}
+          >
+            <Input.TextArea rows={3} maxLength={1024} showCount placeholder="这个 manifest 的用途简介" />
           </Form.Item>
         </Form>
       </Modal>

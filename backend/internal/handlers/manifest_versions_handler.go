@@ -189,6 +189,13 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 			return err
 		}
 
+		// 3. 首次发布后把 manifest 状态从 draft 置为 published(列表页据此显示状态)
+		if err := tx.Model(&models.Manifest{}).
+			Where("id = ? AND status = ?", manifestID, models.ManifestStatusDraft).
+			Update("status", models.ManifestStatusPublished).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 

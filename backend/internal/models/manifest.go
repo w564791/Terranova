@@ -100,13 +100,13 @@ func (ManifestDeploymentResource) TableName() string {
 // CreateManifestRequest 创建 Manifest 请求
 type CreateManifestRequest struct {
 	Name        string `json:"name" binding:"required,max=255"`
-	Description string `json:"description"`
+	Description string `json:"description" binding:"max=1024"`
 }
 
 // UpdateManifestRequest 更新 Manifest 请求
 type UpdateManifestRequest struct {
 	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
+	Description string `json:"description,omitempty" binding:"max=1024"`
 	Status      string `json:"status,omitempty"` // draft, published, archived
 }
 
