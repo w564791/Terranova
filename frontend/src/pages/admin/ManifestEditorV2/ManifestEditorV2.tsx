@@ -41,14 +41,17 @@ import {
   deleteDir,
   moveFile,
   listVersions,
+  listDeployments,
   diffVersions,
   diffDraft,
   languageOfPath,
   type ManifestFileEntry,
   type ManifestEditorContext,
   type ManifestVersion,
+  type ManifestDeployment,
   type DiffEntry,
 } from './manifestApi'
+import { workspaceService } from '../../../services/workspaces'
 import { exportManifestZip } from '../../../services/manifestApi'
 import styles from './ManifestEditorV2.module.css'
 
@@ -142,13 +145,17 @@ export default function ManifestEditorV2() {
   const [ghostDir, setGhostDir] = useState<string | null>(null)
   // 内联新建目录输入:!== null 时 sidebar 顶部出现目录名输入行
   const [creatingDir, setCreatingDir] = useState<string | null>(null)
-  // sidebar 当前视图:explorer(文件树) | search(搜索) | history(版本历史)
-  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'history'>('explorer')
+  // sidebar 当前视图:explorer(文件树) | search(搜索) | deploy(已部署 workspace) | history(版本历史)
+  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'deploy' | 'history'>('explorer')
   const [searchShowReplace, setSearchShowReplace] = useState(false) // Cmd+Shift+H 进来时默认展开替换
   // 侧栏宽度可拖拽(VS Code 行为),限 170–600px
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
+  // 已部署 workspace(active deployment)+ workspace 名称映射,用于左侧"部署"视图与 DRAFT 徽标
+  const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
+  const [wsNameById, setWsNameById] = useState<Record<string, string>>({})
+  const [deployLoading, setDeployLoading] = useState(false)
   // diff tab: 打开一个左旧右新的对比视图。key 唯一标识,激活时显示 DiffEditor、隐藏普通编辑器。
   //   title 显示在 tab 上,如 "main.tf (草稿 ↔ v1.2.0)"
   type DiffTab = { key: string; title: string; path: string; leftRef: string; rightRef: string }
@@ -669,6 +676,32 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
+  // 拉已部署 workspace(active deployment)+ 对应 workspace 名称映射
+  const loadDeployments = useCallback(() => {
+    setDeployLoading(true)
+    Promise.all([
+      listDeployments(ctx).catch(() => [] as ManifestDeployment[]),
+      workspaceService
+        .getWorkspaces()
+        .then((r) => {
+          const d: any = (r as any)?.data
+          return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
+        })
+        .catch(() => [] as any[]),
+    ])
+      .then(([deps, wss]) => {
+        setDeployments(deps.filter((d) => d.status === 'active'))
+        const map: Record<string, string> = {}
+        ;(wss as any[]).forEach((w) => {
+          const id = w.workspace_id || String(w.id)
+          map[id] = w.name || id
+        })
+        setWsNameById(map)
+      })
+      .finally(() => setDeployLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx])
+
   // 拉"未提交更改"(草稿 vs 最新已发布版本),只取真正有变更的。
   // 先 flush 当前文件的待保存内容(autosave 是 1s 防抖,不 flush 会读到旧草稿、漏掉刚改的差异)。
   const loadDraftDiff = useCallback(async () => {
@@ -682,11 +715,20 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
-  // 切到历史视图时拉版本列表 + 未提交更改
+  // 挂载即拉版本 + 部署(DRAFT 徽标按"是否已有发布版本"判断,不必等进历史视图)
+  useEffect(() => {
+    loadVersions()
+    loadDeployments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifestId, orgId])
+
+  // 切到历史视图时刷新版本 + 未提交更改;切到部署视图时刷新部署列表
   useEffect(() => {
     if (activeView === 'history') {
       loadVersions()
       void loadDraftDiff()
+    } else if (activeView === 'deploy') {
+      loadDeployments()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView])
@@ -1312,7 +1354,10 @@ export default function ManifestEditorV2() {
           <span className={styles.muted}>manifests</span>
           <span className={styles.muted}> › </span>
           <span>{manifestId}</span>
-          <span className={styles.badge}>DRAFT</span>
+          {/* 徽标反映真实状态:有已发布版本 → 显示最新版本号;否则 DRAFT(从未发布) */}
+          <span className={styles.badge} title={versions.length > 0 ? '最新已发布版本' : '尚未发布任何版本'}>
+            {versions.length > 0 ? versions[0].version : 'DRAFT'}
+          </span>
         </div>
       </div>
 
@@ -1375,8 +1420,13 @@ export default function ManifestEditorV2() {
         >
           <i className="codicon codicon-search" />
         </div>
-        <div className={`${styles.item} ${styles.disabled}`} title="源代码管理 (本期不启用 — 直接存 Postgres)">
-          <i className="codicon codicon-source-control" />
+        <div
+          className={`${styles.item} ${activeView === 'deploy' ? styles.active : ''}`}
+          title="已部署的 Workspace"
+          role="button"
+          onClick={() => setActiveView('deploy')}
+        >
+          <i className="codicon codicon-rocket" />
         </div>
         <div
           className={`${styles.item} ${activeView === 'history' ? styles.active : ''}`}
@@ -1531,6 +1581,46 @@ export default function ManifestEditorV2() {
         </>
         )}
 
+        {activeView === 'deploy' && (
+          <>
+            <div className={styles.header}>
+              <span>已部署的 Workspace</span>
+              <span className={styles.actions}>
+                <i className="codicon codicon-refresh" title="刷新" onClick={() => loadDeployments()} />
+              </span>
+            </div>
+            <div className={styles.tree}>
+              {deployLoading && (
+                <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12 }}>加载中...</div>
+              )}
+              {!deployLoading && deployments.length === 0 && (
+                <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12, lineHeight: 1.5 }}>
+                  本 manifest 还没部署到任何 workspace。
+                  <br />
+                  点顶栏「部署到 Workspace」进行安装。
+                </div>
+              )}
+              {!deployLoading &&
+                deployments.map((d) => {
+                  const wsName = wsNameById[d.workspace_id] || d.workspace_id
+                  const ver = versions.find((v) => v.id === d.version_id)?.version
+                  return (
+                    <div
+                      key={d.id}
+                      className={styles.deployRow}
+                      title={`跳转到 ${wsName}`}
+                      onClick={() => navigate(`/workspaces/${d.workspace_id}`)}
+                    >
+                      <i className={`codicon codicon-vm ${styles.deployIcon}`} />
+                      <span className={styles.deployName}>{wsName}</span>
+                      {ver && <span className={styles.deployVersion}>{ver}</span>}
+                      <i className={`codicon codicon-arrow-right ${styles.deployGo}`} />
+                    </div>
+                  )
+                })}
+            </div>
+          </>
+        )}
         {activeView === 'history' && (
           <>
             <div className={styles.header}>
@@ -1731,9 +1821,9 @@ export default function ManifestEditorV2() {
         ctx={ctx}
         onClose={() => setPublishOpen(false)}
         onPublished={() => {
-          // 发布成功后刷新历史 + 未提交更改(发布后草稿通常与新版本一致)
+          // 发布成功后始终刷新版本(顶栏徽标依赖 versions);历史视图下再刷未提交更改
+          loadVersions()
           if (activeView === 'history') {
-            loadVersions()
             loadDraftDiff()
           }
         }}

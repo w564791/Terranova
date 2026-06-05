@@ -213,6 +213,24 @@
 .versionChanges { padding: 2px 0 4px; }
 .changeEmpty { padding: 2px 12px 4px 20px; color: var(--fg-muted, #858585); font-size: 12px; }
 
+/* ===== 已部署 workspace 列表 ===== */
+.deployRow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 12px; cursor: pointer;
+  font-size: 13px; color: var(--fg-default, #cccccc);
+  line-height: 22px; white-space: nowrap; overflow: hidden;
+}
+.deployRow:hover { background: var(--hover, #2a2d2e); }
+.deployIcon { color: #4ec9b0; flex-shrink: 0; font-size: 16px; }
+.deployName { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.deployVersion {
+  flex-shrink: 0; font-size: 11px; color: #1e1e1e;
+  background: var(--accent-warn, #cca700); border-radius: 3px;
+  padding: 0 6px; line-height: 16px; font-weight: 600;
+}
+.deployGo { color: var(--fg-muted, #858585); flex-shrink: 0; opacity: 0; transition: opacity 0.1s ease; }
+.deployRow:hover .deployGo { opacity: 1; }
+
 /* 内联新建/重命名输入框: VS Code 风格,就地在文件树行里编辑,不弹窗 */
 .inlineInput {
   flex: 1;
