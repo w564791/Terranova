@@ -27,6 +27,7 @@ import {
   emptyIndex,
   type DefinitionIndex,
 } from './hclDefinitions'
+import { computeHclDiagnostics, HCL_DIAG_OWNER } from './hclDiagnostics'
 import PublishVersionDialog from './PublishVersionDialog'
 import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
@@ -96,10 +97,18 @@ export default function ManifestEditorV2() {
   const diffEditorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null)
   // 跨文件「转到定义」索引(var./local. → 定义位置)。provider 读 ref.current 拿最新。
   const defIndexRef = useRef<DefinitionIndex>(emptyIndex())
+  // 全量索引是否已建好至少一次(决定诊断是否报"未定义引用",避免索引未就绪时误报)
+  const defIndexReadyRef = useRef(false)
   // editor opener(跨文件跳转路由)的 disposable,卸载时释放
   const openerDisposableRef = useRef<monaco.IDisposable | null>(null)
   // openFile 的 ref:一次性注册的 opener 需调最新 openFile,避免 stale 闭包
   const openFileRef = useRef<(path: string) => Promise<void>>(async () => {})
+  // 对某 .tf model 跑诊断并 setModelMarkers(用 ref 供 model 监听器调,读最新索引)
+  const runDiagnosticsRef = useRef<(model: monaco.editor.ITextModel) => void>(() => {})
+  runDiagnosticsRef.current = (model: monaco.editor.ITextModel) => {
+    const markers = computeHclDiagnostics(model.getValue(), defIndexRef.current, defIndexReadyRef.current)
+    monaco.editor.setModelMarkers(model, HCL_DIAG_OWNER, markers)
+  }
 
   const [bootError, setBootError] = useState<string | null>(null)
   const [manifestMissing, setManifestMissing] = useState(false)
@@ -394,9 +403,10 @@ export default function ManifestEditorV2() {
         const uri = pathToManifestUri(path)
         model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(content, languageOfPath(path), uri)
         modelCache.current.set(path, model)
+        const m = model
         // 脏检测挂在 model 上,path 由闭包捕获 —— 不依赖 currentFileRef,
         // 即使 currentFile 被置 null(diff 让位/撤销/删除)也能正确标记。
-        model.onDidChangeContent(() => {
+        m.onDidChangeContent(() => {
           setDirtyFiles((prev) => {
             if (prev.has(path)) return prev
             const next = new Set(prev)
@@ -404,9 +414,10 @@ export default function ManifestEditorV2() {
             return next
           })
           // 增量更新「转到定义」索引:该文件的 var/local 定义随编辑实时刷新
-          if (path.endsWith('.tf') && model) {
+          if (path.endsWith('.tf')) {
             removePathFromIndex(defIndexRef.current, path)
-            indexFile(defIndexRef.current, path, model.getValue())
+            indexFile(defIndexRef.current, path, m.getValue())
+            runDiagnosticsRef.current(m) // 索引更新后再算诊断(未定义引用依赖最新索引)
           }
           setSaveStatus('saving')
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -414,6 +425,8 @@ export default function ManifestEditorV2() {
             void flushSaveRef.current()
           }, AUTOSAVE_DEBOUNCE_MS)
         })
+        // 打开即跑一次诊断(已建好初始索引;markers 在文件再打开时也会重算)
+        if (path.endsWith('.tf')) runDiagnosticsRef.current(m)
       }
 
       // 不再 dispose 旧 model(由 modelCache 持有,关 tab 时才 dispose)
@@ -578,6 +591,11 @@ export default function ManifestEditorV2() {
       }),
     )
     defIndexRef.current = buildDefinitionIndex(entries)
+    defIndexReadyRef.current = true // 全量索引就绪,之后诊断可报"未定义引用"
+    // 索引重建后,对所有已打开的 .tf model 重算诊断(跨文件:A 改定义影响 B 的未定义引用)
+    modelCache.current.forEach((m, p) => {
+      if (p.endsWith('.tf')) runDiagnosticsRef.current(m)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, orgId, manifestId])
 
