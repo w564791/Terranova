@@ -45,9 +45,12 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
   const [versionId, setVersionId] = useState<string | undefined>()
   const [workspaceId, setWorkspaceId] = useState<string | undefined>()
   const [varsetIds, setVarsetIds] = useState<string[]>([])
+  // uninstall 内联确认(antd v5 静态 Modal.confirm 在 React19 下静默失效,改对话框内联二次确认)
+  const [confirmingUninstall, setConfirmingUninstall] = useState(false)
 
   useEffect(() => {
     if (!open) return
+    setConfirmingUninstall(false)
     setLoading(true)
     Promise.all([
       listVersions(ctx).catch(() => []),
@@ -153,22 +156,18 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
 
   const handleUninstall = async () => {
     if (!activeDeploymentForWs) return
-    Modal.confirm({
-      title: '确认 uninstall?',
-      content: '解除 manifest 与 workspace 的关联。残留云端资源需要你之后到 workspace 跑 Plan+Apply 销毁。',
-      okText: 'Uninstall',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await uninstallDeployment(ctx, activeDeploymentForWs.id)
-          message.success('已 uninstall,请到 workspace 跑 Plan+Apply 销毁残留资源')
-          onClose()
-        } catch (err) {
-          const msg = typeof err === 'string' ? err : (err as Error)?.message
-          message.error(`Uninstall 失败: ${msg ?? '未知错误'}`)
-        }
-      },
-    })
+    setSubmitting(true)
+    try {
+      await uninstallDeployment(ctx, activeDeploymentForWs.id)
+      message.success('已 uninstall,请到 workspace 跑 Plan+Apply 销毁残留资源')
+      setConfirmingUninstall(false)
+      onClose()
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : (err as Error)?.message
+      message.error(`Uninstall 失败: ${msg ?? '未知错误'}`)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const renderFooter = () => {
@@ -179,10 +178,26 @@ export default function DeployDialog({ open, ctx, onClose }: Props) {
       )
     }
     if (targetMode === 'upgrade' && activeDeploymentForWs) {
+      // uninstall 二次确认:第一次点变成"确认 Uninstall? / 取消",避免误触
+      if (confirmingUninstall) {
+        return (
+          <Space>
+            <span style={{ color: '#cf1322', marginRight: 4 }}>
+              确认解除关联?残留云端资源需到 workspace 跑 Plan+Apply 销毁。
+            </span>
+            <Button onClick={() => setConfirmingUninstall(false)} disabled={submitting}>
+              取消
+            </Button>
+            <Button danger type="primary" onClick={handleUninstall} loading={submitting}>
+              确认 Uninstall
+            </Button>
+          </Space>
+        )
+      }
       return (
         <Space>
           <Button onClick={onClose}>取消</Button>
-          <Button danger onClick={handleUninstall} loading={submitting}>
+          <Button danger onClick={() => setConfirmingUninstall(true)} loading={submitting}>
             Uninstall
           </Button>
           <Button type="primary" onClick={handleUpgrade} loading={submitting}>
