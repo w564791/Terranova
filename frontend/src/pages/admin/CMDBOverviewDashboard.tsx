@@ -83,8 +83,12 @@ const CMDBOverviewDashboard: React.FC = () => {
       const j = Math.floor(Math.random() * (i + 1));
       [queries[i], queries[j]] = [queries[j], queries[i]];
     }
+    const MAX_DISPLAY_CHARS = 24;
     return queries.map((q, i) => ({
       text: q.query,
+      displayText: [...q.query].length > MAX_DISPLAY_CHARS
+        ? [...q.query].slice(0, MAX_DISPLAY_CHARS).join('') + '…'
+        : q.query,
       count: q.count,
       avgResults: q.avg_results,
       fontSize: maxCount === minCount ? 16 : 12 + (q.count - minCount) / (maxCount - minCount) * 16,
@@ -284,7 +288,7 @@ const CMDBOverviewDashboard: React.FC = () => {
                       }}
                       title={`${item.text} (${item.count}次搜索, 平均${item.avgResults.toFixed(1)}条结果)`}
                     >
-                      {item.text}
+                      {item.displayText}
                     </span>
                   ))}
                 </div>

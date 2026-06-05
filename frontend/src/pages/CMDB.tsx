@@ -1445,6 +1445,7 @@ const CMDB: React.FC = () => {
                   type="text"
                   className={styles.searchInput}
                   placeholder="Enter resource ID, name or description to search..."
+                  maxLength={120}
                   value={searchQuery}
                   onChange={handleSearchInputChange}
                   onKeyDown={handleSearchKeyDown}

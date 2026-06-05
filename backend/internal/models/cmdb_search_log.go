@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // CMDBSearchLog 搜索日志
 type CMDBSearchLog struct {
@@ -22,6 +26,17 @@ type CMDBSearchLog struct {
 
 func (CMDBSearchLog) TableName() string {
 	return "cmdb_search_logs"
+}
+
+// BeforeCreate 按字符数截断超长查询，防止粘贴整段资源摘要等导致日志膨胀/展示越界。
+// 按 rune 截断而非 byte，避免截断中文产生乱码。
+func (l *CMDBSearchLog) BeforeCreate(tx *gorm.DB) error {
+	const maxQueryRunes = 120
+	r := []rune(l.Query)
+	if len(r) > maxQueryRunes {
+		l.Query = string(r[:maxQueryRunes])
+	}
+	return nil
 }
 
 // CMDBSearchAnalytics 搜索分析聚合结果
