@@ -67,7 +67,14 @@ func (c *variableCandidate) compositeKey() string {
 
 // ResolveDisplay returns the full list of effective variables with override markers for the frontend.
 func (s *VariableResolutionService) ResolveDisplay(workspaceID string) ([]EffectiveVariable, error) {
-	return s.resolveDisplayWithExtraVarsets(workspaceID, nil)
+	// 把 active manifest deployment 选定的 varsets 折进优先级链,
+	// 让 workspace variables 页面也能看到 deployment 关联的 varset 变量(此前 display 漏注入,
+	// 仅执行路径 ResolveExecutionWithExtra 注入,导致页面看不到但实际 plan/apply 会用)。
+	extraVarsetIDs, _, err := s.GetActiveDeploymentExtras(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return s.resolveDisplayWithExtraVarsets(workspaceID, extraVarsetIDs)
 }
 
 // resolveDisplayWithExtraVarsets 与 ResolveDisplay 相同,但额外把 manifest deployment 选定的
