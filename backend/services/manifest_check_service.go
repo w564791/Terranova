@@ -26,6 +26,7 @@ type ManifestCheckService struct {
 	aiFormService  *AIFormService
 	configService  *AIConfigService
 	skillAssembler *SkillAssembler
+	domainSelector *manifestDomainSkillSelector
 }
 
 // NewManifestCheckService 创建 manifest check 服务实例
@@ -35,15 +36,17 @@ func NewManifestCheckService(db *gorm.DB) *ManifestCheckService {
 		aiFormService:  NewAIFormService(db),
 		configService:  NewAIConfigService(db),
 		skillAssembler: NewSkillAssembler(db),
+		domainSelector: newManifestDomainSkillSelector(db),
 	}
 }
 
 // ManifestCheckResult manifest 检查结果
 type ManifestCheckResult struct {
-	Status     string          // "complete" | "blocked"
-	Issues     []ManifestIssue // 问题列表
-	Message    string          // 提示信息（blocked 时为拦截原因）
-	UsageLogID string          // Skill 使用日志 ID
+	Status         string          // "complete" | "blocked"
+	Issues         []ManifestIssue // 问题列表
+	Message        string          // 提示信息（blocked 时为拦截原因）
+	UsageLogID     string          // Skill 使用日志 ID
+	CompletedSteps []CompletedStep // 各步骤耗时 + 加载的 skill(供前端 pipeline 展示)
 }
 
 // getManifestCheckComposition 返回 manifest check 的默认 Skill 组合
@@ -62,22 +65,31 @@ func (s *ManifestCheckService) getManifestCheckComposition() *models.SkillCompos
 	}
 }
 
+// CheckFileInput 单个待检查文件(跨文件检查时多于一个)
+type CheckFileInput struct {
+	Path      string
+	Content   string
+	StartLine int // content 在文件中的起始行(整文件=1,选区=选区起始行)
+}
+
 // CheckDraftWithProgress 检查 manifest 草稿内容（带进度回调）
 //
-// filePath 为待检查内容来源路径；content 为待检查内容（选区或当前文件）；
-// startLine 为 content 在文件中的起始行号（选区时>0，整文件为1）。
-// 打包时给每行加真实行号前缀，AI 直接引用而非自己数，避免行号漂移。
+// files 为待检查文件集合：单文件检查时长度为 1；跨文件检查时含当前文件 + 关联文件。
+// 打包时给每行加真实行号前缀(从各文件 StartLine 起)，AI 直接引用而非自己数，避免行号漂移。
 func (s *ManifestCheckService) CheckDraftWithProgress(
 	userID string,
 	workspaceID string,
-	filePath string,
-	content string,
-	startLine int,
+	files []CheckFileInput,
 	progressCallback ProgressCallback,
 ) (*ManifestCheckResult, error) {
 	totalTimer := NewTimer()
 	tracker := newManifestProgressTracker(4, manifestCheckStepName, progressCallback)
 	reportProgress := tracker.report
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("没有待检查内容")
+	}
+	primaryFile := files[0].Path
 
 	log.Printf("[ManifestCheckService] ========== 开始 manifest 草稿检查 ==========")
 
@@ -93,10 +105,15 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 
 	// 步骤 2: 意图断言（安全守卫）
 	// check 会打包用户「选中的内容」发给 AI，选区中可能藏有 prompt injection，
-	// 因此必须先做意图断言，不能跳过。
+	// 因此必须先做意图断言，不能跳过。对所有待检查文件内容做断言。
 	reportProgress(2, "意图断言", "正在检查内容安全性...")
+	var assertInput strings.Builder
+	for _, f := range files {
+		assertInput.WriteString(f.Content)
+		assertInput.WriteString("\n")
+	}
 	assertionTimer := NewTimer()
-	assertionResult, err := s.aiFormService.AssertIntent(userID, content)
+	assertionResult, err := s.aiFormService.AssertIntent(userID, assertInput.String())
 	RecordAICallDuration("manifest_check", "intent_assertion", assertionTimer.ElapsedMs())
 	if err != nil {
 		log.Printf("[ManifestCheckService] 意图断言服务不可用: %v，继续执行", err)
@@ -108,9 +125,9 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 		}, nil
 	}
 
-	// 步骤 3: 打包待检查内容
+	// 步骤 3: 打包待检查内容(多文件分段 + 行号前缀)
 	reportProgress(3, "打包内容", "正在准备待检查内容...")
-	checkContent := buildCheckPayload(filePath, content, startLine)
+	checkContent := buildCheckPayload(files)
 
 	// 步骤 4: 组装 Prompt + AI 检查
 	reportProgress(4, "AI检查", "正在调用 AI 检查...")
@@ -119,10 +136,22 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	if len(composition.FoundationSkills) == 0 && composition.TaskSkill == "" {
 		composition = s.getManifestCheckComposition()
 	}
+	// 遵守开关:仅 UseOptimized=true 才跑 domain skill AI 动态选择。
+	// 用精简摘要(文件名 + 原始内容,无行号前缀/指令噪声)做选择依据,而非整个打包 payload。
+	if aiConfig.UseOptimized {
+		if selected, selErr := s.domainSelector.Select(buildSelectionDigest(files)); selErr != nil {
+			log.Printf("[ManifestCheckService] domain skill AI 选择失败,降级: %v", selErr)
+		} else if len(selected) > 0 {
+			compCopy := *composition
+			compCopy.DomainSkills = selected
+			compCopy.DomainSkillMode = models.DomainSkillModeFixed
+			composition = &compCopy
+		}
+	}
 	dynamicContext := &DynamicContext{
 		ExtraContext: map[string]interface{}{
 			"check_content": checkContent,
-			"file_path":     filePath,
+			"file_path":     primaryFile,
 		},
 	}
 
@@ -142,7 +171,11 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 
 	tracker.addStep("AI检查", int64(aiTimer.ElapsedMs()), assembleResult.UsedSkillNames)
 
-	issues, ok := parseCheckIssues(aiResult, filePath)
+	knownFiles := make(map[string]bool, len(files))
+	for _, f := range files {
+		knownFiles[f.Path] = true
+	}
+	issues, ok := parseCheckIssues(aiResult, primaryFile, len(files) > 1, knownFiles)
 	if !ok {
 		// AI 响应无法解析为问题列表，不能当作"无问题"。返回错误,由 controller 发 error 事件。
 		IncAICallCount("manifest_check", "parse_error")
@@ -150,9 +183,10 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	}
 
 	result := &ManifestCheckResult{
-		Status:  "complete",
-		Issues:  issues,
-		Message: fmt.Sprintf("检查完成，发现 %d 个问题", len(issues)),
+		Status:         "complete",
+		Issues:         issues,
+		Message:        fmt.Sprintf("检查完成，发现 %d 个问题", len(issues)),
+		CompletedSteps: tracker.steps(),
 	}
 
 	// 记录用量日志
@@ -161,8 +195,8 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	IncAICallCount("manifest_check", "success")
 
 	inputSnapshot, _ := json.Marshal(map[string]interface{}{
-		"file_path":    filePath,
-		"content_size": len(content),
+		"file_path":  primaryFile,
+		"file_count": len(files),
 	})
 	outputSnapshot, _ := json.Marshal(map[string]interface{}{"issues": issues})
 
@@ -186,22 +220,48 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	return result, nil
 }
 
-// buildCheckPayload 组装喂给 AI 的待检查内容。
-// 给每行加真实行号前缀(从 startLine 起)，AI 直接引用前缀里的行号，
-// 避免它自己数行导致漂移；选区检查时行号天然是文件绝对行号。
-func buildCheckPayload(filePath, content string, startLine int) string {
-	if filePath == "" {
-		filePath = "(unknown)"
-	}
-	if startLine < 1 {
-		startLine = 1
-	}
-	lines := strings.Split(content, "\n")
+// buildCheckPayload 组装喂给 AI 的待检查内容(多文件分段)。
+// 每段一个文件,每行加真实行号前缀(从该文件 StartLine 起),AI 直接引用前缀里的行号,
+// 避免它自己数行导致漂移;选区检查时行号天然是文件绝对行号。
+// buildSelectionDigest 为 domain skill 选择构建精简摘要:文件名 + 原始内容(无行号前缀/指令噪声)。
+// 每个文件内容截断到 ~2000 字符,避免把超大 payload 灌给选择器。
+func buildSelectionDigest(files []CheckFileInput) string {
+	const maxPerFile = 2000
 	var b strings.Builder
-	for i, line := range lines {
-		fmt.Fprintf(&b, "%d: %s\n", startLine+i, line)
+	for _, f := range files {
+		path := f.Path
+		if path == "" {
+			path = "(unknown)"
+		}
+		content := f.Content
+		if r := []rune(content); len(r) > maxPerFile {
+			content = string(r[:maxPerFile]) + "\n..."
+		}
+		fmt.Fprintf(&b, "# %s\n%s\n\n", path, content)
 	}
-	return fmt.Sprintf("文件: %s\n每行以「行号: 内容」给出，请用前缀里的行号填 issues[].line：\n\n```hcl\n%s```", filePath, b.String())
+	return b.String()
+}
+
+func buildCheckPayload(files []CheckFileInput) string {
+	var out strings.Builder
+	out.WriteString("以下是待检查的文件(可能多个)。每行以「行号: 内容」给出,")
+	out.WriteString("请用前缀里的行号填 issues[].line,并用对应 ### 文件名填 issues[].file:\n\n")
+	for _, f := range files {
+		path := f.Path
+		if path == "" {
+			path = "(unknown)"
+		}
+		start := f.StartLine
+		if start < 1 {
+			start = 1
+		}
+		fmt.Fprintf(&out, "### 文件: %s\n```hcl\n", path)
+		for i, line := range strings.Split(f.Content, "\n") {
+			fmt.Fprintf(&out, "%d: %s\n", start+i, line)
+		}
+		out.WriteString("```\n\n")
+	}
+	return out.String()
 }
 
 // checkIssuesEnvelope AI 返回的问题列表 JSON 结构
@@ -211,12 +271,39 @@ type checkIssuesEnvelope struct {
 		Line    int    `json:"line"`
 		Level   string `json:"level"`
 		Message string `json:"message"`
+		Fix     *struct {
+			File      string `json:"file"`
+			StartLine int    `json:"start_line"`
+			EndLine   int    `json:"end_line"`
+			NewText   string `json:"new_text"`
+		} `json:"fix"`
 	} `json:"issues"`
 }
 
 // parseCheckIssues 解析 AI 返回的问题列表
 // 返回 (issues, ok)。ok=false 表示 AI 响应无法解析为问题列表(不能当作"无问题"处理)。
-func parseCheckIssues(aiResult, defaultFile string) ([]ManifestIssue, bool) {
+// multiFile=true 时(跨文件检查),issue/fix 必须明确归属文件,否则不能盲目落到主文件——
+// 因为关联文件的绝对行号若被当成主文件行号去替换会改坏主文件。
+// isNonIssueNarrative 判断一条 message 是否其实是"已满足/自检叙述",而非真实违规。
+// prompt 已禁止 AI 输出这类内容,但模型偶发违反(且常自相矛盾,如先说缺失又说已满足),
+// 这里做最后一道防御:命中"合规/无需补充/已满足"等措辞即视为伪 issue 丢弃。
+func isNonIssueNarrative(message string) bool {
+	m := strings.ToLower(strings.TrimSpace(message))
+	// "已满足/无需补充/已齐全/均已包含/无缺失/已合规/符合规范/已完整" 这类是结论性"通过"叙述
+	satisfiedPhrases := []string{
+		"无需补充", "已满足", "已齐全", "均已包含", "无缺失", "无需补", "已合规",
+		"符合规范", "已完整", "标签清单已满足", "已包含所需", "已全部包含", "无需新增",
+		"无需添加", "无需修改", "检查通过", "未发现问题", "全部满足",
+	}
+	for _, p := range satisfiedPhrases {
+		if strings.Contains(m, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseCheckIssues(aiResult, defaultFile string, multiFile bool, knownFiles map[string]bool) ([]ManifestIssue, bool) {
 	jsonStr := extractJSON(aiResult)
 	var envelope checkIssuesEnvelope
 	if err := json.Unmarshal([]byte(jsonStr), &envelope); err != nil {
@@ -226,22 +313,60 @@ func parseCheckIssues(aiResult, defaultFile string) ([]ManifestIssue, bool) {
 
 	issues := make([]ManifestIssue, 0, len(envelope.Issues))
 	for _, it := range envelope.Issues {
+		// 防御:空白 message 不是有效问题,跳过(AI 偶尔吐空壳 issue)
+		if strings.TrimSpace(it.Message) == "" {
+			continue
+		}
+		// 防御:AI 偶尔违反 prompt,把"自检叙述/已满足"当 issue 输出(且常自相矛盾,
+		// 如"缺少X不完整...已满足,无需补充")。这类不是真实违规,丢弃,避免误导用户。
+		if isNonIssueNarrative(it.Message) {
+			log.Printf("[ManifestCheckService] 丢弃自检叙述类伪 issue: %q", it.Message)
+			continue
+		}
 		level := it.Level
 		switch level {
 		case "error", "warning", "info":
 		default:
 			level = "warning"
 		}
+		// 无 file 时默认归主文件(defaultFile=files[0],检查主体;关联文件只是上下文)。
+		// 多文件场景 AI 常省略主文件的 file 字段,不能因此丢弃问题/修复。
 		file := it.File
 		if file == "" {
 			file = defaultFile
 		}
-		issues = append(issues, ManifestIssue{
+		issue := ManifestIssue{
 			File:    file,
 			Line:    it.Line,
 			Level:   level,
 			Message: it.Message,
-		})
+		}
+		// fix 行范围合法才考虑。多文件场景下,fix 的行号是「某文件的绝对行号」,
+		// 必须能确定归属文件;否则不能落到主文件(会把别的文件的行号打到主文件,改坏内容)。
+		if it.Fix != nil && it.Fix.StartLine > 0 && it.Fix.EndLine >= it.Fix.StartLine {
+			fixFile := it.Fix.File
+			if fixFile == "" && it.File != "" {
+				fixFile = it.File // 仅当 issue 显式给了 file 才据此推断 fix 归属
+			}
+			switch {
+			case multiFile && fixFile == "":
+				// 多文件且无法确定 fix 归属文件 → 丢弃 fix(只保留问题描述,不给修复按钮)
+				log.Printf("[ManifestCheckService] 丢弃 fix:多文件检查但未指明目标文件,无法安全定位")
+			case multiFile && !knownFiles[fixFile]:
+				log.Printf("[ManifestCheckService] 丢弃 fix:目标文件 %q 不在待检查文件集合内", fixFile)
+			default:
+				if fixFile == "" {
+					fixFile = file // 单文件场景:落到唯一文件
+				}
+				issue.Fix = &ManifestFix{
+					File:      fixFile,
+					StartLine: it.Fix.StartLine,
+					EndLine:   it.Fix.EndLine,
+					NewText:   it.Fix.NewText,
+				}
+			}
+		}
+		issues = append(issues, issue)
 	}
 	return issues, true
 }
