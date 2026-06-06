@@ -128,18 +128,30 @@ type SolverResult struct {
 
 // SchemaSolver Schema 组装器
 type SchemaSolver struct {
-	db          *gorm.DB
-	schema      map[string]*SchemaFieldDef
-	moduleID    uint
-	cmdbService *CMDBService
+	db              *gorm.DB
+	schema          map[string]*SchemaFieldDef
+	moduleID        uint
+	moduleVersionID string // 非空时按指定版本取 schema;空则取 module 级 active(默认/最新)
+	cmdbService     *CMDBService
 }
 
-// NewSchemaSolver 创建新的组装器
+// NewSchemaSolver 创建新的组装器(取 module 级 active schema)
 func NewSchemaSolver(db *gorm.DB, moduleID uint) *SchemaSolver {
 	return &SchemaSolver{
 		db:          db,
 		moduleID:    moduleID,
 		cmdbService: NewCMDBService(db),
+	}
+}
+
+// NewSchemaSolverWithVersion 创建组装器并指定 module 版本。
+// moduleVersionID 非空 → 取该版本的 schema;为空 → 回退 module 级 active(默认/最新版)。
+func NewSchemaSolverWithVersion(db *gorm.DB, moduleID uint, moduleVersionID string) *SchemaSolver {
+	return &SchemaSolver{
+		db:              db,
+		moduleID:        moduleID,
+		moduleVersionID: moduleVersionID,
+		cmdbService:     NewCMDBService(db),
 	}
 }
 
@@ -151,11 +163,17 @@ func (s *SchemaSolver) LoadSchema() error {
 		SchemaData    []byte `gorm:"column:schema_data;type:jsonb"`
 	}
 
-	// 优先使用 openapi_schema，如果没有则使用 schema_data
-	err := s.db.Table("schemas").
-		Where("module_id = ? AND status = ?", s.moduleID, "active").
-		Select("openapi_schema", "schema_data").
-		First(&schema).Error
+	// 优先使用 openapi_schema，如果没有则使用 schema_data。
+	// 指定了 moduleVersionID 则按版本取(优先 active,回退该版本任意),否则取 module 级 active。
+	q := s.db.Table("schemas").Select("openapi_schema", "schema_data")
+	var err error
+	if s.moduleVersionID != "" {
+		err = q.Where("module_id = ? AND module_version_id = ?", s.moduleID, s.moduleVersionID).
+			Order("CASE WHEN status = 'active' THEN 0 ELSE 1 END, created_at DESC").
+			First(&schema).Error
+	} else {
+		err = q.Where("module_id = ? AND status = ?", s.moduleID, "active").First(&schema).Error
+	}
 
 	if err != nil {
 		return fmt.Errorf("加载 Schema 失败: %w", err)

@@ -1056,7 +1056,9 @@ const AIConfigForm = () => {
             formData.capabilities.includes(CAPABILITIES.INTENT_ASSERTION) ||
             formData.capabilities.includes(CAPABILITIES.SUMMARY) ||
             formData.capabilities.includes(CAPABILITIES.SKILL_RULE_EVALUATION) ||
-            formData.capabilities.includes(CAPABILITIES.SKILL_SEMANTIC_EVALUATION)) && (
+            formData.capabilities.includes(CAPABILITIES.SKILL_SEMANTIC_EVALUATION) ||
+            formData.capabilities.includes(CAPABILITIES.MANIFEST_RESOURCE_GENERATION) ||
+            formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) && (
             <div style={{ 
               border: '1px solid #722ed1', 
               borderRadius: '8px', 
@@ -1098,13 +1100,16 @@ const AIConfigForm = () => {
                   </span>
                 </div>
 
-                {/* 优化版开关 - 仅在 Skill 模式 + 表单生成场景下显示 */}
-                {formData.mode === 'skill' && 
-                 (formData.capabilities.includes('*') || formData.capabilities.includes(CAPABILITIES.FORM_GENERATION)) && (
-                  <div style={{ 
-                    marginTop: '12px', 
-                    padding: '12px', 
-                    backgroundColor: '#e6fffb', 
+                {/* 优化版开关 - Skill 模式下,表单生成 / Manifest 生成 / Manifest 检查 场景显示 */}
+                {formData.mode === 'skill' &&
+                 (formData.capabilities.includes('*') ||
+                  formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) ||
+                  formData.capabilities.includes(CAPABILITIES.MANIFEST_RESOURCE_GENERATION) ||
+                  formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '12px',
+                    backgroundColor: '#e6fffb',
                     border: '1px solid #87e8de',
                     borderRadius: '6px'
                   }}>
@@ -1117,14 +1122,10 @@ const AIConfigForm = () => {
                       <span style={{ fontWeight: 500, color: '#13c2c2' }}>🚀 使用优化版（实验性）</span>
                     </label>
                     <div className={styles.hint} style={{ marginLeft: '24px', marginTop: '4px' }}>
-                      启用后，系统将：
-                      <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: '12px', color: '#666' }}>
-                        <li>并行执行 CMDB 查询和 AI 智能选择 Domain Skills</li>
-                        <li>AI 根据用户需求自动选择最相关的 Domain Skills（而非使用固定配置）</li>
-                        <li>减少不必要的 Skill 加载，提升响应速度和生成质量</li>
-                      </ul>
-                      <span style={{ color: '#faad14', fontSize: '11px' }}>
-                         此功能为实验性功能，仅适用于表单生成场景
+                      启用后，由 AI 根据需求/内容自动选择最相关的 Domain Skills（而非使用下方固定配置），
+                      减少不必要的 Skill 加载，提升生成/检查质量。
+                      <span style={{ color: '#faad14', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                         实验性功能。启用后下方 Domain 层 Skill 改由 AI 自动选择。
                       </span>
                     </div>
                   </div>

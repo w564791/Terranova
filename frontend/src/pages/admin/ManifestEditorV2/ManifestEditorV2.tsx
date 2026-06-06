@@ -33,6 +33,8 @@ import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
+import ManifestAiTools, { type EditorBridge, type CheckFile } from './ManifestAiTools'
+import { buildBlockIndex, findExternalRefs, locateBlock } from './hclBlockIndex'
 import {
   listFiles,
   readFile,
@@ -92,6 +94,8 @@ export default function ManifestEditorV2() {
 
   const rootRef = useRef<HTMLDivElement | null>(null) // 根容器(全屏目标)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  // AI 面板展开时挤占编辑区(编辑器右移让位,而非悬浮遮挡)
+  const [aiPanelWidth, setAiPanelWidth] = useState(0)
   const treeRef = useRef<HTMLDivElement | null>(null) // 文件树容器(键盘导航需聚焦它才收 keydown)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const fileContentCache = useRef<Map<string, string>>(new Map())
@@ -110,6 +114,9 @@ export default function ManifestEditorV2() {
   const openerDisposableRef = useRef<monaco.IDisposable | null>(null)
   // openFile 的 ref:一次性注册的 opener 需调最新 openFile,避免 stale 闭包
   const openFileRef = useRef<(path: string) => Promise<void>>(async () => {})
+  // 是否带深链参数(?file/?resource):有则首文件不自动打开,让深链 effect 定位。
+  // 同步初始化(不能等深链 effect,否则 listFiles 先 resolve 会抢开首文件)。
+  const hasDeepLinkRef = useRef(!!(searchParams.get('file') || searchParams.get('resource')))
   // 对某 .tf model 跑诊断并 setModelMarkers(用 ref 供 model 监听器调,读最新索引)
   const runDiagnosticsRef = useRef<(model: monaco.editor.ITextModel) => void>(() => {})
   runDiagnosticsRef.current = (model: monaco.editor.ITextModel) => {
@@ -357,7 +364,8 @@ export default function ManifestEditorV2() {
         if (cancelled) return
         setManifestMissing(false)
         setFiles(items)
-        // 自动打开第一个 .tf, 否则第一个文件
+        // 深链(?file=&line= / ?resource=<id>)交给专门的 effect 处理;此处仅在无深链时打开首文件
+        if (hasDeepLinkRef.current) return
         const firstTf = items.find((f) => f.path.endsWith('.tf'))
         const first = firstTf ?? items[0]
         if (first) {
@@ -506,6 +514,39 @@ export default function ManifestEditorV2() {
     },
     [openFile],
   )
+
+  // ========== 深链定位:?file=&line= 或 ?resource=<id>(来自 workspace 资源跳转)==========
+  // ?file=path&line=N  直接定位;?resource=module.x / aws_xxx.y  解析块起始行后定位。
+  // files 就绪后跑一次(标记 hasDeepLink 让首文件自动打开让位)。
+  const deepLinkDoneRef = useRef(false)
+  useEffect(() => {
+    const fileParam = searchParams.get('file')
+    const resourceParam = searchParams.get('resource')
+    if (!fileParam && !resourceParam) return
+    hasDeepLinkRef.current = true
+    if (deepLinkDoneRef.current || files.length === 0) return
+    deepLinkDoneRef.current = true
+
+    void (async () => {
+      if (fileParam) {
+        const line = parseInt(searchParams.get('line') || '1', 10) || 1
+        await openAt(fileParam, line, 1, 1)
+        return
+      }
+      // ?resource=<id>:建块索引解析出 {file, line}
+      const entries = await collectDraftTfFilesRef.current()
+      const index = buildBlockIndex(entries)
+      const loc = locateBlock(index, resourceParam!)
+      if (loc) {
+        await openAt(loc.file, loc.line, 1, 1)
+      } else {
+        // 解析不到:退而打开首个 .tf,并提示
+        const firstTf = files.find((f) => f.path.endsWith('.tf')) ?? files[0]
+        if (firstTf) await openFile(firstTf.path)
+        message.warning(`未在草稿中找到资源 ${resourceParam}`)
+      }
+    })()
+  }, [files, searchParams, openAt, openFile])
 
   // ========== 跨文件导航回退/前进(Cmd+←/→)==========
   // 跳到历史位置:打开目标文件(fromNav 避免再次记录)并恢复其 viewState
@@ -719,13 +760,108 @@ export default function ManifestEditorV2() {
     navForwardRef.current = navigateForward
   }, [navigateBack, navigateForward])
 
-  // 全量重建「转到定义」索引:拉所有 .tf 文件内容(已打开的优先用 live model,其余 readFile)。
-  // 文件树结构变化(新建/删除/重命名/刷新)后跑一次;编辑中的增量更新见 model.onDidChangeContent。
-  const rebuildDefIndex = useCallback(async () => {
+  // AI 面板宽度变化(展开/折叠)后,让 Monaco 重算尺寸,避免错位
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      editorRef.current?.layout()
+      diffEditorRef.current?.layout()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [aiPanelWidth])
+
+  // AI 工具桥接:用现有 editorRef / openAt 拼出 EditorBridge,供 ManifestAiTools 解耦调用
+  const aiBridge: EditorBridge = useMemo(
+    () => ({
+      contextIds: { organization_id: String(orgId) },
+      manifestId,
+      orgId: String(orgId),
+      getActiveFilePath: () => currentFileRef.current,
+      getSelectionInfo: () => {
+        const ed = editorRef.current
+        const sel = ed?.getSelection()
+        if (!ed || !sel || sel.isEmpty()) return null
+        const text = ed.getModel()?.getValueInRange(sel) ?? ''
+        if (!text) return null
+        return {
+          text,
+          filePath: currentFileRef.current ?? '(unknown)',
+          startLine: sel.startLineNumber,
+          endLine: sel.endLineNumber,
+        }
+      },
+      getActiveFileContent: () => editorRef.current?.getModel()?.getValue() ?? '',
+      insertText: (text: string) => {
+        const ed = editorRef.current
+        if (!ed) return
+        const sel = ed.getSelection()
+        if (!sel) return
+        ed.executeEdits('manifest-ai', [{ range: sel, text, forceMoveMarkers: true }])
+        ed.focus()
+      },
+      revealAt: (path: string, line: number) => {
+        void openAt(path, line, 1, 1)
+      },
+      onSelectionChange: (cb) => {
+        const ed = editorRef.current
+        if (!ed) return () => {}
+        const d = ed.onDidChangeCursorSelection((e) => cb(!e.selection.isEmpty()))
+        return () => d.dispose()
+      },
+      // 收集 check 文件:当前文件 + 其跨文件引用所在文件(≤MAX_CROSS_FILES)
+      collectCheckFiles: async () => {
+        const cur = currentFileRef.current
+        const curContent = editorRef.current?.getModel()?.getValue() ?? ''
+        if (!cur) return []
+        const out: CheckFile[] = [{ path: cur, content: curContent, startLine: 1 }]
+        try {
+          const entries = await collectDraftTfFilesRef.current() // 全部 .tf 的最新内容
+          const index = buildBlockIndex(entries)
+          const externals = findExternalRefs(cur, curContent, index)
+          const MAX_CROSS_FILES = 5
+          for (const path of externals.slice(0, MAX_CROSS_FILES)) {
+            const e = entries.find((x) => x.path === path)
+            if (e) out.push({ path, content: e.content, startLine: 1 })
+          }
+          if (externals.length > MAX_CROSS_FILES) {
+            console.warn(`[manifest-ai] 跨文件检查关联文件 ${externals.length} 个超上限,仅带前 ${MAX_CROSS_FILES} 个`)
+          }
+        } catch (e) {
+          console.warn('[manifest-ai] 收集跨文件失败,降级为仅当前文件:', e)
+        }
+        return out
+      },
+      // 应用修复:目标文件可能非当前文件,确保打开后按行范围替换。
+      // AI 给的行号可能基于旧内容/越界,这里严格校验,越界直接拒绝(不盲目替换以免改坏草稿)。
+      applyFix: async (fix) => {
+        await openFile(fix.file)
+        const ed = editorRef.current
+        const model = ed?.getModel()
+        if (!ed || !model) throw new Error('编辑器未就绪')
+        const lineCount = model.getLineCount()
+        if (
+          fix.startLine < 1 ||
+          fix.endLine < fix.startLine ||
+          fix.startLine > lineCount ||
+          fix.endLine > lineCount
+        ) {
+          throw new Error(`修复行号超出文件范围(${fix.startLine}-${fix.endLine},共 ${lineCount} 行),请重新检查`)
+        }
+        const endLineLen = model.getLineMaxColumn(fix.endLine)
+        const range = new monaco.Range(fix.startLine, 1, fix.endLine, endLineLen)
+        ed.executeEdits('manifest-ai-fix', [{ range, text: fix.newText, forceMoveMarkers: true }])
+        ed.revealRangeInCenter(range)
+        ed.focus()
+      },
+    }),
+    [orgId, manifestId, openAt, openFile, ctx],
+  )
+
+  // 拉所有 .tf 文件最新内容(已打开优先用 live model 含未保存改动,其余 readFile)。
+  // 供「转到定义」索引和 AI 跨文件检查共用。
+  const collectDraftTfFiles = useCallback(async (): Promise<{ path: string; content: string }[]> => {
     const tfFiles = files.filter((f) => f.type === 'file' && f.path.endsWith('.tf') && !f.is_binary)
-    const entries = await Promise.all(
+    return Promise.all(
       tfFiles.map(async (f) => {
-        // 已打开文件用 live model 内容(含未保存改动);否则读草稿
         const model = modelCache.current.get(f.path)
         if (model) return { path: f.path, content: model.getValue() }
         try {
@@ -736,14 +872,26 @@ export default function ManifestEditorV2() {
         }
       }),
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, orgId, manifestId])
+
+  // 让 bridge 始终调到最新的收集逻辑(避免 useMemo 依赖 files 频繁重建 bridge)
+  const collectDraftTfFilesRef = useRef(collectDraftTfFiles)
+  useEffect(() => {
+    collectDraftTfFilesRef.current = collectDraftTfFiles
+  }, [collectDraftTfFiles])
+
+  // 全量重建「转到定义」索引。文件树结构变化(新建/删除/重命名/刷新)后跑一次;
+  // 编辑中的增量更新见 model.onDidChangeContent。
+  const rebuildDefIndex = useCallback(async () => {
+    const entries = await collectDraftTfFiles()
     defIndexRef.current = buildDefinitionIndex(entries)
     defIndexReadyRef.current = true // 全量索引就绪,之后诊断可报"未定义引用"
     // 索引重建后,对所有已打开的 .tf model 重算诊断(跨文件:A 改定义影响 B 的未定义引用)
     modelCache.current.forEach((m, p) => {
       if (p.endsWith('.tf')) runDiagnosticsRef.current(m)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files, orgId, manifestId])
+  }, [collectDraftTfFiles])
 
   useEffect(() => {
     void rebuildDefIndex()
@@ -2021,6 +2169,11 @@ export default function ManifestEditorV2() {
         </div>
         <div className={styles.spacer} />
         <div className={styles.group}>
+          <ManifestAiTools
+            bridge={aiBridge}
+            disabled={manifestMissing}
+            onPanelWidthChange={setAiPanelWidth}
+          />
           <button
             title="对当前草稿在已部署 workspace 跑 plan-only 检测"
             disabled={manifestMissing}
@@ -2374,7 +2527,7 @@ export default function ManifestEditorV2() {
         <div className={styles.sidebarResizer} onMouseDown={startSidebarResize} />
       </div>
 
-      <div className={styles.editorArea}>
+      <div className={styles.editorArea} style={{ marginRight: aiPanelWidth }}>
         <div className={styles.tabs}>
           {openTabs.map((path) => (
             <div
