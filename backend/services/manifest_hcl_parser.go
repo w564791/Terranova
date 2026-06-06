@@ -307,3 +307,116 @@ func shouldParseForResources(path, subpath string) bool {
 	// terraform 不递归子目录: 顶层 .tf 才纳入
 	return !strings.Contains(clean, "/")
 }
+
+// ParsedModuleBlock 从 HCL 文本解析出的 module 块(含全部参数)。
+// 用于生成后的 schema 校验:按 Source/Version 定位仓库 module,用 Parameters 跑 SchemaSolver。
+type ParsedModuleBlock struct {
+	InstanceName  string                 // module "xxx" 的 xxx
+	Source        string                 // source 属性
+	Version       string                 // version 属性(可空)
+	Parameters    map[string]interface{} // 可静态求值的参数(除 source/version)
+	PresentParams map[string]bool        // 块里出现过的所有参数名(含引用变量等不可静态求值的),用于必填检查
+	StartLine     int                    // 块起始行(1-based)
+	EndLine       int                    // 块结束行(1-based)
+}
+
+// ParseManifestModuleBlocks 从单个 HCL 文本解析所有 module 块的参数。
+// Parameters 只含可静态求值的字面量;PresentParams 记录所有出现过的参数名(含 var./资源引用),
+// 供 schema 必填检查区分"完全没写"和"写了但引用变量"——后者不应报缺失。
+
+func ParseManifestModuleBlocks(content string) []ParsedModuleBlock {
+	parser := hclparse.NewParser()
+	file, diags := parser.ParseHCL([]byte(content), "generated.tf")
+	if diags.HasErrors() || file == nil {
+		return nil
+	}
+	bodyContent, _, partDiags := file.Body.PartialContent(&hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{{Type: "module", LabelNames: []string{"name"}}},
+	})
+	if partDiags.HasErrors() || bodyContent == nil {
+		return nil
+	}
+
+	var out []ParsedModuleBlock
+	for _, block := range bodyContent.Blocks {
+		if block.Type != "module" || len(block.Labels) < 1 {
+			continue
+		}
+		pmb := ParsedModuleBlock{
+			InstanceName:  block.Labels[0],
+			Parameters:    make(map[string]interface{}),
+			PresentParams: make(map[string]bool),
+		}
+		if r := block.DefRange; r.Filename != "" {
+			pmb.StartLine = r.Start.Line
+		}
+		attrs, _ := block.Body.JustAttributes()
+		var maxLine int
+		for name, attr := range attrs {
+			if attr.Range.End.Line > maxLine {
+				maxLine = attr.Range.End.Line
+			}
+			// 记录出现过的参数名(无论能否静态求值),source/version 不计入参数
+			if name != "source" && name != "version" {
+				pmb.PresentParams[name] = true
+			}
+			v, vdiags := attr.Expr.Value(nil)
+			if vdiags.HasErrors() {
+				continue // 依赖 var/资源引用,无法静态求值;仅记名,不取值
+			}
+			goVal := ctyToGo(v)
+			switch name {
+			case "source":
+				if s, ok := goVal.(string); ok {
+					pmb.Source = s
+				}
+			case "version":
+				if s, ok := goVal.(string); ok {
+					pmb.Version = s
+				}
+			default:
+				pmb.Parameters[name] = goVal
+			}
+		}
+		if maxLine > pmb.StartLine {
+			pmb.EndLine = maxLine
+		} else {
+			pmb.EndLine = pmb.StartLine
+		}
+		out = append(out, pmb)
+	}
+	return out
+}
+
+// ctyToGo 把 cty.Value 转成 Go 原生值(string/float64/bool/[]interface{}/map[string]interface{})。
+func ctyToGo(v cty.Value) interface{} {
+	if v.IsNull() || !v.IsKnown() {
+		return nil
+	}
+	t := v.Type()
+	switch {
+	case t == cty.String:
+		return v.AsString()
+	case t == cty.Bool:
+		return v.True()
+	case t == cty.Number:
+		f, _ := v.AsBigFloat().Float64()
+		return f
+	case t.IsTupleType() || t.IsListType() || t.IsSetType():
+		var arr []interface{}
+		for it := v.ElementIterator(); it.Next(); {
+			_, ev := it.Element()
+			arr = append(arr, ctyToGo(ev))
+		}
+		return arr
+	case t.IsObjectType() || t.IsMapType():
+		m := make(map[string]interface{})
+		for it := v.ElementIterator(); it.Next(); {
+			kv, ev := it.Element()
+			m[kv.AsString()] = ctyToGo(ev)
+		}
+		return m
+	default:
+		return nil
+	}
+}

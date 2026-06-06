@@ -50,6 +50,11 @@ func (t *manifestProgressTracker) addStep(name string, elapsedMs int64, usedSkil
 	})
 }
 
+// steps 返回累计的已完成步骤(供 service 放进最终结果,让 complete 事件带全量 pipeline)。
+func (t *manifestProgressTracker) steps() []CompletedStep {
+	return t.completedSteps
+}
+
 // hclFenceRe 匹配代码块起始围栏，捕获语言标识(可空)到行尾。
 // 例如 ```hcl / ```terraform / ```tfvars / ``` 都能匹配，避免 "```tf" 误匹配 "```tfvars"。
 var hclFenceRe = regexp.MustCompile("(?m)^[ \\t]*```[ \\t]*([A-Za-z0-9_-]*)[ \\t]*\\r?\\n")
@@ -69,38 +74,4 @@ func extractHCL(text string) string {
 	}
 
 	return strings.TrimSpace(text)
-}
-
-// keywordSplitRe 按非字母数字（含中文）切词
-var keywordSplitRe = regexp.MustCompile(`[^\p{L}\p{N}]+`)
-
-// manifestStopWords 召回时忽略的高频虚词（中英文）
-var manifestStopWords = map[string]bool{
-	"the": true, "a": true, "an": true, "and": true, "or": true, "for": true,
-	"to": true, "of": true, "with": true, "create": true, "add": true, "new": true,
-	"使用": true, "创建": true, "新建": true, "添加": true, "一个": true, "帮我": true,
-	"我要": true, "需要": true, "请": true, "生成": true, "资源": true, "配置": true,
-	"的": true, "和": true, "与": true,
-}
-
-// extractKeywords 从用户描述中提取召回关键词（去停用词、去短词）
-func extractKeywords(description string) []string {
-	parts := keywordSplitRe.Split(strings.ToLower(description), -1)
-	seen := map[string]bool{}
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p == "" || manifestStopWords[p] {
-			continue
-		}
-		// 纯英文短词（<2）跳过；中文单字保留
-		if len([]rune(p)) < 2 && p < "一" {
-			continue
-		}
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
-		out = append(out, p)
-	}
-	return out
 }

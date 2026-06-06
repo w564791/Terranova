@@ -62,7 +62,7 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
   const [exporting, setExporting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Manifest 软链接信息(workspace 装了 manifest 时用作徽章 / banner / 锁定按钮)
-  const { summary: manifestSummary } = useWorkspaceManifestSummary(workspaceId);
+  const { summary: manifestSummary, loading: manifestSummaryLoading } = useWorkspaceManifestSummary(workspaceId);
   const isManifestManaged = manifestSummary?.has_manifest ?? false;
 
   useEffect(() => {
@@ -189,7 +189,25 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
   };
 
   const handleViewResource = (resource: Resource) => {
-    // 导航到查看页面
+    // manifest 部署来源的资源:跳 manifest 编辑器并定位到对应 module/resource 块
+    // (这类资源没有 tf_code,走 ViewResource 会报「无法获取Module信息」)。
+    if (resource.manifest_deployment_id) {
+      // summary 还在加载:不能 fallthrough 到会报错的 ViewResource,提示稍候
+      if (manifestSummaryLoading) {
+        showToast('Manifest 信息加载中,请稍候再试', 'info');
+        return;
+      }
+      if (manifestSummary?.manifest_id != null && manifestSummary?.org_id != null && resource.resource_id) {
+        navigate(
+          `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}&resource=${encodeURIComponent(resource.resource_id)}`,
+        );
+        return;
+      }
+      // 有 manifest 来源但拿不到跳转所需信息:明确提示,而非进会报错的详情页
+      showToast('无法定位该资源对应的 Manifest 位置', 'error');
+      return;
+    }
+    // 非 manifest 资源:走原查看页面
     navigate(`/workspaces/${workspaceId}/resources/${resource.id}`);
   };
 
@@ -399,8 +417,11 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (manifestSummary?.manifest_id && manifestSummary?.org_id) {
+                          const rq = resource.resource_id
+                            ? `&resource=${encodeURIComponent(resource.resource_id)}`
+                            : '';
                           navigate(
-                            `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}`,
+                            `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}${rq}`,
                           );
                         }
                       }}

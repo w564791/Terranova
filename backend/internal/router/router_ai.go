@@ -122,6 +122,17 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			manifestAIController.CheckDraftSSE,
 		)
 
+		// manifest AI 会话(按用户隔离,READ 即可访问自己的会话)
+		manifestSessionPerm := iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+			{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+			{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+		})
+		ai.GET("/manifest/sessions", manifestSessionPerm, manifestAIController.ListSessions)
+		ai.POST("/manifest/sessions", manifestSessionPerm, manifestAIController.CreateSession)
+		ai.GET("/manifest/sessions/:sid/messages", manifestSessionPerm, manifestAIController.GetSessionMessages)
+		ai.DELETE("/manifest/sessions/:sid", manifestSessionPerm, manifestAIController.DeleteSession)
+
 		// 预览组装后的 Prompt（调试用）
 		ai.POST("/skill/preview-prompt",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
