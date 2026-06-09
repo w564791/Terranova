@@ -72,6 +72,37 @@ resource "aws_vpc" "x" {}
 	}
 }
 
+func TestParseManifestModuleSourcesForCheckIncludesNestedPaths(t *testing.T) {
+	files := map[string][]byte{
+		"s3/main.tf": []byte(`
+module "bucket" {
+  source = "platform/aws-s3"
+}
+`),
+		"env/prod/network.tf": []byte(`
+module "network" {
+  source = "platform/aws-vpc"
+}
+`),
+		"notes.txt": []byte(`module "ignored" { source = "platform/text" }`),
+	}
+
+	got := ParseManifestModuleSourcesForCheck(files)
+
+	if got["bucket"] != "platform/aws-s3" {
+		t.Errorf("bucket source = %q, want platform/aws-s3", got["bucket"])
+	}
+	if got["network"] != "platform/aws-vpc" {
+		t.Errorf("network source = %q, want platform/aws-vpc", got["network"])
+	}
+	if _, ok := got["ignored"]; ok {
+		t.Errorf("非 .tf 文件不应被解析")
+	}
+	if len(got) != 2 {
+		t.Errorf("期望 2 个 module source, 实际 %d: %+v", len(got), got)
+	}
+}
+
 func TestWorkspaceResourceIDConvention(t *testing.T) {
 	res := ManifestResourceRef{Kind: "resource", Type: "aws_vpc", Name: "main"}
 	if res.WorkspaceResourceID() != "aws_vpc.main" || res.WorkspaceResourceType() != "aws_vpc" {
@@ -90,7 +121,7 @@ func TestIsTopLevelTFUnderSubpath(t *testing.T) {
 	}{
 		{"main.tf", "", true},
 		{"variables.tf", "", true},
-		{"net/main.tf", "", false},        // 根目录扫描不递归子目录
+		{"net/main.tf", "", false}, // 根目录扫描不递归子目录
 		{"envs/prod/main.tf", "envs/prod", true},
 		{"envs/prod/sub/x.tf", "envs/prod", false}, // subpath 下也不递归
 		{"envs/dev/main.tf", "envs/prod", false},   // 不在 subpath 下

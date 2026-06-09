@@ -679,7 +679,7 @@ func (s *AIFormService) callAI(cfg *models.AIConfig, prompt string) (string, err
 	switch cfg.ServiceType {
 	case "bedrock":
 		return s.callBedrockForForm(cfg.AWSRegion, cfg.ModelID, prompt, cfg.UseInferenceProfile)
-	case "openai", "azure_openai", "ollama":
+	case "openai", "azure_openai", "qwen", "ollama":
 		return s.callOpenAICompatibleForForm(cfg.BaseURL, cfg.APIKey, cfg.ModelID, prompt)
 	default:
 		return "", fmt.Errorf("不支持的服务类型: %s", cfg.ServiceType)

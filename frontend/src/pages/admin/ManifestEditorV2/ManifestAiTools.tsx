@@ -1,22 +1,20 @@
 /**
  * Manifest 编辑器 AI 工具 — 资源生成/修复 + 草稿检查
  *
- * 自包含组件:渲染两个工具栏按钮 + 生成弹窗 + 底部问题面板。
+ * 自包含组件:渲染两个工具栏按钮 + 生成弹窗。
  * 与编辑器通过 EditorBridge 解耦,父组件用现有 editorRef / openAt 拼出 bridge。
  *
- * 两个能力都走 SSE,进度展示与 form_generation 一致(步骤名 + 已耗时)。
+ * 检查结果由父组件通过右侧面板(CheckPanel)展示,本组件仅负责触发。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   generateManifestResource,
-  checkManifestDraft,
   listAISessions,
   createAISession,
   getAISessionMessages,
   deleteAISession,
   type ManifestProgressEvent,
   type ManifestIssue,
-  type ManifestCompletedStep,
   type ManifestAISession,
   type ManifestAIMessage,
 } from '../../../services/manifestAi'
@@ -42,17 +40,6 @@ import {
   chatInputFooterStyle,
   errorStyle,
   genWarnStyle,
-  pipelineStyle,
-  pipelineStepStyle,
-  pipelineSkillStyle,
-  pipelineSkillTagStyle,
-  issuePanelStyle,
-  issueHeaderStyle,
-  issueBodyStyle,
-  issueRowStyle,
-  fixBtnStyle,
-  fixBtnDisabledStyle,
-  fixAppliedBannerStyle,
 } from './manifestAiStyles'
 
 /** 选区快照:用于在面板上展示"已附带的上下文" */
@@ -116,6 +103,8 @@ interface Props {
   disabled?: boolean
   /** 生成面板展开/折叠时回调其占用宽度(0=折叠),父组件据此挤占编辑区 */
   onPanelWidthChange?: (width: number) => void
+  /** 检查按钮点击:由父组件执行检查并在右侧面板展示结果 */
+  onRequestCheck?: () => void
 }
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -129,15 +118,7 @@ const LEVEL_ICON: Record<string, string> = {
   info: 'codicon-info',
 }
 
-// check pipeline 各步骤的简要介绍(key = 后端 completed_steps[].name)
-const CHECK_STEP_DESC: Record<string, string> = {
-  初始化: '获取 AI 配置',
-  意图断言: '安全守卫:检测内容是否含注入',
-  打包内容: '当前文件 + 跨文件引用',
-  AI检查: '组装 Skill 并调用 AI 检查',
-}
-
-export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange }: Props) {
+export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, onRequestCheck }: Props) {
   // 生成弹窗
   const [genOpen, setGenOpen] = useState(false)
   const [description, setDescription] = useState('')
@@ -147,36 +128,6 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange }
   const [genWarnings, setGenWarnings] = useState<string[]>([]) // schema 校验警告
   // 打开面板时快照的上下文(选区优先,否则当前文件),作为 chip 展示,用户可移除
   const [aiContext, setAiContext] = useState<AiContext | null>(null)
-
-  // 检查面板
-  const [checkBusy, setCheckBusy] = useState(false)
-  const [checkStep, setCheckStep] = useState<ManifestProgressEvent | null>(null)
-  const [issues, setIssues] = useState<ManifestIssue[] | null>(null)
-  const [checkError, setCheckError] = useState<string | null>(null)
-  const [checkSteps, setCheckSteps] = useState<ManifestCompletedStep[]>([]) // pipeline 步骤
-  const [stepsExpanded, setStepsExpanded] = useState(false) // pipeline 默认折叠
-  // 应用过任一修复后置 true:内容已变,其余修复行号不可信,置灰并提示重检
-  const [fixApplied, setFixApplied] = useState(false)
-  // 复制检查结果的反馈态(显示"已复制"短暂提示)
-  const [copied, setCopied] = useState(false)
-
-  // 把检查结果整理成纯文本复制到剪贴板:每条 [级别] file:line message
-  const copyIssues = useCallback(async () => {
-    if (!issues || issues.length === 0) return
-    const text = issues
-      .map((it) => {
-        const loc = it.file ? `${it.file}:${it.line || 1}` : `行 ${it.line || 1}`
-        return `[${it.level.toUpperCase()}] ${loc}  ${it.message}`
-      })
-      .join('\n')
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* 剪贴板不可用时静默 */
-    }
-  }, [issues])
 
   // 当前编辑器是否有选区(订阅 selection 变化),决定 Check 按钮文案
   const [hasSelection, setHasSelection] = useState(false)
@@ -311,9 +262,8 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 生成与 Check 各自独立的 abort 控制器,互不覆盖
+  // 生成的 abort 控制器
   const genAbortRef = useRef<AbortController | null>(null)
-  const checkAbortRef = useRef<AbortController | null>(null)
 
   // ===== 生成/修复 =====
   const runGenerate = useCallback(async () => {
@@ -365,99 +315,6 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange }
     }
   }, [description, genBusy, bridge, aiContext, ensureSession, loadHistory, refreshSessions])
 
-  // ===== 检查 =====
-  const runCheck = useCallback(async () => {
-    if (checkBusy) return
-    const filePath = bridge.getActiveFilePath()
-    if (!filePath) return
-    const sel = bridge.getSelectionInfo()
-
-    setCheckBusy(true)
-    setCheckError(null)
-    setCheckStep(null)
-    setIssues(null)
-    setCheckSteps([])
-    setStepsExpanded(false)
-    setFixApplied(false)
-    const controller = new AbortController()
-    checkAbortRef.current = controller
-
-    try {
-      // 有选区:只检查选区(局部意图,不扩展跨文件),起始行用选区绝对行号。
-      // 无选区:检查当前文件 + 其跨文件引用到的关联文件。
-      let files: CheckFile[]
-      if (sel) {
-        if (!sel.text.trim()) {
-          setCheckBusy(false)
-          return
-        }
-        files = [{ path: filePath, content: sel.text, startLine: sel.startLine }]
-      } else {
-        files = await bridge.collectCheckFiles()
-        if (files.length === 0 || !files.some((f) => f.content.trim())) {
-          setCheckBusy(false)
-          return
-        }
-      }
-
-      // 检查可在面板关闭时触发;仅当已有当前会话才落库(不强制建会话)
-      const sid = currentSessionRef.current ?? undefined
-      const result = await checkManifestDraft(
-        { files, sessionId: sid, contextIds: bridge.contextIds },
-        (ev) => {
-          setCheckStep(ev)
-          if (ev.completed_steps?.length) setCheckSteps(ev.completed_steps) // 实时点亮已完成步骤
-        },
-        controller.signal,
-      )
-      setIssues(result.issues)
-      if (result.completedSteps?.length) setCheckSteps(result.completedSteps) // 全量步骤(含最后一步)
-      if (sid) {
-        void loadHistory(sid)
-        void refreshSessions(false)
-      }
-    } catch (e) {
-      if (!isAbortError(e)) {
-        setCheckError(e instanceof Error ? e.message : '检查失败')
-      }
-    } finally {
-      setCheckBusy(false)
-      checkAbortRef.current = null
-    }
-  }, [checkBusy, bridge, loadHistory, refreshSessions])
-
-  const closeIssues = () => {
-    setIssues(null)
-    setCheckError(null)
-    setCheckStep(null)
-    setCheckSteps([])
-    setStepsExpanded(false)
-    setFixApplied(false)
-  }
-
-  // 应用一条修复:写入编辑器 -> 移除该项 -> 标记 fixApplied(其余修复行号已不可信,置灰提示重检)
-  const applyFix = useCallback(
-    async (issue: ManifestIssue, idx: number) => {
-      if (!issue.fix || fixApplied) return
-      try {
-        // issue.fix 是后端 snake_case,转成 bridge 的 camelCase
-        await bridge.applyFix({
-          file: issue.fix.file,
-          startLine: issue.fix.start_line,
-          endLine: issue.fix.end_line,
-          newText: issue.fix.new_text,
-        })
-        setIssues((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))
-        setFixApplied(true)
-      } catch (e) {
-        setCheckError(e instanceof Error ? e.message : '应用修复失败')
-      }
-    },
-    [bridge, fixApplied],
-  )
-
-  const showIssuePanel = checkBusy || issues !== null || checkError !== null
-
   return (
     <>
       <button
@@ -469,10 +326,10 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange }
       </button>
       <button
         title={hasSelection ? '用 AI 检查选中的内容' : '用 AI 检查当前文件(含跨文件引用)'}
-        disabled={disabled || checkBusy}
-        onClick={() => void runCheck()}
+        disabled={disabled}
+        onClick={onRequestCheck}
       >
-        <i className={`codicon ${checkBusy ? 'codicon-loading codicon-modifier-spin' : 'codicon-checklist'}`} />{' '}
+        <i className="codicon codicon-checklist" />{' '}
         {hasSelection ? '检查选中' : '检查文件'}
       </button>
 
@@ -651,124 +508,6 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange }
         </div>
       )}
 
-      {/* ===== 底部问题面板 ===== */}
-      {showIssuePanel && (
-        <div style={issuePanelStyle}>
-          <div style={issueHeaderStyle}>
-            <i className="codicon codicon-checklist" />
-            <span>
-              问题
-              {issues !== null ? ` (${issues.length})` : ''}
-            </span>
-            {/* 检查中:实时步骤;完成后:保留完成态摘要(步骤数 + 总耗时),不随 busy 消失 */}
-            {checkBusy && checkStep ? (
-              <span style={{ opacity: 0.7, fontSize: 12 }}>
-                {checkStep.step_name}
-                {checkStep.total_steps ? ` (${checkStep.step}/${checkStep.total_steps})` : ''}
-              </span>
-            ) : checkSteps.length > 0 ? (
-              <span style={{ opacity: 0.6, fontSize: 12 }}>
-                完成 · {checkSteps.length} 步 ·{' '}
-                {Math.round(checkSteps.reduce((s, st) => s + (st.elapsed_ms || 0), 0))}ms
-              </span>
-            ) : null}
-            <div style={{ flex: 1 }} />
-            {/* 展开/收起 pipeline 步骤 —— 始终默认折叠,需用户主动点开 */}
-            {checkSteps.length > 0 && (
-              <span
-                style={{ cursor: 'pointer', fontSize: 12, opacity: 0.8, marginRight: 8 }}
-                onClick={() => setStepsExpanded((v) => !v)}
-              >
-                <i className={`codicon ${stepsExpanded ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} />
-                {stepsExpanded ? '收起步骤' : '展开步骤'}
-              </span>
-            )}
-            {issues !== null && issues.length > 0 && (
-              <span
-                style={{ cursor: 'pointer', fontSize: 12, opacity: 0.85, marginRight: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                onClick={() => void copyIssues()}
-                title="复制全部检查结果为文本"
-              >
-                <i className={`codicon ${copied ? 'codicon-check' : 'codicon-copy'}`} />
-                {copied ? '已复制' : '复制结果'}
-              </span>
-            )}
-            <i className="codicon codicon-close" style={{ cursor: 'pointer' }} onClick={closeIssues} />
-          </div>
-          <div style={issueBodyStyle}>
-            {/* pipeline 仅在用户主动展开时显示(默认折叠,检查中也不自动展开)*/}
-            {stepsExpanded && checkSteps.length > 0 && (
-              <div style={pipelineStyle}>
-                {checkSteps.map((st, i) => (
-                  <div key={i} style={pipelineStepStyle}>
-                    <i className="codicon codicon-pass-filled" style={{ color: '#4ec9b0' }} />
-                    <span style={{ fontWeight: 500 }}>{st.name}</span>
-                    <span style={{ opacity: 0.6 }}>· {CHECK_STEP_DESC[st.name] || ''}</span>
-                    <span style={{ marginLeft: 'auto', opacity: 0.5 }}>{Math.round(st.elapsed_ms)}ms</span>
-                    {st.used_skills && st.used_skills.length > 0 && (
-                      <div style={pipelineSkillStyle}>
-                        {st.used_skills.map((sk) => (
-                          <span key={sk} style={pipelineSkillTagStyle}>
-                            {sk}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {checkBusy && <div style={{ padding: 12, opacity: 0.7 }}>正在检查...</div>}
-            {checkError && <div style={{ ...errorStyle, margin: 12 }}>{checkError}</div>}
-            {fixApplied && (
-              <div style={fixAppliedBannerStyle}>
-                <i className="codicon codicon-info" /> 已应用修复,内容已变更,其余问题请
-                <span style={{ color: '#9cdcfe', cursor: 'pointer', marginLeft: 4 }} onClick={() => void runCheck()}>
-                  重新检查
-                </span>
-              </div>
-            )}
-            {issues !== null && issues.length === 0 && !checkBusy && !fixApplied && (
-              <div style={{ padding: 12, color: '#4ec9b0' }}>未发现问题。</div>
-            )}
-            {issues?.map((it, i) => (
-              <div key={i} style={issueRowStyle}>
-                <i
-                  className={`codicon ${LEVEL_ICON[it.level] || 'codicon-info'}`}
-                  style={{ color: LEVEL_COLOR[it.level] || '#3794ff' }}
-                />
-                <span
-                  style={{ flex: 1, cursor: 'pointer' }}
-                  onClick={() => bridge.revealAt(it.file, it.line || 1)}
-                  title="点击跳转到该位置"
-                >
-                  {it.message}
-                </span>
-                {it.fix && (
-                  <button
-                    style={fixApplied ? fixBtnDisabledStyle : fixBtnStyle}
-                    disabled={fixApplied}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void applyFix(it, i)
-                    }}
-                    title={fixApplied ? '内容已变更,请重新检查后再修复' : '应用该修复'}
-                  >
-                    <i className="codicon codicon-wand" /> 修复
-                  </button>
-                )}
-                <span
-                  style={{ opacity: 0.6, fontSize: 12, cursor: 'pointer' }}
-                  onClick={() => bridge.revealAt(it.file, it.line || 1)}
-                >
-                  {it.file}
-                  {it.line ? `:${it.line}` : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </>
   )
 }

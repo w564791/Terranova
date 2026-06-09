@@ -15,6 +15,8 @@ import (
 // 与 form 的 selectDomainSkillsByAI 等价(AI 按 skill description 选),但:
 //   - 独立实现,不复用 AICMDBSkillService(方案 B:不碰 form,避免回归)
 //   - 中性 prompt,不排除 CMDB 资源类 skill(form 的 phase=second 会排除,manifest 不要)
+//   - 不把 module_auto skill 放进 AI 自由选择候选；module skill 必须由实际 module 引用精确召回,
+//     避免检查 S3 等普通资源时误选安全组等无关模块约束。
 //
 // 仅在 aiConfig.UseOptimized==true 时由调用方启用(遵守开关)。
 type manifestDomainSkillSelector struct {
@@ -34,9 +36,11 @@ func newManifestDomainSkillSelector(db *gorm.DB) *manifestDomainSkillSelector {
 // Select 让 AI 根据 description 选择相关 domain skill。
 // 返回合法(存在于库)的 skill 名列表。失败/无配置返回 error,调用方降级。
 func (s *manifestDomainSkillSelector) Select(description string) ([]string, error) {
-	// 1. 取所有 active domain skill 的 name+description
+	// 1. 取所有 active domain skill 的 name+description。
+	// module_auto skill 是具体 module 的约束,不能进入全局 AI 自由选择池。
 	var skills []models.Skill
 	if err := s.db.Where("layer = ? AND is_active = ?", models.SkillLayerDomain, true).
+		Where("source_type <> ?", models.SkillSourceModuleAuto).
 		Select("name", "description").
 		Order("priority ASC").
 		Find(&skills).Error; err != nil {

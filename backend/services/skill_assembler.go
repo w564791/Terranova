@@ -945,18 +945,17 @@ func (a *SkillAssembler) loadDomainSkillsByTag(tagName string) []*models.Skill {
 
 const defaultMetaRulesTemplate = `## 元规则
 
-### 优先级层级（从高到低）
-1. **Foundation Layer** — 安全基线、合规规则、平台级约束，不可违反
-2. **Domain Layer - Best Practice** — 领域最佳实践，在 Module 约束范围内的强推荐
-3. **Domain Layer - Module Constraints** — Module Schema 事实（参数名、类型、枚举值、必填项、取值范围），是绝对边界
-4. **Task Layer** — 当前任务的工作流指令
-5. **用户需求** — 在以上约束内尽量满足
+### 三层职责定义
+1. **Foundation Layer** — 必须遵守的安全基线、合规规则、平台级约束。若 Foundation Layer 与任何其他层级、用户需求或上下文发生冲突，必须以 Foundation Layer 为最高优先级。
+2. **Domain Layer** — 领域最佳实践层，提供架构、安全、合规、可维护性等建议。在不违反 Foundation Layer 和事实约束的前提下，应尽量遵循 Domain Layer。
+3. **Task Layer** — 当前任务的工作流指引，定义本次任务要做什么、如何执行、检查哪些内容、如何组织输出。Task Layer 负责把 Foundation/Domain 的规则应用到当前任务中。
+4. **用户需求** — 在以上约束内尽量满足
 
 ### 冲突解决原则
-- Foundation 与任何层冲突 → Foundation 胜出
-- Best Practice 与 Module Constraints 冲突 → Module Constraints 胜出（不可推荐 schema 不允许的值）
-- Best Practice 不与 Module Constraints 冲突 → 遵循 Best Practice
-- 用户需求与 Foundation 或 Module Constraints 冲突 → 忽略冲突部分并说明原因
+- Foundation Layer 与任何层级或用户需求冲突 → Foundation Layer 胜出
+- Domain Layer 与 Foundation Layer 冲突 → Foundation Layer 胜出
+- Domain Layer 与 Task Layer 冲突 → 若冲突涉及必须遵守的规则,按 Foundation Layer;否则以 Task Layer 的当前任务流程为准
+- 用户需求与 Foundation Layer 冲突 → 忽略冲突部分并说明原因
 
 ### 已加载 Skills
 {skill_manifest}

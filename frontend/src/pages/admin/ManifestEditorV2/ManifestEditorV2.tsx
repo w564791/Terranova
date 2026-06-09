@@ -28,7 +28,8 @@ import {
   type DefinitionIndex,
 } from './hclDefinitions'
 import { computeHclDiagnostics, HCL_DIAG_OWNER } from './hclDiagnostics'
-import PublishVersionDialog from './PublishVersionDialog'
+import PublishVersionDialog, { type PublishCheckSummary } from './PublishVersionDialog'
+import CheckPanel from './CheckPanel'
 import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
@@ -56,6 +57,12 @@ import {
   type DiffEntry,
 } from './manifestApi'
 import { workspaceService } from '../../../services/workspaces'
+import {
+  checkManifestDraft,
+  type ManifestIssue,
+  type ManifestProgressEvent,
+  type ManifestCompletedStep,
+} from '../../../services/manifestAi'
 import { exportManifestZip, getManifest, updateManifest } from '../../../services/manifestApi'
 import styles from './ManifestEditorV2.module.css'
 
@@ -96,6 +103,18 @@ export default function ManifestEditorV2() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   // AI 面板展开时挤占编辑区(编辑器右移让位,而非悬浮遮挡)
   const [aiPanelWidth, setAiPanelWidth] = useState(0)
+  // 检查面板(右侧,和 AI 生成面板互斥) — AI 检查和发布检查共用
+  const CHECK_PANEL_WIDTH = 360
+  const [checkPanelOpen, setCheckPanelOpen] = useState(false)
+  const [checkBusy, setCheckBusy] = useState(false)
+  const [checkIssues, setCheckIssues] = useState<ManifestIssue[]>([])
+  const [checkCompletedSteps, setCheckCompletedSteps] = useState<ManifestCompletedStep[]>([])
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const [checkCurrentStep, setCheckCurrentStep] = useState('')
+  const [checkFixApplied, setCheckFixApplied] = useState(false)
+  const checkAbortRef = useRef<AbortController | null>(null)
+  // 发布弹窗读取此状态决定是否解锁表单
+  const [publishCheckSummary, setPublishCheckSummary] = useState<PublishCheckSummary | null>(null)
   const treeRef = useRef<HTMLDivElement | null>(null) // 文件树容器(键盘导航需聚焦它才收 keydown)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const fileContentCache = useRef<Map<string, string>>(new Map())
@@ -760,14 +779,21 @@ export default function ManifestEditorV2() {
     navForwardRef.current = navigateForward
   }, [navigateBack, navigateForward])
 
-  // AI 面板宽度变化(展开/折叠)后,让 Monaco 重算尺寸,避免错位
+  // AI 面板/检查面板宽度变化(展开/折叠)后,让 Monaco 重算尺寸,避免错位
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       editorRef.current?.layout()
       diffEditorRef.current?.layout()
     })
     return () => cancelAnimationFrame(id)
-  }, [aiPanelWidth])
+  }, [aiPanelWidth, checkPanelOpen])
+
+  // AI 面板和检查面板互斥:一个打开时关闭另一个
+  useEffect(() => {
+    if (aiPanelWidth > 0 && checkPanelOpen) {
+      setCheckPanelOpen(false)
+    }
+  }, [aiPanelWidth, checkPanelOpen])
 
   // AI 工具桥接:用现有 editorRef / openAt 拼出 EditorBridge,供 ManifestAiTools 解耦调用
   const aiBridge: EditorBridge = useMemo(
@@ -880,6 +906,107 @@ export default function ManifestEditorV2() {
   useEffect(() => {
     collectDraftTfFilesRef.current = collectDraftTfFiles
   }, [collectDraftTfFiles])
+
+  // ===== 检查面板(AI 检查 + 发布前检查共用右侧面板)=====
+
+  /** 核心检查执行:收集文件 → 调 API → 更新面板状态 */
+  const runCheckCore = useCallback(
+    async (source: 'ai' | 'publish') => {
+      setCheckBusy(true)
+      setCheckIssues([])
+      setCheckCompletedSteps([])
+      setCheckError(null)
+      setCheckCurrentStep('')
+      setCheckFixApplied(false)
+      setCheckPanelOpen(true)
+
+      const controller = new AbortController()
+      checkAbortRef.current = controller
+
+      try {
+        // AI 检查:有选区则只检查选区;无选区则当前文件 + 跨文件引用
+        // 发布检查:始终全量(collectCheckFiles 已处理)
+        let files: { path: string; content: string; start_line: number }[]
+        if (source === 'ai') {
+          const sel = aiBridge.getSelectionInfo()
+          const filePath = aiBridge.getActiveFilePath()
+          if (sel && sel.text.trim() && filePath) {
+            files = [{ path: filePath, content: sel.text, start_line: sel.startLine }]
+          } else {
+            const collected = await aiBridge.collectCheckFiles()
+            if (collected.length === 0 || !collected.some((f) => f.content.trim())) {
+              setCheckBusy(false)
+              return []
+            }
+            files = collected.map((f) => ({ path: f.path, content: f.content, start_line: f.startLine }))
+          }
+        } else {
+          const collected = await aiBridge.collectCheckFiles()
+          if (collected.length === 0 || !collected.some((f) => f.content.trim())) {
+            setCheckBusy(false)
+            return []
+          }
+          files = collected.map((f) => ({ path: f.path, content: f.content, start_line: f.startLine }))
+        }
+
+        const result = await checkManifestDraft(
+          { files, contextIds: aiBridge.contextIds },
+          (ev: ManifestProgressEvent) => {
+            setCheckCurrentStep(ev.step_name || '')
+            if (ev.completed_steps?.length) setCheckCompletedSteps(ev.completed_steps)
+          },
+          controller.signal,
+        )
+        const issues = result.issues || []
+        setCheckIssues(issues)
+        if (result.completedSteps?.length) setCheckCompletedSteps(result.completedSteps)
+        return issues
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return []
+        setCheckError(e instanceof Error ? e.message : '检查失败')
+        return []
+      } finally {
+        setCheckBusy(false)
+        checkAbortRef.current = null
+      }
+    },
+    [aiBridge],
+  )
+
+  /** AI 工具栏触发的检查 */
+  const runAiCheck = useCallback(async () => {
+    await runCheckCore('ai')
+  }, [runCheckCore])
+
+  /** 发布弹窗触发的检查 */
+  const runPublishCheck = useCallback(async () => {
+    const issues = await runCheckCore('publish')
+    setPublishCheckSummary({ done: true, skipped: false, issues })
+  }, [runCheckCore])
+
+  const handleCheckApplyFix = useCallback(
+    async (issue: ManifestIssue, idx: number) => {
+      if (!issue.fix) return
+      try {
+        await aiBridge.applyFix({
+          file: issue.fix.file,
+          startLine: issue.fix.start_line,
+          endLine: issue.fix.end_line,
+          newText: issue.fix.new_text,
+        })
+        setCheckIssues((prev) => prev.filter((_, i) => i !== idx))
+        setCheckFixApplied(true)
+      } catch (e) {
+        setCheckError(e instanceof Error ? e.message : '应用修复失败')
+      }
+    },
+    [aiBridge],
+  )
+
+  const handleCheckPanelClose = useCallback(() => {
+    checkAbortRef.current?.abort()
+    setCheckPanelOpen(false)
+  }, [])
 
   // 全量重建「转到定义」索引。文件树结构变化(新建/删除/重命名/刷新)后跑一次;
   // 编辑中的增量更新见 model.onDidChangeContent。
@@ -2173,6 +2300,7 @@ export default function ManifestEditorV2() {
             bridge={aiBridge}
             disabled={manifestMissing}
             onPanelWidthChange={setAiPanelWidth}
+            onRequestCheck={() => void runAiCheck()}
           />
           <button
             title="对当前草稿在已部署 workspace 跑 plan-only 检测"
@@ -2527,7 +2655,7 @@ export default function ManifestEditorV2() {
         <div className={styles.sidebarResizer} onMouseDown={startSidebarResize} />
       </div>
 
-      <div className={styles.editorArea} style={{ marginRight: aiPanelWidth }}>
+      <div className={styles.editorArea} style={{ marginRight: checkPanelOpen ? CHECK_PANEL_WIDTH : aiPanelWidth }}>
         <div className={styles.tabs}>
           {openTabs.map((path) => (
             <div
@@ -2634,10 +2762,31 @@ export default function ManifestEditorV2() {
         <span className={styles.item}>{currentFile ? languageDisplay(currentFile) : ''}</span>
       </div>
 
+      {/* 检查右侧面板(AI 检查 + 发布前检查共用,和 AI 生成面板布局一致) */}
+      {checkPanelOpen && (
+        <CheckPanel
+          busy={checkBusy}
+          issues={checkIssues}
+          completedSteps={checkCompletedSteps}
+          checkError={checkError}
+          fixApplied={checkFixApplied}
+          currentStepName={checkCurrentStep}
+          onRevealAt={aiBridge.revealAt}
+          onApplyFix={handleCheckApplyFix}
+          onRecheck={() => void runPublishCheck()}
+          onClose={handleCheckPanelClose}
+        />
+      )}
+
       {/* === 弹窗 === */}
       <PublishVersionDialog
         open={publishOpen}
         ctx={ctx}
+        checkSummary={publishCheckSummary}
+        onStartCheck={() => {
+          setPublishCheckSummary(null)
+          void runPublishCheck()
+        }}
         onClose={() => setPublishOpen(false)}
         onPublished={() => {
           // 发布成功后始终刷新版本(顶栏徽标依赖 versions);历史视图下再刷未提交更改

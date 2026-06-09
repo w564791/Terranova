@@ -148,6 +148,12 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 			composition = &compCopy
 		}
 	}
+	if moduleSkillNames := s.resolveReferencedModuleSkillNames(files); len(moduleSkillNames) > 0 {
+		compCopy := *composition
+		compCopy.DomainSkills = mergeSkillNames(compCopy.DomainSkills, moduleSkillNames)
+		compCopy.DomainSkillMode = models.DomainSkillModeFixed
+		composition = &compCopy
+	}
 	dynamicContext := &DynamicContext{
 		ExtraContext: map[string]interface{}{
 			"check_content": checkContent,
@@ -262,6 +268,170 @@ func buildCheckPayload(files []CheckFileInput) string {
 		out.WriteString("```\n\n")
 	}
 	return out.String()
+}
+
+// resolveReferencedModuleSkillNames 从被检查的 HCL 内容中精确解析 module source,
+// 只加载实际引用到的平台 module skill。module_auto 不进入 AI 自由选择池,避免误选无关模块。
+func (s *ManifestCheckService) resolveReferencedModuleSkillNames(files []CheckFileInput) []string {
+	scope := make(map[string][]byte, len(files))
+	for _, f := range files {
+		if strings.TrimSpace(f.Content) == "" {
+			continue
+		}
+		scope[f.Path] = []byte(f.Content)
+	}
+	sourceByName := ParseManifestModuleSourcesForCheck(scope)
+	if len(sourceByName) == 0 {
+		return nil
+	}
+
+	sourceSet := make(map[string]bool, len(sourceByName))
+	sources := make([]string, 0, len(sourceByName))
+	for _, source := range sourceByName {
+		source = strings.TrimSpace(source)
+		if source == "" || sourceSet[source] {
+			continue
+		}
+		sourceSet[source] = true
+		sources = append(sources, source)
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+	log.Printf("[ManifestCheckService] 从 HCL 解析到 module sources: %v", sources)
+
+	modules := s.resolveModulesBySources(sources)
+	if len(modules) == 0 {
+		log.Printf("[ManifestCheckService] module sources 未匹配到平台 active module: %v", sources)
+		return nil
+	}
+
+	names := make([]string, 0, len(modules))
+	for _, module := range modules {
+		name, ok := s.ensureAutoModuleSkillName(module.ID)
+		if !ok {
+			continue
+		}
+		names = append(names, name)
+	}
+	if len(names) > 0 {
+		log.Printf("[ManifestCheckService] 根据 HCL module source 精确加载 module skills: %v", names)
+	}
+	return names
+}
+
+func (s *ManifestCheckService) resolveModulesBySources(sources []string) []models.Module {
+	moduleByID := make(map[uint]models.Module)
+	orderedIDs := make([]uint, 0)
+	addModule := func(module models.Module) {
+		if _, ok := moduleByID[module.ID]; ok {
+			return
+		}
+		moduleByID[module.ID] = module
+		orderedIDs = append(orderedIDs, module.ID)
+	}
+
+	var modules []models.Module
+	if err := s.db.Where("status = ?", "active").
+		Where("module_source IN ? OR source IN ?", sources, sources).
+		Order("id ASC").
+		Find(&modules).Error; err != nil {
+		log.Printf("[ManifestCheckService] 通过 modules 匹配 module source 失败: %v", err)
+	} else {
+		for _, module := range modules {
+			addModule(module)
+		}
+	}
+
+	var versions []models.ModuleVersion
+	if err := s.db.Where("status = ?", "active").
+		Where("module_source IN ? OR source IN ?", sources, sources).
+		Order("module_id ASC").
+		Find(&versions).Error; err != nil {
+		log.Printf("[ManifestCheckService] 通过 module_versions 匹配 module source 失败: %v", err)
+	} else if len(versions) > 0 {
+		moduleIDs := make([]uint, 0, len(versions))
+		seen := make(map[uint]bool, len(versions))
+		for _, version := range versions {
+			if version.ModuleID == 0 || seen[version.ModuleID] {
+				continue
+			}
+			seen[version.ModuleID] = true
+			moduleIDs = append(moduleIDs, version.ModuleID)
+		}
+		if len(moduleIDs) > 0 {
+			var versionModules []models.Module
+			if err := s.db.Where("status = ?", "active").
+				Where("id IN ?", moduleIDs).
+				Order("id ASC").
+				Find(&versionModules).Error; err != nil {
+				log.Printf("[ManifestCheckService] 加载 module_versions 对应 module 失败: %v", err)
+			} else {
+				for _, module := range versionModules {
+					addModule(module)
+				}
+			}
+		}
+	}
+
+	result := make([]models.Module, 0, len(orderedIDs))
+	for _, id := range orderedIDs {
+		result = append(result, moduleByID[id])
+	}
+	return result
+}
+
+func (s *ManifestCheckService) ensureAutoModuleSkillName(moduleID uint) (string, bool) {
+	skillName := fmt.Sprintf("module_%d_auto", moduleID)
+
+	var existingSkill models.Skill
+	err := s.db.Where("name = ? AND source_module_id = ? AND is_active = ?", skillName, moduleID, true).
+		First(&existingSkill).Error
+	if err == nil {
+		if s.skillAssembler.moduleSkillGen.ShouldRegenerate(&existingSkill, moduleID) {
+			skill, regenErr := s.skillAssembler.regenerateModuleSkill(moduleID, &existingSkill)
+			if regenErr != nil {
+				log.Printf("[ManifestCheckService] 重新生成 module %d auto skill 失败: %v", moduleID, regenErr)
+				return "", false
+			}
+			return skill.Name, true
+		}
+		return existingSkill.Name, true
+	}
+	if err != gorm.ErrRecordNotFound {
+		log.Printf("[ManifestCheckService] 查询 module %d auto skill 失败: %v", moduleID, err)
+		return "", false
+	}
+
+	skill, genErr := s.skillAssembler.generateNewModuleSkill(moduleID)
+	if genErr != nil {
+		log.Printf("[ManifestCheckService] 生成 module %d auto skill 失败: %v", moduleID, genErr)
+		return "", false
+	}
+	if skill == nil || skill.Name == "" {
+		return "", false
+	}
+	return skill.Name, true
+}
+
+func mergeSkillNames(base []string, extra []string) []string {
+	seen := make(map[string]bool, len(base)+len(extra))
+	merged := make([]string, 0, len(base)+len(extra))
+	for _, name := range base {
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		merged = append(merged, name)
+	}
+	for _, name := range extra {
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		merged = append(merged, name)
+	}
+	return merged
 }
 
 // checkIssuesEnvelope AI 返回的问题列表 JSON 结构

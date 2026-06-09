@@ -126,12 +126,28 @@ func ParseManifestResources(scopeFiles map[string][]byte, subpath string) []Mani
 // 只取 subpath 直接下层 .tf(与执行/解析 scope 一致);source 取字面量字符串,
 // 非字面量(引用变量等)跳过;半成品 HCL skip。同名 module 取首个。
 func ParseManifestModuleSources(scopeFiles map[string][]byte, subpath string) map[string]string {
+	return parseManifestModuleSources(scopeFiles, func(path string) bool {
+		return shouldParseForResources(path, subpath)
+	})
+}
+
+// ParseManifestModuleSourcesForCheck 提取本次 manifest check 提交内容里的 module source。
+//
+// 与 ParseManifestModuleSources 不同,check 的输入已经是前端明确提交的待检查文件,
+// 文件 path 可能带目录;这里不再套用 terraform 执行目录的顶层过滤,避免漏召回实际
+// 被检查文件引用的平台 module skill。
+func ParseManifestModuleSourcesForCheck(scopeFiles map[string][]byte) map[string]string {
+	return parseManifestModuleSources(scopeFiles, func(path string) bool {
+		return filepath.Ext(path) == ".tf"
+	})
+}
+
+func parseManifestModuleSources(scopeFiles map[string][]byte, shouldParse func(string) bool) map[string]string {
 	parser := hclparse.NewParser()
 	out := make(map[string]string)
-	subpath = strings.TrimSuffix(subpath, "/")
 
 	for path, content := range scopeFiles {
-		if !shouldParseForResources(path, subpath) {
+		if !shouldParse(path) {
 			continue
 		}
 		file, diags := parser.ParseHCL(content, path)
