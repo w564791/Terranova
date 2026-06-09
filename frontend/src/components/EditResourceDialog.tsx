@@ -4,6 +4,10 @@ import { extractErrorMessage } from '../utils/errorHandler';
 import { processApiSchema } from '../utils/schemaTypeMapper';
 import api from '../services/api';
 import DynamicForm, { type FormSchema } from './DynamicForm';
+import { FormRenderer as OpenAPIFormRenderer } from './OpenAPIFormRenderer';
+import FormRendererV3 from './OpenAPIFormRenderer/FormRendererV3';
+import HCLEditor from './HCLEditor/HCLEditor';
+import { useUIVersion } from '../hooks/useUIVersion';
 import styles from './EditResourceDialog.module.css';
 
 interface WorkspaceResource {
@@ -36,11 +40,15 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
   onClose
 }) => {
   const { showToast } = useToast();
+  const { isV3 } = useUIVersion();
   const [formData, setFormData] = useState<any>({});
   const [changeSummary, setChangeSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [schemaLoading, setSchemaLoading] = useState(true);
   const [schema, setSchema] = useState<FormSchema | null>(null);
+  const [rawSchema, setRawSchema] = useState<any>(null);
+  const [isV2Schema, setIsV2Schema] = useState(false);
+  const [viewMode, setViewMode] = useState<'form' | 'hcl'>('form');
   const [changeSummaryError, setChangeSummaryError] = useState('');
   const [initialFieldsToShow, setInitialFieldsToShow] = useState<string[]>([]);
 
@@ -50,7 +58,6 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
 
   // 监控formData变化
   useEffect(() => {
-    console.log(' formData updated:', formData);
   }, [formData]);
 
   const loadResourceSchema = async () => {
@@ -59,7 +66,6 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
       
       // 从resource的tf_code中提取module配置
       const tfCode = resource.current_version?.tf_code || {};
-      console.log('Resource TF Code:', tfCode);
       
       // 提取module块
       let moduleConfig = null;
@@ -101,7 +107,6 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
       
       // 加载module的schema
       const schemaResponse = await api.get(`/modules/${matchedModule.id}/schemas`);
-      console.log('Schema API Response:', schemaResponse.data);
       
       let schemasData = [];
       if (schemaResponse.data.data) {
@@ -114,7 +119,12 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
       
       if (schemasData.length > 0) {
         let activeSchema = schemasData.find((s: any) => s.status === 'active') || schemasData[0];
-        
+
+        // 检测是否为 v2 schema
+        const isV2 = activeSchema.schema_version === 'v2' && activeSchema.openapi_schema;
+        setIsV2Schema(isV2);
+        setRawSchema(activeSchema);
+
         // 解析schema_data
         if (typeof activeSchema.schema_data === 'string') {
           try {
@@ -124,7 +134,7 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
             activeSchema.schema_data = {};
           }
         }
-        
+
         // 处理schema类型
         const processedSchema = processApiSchema(activeSchema);
         setSchema(processedSchema.schema_data);
@@ -132,8 +142,6 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
         // 从module配置中提取表单数据（排除source字段）
         if (moduleConfig) {
           const { source, ...configData } = moduleConfig;
-          console.log('📝 Extracted form data:', configData);
-          console.log('📝 Module config:', moduleConfig);
           
           // 找出所有有值的字段名
           const fieldsWithValues = Object.keys(configData).filter(key => {
@@ -145,7 +153,6 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
             return true;
           });
           
-          console.log('🔑 Fields with values:', fieldsWithValues);
           setInitialFieldsToShow(fieldsWithValues);
           setFormData(configData);
         }
@@ -259,14 +266,76 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
             </div>
           ) : schema ? (
             <>
-              {/* Dynamic Form */}
+              {/* View mode toggle for v3 */}
+              {isV3 && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  <button
+                    onClick={() => setViewMode('form')}
+                    style={{
+                      padding: '6px 12px',
+                      background: viewMode === 'form' ? '#3b82f6' : '#f8f9fa',
+                      color: viewMode === 'form' ? 'white' : '#495057',
+                      border: '1px solid ' + (viewMode === 'form' ? '#3b82f6' : '#dee2e6'),
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      fontWeight: 500
+                    }}
+                  >
+                    表单视图
+                  </button>
+                  <button
+                    onClick={() => setViewMode('hcl')}
+                    style={{
+                      padding: '6px 12px',
+                      background: viewMode === 'hcl' ? '#3b82f6' : '#f8f9fa',
+                      color: viewMode === 'hcl' ? 'white' : '#495057',
+                      border: '1px solid ' + (viewMode === 'hcl' ? '#3b82f6' : '#dee2e6'),
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      fontWeight: 500
+                    }}
+                  >
+                    HCL 视图
+                  </button>
+                </div>
+              )}
+
+              {/* Form/HCL Renderer */}
               <div className={styles.formSection}>
-                <DynamicForm
-                  schema={schema}
-                  values={formData}
-                  onChange={setFormData}
-                  initialFieldsToShow={initialFieldsToShow}
-                />
+                {isV3 && viewMode === 'hcl' ? (
+                  <HCLEditor
+                    data={formData}
+                    onChange={setFormData}
+                    readOnly={false}
+                    schema={rawSchema?.openapi_schema}
+                    skipDefaults={true}
+                    minHeight={400}
+                    maxHeight={600}
+                  />
+                ) : isV2Schema ? (
+                  isV3 ? (
+                    <FormRendererV3
+                      schema={rawSchema.openapi_schema}
+                      initialValues={formData}
+                      onChange={setFormData}
+                    />
+                  ) : (
+                    <OpenAPIFormRenderer
+                      schema={rawSchema.openapi_schema}
+                      initialValues={formData}
+                      onChange={setFormData}
+                    />
+                  )
+                ) : (
+                  <DynamicForm
+                    schema={schema}
+                    values={formData}
+                    onChange={setFormData}
+                    initialFieldsToShow={initialFieldsToShow}
+                  />
+                )}
               </div>
               
               {/* Change Summary */}

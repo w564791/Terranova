@@ -6,6 +6,9 @@ import { processApiSchema } from '../utils/schemaTypeMapper';
 import api from '../services/api';
 import DynamicForm, { type FormSchema, FormPreview } from '../components/DynamicForm';
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
+import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
+import HCLEditor from '../components/HCLEditor/HCLEditor';
+import { useUIVersion } from '../hooks/useUIVersion';
 import { 
   AITriggerButton, 
   AIInputPanel, 
@@ -57,8 +60,9 @@ const EditResource: React.FC = () => {
   const { id, resourceId } = useParams<{ id: string; resourceId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [searchParams] = useSearchParams();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { isV3 } = useUIVersion();
+
   const [resource, setResource] = useState<Resource | null>(null);
   const [schema, setSchema] = useState<FormSchema | null>(null);
   const [rawSchema, setRawSchema] = useState<any>(null); // 原始 schema 数据（用于 ModuleFormRenderer）
@@ -67,11 +71,34 @@ const EditResource: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [changeSummaryError, setChangeSummaryError] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('form');
+  // Read initial viewMode from URL (?view=hcl → 'json', ?view=form → 'form', default 'form')
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    const v = searchParams.get('view');
+    return v === 'hcl' || v === 'json' ? 'json' : 'form';
+  });
   const [formRenderError, setFormRenderError] = useState(false);
+
+  // Wrap setViewMode to also persist to URL
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (mode === 'json') {
+        next.set('view', isV3 ? 'hcl' : 'json');
+      } else {
+        next.delete('view');
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams, isV3]);
   const [initialFieldsToShow, setInitialFieldsToShow] = useState<string[]>([]);
   const [isCloneMode, setIsCloneMode] = useState(false);
+  // 升级模式：从 ViewResource 的升级按钮跳转过来，URL 带 upgrade_to 参数
+  const upgradeTargetVersionId = searchParams.get('upgrade_to') || '';
+  const [isUpgradeMode, setIsUpgradeMode] = useState(!!upgradeTargetVersionId);
   const [moduleSource, setModuleSource] = useState('');
+  const [moduleKeyName, setModuleKeyName] = useState('');
+  const [resourceOriginalVersion, setResourceOriginalVersion] = useState('');
   const changeSummaryRef = React.useRef<HTMLInputElement>(null);
   
   // Module 版本相关状态
@@ -79,6 +106,7 @@ const EditResource: React.FC = () => {
   const [moduleVersions, setModuleVersions] = useState<ModuleVersion[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string>('');
   const [loadingVersionSchema, setLoadingVersionSchema] = useState(false);
+  const [resourceVersionFound, setResourceVersionFound] = useState(true);
   
   // Workspace 资源引用上下文
   const [workspaceResourceContext, setWorkspaceResourceContext] = useState<WorkspaceResourceContext | null>(null);
@@ -197,7 +225,6 @@ const EditResource: React.FC = () => {
   // 编辑协作状态 - 每个窗口独立的session_id（不使用sessionStorage共享）
   const [sessionId] = useState(() => {
     const newId = generateUUID();
-    // console.log('🆕 生成新的session ID:', newId);
     return newId;
   });
   const [otherEditors, setOtherEditors] = useState<EditorInfo[]>([]);
@@ -283,8 +310,7 @@ const EditResource: React.FC = () => {
         
         // 2. 从tf_code中提取module配置
         const tfCode = resourceData.current_version?.tf_code || {};
-        console.log('Resource TF Code:', tfCode);
-        
+
         let moduleConfig = null;
         let extractedModuleSource = '';
         
@@ -296,11 +322,13 @@ const EditResource: React.FC = () => {
             if (Array.isArray(moduleArray) && moduleArray.length > 0) {
               moduleConfig = moduleArray[0];
               extractedModuleSource = moduleConfig.source;
+              setModuleKeyName(moduleKey);
             }
           }
         }
         
         setModuleSource(extractedModuleSource);
+        setResourceOriginalVersion(moduleConfig?.version || '');
         
         if (!extractedModuleSource) {
           showToast('无法获取Module信息', 'error');
@@ -328,13 +356,72 @@ const EditResource: React.FC = () => {
           const versionsRes = await listVersions(matchedModule.id);
           const versionItems = versionsRes.items || [];
           setModuleVersions(versionItems);
-          
-          // 设置默认选中的版本
-          const defaultVersion = versionItems.find((v: ModuleVersion) => v.is_default);
-          if (defaultVersion) {
-            setSelectedVersionId(defaultVersion.id);
-          } else if (versionItems.length > 0) {
-            setSelectedVersionId(versionItems[0].id);
+
+          const resourceVersion = moduleConfig?.version || '';
+          setResourceOriginalVersion(resourceVersion);
+
+          if (upgradeTargetVersionId) {
+            // 升级模式：选择目标版本，加载其 schema
+            const upgradeTarget = versionItems.find(
+              (v: ModuleVersion) => v.id === upgradeTargetVersionId
+            );
+            if (upgradeTarget) {
+              setSelectedVersionId(upgradeTarget.id);
+              setResourceVersionFound(true);
+              setIsUpgradeMode(true);
+              // 预填变更摘要
+              setChangeSummary(`升级模块版本: ${resourceVersion} → ${upgradeTarget.version}`);
+              // 加载目标版本的 schema
+              try {
+                setLoadingVersionSchema(true);
+                const newSchemas = await (await import('../services/moduleVersions')).getVersionSchemas(
+                  matchedModule.id,
+                  upgradeTargetVersionId
+                );
+                if (newSchemas && newSchemas.length > 0) {
+                  const activeSchema = newSchemas.find((s: any) => s.status === 'active') || newSchemas[0];
+                  const isV2 = activeSchema.schema_version === 'v2' && !!activeSchema.openapi_schema;
+                  setRawSchema(activeSchema);
+                  if (isV2) {
+                    setSchema(activeSchema);
+                  } else {
+                    if (typeof activeSchema.schema_data === 'string') {
+                      try { activeSchema.schema_data = JSON.parse(activeSchema.schema_data); } catch {}
+                    }
+                    setSchema(processApiSchema(activeSchema) as any);
+                  }
+                } else {
+                  showToast('该版本没有可用的 Schema', 'warning');
+                }
+              } catch (e) {
+                console.error('加载升级版本 Schema 失败:', e);
+                showToast('加载升级版本 Schema 失败', 'error');
+              } finally {
+                setLoadingVersionSchema(false);
+              }
+            } else {
+              showToast('找不到升级目标版本', 'error');
+            }
+          } else {
+            // 正常编辑模式：锁定到资源当前版本
+            const matchedVersion = versionItems.find(
+              (v: ModuleVersion) => v.version === resourceVersion
+            );
+
+            if (matchedVersion) {
+              setSelectedVersionId(matchedVersion.id);
+              setResourceVersionFound(true);
+            } else if (versionItems.length > 0) {
+              // 资源版本在模块版本列表中找不到 — 降级到默认版本，强制 HCL 模式
+              const defaultVersion = versionItems.find((v: ModuleVersion) => v.is_default);
+              if (defaultVersion) {
+                setSelectedVersionId(defaultVersion.id);
+              } else {
+                setSelectedVersionId(versionItems[0].id);
+              }
+              setResourceVersionFound(false);
+              setViewMode('json'); // 版本不匹配时强制 HCL 视图
+            }
           }
         } catch (error) {
           console.warn('加载版本列表失败:', error);
@@ -342,8 +429,7 @@ const EditResource: React.FC = () => {
         
         // 5. 加载module的schema（使用默认版本）
         const schemaResponse = await api.get(`/modules/${matchedModule.id}/schemas`);
-        console.log('Schema API Response:', schemaResponse.data);
-        
+
         let schemasData = [];
         if (schemaResponse.data.data) {
           schemasData = Array.isArray(schemaResponse.data.data) 
@@ -355,11 +441,7 @@ const EditResource: React.FC = () => {
         
         if (schemasData.length > 0) {
           let activeSchema = schemasData.find((s: any) => s.status === 'active') || schemasData[0];
-          
-          console.log('📊 Active Schema:', activeSchema);
-          console.log('📊 Schema Version:', activeSchema.schema_version);
-          console.log('📊 Has OpenAPI Schema:', !!activeSchema.openapi_schema);
-          
+
           // 检查是否是 V2 Schema (OpenAPI 格式) - 与 AddResources.tsx 保持一致
           const isV2 = activeSchema.schema_version === 'v2' && !!activeSchema.openapi_schema;
           
@@ -367,7 +449,6 @@ const EditResource: React.FC = () => {
           setRawSchema(activeSchema);
           
           if (isV2) {
-            console.log('📊 Using V2 OpenAPI Schema');
             setSchema(activeSchema);
           } else {
             // V1 Schema 处理
@@ -383,16 +464,14 @@ const EditResource: React.FC = () => {
             
             // 使用processApiSchema处理类型转换
             const processedSchema = processApiSchema(activeSchema);
-            console.log('📊 Processed V1 Schema:', processedSchema);
-            
+
             setSchema(processedSchema);
           }
           
           // 5. 提取表单数据
           if (moduleConfig) {
             const { source, ...configData } = moduleConfig;
-            console.log('📝 Extracted form data:', configData);
-            
+
             // 找出所有有值的字段
             const fieldsWithValues = Object.keys(configData).filter(key => {
               const value = configData[key];
@@ -401,14 +480,11 @@ const EditResource: React.FC = () => {
               if (typeof value === 'object' && Object.keys(value).length === 0) return false;
               return true;
             });
-            
-            console.log('🔑 Fields with values:', fieldsWithValues);
-            console.log('📊 Will set initialFieldsToShow to:', fieldsWithValues);
+
             setInitialFieldsToShow(fieldsWithValues);
             setFormData(configData);
             // 保存初始formData用于比较
             initialFormDataRef.current = JSON.parse(JSON.stringify(configData));
-            console.log(' State updated - initialFieldsToShow:', fieldsWithValues);
           }
         } else {
           showToast('该Module暂无Schema定义', 'warning');
@@ -438,8 +514,7 @@ const EditResource: React.FC = () => {
                 description: o.description,
               })) || [],
             }));
-          
-          console.log(`📊 Loaded ${otherResources.length} other resources for reference`);
+
         } catch (error) {
           console.warn('加载 available-outputs 失败:', error);
           // 不影响主流程，只是引用功能不可用
@@ -480,8 +555,7 @@ const EditResource: React.FC = () => {
               };
             })
           );
-          
-          console.log(`📊 Loaded ${remoteDataList.length} remote data references`);
+
         } catch (error) {
           console.warn('加载 remote-data 失败:', error);
           // 不影响主流程，只是远程数据引用功能不可用
@@ -513,29 +587,25 @@ const EditResource: React.FC = () => {
     
     // 连接WebSocket
     websocketService.connect(sessionId);
-    // console.log('🔌 WebSocket连接已建立');
-    
+
     // 监听WebSocket连接状态
     let wsConnected = false;
     const checkWSConnection = () => {
       const isConnected = websocketService.isConnected();
       if (isConnected !== wsConnected) {
         wsConnected = isConnected;
-        console.log(`🔌 WebSocket状态变化: ${isConnected ? '已连接' : '已断开'}`);
       }
       return isConnected;
     };
     
     // 监听接管请求（被接管方）
     const handleTakeoverRequest = (data: any) => {
-      console.log('🔔 WebSocket收到接管请求:', data);
       setTakeoverRequest(data);
       setShowTakeoverRequestDialog(true);
     };
     
     // 监听接管结果（接管方）- 使用stateRef解决闭包问题
     const handleTakeoverApproved = (data: any) => {
-      console.log(' WebSocket收到接管批准通知');
       setShowTakeoverWaitingDialog(false);
       setWaitingForTakeoverRequestId(null);
       showToast('接管成功', 'success');
@@ -547,16 +617,15 @@ const EditResource: React.FC = () => {
       // 记录被接管的session_id
       if (currentSessionToTakeover) {
         takenOverSessionIdRef.current = currentSessionToTakeover.session_id;
-        console.log('📝 记录被接管的session_id:', currentSessionToTakeover.session_id);
       }
-      
+
       // 重置状态
       setEditingDisabled(false);
       setHasShownTakeoverWarning(false);
       setOtherEditors([]);
       setSessionToTakeover(null);
       setShowTakeoverDialog(false);
-      
+
       // 如果有drift，显示恢复对话框
       if (currentDriftToRecover) {
         setShowDriftDialog(true);
@@ -564,7 +633,6 @@ const EditResource: React.FC = () => {
     };
     
     const handleTakeoverRejected = () => {
-      console.log('❌ WebSocket收到接管拒绝通知');
       setShowTakeoverWaitingDialog(false);
       setWaitingForTakeoverRequestId(null);
       showToast('对方拒绝了接管请求', 'warning');
@@ -576,7 +644,6 @@ const EditResource: React.FC = () => {
     };
     
     const handleForceTakeover = () => {
-      console.log(' WebSocket收到强制接管通知');
       showToast('您的编辑会话已被强制接管', 'warning');
       
       // 停止所有定时器
@@ -614,21 +681,13 @@ const EditResource: React.FC = () => {
           sessionId
         );
         
-        console.log('🔒 编辑会话已启动:', response);
-        console.log('📊 Other editors:', response.other_editors);
-        console.log('🆔 Current session ID:', sessionId);
-        
         setOtherEditors(response.other_editors);
         
         // 检查是否有其他编辑者
         if (response.other_editors.length > 0) {
           // 有其他编辑者
           const firstEditor = response.other_editors[0];
-          console.log('🔔 检测到其他编辑者:');
-          console.log('  - 当前session:', sessionId);
-          console.log('  - 其他编辑者session:', firstEditor.session_id);
-          console.log('  - 是否同一用户:', firstEditor.is_same_user);
-          
+
           // 确保不是自己的当前session
           if (firstEditor.session_id === sessionId) {
             console.error('❌ 错误：检测到的其他编辑者是自己！');
@@ -645,7 +704,6 @@ const EditResource: React.FC = () => {
           // 让用户明确知道有其他窗口正在编辑，并确认是否接管
           setSessionToTakeover(firstEditor);
           setShowTakeoverDialog(true);
-          console.log(' 显示接管对话框，is_same_user:', firstEditor.is_same_user);
         } else if (response.has_drift && response.drift) {
           // 没有其他窗口,直接显示drift恢复对话框
           setDriftToRecover(response.drift);
@@ -660,7 +718,6 @@ const EditResource: React.FC = () => {
               await ResourceEditingService.heartbeat(id, Number(resourceId), sessionId);
             } catch (error) {
               // 心跳失败说明锁已被删除或接管,静默停止所有定时器
-              // console.log('⏸️ 心跳失败，锁可能已被删除或接管');
               if (heartbeatTimerRef.current) {
                 clearInterval(heartbeatTimerRef.current);
                 heartbeatTimerRef.current = null;
@@ -682,12 +739,9 @@ const EditResource: React.FC = () => {
             // 只在WebSocket断开时执行轮询
             const wsConnected = checkWSConnection();
             if (wsConnected) {
-              // console.log('⏭️ WebSocket已连接，跳过HTTP轮询');
               return;
             }
-            
-            // console.log('🔄 WebSocket断开，使用HTTP轮询降级');
-            
+
             try {
               const status = await ResourceEditingService.getEditingStatus(
                 id,
@@ -722,7 +776,6 @@ const EditResource: React.FC = () => {
               const requests = pendingRequests.requests || [];
               if (requests.length > 0) {
                 const request = requests[0];
-                console.log('🔔 HTTP轮询检测到接管请求:', request);
                 setTakeoverRequest(request);
                 setShowTakeoverRequestDialog(true);
               }
@@ -755,32 +808,26 @@ const EditResource: React.FC = () => {
     initEditing();
     
     return () => {
-      // console.log('🧹 清理编辑会话...');
       
       // 断开WebSocket
       websocketService.disconnect();
-      console.log(' WebSocket已断开');
       
       // 清理定时器
       if (heartbeatTimerRef.current) {
         clearInterval(heartbeatTimerRef.current);
         heartbeatTimerRef.current = null;
-        console.log(' 心跳定时器已清理');
       }
       if (statusPollTimerRef.current) {
         clearInterval(statusPollTimerRef.current);
         statusPollTimerRef.current = null;
-        console.log(' 状态轮询定时器已清理');
       }
       if (driftSaveTimerRef.current) {
         clearTimeout(driftSaveTimerRef.current);
         driftSaveTimerRef.current = null;
-        console.log(' 草稿保存定时器已清理');
       }
       
       // 页面卸载时立即保存一次草稿(只在有编辑时)
       if (id && resourceId && hasUserEdited && formData && Object.keys(formData).length > 0) {
-        console.log('💾 页面卸载,保存草稿...');
         ResourceEditingService.saveDrift(
           id,
           Number(resourceId),
@@ -791,16 +838,13 @@ const EditResource: React.FC = () => {
       
       // 结束编辑会话（如果已同意接管或已提交，则跳过）
       if (id && resourceId && !hasApprovedTakeoverRef.current && !hasSubmittedRef.current) {
-        console.log('🔚 结束编辑会话...');
         ResourceEditingService.endEditing(
           id,
           Number(resourceId),
           sessionId
         ).catch(console.error);
       } else if (hasApprovedTakeoverRef.current) {
-        console.log('⏭️ 已同意接管，跳过endEditing');
       } else if (hasSubmittedRef.current) {
-        console.log('⏭️ 已提交，跳过endEditing');
       }
     };
   }, [id, resourceId, isCloneMode, sessionId]);
@@ -809,21 +853,16 @@ const EditResource: React.FC = () => {
   useEffect(() => {
     if (!waitingForTakeoverRequestId || !id || !resourceId) return;
     
-    console.log('🔄 启动接管请求状态轮询，request_id:', waitingForTakeoverRequestId);
     
     const pollTimer = window.setInterval(async () => {
       try {
-        console.log('🔍 轮询检查请求状态，request_id:', waitingForTakeoverRequestId);
         
         const requestStatus: any = await api.get(
           `/workspaces/${id}/resources/${resourceId}/editing/request-status/${waitingForTakeoverRequestId}`
         );
         
-        console.log('🔍 请求状态响应:', requestStatus);
-        console.log('🔍 当前状态:', requestStatus.status);
         
         if (requestStatus.status === 'approved') {
-          console.log(' 接管被批准');
           setShowTakeoverWaitingDialog(false);
           setWaitingForTakeoverRequestId(null);
           showToast('接管成功', 'success');
@@ -831,7 +870,6 @@ const EditResource: React.FC = () => {
           // 记录被接管的session_id，用于过滤状态轮询结果
           if (sessionToTakeover) {
             takenOverSessionIdRef.current = sessionToTakeover.session_id;
-            console.log('📝 记录被接管的session_id:', sessionToTakeover.session_id);
           }
           
           // 重置被接管的状态标志，允许继续编辑
@@ -848,7 +886,6 @@ const EditResource: React.FC = () => {
             setShowDriftDialog(true);
           }
         } else if (requestStatus.status === 'rejected') {
-          console.log('❌ 接管被拒绝');
           setShowTakeoverWaitingDialog(false);
           setWaitingForTakeoverRequestId(null);
           showToast('对方拒绝了接管请求', 'warning');
@@ -858,7 +895,6 @@ const EditResource: React.FC = () => {
           sessionStorage.removeItem(storageKey);
           navigate(`/workspaces/${id}/resources/${resourceId}`);
         } else if (requestStatus.status === 'expired') {
-          console.log('⏰ 接管请求超时');
           setShowTakeoverWaitingDialog(false);
           setWaitingForTakeoverRequestId(null);
           showToast('接管请求已超时', 'warning');
@@ -868,7 +904,6 @@ const EditResource: React.FC = () => {
           sessionStorage.removeItem(storageKey);
           navigate(`/workspaces/${id}/resources/${resourceId}`);
         } else {
-          console.log('⏳ 请求仍在pending状态');
         }
       } catch (error) {
         console.error('检查请求状态失败:', error);
@@ -876,7 +911,6 @@ const EditResource: React.FC = () => {
     }, 2000); // 2秒轮询一次，更快响应
     
     return () => {
-      console.log('🧹 清理接管请求状态轮询');
       clearInterval(pollTimer);
     };
   }, [waitingForTakeoverRequestId, id, resourceId, showToast, sessionToTakeover, driftToRecover, navigate]);
@@ -889,7 +923,6 @@ const EditResource: React.FC = () => {
     const hasChanged = JSON.stringify(formData) !== JSON.stringify(initialFormDataRef.current);
     if (hasChanged && !hasUserEdited) {
       setHasUserEdited(true);
-      console.log('✏️ 检测到用户编辑');
     }
   }, [formData, loading, hasUserEdited]);
 
@@ -942,14 +975,12 @@ const EditResource: React.FC = () => {
           return;
         }
         
-        console.log('💾 自动保存草稿:', { formData, changeSummary });
         await ResourceEditingService.saveDrift(
           id,
           Number(resourceId),
           sessionId,
           { formData, changeSummary }
         );
-        console.log(' 草稿保存成功');
         showToast('草稿已自动保存', 'success');
       } catch (error: any) {
         console.error('保存草稿失败:', error);
@@ -960,9 +991,6 @@ const EditResource: React.FC = () => {
   }, [formData, changeSummary, id, resourceId, isCloneMode, sessionId, loading, hasUserEdited]);
 
   const handleSubmit = async (shouldRunAfter: boolean = false) => {
-    console.log('🚀 EditResource handleSubmit 开始');
-    console.log('📝 shouldRunAfter:', shouldRunAfter);
-    console.log('📝 isCloneMode:', isCloneMode);
     
     // 验证变更摘要
     if (!changeSummary.trim()) {
@@ -985,7 +1013,6 @@ const EditResource: React.FC = () => {
         const selectedVersion = moduleVersions.find(v => v.id === selectedVersionId);
         if (selectedVersion?.version) {
           moduleVersionStr = selectedVersion.version;
-          console.log(`📦 Using selected version: ${moduleVersionStr}`);
         }
       }
       
@@ -995,7 +1022,6 @@ const EditResource: React.FC = () => {
           const defaultVersion = await getDefaultVersion(matchedModuleId);
           if (defaultVersion?.version) {
             moduleVersionStr = defaultVersion.version;
-            console.log(`📦 Using default version: ${moduleVersionStr}`);
           }
         } catch (error) {
           console.warn('Failed to get default version:', error);
@@ -1023,7 +1049,6 @@ const EditResource: React.FC = () => {
         // 添加版本信息
         if (moduleVersionStr) {
           moduleConfig.version = moduleVersionStr;
-          console.log(`📦 Adding version ${moduleVersionStr} to cloned resource`);
         }
         
         // 创建资源
@@ -1068,7 +1093,6 @@ const EditResource: React.FC = () => {
         // 添加版本信息
         if (moduleVersionStr) {
           editModuleConfig.version = moduleVersionStr;
-          console.log(`📦 Adding version ${moduleVersionStr} to edited resource`);
         }
         
         // 更新资源
@@ -1093,7 +1117,6 @@ const EditResource: React.FC = () => {
           // 立即结束编辑会话，删除锁
           try {
             await ResourceEditingService.endEditing(id!, Number(resourceId), sessionId);
-            console.log(' 提交成功后已结束编辑会话');
           } catch (error) {
             console.error('结束编辑会话失败:', error);
           }
@@ -1123,7 +1146,6 @@ const EditResource: React.FC = () => {
   };
 
   const handleCancel = () => {
-    console.log('🚪 取消编辑，清理所有定时器');
     
     // 先停止所有定时器，避免在导航过程中触发弹窗
     if (heartbeatTimerRef.current) {
@@ -1142,7 +1164,6 @@ const EditResource: React.FC = () => {
     // 清理sessionStorage中的session_id
     const storageKey = `editing_session_${id}_${resourceId}`;
     sessionStorage.removeItem(storageKey);
-    console.log('🗑️ 已清理sessionStorage');
     
     // 返回到资源查看页面，而不是资源列表
     navigate(`/workspaces/${id}/resources/${resourceId}`);
@@ -1302,13 +1323,10 @@ const EditResource: React.FC = () => {
         <TakeoverConfirmDialog
           otherSession={sessionToTakeover}
           onConfirm={async (forceTakeover: boolean) => {
-            console.log('🚀 点击了接管按钮, forceTakeover:', forceTakeover);
-            console.log('🚀 target_session_id:', sessionToTakeover.session_id);
             
             try {
               if (forceTakeover) {
                 // 强制接管：直接调用TakeoverEditing，不需要等待确认
-                console.log('🚀 开始强制接管...');
                 
                 await api.post(
                   `/workspaces/${id}/resources/${resourceId}/editing/force-takeover`,
@@ -1318,7 +1336,6 @@ const EditResource: React.FC = () => {
                   }
                 );
                 
-                console.log(' 强制接管成功');
                 setShowTakeoverDialog(false);
                 showToast('强制接管成功', 'success');
                 
@@ -1337,7 +1354,6 @@ const EditResource: React.FC = () => {
                 }
               } else {
                 // 普通接管：发送请求，等待对方确认
-                console.log('🚀 开始发送接管请求...');
                 
                 const response = await api.post(
                   `/workspaces/${id}/resources/${resourceId}/editing/takeover-request`,
@@ -1347,9 +1363,6 @@ const EditResource: React.FC = () => {
                   }
                 );
               
-                console.log('接管请求响应:', response);
-                console.log('response类型:', typeof response);
-                console.log('response.request_id:', (response as any)?.request_id);
                 
                 // 注意：axios拦截器返回response.data，所以response直接就是数据
                 const requestId = (response as any)?.request_id;
@@ -1358,8 +1371,6 @@ const EditResource: React.FC = () => {
                   setWaitingForTakeoverRequestId(requestId);
                   setShowTakeoverDialog(false);
                   setShowTakeoverWaitingDialog(true);
-                  console.log(' 接管请求已发送，request_id:', requestId);
-                  console.log(' waitingForTakeoverRequestId已设置为:', requestId);
                 } else {
                   console.error('响应格式错误，response:', response);
                   console.error('requestId:', requestId);
@@ -1502,7 +1513,7 @@ const EditResource: React.FC = () => {
       <div className={styles.content}>
         <div className={styles.configureStep}>
           <h2 className={styles.stepTitle}>修改配置</h2>
-          
+
           {schema && (
             <div className={styles.dynamicFormContainer}>
               <div className={styles.formDescription} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
@@ -1532,33 +1543,31 @@ const EditResource: React.FC = () => {
                 </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  {/* Module 版本选择器 - 始终显示（如果有版本） */}
+                  {/* Module 版本信息 — 锁定显示（不可切换） */}
                   {moduleVersions.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '13px', color: '#64748b' }}>TF Module:</span>
-                      <select
-                        value={selectedVersionId}
-                        onChange={(e) => handleVersionChange(e.target.value)}
-                        disabled={loadingVersionSchema || moduleVersions.length <= 1}
+                      <span
                         style={{
-                          padding: '4px 8px',
+                          padding: '4px 10px',
                           border: '1px solid #e2e8f0',
                           borderRadius: '6px',
                           fontSize: '13px',
-                          color: '#334155',
-                          background: 'white',
-                          cursor: loadingVersionSchema || moduleVersions.length <= 1 ? 'default' : 'pointer',
-                          minWidth: '120px'
+                          color: resourceVersionFound ? '#334155' : '#dc2626',
+                          background: resourceVersionFound ? '#f8fafc' : '#fef2f2',
+                          fontWeight: 500,
+                          fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
                         }}
                       >
-                        {moduleVersions.map(v => (
-                          <option key={v.id} value={v.id}>
-                            {v.version} {v.is_default ? '(默认)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      {loadingVersionSchema && (
-                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>加载中...</span>
+                        {resourceVersionFound
+                          ? moduleVersions.find(v => v.id === selectedVersionId)?.version || selectedVersionId
+                          : `${resourceOriginalVersion || 'unknown'} (未匹配)`
+                        }
+                      </span>
+                      {!resourceVersionFound && (
+                        <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 500 }}>
+                          ⚠ 资源版本与模块版本不匹配，请使用 HCL 视图编辑
+                        </span>
                       )}
                     </div>
                   )}
@@ -1579,7 +1588,7 @@ const EditResource: React.FC = () => {
                       className={`${styles.viewButton} ${viewMode === 'json' ? styles.viewButtonActive : ''}`}
                       onClick={() => setViewMode('json')}
                     >
-                      JSON视图
+                      {isV3 ? 'HCL 视图' : 'JSON视图'}
                     </button>
                   </div>
                 </div>
@@ -1615,26 +1624,49 @@ const EditResource: React.FC = () => {
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}>
-                  <span> 表单渲染失败，已自动切换到JSON视图。编辑完成后可点击"表单视图"按钮重新尝试。</span>
+                  <span> 表单渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图。编辑完成后可点击"表单视图"按钮重新尝试。</span>
                 </div>
               )}
               
+              {/* 版本不匹配时，禁止表单渲染，强制 HCL 模式 */}
+              {!resourceVersionFound && (
+                <div style={{
+                  padding: '12px 16px',
+                  background: '#fef2f2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: '6px',
+                  color: '#991b1b',
+                  marginBottom: '16px',
+                }}>
+                  ⚠ 资源使用的版本 <strong>{resourceOriginalVersion || 'unknown'}</strong> 在当前模块版本列表中不存在，无法渲染表单。请使用 HCL 视图查看和编辑配置。如需升级版本，请前往 <a href={`/modules/${matchedModuleId}/schemas`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>模块管理</a> 页面操作。
+                </div>
+              )}
+
               {/* 根据 viewMode 和 schema 版本选择渲染器 */}
-              {viewMode === 'form' && !formRenderError ? (
+              {viewMode === 'form' && !formRenderError && resourceVersionFound ? (
                 <ErrorBoundary
                   onError={() => {
                     setFormRenderError(true);
                     setViewMode('json');
-                    showToast('表单渲染失败，已切换到JSON视图', 'warning');
+                    showToast(`表单渲染失败，已切换到${isV3 ? 'HCL' : 'JSON'}视图`, 'warning');
                   }}
                 >
                   {rawSchema?.schema_version === 'v2' && rawSchema?.openapi_schema ? (
-                    <OpenAPIFormRenderer
-                      schema={rawSchema.openapi_schema}
-                      initialValues={formData}
-                      onChange={setFormData}
-                      workspaceResource={workspaceResourceContext || undefined}
-                    />
+                    isV3 ? (
+                      <FormRendererV3
+                        schema={rawSchema.openapi_schema}
+                        initialValues={formData}
+                        onChange={setFormData}
+                        workspaceResource={workspaceResourceContext || undefined}
+                      />
+                    ) : (
+                      <OpenAPIFormRenderer
+                        schema={rawSchema.openapi_schema}
+                        initialValues={formData}
+                        onChange={setFormData}
+                        workspaceResource={workspaceResourceContext || undefined}
+                      />
+                    )
                   ) : (
                     <DynamicForm
                       schema={(schema as any).schema_data || schema}
@@ -1645,20 +1677,34 @@ const EditResource: React.FC = () => {
                   )}
                 </ErrorBoundary>
               ) : (
-                <JsonEditor
-                  value={JSON.stringify(formData, null, 2)}
-                  onChange={(value) => {
-                    try {
-                      const parsed = JSON.parse(value);
-                      setFormData(parsed);
-                    } catch (e) {
-                      // JSON格式错误时不更新formData
-                      console.error('Invalid JSON:', e);
-                    }
-                  }}
-                  minHeight={300}
-                  maxHeight={600}
-                />
+                isV3 ? (
+                  <HCLEditor
+                    data={formData}
+                    onChange={setFormData}
+                    readOnly={false}
+                    moduleSource={moduleSource}
+                    moduleVersion={selectedVersionId ? moduleVersions.find(v => v.id === selectedVersionId)?.version || '' : ''}
+                    moduleName={moduleKeyName}
+                    schema={rawSchema?.openapi_schema}
+                    skipDefaults={true}
+                    minHeight={400}
+                    maxHeight={600}
+                  />
+                ) : (
+                  <JsonEditor
+                    value={JSON.stringify(formData, null, 2)}
+                    onChange={(value) => {
+                      try {
+                        const parsed = JSON.parse(value);
+                        setFormData(parsed);
+                      } catch (e) {
+                        console.error('Invalid JSON:', e);
+                      }
+                    }}
+                    minHeight={300}
+                    maxHeight={600}
+                  />
+                )
               )}
             </div>
           )}

@@ -221,7 +221,8 @@ export const schemaV2Service = {
   },
 };
 
-// 辅助函数：检测 Schema 版本
+// @deprecated 请使用 schemaVersionDetector.ts 中的 detectSchemaVersion
+// 保留仅为向后兼容，无调用方
 export function detectSchemaVersion(schema: unknown): 'v1' | 'v2' {
   if (!schema || typeof schema !== 'object') {
     return 'v1';

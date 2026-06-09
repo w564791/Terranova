@@ -908,3 +908,327 @@
   white-space: nowrap;
   display: inline-block;
 }
+
+/* ========== V3 UI Theme Overrides ========== */
+:global(:root[data-ui-version="v3"]) .container {
+  background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+:global(:root[data-ui-version="v3"]) .header {
+  background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(248,250,252,0.8) 100%);
+  backdrop-filter: blur(8px);
+  border-bottom: 2px solid rgba(255,255,255,0.5);
+  padding: 20px 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+:global(:root[data-ui-version="v3"]) .title {
+  font-size: 24px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+:global(:root[data-ui-version="v3"]) .tabs {
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+
+:global(:root[data-ui-version="v3"]) .tab {
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+:global(:root[data-ui-version="v3"]) .tab.active {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  color: #1e293b;
+}
+
+:global(:root[data-ui-version="v3"]) .tab:not(.active) {
+  color: #64748b;
+}
+
+:global(:root[data-ui-version="v3"]) .tab:not(.active):hover {
+  background: rgba(255,255,255,0.5);
+  color: #334155;
+}
+
+:global(:root[data-ui-version="v3"]) .formContainer {
+  background: white;
+  border-radius: 14px;
+  padding: 28px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid rgba(226,232,240,0.6);
+}
+
+:global(:root[data-ui-version="v3"]) .jsonEditorContainer {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid rgba(226,232,240,0.6);
+}
+
+:global(:root[data-ui-version="v3"]) .jsonToolbar {
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+:global(:root[data-ui-version="v3"]) .toolButton {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+:global(:root[data-ui-version="v3"]) .toolButton:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+:global(:root[data-ui-version="v3"]) .jsonEditor {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+:global(:root[data-ui-version="v3"]) .jsonEditor:focus {
+  background: white;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+:global(:root[data-ui-version="v3"]) .outputsList {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid rgba(226,232,240,0.6);
+}
+
+:global(:root[data-ui-version="v3"]) .outputsHeader {
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  padding: 16px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+:global(:root[data-ui-version="v3"]) .outputsTable {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+:global(:root[data-ui-version="v3"]) .outputsTable thead {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+}
+
+:global(:root[data-ui-version="v3"]) .outputsTable th {
+  padding: 14px 16px;
+  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+:global(:root[data-ui-version="v3"]) .outputsTable td {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+:global(:root[data-ui-version="v3"]) .outputsTable tr:hover {
+  background: #f8fafc;
+}
+
+:global(:root[data-ui-version="v3"]) .outputName {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #1e40af;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+:global(:root[data-ui-version="v3"]) .outputType {
+  background: #f0fdf4;
+  color: #166534;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+:global(:root[data-ui-version="v3"]) .versionList {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid rgba(226,232,240,0.6);
+}
+
+:global(:root[data-ui-version="v3"]) .versionHeader {
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  padding: 16px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+:global(:root[data-ui-version="v3"]) .versionItem {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+
+:global(:root[data-ui-version="v3"]) .versionItem:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+
+:global(:root[data-ui-version="v3"]) .versionItem.active {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.15);
+}
+
+:global(:root[data-ui-version="v3"]) .versionNumber {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+:global(:root[data-ui-version="v3"]) .versionMeta {
+  color: #64748b;
+  font-size: 13px;
+}
+
+:global(:root[data-ui-version="v3"]) .switchButton,
+:global(:root[data-ui-version="v3"]) .compareButton {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+:global(:root[data-ui-version="v3"]) .switchButton:hover,
+:global(:root[data-ui-version="v3"]) .compareButton:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+:global(:root[data-ui-version="v3"]) .importButton,
+:global(:root[data-ui-version="v3"]) .editSchemaButton {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+  transition: all 0.2s;
+}
+
+:global(:root[data-ui-version="v3"]) .importButton:hover,
+:global(:root[data-ui-version="v3"]) .editSchemaButton:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+  transform: translateY(-1px);
+}
+
+:global(:root[data-ui-version="v3"]) .backButton {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+:global(:root[data-ui-version="v3"]) .backButton:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+:global(:root[data-ui-version="v3"]) .modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+:global(:root[data-ui-version="v3"]) .diffModal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+:global(:root[data-ui-version="v3"]) .diffModalHeader {
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  padding: 20px 24px;
+  border-radius: 16px 16px 0 0;
+}
+
+:global(:root[data-ui-version="v3"]) .status.active {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+}
+
+:global(:root[data-ui-version="v3"]) .status.draft {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+}
+
+:global(:root[data-ui-version="v3"]) .v2Tag,
+:global(:root[data-ui-version="v3"]) .aiTag {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  color: #1e40af;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+:global(:root[data-ui-version="v3"]) .activeTag {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}

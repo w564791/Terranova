@@ -1,0 +1,50 @@
+/*
+ * UI v3 主题变量
+ * 通过 :root[data-ui-version="v3"] 作用域隔离，不影响 v2
+ */
+:root[data-ui-version="v3"] {
+  /* 中性色 — Tailwind Slate */
+  --v3-gray-50: #f8fafc;
+  --v3-gray-100: #f1f5f9;
+  --v3-gray-200: #e2e8f0;
+  --v3-gray-300: #cbd5e1;
+  --v3-gray-400: #9ca3af;
+  --v3-gray-500: #6b7280;
+  --v3-gray-600: #4b5563;
+  --v3-gray-700: #374151;
+  --v3-gray-800: #1f2937;
+  --v3-gray-900: #111827;
+
+  /* 交互色 */
+  --v3-blue-50: #eff6ff;
+  --v3-blue-100: #dbeafe;
+  --v3-blue-200: #bfdbfe;
+  --v3-blue-300: #93c5fd;
+  --v3-blue-400: #60a5fa;
+  --v3-blue-500: #3b82f6;
+  --v3-blue-600: #2563eb;
+  --v3-blue-700: #1d4ed8;
+
+  --v3-green-500: #22c55e;
+  --v3-green-600: #16a34a;
+  --v3-red-400: #f87171;
+  --v3-red-500: #ef4444;
+
+  /* 圆角 */
+  --v3-radius-sm: 6px;
+  --v3-radius-input: 10px;
+  --v3-radius-section: 14px;
+  --v3-radius-card: 16px;
+
+  /* 间距 */
+  --v3-field-gap: 20px;
+  --v3-label-input-gap: 6px;
+  --v3-section-padding: 24px;
+
+  /* 阴影 */
+  --v3-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --v3-shadow-section: 0 1px 3px rgba(0, 0, 0, 0.04);
+
+  /* 字体 */
+  --v3-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+}

@@ -1,0 +1,92 @@
+.container {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1e293b;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #334155;
+}
+
+.lang {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.copyBtn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.copyBtn:hover {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.copyBtn.copied {
+  color: #86efac;
+  border-color: #86efac;
+}
+
+.body {
+  padding: 16px 20px;
+  overflow-x: auto;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.body pre {
+  margin: 0;
+  white-space: pre;
+  color: #e2e8f0;
+}
+
+/* HCL 语法高亮颜色 */
+.body pre :global(.hcl-keyword) {
+  color: #c084fc;
+}
+
+.body pre :global(.hcl-string) {
+  color: #86efac;
+}
+
+.body pre :global(.hcl-bool) {
+  color: #fca5a5;
+}
+
+.body pre :global(.hcl-number) {
+  color: #fdba74;
+}
+
+.body pre :global(.hcl-attr) {
+  color: #93c5fd;
+}
+
+.body pre :global(.hcl-eq) {
+  color: #94a3b8;
+}
+
+.body pre :global(.hcl-bracket) {
+  color: #e2e8f0;
+}
+
+.body pre :global(.hcl-comment) {
+  color: #64748b;
+  font-style: italic;
+}

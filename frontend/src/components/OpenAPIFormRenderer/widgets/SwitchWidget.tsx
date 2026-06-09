@@ -1,18 +1,16 @@
 import React from 'react';
 import { Form, Switch, Tag } from 'antd';
 import type { WidgetProps } from '../types';
+import { useUIVersionContext } from '../../../contexts/UIVersionContext';
 
 /**
  * SwitchWidget - 开关组件
- * 
- * 注意：Form.Item 会自动将表单值注入到子组件的 checked 属性中（通过 valuePropName="checked"）
- * 不需要手动设置 checked 和 onChange，让 Form.Item 自动处理
- * 
- * 支持的 uiConfig 配置：
- * - checkedHint: 开关打开时显示的提示文本（默认：无）
- * - checkedHintColor: 开关打开时提示的颜色（默认：green）
- * - uncheckedHint: 开关关闭时显示的提示文本（默认：无）
- * - uncheckedHintColor: 开关关闭时提示的颜色（默认：default）
+ *
+ * V3 增强：显示状态文字"已启用/未启用"，统一蓝色主色
+ * V2 模式：保持原有行为不变
+ *
+ * 关键：Form.Item 通过 name 注入 value/onChange 到直接子元素。
+ * V3 模式下 Switch 必须是 Form.Item 的直接子元素，文字标签放在 Form.Item 之外。
  */
 
 // 内部组件：带提示的开关
@@ -40,7 +38,7 @@ const SwitchWithHint: React.FC<SwitchWithHintProps> = ({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <Switch 
+      <Switch
         checked={checked}
         onChange={onChange}
         disabled={disabled}
@@ -61,18 +59,42 @@ const SwitchWidget: React.FC<WidgetProps> = ({
   disabled,
   readOnly,
 }) => {
+  const { isV3 } = useUIVersionContext();
   const label = uiConfig?.label || schema.title || name;
   const help = uiConfig?.help || schema.description;
-  
-  // 获取开关打开/关闭时的提示配置
+
   const checkedHint = uiConfig?.checkedHint;
   const checkedHintColor = uiConfig?.checkedHintColor;
   const uncheckedHint = uiConfig?.uncheckedHint;
   const uncheckedHintColor = uiConfig?.uncheckedHintColor;
-
-  // 如果没有配置任何提示，使用简单的 Switch
   const hasHint = checkedHint || uncheckedHint;
 
+  // V3 模式：Switch 必须是 Form.Item 的直接子元素，
+  // Form.Item 通过 name 注入 checked/onChange。
+  // 状态文字通过 Form.useWatch 读取值，放在 Form.Item 之外。
+  if (isV3) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <Form.Item
+          label={label}
+          name={name}
+          help={help}
+          valuePropName="checked"
+          style={{ marginBottom: 0 }}
+          rules={[
+            ...(schema.required ? [{ required: true, message: `${label}是必填项` }] : []),
+          ]}
+        >
+          <Switch
+            disabled={disabled || readOnly}
+          />
+        </Form.Item>
+        <SwitchV3Label name={name} />
+      </div>
+    );
+  }
+
+  // V2 模式：保持原有行为
   return (
     <Form.Item
       label={label}
@@ -95,6 +117,28 @@ const SwitchWidget: React.FC<WidgetProps> = ({
         <Switch disabled={disabled || readOnly} />
       )}
     </Form.Item>
+  );
+};
+
+/**
+ * V3 状态文字标签 — 独立组件，使用 Form.useWatch 监听值
+ */
+const SwitchV3Label: React.FC<{ name: string }> = ({ name }) => {
+  const form = Form.useFormInstance();
+  const checked = Boolean(Form.useWatch(name, form));
+
+  return (
+    <span
+      style={{
+        fontSize: '12.5px',
+        fontWeight: 450,
+        color: checked ? '#3b82f6' : '#9ca3af',
+        userSelect: 'none',
+        marginTop: '22px', // align with switch (account for Form.Item label height)
+      }}
+    >
+      {checked ? '已启用' : '未启用'}
+    </span>
   );
 };
 

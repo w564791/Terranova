@@ -4,7 +4,9 @@ import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { moduleDemoService, type ModuleDemo, type ModuleDemoVersion } from '../services/moduleDemos';
 import { ModuleFormRenderer } from '../components/ModuleFormRenderer';
+import HCLView from '../components/HCLView/HCLView';
 import { schemaV2Service, type OpenAPISchema } from '../services/schemaV2';
+import { useUIVersion } from '../hooks/useUIVersion';
 import ConfirmDialog from '../components/ConfirmDialog';
 import styles from './AddResources.module.css'; // 复用 AddResources 的样式
 
@@ -23,6 +25,7 @@ const DemoDetail: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isV3 } = useUIVersion();
   
   const [demo, setDemo] = useState<ModuleDemo | null>(null);
   const [schema, setSchema] = useState<OpenAPISchema | null>(null);
@@ -442,7 +445,7 @@ const DemoDetail: React.FC = () => {
                       className={`${styles.viewButton} ${dataViewMode === 'json' ? styles.viewButtonActive : ''}`}
                       onClick={() => setDataViewMode('json')}
                     >
-                      JSON视图
+                      {isV3 ? 'HCL 视图' : 'JSON视图'}
                     </button>
                   </div>
                   
@@ -552,6 +555,11 @@ const DemoDetail: React.FC = () => {
                         </p>
                       </div>
                     )
+                  ) : isV3 ? (
+                    <HCLView
+                      data={displayData}
+                      moduleName={demo?.name?.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'demo'}
+                    />
                   ) : (
                     <div style={{
                       background: '#f8f9fa',

@@ -6,6 +6,10 @@ import { Alert, Button, Space, Tag } from 'antd';
 import { ArrowUpOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { detectSchemaVersion } from '../../services/schemaVersionDetector';
 import { FormRenderer as OpenAPIFormRenderer } from '../OpenAPIFormRenderer';
+import FormRendererV3 from '../OpenAPIFormRenderer/FormRendererV3';
+import { useUIVersionContext } from '../../contexts/UIVersionContext';
+import { UIVersionProvider } from '../../contexts/UIVersionContext';
+import { useUIVersion } from '../../hooks/useUIVersion';
 import type { OpenAPIFormSchema, AIAssistantConfig } from '../OpenAPIFormRenderer/types';
 
 interface ManifestContext {
@@ -57,6 +61,7 @@ const ModuleFormRenderer: React.FC<ModuleFormRendererProps> = ({
   // 检测 Schema 版本
   const schemaVersion = useMemo(() => detectSchemaVersion(schema), [schema]);
   const isV2 = schemaVersion === 'v2';
+  const { isV3 } = useUIVersion();
 
   // 渲染版本标识
   const renderVersionBadge = () => {
@@ -110,10 +115,11 @@ const ModuleFormRenderer: React.FC<ModuleFormRendererProps> = ({
 
   // 渲染 V2 表单
   if (isV2) {
+    const RendererComponent = isV3 ? FormRendererV3 : OpenAPIFormRenderer;
     return (
       <div>
         {renderVersionBadge()}
-        <OpenAPIFormRenderer
+        <RendererComponent
           schema={schema as OpenAPIFormSchema}
           initialValues={initialValues}
           onChange={onChange}
@@ -130,8 +136,6 @@ const ModuleFormRenderer: React.FC<ModuleFormRendererProps> = ({
       </div>
     );
   }
-
-  // 渲染 V1 表单（使用旧的 DynamicForm 或简单展示）
   return (
     <div>
       {renderVersionBadge()}

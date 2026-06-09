@@ -4,6 +4,8 @@ import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import api from '../services/api';
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
+import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
+import { useUIVersion } from '../hooks/useUIVersion';
 import { 
   AITriggerButton, 
   AIInputPanel, 
@@ -11,6 +13,7 @@ import {
   useAIConfigGenerator 
 } from '../components/OpenAPIFormRenderer/AIFormAssistant';
 import { JsonEditor } from '../components/DynamicForm/JsonEditor';
+import HCLEditor from '../components/HCLEditor/HCLEditor';
 import { moduleDemoService } from '../services/moduleDemos';
 import { schemaV2Service } from '../services/schemaV2';
 import { getVersion, type ModuleVersion } from '../services/moduleVersions';
@@ -33,6 +36,7 @@ const CreateDemo: React.FC = () => {
   const versionId = searchParams.get('version_id');
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { isV3 } = useUIVersion();
   
   const [module, setModule] = useState<Module | null>(null);
   const [currentVersion, setCurrentVersion] = useState<ModuleVersion | null>(null);
@@ -283,7 +287,7 @@ const CreateDemo: React.FC = () => {
           
           // schema 不存在的情况由后续 schemaV2Service.getSchemaV2() 的 catch 处理
         } catch (error) {
-          console.warn('Failed to load version:', error);
+          // version load failed — ignore
         }
       }
       
@@ -296,7 +300,6 @@ const CreateDemo: React.FC = () => {
         setViewMode('json');
       }
     } catch (error: any) {
-      console.warn('Failed to load schema:', error);
       setNoSchema(true);
       setViewMode('json');
     } finally {
@@ -464,7 +467,7 @@ const CreateDemo: React.FC = () => {
                     className={`${styles.viewButton} ${viewMode === 'json' ? styles.viewButtonActive : ''}`}
                     onClick={() => setViewMode('json')}
                   >
-                    JSON视图
+                    {isV3 ? 'HCL 视图' : 'JSON视图'}
                   </button>
                 </div>
               </div>
@@ -498,7 +501,7 @@ const CreateDemo: React.FC = () => {
                 justifyContent: 'space-between',
                 alignItems: 'center'
               }}>
-                <span> 表单渲染失败，已自动切换到JSON视图。编辑完成后可点击"表单视图"按钮重新尝试。</span>
+                <span> 表单渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图。编辑完成后可点击"表单视图"按钮重新尝试。</span>
               </div>
             )}
             
@@ -507,15 +510,33 @@ const CreateDemo: React.FC = () => {
                 onError={() => {
                   setFormRenderError(true);
                   setViewMode('json');
-                  showToast('表单渲染失败，已切换到JSON视图', 'warning');
+                  showToast(`表单渲染失败，已切换到${isV3 ? 'HCL' : 'JSON'}视图`, 'warning');
                 }}
               >
-                <OpenAPIFormRenderer
-                  schema={schema}
-                  initialValues={formData}
-                  onChange={setFormData}
-                />
+                {isV3 ? (
+                  <FormRendererV3
+                    schema={schema}
+                    initialValues={formData}
+                    onChange={setFormData}
+                  />
+                ) : (
+                  <OpenAPIFormRenderer
+                    schema={schema}
+                    initialValues={formData}
+                    onChange={setFormData}
+                  />
+                )}
               </ErrorBoundary>
+            ) : isV3 ? (
+              <HCLEditor
+                data={filteredFormData}
+                onChange={setFormData}
+                readOnly={false}
+                schema={schema}
+                skipDefaults={true}
+                minHeight={300}
+                maxHeight={600}
+              />
             ) : (
               <JsonEditor
                 value={JSON.stringify(filteredFormData, null, 2)}
@@ -524,7 +545,7 @@ const CreateDemo: React.FC = () => {
                     const parsed = JSON.parse(value);
                     setFormData(parsed);
                   } catch (e) {
-                    console.error('Invalid JSON:', e);
+                    // invalid JSON — ignore
                   }
                 }}
                 minHeight={300}
@@ -587,7 +608,6 @@ class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error('Form render error:', error, errorInfo);
     this.props.onError();
   }
 

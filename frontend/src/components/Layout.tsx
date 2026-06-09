@@ -6,6 +6,7 @@ import { logout } from '../store/slices/authSlice';
 import { authService } from '../services/auth';
 import MotivationalQuote from './MotivationalQuote';
 import NoPermission from '../pages/NoPermission';
+import { useUIVersion } from '../hooks/useUIVersion';
 import styles from './Layout.module.css';
 
 const Layout: React.FC = () => {
@@ -23,6 +24,7 @@ const Layout: React.FC = () => {
   const [hasVariableSetsPermission, setHasVariableSetsPermission] = useState(false);
   const [hasGlobalSettingsPermission, setHasGlobalSettingsPermission] = useState(false);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
+  const { isV3, setVersion } = useUIVersion();
 
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -326,6 +328,25 @@ const Layout: React.FC = () => {
           <MotivationalQuote username={user?.username} />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              onClick={() => setVersion(isV3 ? 'v2' : 'v3')}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '6px',
+                border: '1px solid',
+                borderColor: isV3 ? '#93c5fd' : '#e2e8f0',
+                background: isV3 ? '#eff6ff' : '#fff',
+                color: isV3 ? '#2563eb' : '#6b7280',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                lineHeight: '1.4',
+              }}
+              title={isV3 ? '切换到经典 UI (v2)' : '切换到新版 UI (v3)'}
+            >
+              UI {isV3 ? 'v3' : 'v2'}
+            </button>
             <div className={styles.userMenu} onClick={() => setShowUserMenu(!showUserMenu)}>
               <div className={styles.avatar}>
                 {user?.username?.charAt(0).toUpperCase()}

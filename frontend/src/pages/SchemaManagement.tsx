@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import DynamicForm, { type FormSchema, FormPreview } from '../components/DynamicForm';
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
+import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
+import HCLEditor from '../components/HCLEditor/HCLEditor';
+import { useUIVersion } from '../hooks/useUIVersion';
 import { OpenAPISchemaEditor } from '../components/OpenAPISchemaEditor';
 import { JsonDiff } from '../components/JsonDiff';
 import { useToast } from '../contexts/ToastContext';
@@ -39,6 +42,7 @@ const SchemaManagement: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { isV3 } = useUIVersion();
   const [module, setModule] = useState<Module | null>(null);
   const [schemas, setSchemas] = useState<Schema[]>([]);
   const [activeSchema, setActiveSchema] = useState<Schema | null>(null);
@@ -49,8 +53,8 @@ const SchemaManagement: React.FC = () => {
   // 从 URL 参数获取初始 tab
   const getInitialTab = (): 'form' | 'json' | 'outputs' | 'versions' => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'json' || tabParam === 'outputs' || tabParam === 'versions') {
-      return tabParam;
+    if (tabParam === 'json' || tabParam === 'hcl' || tabParam === 'outputs' || tabParam === 'versions') {
+      return tabParam === 'hcl' ? 'json' : tabParam;
     }
     return 'form';
   };
@@ -323,10 +327,10 @@ const SchemaManagement: React.FC = () => {
   };
 
   const handleTabChange = (tab: 'form' | 'json' | 'outputs' | 'versions') => {
-    if (tab === 'json' && activeTab === 'form') {
+    if (tab === 'json' && activeTab === 'form' && !isV3) {
       setJsonString(JSON.stringify(formValues, null, 2));
       setJsonError(null);
-    } else if (tab === 'form' && activeTab === 'json') {
+    } else if (tab === 'form' && activeTab === 'json' && !isV3) {
       try {
         const parsed = JSON.parse(jsonString);
         setFormValues(parsed);
@@ -338,10 +342,12 @@ const SchemaManagement: React.FC = () => {
       }
     }
     setActiveTab(tab);
-    
-    // 更新 URL 参数
+
+    // 更新 URL 参数 — v3 模式下用 hcl 替代 json
     if (tab === 'form') {
       searchParams.delete('tab');
+    } else if (tab === 'json' && isV3) {
+      searchParams.set('tab', 'hcl');
     } else {
       searchParams.set('tab', tab);
     }
@@ -540,8 +546,9 @@ const SchemaManagement: React.FC = () => {
     if (!activeSchema) return null;
 
     if (isV2Schema(activeSchema)) {
+      const Renderer = isV3 ? FormRendererV3 : OpenAPIFormRenderer;
       return (
-        <OpenAPIFormRenderer
+        <Renderer
           schema={activeSchema.openapi_schema}
           initialValues={formValues}
           onChange={setFormValues}
@@ -746,7 +753,7 @@ const SchemaManagement: React.FC = () => {
               className={`${styles.tab} ${activeTab === 'json' ? styles.active : ''}`}
               onClick={() => handleTabChange('json')}
             >
-              配置 JSON
+              {isV3 ? '配置 HCL' : '配置 JSON'}
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'outputs' ? styles.active : ''}`}
@@ -776,23 +783,35 @@ const SchemaManagement: React.FC = () => {
             )}
 
             {activeTab === 'json' && (
-              <div className={styles.jsonEditorContainer}>
-                <div className={styles.jsonToolbar}>
-                  <button onClick={formatJSON} className={styles.toolButton}>格式化</button>
-                  <button onClick={copyJSON} className={styles.toolButton}>复制</button>
-                  <span className={styles.toolHint}>
-                    提示：修改 JSON 后切换到"配置表单"即可应用更改
-                  </span>
-                </div>
-                <textarea
-                  value={jsonString}
-                  onChange={(e) => setJsonString(e.target.value)}
-                  className={styles.jsonEditor}
-                  spellCheck={false}
-                  placeholder="在此编辑 JSON 配置..."
+              isV3 ? (
+                <HCLEditor
+                  data={formValues}
+                  onChange={setFormValues}
+                  readOnly={false}
+                  schema={isV2Schema(activeSchema) ? activeSchema.openapi_schema : undefined}
+                  skipDefaults={true}
+                  minHeight={400}
+                  maxHeight={600}
                 />
-                {jsonError && <div className={styles.jsonError}>{jsonError}</div>}
-              </div>
+              ) : (
+                <div className={styles.jsonEditorContainer}>
+                  <div className={styles.jsonToolbar}>
+                    <button onClick={formatJSON} className={styles.toolButton}>格式化</button>
+                    <button onClick={copyJSON} className={styles.toolButton}>复制</button>
+                    <span className={styles.toolHint}>
+                      提示：修改 JSON 后切换到"配置表单"即可应用更改
+                    </span>
+                  </div>
+                  <textarea
+                    value={jsonString}
+                    onChange={(e) => setJsonString(e.target.value)}
+                    className={styles.jsonEditor}
+                    spellCheck={false}
+                    placeholder="在此编辑 JSON 配置..."
+                  />
+                  {jsonError && <div className={styles.jsonError}>{jsonError}</div>}
+                </div>
+              )
             )}
 
             {activeTab === 'outputs' && renderOutputsList()}
@@ -818,9 +837,20 @@ const SchemaManagement: React.FC = () => {
         <div className={styles.modalOverlay} onClick={() => setShowPreview(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2>配置预览</h2>
-            <pre className={styles.previewCode}>
-              {JSON.stringify(formValues, null, 2)}
-            </pre>
+            {isV3 ? (
+              <HCLEditor
+                data={formValues}
+                readOnly={true}
+                schema={isV2Schema(activeSchema) ? activeSchema.openapi_schema : undefined}
+                skipDefaults={true}
+                minHeight={300}
+                maxHeight={500}
+              />
+            ) : (
+              <pre className={styles.previewCode}>
+                {JSON.stringify(formValues, null, 2)}
+              </pre>
+            )}
             <div className={styles.modalActions}>
               <button onClick={() => setShowPreview(false)} className={styles.closeButton}>
                 关闭

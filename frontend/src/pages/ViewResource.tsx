@@ -1,12 +1,16 @@
-import React, { useState, useEffect, Component, type ReactNode } from 'react';
+import React, { useState, useEffect, useMemo, Component, type ReactNode } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { processApiSchema } from '../utils/schemaTypeMapper';
 import api from '../services/api';
+import { listVersions } from '../services/moduleVersions';
 import { FormPreview } from '../components/DynamicForm';
 import type { FormSchema } from '../components/DynamicForm';
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
+import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
+import HCLView from '../components/HCLView/HCLView';
+import { useUIVersion } from '../hooks/useUIVersion';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SplitButton from '../components/SplitButton';
 import ResourceRunDialog from '../components/ResourceRunDialog';
@@ -76,7 +80,8 @@ const ViewResource: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+  const { isV3 } = useUIVersion();
+
   const [resource, setResource] = useState<Resource | null>(null);
   const [schema, setSchema] = useState<any>(null); // 支持 v1 和 v2 schema
   const [rawSchema, setRawSchema] = useState<any>(null); // 原始 schema 数据（用于 ModuleFormRenderer）
@@ -97,6 +102,28 @@ const ViewResource: React.FC = () => {
   const [formRenderError, setFormRenderError] = useState(false);
   const [showRunDialog, setShowRunDialog] = useState(false);
   const [matchedModule, setMatchedModule] = useState<{ id: number; name: string } | null>(null);
+  const [resourceModuleSource, setResourceModuleSource] = useState<string>('');
+  const [resourceModuleVersion, setResourceModuleVersion] = useState<string>('');
+  const [resourceModuleName, setResourceModuleName] = useState<string>('');
+  const [resourceVersionFound, setResourceVersionFound] = useState(true);
+  const [latestModuleVersion, setLatestModuleVersion] = useState<string>('');
+  const [latestModuleVersionId, setLatestModuleVersionId] = useState<string>('');
+  const [allModuleVersions, setAllModuleVersions] = useState<Array<{ id: string; version: string }>>([]);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [upgradeTargetVersion, setUpgradeTargetVersion] = useState<string>('');
+  const [upgradeTargetVersionId, setUpgradeTargetVersionId] = useState<string>('');
+  const [showVersionSelector, setShowVersionSelector] = useState(false);
+
+  // 判断是否为升级（目标版本 > 当前版本）
+  const isUpgrade = useMemo(() => {
+    const va = (upgradeTargetVersion || '').split('.').map(Number);
+    const vb = (resourceModuleVersion || '').split('.').map(Number);
+    for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+      const diff = (va[i] || 0) - (vb[i] || 0);
+      if (diff !== 0) return diff > 0;
+    }
+    return false;
+  }, [upgradeTargetVersion, resourceModuleVersion]);
 
   useEffect(() => {
     loadResource();
@@ -111,8 +138,8 @@ const ViewResource: React.FC = () => {
     if (resource && versions.length > 0 && !urlInitialized) {
       const urlVersion = searchParams.get('version');
       const urlMode = searchParams.get('mode') as ViewMode;
-      const urlDataView = searchParams.get('view') as DataViewMode;
-      
+      const urlDataView = searchParams.get('view') as string;
+
       if (urlVersion) {
         const versionNum = parseInt(urlVersion);
         if (versions.some(v => v.version === versionNum)) {
@@ -123,7 +150,7 @@ const ViewResource: React.FC = () => {
       } else {
         setSelectedVersion(resource.current_version?.version || null);
       }
-      
+
       if (urlMode === 'compare') {
         setViewMode('compare');
         // 如果是对比模式，触发对比
@@ -134,9 +161,9 @@ const ViewResource: React.FC = () => {
       } else {
         setViewMode('view');
       }
-      
-      if (urlDataView === 'json' || urlDataView === 'form') {
-        setDataViewMode(urlDataView);
+
+      if (urlDataView === 'json' || urlDataView === 'hcl' || urlDataView === 'form') {
+        setDataViewMode(urlDataView === 'hcl' ? 'json' : urlDataView);
       }
       
       setUrlInitialized(true);
@@ -146,12 +173,9 @@ const ViewResource: React.FC = () => {
   useEffect(() => {
     // 当选择版本时，加载该版本的数据
     if (selectedVersion !== null && resource?.current_version?.version) {
-      console.log('🔄 Version changed to:', selectedVersion);
       if (selectedVersion !== resource.current_version.version) {
-        console.log('📥 Loading historical version data...');
         loadVersionData(selectedVersion);
       } else {
-        console.log('📋 Using current version data');
         setDisplayData(formData);
       }
     }
@@ -160,7 +184,6 @@ const ViewResource: React.FC = () => {
   useEffect(() => {
     // 当formData更新时，如果是当前版本，更新displayData
     if (selectedVersion === resource?.current_version?.version && Object.keys(formData).length > 0) {
-      console.log(' Updating displayData with formData:', formData);
       setDisplayData(formData);
     }
   }, [formData, selectedVersion, resource]);
@@ -188,6 +211,7 @@ const ViewResource: React.FC = () => {
           if (Array.isArray(moduleArray) && moduleArray.length > 0) {
             moduleConfig = moduleArray[0];
             moduleSource = moduleConfig.source;
+            setResourceModuleName(moduleKey);
           }
         }
       }
@@ -196,37 +220,74 @@ const ViewResource: React.FC = () => {
         showToast('无法获取Module信息', 'error');
         return;
       }
+
+      // 保存 module source 和 version 到 state（v3 UI 显示用）
+      setResourceModuleSource(moduleSource);
+      const moduleVersion = moduleConfig?.version || '';
+      setResourceModuleVersion(moduleVersion);
       
       // 3. 查找对应的module
       const modulesResponse = await api.get('/modules');
       const modules = modulesResponse.data.items || [];
       
-      console.log('🔍 Looking for module with source:', moduleSource);
-      console.log('📋 Available modules:', modules.map((m: any) => ({
-        id: m.id,
-        name: m.name,
-        source: m.source,
-        module_source: m.module_source
-      })));
-      
-      const foundModule = modules.find((m: any) => 
+      const foundModule = modules.find((m: any) =>
         m.module_source === moduleSource || m.source === moduleSource
       );
-      
-      console.log(' Matched module:', foundModule);
-      
+
       // 保存匹配的 module 信息
       if (foundModule) {
         setMatchedModule({ id: foundModule.id, name: foundModule.name });
       }
-      
+
       if (!foundModule) {
         showToast('找不到对应的Module', 'error');
         console.error('❌ No module found for source:', moduleSource);
         return;
       }
-      
-      // 4. 加载module的schema
+
+      // 4. 加载模块版本列表，检查资源版本是否存在
+      try {
+        const versionsRes = await listVersions(foundModule.id);
+        const versionItems = versionsRes.items || [];
+
+        // 存储所有模块版本（用于版本选择下拉）
+        setAllModuleVersions(versionItems.map((v: any) => ({ id: v.id, version: v.version })));
+
+        // 找到版本号最大的版本（用于升级提示）
+        // 按版本号降序排列，取第一个
+        const sortedVersions = [...versionItems].sort((a: any, b: any) => {
+          const va = (a.version || '').split('.').map(Number);
+          const vb = (b.version || '').split('.').map(Number);
+          for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+            const diff = (vb[i] || 0) - (va[i] || 0);
+            if (diff !== 0) return diff;
+          }
+          return 0;
+        });
+
+        const latestVer = sortedVersions[0];
+        if (latestVer) {
+          setLatestModuleVersion(latestVer.version || '');
+          setLatestModuleVersionId(latestVer.id || '');
+        }
+
+        // 检查资源版本是否在模块版本列表中
+        if (moduleVersion) {
+          const versionMatched = versionItems.some(
+            (v: any) => v.version === moduleVersion
+          );
+          setResourceVersionFound(versionMatched);
+
+          if (!versionMatched) {
+            // 版本不匹配，强制 HCL 视图
+            setDataViewMode('json');
+          }
+        }
+      } catch (versionError) {
+        console.warn('加载模块版本列表失败:', versionError);
+      }
+
+      // 5. 加载module的schema
       const schemaResponse = await api.get(`/modules/${foundModule.id}/schemas`);
       
       let schemasData = [];
@@ -254,10 +315,6 @@ const ViewResource: React.FC = () => {
           }
         }
         
-        console.log('📋 Schema source:', activeSchema.openapi_schema ? 'openapi_schema' : 'schema_data');
-        console.log('📋 Schema version:', activeSchema.schema_version);
-        console.log('📋 Has OpenAPI Schema:', !!activeSchema.openapi_schema);
-        
         // 检查是否是 V2 Schema (OpenAPI 格式) - 与 AddResources.tsx 保持一致
         const isV2 = activeSchema.schema_version === 'v2' && !!activeSchema.openapi_schema;
         
@@ -265,7 +322,6 @@ const ViewResource: React.FC = () => {
         setRawSchema(activeSchema);
         
         if (isV2) {
-          console.log('📊 Using V2 OpenAPI Schema');
           setSchema(activeSchema);
         } else {
           // V1 Schema 处理
@@ -281,15 +337,13 @@ const ViewResource: React.FC = () => {
           
           // 使用processApiSchema处理类型转换
           const processedSchema = processApiSchema(activeSchema);
-          console.log('📊 Processed V1 Schema:', processedSchema);
-          
+
           setSchema(processedSchema);
         }
         
         // 5. 提取表单数据
         if (moduleConfig) {
           const { source, version, ...configData } = moduleConfig; // 排除 source 和 version
-          console.log('📝 Extracted form data:', configData);
           setFormData(configData);
           // 直接设置 displayData，不等待 selectedVersion 的设置
           setDisplayData(configData);
@@ -315,6 +369,19 @@ const ViewResource: React.FC = () => {
 
   const handleBack = () => {
     navigate(`/workspaces/${id}?tab=resources`);
+  };
+
+  // 切换模块版本 — 跳转到编辑页面，由用户确认后提交
+  const handleVersionSwitch = (targetVersionId: string, targetVersion: string) => {
+    setShowVersionSelector(false);
+    setUpgradeTargetVersionId(targetVersionId);
+    setUpgradeTargetVersion(targetVersion);
+    setShowUpgradeDialog(true);
+  };
+
+  const handleConfirmVersionSwitch = () => {
+    setShowUpgradeDialog(false);
+    navigate(`/workspaces/${id}/resources/${resourceId}/edit?upgrade_to=${upgradeTargetVersionId}`);
   };
 
   const loadVersions = async () => {
@@ -347,13 +414,9 @@ const ViewResource: React.FC = () => {
     
     const moduleKey = moduleKeys[0];
     const moduleArray = moduleData[moduleKey];
-    
-    console.log('📝 Module key:', moduleKey);
-    console.log('📝 Module array:', moduleArray);
-    
+
     if (Array.isArray(moduleArray) && moduleArray.length > 0) {
       const { source, ...config } = moduleArray[0];
-      console.log(' Successfully extracted config:', config);
       return config;
     }
     
@@ -363,48 +426,37 @@ const ViewResource: React.FC = () => {
 
   const loadVersionData = async (version: number) => {
     try {
-      console.log(`🌐 Fetching version ${version} data...`);
       const versionResponse: any = await api.get(
         `/workspaces/${id}/resources/${resourceId}/versions/${version}`
       );
-      
-      console.log('📦 Full API response:', versionResponse);
-      console.log('📦 versionResponse.data:', versionResponse.data);
-      
+
       // 尝试多种可能的数据路径
-      const versionDataResponse = versionResponse.data?.version || 
-                                   versionResponse.data || 
+      const versionDataResponse = versionResponse.data?.version ||
+                                   versionResponse.data ||
                                    versionResponse.version ||
                                    versionResponse;
-      
-      console.log('📦 Version data:', versionDataResponse);
-      console.log('📦 tf_code type:', typeof versionDataResponse.tf_code);
-      console.log('📦 tf_code content:', versionDataResponse.tf_code);
-      
+
       // 如果tf_code是字符串，需要先解析
       let tfCode = versionDataResponse.tf_code;
       if (typeof tfCode === 'string') {
         try {
           tfCode = JSON.parse(tfCode);
-          console.log('📦 Parsed tf_code:', tfCode);
         } catch (e) {
           console.error('❌ Failed to parse tf_code:', e);
         }
       }
-      
+
       if (!tfCode) {
         console.error('❌ tf_code is undefined or null!');
         console.error('❌ versionDataResponse keys:', Object.keys(versionDataResponse));
         showToast('无法获取版本数据', 'error');
         return;
       }
-      
+
       const config = extractModuleConfig(tfCode);
-      console.log('⚙️ Extracted config:', config);
-      
+
       if (Object.keys(config).length > 0) {
         setDisplayData(config);
-        console.log(' DisplayData updated with config');
       } else {
         console.error('❌ Extracted config is empty!');
       }
@@ -554,66 +606,50 @@ const ViewResource: React.FC = () => {
 
   const handleCompareVersions = async (fromVer: number, toVer: number) => {
     try {
-      console.log(`🔀 Comparing versions: v${fromVer} → v${toVer}`);
-      
       const [fromResponse, toResponse]: any[] = await Promise.all([
         api.get(`/workspaces/${id}/resources/${resourceId}/versions/${fromVer}`),
         api.get(`/workspaces/${id}/resources/${resourceId}/versions/${toVer}`)
       ]);
-      
-      console.log('📦 From response:', fromResponse);
-      console.log('📦 To response:', toResponse);
-      
+
       // 使用与loadVersionData相同的数据提取逻辑
-      const fromData = fromResponse.data?.version || 
-                       fromResponse.data || 
+      const fromData = fromResponse.data?.version ||
+                       fromResponse.data ||
                        fromResponse.version ||
                        fromResponse;
-      const toData = toResponse.data?.version || 
-                     toResponse.data || 
+      const toData = toResponse.data?.version ||
+                     toResponse.data ||
                      toResponse.version ||
                      toResponse;
-      
-      console.log('📦 From data:', fromData);
-      console.log('📦 To data:', toData);
-      
+
       // 处理tf_code可能是字符串的情况
       let fromTfCode = fromData.tf_code;
       let toTfCode = toData.tf_code;
-      
+
       if (typeof fromTfCode === 'string') {
         fromTfCode = JSON.parse(fromTfCode);
       }
       if (typeof toTfCode === 'string') {
         toTfCode = JSON.parse(toTfCode);
       }
-      
-      console.log('📦 From tf_code:', fromTfCode);
-      console.log('📦 To tf_code:', toTfCode);
-      
+
       if (!fromTfCode || !toTfCode) {
         console.error('❌ tf_code is missing!');
         showToast('无法获取版本数据', 'error');
         return;
       }
-      
+
       const fromConfig = extractModuleConfig(fromTfCode);
       const toConfig = extractModuleConfig(toTfCode);
-      
-      console.log('⚙️ From config:', fromConfig);
-      console.log('⚙️ To config:', toConfig);
-      
+
       if (Object.keys(fromConfig).length === 0 && Object.keys(toConfig).length === 0) {
         console.error('❌ Both configs are empty!');
         showToast('无法提取配置数据', 'error');
         return;
       }
-      
+
       const diff = calculateDiff(fromConfig, toConfig);
-      console.log('📊 Diff fields:', diff);
-      
+
       setDiffFields(diff);
-      console.log(' Diff fields set, count:', diff.length);
     } catch (error: any) {
       console.error('❌ 对比版本失败:', error);
       showToast(extractErrorMessage(error), 'error');
@@ -753,10 +789,10 @@ const ViewResource: React.FC = () => {
                 {extractModuleVersion(resource.current_version?.tf_code) && (
                   <div className={styles.infoRow}>
                     <span className={styles.infoLabel}>Module 版本:</span>
-                    <span className={styles.infoValue} style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '8px' 
+                    <span className={styles.infoValue} style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}>
                       <span style={{
                         padding: '2px 8px',
@@ -766,8 +802,185 @@ const ViewResource: React.FC = () => {
                         fontSize: '12px',
                         fontWeight: 600
                       }}>
-                        {extractModuleVersion(resource.current_version?.tf_code)}
+                        {resourceModuleVersion || extractModuleVersion(resource.current_version?.tf_code)}
                       </span>
+
+                      {/* 版本选择器按钮 */}
+                      {allModuleVersions.length > 1 && (
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <button
+                            onClick={() => setShowVersionSelector(!showVersionSelector)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid #e2e8f0',
+                              background: 'white',
+                              color: '#64748b',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = '#94a3b8';
+                              e.currentTarget.style.color = '#334155';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = '#e2e8f0';
+                              e.currentTarget.style.color = '#64748b';
+                            }}
+                            title="切换模块版本"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M7 15l5 5 5-5" />
+                              <path d="M7 9l5-5 5 5" />
+                            </svg>
+                          </button>
+
+                          {/* 版本下拉菜单 */}
+                          {showVersionSelector && (
+                            <>
+                              {/* 点击外部关闭 */}
+                              <div
+                                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }}
+                                onClick={() => setShowVersionSelector(false)}
+                              />
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                marginTop: '4px',
+                                background: 'white',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                zIndex: 100,
+                                minWidth: '160px',
+                                maxHeight: '240px',
+                                overflowY: 'auto',
+                                padding: '4px',
+                              }}>
+                                {allModuleVersions
+                                  .sort((a, b) => {
+                                    const va = a.version.split('.').map(Number);
+                                    const vb = b.version.split('.').map(Number);
+                                    for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+                                      const diff = (vb[i] || 0) - (va[i] || 0);
+                                      if (diff !== 0) return diff;
+                                    }
+                                    return 0;
+                                  })
+                                  .map((v) => {
+                                    const isCurrent = v.version === resourceModuleVersion;
+                                    const isLatest = v.version === latestModuleVersion;
+                                    return (
+                                      <div
+                                        key={v.id}
+                                        onClick={() => !isCurrent && handleVersionSwitch(v.id, v.version)}
+                                        style={{
+                                          padding: '8px 12px',
+                                          borderRadius: '6px',
+                                          cursor: isCurrent ? 'default' : 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          gap: '8px',
+                                          background: isCurrent ? '#f1f5f9' : 'transparent',
+                                          transition: 'background 0.1s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          if (!isCurrent) e.currentTarget.style.background = '#f8fafc';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          if (!isCurrent) e.currentTarget.style.background = 'transparent';
+                                        }}
+                                      >
+                                        <span style={{
+                                          fontSize: '13px',
+                                          fontWeight: isCurrent ? 600 : 400,
+                                          color: isCurrent ? '#334155' : '#475569',
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                        }}>
+                                          {v.version}
+                                        </span>
+                                        <span style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                          {isCurrent && (
+                                            <span style={{
+                                              fontSize: '10px',
+                                              padding: '1px 6px',
+                                              borderRadius: '3px',
+                                              background: '#667eea',
+                                              color: 'white',
+                                              fontWeight: 600,
+                                            }}>当前</span>
+                                          )}
+                                          {isLatest && !isCurrent && (
+                                            <span style={{
+                                              fontSize: '10px',
+                                              padding: '1px 6px',
+                                              borderRadius: '3px',
+                                              background: '#dcfce7',
+                                              color: '#166534',
+                                              fontWeight: 600,
+                                            }}>最新</span>
+                                          )}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 有新版本可用时显示升级快捷提示 */}
+                      {latestModuleVersion && latestModuleVersion !== resourceModuleVersion && (
+                        <span
+                          onClick={() => handleVersionSwitch(latestModuleVersionId, latestModuleVersion)}
+                          style={{
+                            fontSize: '12px',
+                            color: '#3b82f6',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#dbeafe';
+                            e.currentTarget.style.borderColor = '#93c5fd';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#eff6ff';
+                            e.currentTarget.style.borderColor = '#bfdbfe';
+                          }}
+                          title={`点击升级到 ${latestModuleVersion}`}
+                        >
+                          {resourceModuleVersion} → {latestModuleVersion}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M7 17L17 7" />
+                            <path d="M7 7h10v10" />
+                          </svg>
+                        </span>
+                      )}
+
+                      {/* 版本不存在时的警告 */}
+                      {!resourceVersionFound && !latestModuleVersion && (
+                        <span style={{
+                          fontSize: '11px',
+                          color: '#dc2626',
+                          fontWeight: 500,
+                        }}>
+                          (版本不存在)
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}
@@ -802,7 +1015,9 @@ const ViewResource: React.FC = () => {
                           newParams.delete('view');
                           setSearchParams(newParams, { replace: true });
                         }}
-                        title={formRenderError ? '点击重新尝试表单视图' : '切换到表单视图'}
+                        title={!resourceVersionFound ? '版本不匹配，无法使用表单视图' : formRenderError ? '点击重新尝试表单视图' : '切换到表单视图'}
+                        disabled={!resourceVersionFound}
+                        style={!resourceVersionFound ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                       >
                         表单视图
                       </button>
@@ -812,11 +1027,11 @@ const ViewResource: React.FC = () => {
                           setDataViewMode('json');
                           // 更新URL参数
                           const newParams = new URLSearchParams(searchParams);
-                          newParams.set('view', 'json');
+                          newParams.set('view', isV3 ? 'hcl' : 'json');
                           setSearchParams(newParams, { replace: true });
                         }}
                       >
-                        JSON视图
+                        {isV3 ? 'HCL 视图' : 'JSON视图'}
                       </button>
                     </div>
                     
@@ -873,29 +1088,56 @@ const ViewResource: React.FC = () => {
                       color: '#856404',
                       marginBottom: '16px'
                     }}>
-                       表单渲染失败，已自动切换到JSON视图
+                       表单渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图
+                    </div>
+                  )}
+
+                  {/* 版本不匹配时，禁止表单渲染，强制 HCL 模式 */}
+                  {!resourceVersionFound && (
+                    <div style={{
+                      padding: '12px 16px',
+                      background: '#fef2f2',
+                      border: '1px solid #fca5a5',
+                      borderRadius: '6px',
+                      color: '#991b1b',
+                      marginBottom: '16px',
+                    }}>
+                      ⚠ 资源使用的模块版本 <strong>{resourceModuleVersion || 'unknown'}</strong> 在当前模块版本列表中不存在，无法渲染表单。
+                      {latestModuleVersion && (
+                        <> 最新版本为 <strong>{latestModuleVersion}</strong>，<a href={`/modules/${matchedModule?.id}/schemas`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>点击前往升级</a>。</>
+                      )}
                     </div>
                   )}
 
                   <div className={styles.previewContent}>
-                    {dataViewMode === 'form' && !formRenderError ? (
+                    {dataViewMode === 'form' && !formRenderError && resourceVersionFound ? (
                       <ErrorBoundary
                         onError={() => {
                           setFormRenderError(true);
                           setDataViewMode('json');
-                          showToast('表单渲染失败，已切换到JSON视图', 'warning');
+                          showToast(`表单渲染失败，已切换到${isV3 ? 'HCL' : 'JSON'}视图`, 'warning');
                         }}
                       >
                         {/* 根据 schema 版本选择渲染器 - 与 AddResources.tsx 保持一致 */}
                         {rawSchema?.schema_version === 'v2' && rawSchema?.openapi_schema ? (
                           // 使用 key 强制在 displayData 变化时重新渲染组件
-                          <OpenAPIFormRenderer
-                            key={JSON.stringify(displayData)}
-                            schema={rawSchema.openapi_schema}
-                            initialValues={displayData}
-                            onChange={() => {}}
-                            readOnly={true}
-                          />
+                          isV3 ? (
+                            <FormRendererV3
+                              key={JSON.stringify(displayData)}
+                              schema={rawSchema.openapi_schema}
+                              initialValues={displayData}
+                              onChange={() => {}}
+                              readOnly={true}
+                            />
+                          ) : (
+                            <OpenAPIFormRenderer
+                              key={JSON.stringify(displayData)}
+                              schema={rawSchema.openapi_schema}
+                              initialValues={displayData}
+                              onChange={() => {}}
+                              readOnly={true}
+                            />
+                          )
                         ) : (
                           <FormPreview
                             schema={(schema as any).schema_data || schema}
@@ -908,25 +1150,34 @@ const ViewResource: React.FC = () => {
                         )}
                       </ErrorBoundary>
                     ) : (
-                      <div style={{
-                        background: '#f8f9fa',
-                        border: '1px solid #dee2e6',
-                        borderRadius: '6px',
-                        padding: '16px',
-                        maxHeight: '600px',
-                        overflow: 'auto'
-                      }}>
-                        <pre style={{
-                          margin: 0,
-                          fontFamily: 'Monaco, Menlo, Consolas, monospace',
-                          fontSize: '13px',
-                          lineHeight: '1.5',
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word'
+                      isV3 ? (
+                        <HCLView
+                          data={displayData}
+                          moduleSource={resourceModuleSource}
+                          moduleVersion={resourceModuleVersion}
+                          moduleName={resourceModuleName}
+                        />
+                      ) : (
+                        <div style={{
+                          background: '#f8f9fa',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          padding: '16px',
+                          maxHeight: '600px',
+                          overflow: 'auto'
                         }}>
-                          {JSON.stringify(displayData, null, 2)}
-                        </pre>
-                      </div>
+                          <pre style={{
+                            margin: 0,
+                            fontFamily: 'Monaco, Menlo, Consolas, monospace',
+                            fontSize: '13px',
+                            lineHeight: '1.5',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word'
+                          }}>
+                            {JSON.stringify(displayData, null, 2)}
+                          </pre>
+                        </div>
+                      )
                     )}
                   </div>
                 </div>
@@ -1333,6 +1584,16 @@ const ViewResource: React.FC = () => {
       />
         </div>
       </div>
+      {/* 版本切换确认对话框 */}
+      <ConfirmDialog
+        isOpen={showUpgradeDialog}
+        title={isUpgrade ? '升级模块版本' : '切换模块版本'}
+        message={`确定要将模块版本从 ${resourceModuleVersion} ${isUpgrade ? '升级' : '切换'}到 ${upgradeTargetVersion} 吗？\n\n将跳转到编辑页面，使用目标版本的 Schema 渲染表单。请确认配置无误后提交保存，提交后资源的模块版本将正式变更。`}
+        confirmText="前往编辑"
+        cancelText="取消"
+        onConfirm={handleConfirmVersionSwitch}
+        onCancel={() => setShowUpgradeDialog(false)}
+      />
     </div>
   );
 };

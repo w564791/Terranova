@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
+import { useUIVersion } from '../hooks/useUIVersion';
+import { jsonToHCL } from '../utils/hclFormatter';
 import styles from './ResourceVersionDiff.module.css';
 
 interface Version {
@@ -45,6 +47,7 @@ const ResourceVersionDiff: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const { showToast } = useToast();
+  const { isV3 } = useUIVersion();
 
   useEffect(() => {
     if (isOpen) {
@@ -138,6 +141,13 @@ const ResourceVersionDiff: React.FC<Props> = ({
   const formatValue = (value: any): string => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'object') {
+      if (isV3) {
+        try {
+          return jsonToHCL(value, { moduleName: 'diff', skipDefaults: false });
+        } catch {
+          return JSON.stringify(value, null, 2);
+        }
+      }
       return JSON.stringify(value, null, 2);
     }
     return String(value);

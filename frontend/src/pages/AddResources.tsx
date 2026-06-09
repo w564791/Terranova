@@ -6,6 +6,9 @@ import { processApiSchema } from '../utils/schemaTypeMapper';
 import api from '../services/api';
 import DynamicForm, { FormPreview } from '../components/DynamicForm';
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
+import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
+import HCLView from '../components/HCLView/HCLView';
+import { useUIVersion } from '../hooks/useUIVersion';
 import { 
   AITriggerButton, 
   AIInputPanel, 
@@ -13,6 +16,7 @@ import {
   useAIConfigGenerator 
 } from '../components/OpenAPIFormRenderer/AIFormAssistant';
 import { JsonEditor } from '../components/DynamicForm/JsonEditor';
+import HCLEditor from '../components/HCLEditor/HCLEditor';
 import DemoSelector from '../components/DemoSelector';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TopBar from '../components/TopBar';
@@ -172,6 +176,7 @@ const AddResources: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { isV3 } = useUIVersion();
   
   // 从 URL 参数获取 module 和版本（特殊入口，用于指定非默认版本）
   const urlModuleParam = searchParams.get('module');
@@ -501,8 +506,7 @@ const AddResources: React.FC = () => {
   const loadModules = async () => {
     try {
       const response = await api.get('/modules');
-      console.log('📦 Modules API Response:', response.data);
-      
+
       // 处理不同的响应格式
       let modulesData: Module[] = [];
       if (response.data.items) {
@@ -513,7 +517,6 @@ const AddResources: React.FC = () => {
         modulesData = response.data.data;
       }
       
-      console.log('📦 Loaded modules:', modulesData.map(m => ({ id: m.id, name: m.name, version: m.version })));
       setModules(modulesData);
     } catch (error: any) {
       showToast(extractErrorMessage(error), 'error');
@@ -587,12 +590,11 @@ const AddResources: React.FC = () => {
           // 通过版本号查找（URL 参数是版本号字符串，如 "1.0.0"）
           versionToSelect = versionItems.find((v: ModuleVersion) => v.version === urlVersionParam);
           if (versionToSelect) {
-            console.log(`📦 URL version param found: ${urlVersionParam} for module ${moduleId} (ID: ${versionToSelect.id})`);
           } else {
             console.warn(`📦 URL version param "${urlVersionParam}" not found for module ${moduleId}, falling back to default`);
           }
         } else if (urlVersionParam && !urlModuleMatches) {
-          console.log(`📦 URL version param "${urlVersionParam}" ignored (module mismatch: URL=${urlModuleParam}, current=${moduleId})`);
+          // URL version param ignored due to module mismatch
         }
         
         // 如果 URL 没有指定版本或版本不存在，使用默认版本
@@ -605,8 +607,7 @@ const AddResources: React.FC = () => {
         
         if (versionToSelect) {
           setSelectedVersionId(versionToSelect.id);
-          console.log(`📦 Version selected: ${versionToSelect.version} (ID: ${versionToSelect.id})`);
-          
+
           // 更新 URL 参数，显示当前使用的 module 和版本
           const newParams = new URLSearchParams(searchParams);
           newParams.set('module', String(moduleId));
@@ -614,8 +615,7 @@ const AddResources: React.FC = () => {
           setSearchParams(newParams, { replace: true });
         } else {
           setSelectedVersionId('');
-          console.log('📦 No versions available');
-          
+
           // 即使没有版本，也更新 module 参数
           const newParams = new URLSearchParams(searchParams);
           newParams.set('module', String(moduleId));
@@ -634,8 +634,7 @@ const AddResources: React.FC = () => {
       try {
         const promptsRes = await moduleService.getModulePrompts(moduleId);
         const promptsData = promptsRes.data?.items || [];
-        console.log('💡 Module prompts loaded:', promptsData);
-        
+
         // 更新 modules 状态中对应模块的 ai_prompts
         setModules(prev => prev.map(m => 
           m.id === moduleId ? { ...m, ai_prompts: promptsData } : m
@@ -646,8 +645,7 @@ const AddResources: React.FC = () => {
       }
       
       const response = await api.get(`/modules/${moduleId}/schemas`);
-      console.log('📊 Schema API Response:', response.data);
-      
+
       // 处理不同的响应格式
       let schemasData = [];
       if (response.data.data) {
@@ -656,19 +654,12 @@ const AddResources: React.FC = () => {
         schemasData = response.data;
       }
       
-      console.log('📊 Schemas Data:', schemasData);
-      
       if (schemasData.length > 0) {
         // 选择第一个active状态的schema或第一个schema
         let activeSchema = schemasData[0];
-        
-        console.log('📊 Active Schema:', activeSchema);
-        console.log('📊 Schema Version:', activeSchema.schema_version);
-        console.log('📊 Has OpenAPI Schema:', !!activeSchema.openapi_schema);
-        
+
         // 检查是否是 V2 Schema (OpenAPI 格式)
         if (activeSchema.schema_version === 'v2' && activeSchema.openapi_schema) {
-          console.log('📊 Using V2 OpenAPI Schema');
           setCurrentSchema(activeSchema);
         } else {
           // V1 Schema 处理
@@ -684,8 +675,7 @@ const AddResources: React.FC = () => {
           
           // 使用processApiSchema处理类型转换
           const processedSchema = processApiSchema(activeSchema);
-          console.log('📊 Processed V1 Schema:', processedSchema);
-          
+
           setCurrentSchema(processedSchema);
         }
       } else {
@@ -759,7 +749,6 @@ const AddResources: React.FC = () => {
       const selectedVersion = moduleVersions.find(v => v.id === selectedVersionId);
       if (selectedVersion?.version) {
         selectedVersionStr = selectedVersion.version;
-        console.log(`📦 Saving config with version: ${selectedVersionStr}`);
       }
     }
     
@@ -793,9 +782,7 @@ const AddResources: React.FC = () => {
           const moduleName = `${config.resource_type}_${config.resource_name}`;
           return `--target=module.${moduleName}`;
         }).join(' ');
-        
-        console.log('🎯 设置 TF_CLI_ARGS:', targetArgs);
-        
+
         try {
           // 尝试获取现有变量
           const variablesResponse: any = await api.get(`/workspaces/${id}/variables`);
@@ -814,7 +801,6 @@ const AddResources: React.FC = () => {
               sensitive: false,
               description: 'Auto-generated for resource-specific run'
             });
-            console.log('✅ TF_CLI_ARGS 变量已更新');
           } else {
             // 创建新变量
             try {
@@ -826,7 +812,6 @@ const AddResources: React.FC = () => {
                 sensitive: false,
                 description: 'Auto-generated for resource-specific run'
               });
-              console.log('✅ TF_CLI_ARGS 变量已创建');
             } catch (createError: any) {
               // 如果创建失败是因为变量已存在，尝试重新获取并更新
               const errorMessage = createError?.response?.data?.message || createError?.message || '';
@@ -845,7 +830,6 @@ const AddResources: React.FC = () => {
                     sensitive: false,
                     description: 'Auto-generated for resource-specific run'
                   });
-                  console.log('✅ TF_CLI_ARGS 变量已更新（重试成功）');
                 }
               } else {
                 throw createError;
@@ -877,13 +861,9 @@ const AddResources: React.FC = () => {
         // 使用配置步骤中用户选中的版本
         if (config.selected_version) {
           moduleConfig.version = config.selected_version;
-          console.log(`📦 Adding version ${config.selected_version} to module ${module.name} (from user selection)`);
         } else if (module.version) {
           // 回退到 Module 表的 version 字段
           moduleConfig.version = module.version;
-          console.log(`📦 Adding version ${module.version} to module ${module.name} (from Module table)`);
-        } else {
-          console.log(` Module ${module.name} has no version configured`);
         }
         
         const tfCode = {
@@ -891,8 +871,7 @@ const AddResources: React.FC = () => {
             [`${config.resource_type}_${config.resource_name}`]: [moduleConfig]
           }
         };
-        console.log('📦 Generated tf_code:', JSON.stringify(tfCode, null, 2));
-        
+
         await api.post(`/workspaces/${id}/resources`, {
           resource_type: config.resource_type,
           resource_name: config.resource_name,
@@ -1007,7 +986,6 @@ const AddResources: React.FC = () => {
       return true;
     });
     
-    console.log('📋 Fields with values from demo:', fieldsWithValues);
     setInitialFieldsToShow(fieldsWithValues);
     
     showToast(`已应用Demo "${demoName}" 的配置`, 'success');
@@ -1187,7 +1165,7 @@ const AddResources: React.FC = () => {
                         className={`${styles.viewButton} ${configViewMode === 'json' ? styles.viewButtonActive : ''}`}
                         onClick={() => setConfigViewMode('json')}
                       >
-                        JSON视图
+                        {isV3 ? 'HCL 视图' : 'JSON视图'}
                       </button>
                     </div>
                     
@@ -1204,8 +1182,6 @@ const AddResources: React.FC = () => {
                 {/* AI 输入面板 - 贯穿式显示在标题栏下方 */}
                 {ai.expanded && isV2Schema(currentSchema) && currentModule && (
                   <>
-                    {console.log('[AddResources] currentModule:', currentModule)}
-                    {console.log('[AddResources] ai_prompts:', currentModule.ai_prompts)}
                     <AIInputPanel
                       description={ai.description}
                       onDescriptionChange={ai.setDescription}
@@ -1237,7 +1213,7 @@ const AddResources: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
-                    <span> 表单渲染失败，已自动切换到JSON视图。编辑完成后可点击"表单视图"按钮重新尝试。</span>
+                    <span> 表单渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图。编辑完成后可点击"表单视图"按钮重新尝试。</span>
                   </div>
                 )}
                 
@@ -1246,15 +1222,23 @@ const AddResources: React.FC = () => {
                     onError={() => {
                       setFormRenderError(true);
                       setConfigViewMode('json');
-                      showToast('表单渲染失败，已切换到JSON视图', 'warning');
+                      showToast(`表单渲染失败，已切换到${isV3 ? 'HCL' : 'JSON'}视图`, 'warning');
                     }}
                   >
                     {isV2Schema(currentSchema) ? (
-                      <OpenAPIFormRenderer
-                        schema={currentSchema.openapi_schema}
-                        initialValues={formData}
-                        onChange={setFormData}
-                      />
+                      isV3 ? (
+                        <FormRendererV3
+                          schema={currentSchema.openapi_schema}
+                          initialValues={formData}
+                          onChange={setFormData}
+                        />
+                      ) : (
+                        <OpenAPIFormRenderer
+                          schema={currentSchema.openapi_schema}
+                          initialValues={formData}
+                          onChange={setFormData}
+                        />
+                      )
                     ) : (
                       <DynamicForm
                         schema={currentSchema.schema_data}
@@ -1265,20 +1249,32 @@ const AddResources: React.FC = () => {
                     )}
                   </ErrorBoundary>
                 ) : (
-                  <JsonEditor
-                    value={JSON.stringify(filteredFormDataForSubmit, null, 2)}
-                    onChange={(value) => {
-                      try {
-                        const parsed = JSON.parse(value);
-                        setFormData(parsed);
-                      } catch (e) {
-                        // JSON格式错误时不更新formData
-                        console.error('Invalid JSON:', e);
-                      }
-                    }}
-                    minHeight={300}
-                    maxHeight={600}
-                  />
+                  isV3 ? (
+                    <HCLEditor
+                      data={filteredFormDataForSubmit}
+                      onChange={setFormData}
+                      readOnly={false}
+                      schema={currentSchema?.openapi_schema}
+                      skipDefaults={true}
+                      minHeight={300}
+                      maxHeight={600}
+                    />
+                  ) : (
+                    <JsonEditor
+                      value={JSON.stringify(filteredFormDataForSubmit, null, 2)}
+                      onChange={(value) => {
+                        try {
+                          const parsed = JSON.parse(value);
+                          setFormData(parsed);
+                        } catch (e) {
+                          // JSON格式错误时不更新formData
+                          console.error('Invalid JSON:', e);
+                        }
+                      }}
+                      minHeight={300}
+                      maxHeight={600}
+                    />
+                  )
                 )}
               </div>
             ) : currentSchema ? (
@@ -1318,7 +1314,7 @@ const AddResources: React.FC = () => {
                     className={`${styles.viewButton} ${viewMode === 'json' ? styles.viewButtonActive : ''}`}
                     onClick={() => setViewMode('json')}
                   >
-                    JSON视图
+                    {isV3 ? 'HCL 视图' : 'JSON视图'}
                   </button>
                 </div>
 
@@ -1331,7 +1327,7 @@ const AddResources: React.FC = () => {
                     color: '#856404',
                     marginBottom: '16px'
                   }}>
-                     表单预览渲染失败，已自动切换到JSON视图
+                     表单预览渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图
                   </div>
                 )}
 
@@ -1351,16 +1347,25 @@ const AddResources: React.FC = () => {
                             onError={() => {
                               setPreviewRenderError(true);
                               setViewMode('json');
-                              showToast('预览渲染失败，已切换到JSON视图', 'warning');
+                              showToast(`预览渲染失败，已切换到${isV3 ? 'HCL' : 'JSON'}视图`, 'warning');
                             }}
                           >
                             {isV2Schema(currentSchema) ? (
-                              <OpenAPIFormRenderer
-                                schema={currentSchema.openapi_schema}
-                                initialValues={config.config}
-                                onChange={() => {}}
-                                readOnly={true}
-                              />
+                              isV3 ? (
+                                <FormRendererV3
+                                  schema={currentSchema.openapi_schema}
+                                  initialValues={config.config}
+                                  onChange={() => {}}
+                                  readOnly={true}
+                                />
+                              ) : (
+                                <OpenAPIFormRenderer
+                                  schema={currentSchema.openapi_schema}
+                                  initialValues={config.config}
+                                  onChange={() => {}}
+                                  readOnly={true}
+                                />
+                              )
                             ) : (
                               <FormPreview
                                 schema={currentSchema.schema_data}
@@ -1381,16 +1386,23 @@ const AddResources: React.FC = () => {
                             maxHeight: '600px',
                             overflow: 'auto'
                           }}>
-                            <pre style={{
-                              margin: 0,
-                              fontFamily: 'Monaco, Menlo, Consolas, monospace',
-                              fontSize: '13px',
-                              lineHeight: '1.5',
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word'
-                            }}>
-                              {JSON.stringify(config.config, null, 2)}
-                            </pre>
+                            {isV3 ? (
+                              <HCLView
+                                data={config.config}
+                                moduleName={config.module_name?.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'resource'}
+                              />
+                            ) : (
+                              <pre style={{
+                                margin: 0,
+                                fontFamily: 'Monaco, Menlo, Consolas, monospace',
+                                fontSize: '13px',
+                                lineHeight: '1.5',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word'
+                              }}>
+                                {JSON.stringify(config.config, null, 2)}
+                              </pre>
+                            )}
                           </div>
                         )}
                       </div>

@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { type ModuleDemo } from '../services/moduleDemos';
 import { FormPreview } from '../components/DynamicForm';
 import type { FormSchema } from '../components/DynamicForm';
+import { FormRenderer as OpenAPIFormRenderer } from './OpenAPIFormRenderer';
+import FormRendererV3 from './OpenAPIFormRenderer/FormRendererV3';
+import HCLView from './HCLView/HCLView';
+import { useUIVersion } from '../hooks/useUIVersion';
 import { processApiSchema } from '../utils/schemaTypeMapper';
 import api from '../services/api';
 import styles from './DemoForm.module.css'; // 复用 DemoForm 的样式
@@ -13,8 +17,11 @@ interface DemoPreviewProps {
 }
 
 const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) => {
+  const { isV3 } = useUIVersion();
   const [schema, setSchema] = useState<FormSchema | null>(null);
-  const [dataViewMode, setDataViewMode] = useState<'form' | 'json'>('json'); // 默认使用 JSON 视图
+  const [rawSchema, setRawSchema] = useState<any>(null);
+  const [isV2, setIsV2] = useState(false);
+  const [dataViewMode, setDataViewMode] = useState<'form' | 'json'>('json');
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
@@ -26,7 +33,6 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
       setLoading(true);
       const response = await api.get(`/modules/${moduleId}/schemas`);
       
-      console.log('📋 Schema response:', response);
       
       // 处理响应数据
       let schemasData = [];
@@ -36,14 +42,16 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
         schemasData = response;
       }
       
-      console.log('📋 Schemas data:', schemasData);
       
       if (schemasData.length > 0) {
         // 查找 active 状态的 schema，如果没有则使用第一个
         let activeSchema = schemasData.find((s: any) => s.status === 'active') || schemasData[0];
-        
-        console.log('📋 Active schema:', activeSchema);
-        
+
+        // 检测是否为 v2 schema
+        const v2 = activeSchema.schema_version === 'v2' && activeSchema.openapi_schema;
+        setIsV2(v2);
+        setRawSchema(activeSchema);
+
         // 如果 schema_data 是字符串，需要解析
         if (typeof activeSchema.schema_data === 'string') {
           try {
@@ -53,11 +61,8 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
             activeSchema.schema_data = {};
           }
         }
-        
+
         const processedSchema = processApiSchema(activeSchema);
-        console.log('📋 Processed schema:', processedSchema);
-        console.log('📋 Schema data:', processedSchema.schema_data);
-        
         setSchema(processedSchema.schema_data);
       }
     } catch (error) {
@@ -152,40 +157,63 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
                     onClick={() => setDataViewMode('json')}
                     style={{
                       padding: '6px 12px',
-                      background: dataViewMode === 'json' ? '#007bff' : '#f8f9fa',
+                      background: dataViewMode === 'json' ? '#3b82f6' : '#f8f9fa',
                       color: dataViewMode === 'json' ? 'white' : '#495057',
-                      border: '1px solid ' + (dataViewMode === 'json' ? '#007bff' : '#dee2e6'),
-                      borderRadius: '4px',
+                      border: '1px solid ' + (dataViewMode === 'json' ? '#3b82f6' : '#dee2e6'),
+                      borderRadius: '6px',
                       fontSize: '13px',
                       cursor: 'pointer',
                       fontWeight: 500
                     }}
                   >
-                    JSON视图
+                    {isV3 ? 'HCL 视图' : 'JSON视图'}
                   </button>
                 </div>
               </div>
               
               {dataViewMode === 'json' ? (
-                <div style={{
-                  background: '#f8f9fa',
-                  border: '1px solid #dee2e6',
-                  borderRadius: '6px',
-                  padding: '16px',
-                  maxHeight: '500px',
-                  overflow: 'auto'
-                }}>
-                  <pre style={{
-                    margin: 0,
-                    fontFamily: 'Monaco, Menlo, Consolas, monospace',
-                    fontSize: '13px',
-                    lineHeight: '1.5',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word'
+                isV3 ? (
+                  <HCLView
+                    data={demo.current_version?.config_data || {}}
+                    moduleName={demo.name?.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'demo'}
+                  />
+                ) : (
+                  <div style={{
+                    background: '#f8f9fa',
+                    border: '1px solid #dee2e6',
+                    borderRadius: '6px',
+                    padding: '16px',
+                    maxHeight: '500px',
+                    overflow: 'auto'
                   }}>
-                    {JSON.stringify(demo.current_version?.config_data || {}, null, 2)}
-                  </pre>
-                </div>
+                    <pre style={{
+                      margin: 0,
+                      fontFamily: 'Monaco, Menlo, Consolas, monospace',
+                      fontSize: '13px',
+                      lineHeight: '1.5',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {JSON.stringify(demo.current_version?.config_data || {}, null, 2)}
+                    </pre>
+                  </div>
+                )
+              ) : isV2 && rawSchema?.openapi_schema ? (
+                isV3 ? (
+                  <FormRendererV3
+                    schema={rawSchema.openapi_schema}
+                    initialValues={demo.current_version?.config_data || {}}
+                    onChange={() => {}}
+                    readOnly={true}
+                  />
+                ) : (
+                  <OpenAPIFormRenderer
+                    schema={rawSchema.openapi_schema}
+                    initialValues={demo.current_version?.config_data || {}}
+                    onChange={() => {}}
+                    readOnly={true}
+                  />
+                )
               ) : schema ? (
                 <FormPreview
                   schema={schema}

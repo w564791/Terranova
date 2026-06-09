@@ -325,7 +325,7 @@ const AddResourceDialog: React.FC<{
           </div>
 
           <div className={styles.formGroup}>
-            <label>Terraform配置 (JSON) *</label>
+            <label>Terraform配置 (HCL) *</label>
             <textarea
               value={formData.tf_code}
               onChange={e => setFormData({...formData, tf_code: e.target.value})}
