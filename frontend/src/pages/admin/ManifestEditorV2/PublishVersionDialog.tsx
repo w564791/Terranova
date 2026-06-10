@@ -28,6 +28,7 @@ interface Props {
   ctx: ManifestEditorContext
   checkSummary: PublishCheckSummary | null
   onStartCheck: () => void
+  onSkipCheck: () => void
   onClose: () => void
   onPublished?: (version: ManifestVersion) => void
 }
@@ -167,6 +168,7 @@ export default function PublishVersionDialog({
   ctx,
   checkSummary,
   onStartCheck,
+  onSkipCheck,
   onClose,
   onPublished,
 }: Props) {
@@ -234,7 +236,13 @@ export default function PublishVersionDialog({
             <div style={sectionBoxStyle}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="codicon codicon-info" style={{ color: '#3794ff' }} />
-                <span style={{ flex: 1 }}>发布前请先对草稿执行一次检查</span>
+                <span style={{ flex: 1 }}>发布前建议对草稿执行一次检查</span>
+                <button
+                  style={btnSecondaryStyle}
+                  onClick={onSkipCheck}
+                >
+                  跳过检查
+                </button>
                 <button
                   style={btnPrimaryStyle}
                   onClick={() => {

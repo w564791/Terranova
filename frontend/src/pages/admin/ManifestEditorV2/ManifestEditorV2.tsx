@@ -4,7 +4,7 @@
  * 视觉 1:1 对齐 manifest-vscode-mockup.html demo,数据接 manifest_files API。
  *
  * 能力: layout shell + 文件树 + tab + Monaco(HCL 高亮 + 4 个 provider)接 manifest_files;
- * Toolbar 三按钮 Run / 发布 / 部署 分别挂 RunDialog / PublishVersionDialog / DeployPanel(覆盖编辑区)。
+ * Toolbar 三按钮 Run / 发布 / 部署:RunDialog 和 DeployPanel 为右侧停靠面板(含 WebSocket 日志流),PublishVersionDialog 为弹窗。
  */
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
@@ -119,17 +119,17 @@ export default function ManifestEditorV2() {
 
   const rootRef = useRef<HTMLDivElement | null>(null) // 根容器(全屏目标)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  // AI 面板展开时挤占编辑区(编辑器右移让位,而非悬浮遮挡)
+  // 右侧面板系统:AI 生成 / 检查 / Run / 部署 四选一(互斥),共享右侧停靠区
   const [aiPanelWidth, setAiPanelWidth] = useState(0)
-  // 检查面板(右侧,和 AI 生成面板互斥) — AI 检查和发布检查共用
   const CHECK_PANEL_WIDTH = 360
   const [checkPanelOpen, setCheckPanelOpen] = useState(false)
+  const [runPanelWidth, setRunPanelWidth] = useState(0)
+  const [deployPanelWidth, setDeployPanelWidth] = useState(0)
   const [checkBusy, setCheckBusy] = useState(false)
   const [checkIssues, setCheckIssues] = useState<ManifestIssue[]>([])
   const [checkCompletedSteps, setCheckCompletedSteps] = useState<ManifestCompletedStep[]>([])
   const [checkError, setCheckError] = useState<string | null>(null)
   const [checkCurrentStep, setCheckCurrentStep] = useState('')
-  const [checkFixApplied, setCheckFixApplied] = useState(false)
   const checkAbortRef = useRef<AbortController | null>(null)
   // 发布弹窗读取此状态决定是否解锁表单
   const [publishCheckSummary, setPublishCheckSummary] = useState<PublishCheckSummary | null>(null)
@@ -166,6 +166,8 @@ export default function ManifestEditorV2() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [deployOpen, setDeployOpen] = useState(false)
   const [runOpen, setRunOpen] = useState(false)
+  const [runViewLast, setRunViewLast] = useState(false) // 打开 Run 面板时直接跳到上次任务
+  const [lastRunTask, setLastRunTask] = useState<{ taskId: number; workspaceId: string } | null>(null)
   // 内联新建/重命名(VS Code 风格,不弹窗):
   //   creating !== null  → 文件树顶部出现一个输入行,值即 creating
   //   renamingPath        → 该行 name 就地变输入框,值即 renameValue
@@ -846,21 +848,35 @@ export default function ManifestEditorV2() {
     navForwardRef.current = navigateForward
   }, [navigateBack, navigateForward])
 
-  // AI 面板/检查面板宽度变化(展开/折叠)后,让 Monaco 重算尺寸,避免错位
+  // 右侧面板宽度变化(展开/折叠)后,让 Monaco 重算尺寸,避免错位
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       editorRef.current?.layout()
       diffEditorRef.current?.layout()
     })
     return () => cancelAnimationFrame(id)
+  }, [aiPanelWidth, checkPanelOpen, runPanelWidth, deployPanelWidth])
+
+  // 右侧面板互斥:AI 生成 / 检查 / Run / 部署 同时只能展开一个
+  useEffect(() => {
+    if (aiPanelWidth > 0 && checkPanelOpen) setCheckPanelOpen(false)
   }, [aiPanelWidth, checkPanelOpen])
 
-  // AI 面板和检查面板互斥:一个打开时关闭另一个
   useEffect(() => {
-    if (aiPanelWidth > 0 && checkPanelOpen) {
-      setCheckPanelOpen(false)
+    if (runOpen) {
+      if (aiPanelWidth > 0) setAiPanelWidth(0)
+      if (checkPanelOpen) setCheckPanelOpen(false)
+      if (deployOpen) setDeployOpen(false)
     }
-  }, [aiPanelWidth, checkPanelOpen])
+  }, [runOpen])
+
+  useEffect(() => {
+    if (deployOpen) {
+      if (aiPanelWidth > 0) setAiPanelWidth(0)
+      if (checkPanelOpen) setCheckPanelOpen(false)
+      if (runOpen) setRunOpen(false)
+    }
+  }, [deployOpen])
 
   // AI 工具桥接:用现有 editorRef / openAt 拼出 EditorBridge,供 ManifestAiTools 解耦调用
   const aiBridge: EditorBridge = useMemo(
@@ -984,7 +1000,6 @@ export default function ManifestEditorV2() {
       setCheckCompletedSteps([])
       setCheckError(null)
       setCheckCurrentStep('')
-      setCheckFixApplied(false)
       setCheckPanelOpen(true)
 
       const controller = new AbortController()
@@ -1052,7 +1067,7 @@ export default function ManifestEditorV2() {
   }, [runCheckCore])
 
   const handleCheckApplyFix = useCallback(
-    async (issue: ManifestIssue, idx: number) => {
+    async (issue: ManifestIssue, _idx: number) => {
       if (!issue.fix) return
       try {
         await aiBridge.applyFix({
@@ -1061,8 +1076,6 @@ export default function ManifestEditorV2() {
           endLine: issue.fix.end_line,
           newText: issue.fix.new_text,
         })
-        setCheckIssues((prev) => prev.filter((_, i) => i !== idx))
-        setCheckFixApplied(true)
       } catch (e) {
         setCheckError(e instanceof Error ? e.message : '应用修复失败')
       }
@@ -2372,7 +2385,10 @@ export default function ManifestEditorV2() {
           <button
             title="对当前草稿在已部署 workspace 跑 plan-only 检测"
             disabled={manifestMissing}
-            onClick={() => setRunOpen(true)}
+            onClick={() => {
+              setRunViewLast(false)
+              setRunOpen(true)
+            }}
           >
             <i className="codicon codicon-play" /> Run
           </button>
@@ -2722,7 +2738,7 @@ export default function ManifestEditorV2() {
         <div className={styles.sidebarResizer} onMouseDown={startSidebarResize} />
       </div>
 
-      <div className={styles.editorArea} style={{ marginRight: checkPanelOpen ? CHECK_PANEL_WIDTH : aiPanelWidth }}>
+      <div className={styles.editorArea} style={{ marginRight: Math.max(checkPanelOpen ? CHECK_PANEL_WIDTH : 0, aiPanelWidth, runPanelWidth, deployPanelWidth) }}>
         <div className={styles.tabs}>
           {openTabs.map((path) => (
             <div
@@ -2802,15 +2818,11 @@ export default function ManifestEditorV2() {
               width: '100%',
               height: '100%',
               visibility:
-                activeDiffKey || deployOpen || (binaryView && currentFile === binaryView.path)
+                activeDiffKey || (binaryView && currentFile === binaryView.path)
                   ? 'hidden'
                   : 'visible',
             }}
           />
-          {/* 部署面板:点「部署到 Workspace」时盖住编辑区(非弹窗)。只在 open 时挂载,关闭即卸载重置。 */}
-          {deployOpen && (
-            <DeployPanel ctx={ctx} onClose={() => setDeployOpen(false)} />
-          )}
         </div>
       </div>
 
@@ -2823,25 +2835,61 @@ export default function ManifestEditorV2() {
           {saveStatus === 'saved' ? '自动保存' : '编辑中'}
         </span>
         <div className={styles.spacer} />
+        {lastRunTask && (
+          <span
+            className={styles.item}
+            style={{ cursor: 'pointer' }}
+            title={`查看上次运行: Task #${lastRunTask.taskId}`}
+            onClick={() => {
+              setRunViewLast(true)
+              setRunOpen(true)
+            }}
+          >
+            <i className="codicon codicon-output" />
+            Task #{lastRunTask.taskId}
+          </span>
+        )}
         <span className={styles.item}>{`行 ${cursor.line}, 列 ${cursor.col}`}</span>
         <span className={styles.item}>UTF-8</span>
         <span className={styles.item}>LF</span>
         <span className={styles.item}>{currentFile ? languageDisplay(currentFile) : ''}</span>
       </div>
 
-      {/* 检查右侧面板(AI 检查 + 发布前检查共用,和 AI 生成面板布局一致) */}
+      {/* 右侧停靠面板:检查 / Run / 部署(与 AI 生成面板共享布局,四选一互斥) */}
       {checkPanelOpen && (
         <CheckPanel
           busy={checkBusy}
           issues={checkIssues}
           completedSteps={checkCompletedSteps}
           checkError={checkError}
-          fixApplied={checkFixApplied}
           currentStepName={checkCurrentStep}
           onRevealAt={aiBridge.revealAt}
           onApplyFix={handleCheckApplyFix}
           onRecheck={() => void runPublishCheck()}
           onClose={handleCheckPanelClose}
+        />
+      )}
+
+      {runOpen && (
+        <RunDialog
+          open={runOpen}
+          ctx={ctx}
+          lastRunTask={lastRunTask}
+          viewLast={runViewLast}
+          onRunTaskCreated={(taskId, workspaceId) => setLastRunTask({ taskId, workspaceId })}
+          onClose={() => {
+            setRunOpen(false)
+            setRunViewLast(false)
+          }}
+          onPanelWidthChange={setRunPanelWidth}
+        />
+      )}
+
+      {deployOpen && (
+        <DeployPanel
+          ctx={ctx}
+          onClose={() => setDeployOpen(false)}
+          onPanelWidthChange={setDeployPanelWidth}
         />
       )}
 
@@ -2854,6 +2902,7 @@ export default function ManifestEditorV2() {
           setPublishCheckSummary(null)
           void runPublishCheck()
         }}
+        onSkipCheck={() => setPublishCheckSummary({ done: false, skipped: true, issues: [] })}
         onClose={() => setPublishOpen(false)}
         onPublished={() => {
           // 发布成功后始终刷新版本(顶栏徽标依赖 versions);历史视图下再刷未提交更改
@@ -2862,11 +2911,6 @@ export default function ManifestEditorV2() {
             loadDraftDiff()
           }
         }}
-      />
-      <RunDialog
-        open={runOpen}
-        ctx={ctx}
-        onClose={() => setRunOpen(false)}
       />
 
       {/* 文件树右键菜单(自建轻量菜单)*/}

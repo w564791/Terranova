@@ -6,7 +6,7 @@
  *
  * 供「AI 检查」(工具栏按钮)和「发布前检查」(发布弹窗)共用。
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import type { ManifestIssue, ManifestCompletedStep } from '../../../services/manifestAi'
 import {
   chatPanelStyle,
@@ -47,7 +47,6 @@ export interface CheckPanelProps {
   issues: ManifestIssue[]
   completedSteps: ManifestCompletedStep[]
   checkError: string | null
-  fixApplied: boolean
   currentStepName: string
   onRevealAt: (path: string, line: number) => void
   onApplyFix: (issue: ManifestIssue, idx: number) => Promise<void>
@@ -60,7 +59,6 @@ export default function CheckPanel({
   issues,
   completedSteps,
   checkError,
-  fixApplied,
   currentStepName,
   onRevealAt,
   onApplyFix,
@@ -69,6 +67,25 @@ export default function CheckPanel({
 }: CheckPanelProps) {
   const [stepsExpanded, setStepsExpanded] = useState(true)
   const [copied, setCopied] = useState(false)
+
+  // 逐条追踪已修复的 issue,避免单一 boolean 导致全部修复按钮被禁用
+  const prevIssuesRef = useRef<ManifestIssue[]>(issues)
+  const [fixedIndices, setFixedIndices] = useState<Set<number>>(new Set())
+  if (prevIssuesRef.current !== issues) {
+    prevIssuesRef.current = issues
+    setFixedIndices(new Set())
+  }
+  const anyFixApplied = fixedIndices.size > 0
+
+  const handleApplyFix = useCallback(async (issue: ManifestIssue, idx: number) => {
+    await onApplyFix(issue, idx)
+    setFixedIndices((prev) => new Set([...prev, idx]))
+  }, [onApplyFix])
+
+  const handleRecheck = useCallback(() => {
+    setFixedIndices(new Set())
+    onRecheck()
+  }, [onRecheck])
 
   const copyIssues = useCallback(async () => {
     if (issues.length === 0) return
@@ -166,7 +183,7 @@ export default function CheckPanel({
             {checkError}
             <span
               style={{ color: '#9cdcfe', cursor: 'pointer', marginLeft: 8 }}
-              onClick={onRecheck}
+              onClick={handleRecheck}
             >
               重试
             </span>
@@ -174,12 +191,12 @@ export default function CheckPanel({
         )}
 
         {/* 修复提示 */}
-        {fixApplied && (
+        {anyFixApplied && (
           <div style={fixAppliedBannerStyle}>
             <i className="codicon codicon-info" /> 已应用修复,内容已变更,建议
             <span
               style={{ color: '#9cdcfe', cursor: 'pointer', marginLeft: 4 }}
-              onClick={onRecheck}
+              onClick={handleRecheck}
             >
               重新检查
             </span>
@@ -220,13 +237,13 @@ export default function CheckPanel({
             </span>
             {it.fix && (
               <button
-                style={fixApplied ? fixBtnDisabledStyle : fixBtnStyle}
-                disabled={fixApplied}
+                style={fixedIndices.has(i) ? fixBtnDisabledStyle : fixBtnStyle}
+                disabled={fixedIndices.has(i)}
                 onClick={(e) => {
                   e.stopPropagation()
-                  void onApplyFix(it, i)
+                  void handleApplyFix(it, i)
                 }}
-                title={fixApplied ? '内容已变更,请重新检查后再修复' : '应用该修复'}
+                title={fixedIndices.has(i) ? '该修复已应用' : '应用该修复'}
               >
                 <i className="codicon codicon-wand" /> 修复
               </button>
@@ -253,7 +270,7 @@ export default function CheckPanel({
                 cursor: 'pointer',
                 fontSize: 13,
               }}
-              onClick={onRecheck}
+              onClick={handleRecheck}
             >
               <i className="codicon codicon-refresh" style={{ marginRight: 4 }} />
               重新检查
