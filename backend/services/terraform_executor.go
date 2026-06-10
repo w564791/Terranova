@@ -3890,6 +3890,20 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	// 3. 记录快照时间
 	snapshotTime := time.Now()
 
+	// 3b. 快照 manifest version（manifest-managed workspace 用，供 code diff 回溯）
+	var snapshotManifestVersionID *string
+	if s.workspaceUsesManifest(workspace) {
+		var dep models.ManifestDeployment
+		if err := s.db.Select("version_id").
+			Where("id = ?", *workspace.ManifestDeploymentID).
+			First(&dep).Error; err == nil {
+			snapshotManifestVersionID = &dep.VersionID
+			logger.Debug("Captured manifest version: %s", dep.VersionID)
+		} else {
+			logger.Warn("Failed to fetch manifest deployment version: %v", err)
+		}
+	}
+
 	// 4. 保存快照到task（仅资源版本和Provider配置，变量由variable_snapshot_id关联）
 	if s.db != nil {
 		resourceVersionsJSON, err := json.Marshal(models.JSONB(resourceVersions))
@@ -3906,9 +3920,10 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 			UPDATE workspace_tasks
 			SET snapshot_resource_versions = ?::jsonb,
 			    snapshot_provider_config = ?::jsonb,
-			    snapshot_created_at = ?
+			    snapshot_created_at = ?,
+			    snapshot_manifest_version_id = ?
 			WHERE id = ?
-		`, resourceVersionsJSON, providerConfigJSON, snapshotTime, task.ID).Error; err != nil {
+		`, resourceVersionsJSON, providerConfigJSON, snapshotTime, snapshotManifestVersionID, task.ID).Error; err != nil {
 			return fmt.Errorf("failed to save snapshot: %w", err)
 		}
 		logger.Debug("Snapshot saved to database")
@@ -3917,6 +3932,7 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 		task.SnapshotResourceVersions = models.JSONB(resourceVersions)
 		task.SnapshotProviderConfig = models.JSONB(providerConfig)
 		task.SnapshotCreatedAt = &snapshotTime
+		task.SnapshotManifestVersionID = snapshotManifestVersionID
 
 		if err := s.dataAccessor.UpdateTask(task); err != nil {
 			return fmt.Errorf("failed to save snapshot in agent mode: %w", err)
@@ -3928,6 +3944,7 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	logger.Info("  - Resources: %d", len(resourceVersions))
 	logger.Info("  - Variable snapshot: %v", task.VariableSnapshotID != nil)
 	logger.Info("  - Provider config: %v", providerConfig != nil)
+	logger.Info("  - Manifest version: %v", snapshotManifestVersionID)
 	logger.Info("  - Created at: %s", snapshotTime.Format("2006-01-02 15:04:05"))
 
 	return nil
