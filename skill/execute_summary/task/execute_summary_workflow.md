@@ -423,6 +423,47 @@ Terraform plan 中，资源的 `change.after_unknown` 标记了哪些字段的�
   - "代码有变更且影响该字段": diff 中包含影响 unknown 字段的变更（如修改了 policy document 的内容）
   - "无法确定": 无法获取代码差异或依赖链过于复杂
 
+### Manifest 资源的代码变更分析
+
+`query_resource_code_diff` 同时支持 workspace module 资源和 manifest 资源，自动感知无需额外参数。
+
+**返回格式差异：**
+
+- **Module 资源**（`source_type` 未返回或为 module）：返回字段级 JSON diff
+  ```yaml
+  diff: [{"path": "module.xxx.policy_statements.xxx", "type": "modified", "old": "...", "new": "..."}]
+  ```
+- **Manifest 资源**（`source_type: "manifest"`）：返回 HCL block 文本级对比
+  ```yaml
+  source_type: "manifest"
+  change_type: "modified" | "added" | "removed"
+  old_hcl: 'resource "aws_s3_bucket" "my_bucket" { bucket = "old" }'
+  new_hcl: 'resource "aws_s3_bucket" "my_bucket" { bucket = "new" }'
+  file: "main.tf"
+  ```
+
+**Manifest 分析规则：**
+
+```yaml
+manifest_diff_analysis:
+  - source_type == "manifest" AND has_changes == false:
+      代码无变更（manifest 版本未变或 HCL block 完全一致）
+  - source_type == "manifest" AND change_type == "modified":
+      对比 old_hcl 和 new_hcl 中的具体属性差异，判断是否影响 unknown 字段
+  - source_type == "manifest" AND change_type == "added":
+      新增的 resource block，所有字段均为新值
+  - source_type == "manifest" AND change_type == "removed":
+      resource block 被移除（对应 terraform plan 中的 delete）
+
+manifest_address_inference:
+  - manifest 资源的 resource_id 直接使用 HCL 声明名:
+    - resource 块: "<type>.<name>"（如 aws_s3_bucket.my_bucket）
+    - module 块: "module.<name>"（如 module.network）
+  - terraform_address 中的 module 前缀对应 manifest 中的 module 实例
+  - 例如: module.network.aws_vpc.this → resource_id = module.network
+    注意: module 实例内的子资源，其 resource_id 为 module 实例本身
+```
+
 输出要求:
   - changes_overview 中必须说明 after_unknown 字段的预期变更情况
   - impact_analysis.details 中对应资源的 impact 字段必须包含代码差异分析结论
