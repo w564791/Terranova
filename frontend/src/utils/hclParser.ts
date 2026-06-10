@@ -9,15 +9,21 @@ interface ParserState {
   pos: number;
 }
 
-// Terraform module block 系统参数（不提示用户）
+// Terraform system/meta arguments. These are not ModuleInput schema fields, but
+// they must be preserved when users edit HCL directly.
 export const TF_SYSTEM_PARAMS = new Set([
-  'source',      // 模块来源
-  'version',     // 模块版本
-  'for_each',    // 循环创建
-  'count',       // 条件/计数创建
-  'depends_on',  // 显式依赖
-  'providers',   // 提供者映射
-  'lifecycle',   // 生命周期控制
+  // module block arguments
+  'source',
+  'version',
+  'for_each',
+  'count',
+  'depends_on',
+  'providers',
+  // resource-compatible meta/provisioner arguments kept for legacy/imported HCL
+  'provider',
+  'lifecycle',
+  'provisioner',
+  'connection',
 ]);
 
 export interface HCLParseResult {
@@ -333,7 +339,8 @@ export function parseHCLConfig(hcl: string): Record<string, any> {
 }
 
 /**
- * 检测 userConfig 中有哪些字段不在 schema 定义中
+ * 检测 userConfig 中有哪些字段不在 schema 定义中。
+ * Terraform module meta-arguments are system fields and should not be reported.
  */
 export function detectExtraFields(
   userConfig: Record<string, any>,
@@ -347,5 +354,5 @@ export function detectExtraFields(
   
   if (schemaFields.size === 0) return [];
   
-  return Object.keys(userConfig).filter(key => !schemaFields.has(key));
+  return Object.keys(userConfig).filter(key => !schemaFields.has(key) && !TF_SYSTEM_PARAMS.has(key));
 }

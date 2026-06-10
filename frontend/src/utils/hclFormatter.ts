@@ -26,6 +26,10 @@ export function jsonToHCL(
     skipDefaults = false,
     systemParams = {},
   } = options;
+  const systemSource = typeof systemParams.source === 'string' ? systemParams.source : undefined;
+  const systemVersion = typeof systemParams.version === 'string' ? systemParams.version : undefined;
+  const effectiveModuleSource = systemSource || moduleSource;
+  const effectiveModuleVersion = systemVersion || moduleVersion;
 
   // Extract schema properties for format-aware rendering
   const schemaProperties: Record<string, any> = {};
@@ -67,11 +71,11 @@ export function jsonToHCL(
 
   lines.push(`module "${moduleName}" {`);
 
-  if (moduleSource) {
-    lines.push(`${pad(1)}source  = "${escapeHCLString(moduleSource)}"`);
+  if (effectiveModuleSource) {
+    lines.push(`${pad(1)}source  = "${escapeHCLString(effectiveModuleSource)}"`);
   }
-  if (moduleVersion) {
-    lines.push(`${pad(1)}version = "${escapeHCLString(moduleVersion)}"`);
+  if (effectiveModuleVersion) {
+    lines.push(`${pad(1)}version = "${escapeHCLString(effectiveModuleVersion)}"`);
   }
 
   // Render system params (for_each, count, depends_on, providers, lifecycle)
@@ -83,7 +87,7 @@ export function jsonToHCL(
     lines.push(...formatted);
   });
 
-  if (moduleSource || moduleVersion || sysEntries.length > 0) {
+  if (effectiveModuleSource || effectiveModuleVersion || sysEntries.length > 0) {
     lines.push('');
   }
 

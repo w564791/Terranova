@@ -11,7 +11,7 @@ import HCLEditor from '../components/HCLEditor/HCLEditor';
 import MonacoHclEditor from '../components/MonacoHclEditor';
 import { useUIVersion } from '../hooks/useUIVersion';
 import { jsonToHCL } from '../utils/hclFormatter';
-import { parseHCLModule } from '../utils/hclParser';
+import { parseHCLModule, TF_SYSTEM_PARAMS } from '../utils/hclParser';
 import { 
   AITriggerButton, 
   AIInputPanel, 
@@ -78,6 +78,7 @@ const EditResource: React.FC = () => {
   // Monaco HCL Editor 状态
   const [hclText, setHclText] = useState('');
   const [isHclEditorReady, setIsHclEditorReady] = useState(false);
+  const [hclSystemParams, setHclSystemParams] = useState<Record<string, any>>({});
   
   // Read initial viewMode from URL (?view=hcl → 'json', ?view=form → 'form', default 'form')
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
@@ -100,7 +101,7 @@ const EditResource: React.FC = () => {
   const detectExtraFieldsInData = useCallback((data: Record<string, any>) => {
     const schemaFields = getSchemaFields();
     if (schemaFields.size === 0) return [];
-    return Object.keys(data).filter(key => !schemaFields.has(key));
+    return Object.keys(data).filter(key => !schemaFields.has(key) && !TF_SYSTEM_PARAMS.has(key));
   }, [getSchemaFields]);
 
   const filterDataToSchema = useCallback((data: Record<string, any>) => {
@@ -109,31 +110,48 @@ const EditResource: React.FC = () => {
 
     const filtered: Record<string, any> = {};
     Object.keys(data).forEach(key => {
-      if (schemaFields.has(key)) {
+      if (schemaFields.has(key) || TF_SYSTEM_PARAMS.has(key)) {
         filtered[key] = data[key];
       }
     });
     return filtered;
   }, [getSchemaFields]);
 
-  const getCurrentConfigData = useCallback(() => {
+  const normalizeSystemParams = useCallback((params: Record<string, any>) => {
+    const normalized: Record<string, any> = {};
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (TF_SYSTEM_PARAMS.has(key)) {
+        normalized[key] = value;
+      }
+    });
+
+    return normalized;
+  }, []);
+
+  const getCurrentHclData = useCallback(() => {
     if (viewMode === 'json' && hclText.trim()) {
       try {
-        return parseHCLModule(hclText).userConfig;
+        const parsed = parseHCLModule(hclText);
+        return {
+          userConfig: parsed.userConfig,
+          systemParams: normalizeSystemParams(parsed.systemParams),
+        };
       } catch {
-        return formData;
+        return { userConfig: formData, systemParams: hclSystemParams };
       }
     }
-    return formData;
-  }, [viewMode, hclText, formData]);
+    return { userConfig: formData, systemParams: hclSystemParams };
+  }, [viewMode, hclText, formData, hclSystemParams, normalizeSystemParams]);
 
   // Wrap setViewMode to also persist to URL and check for extra fields
   const setViewMode = useCallback((mode: ViewMode) => {
     // 从 HCL 模式切换到表单模式时，检查是否有未处理的额外字段
-    const currentData = getCurrentConfigData();
+    const { userConfig: currentData, systemParams: currentSystemParams } = getCurrentHclData();
     const extraFields = detectExtraFieldsInData(currentData);
     if (viewMode === 'json' && mode === 'form' && extraFields.length > 0) {
       setFormData(currentData);
+      setHclSystemParams(currentSystemParams);
       setPendingExtraFields(extraFields);
       setPendingViewModeChange(mode);
       setShowExtraFieldsDialog(true);
@@ -150,7 +168,7 @@ const EditResource: React.FC = () => {
       }
       return next;
     }, { replace: true });
-  }, [detectExtraFieldsInData, getCurrentConfigData, setSearchParams, isV3, viewMode]);
+  }, [detectExtraFieldsInData, getCurrentHclData, setSearchParams, isV3, viewMode]);
   const [initialFieldsToShow, setInitialFieldsToShow] = useState<string[]>([]);
   const [isCloneMode, setIsCloneMode] = useState(false);
   // 升级模式：从 ViewResource 的升级按钮跳转过来，URL 带 upgrade_to 参数
@@ -281,6 +299,7 @@ const EditResource: React.FC = () => {
           moduleVersion: selectedVersionId ? moduleVersions.find(v => v.id === selectedVersionId)?.version || '' : '',
           schema: rawSchema?.openapi_schema,
           skipDefaults: true,
+          systemParams: hclSystemParams,
         });
         setHclText(hcl);
         setIsHclEditorReady(true);
@@ -288,7 +307,7 @@ const EditResource: React.FC = () => {
         console.error('Failed to convert formData to HCL:', error);
       }
     }
-  }, [formData, moduleKeyName, moduleSource, selectedVersionId, moduleVersions, rawSchema, isHclEditorReady]);
+  }, [formData, moduleKeyName, moduleSource, selectedVersionId, moduleVersions, rawSchema, hclSystemParams, isHclEditorReady]);
 
   // HCL 变更处理：hclText → formData
   const handleHclChange = useCallback((newHclText: string) => {
@@ -296,10 +315,11 @@ const EditResource: React.FC = () => {
     try {
       const result = parseHCLModule(newHclText);
       // 提取系统参数（source, version 等）和用户配置
-      const { userConfig } = result;
+      const { systemParams, userConfig } = result;
       
       // 只更新用户配置部分，保留系统参数
       setFormData(userConfig);
+      setHclSystemParams(normalizeSystemParams(systemParams));
       
       // 如果有额外字段，检测并提示
       setPendingExtraFields(detectExtraFieldsInData(userConfig));
@@ -307,7 +327,7 @@ const EditResource: React.FC = () => {
       // HCL 解析失败，不更新 formData，保持当前状态
       console.error('Failed to parse HCL:', error);
     }
-  }, [detectExtraFieldsInData]);
+  }, [detectExtraFieldsInData, normalizeSystemParams]);
 
   // AI 助手 Hook
   const ai = useAIConfigGenerator({
@@ -631,7 +651,19 @@ const EditResource: React.FC = () => {
           
           // 5. 提取表单数据
           if (moduleConfig) {
-            const { source, ...configData } = moduleConfig;
+            const rawConfigData = { ...moduleConfig };
+            delete rawConfigData.source;
+            delete rawConfigData.version;
+            const initialSystemParams: Record<string, any> = {};
+            const configData: Record<string, any> = {};
+
+            Object.entries(rawConfigData).forEach(([key, value]) => {
+              if (TF_SYSTEM_PARAMS.has(key)) {
+                initialSystemParams[key] = value;
+              } else {
+                configData[key] = value;
+              }
+            });
 
             // 找出所有有值的字段
             const fieldsWithValues = Object.keys(configData).filter(key => {
@@ -643,6 +675,7 @@ const EditResource: React.FC = () => {
             });
 
             setInitialFieldsToShow(fieldsWithValues);
+            setHclSystemParams(initialSystemParams);
             setFormData(configData);
             // 保存初始formData用于比较
             initialFormDataRef.current = JSON.parse(JSON.stringify(configData));
@@ -1155,7 +1188,9 @@ const EditResource: React.FC = () => {
     shouldRunAfter: boolean = false,
     submitData?: Record<string, any>
   ) => {
-    const dataToSubmit = submitData || getCurrentConfigData();
+    const currentHclData = getCurrentHclData();
+    const dataToSubmit = submitData || currentHclData.userConfig;
+    const systemParamsToSubmit = submitData ? hclSystemParams : currentHclData.systemParams;
 
     // 验证变更摘要
     if (!changeSummary.trim()) {
@@ -1171,6 +1206,7 @@ const EditResource: React.FC = () => {
     const extraFields = detectExtraFieldsInData(dataToSubmit);
     if (!submitData && extraFields.length > 0) {
       setFormData(dataToSubmit);
+      setHclSystemParams(systemParamsToSubmit);
       setPendingExtraFields(extraFields);
       setPendingSubmitAction(shouldRunAfter);
       setShowExtraFieldsDialog(true);
@@ -1218,11 +1254,12 @@ const EditResource: React.FC = () => {
         // 构建 module 配置
         const moduleConfig: Record<string, any> = {
           source: moduleSource,
+          ...systemParamsToSubmit,
           ...dataToSubmit
         };
         
         // 添加版本信息
-        if (moduleVersionStr) {
+        if (moduleVersionStr && systemParamsToSubmit.version === undefined) {
           moduleConfig.version = moduleVersionStr;
         }
         
@@ -1262,11 +1299,12 @@ const EditResource: React.FC = () => {
         // 构建 module 配置
         const editModuleConfig: Record<string, any> = {
           source: moduleSource,
+          ...systemParamsToSubmit,
           ...dataToSubmit
         };
         
         // 添加版本信息
-        if (moduleVersionStr) {
+        if (moduleVersionStr && systemParamsToSubmit.version === undefined) {
           editModuleConfig.version = moduleVersionStr;
         }
         
