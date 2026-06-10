@@ -12,3 +12,45 @@
   width: 100%;
   min-height: 400px;
 }
+
+.container :global(.monaco-editor),
+.container :global(.monaco-editor *),
+.container :global(.monaco-editor textarea) {
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.container :global(.monaco-editor .view-lines) {
+  white-space: nowrap !important;
+}
+
+.container :global(.monaco-editor .view-line) {
+  position: absolute !important;
+  width: 100% !important;
+}
+
+.container :global(.monaco-editor .lines-content > .view-lines > .view-line > span) {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+}
+
+.container :global(.monaco-editor .inputarea) {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  outline: none !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  resize: none !important;
+  background: transparent !important;
+  color: transparent !important;
+  z-index: -10 !important;
+}
+
+.container :global(.monaco-editor .inputarea.ime-input) {
+  z-index: 10 !important;
+  color: var(--vscode-editor-foreground) !important;
+}

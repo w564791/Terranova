@@ -1,10 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as monaco from 'monaco-editor';
+import 'monaco-editor/esm/vs/editor/editor.all.js';
+import monacoEditorCss from 'monaco-editor/min/vs/editor/editor.main.css?inline';
 import { registerHclLanguage } from '../../pages/admin/ManifestEditorV2/hclLanguage';
 import { registerHclCompletion } from '../../pages/admin/ManifestEditorV2/hclCompletion';
 import { registerHclProviders } from '../../pages/admin/ManifestEditorV2/hclProviders';
 import { registerHclDefinition, type DefinitionIndex } from '../../pages/admin/ManifestEditorV2/hclDefinitions';
 import styles from './MonacoHclEditor.module.css';
+
+const MONACO_EDITOR_STYLE_ID = 'terranova-monaco-editor-core-css';
+
+function ensureMonacoEditorCss() {
+  if (typeof document === 'undefined' || document.getElementById(MONACO_EDITOR_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = MONACO_EDITOR_STYLE_ID;
+  style.textContent = monacoEditorCss;
+  document.head.appendChild(style);
+}
 
 export interface MonacoHclEditorProps {
   value: string;
@@ -37,12 +52,39 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const onChangeRef = useRef(onChange);
+  const initialValueRef = useRef(value);
+  const initialReadOnlyRef = useRef(readOnly);
+  const initialDefinitionIndexRef = useRef(definitionIndex);
   const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const layoutEditor = useCallback(() => {
+    const container = containerRef.current;
+    const editor = editorRef.current;
+    if (!container || !editor) return;
+
+    const desiredHeight = maxHeight || minHeight;
+
+    if (container.style.height !== `${desiredHeight}px`) {
+      container.style.height = `${desiredHeight}px`;
+    }
+
+    editor.layout({
+      width: container.clientWidth,
+      height: desiredHeight,
+    });
+  }, [maxHeight, minHeight]);
 
   // 初始化 Monaco 和 HCL 语言支持
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    ensureMonacoEditorCss();
 
     // 注册 HCL 语言（只注册一次）
     registerHclLanguage();
@@ -54,18 +96,19 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
     registerHclProviders();
 
     // 注册跳转到定义（需要定义索引）
-    if (definitionIndex) {
+    const initialDefinitionIndex = initialDefinitionIndexRef.current;
+    if (initialDefinitionIndex) {
       registerHclDefinition({
-        getIndex: () => definitionIndex,
+        getIndex: () => initialDefinitionIndex,
       });
     }
 
     // 创建编辑器
     const editor = monaco.editor.create(container, {
-      value,
+      value: initialValueRef.current,
       language: 'hcl',
       theme: 'vs-dark',
-      readOnly,
+      readOnly: initialReadOnlyRef.current,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       fontSize: 13,
@@ -91,25 +134,17 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
 
     // 监听内容变化 → 通知父组件
     editor.onDidChangeModelContent(() => {
-      onChange(editor.getValue());
+      onChangeRef.current(editor.getValue());
     });
 
     // 初始计算高度并设置容器尺寸
     requestAnimationFrame(() => {
-      const contentHeight = editor.getContentHeight();
-      const desiredHeight = Math.min(Math.max(contentHeight, minHeight), maxHeight);
-      container.style.height = `${desiredHeight}px`;
-      editor.layout({ width: container.clientWidth, height: desiredHeight });
+      layoutEditor();
     });
 
     // ResizeObserver: 当容器外部尺寸变化时（窗口缩放等），重新 layout
     const resizeObserver = new ResizeObserver(() => {
-      if (editorRef.current && container) {
-        editorRef.current.layout({
-          width: container.clientWidth,
-          height: container.clientHeight,
-        });
-      }
+      layoutEditor();
     });
     resizeObserver.observe(container);
 
@@ -117,7 +152,7 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
       resizeObserver.disconnect();
       editor.dispose();
     };
-  }, []); // 只在组件挂载时初始化一次
+  }, [layoutEditor]); // 编辑器实例保持稳定，value/readOnly 由后续 effect 同步
 
   // 滚动隔离：阻止 wheel 事件冒泡到外层滚动容器（.content 等）
   // 必须用 native addListener + { passive: false }，React onWheel 是 passive 的
@@ -129,21 +164,22 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
       const editor = editorRef.current;
       if (!editor) return;
 
-      const info = editor.getScrollTop();
+      const scrollTop = editor.getScrollTop();
       const scrollHeight = editor.getScrollHeight();
       const viewportHeight = editor.getLayoutInfo().height;
-      const maxScroll = scrollHeight - viewportHeight;
+      const maxScroll = Math.max(0, scrollHeight - viewportHeight);
 
       // 只在 Monaco 可以滚动的方向上拦截
       const scrollingDown = e.deltaY > 0;
       const scrollingUp = e.deltaY < 0;
 
-      if ((scrollingDown && info < maxScroll) || (scrollingUp && info > 0)) {
+      if ((scrollingDown && scrollTop < maxScroll) || (scrollingUp && scrollTop > 0)) {
+        e.preventDefault();
         e.stopPropagation();
       }
     };
 
-    container.addEventListener('wheel', handleWheel, { passive: true });
+    container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
   }, [isReady]);
 
@@ -152,10 +188,34 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
     if (editorRef.current && isReady) {
       const currentValue = editorRef.current.getValue();
       if (value !== currentValue) {
-        editorRef.current.setValue(value);
+        const editor = editorRef.current;
+        const model = editor.getModel();
+        const position = editor.getPosition();
+        const selections = editor.getSelections();
+        const scrollTop = editor.getScrollTop();
+        const scrollLeft = editor.getScrollLeft();
+
+        if (model) {
+          editor.pushUndoStop();
+          model.pushEditOperations(
+            selections || [],
+            [{ range: model.getFullModelRange(), text: value }],
+            () => selections || null
+          );
+          editor.pushUndoStop();
+        } else {
+          editor.setValue(value);
+        }
+
+        if (position) {
+          editor.setPosition(position);
+        }
+        editor.setScrollTop(scrollTop);
+        editor.setScrollLeft(scrollLeft);
+        layoutEditor();
       }
     }
-  }, [value, isReady]);
+  }, [layoutEditor, value, isReady]);
 
   // 更新只读状态
   useEffect(() => {
