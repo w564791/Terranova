@@ -122,6 +122,60 @@ function parseNumber(state: ParserState): number {
   return num;
 }
 
+function parseExpression(state: ParserState): string {
+  skipWhitespaceAndComments(state);
+  const start = state.pos;
+  let inString = false;
+  let escaped = false;
+  let parenDepth = 0;
+
+  while (state.pos < state.input.length) {
+    const ch = state.input[state.pos];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      state.pos++;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      state.pos++;
+      continue;
+    }
+
+    if (ch === '(') {
+      parenDepth++;
+      state.pos++;
+      continue;
+    }
+    if (ch === ')') {
+      if (parenDepth === 0) break;
+      parenDepth--;
+      state.pos++;
+      continue;
+    }
+
+    if (parenDepth === 0 && (ch === '\n' || ch === '\r' || ch === ',' || ch === '}' || ch === ']')) {
+      break;
+    }
+
+    state.pos++;
+  }
+
+  const raw = state.input.slice(start, state.pos).trim();
+  if (!raw) {
+    throw new Error(`Expected expression at position ${start}`);
+  }
+  return `\${${raw}}`;
+}
+
 function parseValue(state: ParserState): any {
   skipWhitespaceAndComments(state);
   const ch = state.input[state.pos];
@@ -167,6 +221,11 @@ function parseValue(state: ParserState): any {
   // Number (including negative)
   if (ch === '-' || (ch >= '0' && ch <= '9')) {
     return parseNumber(state);
+  }
+
+  // Terraform expressions, e.g. var.items, aws.us_east_1, try(var.foo, [])
+  if (/[a-zA-Z_]/.test(ch)) {
+    return parseExpression(state);
   }
 
   throw new Error(`Unexpected character '${ch}' at position ${state.pos}`);

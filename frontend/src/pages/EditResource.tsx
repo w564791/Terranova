@@ -94,9 +94,17 @@ const EditResource: React.FC = () => {
   const [pendingSubmitAction, setPendingSubmitAction] = useState<boolean | null>(null);
 
   const getSchemaFields = useCallback(() => {
-    const properties = rawSchema?.openapi_schema?.components?.schemas?.ModuleInput?.properties;
+    const properties =
+      rawSchema?.openapi_schema?.components?.schemas?.ModuleInput?.properties ||
+      schema?.openapi_schema?.components?.schemas?.ModuleInput?.properties ||
+      rawSchema?.schema_data?.components?.schemas?.ModuleInput?.properties ||
+      schema?.schema_data?.components?.schemas?.ModuleInput?.properties ||
+      rawSchema?.schema_data?.properties ||
+      schema?.schema_data?.properties ||
+      rawSchema?.properties ||
+      schema?.properties;
     return new Set<string>(properties ? Object.keys(properties) : []);
-  }, [rawSchema]);
+  }, [rawSchema, schema]);
 
   const detectExtraFieldsInData = useCallback((data: Record<string, any>) => {
     const schemaFields = getSchemaFields();
@@ -1192,16 +1200,6 @@ const EditResource: React.FC = () => {
     const dataToSubmit = submitData || currentHclData.userConfig;
     const systemParamsToSubmit = submitData ? hclSystemParams : currentHclData.systemParams;
 
-    // 验证变更摘要
-    if (!changeSummary.trim()) {
-      setChangeSummaryError('请输入变更摘要');
-      showToast('请输入变更摘要', 'warning');
-      // 自动滚动到摘要输入框并聚焦
-      changeSummaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      changeSummaryRef.current?.focus();
-      return;
-    }
-
     // 检查是否有未处理的额外字段
     const extraFields = detectExtraFieldsInData(dataToSubmit);
     if (!submitData && extraFields.length > 0) {
@@ -1210,6 +1208,16 @@ const EditResource: React.FC = () => {
       setPendingExtraFields(extraFields);
       setPendingSubmitAction(shouldRunAfter);
       setShowExtraFieldsDialog(true);
+      return;
+    }
+
+    // 验证变更摘要
+    if (!changeSummary.trim()) {
+      setChangeSummaryError('请输入变更摘要');
+      showToast('请输入变更摘要', 'warning');
+      // 自动滚动到摘要输入框并聚焦
+      changeSummaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      changeSummaryRef.current?.focus();
       return;
     }
 

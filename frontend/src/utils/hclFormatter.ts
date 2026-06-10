@@ -83,7 +83,7 @@ export function jsonToHCL(
     ([key]) => key !== 'source' && key !== 'version'
   );
   sysEntries.forEach(([key, value]) => {
-    const formatted = formatValue(key, value, 1, pad);
+    const formatted = formatSystemValue(key, value, 1, pad);
     lines.push(...formatted);
   });
 
@@ -104,6 +104,105 @@ export function jsonToHCL(
   lines.push('}');
 
   return lines.join('\n');
+}
+
+function getTerraformExpression(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('${') || !trimmed.endsWith('}')) return null;
+  return trimmed.slice(2, -1).trim();
+}
+
+function formatSystemValue(
+  key: string,
+  value: unknown,
+  level: number,
+  pad: (n: number) => string
+): string[] {
+  const lines: string[] = [];
+  const formattedKey = formatHCLKey(key);
+
+  if (value === null || value === undefined) {
+    lines.push(`${pad(level)}# ${formattedKey} = null`);
+    return lines;
+  }
+
+  const expression = getTerraformExpression(value);
+  if (expression) {
+    lines.push(`${pad(level)}${formattedKey} = ${expression}`);
+    return lines;
+  }
+
+  if (typeof value === 'boolean' || typeof value === 'number') {
+    lines.push(`${pad(level)}${formattedKey} = ${value}`);
+    return lines;
+  }
+
+  if (typeof value === 'string') {
+    lines.push(`${pad(level)}${formattedKey} = "${escapeHCLString(value)}"`);
+    return lines;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      lines.push(`${pad(level)}${formattedKey} = []`);
+      return lines;
+    }
+
+    const allSimple = value.every(
+      (item) =>
+        typeof item === 'string' ||
+        typeof item === 'number' ||
+        typeof item === 'boolean' ||
+        item === null ||
+        item === undefined
+    );
+
+    if (allSimple && value.length <= 4) {
+      const items = value.map((item) => formatSystemPrimitive(item)).join(', ');
+      lines.push(`${pad(level)}${formattedKey} = [${items}]`);
+      return lines;
+    }
+
+    lines.push(`${pad(level)}${formattedKey} = [`);
+    value.forEach((item) => {
+      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+        lines.push(`${pad(level + 1)}{`);
+        Object.entries(item).forEach(([k, v]) => {
+          lines.push(...formatSystemValue(k, v, level + 2, pad));
+        });
+        lines.push(`${pad(level + 1)}},`);
+      } else {
+        lines.push(`${pad(level + 1)}${formatSystemPrimitive(item)},`);
+      }
+    });
+    lines.push(`${pad(level)}]`);
+    return lines;
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      lines.push(`${pad(level)}${formattedKey} = {}`);
+      return lines;
+    }
+
+    lines.push(`${pad(level)}${formattedKey} = {`);
+    entries.forEach(([k, v]) => {
+      lines.push(...formatSystemValue(k, v, level + 1, pad));
+    });
+    lines.push(`${pad(level)}}`);
+    return lines;
+  }
+
+  lines.push(`${pad(level)}${formattedKey} = "${String(value)}"`);
+  return lines;
+}
+
+function formatSystemPrimitive(value: unknown): string {
+  const expression = getTerraformExpression(value);
+  if (expression) return expression;
+  return formatPrimitive(value);
 }
 
 function formatValue(
