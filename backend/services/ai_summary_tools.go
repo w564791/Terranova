@@ -498,7 +498,12 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		return map[string]interface{}{"found": false, "message": "resource not found"}, nil
 	}
 
-	// 2. 获取当前最新版本
+	// 自动感知：manifest-managed 资源走 manifest 分支
+	if resource.ManifestDeploymentID != nil && *resource.ManifestDeploymentID != "" {
+		return t.executeManifestCodeDiff(workspaceID, resourceID, resource)
+	}
+
+	// 2. 获取当前最新版本（module 分支）
 	var currentVersion models.ResourceCodeVersion
 	if err := t.db.Where("resource_id = ? AND is_latest = true", resource.ID).
 		First(&currentVersion).Error; err != nil {
@@ -591,6 +596,201 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 		"applied_task_id": appliedTaskID,
 		"diff":            diff,
 	}, nil
+}
+
+// executeManifestCodeDiff 处理 manifest-managed 资源的代码变更分析。
+// 对比上次 apply 的 manifest 版本与当前版本中，指定 resource/module block 的 HCL 源码差异。
+func (t *QueryResourceCodeDiffTool) executeManifestCodeDiff(
+	workspaceID, resourceID string,
+	resource models.WorkspaceResource,
+) (interface{}, error) {
+	// 1. 查 workspace 获取 manifest 软链接 + subpath
+	var ws struct {
+		ManifestDeploymentID *string
+		ManifestSubpath      *string
+	}
+	if err := t.db.Table("workspaces").
+		Select("manifest_deployment_id, manifest_subpath").
+		Where("workspace_id = ?", workspaceID).
+		Scan(&ws).Error; err != nil {
+		return map[string]interface{}{"found": false, "message": "workspace not found"}, nil
+	}
+	if ws.ManifestDeploymentID == nil || *ws.ManifestDeploymentID == "" {
+		return map[string]interface{}{"found": false, "message": "workspace has no manifest deployment"}, nil
+	}
+
+	// 2. 查 manifest_deployments 获取 manifest_id + 当前 version_id
+	var dep models.ManifestDeployment
+	if err := t.db.Select("manifest_id, version_id").
+		Where("id = ?", *ws.ManifestDeploymentID).
+		First(&dep).Error; err != nil {
+		return map[string]interface{}{"found": false, "message": "manifest deployment not found"}, nil
+	}
+
+	// 获取当前版本名称
+	var currentVersion models.ManifestVersion
+	if err := t.db.Select("version").
+		Where("id = ?", dep.VersionID).
+		First(&currentVersion).Error; err != nil {
+		return map[string]interface{}{"found": false, "message": "current manifest version not found"}, nil
+	}
+
+	// 3. 查上次 apply 成功的 task 获取 snapshot_manifest_version_id（旧版本）
+	var appliedTask models.WorkspaceTask
+	if err := t.db.Select("id, snapshot_manifest_version_id").
+		Where("workspace_id = ? AND status = 'applied' AND snapshot_manifest_version_id IS NOT NULL", workspaceID).
+		Order("id DESC").
+		First(&appliedTask).Error; err != nil {
+		return map[string]interface{}{
+			"found":           true,
+			"source_type":     "manifest",
+			"message":         "no apply history with manifest version found",
+			"current_version": currentVersion.Version,
+		}, nil
+	}
+	if appliedTask.SnapshotManifestVersionID == nil || *appliedTask.SnapshotManifestVersionID == "" {
+		return map[string]interface{}{
+			"found":           true,
+			"source_type":     "manifest",
+			"message":         "no manifest version in apply snapshot",
+			"current_version": currentVersion.Version,
+		}, nil
+	}
+
+	// 获取旧版本名称
+	var appliedVersion models.ManifestVersion
+	if err := t.db.Select("version").
+		Where("id = ?", *appliedTask.SnapshotManifestVersionID).
+		First(&appliedVersion).Error; err != nil {
+		return map[string]interface{}{
+			"found":           true,
+			"source_type":     "manifest",
+			"message":         "applied manifest version record not found",
+			"current_version": currentVersion.Version,
+		}, nil
+	}
+
+	// 4. 新旧版本相同，无变更
+	if *appliedTask.SnapshotManifestVersionID == dep.VersionID {
+		return map[string]interface{}{
+			"found":            true,
+			"source_type":      "manifest",
+			"has_changes":      false,
+			"message":          "manifest version unchanged since last apply",
+			"applied_version":  appliedVersion.Version,
+			"current_version":  currentVersion.Version,
+			"applied_task_id":  appliedTask.ID,
+		}, nil
+	}
+
+	// 5. 拉两个版本的 manifest_files
+	subpath := ""
+	if ws.ManifestSubpath != nil {
+		subpath = *ws.ManifestSubpath
+	}
+
+	appliedFiles := t.loadManifestFiles(dep.ManifestID, *appliedTask.SnapshotManifestVersionID)
+	currentFiles := t.loadManifestFiles(dep.ManifestID, dep.VersionID)
+
+	if len(appliedFiles) == 0 && len(currentFiles) == 0 {
+		return map[string]interface{}{
+			"found":           true,
+			"source_type":     "manifest",
+			"message":         "no manifest files found in either version",
+			"applied_version": appliedVersion.Version,
+			"current_version": currentVersion.Version,
+		}, nil
+	}
+
+	// 6. 解析 resource_id → (kind, typeName, name)
+	kind, typeName, name := parseResourceIDForManifest(resourceID)
+
+	// 7. 从两个版本提取该 resource 的 HCL block
+	appliedScope := manifestFilesToScope(appliedFiles)
+	currentScope := manifestFilesToScope(currentFiles)
+
+	appliedPath, appliedHCL, appliedFound := ExtractResourceBlock(appliedScope, kind, typeName, name, subpath)
+	currentPath, currentHCL, currentFound := ExtractResourceBlock(currentScope, kind, typeName, name, subpath)
+
+	// 8. 分析变更情况
+	result := map[string]interface{}{
+		"found":           true,
+		"source_type":     "manifest",
+		"applied_version": appliedVersion.Version,
+		"current_version": currentVersion.Version,
+		"applied_task_id": appliedTask.ID,
+	}
+
+	switch {
+	case !appliedFound && !currentFound:
+		result["has_changes"] = false
+		result["message"] = "resource block not found in either version"
+	case !appliedFound && currentFound:
+		result["has_changes"] = true
+		result["change_type"] = "added"
+		result["file"] = currentPath
+		result["new_hcl"] = currentHCL
+	case appliedFound && !currentFound:
+		result["has_changes"] = true
+		result["change_type"] = "removed"
+		result["file"] = appliedPath
+		result["old_hcl"] = appliedHCL
+	case appliedFound && currentFound:
+		if appliedHCL == currentHCL {
+			result["has_changes"] = false
+			result["message"] = "resource block unchanged"
+			result["file"] = currentPath
+		} else {
+			result["has_changes"] = true
+			result["change_type"] = "modified"
+			result["file"] = currentPath
+			result["old_hcl"] = appliedHCL
+			result["new_hcl"] = currentHCL
+			if appliedPath != currentPath {
+				result["file_moved"] = true
+				result["old_file"] = appliedPath
+			}
+		}
+	}
+
+	log.Printf("[query_resource_code_diff] manifest: resource=%s applied=%s current=%s has_changes=%v",
+		resourceID, appliedVersion.Version, currentVersion.Version, result["has_changes"])
+
+	return result, nil
+}
+
+// loadManifestFiles 加载指定 manifest 版本的所有文件
+func (t *QueryResourceCodeDiffTool) loadManifestFiles(manifestID, versionID string) []models.ManifestFile {
+	var files []models.ManifestFile
+	t.db.Select("path, content").
+		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
+		Find(&files)
+	return files
+}
+
+// manifestFilesToScope 将 ManifestFile 切片转换为 path→content 的 scope map
+func manifestFilesToScope(files []models.ManifestFile) map[string][]byte {
+	scope := make(map[string][]byte, len(files))
+	for _, f := range files {
+		scope[f.Path] = f.Content
+	}
+	return scope
+}
+
+// parseResourceIDForManifest 将 resource_id 解析为 HCL block 的 (kind, typeName, name)。
+// resource_id 格式:
+//   - module 块: "module.<name>" → kind="module", typeName="", name="<name>"
+//   - resource 块: "<type>.<name>" → kind="resource", typeName="<type>", name="<name>"
+func parseResourceIDForManifest(resourceID string) (kind, typeName, name string) {
+	if strings.HasPrefix(resourceID, "module.") {
+		return "module", "", strings.TrimPrefix(resourceID, "module.")
+	}
+	parts := strings.SplitN(resourceID, ".", 2)
+	if len(parts) == 2 {
+		return "resource", parts[0], parts[1]
+	}
+	// fallback: 整个 resourceID 当 name 用
+	return "resource", "", resourceID
 }
 
 // computeJSONDiff 计算两个 JSON 对象的精简差异，只返回变更部分
