@@ -90,12 +90,51 @@ const EditResource: React.FC = () => {
   const [pendingExtraFields, setPendingExtraFields] = useState<string[]>([]);
   const [showExtraFieldsDialog, setShowExtraFieldsDialog] = useState(false);
   const [pendingViewModeChange, setPendingViewModeChange] = useState<ViewMode | null>(null);
-  const [pendingSubmit, setPendingSubmit] = useState<boolean>(false);
+  const [pendingSubmitAction, setPendingSubmitAction] = useState<boolean | null>(null);
+
+  const getSchemaFields = useCallback(() => {
+    const properties = rawSchema?.openapi_schema?.components?.schemas?.ModuleInput?.properties;
+    return new Set<string>(properties ? Object.keys(properties) : []);
+  }, [rawSchema]);
+
+  const detectExtraFieldsInData = useCallback((data: Record<string, any>) => {
+    const schemaFields = getSchemaFields();
+    if (schemaFields.size === 0) return [];
+    return Object.keys(data).filter(key => !schemaFields.has(key));
+  }, [getSchemaFields]);
+
+  const filterDataToSchema = useCallback((data: Record<string, any>) => {
+    const schemaFields = getSchemaFields();
+    if (schemaFields.size === 0) return data;
+
+    const filtered: Record<string, any> = {};
+    Object.keys(data).forEach(key => {
+      if (schemaFields.has(key)) {
+        filtered[key] = data[key];
+      }
+    });
+    return filtered;
+  }, [getSchemaFields]);
+
+  const getCurrentConfigData = useCallback(() => {
+    if (viewMode === 'json' && hclText.trim()) {
+      try {
+        return parseHCLModule(hclText).userConfig;
+      } catch {
+        return formData;
+      }
+    }
+    return formData;
+  }, [viewMode, hclText, formData]);
 
   // Wrap setViewMode to also persist to URL and check for extra fields
   const setViewMode = useCallback((mode: ViewMode) => {
     // 从 HCL 模式切换到表单模式时，检查是否有未处理的额外字段
-    if (viewMode === 'json' && mode === 'form' && pendingExtraFields.length > 0) {
+    const currentData = getCurrentConfigData();
+    const extraFields = detectExtraFieldsInData(currentData);
+    if (viewMode === 'json' && mode === 'form' && extraFields.length > 0) {
+      setFormData(currentData);
+      setPendingExtraFields(extraFields);
       setPendingViewModeChange(mode);
       setShowExtraFieldsDialog(true);
       return;
@@ -111,7 +150,7 @@ const EditResource: React.FC = () => {
       }
       return next;
     }, { replace: true });
-  }, [setSearchParams, isV3, viewMode, pendingExtraFields]);
+  }, [detectExtraFieldsInData, getCurrentConfigData, setSearchParams, isV3, viewMode]);
   const [initialFieldsToShow, setInitialFieldsToShow] = useState<string[]>([]);
   const [isCloneMode, setIsCloneMode] = useState(false);
   // 升级模式：从 ViewResource 的升级按钮跳转过来，URL 带 upgrade_to 参数
@@ -257,28 +296,18 @@ const EditResource: React.FC = () => {
     try {
       const result = parseHCLModule(newHclText);
       // 提取系统参数（source, version 等）和用户配置
-      const { systemParams, userConfig } = result;
+      const { userConfig } = result;
       
       // 只更新用户配置部分，保留系统参数
       setFormData(userConfig);
       
       // 如果有额外字段，检测并提示
-      if (rawSchema?.openapi_schema) {
-        const schemaProperties = rawSchema.openapi_schema.components?.schemas?.ModuleInput?.properties || {};
-        const schemaKeys = new Set(Object.keys(schemaProperties));
-        const extraFields = Object.keys(userConfig).filter(key => !schemaKeys.has(key));
-        
-        if (extraFields.length > 0) {
-          setPendingExtraFields(extraFields);
-        } else {
-          setPendingExtraFields([]);
-        }
-      }
+      setPendingExtraFields(detectExtraFieldsInData(userConfig));
     } catch (error) {
       // HCL 解析失败，不更新 formData，保持当前状态
       console.error('Failed to parse HCL:', error);
     }
-  }, [rawSchema]);
+  }, [detectExtraFieldsInData]);
 
   // AI 助手 Hook
   const ai = useAIConfigGenerator({
@@ -310,7 +339,7 @@ const EditResource: React.FC = () => {
   const [savedResourceName, setSavedResourceName] = useState('');
   
   // Ref to store handleSubmit function to avoid forward reference
-  const handleSubmitRef = useRef<(shouldRunAfter: boolean) => Promise<void>>();
+  const handleSubmitRef = useRef<(shouldRunAfter: boolean, submitData?: Record<string, any>) => Promise<void>>();
   
   // WebSocket接管请求状态
   const [showTakeoverRequestDialog, setShowTakeoverRequestDialog] = useState(false);
@@ -320,8 +349,11 @@ const EditResource: React.FC = () => {
 
   // 处理 HCL 额外字段：保留
   const handleKeepExtraFields = useCallback(() => {
+    const submitAction = pendingSubmitAction;
+
     setPendingExtraFields([]);
     setShowExtraFieldsDialog(false);
+    setPendingSubmitAction(null);
 
     // 如果是模式切换，继续切换
     if (pendingViewModeChange) {
@@ -339,28 +371,20 @@ const EditResource: React.FC = () => {
     }
 
     // 如果是提交，继续提交（使用 ref 避免前向引用）
-    if (pendingSubmit && handleSubmitRef.current) {
-      handleSubmitRef.current(true);
-      setPendingSubmit(false);
+    if (submitAction !== null && handleSubmitRef.current) {
+      handleSubmitRef.current(submitAction, formData);
     }
-  }, [pendingViewModeChange, pendingSubmit, isV3, setSearchParams]);
+  }, [pendingViewModeChange, pendingSubmitAction, isV3, setSearchParams, formData]);
 
-  // 处理 HCL 额外字段：丢弃
+  // 处理 HCL 额外字段：不保留
   const handleDiscardExtraFields = useCallback(() => {
-    // 从 formData 中移除非 schema 字段
-    const schemaProperties = rawSchema?.openapi_schema?.components?.schemas?.ModuleInput?.properties || {};
-    const schemaFields = new Set(Object.keys(schemaProperties));
-    
-    const filteredFormData: Record<string, any> = {};
-    Object.keys(formData).forEach(key => {
-      if (schemaFields.size === 0 || schemaFields.has(key)) {
-        filteredFormData[key] = formData[key];
-      }
-    });
+    const submitAction = pendingSubmitAction;
+    const filteredFormData = filterDataToSchema(formData);
     
     setFormData(filteredFormData);
     setPendingExtraFields([]);
     setShowExtraFieldsDialog(false);
+    setPendingSubmitAction(null);
     
     // 如果是模式切换，继续切换
     if (pendingViewModeChange) {
@@ -378,11 +402,10 @@ const EditResource: React.FC = () => {
     }
     
     // 如果是提交，继续提交（使用 ref 避免前向引用）
-    if (pendingSubmit && handleSubmitRef.current) {
-      handleSubmitRef.current(true);
-      setPendingSubmit(false);
+    if (submitAction !== null && handleSubmitRef.current) {
+      handleSubmitRef.current(submitAction, filteredFormData);
     }
-  }, [pendingViewModeChange, pendingSubmit, isV3, setSearchParams]);
+  }, [pendingViewModeChange, pendingSubmitAction, isV3, setSearchParams, formData, filterDataToSchema]);
 
   const heartbeatTimerRef = useRef<number | null>(null);
   const statusPollTimerRef = useRef<number | null>(null);
@@ -1128,7 +1151,11 @@ const EditResource: React.FC = () => {
     }, 2000); // 改为2秒防抖，减少API调用频率
   }, [formData, changeSummary, id, resourceId, isCloneMode, sessionId, loading, hasUserEdited]);
 
-  const handleSubmit = async (shouldRunAfter: boolean = false) => {
+  const handleSubmit = async (
+    shouldRunAfter: boolean = false,
+    submitData?: Record<string, any>
+  ) => {
+    const dataToSubmit = submitData || getCurrentConfigData();
 
     // 验证变更摘要
     if (!changeSummary.trim()) {
@@ -1141,8 +1168,11 @@ const EditResource: React.FC = () => {
     }
 
     // 检查是否有未处理的额外字段
-    if (pendingExtraFields.length > 0) {
-      setPendingSubmit(shouldRunAfter);
+    const extraFields = detectExtraFieldsInData(dataToSubmit);
+    if (!submitData && extraFields.length > 0) {
+      setFormData(dataToSubmit);
+      setPendingExtraFields(extraFields);
+      setPendingSubmitAction(shouldRunAfter);
       setShowExtraFieldsDialog(true);
       return;
     }
@@ -1188,7 +1218,7 @@ const EditResource: React.FC = () => {
         // 构建 module 配置
         const moduleConfig: Record<string, any> = {
           source: moduleSource,
-          ...formData
+          ...dataToSubmit
         };
         
         // 添加版本信息
@@ -1232,7 +1262,7 @@ const EditResource: React.FC = () => {
         // 构建 module 配置
         const editModuleConfig: Record<string, any> = {
           source: moduleSource,
-          ...formData
+          ...dataToSubmit
         };
         
         // 添加版本信息
@@ -1980,22 +2010,22 @@ const EditResource: React.FC = () => {
               </ul>
               <p><strong>请选择处理方式：</strong></p>
               <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                <li><strong>不保留</strong>：从配置中移除这些字段，并继续切换或保存</li>
                 <li><strong>保留</strong>：将这些字段保存到配置中（可能会在下次加载时被过滤）</li>
-                <li><strong>丢弃</strong>：从配置中移除这些字段</li>
               </ul>
             </div>
             <div className={styles.dialogFooter}>
               <button
                 className={styles.btnCancel}
-                onClick={handleDiscardExtraFields}
-              >
-                丢弃这些字段
-              </button>
-              <button
-                className={styles.btnPrimary}
                 onClick={handleKeepExtraFields}
               >
                 保留这些字段
+              </button>
+              <button
+                className={styles.btnPrimary}
+                onClick={handleDiscardExtraFields}
+              >
+                不保留
               </button>
             </div>
           </div>
