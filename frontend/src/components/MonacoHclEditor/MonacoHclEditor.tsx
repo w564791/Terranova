@@ -125,7 +125,7 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
       scrollbar: {
         vertical: 'auto',
         horizontal: 'auto',
-        alwaysConsumeMouseWheel: true,
+        alwaysConsumeMouseWheel: false,
       },
     });
 
