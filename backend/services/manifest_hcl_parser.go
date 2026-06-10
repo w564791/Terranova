@@ -436,3 +436,187 @@ func ctyToGo(v cty.Value) interface{} {
 		return nil
 	}
 }
+
+// ExtractResourceBlock 从一组 .tf 文件中提取指定 resource 或 module block 的完整 HCL 源码。
+//
+// kind: "resource" 或 "module"
+// typeName: resource 类型（如 "aws_s3_bucket"），module 时传空
+// name: 声明名（如 "my_bucket" 或 module 实例名 "network"）
+// subpath: terraform 执行子目录（空 = 根目录）
+//
+// 返回 (文件路径, HCL 文本, 是否找到)。跨文件搜索，同名 resource 取首个匹配。
+func ExtractResourceBlock(
+	scopeFiles map[string][]byte,
+	kind, typeName, name, subpath string,
+) (filePath string, hclText string, found bool) {
+	parser := hclparse.NewParser()
+	subpath = strings.TrimSuffix(subpath, "/")
+
+	for path, content := range scopeFiles {
+		if !shouldParseForResources(path, subpath) {
+			continue
+		}
+
+		file, diags := parser.ParseHCL(content, path)
+		if diags.HasErrors() || file == nil {
+			continue
+		}
+
+		var labelNames []string
+		if kind == "resource" {
+			labelNames = []string{"type", "name"}
+		} else {
+			labelNames = []string{"name"}
+		}
+
+		schema := &hcl.BodySchema{
+			Blocks: []hcl.BlockHeaderSchema{
+				{Type: kind, LabelNames: labelNames},
+			},
+		}
+		bodyContent, _, partDiags := file.Body.PartialContent(schema)
+		if partDiags.HasErrors() || bodyContent == nil {
+			continue
+		}
+
+		for _, block := range bodyContent.Blocks {
+			if block.Type != kind {
+				continue
+			}
+			if kind == "resource" && len(block.Labels) >= 2 {
+				if block.Labels[0] != typeName || block.Labels[1] != name {
+					continue
+				}
+			} else if kind == "module" && len(block.Labels) >= 1 {
+				if block.Labels[0] != name {
+					continue
+				}
+			} else {
+				continue
+			}
+
+			// 提取完整 block 文本：从 DefRange.Start 到 body 最后一个属性/块的 End
+			text := extractBlockText(content, block)
+			if text == "" {
+				continue
+			}
+			return path, text, true
+		}
+	}
+	return "", "", false
+}
+
+// extractBlockText 从原始 HCL 内容中提取一个 block 的完整源码文本（含花括号）。
+// 使用花括号配对方式定位 block 结束位置，避免依赖 HCL schema 遍历 nested blocks。
+func extractBlockText(content []byte, block *hcl.Block) string {
+	startByte := block.DefRange.Start.Byte
+	if startByte < 0 || startByte >= len(content) {
+		return ""
+	}
+
+	// 找到 block header 之后的第一个 '{'
+	pos := startByte
+	for pos < len(content) && content[pos] != '{' {
+		pos++
+	}
+	if pos >= len(content) {
+		return ""
+	}
+
+	// 从 '{' 开始做花括号配对，正确处理字符串和注释
+	depth := 0
+	inString := false
+	inHeredoc := false
+	i := pos
+	for i < len(content) {
+		b := content[i]
+
+		// heredoc 处理 (<<EOF ... EOF 或 <<-EOF ... EOF)
+		if inHeredoc {
+			// 简化：遇到行首的标识符结束（此处以换行后的字母开头为准）
+			if b == '\n' && i+1 < len(content) && isAlpha(content[i+1]) {
+				// 检查到行尾是否是 heredoc 结束标识
+				lineStart := i + 1
+				lineEnd := lineStart
+				for lineEnd < len(content) && content[lineEnd] != '\n' && content[lineEnd] != '\r' {
+					lineEnd++
+				}
+				// heredoc 结束标识是独立的标识符行
+				ident := strings.TrimSpace(string(content[lineStart:lineEnd]))
+				if len(ident) > 0 && isIdentChar(ident[len(ident)-1]) {
+					inHeredoc = false
+					i = lineEnd
+					continue
+				}
+			}
+			i++
+			continue
+		}
+
+		// 字符串内：只关心转义和结束引号
+		if inString {
+			if b == '\\' && i+1 < len(content) {
+				i += 2 // 跳过转义
+				continue
+			}
+			if b == '"' {
+				inString = false
+			}
+			i++
+			continue
+		}
+
+		switch b {
+		case '"':
+			inString = true
+		case '#':
+			// 行注释：跳到行尾
+			for i < len(content) && content[i] != '\n' {
+				i++
+			}
+			continue
+		case '/':
+			if i+1 < len(content) && content[i+1] == '/' {
+				for i < len(content) && content[i] != '\n' {
+					i++
+				}
+				continue
+			}
+			if i+1 < len(content) && content[i+1] == '*' {
+				i += 2
+				for i+1 < len(content) {
+					if content[i] == '*' && content[i+1] == '/' {
+						i += 2
+						break
+					}
+					i++
+				}
+				continue
+			}
+		case '<':
+			if i+1 < len(content) && content[i+1] == '<' {
+				inHeredoc = true
+				i += 2
+				continue
+			}
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return string(content[startByte : i+1])
+			}
+		}
+		i++
+	}
+
+	return ""
+}
+
+func isAlpha(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_'
+}
+
+func isIdentChar(b byte) bool {
+	return isAlpha(b) || (b >= '0' && b <= '9') || b == '-'
+}
