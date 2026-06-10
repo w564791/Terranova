@@ -1,6 +1,6 @@
 ## v0.8.0-beta1
 
-前端 UI v3 主题系统全面上线:新增 v2/v3 切换机制,CSS 变量覆盖架构确保 v2 零影响;资源编辑引入 HCL 双向实时编辑器(overlay 方案 + Monaco Editor 双引擎),支持 Terraform 系统参数分离与 Schema 外字段检测;版本管理增加升级/降级流程、版本锁定策略与 Schema 感知的版本对比;HCL 工具链增强 jsonencode() 双向转换、Terraform 表达式解析;后端 terraform init 自动检测 locked provider 错误并 -upgrade 重试。
+前端 UI v3 主题系统全面上线:新增 v2/v3 切换机制,CSS 变量覆盖架构确保 v2 零影响;资源编辑引入 HCL 双向实时编辑器(overlay 方案 + Monaco Editor 双引擎),支持 Terraform 系统参数分离与 Schema 外字段检测;版本管理增加升级/降级流程、版本锁定策略与 Schema 感知的版本对比;HCL 工具链增强 jsonencode() 双向转换、Terraform 表达式解析;后端 terraform init 自动检测 locked provider 错误并 -upgrade 重试;Manifest 资源管理增强:manifest 管理的资源禁止直接删除(后端 409 + 前端拦截),深链跳转支持版本/subpath 参数与发布版本 fallback。
 
 ### 新增功能
 
@@ -204,3 +204,44 @@
 - `frontend/src/components/DemoPreview.tsx` — FormRendererV3 + HCLView
 - `frontend/src/services/schemaV2.ts` — 命名说明注释 + `detectSchemaVersion` 标记 `@deprecated`
 - `backend/services/terraform_executor.go` — locked provider 检测 + `-upgrade` 自动重试
+
+### Manifest 资源管理增强
+
+#### Manifest 管理资源删除保护
+
+- **新增** 后端删除保护:`DeleteResourceWithOptions` 检测 `manifest_deployment_id`,如果资源由 Manifest 管理则返回错误,阻止直接删除
+- **新增** 409 Conflict 响应:`DeleteResource` controller 识别 "managed by a manifest deployment" 错误,返回 HTTP 409 而非 500,前端可精确区分
+- **新增** 前端删除拦截:ResourcesTab `handleDeleteResource` 检测 `manifest_deployment_id`,阻止删除并 toast 提示「此资源由 Manifest 管理,请在 manifest 编辑器中操作」
+- **新增** 删除按钮 disabled 状态:Manifest 管理的资源删除按钮置灰 + hover 提示,防止误操作
+
+#### Workspace Manifest Summary 增强
+
+- **新增** `version_id` 字段:workspace manifest summary API 返回当前部署的版本 ID,供前端构建版本感知的深链
+- **新增** `listVersionFiles` API:读取已发布版本的文件树(只读),用于深链跳转时在发布版本中查找资源块
+
+#### 深链跳转增强
+
+- **新增** 版本感知深链:`buildManifestEditorUrl` 统一构建编辑器 URL,携带 `version`、`subpath`、`resource` 参数,从 workspace 资源列表跳转到 Manifest 编辑器时精确定位
+- **新增** 发布版本 fallback:深链定位时先在草稿文件中查找资源块,找不到则通过 `listVersionFiles` 加载发布版本文件构建索引,在发布版本中找到后打开对应草稿文件并定位行号
+- **新增** subpath 过滤:`isTopLevelTfUnderSubpath` 辅助函数,深链构建索引时只纳入 subpath 下的顶层 .tf 文件,避免跨 subpath 误匹配
+- **优化** 深链 key 去重:`deepLinkDoneRef` 从布尔值改为深链 key 字符串,支持同一编辑器内连续跳转不同资源/文件,不再因 key 不同而跳过
+
+#### Manifest 徽章简化
+
+- **优化** Manifest 徽章 UI:移除 📦 emoji、manifest 名称和 active_tag 显示,精简为「Manifest」文字标签,点击跳转到编辑器
+- **优化** Manifest 编辑器跳转统一:ResourcesTab 所有跳转点(badge、banner 按钮、资源行点击)统一使用 `buildManifestEditorUrl`,消除重复的 URL 拼接逻辑
+
+#### 测试
+
+- **新增** `resource_service_manifest_test.go`:Manifest 管理资源删除保护的单元测试,覆盖有 manifest 部署 ID 的资源被拒绝删除、无 manifest 的资源正常删除等场景
+
+#### 新增/修改文件
+
+- `backend/controllers/resource_controller.go` — 409 Conflict 响应
+- `backend/internal/handlers/manifest_deployments_v2_handler.go` — version_id 字段
+- `backend/services/resource_service.go` — manifest_deployment_id 字段 + 删除保护
+- `backend/services/resource_service_manifest_test.go` — 删除保护单元测试(新增)
+- `frontend/src/hooks/useWorkspaceManifestSummary.ts` — version_id 类型
+- `frontend/src/pages/ResourcesTab.tsx` — 删除拦截 + buildManifestEditorUrl + 徽章简化
+- `frontend/src/pages/admin/ManifestEditorV2/ManifestEditorV2.tsx` — 深链版本/subpath/fallback
+- `frontend/src/pages/admin/ManifestEditorV2/manifestApi.ts` — listVersionFiles API
