@@ -636,9 +636,10 @@ func (t *QueryResourceCodeDiffTool) executeManifestCodeDiff(
 	}
 
 	// 3. 查上次 apply 成功的 task 获取 snapshot_manifest_version_id（旧版本）
+	// 排除后台任务（drift_check 等），仅取用户发起的正常流程任务。
 	var appliedTask models.WorkspaceTask
 	if err := t.db.Select("id, snapshot_manifest_version_id").
-		Where("workspace_id = ? AND status = 'applied' AND snapshot_manifest_version_id IS NOT NULL", workspaceID).
+		Where("workspace_id = ? AND status = 'applied' AND snapshot_manifest_version_id IS NOT NULL AND is_background = false", workspaceID).
 		Order("id DESC").
 		First(&appliedTask).Error; err != nil {
 		return map[string]interface{}{
@@ -762,9 +763,12 @@ func (t *QueryResourceCodeDiffTool) executeManifestCodeDiff(
 // loadManifestFiles 加载指定 manifest 版本的所有文件
 func (t *QueryResourceCodeDiffTool) loadManifestFiles(manifestID, versionID string) []models.ManifestFile {
 	var files []models.ManifestFile
-	t.db.Select("path, content").
+	if err := t.db.Select("path, content").
 		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Find(&files)
+		Find(&files).Error; err != nil {
+		log.Printf("[query_resource_code_diff] failed to load manifest files (manifest=%s version=%s): %v",
+			manifestID, versionID, err)
+	}
 	return files
 }
 

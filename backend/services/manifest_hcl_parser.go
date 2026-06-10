@@ -2,6 +2,7 @@ package services
 
 import (
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -452,7 +453,15 @@ func ExtractResourceBlock(
 	parser := hclparse.NewParser()
 	subpath = strings.TrimSuffix(subpath, "/")
 
-	for path, content := range scopeFiles {
+	// 排序确保确定性遍历顺序（同名 resource 取首个匹配时结果稳定）
+	paths := make([]string, 0, len(scopeFiles))
+	for p := range scopeFiles {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	for _, path := range paths {
+		content := scopeFiles[path]
 		if !shouldParseForResources(path, subpath) {
 			continue
 		}
@@ -526,25 +535,23 @@ func extractBlockText(content []byte, block *hcl.Block) string {
 	// 从 '{' 开始做花括号配对，正确处理字符串和注释
 	depth := 0
 	inString := false
-	inHeredoc := false
+	heredocIdent := "" // 非空 = 在 heredoc 内部
 	i := pos
 	for i < len(content) {
 		b := content[i]
 
-		// heredoc 处理 (<<EOF ... EOF 或 <<-EOF ... EOF)
-		if inHeredoc {
-			// 简化：遇到行首的标识符结束（此处以换行后的字母开头为准）
-			if b == '\n' && i+1 < len(content) && isAlpha(content[i+1]) {
-				// 检查到行尾是否是 heredoc 结束标识
+		// heredoc 处理：逐行扫描，只有整行（trim 后）精确匹配 heredocIdent 才结束
+		if heredocIdent != "" {
+			if b == '\n' {
+				// 读取下一行内容
 				lineStart := i + 1
 				lineEnd := lineStart
 				for lineEnd < len(content) && content[lineEnd] != '\n' && content[lineEnd] != '\r' {
 					lineEnd++
 				}
-				// heredoc 结束标识是独立的标识符行
-				ident := strings.TrimSpace(string(content[lineStart:lineEnd]))
-				if len(ident) > 0 && isIdentChar(ident[len(ident)-1]) {
-					inHeredoc = false
+				lineText := strings.TrimSpace(string(content[lineStart:lineEnd]))
+				if lineText == heredocIdent {
+					heredocIdent = ""
 					i = lineEnd
 					continue
 				}
@@ -594,10 +601,29 @@ func extractBlockText(content []byte, block *hcl.Block) string {
 				continue
 			}
 		case '<':
+			// heredoc: <<IDENT 或 <<-IDENT（必须是合法标识符，否则是位移运算符）
 			if i+1 < len(content) && content[i+1] == '<' {
-				inHeredoc = true
-				i += 2
-				continue
+				hStart := i + 2
+				indented := false
+				if hStart < len(content) && content[hStart] == '-' {
+					indented = true
+					hStart++
+				}
+				hEnd := hStart
+				for hEnd < len(content) && isIdentChar(content[hEnd]) {
+					hEnd++
+				}
+				if hEnd > hStart && isAlpha(content[hStart]) {
+					// 合法 heredoc：记住标识符名称
+					heredocIdent = string(content[hStart:hEnd])
+					_ = indented // indented 模式只影响缩进，不影响结束标识匹配
+					i = hEnd
+					// 跳到行尾（heredoc 内容从下一行开始）
+					for i < len(content) && content[i] != '\n' {
+						i++
+					}
+					continue
+				}
 			}
 		case '{':
 			depth++

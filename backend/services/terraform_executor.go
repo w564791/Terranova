@@ -3891,8 +3891,9 @@ func (s *TerraformExecutor) CreateResourceVersionSnapshot(
 	snapshotTime := time.Now()
 
 	// 3b. 快照 manifest version（manifest-managed workspace 用，供 code diff 回溯）
+	// 仅 Local 模式（s.db != nil）可查；Agent 模式通过 DataAccessor 由平台侧快照。
 	var snapshotManifestVersionID *string
-	if s.workspaceUsesManifest(workspace) {
+	if s.db != nil && s.workspaceUsesManifest(workspace) {
 		var dep models.ManifestDeployment
 		if err := s.db.Select("version_id").
 			Where("id = ?", *workspace.ManifestDeploymentID).

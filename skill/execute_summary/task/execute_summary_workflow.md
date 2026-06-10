@@ -462,6 +462,9 @@ manifest_address_inference:
   - terraform_address 中的 module 前缀对应 manifest 中的 module 实例
   - 例如: module.network.aws_vpc.this → resource_id = module.network
     注意: module 实例内的子资源，其 resource_id 为 module 实例本身
+  - module 实例的 HCL block 只含调用参数（source/version/inputs），
+    不含子资源定义。子资源的变更需通过 module source 版本升级或
+    inputs 参数变化推断，而非直接查看子资源 HCL
 ```
 
 输出要求:

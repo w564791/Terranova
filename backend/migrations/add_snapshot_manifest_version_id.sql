@@ -11,8 +11,15 @@ COMMENT ON COLUMN workspace_tasks.snapshot_manifest_version_id
 
 -- Backfill: for existing applied tasks in manifest-managed workspaces,
 -- set snapshot_manifest_version_id from current deployment version.
--- Note: this is best-effort; older tasks before this column existed
--- will have NULL (acceptable — no apply history to compare against).
+--
+-- LIMITATION: uses CURRENT deployment version, not the version at the time
+-- of each task. After an upgrade (v1→v2), old v1 tasks will be backfilled
+-- with v2's version_id, making code diff report "code unchanged" until
+-- the next apply creates a task with the correct snapshot. This is
+-- acceptable because:
+-- 1. Only affects the transition period after migration
+-- 2. Next plan+apply cycle creates correct snapshots automatically
+-- 3. Older tasks before this column existed have NULL (no history to compare)
 UPDATE workspace_tasks t
 SET snapshot_manifest_version_id = md.version_id
 FROM workspaces w
