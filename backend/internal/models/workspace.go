@@ -391,10 +391,11 @@ type WorkspaceTask struct {
 	ApplyDescription string `json:"apply_description" gorm:"type:text"`  // Apply描述
 
 	// Plan+Apply快照字段（新版本，用于修复竞态条件bug）
-	SnapshotResourceVersions JSONB      `json:"snapshot_resource_versions" gorm:"type:jsonb"` // 资源版本快照
-	VariableSnapshotID       *string    `json:"variable_snapshot_id" gorm:"type:varchar(30)"` // 变量快照ID（关联variable_snapshots表）
-	SnapshotProviderConfig   JSONB      `json:"snapshot_provider_config" gorm:"type:jsonb"`   // Provider配置快照
-	SnapshotCreatedAt        *time.Time `json:"snapshot_created_at"`                          // 快照创建时间
+	SnapshotResourceVersions   JSONB      `json:"snapshot_resource_versions" gorm:"type:jsonb"`   // 资源版本快照
+	VariableSnapshotID         *string    `json:"variable_snapshot_id" gorm:"type:varchar(30)"`   // 变量快照ID（关联variable_snapshots表）
+	SnapshotProviderConfig     JSONB      `json:"snapshot_provider_config" gorm:"type:jsonb"`     // Provider配置快照
+	SnapshotCreatedAt          *time.Time `json:"snapshot_created_at"`                            // 快照创建时间
+	SnapshotManifestVersionID  *string    `json:"snapshot_manifest_version_id" gorm:"type:varchar(36)"` // Manifest版本ID快照（manifest-managed workspace 用，供 code diff 回溯）
 
 	// Apply确认审计字段（用于追踪谁在什么时间确认了apply）
 	ApplyConfirmedBy *string    `json:"apply_confirmed_by" gorm:"type:varchar(255)"` // 确认apply的用户ID
