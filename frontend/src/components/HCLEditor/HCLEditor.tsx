@@ -78,6 +78,15 @@ const HCLEditor: React.FC<HCLEditorProps> = ({
     }
   }, []);
 
+  const handlePreScroll = useCallback(() => {
+    if (textareaRef.current && preRef.current && isEditing) {
+      textareaRef.current.scrollTop = preRef.current.scrollTop;
+      textareaRef.current.scrollLeft = preRef.current.scrollLeft;
+    }
+  }, [isEditing]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Parse HCL and detect extra fields
   const parseAndNotify = useCallback((newText: string) => {
     try {
@@ -117,12 +126,48 @@ const HCLEditor: React.FC<HCLEditorProps> = ({
     parseAndNotify(newText);
   }, [handleScroll, parseAndNotify]);
 
-  const handleBlur = useCallback(() => {
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLTextAreaElement>) => {
     if (error) return;
+    // 判断失焦后的新焦点是否仍在编辑器容器内部
+    // 点击滚动条、<pre> 代码行等容器内元素时，焦点仍在编辑器内，不关闭编辑
+    const related = e.relatedTarget as Node | null;
+    if (related && containerRef.current && containerRef.current.contains(related)) {
+      // 焦点仍在编辑器内，延迟恢复 textarea 焦点
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
     setIsEditing(false);
     setEditValue(hclText);
     setError(null);
   }, [error, hclText]);
+
+  // 自动调整 textarea 高度以匹配内容
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    const pre = preRef.current;
+    if (textarea && pre) {
+      // 先重置高度以获取正确的 scrollHeight
+      textarea.style.height = 'auto';
+      // 使用 pre 的 scrollHeight，因为它反映了实际内容高度
+      const height = pre.scrollHeight;
+      textarea.style.height = `${height}px`;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isEditing) {
+      adjustTextareaHeight();
+      // 监听 pre 元素的大小变化
+      const pre = preRef.current;
+      if (pre) {
+        const resizeObserver = new ResizeObserver(() => {
+          adjustTextareaHeight();
+        });
+        resizeObserver.observe(pre);
+        return () => resizeObserver.disconnect();
+      }
+    }
+  }, [isEditing, editValue, adjustTextareaHeight]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -265,10 +310,15 @@ const HCLEditor: React.FC<HCLEditorProps> = ({
           </button>
         </div>
       </div>
-      <div className={styles.scrollArea} style={{ maxHeight }}>
+      <div
+        className={styles.scrollArea}
+        style={{ maxHeight }}
+        onClick={isEditing ? undefined : handlePreClick}
+      >
         <pre
           ref={preRef}
           className={styles.highlightPre}
+          onScroll={isEditing ? handlePreScroll : undefined}
           dangerouslySetInnerHTML={{ __html: highlightedHTML }}
         />
         {isEditing && (
@@ -285,12 +335,6 @@ const HCLEditor: React.FC<HCLEditorProps> = ({
           />
         )}
       </div>
-      {!isEditing && (
-        <div
-          className={styles.clickOverlay}
-          onClick={handlePreClick}
-        />
-      )}
       {/* Extra fields prompt */}
       {pendingExtra && pendingExtra.length > 0 && !isEditing && (
         <div className={styles.extraFieldsBar}>
