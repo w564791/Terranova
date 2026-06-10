@@ -5,7 +5,7 @@
   overflow: hidden;
   background: #1e1e1e;
   position: relative;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 
 .editor {

@@ -21,6 +21,26 @@ function ensureMonacoEditorCss() {
   document.head.appendChild(style);
 }
 
+function findVerticalScrollParent(element: HTMLElement): HTMLElement | null {
+  let current = element.parentElement;
+
+  while (current && current !== document.body) {
+    const style = window.getComputedStyle(current);
+    const overflowY = style.overflowY;
+    const canScroll =
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      current.scrollHeight > current.clientHeight;
+
+    if (canScroll) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
 export interface MonacoHclEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -154,33 +174,78 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
     };
   }, [layoutEditor]); // 编辑器实例保持稳定，value/readOnly 由后续 effect 同步
 
-  // 滚动隔离：阻止 wheel 事件冒泡到外层滚动容器（.content 等）
-  // 必须用 native addListener + { passive: false }，React onWheel 是 passive 的
+  // 编辑器可滚动时隔离页面滚动；到顶/到底后把滚轮交给页面滚动容器。
+  // 必须用 native addListener + { passive: false }，React onWheel 是 passive 的。
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const handleWheel = (e: WheelEvent) => {
+    const getScrollState = () => {
       const editor = editorRef.current;
-      if (!editor) return;
+      if (!editor) return null;
 
       const scrollTop = editor.getScrollTop();
       const scrollHeight = editor.getScrollHeight();
       const viewportHeight = editor.getLayoutInfo().height;
       const maxScroll = Math.max(0, scrollHeight - viewportHeight);
 
+      return { scrollTop, maxScroll };
+    };
+
+    const handoffWheelAtBoundary = (e: WheelEvent) => {
+      if (e.ctrlKey || e.deltaY === 0) return;
+
+      const scrollState = getScrollState();
+      if (!scrollState) return;
+
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+      const atTop = scrollState.scrollTop <= 0;
+      const atBottom = scrollState.scrollTop >= scrollState.maxScroll;
+
+      if (!((scrollingUp && atTop) || (scrollingDown && atBottom))) {
+        return;
+      }
+
+      const scrollParent = findVerticalScrollParent(container);
+      const scrollingElement = document.scrollingElement as HTMLElement | null;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (scrollParent) {
+        scrollParent.scrollTop += e.deltaY;
+      } else if (scrollingElement) {
+        scrollingElement.scrollTop += e.deltaY;
+      } else {
+        window.scrollBy(0, e.deltaY);
+      }
+    };
+
+    const isolateWheelInsideEditor = (e: WheelEvent) => {
+      const scrollState = getScrollState();
+      if (!scrollState) return;
+
       // 只在 Monaco 可以滚动的方向上拦截
       const scrollingDown = e.deltaY > 0;
       const scrollingUp = e.deltaY < 0;
 
-      if ((scrollingDown && scrollTop < maxScroll) || (scrollingUp && scrollTop > 0)) {
+      if (
+        (scrollingDown && scrollState.scrollTop < scrollState.maxScroll) ||
+        (scrollingUp && scrollState.scrollTop > 0)
+      ) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
 
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
+    container.addEventListener('wheel', handoffWheelAtBoundary, { capture: true, passive: false });
+    container.addEventListener('wheel', isolateWheelInsideEditor, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', handoffWheelAtBoundary, { capture: true });
+      container.removeEventListener('wheel', isolateWheelInsideEditor);
+    };
   }, [isReady]);
 
   // 更新外部值变化
