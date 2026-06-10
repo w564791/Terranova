@@ -3,6 +3,9 @@ import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useUIVersion } from '../hooks/useUIVersion';
 import { jsonToHCL } from '../utils/hclFormatter';
+// 注意：这里使用的是 Schema API V2（OpenAPI 格式），不是 UI 主题 V2
+// Schema V2 是后端 API 数据格式版本，与 UI 主题 v2/v3 是两个不同的概念
+import { schemaV2Service } from '../services/schemaV2';
 import styles from './ResourceVersionDiff.module.css';
 
 interface Version {
@@ -46,14 +49,66 @@ const ResourceVersionDiff: React.FC<Props> = ({
   const [diffFields, setDiffFields] = useState<DiffField[]>([]);
   const [loading, setLoading] = useState(false);
   const [showUnchanged, setShowUnchanged] = useState(false);
+  const [schema, setSchema] = useState<any>(null);
   const { showToast } = useToast();
   const { isV3 } = useUIVersion();
 
   useEffect(() => {
     if (isOpen) {
+      loadSchema();
       loadVersionsAndCompare();
     }
   }, [isOpen, fromVersion, toVersion]);
+
+  // schema 加载完成后，如果有版本数据，重新计算 diff（确保 typejsonstring 字段能被正确识别）
+  useEffect(() => {
+    if (schema && fromData && toData) {
+      const diff = calculateDiff(
+        extractModuleConfig(fromData.tf_code),
+        extractModuleConfig(toData.tf_code)
+      );
+      setDiffFields(diff);
+    }
+  }, [schema]);
+
+  // 加载资源的 module schema
+  const loadSchema = async () => {
+    try {
+      // 1. 获取资源信息，拿到 module_source 和 module_version
+      const resourceRes = await api.get(`/workspaces/${workspaceId}/resources/${resourceId}`);
+      const resource = resourceRes.data || resourceRes;
+      const tfCode = resource.tf_code;
+      
+      if (!tfCode || !tfCode.module) return;
+      
+      // 提取 module source
+      const moduleKeys = Object.keys(tfCode.module);
+      if (moduleKeys.length === 0) return;
+      
+      const moduleKey = moduleKeys[0];
+      const moduleArray = tfCode.module[moduleKey];
+      if (!Array.isArray(moduleArray) || moduleArray.length === 0) return;
+      
+      const moduleSource = moduleArray[0].source;
+      if (!moduleSource) return;
+      
+      // 2. 通过 module_source 查找 module_id
+      const modulesRes = await api.get('/modules', { params: { source: moduleSource } });
+      const modules = modulesRes.data?.items || modulesRes.items || [];
+      const module = modules.find((m: any) => m.source === moduleSource);
+      
+      if (!module) return;
+      
+      // 3. 加载 module 的 schema
+      const schemaRes = await schemaV2Service.getSchemaV2(module.id);
+      // getSchemaV2 返回 SchemaV2 对象，包含 openapi_schema 字段
+      if (schemaRes && schemaRes.openapi_schema) {
+        setSchema(schemaRes.openapi_schema);
+      }
+    } catch (error) {
+      console.error('Failed to load schema:', error);
+    }
+  };
 
   const loadVersionsAndCompare = async () => {
     try {
@@ -88,19 +143,114 @@ const ResourceVersionDiff: React.FC<Props> = ({
   // 从tf_code中提取module配置
   const extractModuleConfig = (tfCode: any): any => {
     if (!tfCode || !tfCode.module) return {};
-    
+
     const moduleKeys = Object.keys(tfCode.module);
     if (moduleKeys.length === 0) return {};
-    
+
     const moduleKey = moduleKeys[0];
     const moduleArray = tfCode.module[moduleKey];
-    
+
     if (Array.isArray(moduleArray) && moduleArray.length > 0) {
       const { source, ...config } = moduleArray[0];
       return config;
     }
-    
+
     return {};
+  };
+
+  // 判断字段是否是 typejsonstring 类型（根据 schema）
+  const isJsonStringField = (fieldName: string): boolean => {
+    if (!schema) return false;
+    
+    const properties = schema.components?.schemas?.ModuleInput?.properties;
+    if (!properties) return false;
+    
+    const fieldSchema = properties[fieldName];
+    if (!fieldSchema) return false;
+    
+    return fieldSchema.format === 'json';
+  };
+
+  // 格式化 JSON 字符串为 jsonencode 格式（统一使用 pretty-print）
+  const formatJsonStringAsHCL = (jsonStr: string): string => {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      // 先格式化为统一的 pretty-print JSON
+      const prettyJson = JSON.stringify(parsed, null, 2);
+      const lines: string[] = [];
+      lines.push('jsonencode(');
+      const inner = formatJsonEncodeValue(parsed, 1, (level: number) => '  '.repeat(level));
+      lines.push(...inner);
+      lines.push(')');
+      return lines.join('\n');
+    } catch {
+      return jsonStr;
+    }
+  };
+
+  // 格式化 jsonencode 内部的值
+  const formatJsonEncodeValue = (value: any, level: number, pad: (level: number) => string): string[] => {
+    const lines: string[] = [];
+    const indent = pad(level);
+
+    if (value === null || value === undefined) {
+      lines.push(`${indent}null`);
+      return lines;
+    }
+
+    if (typeof value === 'boolean' || typeof value === 'number') {
+      lines.push(`${indent}${value}`);
+      return lines;
+    }
+
+    if (typeof value === 'string') {
+      lines.push(`${indent}"${value.replace(/"/g, '\\"')}"`);
+      return lines;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        lines.push(`${indent}[]`);
+        return lines;
+      }
+      lines.push(`${indent}[`);
+      value.forEach((item, idx) => {
+        const itemLines = formatJsonEncodeValue(item, level + 1, pad);
+        const comma = idx < value.length - 1 ? ',' : '';
+        if (itemLines.length === 1) {
+          lines.push(`${itemLines[0]}${comma}`);
+        } else {
+          lines.push(...itemLines);
+          if (comma) lines[lines.length - 1] += comma;
+        }
+      });
+      lines.push(`${indent}]`);
+      return lines;
+    }
+
+    if (typeof value === 'object') {
+      const entries = Object.entries(value);
+      if (entries.length === 0) {
+        lines.push(`${indent}{}`);
+        return lines;
+      }
+      lines.push(`${indent}{`);
+      entries.forEach(([k, v], idx) => {
+        const keyStr = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k) ? k : `"${k}"`;
+        const valueLines = formatJsonEncodeValue(v, level + 1, pad);
+        if (valueLines.length === 1) {
+          lines.push(`${pad(level + 1)}${keyStr} = ${valueLines[0].trim()}`);
+        } else {
+          lines.push(`${pad(level + 1)}${keyStr} = ${valueLines[0].trim()}`);
+          lines.push(...valueLines.slice(1));
+        }
+      });
+      lines.push(`${indent}}`);
+      return lines;
+    }
+
+    lines.push(`${indent}${String(value)}`);
+    return lines;
   };
 
   // 计算两个版本之间的差异
@@ -138,8 +288,14 @@ const ResourceVersionDiff: React.FC<Props> = ({
   };
 
   // 格式化值显示
-  const formatValue = (value: any): string => {
+  const formatValue = (fieldName: string, value: any): string => {
     if (value === null || value === undefined) return '';
+
+    // 对 typejsonstring 字段使用 jsonencode 格式
+    if (isJsonStringField(fieldName)) {
+      return formatJsonStringAsHCL(value);
+    }
+
     if (typeof value === 'object') {
       if (isV3) {
         try {
@@ -151,6 +307,43 @@ const ResourceVersionDiff: React.FC<Props> = ({
       return JSON.stringify(value, null, 2);
     }
     return String(value);
+  };
+
+  // 逐行对比两个 JSON 字符串的差异
+  const computeLineDiff = (oldLines: string[], newLines: string[]): Array<{type: 'added' | 'removed' | 'unchanged', content: string}> => {
+    const result: Array<{type: 'added' | 'removed' | 'unchanged', content: string}> = [];
+    
+    // 简单的 LCS 算法
+    const m = oldLines.length;
+    const n = newLines.length;
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (oldLines[i - 1] === newLines[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+    
+    // 回溯构建 diff
+    let i = m, j = n;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+        result.unshift({ type: 'unchanged', content: oldLines[i - 1] });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        result.unshift({ type: 'added', content: newLines[j - 1] });
+        j--;
+      } else if (i > 0) {
+        result.unshift({ type: 'removed', content: oldLines[i - 1] });
+        i--;
+      }
+    }
+    
+    return result;
   };
 
   // 获取diff图标和颜色
@@ -251,22 +444,48 @@ const ResourceVersionDiff: React.FC<Props> = ({
                     <div className={styles.fieldContent}>
                       {field.type === 'removed' && (
                         <pre className={styles.removedValue}>
-                          <code>{formatValue(field.oldValue)}</code>
+                          <code>{formatValue(field.field, field.oldValue)}</code>
                         </pre>
                       )}
                       {field.type === 'added' && (
                         <pre className={styles.addedValue}>
-                          <code>{formatValue(field.newValue)}</code>
+                          <code>{formatValue(field.field, field.newValue)}</code>
                         </pre>
                       )}
                       {field.type === 'modified' && (
                         <>
-                          <pre className={styles.removedValue}>
-                            <code>{formatValue(field.oldValue)}</code>
-                          </pre>
-                          <pre className={styles.addedValue}>
-                            <code>{formatValue(field.newValue)}</code>
-                          </pre>
+                          {/* 对 typejsonstring 字段进行逐行对比 */}
+                          {isJsonStringField(field.field) ? (
+                            <div className={styles.lineDiffContainer}>
+                              {computeLineDiff(
+                                formatValue(field.field, field.oldValue).split('\n'),
+                                formatValue(field.field, field.newValue).split('\n')
+                              ).map((line, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`${styles.lineDiff} ${
+                                    line.type === 'added' ? styles.lineAdded :
+                                    line.type === 'removed' ? styles.lineRemoved :
+                                    styles.lineUnchanged
+                                  }`}
+                                >
+                                  <span className={styles.linePrefix}>
+                                    {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
+                                  </span>
+                                  <code>{line.content}</code>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              <pre className={styles.removedValue}>
+                                <code>{formatValue(field.field, field.oldValue)}</code>
+                              </pre>
+                              <pre className={styles.addedValue}>
+                                <code>{formatValue(field.field, field.newValue)}</code>
+                              </pre>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -288,7 +507,7 @@ const ResourceVersionDiff: React.FC<Props> = ({
                           <div key={field.field} className={styles.unchangedField}>
                             <span className={styles.fieldName}>{field.field}</span>
                             <span className={styles.unchangedValue}>
-                              {formatValue(field.oldValue)}
+                              {formatValue(field.field, field.oldValue)}
                             </span>
                           </div>
                         ))}

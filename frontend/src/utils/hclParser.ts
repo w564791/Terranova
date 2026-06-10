@@ -65,7 +65,8 @@ function expect(state: ParserState, expected: string): void {
 function parseIdentifier(state: ParserState): string {
   skipWhitespaceAndComments(state);
   let start = state.pos;
-  while (state.pos < state.input.length && /[a-zA-Z0-9_-]/.test(state.input[state.pos])) {
+  // Allow colons in identifiers (for AWS-style keys like aws:PrincipalArn)
+  while (state.pos < state.input.length && /[a-zA-Z0-9_:-]/.test(state.input[state.pos])) {
     state.pos++;
   }
   if (state.pos === start) {
@@ -119,6 +120,17 @@ function parseValue(state: ParserState): any {
   skipWhitespaceAndComments(state);
   const ch = state.input[state.pos];
 
+  // jsonencode(...) — parse inner HCL object and convert to JSON string
+  if (state.input.slice(state.pos, state.pos + 11) === 'jsonencode(') {
+    state.pos += 11; // skip 'jsonencode('
+    const parsed = parseHCLInnerValue(state);
+    skipWhitespaceAndComments(state);
+    if (state.input[state.pos] === ')') {
+      state.pos++; // skip ')'
+    }
+    return JSON.stringify(parsed);
+  }
+
   // String
   if (ch === '"') {
     return parseString(state);
@@ -152,6 +164,92 @@ function parseValue(state: ParserState): any {
   }
 
   throw new Error(`Unexpected character '${ch}' at position ${state.pos}`);
+}
+
+/**
+ * 解析 jsonencode 内部的 HCL 风格值（key = value, 逗号分隔数组元素）
+ */
+function parseHCLInnerValue(state: ParserState): any {
+  skipWhitespaceAndComments(state);
+  const ch = state.input[state.pos];
+
+  if (ch === '{') {
+    return parseHCLObject(state);
+  }
+  if (ch === '[') {
+    return parseHCLArray(state);
+  }
+  if (ch === '"') {
+    return parseString(state);
+  }
+  if (state.input.slice(state.pos, state.pos + 4) === 'true' &&
+      !/[a-zA-Z0-9_]/.test(state.input[state.pos + 4] || '')) {
+    state.pos += 4;
+    return true;
+  }
+  if (state.input.slice(state.pos, state.pos + 5) === 'false' &&
+      !/[a-zA-Z0-9_]/.test(state.input[state.pos + 5] || '')) {
+    state.pos += 5;
+    return false;
+  }
+  if (state.input.slice(state.pos, state.pos + 4) === 'null' &&
+      !/[a-zA-Z0-9_]/.test(state.input[state.pos + 4] || '')) {
+    state.pos += 4;
+    return null;
+  }
+  if (ch === '-' || (ch >= '0' && ch <= '9')) {
+    return parseNumber(state);
+  }
+
+  throw new Error(`Unexpected character '${ch}' inside jsonencode at position ${state.pos}`);
+}
+
+/**
+ * 解析 HCL 风格对象（key = value，支持逗号分隔）
+ */
+function parseHCLObject(state: ParserState): Record<string, any> {
+  expect(state, '{');
+  const result: Record<string, any> = {};
+
+  while (peek(state) !== '}') {
+    if (state.pos >= state.input.length) {
+      throw new Error('Unterminated object inside jsonencode');
+    }
+    const key = parseIdentifier(state);
+    expect(state, '=');
+    result[key] = parseHCLInnerValue(state);
+    // skip optional comma
+    skipWhitespaceAndComments(state);
+    if (state.input[state.pos] === ',') {
+      state.pos++;
+    }
+  }
+
+  expect(state, '}');
+  return result;
+}
+
+/**
+ * 解析 HCL 风格数组
+ */
+function parseHCLArray(state: ParserState): any[] {
+  expect(state, '[');
+  const result: any[] = [];
+
+  while (peek(state) !== ']') {
+    if (state.pos >= state.input.length) {
+      throw new Error('Unterminated array inside jsonencode');
+    }
+    result.push(parseHCLInnerValue(state));
+    // skip optional comma
+    skipWhitespaceAndComments(state);
+    if (state.input[state.pos] === ',') {
+      state.pos++;
+    }
+  }
+
+  expect(state, ']');
+  return result;
 }
 
 function parseObject(state: ParserState): Record<string, any> {

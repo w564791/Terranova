@@ -981,3 +981,72 @@
   color: var(--color-gray-600) !important;
   border-color: var(--color-gray-300) !important;
 }
+
+/* HCL 额外字段对话框 */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dialogHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.dialogHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.dialogBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.dialogBody p {
+  margin: 0 0 12px 0;
+  color: var(--color-gray-700);
+  line-height: 1.6;
+}
+
+.dialogBody ul {
+  margin: 8px 0;
+  padding-left: 20px;
+  color: var(--color-gray-700);
+  line-height: 1.6;
+}
+
+.dialogBody li {
+  margin-bottom: 4px;
+}
+
+.dialogFooter {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

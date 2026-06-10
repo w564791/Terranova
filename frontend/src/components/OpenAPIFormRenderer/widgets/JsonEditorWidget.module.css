@@ -1,0 +1,250 @@
+/* V3 JSON Editor Widget */
+
+.v3Container {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1e293b;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.v3Container:focus-within {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.v3Container.hasError {
+  border-color: #fca5a5;
+}
+
+.v3Container.hasError:focus-within {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.v3Toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #334155;
+  gap: 8px;
+}
+
+.v3ToolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.v3ToolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.v3StatusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.v3StatusDot.valid {
+  background: #22c55e;
+}
+
+.v3StatusDot.invalid {
+  background: #ef4444;
+}
+
+.v3StatusDot.empty {
+  background: #64748b;
+}
+
+.v3StatusText {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.v3ToolBtn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #475569;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.v3ToolBtn:hover {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.v3ToolBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.v3ToolBtn.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+/* Editor body */
+.v3EditorBody {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+}
+
+.v3LineNumbers {
+  padding: 10px 0;
+  text-align: right;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+  user-select: none;
+  min-width: 36px;
+  padding-right: 8px;
+  padding-left: 8px;
+  border-right: 1px solid #334155;
+  flex-shrink: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.v3LineNumbers::-webkit-scrollbar {
+  display: none;
+}
+
+.v3LineNumbers span {
+  display: block;
+}
+
+.v3ScrollArea {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  min-height: 120px;
+}
+
+.v3HighlightPre {
+  margin: 0;
+  padding: 10px 12px;
+  white-space: pre;
+  color: #e2e8f0;
+  box-sizing: border-box;
+  min-height: 120px;
+}
+
+.v3Textarea {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  background: transparent;
+  color: transparent;
+  caret-color: #e2e8f0;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre;
+  overflow: hidden;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+.v3Textarea::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: transparent;
+}
+
+.v3Textarea::placeholder {
+  color: #475569;
+}
+
+/* Error bar */
+.v3ErrorBar {
+  padding: 6px 12px;
+  background: #7f1d1d;
+  color: #fca5a5;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  border-top: 1px solid #991b1b;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.v3ErrorIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Reference expression */
+.v3ReferenceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* JSON syntax colors */
+.v3HighlightPre :global(.json-key) {
+  color: #93c5fd;
+}
+
+.v3HighlightPre :global(.json-string) {
+  color: #86efac;
+}
+
+.v3HighlightPre :global(.json-number) {
+  color: #fdba74;
+}
+
+.v3HighlightPre :global(.json-bool) {
+  color: #fca5a5;
+}
+
+.v3HighlightPre :global(.json-null) {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.v3HighlightPre :global(.json-bracket) {
+  color: #e2e8f0;
+}
+
+.v3HighlightPre :global(.json-brace) {
+  color: #c084fc;
+}
+
+.v3HighlightPre :global(.json-comma) {
+  color: #94a3b8;
+}
+
+.v3HighlightPre :global(.json-colon) {
+  color: #94a3b8;
+}

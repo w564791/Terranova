@@ -1,3 +1,17 @@
+/**
+ * Schema V2 服务
+ * 
+ * 【命名说明】
+ * 这里的 "V2" 指的是后端 Schema API 的数据格式版本：
+ * - Schema V1: 旧的扁平结构（{ field1: { type: 'string' } }）
+ * - Schema V2: OpenAPI 标准格式（{ components: { schemas: { ModuleInput: {...} } } }）
+ * 
+ * 这与前端 UI 主题版本（v2/v3）是两个不同的概念：
+ * - UI v2/v3: 控制前端视觉设计、CSS 样式、组件外观
+ * - Schema V2: 后端 API 返回的 OpenAPI 格式数据结构
+ * 
+ * UI 主题 v3 仍然使用 Schema V2 API 获取数据。
+ */
 import api from './api';
 
 // Schema V2 相关类型定义

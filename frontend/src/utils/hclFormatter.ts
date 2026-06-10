@@ -27,6 +27,12 @@ export function jsonToHCL(
     systemParams = {},
   } = options;
 
+  // Extract schema properties for format-aware rendering
+  const schemaProperties: Record<string, any> = {};
+  if (schema?.components?.schemas?.ModuleInput?.properties) {
+    Object.assign(schemaProperties, schema.components.schemas.ModuleInput.properties);
+  }
+
   // Extract defaults from schema if skipDefaults is enabled
   const schemaDefaults: Record<string, any> = {};
   if (skipDefaults && schema) {
@@ -85,19 +91,10 @@ export function jsonToHCL(
     ([key]) => key !== 'source' && key !== 'version'
   );
 
-  entries.forEach(([key, value], index) => {
-    const formatted = formatValue(key, value, 1, pad);
+  entries.forEach(([key, value]) => {
+    const schemaProp = schemaProperties[key];
+    const formatted = formatValue(key, value, 1, pad, schemaProp);
     lines.push(...formatted);
-
-    // 只在顶级标量字段之间加空行，嵌套对象后不加
-    if (index < entries.length - 1) {
-      const isComplex =
-        (typeof value === 'object' && value !== null && !Array.isArray(value)) ||
-        (Array.isArray(value) && value.some(v => typeof v === 'object' && v !== null));
-      if (!isComplex) {
-        lines.push('');
-      }
-    }
   });
 
   lines.push('}');
@@ -109,33 +106,60 @@ function formatValue(
   key: string,
   value: unknown,
   level: number,
-  pad: (n: number) => string
+  pad: (n: number) => string,
+  schemaProp?: any
 ): string[] {
   const lines: string[] = [];
+  const formattedKey = formatHCLKey(key);
 
   if (value === null || value === undefined) {
-    lines.push(`${pad(level)}# ${key} = null`);
+    lines.push(`${pad(level)}# ${formattedKey} = null`);
     return lines;
   }
 
   if (typeof value === 'boolean') {
-    lines.push(`${pad(level)}${key} = ${value}`);
+    lines.push(`${pad(level)}${formattedKey} = ${value}`);
     return lines;
   }
 
   if (typeof value === 'number') {
-    lines.push(`${pad(level)}${key} = ${value}`);
+    lines.push(`${pad(level)}${formattedKey} = ${value}`);
+    return lines;
+  }
+
+  // 对象/数组值：如果 schema 标记为 format: json，强制用 jsonencode()
+  const isJsonField = schemaProp?.format === 'json';
+  if (isJsonField && typeof value === 'object') {
+    lines.push(`${pad(level)}${formattedKey} = jsonencode(`);
+    const inner = formatJsonEncodeValue(value, level + 1, pad);
+    lines.push(...inner);
+    lines.push(`${pad(level)})`);
     return lines;
   }
 
   if (typeof value === 'string') {
-    lines.push(`${pad(level)}${key} = "${escapeHCLString(value)}"`);
+    // 检测是否为 JSON 字符串，如果是则渲染为 jsonencode({...})
+    const trimmed = value.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        lines.push(`${pad(level)}${formattedKey} = jsonencode(`);
+        const inner = formatJsonEncodeValue(parsed, level + 1, pad);
+        lines.push(...inner);
+        lines.push(`${pad(level)})`);
+        return lines;
+      } catch {
+        // 不是有效 JSON，按普通字符串处理
+      }
+    }
+    lines.push(`${pad(level)}${formattedKey} = "${escapeHCLString(value)}"`);
     return lines;
   }
 
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      lines.push(`${pad(level)}${key} = []`);
+      lines.push(`${pad(level)}${formattedKey} = []`);
       return lines;
     }
 
@@ -144,7 +168,7 @@ function formatValue(
     );
 
     if (hasObjects) {
-      lines.push(`${pad(level)}${key} = [`);
+      lines.push(`${pad(level)}${formattedKey} = [`);
       value.forEach((item, idx) => {
         if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
           lines.push(`${pad(level + 1)}{`);
@@ -171,9 +195,9 @@ function formatValue(
 
       if (allSimple && value.length <= 4) {
         const items = value.map((v) => formatPrimitive(v)).join(', ');
-        lines.push(`${pad(level)}${key} = [${items}]`);
+        lines.push(`${pad(level)}${formattedKey} = [${items}]`);
       } else {
-        lines.push(`${pad(level)}${key} = [`);
+        lines.push(`${pad(level)}${formattedKey} = [`);
         value.forEach((item) => {
           lines.push(`${pad(level + 1)}${formatPrimitive(item)},`);
         });
@@ -186,11 +210,11 @@ function formatValue(
   if (typeof value === 'object') {
     const entries = Object.entries(value);
     if (entries.length === 0) {
-      lines.push(`${pad(level)}${key} = {}`);
+      lines.push(`${pad(level)}${formattedKey} = {}`);
       return lines;
     }
 
-    lines.push(`${pad(level)}${key} = {`);
+    lines.push(`${pad(level)}${formattedKey} = {`);
     entries.forEach(([k, v]) => {
       const nested = formatValue(k, v, level + 1, pad);
       lines.push(...nested);
@@ -199,8 +223,182 @@ function formatValue(
     return lines;
   }
 
-  lines.push(`${pad(level)}${key} = "${String(value)}"`);
+  lines.push(`${pad(level)}${formattedKey} = "${String(value)}"`);
   return lines;
+}
+
+/**
+ * jsonencode 内部的值格式化 — HCL 风格（= 分隔，末尾无逗号）
+ */
+function formatJsonEncodeValue(
+  value: unknown,
+  level: number,
+  pad: (n: number) => string
+): string[] {
+  const lines: string[] = [];
+
+  if (value === null || value === undefined) {
+    lines.push(`${pad(level)}null`);
+    return lines;
+  }
+
+  if (typeof value === 'boolean') {
+    lines.push(`${pad(level)}${value}`);
+    return lines;
+  }
+
+  if (typeof value === 'number') {
+    lines.push(`${pad(level)}${value}`);
+    return lines;
+  }
+
+  if (typeof value === 'string') {
+    lines.push(`${pad(level)}"${escapeHCLString(value)}"`);
+    return lines;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      lines.push(`${pad(level)}[]`);
+      return lines;
+    }
+    lines.push(`${pad(level)}[`);
+    value.forEach((item, idx) => {
+      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+        lines.push(`${pad(level + 1)}{`);
+        const entries = Object.entries(item);
+        entries.forEach(([k, v]) => {
+          const nested = formatJsonEncodeKV(k, v, level + 2, pad);
+          lines.push(...nested);
+        });
+        const comma = idx < value.length - 1 ? ',' : '';
+        lines.push(`${pad(level + 1)}}${comma}`);
+      } else if (Array.isArray(item)) {
+        const inner = formatJsonEncodeValue(item, level + 1, pad);
+        lines.push(...inner);
+        if (idx < value.length - 1) {
+          lines[lines.length - 1] += ',';
+        }
+      } else {
+        const primitive = formatJsonEncodePrimitive(item);
+        const comma = idx < value.length - 1 ? ',' : '';
+        lines.push(`${pad(level + 1)}${primitive}${comma}`);
+      }
+    });
+    lines.push(`${pad(level)}]`);
+    return lines;
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      lines.push(`${pad(level)}{}`);
+      return lines;
+    }
+    lines.push(`${pad(level)}{`);
+    entries.forEach(([k, v]) => {
+      const nested = formatJsonEncodeKV(k, v, level + 1, pad);
+      lines.push(...nested);
+    });
+    lines.push(`${pad(level)}}`);
+    return lines;
+  }
+
+  lines.push(`${pad(level)}"${String(value)}"`);
+  return lines;
+}
+
+/**
+ * 判断 HCL key 是否需要引号
+ * 合法标识符：只包含 [a-zA-Z0-9_-] 且以字母或下划线开头
+ */
+function needsQuoteForKey(key: string): boolean {
+  if (!key || key.length === 0) return true;
+  // 必须以字母或下划线开头
+  if (!/^[a-zA-Z_]/.test(key)) return true;
+  // 只能包含字母、数字、下划线和短横线
+  if (!/^[a-zA-Z0-9_-]+$/.test(key)) return true;
+  return false;
+}
+
+/**
+ * 格式化 HCL key，必要时加引号
+ */
+function formatHCLKey(key: string): string {
+  if (needsQuoteForKey(key)) {
+    return `"${key.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+  return key;
+}
+
+/**
+ * jsonencode 内部的 key = value 格式化
+ */
+function formatJsonEncodeKV(
+  key: string,
+  value: unknown,
+  level: number,
+  pad: (n: number) => string
+): string[] {
+  const lines: string[] = [];
+  const formattedKey = formatHCLKey(key);
+
+  if (value === null || value === undefined) {
+    lines.push(`${pad(level)}${formattedKey} = null`);
+    return lines;
+  }
+
+  if (typeof value === 'boolean' || typeof value === 'number') {
+    lines.push(`${pad(level)}${formattedKey} = ${value}`);
+    return lines;
+  }
+
+  if (typeof value === 'string') {
+    lines.push(`${pad(level)}${formattedKey} = "${escapeHCLString(value)}"`);
+    return lines;
+  }
+
+  if (Array.isArray(value)) {
+    lines.push(`${pad(level)}${formattedKey} = [`);
+    value.forEach((item, idx) => {
+      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+        lines.push(`${pad(level + 1)}{`);
+        Object.entries(item).forEach(([k, v]) => {
+          const nested = formatJsonEncodeKV(k, v, level + 2, pad);
+          lines.push(...nested);
+        });
+        const comma = idx < value.length - 1 ? ',' : '';
+        lines.push(`${pad(level + 1)}}${comma}`);
+      } else {
+        const primitive = formatJsonEncodePrimitive(item);
+        const comma = idx < value.length - 1 ? ',' : '';
+        lines.push(`${pad(level + 1)}${primitive}${comma}`);
+      }
+    });
+    lines.push(`${pad(level)}]`);
+    return lines;
+  }
+
+  if (typeof value === 'object') {
+    lines.push(`${pad(level)}${formattedKey} = {`);
+    Object.entries(value).forEach(([k, v]) => {
+      const nested = formatJsonEncodeKV(k, v, level + 1, pad);
+      lines.push(...nested);
+    });
+    lines.push(`${pad(level)}}`);
+    return lines;
+  }
+
+  lines.push(`${pad(level)}${formattedKey} = "${String(value)}"`);
+  return lines;
+}
+
+function formatJsonEncodePrimitive(value: unknown): string {
+  if (typeof value === 'string') return `"${escapeHCLString(value)}"`;
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'number') return String(value);
+  if (value === null || value === undefined) return 'null';
+  return `"${String(value)}"`;
 }
 
 function formatPrimitive(value: unknown): string {
@@ -235,10 +433,10 @@ function highlightLine(line: string): string {
   const indent = line.length - line.trimStart().length;
   const indentStr = line.substring(0, indent);
 
-  // 闭合括号: }  ]  },  ],  }]  ]}
-  if (/^[\}\]][\}\],]*,?$/.test(trimmed)) {
+  // 闭合括号: }  ]  ),  },  ],  }]  ]}
+  if (/^[\}\)\]][\}\)\],]*,?$/.test(trimmed)) {
     const body = escapeHTML(trimmed);
-    return `${escapeHTML(indentStr)}${body.replace(/[\{\}\[\]]/g, '<span class="hcl-bracket">$&</span>')}`;
+    return `${escapeHTML(indentStr)}${body.replace(/[\{\}\[\]\(\)]/g, '<span class="hcl-bracket">$&</span>')}`;
   }
 
   // 开括号: {  [
@@ -273,6 +471,14 @@ function highlightValue(raw: string): string {
   const v = raw.trimEnd();
   if (!v) return '';
 
+  // jsonencode(...)
+  if (v.startsWith('jsonencode(')) {
+    return `<span class="hcl-keyword">jsonencode</span><span class="hcl-bracket">(</span>`;
+  }
+  // closing jsonencode paren
+  if (v === ')') {
+    return `<span class="hcl-bracket">)</span>`;
+  }
   // boolean
   if (v === 'true' || v === 'false') return `<span class="hcl-bool">${v}</span>`;
   // number

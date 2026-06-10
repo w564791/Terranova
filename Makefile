@@ -145,7 +145,7 @@ docker-build: ## 构建后端 Docker 镜像（本地，当前架构）
 
 docker-build-frontend: ## 构建前端 Docker 镜像（本地，当前架构）
 	@echo "构建镜像: $(IMAGE_FRONTEND):$(VERSION)"
-	docker build \
+	docker build  \
 		-t $(IMAGE_FRONTEND):$(VERSION) \
 		-t $(IMAGE_FRONTEND):latest \
 		frontend/

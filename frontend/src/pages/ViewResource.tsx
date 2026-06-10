@@ -153,10 +153,26 @@ const ViewResource: React.FC = () => {
 
       if (urlMode === 'compare') {
         setViewMode('compare');
-        // 如果是对比模式，触发对比
-        const versionNum = parseInt(urlVersion || '0');
-        if (versionNum && resource.current_version?.version) {
-          handleCompareVersions(versionNum, resource.current_version.version);
+        // 从URL读取对比版本
+        const urlCompareFrom = searchParams.get('compare_from');
+        const urlCompareTo = searchParams.get('compare_to');
+        
+        if (urlCompareFrom && urlCompareTo) {
+          const from = parseInt(urlCompareFrom);
+          const to = parseInt(urlCompareTo);
+          if (from && to) {
+            setCompareFromVersion(from);
+            setCompareToVersion(to);
+            handleCompareVersions(from, to);
+          }
+        } else {
+          // 兼容旧URL格式：使用version参数和当前版本
+          const versionNum = parseInt(urlVersion || '0');
+          if (versionNum && resource.current_version?.version) {
+            setCompareFromVersion(versionNum);
+            setCompareToVersion(resource.current_version.version);
+            handleCompareVersions(versionNum, resource.current_version.version);
+          }
         }
       } else {
         setViewMode('view');
@@ -491,23 +507,25 @@ const ViewResource: React.FC = () => {
 
   const handleStartCompare = async () => {
     if (!selectedVersion || !resource?.current_version?.version) return;
-    
+
     // 切换到对比模式
     setViewMode('compare');
-    
+
     // 设置初始对比版本
     setCompareFromVersion(selectedVersion);
     setCompareToVersion(resource.current_version.version);
-    
-    // 更新URL参数
+
+    // 更新URL参数，包含对比版本信息
     const newParams = new URLSearchParams(searchParams);
     newParams.set('version', selectedVersion.toString());
     newParams.set('mode', 'compare');
+    newParams.set('compare_from', selectedVersion.toString());
+    newParams.set('compare_to', resource.current_version.version.toString());
     if (dataViewMode !== 'form') {
       newParams.set('view', dataViewMode);
     }
     setSearchParams(newParams, { replace: true });
-    
+
     // 对比选中版本和当前版本
     await handleCompareVersions(selectedVersion, resource.current_version.version);
   };
@@ -662,8 +680,81 @@ const ViewResource: React.FC = () => {
     ));
   };
 
+  // 判断字段是否是 typejsonstring 类型（根据 schema）
+  const isJsonStringField = (fieldName: string): boolean => {
+    const openApiSchema = rawSchema?.openapi_schema;
+    if (!openApiSchema) return false;
+
+    const properties = openApiSchema.components?.schemas?.ModuleInput?.properties;
+    if (!properties) return false;
+
+    const fieldSchema = properties[fieldName];
+    if (!fieldSchema) return false;
+
+    return fieldSchema.format === 'json';
+  };
+
+  // 格式化 JSON 字符串为 jsonencode 格式
+  const formatJsonStringAsHCL = (jsonStr: string): string => {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const prettyJson = JSON.stringify(parsed, null, 2);
+      return prettyJson;
+    } catch {
+      return jsonStr;
+    }
+  };
+
+  // 逐行对比两个文本的差异
+  const computeLineDiff = (oldLines: string[], newLines: string[]): Array<{type: 'added' | 'removed' | 'unchanged', content: string}> => {
+    const result: Array<{type: 'added' | 'removed' | 'unchanged', content: string}> = [];
+    const m = oldLines.length;
+    const n = newLines.length;
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (oldLines[i - 1] === newLines[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    let i = m, j = n;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+        result.unshift({ type: 'unchanged', content: oldLines[i - 1] });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        result.unshift({ type: 'added', content: newLines[j - 1] });
+        j--;
+      } else if (i > 0) {
+        result.unshift({ type: 'removed', content: oldLines[i - 1] });
+        i--;
+      }
+    }
+
+    return result;
+  };
+
   const formatValue = (value: any): string => {
     if (value === null || value === undefined) return '';
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  };
+
+  // 带字段名的格式化，支持 typejsonstring
+  const formatFieldValue = (fieldName: string, value: any): string => {
+    if (value === null || value === undefined) return '';
+
+    if (isJsonStringField(fieldName) && typeof value === 'string') {
+      return formatJsonStringAsHCL(value);
+    }
+
     if (typeof value === 'object') {
       return JSON.stringify(value, null, 2);
     }
@@ -1195,9 +1286,11 @@ const ViewResource: React.FC = () => {
                     setViewMode('view');
                     setCompareFromVersion(null);
                     setCompareToVersion(null);
-                    // 更新URL参数
+                    // 清理URL参数
                     const newParams = new URLSearchParams(searchParams);
                     newParams.delete('mode');
+                    newParams.delete('compare_from');
+                    newParams.delete('compare_to');
                     setSearchParams(newParams, { replace: true });
                   }}
                   className={styles.btnSecondary}
@@ -1234,6 +1327,11 @@ const ViewResource: React.FC = () => {
                       setCompareFromVersion(from);
                       if (compareToVersion) {
                         handleCompareVersions(from, compareToVersion);
+                        // 更新URL参数
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.set('compare_from', from.toString());
+                        newParams.set('compare_to', compareToVersion.toString());
+                        setSearchParams(newParams, { replace: true });
                       }
                     }}
                     style={{
@@ -1281,6 +1379,11 @@ const ViewResource: React.FC = () => {
                       setCompareToVersion(to);
                       if (compareFromVersion) {
                         handleCompareVersions(compareFromVersion, to);
+                        // 更新URL参数
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.set('compare_from', compareFromVersion.toString());
+                        newParams.set('compare_to', to.toString());
+                        setSearchParams(newParams, { replace: true });
                       }
                     }}
                     style={{
@@ -1382,10 +1485,10 @@ const ViewResource: React.FC = () => {
                               <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
                                 删除的值：
                               </div>
-                              <pre style={{ 
-                                margin: 0, 
-                                padding: '12px', 
-                                background: 'var(--color-red-50)', 
+                              <pre style={{
+                                margin: 0,
+                                padding: '12px',
+                                background: 'var(--color-red-50)',
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
@@ -1394,7 +1497,7 @@ const ViewResource: React.FC = () => {
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
                               }}>
-                                {formatValue(field.oldValue)}
+                                {formatFieldValue(field.field, field.oldValue)}
                               </pre>
                             </div>
                           )}
@@ -1403,10 +1506,10 @@ const ViewResource: React.FC = () => {
                               <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
                                 新增的值：
                               </div>
-                              <pre style={{ 
-                                margin: 0, 
-                                padding: '12px', 
-                                background: 'var(--color-green-50)', 
+                              <pre style={{
+                                margin: 0,
+                                padding: '12px',
+                                background: 'var(--color-green-50)',
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
@@ -1415,20 +1518,69 @@ const ViewResource: React.FC = () => {
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
                               }}>
-                                {formatValue(field.newValue)}
+                                {formatFieldValue(field.field, field.newValue)}
                               </pre>
                             </div>
                           )}
-                          {field.type === 'modified' && (
+                          {field.type === 'modified' && isJsonStringField(field.field) ? (
+                            // typejsonstring 字段：逐行对比
+                            <div style={{
+                              borderRadius: '6px',
+                              border: '1px solid var(--color-gray-200)',
+                              overflow: 'hidden',
+                              fontFamily: 'monospace',
+                              fontSize: '13px',
+                              lineHeight: '1.6'
+                            }}>
+                              {computeLineDiff(
+                                formatFieldValue(field.field, field.oldValue).split('\n'),
+                                formatFieldValue(field.field, field.newValue).split('\n')
+                              ).map((line, lineIdx) => (
+                                <div key={lineIdx} style={{
+                                  display: 'flex',
+                                  padding: 0,
+                                  background: line.type === 'added' ? 'var(--color-green-50)' :
+                                              line.type === 'removed' ? 'var(--color-red-50)' : 'white'
+                                }}>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    width: '24px',
+                                    padding: '1px 6px',
+                                    textAlign: 'center',
+                                    fontWeight: 'bold',
+                                    userSelect: 'none',
+                                    flexShrink: 0,
+                                    color: line.type === 'added' ? 'var(--color-green-600)' :
+                                           line.type === 'removed' ? 'var(--color-red-600)' : 'var(--color-gray-400)',
+                                    background: line.type === 'added' ? 'var(--color-green-100)' :
+                                               line.type === 'removed' ? 'var(--color-red-100)' : 'var(--color-gray-50)',
+                                    borderRight: '1px solid var(--color-gray-200)'
+                                  }}>
+                                    {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
+                                  </span>
+                                  <span style={{
+                                    padding: '1px 12px',
+                                    flex: 1,
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                    color: line.type === 'added' ? 'var(--color-green-700)' :
+                                           line.type === 'removed' ? 'var(--color-red-700)' : 'var(--color-gray-700)'
+                                  }}>
+                                    {line.content}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : field.type === 'modified' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                               <div>
                                 <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
                                   旧版本：
                                 </div>
-                                <pre style={{ 
-                                  margin: 0, 
-                                  padding: '12px', 
-                                  background: 'var(--color-red-50)', 
+                                <pre style={{
+                                  margin: 0,
+                                  padding: '12px',
+                                  background: 'var(--color-red-50)',
                                   borderRadius: '6px',
                                   fontSize: '13px',
                                   fontFamily: 'monospace',
@@ -1437,17 +1589,17 @@ const ViewResource: React.FC = () => {
                                   whiteSpace: 'pre-wrap',
                                   wordBreak: 'break-word'
                                 }}>
-                                  {formatValue(field.oldValue)}
+                                  {formatFieldValue(field.field, field.oldValue)}
                                 </pre>
                               </div>
                               <div>
                                 <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
                                   新版本：
                                 </div>
-                                <pre style={{ 
-                                  margin: 0, 
-                                  padding: '12px', 
-                                  background: 'var(--color-green-50)', 
+                                <pre style={{
+                                  margin: 0,
+                                  padding: '12px',
+                                  background: 'var(--color-green-50)',
                                   borderRadius: '6px',
                                   fontSize: '13px',
                                   fontFamily: 'monospace',
@@ -1456,7 +1608,7 @@ const ViewResource: React.FC = () => {
                                   whiteSpace: 'pre-wrap',
                                   wordBreak: 'break-word'
                                 }}>
-                                  {formatValue(field.newValue)}
+                                  {formatFieldValue(field.field, field.newValue)}
                                 </pre>
                               </div>
                             </div>
@@ -1466,10 +1618,10 @@ const ViewResource: React.FC = () => {
                               <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
                                 值：
                               </div>
-                              <pre style={{ 
-                                margin: 0, 
-                                padding: '12px', 
-                                background: 'var(--color-gray-50)', 
+                              <pre style={{
+                                margin: 0,
+                                padding: '12px',
+                                background: 'var(--color-gray-50)',
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
@@ -1478,7 +1630,7 @@ const ViewResource: React.FC = () => {
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
                               }}>
-                                {formatValue(field.oldValue)}
+                                {formatFieldValue(field.field, field.oldValue)}
                               </pre>
                             </div>
                           )}

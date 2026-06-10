@@ -4243,6 +4243,7 @@ func (s *TerraformExecutor) TerraformInitWithLogging(
 	maxDelay := 30 * time.Second
 
 	var lastErr error
+	var forceUpgrade bool
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			// 计算退避延迟（指数退避）
@@ -4250,11 +4251,15 @@ func (s *TerraformExecutor) TerraformInitWithLogging(
 			if delay > maxDelay {
 				delay = maxDelay
 			}
-			logger.Warn("Terraform init failed (attempt %d/%d), retrying in %v...", attempt, maxRetries, delay)
+			if forceUpgrade {
+				logger.Warn("Terraform init failed due to locked provider version mismatch, retrying with -upgrade flag...")
+			} else {
+				logger.Warn("Terraform init failed (attempt %d/%d), retrying in %v...", attempt, maxRetries, delay)
+			}
 			time.Sleep(delay)
 		}
 
-		err := s.terraformInitOnce(ctx, workDir, task, workspace, logger, attempt+1, maxRetries)
+		err := s.terraformInitOnce(ctx, workDir, task, workspace, logger, attempt+1, maxRetries, forceUpgrade)
 		if err == nil {
 			return nil
 		}
@@ -4264,6 +4269,13 @@ func (s *TerraformExecutor) TerraformInitWithLogging(
 		// 检查是否是用户取消
 		if ctx.Err() == context.Canceled {
 			return fmt.Errorf("task cancelled by user")
+		}
+
+		// 检查是否是 locked provider 版本不匹配错误，如果是则强制使用 -upgrade 重试
+		if s.isLockedProviderError(err) {
+			logger.Warn("Detected locked provider version mismatch, will retry with -upgrade flag")
+			forceUpgrade = true
+			continue
 		}
 
 		// 检查是否是可重试的错误（网络超时、注册表访问失败等）
@@ -4317,6 +4329,18 @@ func (s *TerraformExecutor) isRetryableInitError(err error) bool {
 	return false
 }
 
+// isLockedProviderError 检测是否为 locked provider 版本不匹配错误
+// 这种错误发生在 .terraform.lock.hcl 中锁定的 provider 版本不满足模块约束时
+// 解决方案是使用 -upgrade 参数重新执行 terraform init
+func (s *TerraformExecutor) isLockedProviderError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "locked provider") ||
+		strings.Contains(errStr, "must use terraform init -upgrade")
+}
+
 // terraformInitOnce 执行单次 terraform init
 func (s *TerraformExecutor) terraformInitOnce(
 	ctx context.Context,
@@ -4326,6 +4350,7 @@ func (s *TerraformExecutor) terraformInitOnce(
 	logger *TerraformLogger,
 	attempt int,
 	maxAttempts int,
+	forceUpgrade bool,
 ) error {
 	// 获取Terraform二进制文件路径（已在Fetching阶段下载）
 	// 必须使用下载的版本，不允许回退到系统terraform
@@ -4396,7 +4421,8 @@ plugin_cache_may_break_dependency_lock_file = true
 
 	// 判断是否需要使用 -upgrade 参数
 	// 只在 provider 配置变更或首次运行时使用 -upgrade，以加速 init 过程
-	needUpgrade := s.shouldUseUpgrade(workspace, logger)
+	// forceUpgrade 用于检测到 locked provider 错误后强制重试
+	needUpgrade := forceUpgrade || s.shouldUseUpgrade(workspace, logger)
 
 	// 构建命令
 	args := []string{
@@ -4415,6 +4441,8 @@ plugin_cache_may_break_dependency_lock_file = true
 		args = append(args, "-upgrade")
 		if attempt == 1 {
 			logger.Info("Using -upgrade flag (provider config changed or first run)")
+		} else if forceUpgrade {
+			logger.Info("Using -upgrade flag (forced: locked provider version mismatch detected)")
 		}
 	} else if attempt == 1 {
 		logger.Info("Skipping -upgrade flag (provider config unchanged, saving time)")

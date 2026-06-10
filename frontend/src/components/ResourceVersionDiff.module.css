@@ -327,3 +327,64 @@
 .stat strong {
   font-weight: 600;
 }
+
+/* 逐行对比样式 */
+.lineDiffContainer {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.lineDiff {
+  display: flex;
+  padding: 0;
+  margin: 0;
+}
+
+.linePrefix {
+  display: inline-block;
+  width: 20px;
+  padding: 2px 8px;
+  text-align: center;
+  font-weight: bold;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.lineDiff code {
+  display: block;
+  padding: 2px 12px;
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.lineAdded {
+  background: var(--color-green-50);
+}
+
+.lineAdded .linePrefix {
+  color: var(--color-green-600);
+  background: var(--color-green-100);
+}
+
+.lineRemoved {
+  background: var(--color-red-50);
+}
+
+.lineRemoved .linePrefix {
+  color: var(--color-red-600);
+  background: var(--color-red-100);
+}
+
+.lineUnchanged {
+  background: white;
+}
+
+.lineUnchanged .linePrefix {
+  color: var(--color-gray-400);
+  background: var(--color-gray-50);
+}

@@ -1,0 +1,14 @@
+.container {
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1e1e1e;
+  position: relative;
+  overscroll-behavior: contain;
+}
+
+.editor {
+  width: 100%;
+  min-height: 400px;
+}

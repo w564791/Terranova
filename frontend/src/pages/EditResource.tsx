@@ -8,7 +8,10 @@ import DynamicForm, { type FormSchema, FormPreview } from '../components/Dynamic
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
 import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
 import HCLEditor from '../components/HCLEditor/HCLEditor';
+import MonacoHclEditor from '../components/MonacoHclEditor';
 import { useUIVersion } from '../hooks/useUIVersion';
+import { jsonToHCL } from '../utils/hclFormatter';
+import { parseHCLModule } from '../utils/hclParser';
 import { 
   AITriggerButton, 
   AIInputPanel, 
@@ -71,6 +74,11 @@ const EditResource: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [changeSummaryError, setChangeSummaryError] = useState('');
+  
+  // Monaco HCL Editor 状态
+  const [hclText, setHclText] = useState('');
+  const [isHclEditorReady, setIsHclEditorReady] = useState(false);
+  
   // Read initial viewMode from URL (?view=hcl → 'json', ?view=form → 'form', default 'form')
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
     const v = searchParams.get('view');
@@ -78,8 +86,21 @@ const EditResource: React.FC = () => {
   });
   const [formRenderError, setFormRenderError] = useState(false);
 
-  // Wrap setViewMode to also persist to URL
+  // HCL 额外字段检测状态 - 必须在 setViewMode 之前声明
+  const [pendingExtraFields, setPendingExtraFields] = useState<string[]>([]);
+  const [showExtraFieldsDialog, setShowExtraFieldsDialog] = useState(false);
+  const [pendingViewModeChange, setPendingViewModeChange] = useState<ViewMode | null>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<boolean>(false);
+
+  // Wrap setViewMode to also persist to URL and check for extra fields
   const setViewMode = useCallback((mode: ViewMode) => {
+    // 从 HCL 模式切换到表单模式时，检查是否有未处理的额外字段
+    if (viewMode === 'json' && mode === 'form' && pendingExtraFields.length > 0) {
+      setPendingViewModeChange(mode);
+      setShowExtraFieldsDialog(true);
+      return;
+    }
+    
     setViewModeState(mode);
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
@@ -90,7 +111,7 @@ const EditResource: React.FC = () => {
       }
       return next;
     }, { replace: true });
-  }, [setSearchParams, isV3]);
+  }, [setSearchParams, isV3, viewMode, pendingExtraFields]);
   const [initialFieldsToShow, setInitialFieldsToShow] = useState<string[]>([]);
   const [isCloneMode, setIsCloneMode] = useState(false);
   // 升级模式：从 ViewResource 的升级按钮跳转过来，URL 带 upgrade_to 参数
@@ -211,6 +232,54 @@ const EditResource: React.FC = () => {
     return result;
   }, [filterEmptyStrings]);
 
+  // HCL 转换函数：formData → hclText
+  useEffect(() => {
+    if (Object.keys(formData).length > 0 && !isHclEditorReady) {
+      try {
+        const hcl = jsonToHCL(formData, {
+          moduleName: moduleKeyName || 'resource',
+          moduleSource: moduleSource,
+          moduleVersion: selectedVersionId ? moduleVersions.find(v => v.id === selectedVersionId)?.version || '' : '',
+          schema: rawSchema?.openapi_schema,
+          skipDefaults: true,
+        });
+        setHclText(hcl);
+        setIsHclEditorReady(true);
+      } catch (error) {
+        console.error('Failed to convert formData to HCL:', error);
+      }
+    }
+  }, [formData, moduleKeyName, moduleSource, selectedVersionId, moduleVersions, rawSchema, isHclEditorReady]);
+
+  // HCL 变更处理：hclText → formData
+  const handleHclChange = useCallback((newHclText: string) => {
+    setHclText(newHclText);
+    try {
+      const result = parseHCLModule(newHclText);
+      // 提取系统参数（source, version 等）和用户配置
+      const { systemParams, userConfig } = result;
+      
+      // 只更新用户配置部分，保留系统参数
+      setFormData(userConfig);
+      
+      // 如果有额外字段，检测并提示
+      if (rawSchema?.openapi_schema) {
+        const schemaProperties = rawSchema.openapi_schema.components?.schemas?.ModuleInput?.properties || {};
+        const schemaKeys = new Set(Object.keys(schemaProperties));
+        const extraFields = Object.keys(userConfig).filter(key => !schemaKeys.has(key));
+        
+        if (extraFields.length > 0) {
+          setPendingExtraFields(extraFields);
+        } else {
+          setPendingExtraFields([]);
+        }
+      }
+    } catch (error) {
+      // HCL 解析失败，不更新 formData，保持当前状态
+      console.error('Failed to parse HCL:', error);
+    }
+  }, [rawSchema]);
+
   // AI 助手 Hook
   const ai = useAIConfigGenerator({
     moduleId: matchedModuleId || 0,
@@ -240,11 +309,80 @@ const EditResource: React.FC = () => {
   const [showRunDialog, setShowRunDialog] = useState(false);
   const [savedResourceName, setSavedResourceName] = useState('');
   
+  // Ref to store handleSubmit function to avoid forward reference
+  const handleSubmitRef = useRef<(shouldRunAfter: boolean) => Promise<void>>();
+  
   // WebSocket接管请求状态
   const [showTakeoverRequestDialog, setShowTakeoverRequestDialog] = useState(false);
   const [takeoverRequest, setTakeoverRequest] = useState<any>(null);
   const [showTakeoverWaitingDialog, setShowTakeoverWaitingDialog] = useState(false);
   const [waitingForTakeoverRequestId, setWaitingForTakeoverRequestId] = useState<number | null>(null);
+
+  // 处理 HCL 额外字段：保留
+  const handleKeepExtraFields = useCallback(() => {
+    setPendingExtraFields([]);
+    setShowExtraFieldsDialog(false);
+
+    // 如果是模式切换，继续切换
+    if (pendingViewModeChange) {
+      setViewModeState(pendingViewModeChange);
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        if (pendingViewModeChange === 'json') {
+          next.set('view', isV3 ? 'hcl' : 'json');
+        } else {
+          next.delete('view');
+        }
+        return next;
+      }, { replace: true });
+      setPendingViewModeChange(null);
+    }
+
+    // 如果是提交，继续提交（使用 ref 避免前向引用）
+    if (pendingSubmit && handleSubmitRef.current) {
+      handleSubmitRef.current(true);
+      setPendingSubmit(false);
+    }
+  }, [pendingViewModeChange, pendingSubmit, isV3, setSearchParams]);
+
+  // 处理 HCL 额外字段：丢弃
+  const handleDiscardExtraFields = useCallback(() => {
+    // 从 formData 中移除非 schema 字段
+    const schemaProperties = rawSchema?.openapi_schema?.components?.schemas?.ModuleInput?.properties || {};
+    const schemaFields = new Set(Object.keys(schemaProperties));
+    
+    const filteredFormData: Record<string, any> = {};
+    Object.keys(formData).forEach(key => {
+      if (schemaFields.size === 0 || schemaFields.has(key)) {
+        filteredFormData[key] = formData[key];
+      }
+    });
+    
+    setFormData(filteredFormData);
+    setPendingExtraFields([]);
+    setShowExtraFieldsDialog(false);
+    
+    // 如果是模式切换，继续切换
+    if (pendingViewModeChange) {
+      setViewModeState(pendingViewModeChange);
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        if (pendingViewModeChange === 'json') {
+          next.set('view', isV3 ? 'hcl' : 'json');
+        } else {
+          next.delete('view');
+        }
+        return next;
+      }, { replace: true });
+      setPendingViewModeChange(null);
+    }
+    
+    // 如果是提交，继续提交（使用 ref 避免前向引用）
+    if (pendingSubmit && handleSubmitRef.current) {
+      handleSubmitRef.current(true);
+      setPendingSubmit(false);
+    }
+  }, [pendingViewModeChange, pendingSubmit, isV3, setSearchParams]);
 
   const heartbeatTimerRef = useRef<number | null>(null);
   const statusPollTimerRef = useRef<number | null>(null);
@@ -991,7 +1129,7 @@ const EditResource: React.FC = () => {
   }, [formData, changeSummary, id, resourceId, isCloneMode, sessionId, loading, hasUserEdited]);
 
   const handleSubmit = async (shouldRunAfter: boolean = false) => {
-    
+
     // 验证变更摘要
     if (!changeSummary.trim()) {
       setChangeSummaryError('请输入变更摘要');
@@ -1001,7 +1139,14 @@ const EditResource: React.FC = () => {
       changeSummaryRef.current?.focus();
       return;
     }
-    
+
+    // 检查是否有未处理的额外字段
+    if (pendingExtraFields.length > 0) {
+      setPendingSubmit(shouldRunAfter);
+      setShowExtraFieldsDialog(true);
+      return;
+    }
+
     try {
       setSubmitting(true);
       
@@ -1144,6 +1289,11 @@ const EditResource: React.FC = () => {
       setSubmitting(false);
     }
   };
+
+  // Update handleSubmitRef whenever handleSubmit changes
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
 
   const handleCancel = () => {
     
@@ -1678,15 +1828,10 @@ const EditResource: React.FC = () => {
                 </ErrorBoundary>
               ) : (
                 isV3 ? (
-                  <HCLEditor
-                    data={formData}
-                    onChange={setFormData}
+                  <MonacoHclEditor
+                    value={hclText}
+                    onChange={handleHclChange}
                     readOnly={false}
-                    moduleSource={moduleSource}
-                    moduleVersion={selectedVersionId ? moduleVersions.find(v => v.id === selectedVersionId)?.version || '' : ''}
-                    moduleName={moduleKeyName}
-                    schema={rawSchema?.openapi_schema}
-                    skipDefaults={true}
                     minHeight={400}
                     maxHeight={600}
                   />
@@ -1805,6 +1950,57 @@ const EditResource: React.FC = () => {
         loading={ai.loading}
         blockMessage={ai.blockMessage}
       />
+
+      {/* HCL 额外字段对话框 */}
+      {showExtraFieldsDialog && pendingExtraFields.length > 0 && (
+        <div className={styles.overlay}>
+          <div className={styles.dialog} style={{ maxWidth: '500px' }}>
+            <div className={styles.dialogHeader}>
+              <h3>发现额外字段</h3>
+            </div>
+            <div className={styles.dialogBody}>
+              <p>在 HCL 编辑模式下检测到以下字段不在 Schema 定义中：</p>
+              <div style={{
+                background: '#f8f9fa',
+                padding: '12px',
+                borderRadius: '6px',
+                margin: '12px 0',
+                fontFamily: 'monospace',
+                fontSize: '13px'
+              }}>
+                {pendingExtraFields.map((field, idx) => (
+                  <div key={field}>• {field}{idx < pendingExtraFields.length - 1 ? ',' : ''}</div>
+                ))}
+              </div>
+              <p>这些字段可能是：</p>
+              <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                <li>手动添加的配置项</li>
+                <li>新版本的 Schema 新增字段</li>
+                <li>拼写错误的字段名</li>
+              </ul>
+              <p><strong>请选择处理方式：</strong></p>
+              <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                <li><strong>保留</strong>：将这些字段保存到配置中（可能会在下次加载时被过滤）</li>
+                <li><strong>丢弃</strong>：从配置中移除这些字段</li>
+              </ul>
+            </div>
+            <div className={styles.dialogFooter}>
+              <button
+                className={styles.btnCancel}
+                onClick={handleDiscardExtraFields}
+              >
+                丢弃这些字段
+              </button>
+              <button
+                className={styles.btnPrimary}
+                onClick={handleKeepExtraFields}
+              >
+                保留这些字段
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       </div>
     </div>
