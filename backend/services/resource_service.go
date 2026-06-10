@@ -133,15 +133,16 @@ func (s *ResourceService) GetResources(workspaceID string, includeInactive bool)
 
 // ResourceListItem 资源列表项（精简字段）
 type ResourceListItem struct {
-	ID             uint                    `json:"id"`
-	WorkspaceID    string                  `json:"workspace_id"`
-	ResourceType   string                  `json:"resource_type"`
-	ResourceName   string                  `json:"resource_name"`
-	ResourceID     string                  `json:"resource_id"`
-	IsActive       bool                    `json:"is_active"`
-	CreatedAt      string                  `json:"created_at"`
-	UpdatedAt      string                  `json:"updated_at"`
-	CurrentVersion *ResourceVersionSummary `json:"current_version,omitempty"`
+	ID                   uint                    `json:"id"`
+	WorkspaceID          string                  `json:"workspace_id"`
+	ResourceType         string                  `json:"resource_type"`
+	ResourceName         string                  `json:"resource_name"`
+	ResourceID           string                  `json:"resource_id"`
+	IsActive             bool                    `json:"is_active"`
+	ManifestDeploymentID *string                 `json:"manifest_deployment_id,omitempty"`
+	CreatedAt            string                  `json:"created_at"`
+	UpdatedAt            string                  `json:"updated_at"`
+	CurrentVersion       *ResourceVersionSummary `json:"current_version,omitempty"`
 }
 
 // ResourceVersionSummary 版本摘要信息
@@ -211,7 +212,7 @@ func (s *ResourceService) GetResourcesPaginated(
 	err := query.Select(
 		"id", "workspace_id", "resource_type", "resource_name",
 		"resource_id", "is_active", "created_at", "updated_at",
-		"current_version_id",
+		"current_version_id", "manifest_deployment_id",
 	).Preload("CurrentVersion", func(db *gorm.DB) *gorm.DB {
 		return db.Select("id", "resource_id", "version", "is_latest", "change_summary")
 	}).Find(&resources).Error
@@ -224,14 +225,15 @@ func (s *ResourceService) GetResourcesPaginated(
 	items := make([]ResourceListItem, len(resources))
 	for i, r := range resources {
 		items[i] = ResourceListItem{
-			ID:           r.ID,
-			WorkspaceID:  r.WorkspaceID,
-			ResourceType: r.ResourceType,
-			ResourceName: r.ResourceName,
-			ResourceID:   r.ResourceID,
-			IsActive:     r.IsActive,
-			CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:    r.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			ID:                   r.ID,
+			WorkspaceID:          r.WorkspaceID,
+			ResourceType:         r.ResourceType,
+			ResourceName:         r.ResourceName,
+			ResourceID:           r.ResourceID,
+			IsActive:             r.IsActive,
+			ManifestDeploymentID: r.ManifestDeploymentID,
+			CreatedAt:            r.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:            r.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 
 		if r.CurrentVersion != nil {
@@ -343,6 +345,9 @@ func (s *ResourceService) DeleteResourceWithOptions(resourceID uint, userID stri
 	var resource models.WorkspaceResource
 	if err := s.db.First(&resource, resourceID).Error; err != nil {
 		return fmt.Errorf("resource not found: %w", err)
+	}
+	if resource.ManifestDeploymentID != nil && *resource.ManifestDeploymentID != "" {
+		return fmt.Errorf("resource %s is managed by a manifest deployment; delete it from the manifest editor", resource.ResourceID)
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {

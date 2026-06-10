@@ -285,6 +285,10 @@ func (c *ResourceController) DeleteResource(ctx *gin.Context) {
 	uid := userID.(string)
 
 	if err := c.service.DeleteResource(uint(resourceID), uid); err != nil {
+		if strings.Contains(err.Error(), "managed by a manifest deployment") {
+			ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

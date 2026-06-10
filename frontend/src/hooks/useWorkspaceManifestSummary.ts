@@ -13,6 +13,7 @@ export interface WorkspaceManifestSummary {
   workspace_id: string
   has_manifest: boolean
   deployment_id?: string
+  version_id?: string
   active_tag?: string
   subpath?: string | null
   manifest_id?: string

@@ -38,6 +38,7 @@ import ManifestAiTools, { type EditorBridge, type CheckFile } from './ManifestAi
 import { buildBlockIndex, findExternalRefs, locateBlock } from './hclBlockIndex'
 import {
   listFiles,
+  listVersionFiles,
   readFile,
   putFile,
   putFileB64,
@@ -84,6 +85,23 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error)
     reader.readAsDataURL(file)
   })
+}
+
+function normalizeManifestSubpath(value: string | null): string {
+  if (!value) return ''
+  return value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+}
+
+function isTopLevelTfUnderSubpath(path: string, subpath: string): boolean {
+  if (!path.endsWith('.tf')) return false
+  const cleanPath = path.replace(/\\/g, '/').replace(/^\/+/, '')
+  const cleanSubpath = normalizeManifestSubpath(subpath)
+  let relativePath = cleanPath
+  if (cleanSubpath) {
+    if (!cleanPath.startsWith(`${cleanSubpath}/`)) return false
+    relativePath = cleanPath.slice(cleanSubpath.length + 1)
+  }
+  return relativePath.length > 0 && !relativePath.includes('/')
 }
 
 export default function ManifestEditorV2() {
@@ -537,14 +555,21 @@ export default function ManifestEditorV2() {
   // ========== 深链定位:?file=&line= 或 ?resource=<id>(来自 workspace 资源跳转)==========
   // ?file=path&line=N  直接定位;?resource=module.x / aws_xxx.y  解析块起始行后定位。
   // files 就绪后跑一次(标记 hasDeepLink 让首文件自动打开让位)。
-  const deepLinkDoneRef = useRef(false)
+  // 记录上次处理的深链 key,支持同一编辑器内连续跳转不同资源/文件。
+  const deepLinkDoneRef = useRef<string | null>(null)
   useEffect(() => {
     const fileParam = searchParams.get('file')
     const resourceParam = searchParams.get('resource')
     if (!fileParam && !resourceParam) return
     hasDeepLinkRef.current = true
-    if (deepLinkDoneRef.current || files.length === 0) return
-    deepLinkDoneRef.current = true
+    const versionParam = searchParams.get('version')
+    const hasSubpathParam = searchParams.has('subpath')
+    const subpathParam = normalizeManifestSubpath(searchParams.get('subpath'))
+    const deepLinkKey = fileParam
+      ? `file:${fileParam}:${searchParams.get('line') || '1'}`
+      : `resource:${resourceParam}:version:${versionParam || 'draft'}:subpath:${hasSubpathParam ? subpathParam : '*'}`
+    if (deepLinkDoneRef.current === deepLinkKey || files.length === 0) return
+    deepLinkDoneRef.current = deepLinkKey
 
     void (async () => {
       if (fileParam) {
@@ -552,20 +577,62 @@ export default function ManifestEditorV2() {
         await openAt(fileParam, line, 1, 1)
         return
       }
-      // ?resource=<id>:建块索引解析出 {file, line}
+      // ?resource=<id>:先在草稿中查找;找不到则 fallback 到发布版本文件
       const entries = await collectDraftTfFilesRef.current()
-      const index = buildBlockIndex(entries)
+      const scopedEntries = hasSubpathParam
+        ? entries.filter((entry) => isTopLevelTfUnderSubpath(entry.path, subpathParam))
+        : entries
+      const index = buildBlockIndex(scopedEntries)
       const loc = locateBlock(index, resourceParam!)
       if (loc) {
         await openAt(loc.file, loc.line, 1, 1)
-      } else {
-        // 解析不到:退而打开首个 .tf,并提示
-        const firstTf = files.find((f) => f.path.endsWith('.tf')) ?? files[0]
-        if (firstTf) await openFile(firstTf.path)
-        message.warning(`未在草稿中找到资源 ${resourceParam}`)
+        return
       }
+      // 草稿中找不到,尝试从发布版本文件中查找(?version= 来自 workspace 跳转)
+      if (versionParam) {
+        try {
+          const versionEntries = await listVersionFiles(ctx, versionParam)
+          const vFiles = await Promise.all(
+            versionEntries
+              .filter(
+                (f) =>
+                  f.type === 'file' &&
+                  f.path.endsWith('.tf') &&
+                  !f.is_binary &&
+                  (!hasSubpathParam || isTopLevelTfUnderSubpath(f.path, subpathParam)),
+              )
+              .map(async (f) => {
+                try {
+                  const r = await readFile(ctx, f.path, versionParam)
+                  return { path: f.path, content: r.is_binary ? '' : r.content ?? '' }
+                } catch {
+                  return { path: f.path, content: '' }
+                }
+              }),
+          )
+          const vIndex = buildBlockIndex(vFiles)
+          const vLoc = locateBlock(vIndex, resourceParam!)
+          if (vLoc) {
+            // 在发布版本中找到:打开对应草稿文件(如果存在)并定位到该版本中的行号
+            const draftFile = files.find((f) => f.path === vLoc.file)
+            if (draftFile) {
+              await openAt(vLoc.file, vLoc.line, 1, 1)
+            } else {
+              // 草稿中没有这个文件(发布版本新增的文件),直接打开发布版本内容
+              await openAt(vLoc.file, vLoc.line, 1, 1)
+            }
+            return
+          }
+        } catch {
+          // 获取发布版本文件失败,忽略
+        }
+      }
+      // 都找不到:退而打开首个 .tf,并提示
+      const firstTf = files.find((f) => f.path.endsWith('.tf')) ?? files[0]
+      if (firstTf) await openFile(firstTf.path)
+      message.warning(`未在 Manifest 中找到资源 ${resourceParam}`)
     })()
-  }, [files, searchParams, openAt, openFile])
+  }, [files, searchParams, openAt, openFile, ctx])
 
   // ========== 跨文件导航回退/前进(Cmd+←/→)==========
   // 跳到历史位置:打开目标文件(fromNav 避免再次记录)并恢复其 viewState

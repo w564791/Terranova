@@ -489,6 +489,7 @@ func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Contex
 		WorkspaceID    string  `json:"workspace_id"`
 		HasManifest    bool    `json:"has_manifest"`
 		DeploymentID   string  `json:"deployment_id,omitempty"`
+		VersionID      string  `json:"version_id,omitempty"`
 		ActiveTag      string  `json:"active_tag,omitempty"`
 		Subpath        *string `json:"subpath,omitempty"`
 		ManifestID     string  `json:"manifest_id,omitempty"`
@@ -528,17 +529,19 @@ func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Contex
 	type joinRow struct {
 		ManifestID   string
 		ManifestName string
+		VersionID    string
 		OrgID        int
 		Status       string
 	}
 	var jr joinRow
 	if err := h.db.Table("manifest_deployments md").
-		Select("md.manifest_id, m.name as manifest_name, m.organization_id as org_id, md.status").
+		Select("md.manifest_id, m.name as manifest_name, md.version_id, m.organization_id as org_id, md.status").
 		Joins("JOIN manifests m ON m.id = md.manifest_id").
 		Where("md.id = ?", *ws.ManifestDeploymentID).
 		Take(&jr).Error; err == nil {
 		out.ManifestID = jr.ManifestID
 		out.ManifestName = jr.ManifestName
+		out.VersionID = jr.VersionID
 		out.OrgID = jr.OrgID
 		out.Status = jr.Status
 	}

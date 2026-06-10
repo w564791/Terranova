@@ -46,6 +46,17 @@ export async function listFiles(ctx: ManifestEditorContext): Promise<ManifestFil
   return body.files || []
 }
 
+/** 列某已发布版本的文件树(只读) */
+export async function listVersionFiles(
+  ctx: ManifestEditorContext,
+  versionId: string,
+): Promise<ManifestFileEntry[]> {
+  const body = (await api.get(
+    `${basePath(ctx)}/files?version=${encodeURIComponent(versionId)}`,
+  )) as { files?: ManifestFileEntry[] }
+  return body.files || []
+}
+
 /** 读单文件(text 直接返回 content, binary 走 content_b64) */
 export async function readFile(
   ctx: ManifestEditorContext,

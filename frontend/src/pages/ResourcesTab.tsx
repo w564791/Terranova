@@ -65,6 +65,21 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
   const { summary: manifestSummary, loading: manifestSummaryLoading } = useWorkspaceManifestSummary(workspaceId);
   const isManifestManaged = manifestSummary?.has_manifest ?? false;
 
+  const buildManifestEditorUrl = (resource?: Resource) => {
+    if (manifestSummary?.manifest_id == null || manifestSummary?.org_id == null) return null;
+    const params = new URLSearchParams({
+      org: String(manifestSummary.org_id),
+      subpath: manifestSummary.subpath ?? '',
+    });
+    if (manifestSummary.version_id) {
+      params.set('version', manifestSummary.version_id);
+    }
+    if (resource?.resource_id) {
+      params.set('resource', resource.resource_id);
+    }
+    return `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?${params.toString()}`;
+  };
+
   useEffect(() => {
     fetchResources();
   }, [workspaceId, page, pageSize, searchTerm, sortBy, sortOrder, includeInactive]);
@@ -197,10 +212,9 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
         showToast('Manifest 信息加载中,请稍候再试', 'info');
         return;
       }
-      if (manifestSummary?.manifest_id != null && manifestSummary?.org_id != null && resource.resource_id) {
-        navigate(
-          `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}&resource=${encodeURIComponent(resource.resource_id)}`,
-        );
+      const manifestEditorUrl = buildManifestEditorUrl(resource);
+      if (manifestEditorUrl && resource.resource_id) {
+        navigate(manifestEditorUrl);
         return;
       }
       // 有 manifest 来源但拿不到跳转所需信息:明确提示,而非进会报错的详情页
@@ -212,6 +226,10 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
   };
 
   const handleDeleteResource = (resource: Resource) => {
+    if (resource.manifest_deployment_id) {
+      showToast('此资源由 Manifest 管理，请在 manifest 编辑器中操作', 'info');
+      return;
+    }
     setResourceToDelete(resource);
     setShowDeleteDialog(true);
   };
@@ -275,7 +293,6 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
                 gap: 8,
               }}
             >
-              <span>📦</span>
               <span>
                 此 workspace 由 Manifest{' '}
                 <strong style={{ color: '#fff' }}>
@@ -296,11 +313,10 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
                     cursor: 'pointer',
                     fontSize: 12,
                   }}
-                  onClick={() =>
-                    navigate(
-                      `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}`,
-                    )
-                  }
+                  onClick={() => {
+                    const manifestEditorUrl = buildManifestEditorUrl();
+                    if (manifestEditorUrl) navigate(manifestEditorUrl);
+                  }}
                 >
                   打开编辑器
                 </button>
@@ -416,28 +432,13 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
                       className={styles.manifestBadge}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (manifestSummary?.manifest_id && manifestSummary?.org_id) {
-                          const rq = resource.resource_id
-                            ? `&resource=${encodeURIComponent(resource.resource_id)}`
-                            : '';
-                          navigate(
-                            `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?org=${manifestSummary.org_id}${rq}`,
-                          );
-                        }
+                        const manifestEditorUrl = buildManifestEditorUrl(resource);
+                        if (manifestEditorUrl) navigate(manifestEditorUrl);
                       }}
                       style={{ cursor: manifestSummary?.manifest_id ? 'pointer' : 'default' }}
-                      title={
-                        manifestSummary?.manifest_name
-                          ? `来自 Manifest ${manifestSummary.manifest_name} @ ${manifestSummary.active_tag ?? ''}\n点击跳转到 manifest 编辑器`
-                          : `Manifest 部署: ${resource.manifest_deployment_id}`
-                      }
+                      title="Manifest 管理，点击跳转到 manifest 编辑器"
                     >
-                      📦 {manifestSummary?.manifest_name ?? 'Manifest'}
-                      {manifestSummary?.active_tag && (
-                        <span style={{ opacity: 0.7, marginLeft: 4 }}>
-                          {manifestSummary.active_tag}
-                        </span>
-                      )}
+                      Manifest
                     </span>
                   )}
                 </div>
@@ -483,7 +484,12 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
                     handleDeleteResource(resource);
                   }}
                   className={styles.btnDelete}
-                  disabled={!resource.is_active}
+                  disabled={!resource.is_active || !!resource.manifest_deployment_id}
+                  title={
+                    resource.manifest_deployment_id
+                      ? '此资源由 Manifest 管理，请在 manifest 编辑器中操作'
+                      : undefined
+                  }
                 >
                   删除
                 </button>
