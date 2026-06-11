@@ -46,20 +46,21 @@ func NewManifestAIService(db *gorm.DB) *ManifestAIService {
 
 // ManifestGenerateResult manifest 资源生成结果
 type ManifestGenerateResult struct {
-	Status     string   // "complete" | "blocked"
-	HCL        string   // 生成的 HCL 文本
-	Message    string   // 提示信息（blocked 时为拦截原因）
-	UsageLogID string   // Skill 使用日志 ID
-	Warnings   []string // schema 校验发现的问题(仅 module 块,引用仓库已有 module 时)
+	Status         string          // "complete" | "blocked"
+	HCL            string          // 生成的 HCL 文本
+	Message        string          // 提示信息（blocked 时为拦截原因）
+	UsageLogID     string          // Skill 使用日志 ID
+	Warnings       []string        // schema 校验发现的问题(仅 module 块,引用仓库已有 module 时)
+	CompletedSteps []CompletedStep // 各步骤耗时 + 使用的 skill(供前端 pipeline 展示)
 }
 
 // manifestModuleCandidate Module 库候选项(拼进 prompt 供 AI 挑选)
 type manifestModuleCandidate struct {
-	moduleID    uint   // 内部用(加载 module skill),不进 prompt
-	Name        string `json:"name"`
-	Source      string `json:"source"`
-	Version     string `json:"version"`
-	Description string `json:"description"`
+	moduleID    uint     // 内部用(加载 module skill),不进 prompt
+	Name        string   `json:"name"`
+	Source      string   `json:"source"`
+	Versions    []string `json:"versions,omitempty"` // 可用版本列表(从 module_versions 表)
+	Description string   `json:"description"`
 }
 
 // getManifestGenerationComposition 返回 manifest 资源生成的默认 Skill 组合
@@ -90,7 +91,7 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 	progressCallback ProgressCallback,
 ) (*ManifestGenerateResult, error) {
 	totalTimer := NewTimer()
-	tracker := newManifestProgressTracker(4, manifestGenStepName, progressCallback)
+	tracker := newManifestProgressTracker(5, manifestGenStepName, progressCallback)
 	reportProgress := tracker.report
 
 	log.Printf("[ManifestAIService] ========== 开始 manifest 资源生成 ==========")
@@ -128,35 +129,47 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 	moduleContext := s.buildModuleContext(candidates)
 	log.Printf("[ManifestAIService] Module 库候选 %d 个", len(candidates))
 
-	// 步骤 4: 组装 Prompt + AI 生成
-	reportProgress(4, "AI生成", "正在调用 AI 生成资源...")
 	// 优先用 AIConfig 里配置的 Skill 组合(UI 可调),为空才回退硬编码默认。对齐 form_generation。
 	composition := &aiConfig.SkillComposition
 	if len(composition.FoundationSkills) == 0 && composition.TaskSkill == "" {
 		composition = s.getManifestGenerationComposition()
 	}
-	// 遵守开关:仅 UseOptimized=true 才跑 domain skill AI 动态选择,覆盖 DomainSkills。
-	// 关闭时不动 composition,由 AssemblePrompt 按 DomainSkillMode 走。失败降级,不阻断。
-	if aiConfig.UseOptimized {
-		selDesc := description
-		if moduleContext != "" {
-			selDesc = description + "\n\n候选 Module:\n" + moduleContext
-		}
-		if selected, selErr := s.domainSelector.Select(selDesc); selErr != nil {
-			log.Printf("[ManifestAIService] domain skill AI 选择失败,降级: %v", selErr)
-		} else if len(selected) > 0 {
-			compCopy := *composition
-			compCopy.DomainSkills = selected
-			compCopy.DomainSkillMode = models.DomainSkillModeFixed
-			composition = &compCopy
-		}
-	}
-	// 遵守开关:仅 AutoLoadModuleSkill=true 才把候选 module 的 skill 加载进上下文。
+
+	// 步骤 4: Domain Skill + Module 选择(AI 同时选择最佳实践 skill 和相关 module)
 	moduleSkills := ""
-	if composition.AutoLoadModuleSkill {
-		moduleSkills = s.loadCandidateModuleSkills(candidates)
+	var moduleSkillNames []string
+	reportProgress(4, "Skill选择", "正在选择相关 Skill...")
+	if aiConfig.UseOptimized {
+		// 构建 module 信息列表传给 AI
+		moduleInfos := make([]manifestModuleInfo, len(candidates))
+		for i, c := range candidates {
+			moduleInfos[i] = manifestModuleInfo{
+				Name:        c.Name,
+				Source:      c.Source,
+				Versions:    c.Versions,
+				Description: c.Description,
+			}
+		}
+
+		selectedSkills, selectedModules, selErr := s.domainSelector.Select(description, moduleInfos)
+		if selErr != nil {
+			log.Printf("[ManifestAIService] skill AI 选择失败,降级: %v", selErr)
+		} else {
+			if len(selectedSkills) > 0 {
+				compCopy := *composition
+				compCopy.DomainSkills = selectedSkills
+				compCopy.DomainSkillMode = models.DomainSkillModeFixed
+				composition = &compCopy
+			}
+			// AI 选中的 modules → 加载 module_version_skills
+			if composition.AutoLoadModuleSkill && len(selectedModules) > 0 {
+				moduleSkills, moduleSkillNames = s.loadModuleSkillsByNames(selectedModules, candidates)
+			}
+		}
 	}
 
+	// 步骤 5: 组装 Prompt + AI 生成
+	reportProgress(5, "AI生成", "正在调用 AI 生成资源...")
 	dynamicContext := &DynamicContext{
 		UserDescription: description,
 		WorkspaceID:     workspaceID,
@@ -173,6 +186,8 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 		IncAICallCount("manifest_resource_generation", "skill_assembly_error")
 		return nil, fmt.Errorf("组装 Prompt 失败: %w", err)
 	}
+	// 把精确匹配加载的 module skill 名追加到 UsedSkillNames(pipeline 展示)
+	assembleResult.UsedSkillNames = append(assembleResult.UsedSkillNames, moduleSkillNames...)
 
 	aiTimer := NewTimer()
 	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
@@ -195,9 +210,10 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 	warnings := s.validateModuleBlocks(hcl)
 
 	result := &ManifestGenerateResult{
-		Status:   "complete",
-		HCL:      hcl,
-		Warnings: warnings,
+		Status:         "complete",
+		HCL:            hcl,
+		Warnings:       warnings,
+		CompletedSteps: tracker.steps(),
 	}
 
 	// 记录用量日志
@@ -232,22 +248,87 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 	return result, nil
 }
 
-// loadCandidateModuleSkills 加载候选 module 的 skill 内容,拼成喂给 AI 的上下文文本。
-// 仅在 AutoLoadModuleSkill 开关开启时由调用方触发。失败的单个 module 跳过,不阻断。
-func (s *ManifestAIService) loadCandidateModuleSkills(candidates []manifestModuleCandidate) string {
-	var b strings.Builder
-	for _, c := range candidates {
-		if c.moduleID == 0 {
-			continue
-		}
-		skill, err := s.skillAssembler.GetOrGenerateModuleSkill(c.moduleID)
-		if err != nil || skill == nil {
-			log.Printf("[ManifestAIService] 加载 module %d skill 失败,跳过: %v", c.moduleID, err)
-			continue
-		}
-		fmt.Fprintf(&b, "## Module: %s (source: %s)\n%s\n\n", c.Name, c.Source, skill.Content)
+// loadModuleSkillsByNames 按 AI 选中的 module(含版本) 加载 module_version_skills 内容。
+// 从 candidates 找到 module_id → 优先指定版本 → 回退默认版本 → module_version_skills。
+// 返回 (skill 内容文本, skill 名列表)。
+func (s *ManifestAIService) loadModuleSkillsByNames(selectedModules []selectedModule, candidates []manifestModuleCandidate) (string, []string) {
+	if len(selectedModules) == 0 {
+		return "", nil
 	}
-	return b.String()
+
+	// 构建 name → moduleID 映射
+	nameToID := make(map[string]uint, len(candidates))
+	for _, c := range candidates {
+		nameToID[c.Name] = c.moduleID
+	}
+
+	mvSvc := NewModuleVersionService(s.db)
+	var b strings.Builder
+	var names []string
+
+	for _, sel := range selectedModules {
+		moduleID, ok := nameToID[sel.Name]
+		if !ok || moduleID == 0 {
+			log.Printf("[ManifestAIService] AI 选中 module %q 不在候选中,跳过", sel.Name)
+			continue
+		}
+
+		var mv *models.ModuleVersion
+		var err error
+		versionUsed := ""
+
+		// 优先使用 AI 指定的版本
+		if sel.Version != "" {
+			mv, err = mvSvc.GetVersionByVersion(moduleID, sel.Version)
+			if err != nil || mv == nil {
+				log.Printf("[ManifestAIService] module %s 指定版本 %s 不存在,回退默认版本", sel.Name, sel.Version)
+			} else {
+				versionUsed = sel.Version
+			}
+		}
+
+		// 回退到默认版本
+		if mv == nil {
+			mv, err = mvSvc.GetDefaultVersion(moduleID)
+			if err != nil || mv == nil {
+				log.Printf("[ManifestAIService] module %s 无默认版本,跳过", sel.Name)
+				continue
+			}
+			versionUsed = mv.Version
+		}
+
+		type versionSkill struct {
+			SchemaGeneratedContent string `gorm:"column:schema_generated_content"`
+			CustomContent          string `gorm:"column:custom_content"`
+		}
+		var vs versionSkill
+		if err := s.db.Table("module_version_skills").
+			Where("module_version_id = ?", mv.ID).
+			Select("schema_generated_content", "custom_content").
+			First(&vs).Error; err != nil {
+			log.Printf("[ManifestAIService] module %s version %s 无 skill 记录,跳过", sel.Name, versionUsed)
+			continue
+		}
+		// 组合 schema_generated_content + custom_content
+		combinedContent := vs.SchemaGeneratedContent
+		if vs.CustomContent != "" {
+			if combinedContent != "" {
+				combinedContent += "\n\n---\n\n## 用户自定义补充\n\n"
+			}
+			combinedContent += vs.CustomContent
+		}
+		if combinedContent == "" {
+			log.Printf("[ManifestAIService] module %s version %s skill 内容为空,跳过", sel.Name, versionUsed)
+			continue
+		}
+
+		skillName := fmt.Sprintf("module_%d_version_skill", moduleID)
+		names = append(names, skillName)
+		fmt.Fprintf(&b, "## Module: %s (version: %s)\n%s\n\n", sel.Name, versionUsed, combinedContent)
+		log.Printf("[ManifestAIService] 精确加载 module skill: %s (%s %s)", skillName, sel.Name, versionUsed)
+	}
+
+	return b.String(), names
 }
 
 // validateModuleBlocks 对生成 HCL 里引用了「仓库已有 module」的 module 块做 schema 校验。
@@ -357,7 +438,7 @@ func (s *ManifestAIService) validateOneModuleBlock(b ParsedModuleBlock) []string
 	return out
 }
 
-// listAllModules 列出全部 active module(精简字段),交给 AI 自行按描述挑选。
+// listAllModules 列出全部 active module(精简字段 + 可用版本),交给 AI 自行按描述挑选。
 //
 // 不做关键词/向量召回筛选:module 库常用量级 ≤100,name+source+description 全列进
 // prompt 的 token 成本可控,而"中文描述↔module 语义匹配"正是 LLM 最擅长的,比 LIKE
@@ -370,7 +451,6 @@ func (s *ManifestAIService) listAllModules() []manifestModuleCandidate {
 		ID          uint   `gorm:"column:id"`
 		Name        string `gorm:"column:name"`
 		Source      string `gorm:"column:source"`
-		Version     string `gorm:"column:version"`
 		Description string `gorm:"column:description"`
 	}
 	var rows []row
@@ -378,12 +458,38 @@ func (s *ManifestAIService) listAllModules() []manifestModuleCandidate {
 	if err := s.db.Table("modules m").
 		Select(`m.id, m.name,
 				COALESCE(NULLIF(m.module_source, ''), m.source) AS source,
-				m.version, m.description`).
+				m.description`).
 		Where("m.status = ?", "active").
 		Order("m.name ASC").
 		Scan(&rows).Error; err != nil {
 		log.Printf("[ManifestAIService] 列出 module 失败: %v", err)
 		return nil
+	}
+
+	// 查询所有 module 的可用版本(从 module_versions 表)
+	type versionRow struct {
+		ModuleID uint   `gorm:"column:module_id"`
+		Version  string `gorm:"column:version"`
+	}
+	var versions []versionRow
+	if len(rows) > 0 {
+		moduleIDs := make([]uint, len(rows))
+		for i, r := range rows {
+			moduleIDs[i] = r.ID
+		}
+		if err := s.db.Table("module_versions").
+			Select("module_id, version").
+			Where("module_id IN ? AND status = ?", moduleIDs, "active").
+			Order("module_id, version DESC").
+			Scan(&versions).Error; err != nil {
+			log.Printf("[ManifestAIService] 查询 module versions 失败: %v", err)
+		}
+	}
+
+	// 按 module_id 分组版本
+	versionsByModule := make(map[uint][]string)
+	for _, v := range versions {
+		versionsByModule[v.ModuleID] = append(versionsByModule[v.ModuleID], v.Version)
 	}
 
 	candidates := make([]manifestModuleCandidate, 0, len(rows))
@@ -392,7 +498,7 @@ func (s *ManifestAIService) listAllModules() []manifestModuleCandidate {
 			moduleID:    r.ID,
 			Name:        r.Name,
 			Source:      r.Source,
-			Version:     r.Version,
+			Versions:    versionsByModule[r.ID],
 			Description: r.Description,
 		})
 	}
@@ -421,6 +527,8 @@ func manifestGenStepName(step int) string {
 	case 3:
 		return "Module候选"
 	case 4:
+		return "Skill选择"
+	case 5:
 		return "AI生成"
 	default:
 		return ""

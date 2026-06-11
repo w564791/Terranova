@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"iac-platform/internal/models"
 	"log"
@@ -80,7 +81,6 @@ type LogSkillUsageParams struct {
 // 负责根据 SkillComposition 配置组装最终的 Prompt
 type SkillAssembler struct {
 	db               *gorm.DB
-	moduleSkillGen   *ModuleSkillGenerator
 	skillCache       map[string]*models.Skill // 简单的内存缓存
 	skillCacheExpiry time.Time
 }
@@ -88,9 +88,8 @@ type SkillAssembler struct {
 // NewSkillAssembler 创建 SkillAssembler 实例
 func NewSkillAssembler(db *gorm.DB) *SkillAssembler {
 	return &SkillAssembler{
-		db:             db,
-		moduleSkillGen: NewModuleSkillGenerator(db),
-		skillCache:     make(map[string]*models.Skill),
+		db:         db,
+		skillCache: make(map[string]*models.Skill),
 	}
 }
 
@@ -401,11 +400,18 @@ func (a *SkillAssembler) GetOrGenerateModuleSkill(moduleID uint) (*models.Skill,
 				log.Printf("[SkillAssembler] 成功加载 ModuleVersionSkill, versionID=%s, contentLength=%d",
 					versionSkill.ModuleVersionID, len(combinedContent))
 
+				// 构建 description:用于 AI 智能选择(必须填,否则 selector 无法语义匹配)
+				desc := module.Description
+				if desc == "" {
+					desc = fmt.Sprintf("%s %s 模块的配置知识,包括 Schema 约束和配置示例", module.Provider, module.Name)
+				}
+
 				// 将 ModuleVersionSkill 转换为 Skill 对象返回
 				return &models.Skill{
 					ID:          versionSkill.ID,
 					Name:        fmt.Sprintf("module_%d_version_skill", moduleID),
 					DisplayName: fmt.Sprintf("%s 配置知识（版本 Skill）", module.Name),
+					Description: desc,
 					Content:     combinedContent,
 					Layer:       models.SkillLayerDomain,
 					IsActive:    true,
@@ -413,7 +419,7 @@ func (a *SkillAssembler) GetOrGenerateModuleSkill(moduleID uint) (*models.Skill,
 					SourceType:  models.SkillSourceModuleAuto,
 					Metadata: models.SkillMetadata{
 						Tags:        []string{"module", "version-skill", module.Provider},
-						Description: fmt.Sprintf("从 Module %s 默认版本加载的 Skill", module.Name),
+						Description: desc,
 					},
 				}, nil
 			} else {
@@ -428,29 +434,39 @@ func (a *SkillAssembler) GetOrGenerateModuleSkill(moduleID uint) (*models.Skill,
 		log.Printf("[SkillAssembler] Module 没有设置默认版本, moduleID=%d", moduleID)
 	}
 
-	// 3. Fallback: 从 skills 表加载自动生成的 Skill
-	log.Printf("[SkillAssembler] Fallback: 尝试加载自动生成的 Module Skill")
-	var existingSkill models.Skill
-	skillName := fmt.Sprintf("module_%d_auto", moduleID)
-
-	err := a.db.Where("name = ? AND source_module_id = ?", skillName, moduleID).First(&existingSkill).Error
-	if err == nil {
-		// 检查是否需要重新生成
-		if a.moduleSkillGen.ShouldRegenerate(&existingSkill, moduleID) {
-			log.Printf("[SkillAssembler] Module Skill 需要重新生成: %s", skillName)
-			return a.regenerateModuleSkill(moduleID, &existingSkill)
+	// Fallback: 通过 module_versions.is_default=true 查找默认版本
+	mvSvc := NewModuleVersionService(a.db)
+	if mv, err := mvSvc.GetDefaultVersion(moduleID); err == nil && mv != nil {
+		var versionSkill models.ModuleVersionSkill
+		if err := a.db.Where("module_version_id = ? AND is_active = ?", mv.ID, true).
+			First(&versionSkill).Error; err == nil {
+			if combinedContent := versionSkill.GetCombinedContent(); combinedContent != "" {
+				desc := module.Description
+				if desc == "" {
+					desc = fmt.Sprintf("%s %s 模块的配置知识,包括 Schema 约束和配置示例", module.Provider, module.Name)
+				}
+				return &models.Skill{
+					ID:          versionSkill.ID,
+					Name:        fmt.Sprintf("module_%d_version_skill", moduleID),
+					DisplayName: fmt.Sprintf("%s 配置知识（版本 Skill）", module.Name),
+					Description: desc,
+					Content:     combinedContent,
+					Layer:       models.SkillLayerDomain,
+					IsActive:    true,
+					Priority:    100,
+					SourceType:  models.SkillSourceModuleAuto,
+					Metadata: models.SkillMetadata{
+						Tags:        []string{"module", "version-skill", module.Provider},
+						Description: desc,
+					},
+				}, nil
+			}
 		}
-		log.Printf("[SkillAssembler] 使用自动生成的 Module Skill: %s", skillName)
-		return &existingSkill, nil
 	}
 
-	if err != gorm.ErrRecordNotFound {
-		return nil, fmt.Errorf("查询 Module Skill 失败: %w", err)
-	}
-
-	// 4. 不存在，生成新的
-	log.Printf("[SkillAssembler] 生成新的 Module Skill: moduleID=%d", moduleID)
-	return a.generateNewModuleSkill(moduleID)
+	// module_version_skills 无记录,返回 nil(不再 fallback 到 skills 表的 module_%d_auto)
+	log.Printf("[SkillAssembler] Module %d 的默认版本无 module_version_skills 记录", moduleID)
+	return nil, nil
 }
 
 // EvaluateCondition 评估单个条件
@@ -640,89 +656,6 @@ func (a *SkillAssembler) fillDynamicContext(prompt string, context *DynamicConte
 	}
 
 	return result
-}
-
-// generateNewModuleSkill 生成新的 Module Skill
-func (a *SkillAssembler) generateNewModuleSkill(moduleID uint) (*models.Skill, error) {
-	// 获取 Module 信息
-	var module models.Module
-	if err := a.db.First(&module, moduleID).Error; err != nil {
-		return nil, fmt.Errorf("Module 不存在: %w", err)
-	}
-
-	// 获取 Schema
-	var schema models.Schema
-	if err := a.db.Where("module_id = ? AND status = ?", moduleID, "active").First(&schema).Error; err != nil {
-		log.Printf("[SkillAssembler] Module %d 没有活跃的 Schema，跳过 Skill 生成", moduleID)
-		return nil, nil
-	}
-
-	// 生成 Skill 内容
-	content, err := a.moduleSkillGen.GenerateSkillContent(&module, &schema)
-	if err != nil {
-		return nil, fmt.Errorf("生成 Skill 内容失败: %w", err)
-	}
-
-	// 创建 Skill 记录
-	skill := &models.Skill{
-		ID:             uuid.New().String(),
-		Name:           fmt.Sprintf("module_%d_auto", moduleID),
-		DisplayName:    fmt.Sprintf("%s 配置知识", module.Name),
-		Layer:          models.SkillLayerDomain,
-		Content:        content,
-		Version:        "1.0.0",
-		IsActive:       true,
-		Priority:       100, // Module Skill 优先级较低
-		SourceType:     models.SkillSourceModuleAuto,
-		SourceModuleID: &moduleID,
-		Metadata: models.SkillMetadata{
-			Tags:        []string{"module", "auto-generated", module.Provider},
-			Description: fmt.Sprintf("从 Module %s 自动生成的配置知识", module.Name),
-		},
-	}
-
-	if err := a.db.Create(skill).Error; err != nil {
-		return nil, fmt.Errorf("保存 Module Skill 失败: %w", err)
-	}
-
-	log.Printf("[SkillAssembler] 成功生成 Module Skill: %s", skill.Name)
-	return skill, nil
-}
-
-// regenerateModuleSkill 重新生成 Module Skill
-func (a *SkillAssembler) regenerateModuleSkill(moduleID uint, existingSkill *models.Skill) (*models.Skill, error) {
-	// 获取 Module 信息
-	var module models.Module
-	if err := a.db.First(&module, moduleID).Error; err != nil {
-		return nil, fmt.Errorf("Module 不存在: %w", err)
-	}
-
-	// 获取 Schema
-	var schema models.Schema
-	if err := a.db.Where("module_id = ? AND status = ?", moduleID, "active").First(&schema).Error; err != nil {
-		return existingSkill, nil // 没有 Schema，返回现有的
-	}
-
-	// 生成新内容
-	content, err := a.moduleSkillGen.GenerateSkillContent(&module, &schema)
-	if err != nil {
-		return existingSkill, nil // 生成失败，返回现有的
-	}
-
-	// 更新版本号
-	newVersion := incrementVersion(existingSkill.Version)
-
-	// 更新 Skill
-	existingSkill.Content = content
-	existingSkill.Version = newVersion
-	existingSkill.UpdatedAt = time.Now()
-
-	if err := a.db.Save(existingSkill).Error; err != nil {
-		return nil, fmt.Errorf("更新 Module Skill 失败: %w", err)
-	}
-
-	log.Printf("[SkillAssembler] 成功更新 Module Skill: %s -> %s", existingSkill.Name, newVersion)
-	return existingSkill, nil
 }
 
 // LogSkillUsage 记录 Skill 使用日志
@@ -984,7 +917,7 @@ func (a *SkillAssembler) buildSkillManifest(skills []*models.Skill) string {
 	return sb.String()
 }
 
-// buildMetaRulesPreamble 生成元规则段落
+// buildMetaRulesPreamble 生成元规则段落（包裹在 XML 标签中）
 func (a *SkillAssembler) buildMetaRulesPreamble(config *models.MetaRulesConfig, skills []*models.Skill) string {
 	template := defaultMetaRulesTemplate
 	if config != nil && config.Template != "" {
@@ -992,52 +925,105 @@ func (a *SkillAssembler) buildMetaRulesPreamble(config *models.MetaRulesConfig, 
 	}
 
 	manifest := a.buildSkillManifest(skills)
-	return strings.ReplaceAll(template, "{skill_manifest}", manifest)
-}
+	content := strings.ReplaceAll(template, "{skill_manifest}", manifest)
 
-// getSectionHeader 根据 Skill 的 Layer 和 SourceType 返回分段标题
-func (a *SkillAssembler) getSectionHeader(skill *models.Skill) string {
-	switch skill.Layer {
-	case models.SkillLayerFoundation:
-		return "[Foundation Layer]"
-	case models.SkillLayerDomain:
-		if skill.SourceType == models.SkillSourceModuleAuto {
-			return "[Domain Layer - Module Constraints]"
-		}
-		return "[Domain Layer - Best Practice]"
-	case models.SkillLayerTask:
-		return "[Task Layer]"
-	default:
-		return "[Unknown Layer]"
-	}
-}
-
-// buildSectionedPrompt 带分段标记的组装
-func (a *SkillAssembler) buildSectionedPrompt(skills []*models.Skill) string {
 	var sb strings.Builder
-	currentSection := ""
+	sb.WriteString("<meta_rules>\n")
+	sb.WriteString(content)
+	sb.WriteString("</meta_rules>\n\n")
+
+	return sb.String()
+}
+
+// buildSectionedPrompt 使用 XML 标签按层级组装 Prompt
+func (a *SkillAssembler) buildSectionedPrompt(skills []*models.Skill) string {
+	var parts []string
+
+	// 按 layer 分组
+	var taskSkills, foundationSkills, domainBestPracticeSkills, domainModuleConstraintSkills []*models.Skill
 
 	for _, skill := range skills {
 		if !skill.IsActive {
 			continue
 		}
 
-		section := a.getSectionHeader(skill)
-		if section != currentSection {
-			if currentSection != "" {
-				sb.WriteString("\n\n")
+		switch skill.Layer {
+		case models.SkillLayerTask:
+			taskSkills = append(taskSkills, skill)
+		case models.SkillLayerFoundation:
+			foundationSkills = append(foundationSkills, skill)
+		case models.SkillLayerDomain:
+			if skill.SourceType == models.SkillSourceModuleAuto {
+				domainModuleConstraintSkills = append(domainModuleConstraintSkills, skill)
+			} else {
+				domainBestPracticeSkills = append(domainBestPracticeSkills, skill)
 			}
-			sb.WriteString(fmt.Sprintf("## %s\n\n", section))
-			currentSection = section
-		} else {
-			sb.WriteString("\n\n")
 		}
-
-		sb.WriteString(fmt.Sprintf("--- skill: %s (v%s) ---\n", skill.Name, skill.Version))
-		sb.WriteString(skill.Content)
 	}
 
-	return sb.String()
+	// 输出 task_layer
+	if len(taskSkills) > 0 {
+		xmlContent := a.buildSkillsXML(taskSkills)
+		parts = append(parts, fmt.Sprintf("<task_layer>\n%s\n</task_layer>", xmlContent))
+	}
+
+	// 输出 foundation_layer
+	if len(foundationSkills) > 0 {
+		xmlContent := a.buildSkillsXML(foundationSkills)
+		parts = append(parts, fmt.Sprintf("<foundation_layer>\n%s\n</foundation_layer>", xmlContent))
+	}
+
+	// 输出 domain_layer（包含子层）
+	if len(domainBestPracticeSkills) > 0 || len(domainModuleConstraintSkills) > 0 {
+		var domainParts []string
+
+		if len(domainBestPracticeSkills) > 0 {
+			xmlContent := a.buildSkillsXML(domainBestPracticeSkills)
+			domainParts = append(domainParts, fmt.Sprintf("  <best_practice>\n%s\n  </best_practice>", xmlContent))
+		}
+
+		if len(domainModuleConstraintSkills) > 0 {
+			xmlContent := a.buildSkillsXML(domainModuleConstraintSkills)
+			domainParts = append(domainParts, fmt.Sprintf("  <module_constraints>\n%s\n  </module_constraints>", xmlContent))
+		}
+
+		parts = append(parts, fmt.Sprintf("<domain_layer>\n%s\n</domain_layer>", strings.Join(domainParts, "\n\n")))
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+// skillXMLElement 用于 XML 序列化的 Skill 结构
+type skillXMLElement struct {
+	XMLName  xml.Name `xml:"skill"`
+	Name     string   `xml:"name,attr"`
+	Version  string   `xml:"version,attr"`
+	Priority int      `xml:"priority,attr"`
+	Content  string   `xml:",chardata"`
+}
+
+// buildSkillsXML 将一组 Skills 序列化为 XML
+func (a *SkillAssembler) buildSkillsXML(skills []*models.Skill) string {
+	var parts []string
+
+	for _, skill := range skills {
+		elem := skillXMLElement{
+			Name:     skill.Name,
+			Version:  skill.Version,
+			Priority: skill.Priority,
+			Content:  "\n" + skill.Content + "\n",
+		}
+
+		data, err := xml.Marshal(elem)
+		if err != nil {
+			log.Printf("[SkillAssembler] XML 序列化 Skill '%s' 失败: %v", skill.Name, err)
+			continue
+		}
+
+		parts = append(parts, string(data))
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 // sourceTypeOrder 返回 SourceType 的排序权重

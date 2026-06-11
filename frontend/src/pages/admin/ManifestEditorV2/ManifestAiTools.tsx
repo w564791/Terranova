@@ -17,6 +17,7 @@ import {
   type ManifestIssue,
   type ManifestAISession,
   type ManifestAIMessage,
+  type ManifestCompletedStep,
 } from '../../../services/manifestAi'
 import {
   AI_PANEL_WIDTH,
@@ -26,7 +27,6 @@ import {
   chatHeaderIcon,
   chatBodyStyle,
   chatEmptyStyle,
-  chatProgressStyle,
   sessionListStyle,
   sessionItemStyle,
   historyMsgStyle,
@@ -40,7 +40,19 @@ import {
   chatInputFooterStyle,
   errorStyle,
   genWarnStyle,
+  pipelineStyle,
+  pipelineStepStyle,
+  pipelineSkillStyle,
+  pipelineSkillTagStyle,
 } from './manifestAiStyles'
+
+const GEN_STEP_DESC: Record<string, string> = {
+  初始化: '获取 AI 配置',
+  意图断言: '安全守卫',
+  Module候选: '列出 Module 库',
+  Skill选择: 'AI 语义选择 Domain + 精确匹配 Module Skill',
+  AI生成: '组装 Skill 并调用 AI',
+}
 
 /** 选区快照:用于在面板上展示"已附带的上下文" */
 export interface SelectionInfo {
@@ -126,6 +138,9 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
   const [genStep, setGenStep] = useState<ManifestProgressEvent | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
   const [genWarnings, setGenWarnings] = useState<string[]>([]) // schema 校验警告
+  const [genCompletedSteps, setGenCompletedSteps] = useState<ManifestCompletedStep[]>([])
+  const [genCurrentStep, setGenCurrentStep] = useState('')
+  const [stepsExpanded, setStepsExpanded] = useState(true)
   // 打开面板时快照的上下文(选区优先,否则当前文件),作为 chip 展示,用户可移除
   const [aiContext, setAiContext] = useState<AiContext | null>(null)
 
@@ -232,6 +247,8 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
     setGenStep(null)
     setGenError(null)
     setGenWarnings([])
+    setGenCompletedSteps([])
+    setGenCurrentStep('')
     const sel = bridge.getSelectionInfo()
     if (sel) {
       setAiContext({
@@ -272,6 +289,8 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
     setGenError(null)
     setGenStep(null)
     setGenWarnings([])
+    setGenCompletedSteps([])
+    setGenCurrentStep('')
     const controller = new AbortController()
     genAbortRef.current = controller
 
@@ -284,9 +303,16 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
           sessionId: sid,
           contextIds: bridge.contextIds,
         },
-        (ev) => setGenStep(ev),
+        (ev) => {
+          setGenStep(ev)
+          setGenCurrentStep(ev.step_name || '')
+          if (ev.completed_steps?.length) setGenCompletedSteps(ev.completed_steps)
+        },
         controller.signal,
       )
+
+      if (result.completedSteps?.length) setGenCompletedSteps(result.completedSteps)
+      setGenCurrentStep('')
 
       if (result.status === 'blocked') {
         setGenError(result.message || '请求被安全策略拦截')
@@ -340,7 +366,25 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
           <div style={chatHeaderStyle}>
             <span style={{ color: '#cccccc', fontWeight: 600 }}>AI 生成</span>
             <span style={chatHeaderUnderline} />
+            {genBusy ? (
+              <span style={{ opacity: 0.7, fontSize: 12, marginLeft: 8 }}>
+                {genCurrentStep}
+              </span>
+            ) : genCompletedSteps.length > 0 ? (
+              <span style={{ opacity: 0.6, fontSize: 12, marginLeft: 8 }}>
+                完成 · {genCompletedSteps.length} 步 ·{' '}
+                {Math.round(genCompletedSteps.reduce((s, st) => s + (st.elapsed_ms || 0), 0))}ms
+              </span>
+            ) : null}
             <div style={{ flex: 1 }} />
+            {(genCompletedSteps.length > 0 || (genBusy && genCurrentStep)) && (
+              <i
+                className={`codicon ${stepsExpanded ? 'codicon-chevron-up' : 'codicon-chevron-down'}`}
+                title={stepsExpanded ? '收起步骤' : '展开步骤'}
+                style={chatHeaderIcon}
+                onClick={() => setStepsExpanded((v) => !v)}
+              />
+            )}
             <i
               className="codicon codicon-history"
               title="历史会话"
@@ -411,30 +455,45 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
             {history.map((m) => (
               <ManifestHistoryMessage key={m.id} msg={m} onJump={bridge.revealAt} />
             ))}
-            {!genBusy && !genStep && !genError && history.length === 0 && (
+            {!genBusy && !genStep && !genError && !genCompletedSteps.length && history.length === 0 && (
               <div style={chatEmptyStyle}>
                 <i className="codicon codicon-sparkle" style={{ fontSize: 40, opacity: 0.5 }} />
                 <div style={{ fontSize: 15, fontWeight: 600 }}>使用智能体构建</div>
                 <div style={{ fontSize: 12, opacity: 0.6 }}>AI 答复可能不准确</div>
               </div>
             )}
-            {genStep && (
-              <div style={chatProgressStyle}>
-                <i
-                  className={`codicon ${
-                    genStep.type === 'complete' ? 'codicon-check' : 'codicon-loading codicon-modifier-spin'
-                  }`}
-                />
-                <span>
-                  {genStep.step_name}
-                  {genStep.total_steps ? ` (${genStep.step}/${genStep.total_steps})` : ''}
-                  {genStep.message ? ` — ${genStep.message}` : ''}
-                </span>
-                {genStep.elapsed_ms ? (
-                  <span style={{ opacity: 0.5, marginLeft: 'auto' }}>{Math.round(genStep.elapsed_ms)}ms</span>
-                ) : null}
-              </div>
-            )}
+            {/* pipeline 步骤:生成中默认展示(可 toggle),完成后需用户展开 */}
+            {(() => {
+              const hasSteps = genCompletedSteps.length > 0 || (genBusy && genCurrentStep)
+              const showPipeline = genBusy ? stepsExpanded : (stepsExpanded && genCompletedSteps.length > 0)
+              if (!hasSteps || !showPipeline) return null
+              return (
+                <div style={pipelineStyle}>
+                  {genCompletedSteps.map((st, i) => (
+                    <div key={i} style={pipelineStepStyle}>
+                      <i className="codicon codicon-pass-filled" style={{ color: '#4ec9b0' }} />
+                      <span style={{ fontWeight: 500 }}>{st.name}</span>
+                      <span style={{ opacity: 0.6 }}>· {GEN_STEP_DESC[st.name] || ''}</span>
+                      <span style={{ marginLeft: 'auto', opacity: 0.5 }}>{Math.round(st.elapsed_ms)}ms</span>
+                      {st.used_skills && st.used_skills.length > 0 && (
+                        <div style={pipelineSkillStyle}>
+                          {st.used_skills.map((sk) => (
+                            <span key={sk} style={pipelineSkillTagStyle}>{sk}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {genBusy && genCurrentStep && !genCompletedSteps.some((s) => s.name === genCurrentStep) && (
+                    <div style={{ ...pipelineStepStyle, opacity: 0.6 }}>
+                      <i className="codicon codicon-loading codicon-modifier-spin" style={{ color: '#3794ff' }} />
+                      <span>{genCurrentStep}</span>
+                      <span style={{ opacity: 0.6 }}>· {GEN_STEP_DESC[genCurrentStep] || ''}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             {genError && <div style={errorStyle}>{genError}</div>}
             {genWarnings.length > 0 && (
               <div style={genWarnStyle}>

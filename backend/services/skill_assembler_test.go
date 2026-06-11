@@ -328,31 +328,37 @@ func TestBuildSkillManifest(t *testing.T) {
 func TestBuildSectionedPrompt(t *testing.T) {
 	a := &SkillAssembler{}
 	skills := []*models.Skill{
-		{ID: "s1", Name: "base_rule", Layer: models.SkillLayerFoundation, SourceType: models.SkillSourceManual, Version: "1.0.0", IsActive: true, Content: "Foundation content"},
-		{ID: "s2", Name: "aws_best", Layer: models.SkillLayerDomain, SourceType: models.SkillSourceManual, Version: "1.0.0", IsActive: true, Content: "Domain best practice"},
-		{ID: "s3", Name: "module_auto", Layer: models.SkillLayerDomain, SourceType: models.SkillSourceModuleAuto, Version: "1.0.0", IsActive: true, Content: "Module constraints"},
-		{ID: "s4", Name: "gen_workflow", Layer: models.SkillLayerTask, SourceType: models.SkillSourceManual, Version: "1.0.0", IsActive: true, Content: "Task workflow"},
+		{ID: "s1", Name: "base_rule", Layer: models.SkillLayerFoundation, SourceType: models.SkillSourceManual, Version: "1.0.0", Priority: 0, IsActive: true, Content: "Foundation content"},
+		{ID: "s2", Name: "aws_best", Layer: models.SkillLayerDomain, SourceType: models.SkillSourceManual, Version: "1.0.0", Priority: 0, IsActive: true, Content: "Domain best practice"},
+		{ID: "s3", Name: "module_auto", Layer: models.SkillLayerDomain, SourceType: models.SkillSourceModuleAuto, Version: "1.0.0", Priority: 0, IsActive: true, Content: "Module constraints"},
+		{ID: "s4", Name: "gen_workflow", Layer: models.SkillLayerTask, SourceType: models.SkillSourceManual, Version: "1.0.0", Priority: 0, IsActive: true, Content: "Task workflow"},
 	}
 
 	result := a.buildSectionedPrompt(skills)
 
-	if !strings.Contains(result, "[Foundation Layer]") {
-		t.Error("should contain Foundation Layer section")
+	if !strings.Contains(result, "<foundation_layer>") {
+		t.Error("should contain foundation_layer XML tag")
 	}
-	if !strings.Contains(result, "[Domain Layer - Best Practice]") {
-		t.Error("should contain Domain Layer - Best Practice section")
+	if !strings.Contains(result, "<best_practice>") {
+		t.Error("should contain best_practice XML tag")
 	}
-	if !strings.Contains(result, "[Domain Layer - Module Constraints]") {
-		t.Error("should contain Domain Layer - Module Constraints section")
+	if !strings.Contains(result, "<module_constraints>") {
+		t.Error("should contain module_constraints XML tag")
 	}
-	if !strings.Contains(result, "[Task Layer]") {
-		t.Error("should contain Task Layer section")
+	if !strings.Contains(result, "<task_layer>") {
+		t.Error("should contain task_layer XML tag")
 	}
 	if !strings.Contains(result, "Foundation content") {
 		t.Error("should include foundation skill content")
 	}
-	if !strings.Contains(result, "--- skill: base_rule (v1.0.0) ---") {
-		t.Error("should include skill name/version markers")
+	if !strings.Contains(result, `name="base_rule"`) {
+		t.Error("should include skill name attribute")
+	}
+	if !strings.Contains(result, `version="1.0.0"`) {
+		t.Error("should include skill version attribute")
+	}
+	if !strings.Contains(result, `priority="0"`) {
+		t.Error("should include skill priority attribute")
 	}
 }
 
@@ -486,33 +492,6 @@ func TestDiscoverDomainSkillsFromContent_ConditionalRequire(t *testing.T) {
 	skills := a.discoverDomainSkillsFromContent(content, ctx)
 	if len(skills) != 0 {
 		t.Errorf("expected 0 skills (none in DB), got %d", len(skills))
-	}
-}
-
-// ========== getSectionHeader Tests ==========
-
-func TestGetSectionHeader(t *testing.T) {
-	a := &SkillAssembler{}
-
-	tests := []struct {
-		name     string
-		skill    *models.Skill
-		expected string
-	}{
-		{"foundation", &models.Skill{Layer: models.SkillLayerFoundation}, "[Foundation Layer]"},
-		{"domain manual", &models.Skill{Layer: models.SkillLayerDomain, SourceType: models.SkillSourceManual}, "[Domain Layer - Best Practice]"},
-		{"domain auto", &models.Skill{Layer: models.SkillLayerDomain, SourceType: models.SkillSourceModuleAuto}, "[Domain Layer - Module Constraints]"},
-		{"task", &models.Skill{Layer: models.SkillLayerTask}, "[Task Layer]"},
-		{"unknown", &models.Skill{Layer: "unknown"}, "[Unknown Layer]"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := a.getSectionHeader(tt.skill)
-			if got != tt.expected {
-				t.Errorf("getSectionHeader: got %q, want %q", got, tt.expected)
-			}
-		})
 	}
 }
 

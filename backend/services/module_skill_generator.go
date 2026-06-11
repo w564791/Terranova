@@ -6,7 +6,6 @@ import (
 	"iac-platform/internal/models"
 	"log"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -243,88 +242,6 @@ func (g *ModuleSkillGenerator) ExtractDemoExamples(moduleID uint) string {
 	}
 
 	return sb.String()
-}
-
-// ShouldRegenerate 判断是否需要重新生成 Skill
-func (g *ModuleSkillGenerator) ShouldRegenerate(skill *models.Skill, moduleID uint) bool {
-	if skill == nil {
-		return true
-	}
-
-	// 检查 Module 更新时间
-	var module models.Module
-	if err := g.db.First(&module, moduleID).Error; err != nil {
-		return false
-	}
-
-	// 如果 Module 更新时间晚于 Skill 更新时间，需要重新生成
-	if module.UpdatedAt.After(skill.UpdatedAt) {
-		return true
-	}
-
-	// 检查 Schema 更新时间
-	var schema models.Schema
-	if err := g.db.Where("module_id = ? AND status = ?", moduleID, "active").First(&schema).Error; err == nil {
-		if schema.UpdatedAt.After(skill.UpdatedAt) {
-			return true
-		}
-	}
-
-	// 检查 Demo 更新时间
-	var latestDemo models.ModuleDemo
-	if err := g.db.Where("module_id = ?", moduleID).Order("updated_at DESC").First(&latestDemo).Error; err == nil {
-		if latestDemo.UpdatedAt.After(skill.UpdatedAt) {
-			return true
-		}
-	}
-
-	// 如果 Skill 超过 24 小时未更新，也重新生成
-	if time.Since(skill.UpdatedAt) > 24*time.Hour {
-		return true
-	}
-
-	return false
-}
-
-// GenerateSkillFromModule 从 Module 生成完整的 Skill 对象
-func (g *ModuleSkillGenerator) GenerateSkillFromModule(moduleID uint) (*models.Skill, error) {
-	// 获取 Module
-	var module models.Module
-	if err := g.db.First(&module, moduleID).Error; err != nil {
-		return nil, fmt.Errorf("Module 不存在: %w", err)
-	}
-
-	// 获取 Schema
-	var schema models.Schema
-	if err := g.db.Where("module_id = ? AND status = ?", moduleID, "active").First(&schema).Error; err != nil {
-		log.Printf("[ModuleSkillGenerator] Module %d 没有活跃的 Schema", moduleID)
-		schema = models.Schema{} // 使用空 Schema
-	}
-
-	// 生成内容
-	content, err := g.GenerateSkillContent(&module, &schema)
-	if err != nil {
-		return nil, err
-	}
-
-	// 创建 Skill 对象
-	skill := &models.Skill{
-		Name:           fmt.Sprintf("module_%d_auto", moduleID),
-		DisplayName:    fmt.Sprintf("%s 配置知识", module.Name),
-		Layer:          models.SkillLayerDomain,
-		Content:        content,
-		Version:        "1.0.0",
-		IsActive:       true,
-		Priority:       100,
-		SourceType:     models.SkillSourceModuleAuto,
-		SourceModuleID: &moduleID,
-		Metadata: models.SkillMetadata{
-			Tags:        []string{"module", "auto-generated", module.Provider},
-			Description: fmt.Sprintf("从 Module %s 自动生成的配置知识", module.Name),
-		},
-	}
-
-	return skill, nil
 }
 
 // PreviewSkillContent 预览 Skill 内容（不保存）

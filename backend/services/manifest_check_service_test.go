@@ -1,17 +1,16 @@
 package services
 
 import (
+	"strings"
 	"testing"
 	"time"
-
-	"iac-platform/internal/models"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func TestResolveReferencedModuleSkillNamesMatchesModuleVersionSource(t *testing.T) {
+func TestResolveModuleVersionSkillsForCheckMatchesModuleVersionSource(t *testing.T) {
 	db := newManifestCheckTestDB(t)
 	now := time.Now()
 
@@ -23,22 +22,22 @@ func TestResolveReferencedModuleSkillNamesMatchesModuleVersionSource(t *testing.
 		t.Fatalf("create module: %v", err)
 	}
 	if err := db.Exec(
-		`INSERT INTO module_versions (id, module_id, version, source, module_source, status, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"modv-s3", 54, "1.0.0", "platform/aws-s3", "platform/aws-s3", "active", now.Add(-time.Hour), now.Add(-time.Hour),
+		`INSERT INTO module_versions (id, module_id, version, source, module_source, is_default, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"modv-s3", 54, "1.0.0", "platform/aws-s3", "platform/aws-s3", true, "active", now.Add(-time.Hour), now.Add(-time.Hour),
 	).Error; err != nil {
 		t.Fatalf("create module version: %v", err)
 	}
 	if err := db.Exec(
-		`INSERT INTO skills (id, name, display_name, layer, content, version, is_active, priority, source_type, source_module_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		"skill-module-54", "module_54_auto", "S3 Module", models.SkillLayerDomain, "s3 module constraints", "1.0.0", true, 100, models.SkillSourceModuleAuto, 54, now, now,
+		`INSERT INTO module_version_skills (id, module_version_id, schema_generated_content, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		"mvs-s3", "modv-s3", "s3 module constraints", now, now,
 	).Error; err != nil {
-		t.Fatalf("create skill: %v", err)
+		t.Fatalf("create module version skill: %v", err)
 	}
 
 	svc := NewManifestCheckService(db)
-	got := svc.resolveReferencedModuleSkillNames([]CheckFileInput{{
+	content, names := svc.resolveModuleVersionSkillsForCheck([]CheckFileInput{{
 		Path: "s3/main.tf",
 		Content: `
 module "bucket" {
@@ -48,8 +47,11 @@ module "bucket" {
 		StartLine: 1,
 	}})
 
-	if len(got) != 1 || got[0] != "module_54_auto" {
-		t.Fatalf("resolveReferencedModuleSkillNames() = %#v, want [module_54_auto]", got)
+	if len(names) != 1 || names[0] != "module_54_version_skill" {
+		t.Fatalf("resolveModuleVersionSkillsForCheck() names = %#v, want [module_54_version_skill]", names)
+	}
+	if !strings.Contains(content, "s3 module constraints") {
+		t.Fatalf("resolveModuleVersionSkillsForCheck() content missing skill text")
 	}
 }
 
@@ -78,7 +80,16 @@ func newManifestCheckTestDB(t *testing.T) *gorm.DB {
 			version TEXT,
 			source TEXT,
 			module_source TEXT,
+			is_default INTEGER DEFAULT 0,
 			status TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE module_version_skills (
+			id TEXT PRIMARY KEY,
+			module_version_id TEXT,
+			schema_generated_content TEXT,
+			custom_content TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
@@ -86,6 +97,7 @@ func newManifestCheckTestDB(t *testing.T) *gorm.DB {
 			id TEXT PRIMARY KEY,
 			name TEXT,
 			display_name TEXT,
+			description TEXT,
 			layer TEXT,
 			content TEXT,
 			version TEXT,

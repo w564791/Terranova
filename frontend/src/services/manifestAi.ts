@@ -147,6 +147,7 @@ export interface GenerateResourceResult {
   message?: string
   warnings?: string[]
   usageLogId?: string
+  completedSteps?: ManifestCompletedStep[]
 }
 
 /** 生成/修复 manifest 资源(SSE 实时进度) */
@@ -176,6 +177,7 @@ export async function generateManifestResource(
     message: final.message,
     warnings: final.warnings,
     usageLogId: final.usage_log_id,
+    completedSteps: final.completed_steps,
   }
 }
 

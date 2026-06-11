@@ -39,6 +39,7 @@ const CHECK_STEP_DESC: Record<string, string> = {
   初始化: '获取 AI 配置',
   意图断言: '安全守卫:检测内容是否含注入',
   打包内容: '当前文件 + 跨文件引用',
+  Skill选择: 'AI 语义选择 Domain + 精确匹配 Module Skill',
   AI检查: '组装 Skill 并调用 AI 检查',
 }
 

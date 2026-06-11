@@ -1367,7 +1367,7 @@ const AIConfigForm = () => {
                               color: '#389e0d'
                             }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>✓ 自动发现模式已启用，Domain Skills 将根据 Task Skill 的 domain_tags 自动匹配</span>
+                                <span>✓ 自动发现模式已启用，Domain Skills 将自动匹配</span>
                                 <button
                                   type="button"
                                   onClick={handlePreviewDiscovery}
@@ -1516,9 +1516,11 @@ const AIConfigForm = () => {
                           </div>
                         </div>
 
-                        {/* Module Skill 自动加载选项（仅 form_generation 显示，module_skill_generation 不需要） */}
-                        {(formData.capabilities.includes('*') || 
-                          formData.capabilities.includes(CAPABILITIES.FORM_GENERATION)) && 
+                        {/* Module Skill 自动加载选项（form_generation / manifest 场景显示，module_skill_generation 不需要） */}
+                        {(formData.capabilities.includes('*') ||
+                          formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) ||
+                          formData.capabilities.includes(CAPABILITIES.MANIFEST_RESOURCE_GENERATION) ||
+                          formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) &&
                          !formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) && (
                           <div style={{ marginBottom: '12px' }}>
                             <label style={{ 
@@ -1591,9 +1593,11 @@ const AIConfigForm = () => {
                                 : <span style={{ color: '#999' }}>（未选择，将使用默认）</span>
                               }
                             </div>
-                            {/* 仅 form_generation 显示 Module Skill 加载状态 */}
-                            {(formData.capabilities.includes('*') || 
-                              formData.capabilities.includes(CAPABILITIES.FORM_GENERATION)) && 
+                            {/* form_generation / manifest 场景显示 Module Skill 加载状态 */}
+                            {(formData.capabilities.includes('*') ||
+                              formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) ||
+                              formData.capabilities.includes(CAPABILITIES.MANIFEST_RESOURCE_GENERATION) ||
+                              formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) &&
                              !formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) && (
                               <div>
                                 <span style={{ color: '#faad14' }}>Module Skill:</span>{' '}

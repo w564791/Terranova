@@ -18,6 +18,7 @@ export const chatPanelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   zIndex: 60,
+  userSelect: 'text', // 覆盖 .toolbar 继承的 user-select:none,允许复制面板内容
 }
 export const chatHeaderStyle: React.CSSProperties = {
   position: 'relative',

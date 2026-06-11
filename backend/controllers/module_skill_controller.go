@@ -1,14 +1,12 @@
 package controllers
 
 import (
-	"fmt"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -51,18 +49,19 @@ func (c *ModuleSkillController) GetModuleSkill(ctx *gin.Context) {
 		return
 	}
 
-	// 查找 Module 关联的 Skill
-	var skill models.Skill
-	if err := c.db.Where("source_module_id = ?", moduleID).First(&skill).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"error":   "Module 没有关联的 Skill",
-				"message": "可以使用 POST /modules/{module_id}/skill/generate 生成",
-			})
-			return
-		}
+	// 从 module_version_skills 加载默认版本的 Skill
+	skill, err := c.skillAssembler.GetOrGenerateModuleSkill(uint(moduleID))
+	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "查询失败",
+			"error":   "查询失败",
+			"details": err.Error(),
+		})
+		return
+	}
+	if skill == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error":   "Module 没有关联的 Skill",
+			"message": "该 Module 的默认版本没有 module_version_skills 记录",
 		})
 		return
 	}
@@ -94,36 +93,7 @@ func (c *ModuleSkillController) GenerateModuleSkill(ctx *gin.Context) {
 		return
 	}
 
-	force := ctx.Query("force") == "true"
-
-	// 检查 Module 是否存在
-	var module models.Module
-	if err := c.db.First(&module, moduleID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			ctx.JSON(http.StatusNotFound, gin.H{
-				"error": "Module 不存在",
-			})
-			return
-		}
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "查询失败",
-		})
-		return
-	}
-
-	// 检查是否已存在 Skill
-	var existingSkill models.Skill
-	skillExists := c.db.Where("source_module_id = ?", moduleID).First(&existingSkill).Error == nil
-
-	if skillExists && !force {
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "Skill 已存在，使用 force=true 强制重新生成",
-			"skill":   existingSkill,
-		})
-		return
-	}
-
-	// 生成 Skill
+	// 从 module_version_skills 获取(或生成)Skill
 	skill, err := c.skillAssembler.GetOrGenerateModuleSkill(uint(moduleID))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -135,7 +105,7 @@ func (c *ModuleSkillController) GenerateModuleSkill(ctx *gin.Context) {
 
 	if skill == nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "无法生成 Skill，Module 可能没有活跃的 Schema",
+			"error": "无法获取 Skill，该 Module 的默认版本没有 module_version_skills 记录",
 		})
 		return
 	}
@@ -304,96 +274,3 @@ func (c *ModuleSkillController) DeleteModuleSkill(ctx *gin.Context) {
 	})
 }
 
-// BatchGenerateModuleSkills 批量生成 Module Skills
-// @Summary 批量生成 Module Skills
-// @Description 为所有有活跃 Schema 的 Module 生成 Skill，此方法未注册到路由
-// @Tags Module Skill
-// @Accept json
-// @Produce json
-// @Param force query bool false "是否强制重新生成已存在的"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]string
-// @Security BearerAuth
-func (c *ModuleSkillController) BatchGenerateModuleSkills(ctx *gin.Context) {
-	force := ctx.Query("force") == "true"
-
-	// 获取所有有活跃 Schema 的 Module
-	var modules []models.Module
-	if err := c.db.Joins("JOIN schemas ON schemas.module_id = modules.id AND schemas.status = 'active'").
-		Group("modules.id").
-		Find(&modules).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "查询 Module 失败",
-		})
-		return
-	}
-
-	var generated, skipped, failed int
-	var errors []string
-
-	for _, module := range modules {
-		// 检查是否已存在 Skill
-		var existingSkill models.Skill
-		skillExists := c.db.Where("source_module_id = ?", module.ID).First(&existingSkill).Error == nil
-
-		if skillExists && !force {
-			skipped++
-			continue
-		}
-
-		// 生成 Skill
-		skill, err := c.skillGenerator.GenerateSkillFromModule(module.ID)
-		if err != nil {
-			failed++
-			errors = append(errors, module.Name+": "+err.Error())
-			continue
-		}
-
-		if skill == nil {
-			skipped++
-			continue
-		}
-
-		// 保存或更新
-		if skillExists {
-			existingSkill.Content = skill.Content
-			existingSkill.Version = incrementSkillVersion(existingSkill.Version)
-			if err := c.db.Save(&existingSkill).Error; err != nil {
-				failed++
-				errors = append(errors, module.Name+": 保存失败")
-				continue
-			}
-		} else {
-			skill.ID = uuid.New().String()
-			if err := c.db.Create(skill).Error; err != nil {
-				failed++
-				errors = append(errors, module.Name+": 创建失败")
-				continue
-			}
-		}
-		generated++
-	}
-
-	// 清除缓存
-	c.skillAssembler.ClearCache()
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"total_modules": len(modules),
-		"generated":     generated,
-		"skipped":       skipped,
-		"failed":        failed,
-		"errors":        errors,
-	})
-}
-
-// incrementSkillVersion 递增版本号
-func incrementSkillVersion(version string) string {
-	// 简单实现：1.0.0 -> 1.0.1
-	parts := []int{1, 0, 0}
-	n, _ := fmt.Sscanf(version, "%d.%d.%d", &parts[0], &parts[1], &parts[2])
-	if n == 3 {
-		parts[2]++
-		return strconv.Itoa(parts[0]) + "." + strconv.Itoa(parts[1]) + "." + strconv.Itoa(parts[2])
-	}
-	return "1.0.1"
-}

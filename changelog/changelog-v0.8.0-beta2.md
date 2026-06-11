@@ -89,3 +89,72 @@ Manifest 编辑器 V2 交互体验全面升级:发布版本支持跳过检查、
 - **useEffect 依赖触发**:每个面板打开时通过 `useEffect` 检测并关闭其他面板,如 `runOpen` 变化时检查 `aiPanelWidth`/`checkPanelOpen`/`deployOpen` 并逐个关闭
 - **宽度计算**:`Math.max(checkPanelOpen ? CHECK_PANEL_WIDTH : 0, aiPanelWidth, runPanelWidth, deployPanelWidth)` 确保编辑器让出足够空间
 - **cleanup 恢复**:每个面板组件卸载时通过 `onPanelWidthChange?.(0)` 通知父组件恢复全宽
+
+---
+
+### AI Skill 系统重构:Module Skill 精确加载 + Domain/Module 分离选择
+
+Manifest AI 资源生成/检查的 Skill 系统全面重构:Domain Skill(AI 语义选择最佳实践)与 Module Skill(精确版本匹配配置知识)彻底分离;Module Skill 数据源从 `skills` 表的遗留 `module_%d_auto` 记录迁移到 `module_version_skills` 表;AI 一次调用同时选择 domain skills 和 modules(含版本);生成/检查流程增加独立"Skill选择"步骤,前端 pipeline 从 4 步扩展为 5 步。
+
+#### Module Skill 选择架构重构
+
+- **重构** `manifestDomainSkillSelector.Select` 新增 `modules` 参数:AI 同时选择 domain skills + modules,一次 AI 调用完成两个选择,不增加延迟
+- **新增** `manifestModuleInfo` 结构体:传给 AI 的 module 信息包含 `Name`/`Source`/`Versions[]`/`Description`,AI 可看到所有可用版本
+- **新增** `selectedModule` 结构体:AI 返回 `{name, version}` 格式,支持用户指定版本(如"使用5.14.0")
+- **重构** AI prompt 增加"可用 Modules"段:列出每个 module 的 name/source/可用版本/description,指导 AI 返回 `selected_modules` 数组
+- **重构** AI 输出格式:`selected_modules` 从 `string[]` 改为 `{name, version}[]`,支持版本信息传递
+
+#### Module Skill 精确加载
+
+- **新增** `loadModuleSkillsByNames`:按 AI 选中的 module(含版本) 加载 `module_version_skills` 内容,优先使用指定版本,不存在时回退默认版本
+- **优化** Module Skill 内容组合:同时加载 `schema_generated_content` + `custom_content`,与 `GetCombinedContent()` 逻辑一致
+- **新增** `listAllModules` 版本列表:额外查询 `module_versions` 表获取每个 module 的可用版本,传给 AI 做选择
+- **重构** `manifestModuleCandidate`:`Version string` → `Versions []string`,不再依赖 `modules.version` 单字段
+
+#### Manifest 检查流程对齐
+
+- **重构** `resolveModuleVersionSkillsForCheck`:从 HCL 解析 module source → 查 module → 默认版本 → `module_version_skills`,同样组合 `schema_generated_content` + `custom_content`
+- **新增** `AutoLoadModuleSkill` 守卫:检查流程的 module skill 加载受开关控制,关闭时不加载
+
+#### Pipeline 步骤扩展(4→5 步)
+
+- **新增** 步骤 4 "Skill选择":Domain Skill AI 语义选择 + Module Skill 精确匹配,独立耗时展示
+- **更新** `manifestGenStepName`/`manifestCheckStepName`:新增"Skill选择"步骤名
+- **新增** 前端 `GEN_STEP_DESC`/`CHECK_STEP_DESC`:增加"Skill选择"描述
+- **新增** `ManifestAiTools.tsx` pipeline 展示:与 `CheckPanel` 一致的步骤列表(绿色勾 + 耗时 + skill 标签),header 显示完成摘要 + 折叠 toggle
+- **新增** `ManifestGenerateResult.CompletedSteps`:后端 complete SSE 事件携带全量步骤数据
+- **新增** `manifestAi.ts` `completedSteps` 字段:前端从 complete 事件读取步骤列表
+
+#### 遗留代码清理
+
+- **删除** `generateNewModuleSkill`/`regenerateModuleSkill`:`SkillAssembler` 不再往 `skills` 表写入 `module_%d_auto` 记录
+- **删除** `ShouldRegenerate`/`GenerateSkillFromModule`:`ModuleSkillGenerator` 不再提供基于 `skills` 表的生成/重生成逻辑
+- **删除** `BatchGenerateModuleSkills`/`incrementSkillVersion`:controller 不再提供批量生成到 `skills` 表的端点
+- **删除** `moduleSkillGen` 字段:`SkillAssembler` 不再持有 `ModuleSkillGenerator` 实例
+- **重构** `GetOrGenerateModuleSkill`:仅从 `module_version_skills` 表加载(优先 `DefaultVersionID`,fallback `is_default=true`),无记录返回 nil
+- **简化** `ModuleSkillController`:Generate/Get 端点统一调用 `GetOrGenerateModuleSkill`,移除 `force` 参数和 `skills` 表查询逻辑
+
+#### AI Config 前端修复
+
+- **修复** `AIConfigForm.tsx` `auto_load_module_skill` 开关可见性:新增 `MANIFEST_RESOURCE_GENERATION`/`MANIFEST_CHECK` 到 OR 条件,manifest 能力的 AI config 编辑页显示该开关
+
+#### AI 面板复制修复
+
+- **修复** `manifestAiStyles.ts` `chatPanelStyle` 增加 `userSelect: 'text'`:覆盖 `.toolbar` 继承的 `user-select:none`,AI 生成面板内可正常选中复制
+
+### 修改文件
+
+- `backend/services/manifest_domain_skill.go` — Select 新增 modules 参数 + selectedModule 结构体 + prompt/output 格式重构
+- `backend/services/manifest_ai_service.go` — loadModuleSkillsByNames(版本匹配+回退) + listAllModules(版本列表) + 5 步流程
+- `backend/services/manifest_check_service.go` — resolveModuleVersionSkillsForCheck + AutoLoadModuleSkill 守卫 + 5 步流程
+- `backend/services/manifest_check_service_test.go` — 测试改用 module_version_skills 路径 + custom_content 列
+- `backend/services/skill_assembler.go` — 删除 generateNewModuleSkill/regenerateModuleSkill/moduleSkillGen + GetOrGenerateModuleSkill 仅读 module_version_skills
+- `backend/services/skill_assembler_test.go` — 移除 module_auto 相关测试用例
+- `backend/services/module_skill_generator.go` — 删除 ShouldRegenerate/GenerateSkillFromModule
+- `backend/controllers/module_skill_controller.go` — 简化 Generate/Get 端点 + 删除 BatchGenerate
+- `backend/controllers/manifest_ai_controller.go` — complete 事件携带 CompletedSteps
+- `frontend/src/pages/AIConfigForm.tsx` — auto_load_module_skill 开关对 manifest 能力可见
+- `frontend/src/pages/admin/ManifestEditorV2/ManifestAiTools.tsx` — pipeline 步骤展示 + Skill选择描述
+- `frontend/src/pages/admin/ManifestEditorV2/CheckPanel.tsx` — Skill选择描述
+- `frontend/src/pages/admin/ManifestEditorV2/manifestAiStyles.ts` — userSelect: 'text'
+- `frontend/src/services/manifestAi.ts` — completedSteps 字段

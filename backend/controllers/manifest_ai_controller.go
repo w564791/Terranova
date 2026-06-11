@@ -111,13 +111,14 @@ func (c *ManifestAIController) GenerateResourceSSE(ctx *gin.Context) {
 	}
 
 	c.sendSSEEvent(ctx, flusher, services.ProgressEvent{
-		Type:       "complete",
-		StepName:   "完成",
-		Message:    result.Message,
-		HCL:        result.HCL,
-		Warnings:   result.Warnings,
-		UsageLogID: result.UsageLogID,
-		ElapsedMs:  time.Since(startTime).Milliseconds(),
+		Type:           "complete",
+		StepName:       "完成",
+		Message:        result.Message,
+		HCL:            result.HCL,
+		Warnings:       result.Warnings,
+		UsageLogID:     result.UsageLogID,
+		CompletedSteps: result.CompletedSteps,
+		ElapsedMs:      time.Since(startTime).Milliseconds(),
 	})
 
 	// 落会话(session_id 为空则跳过)
