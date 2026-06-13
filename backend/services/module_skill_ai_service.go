@@ -162,13 +162,22 @@ func (s *ModuleSkillAIService) callBedrock(aiConfig *models.AIConfig, prompt str
 	client := bedrockruntime.NewFromConfig(cfg)
 
 	// 构建请求体（Claude 格式）
+	systemBlock := map[string]interface{}{
+		"type": "text",
+		"text": prompt,
+	}
+	if aiConfig.CacheEnabled {
+		systemBlock["cache_control"] = map[string]interface{}{"type": "ephemeral"}
+	}
+
 	requestBody := map[string]interface{}{
 		"anthropic_version": "bedrock-2023-05-31",
 		"max_tokens":        4096,
+		"system":            []map[string]interface{}{systemBlock},
 		"messages": []map[string]string{
 			{
 				"role":    "user",
-				"content": prompt,
+				"content": "请根据以上指示完成任务。",
 			},
 		},
 	}

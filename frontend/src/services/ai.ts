@@ -26,6 +26,8 @@ export interface AIConfig {
   // Extended Thinking 配置
   thinking_enabled?: boolean;
   thinking_budget_tokens?: number;
+  // Prompt Caching 配置（仅 Bedrock）
+  cache_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

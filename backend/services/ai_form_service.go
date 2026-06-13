@@ -678,7 +678,7 @@ func (s *AIFormService) extractSchemaConstraints(schema map[string]interface{}) 
 func (s *AIFormService) callAI(cfg *models.AIConfig, prompt string) (string, error) {
 	switch cfg.ServiceType {
 	case "bedrock":
-		return s.callBedrockForForm(cfg.AWSRegion, cfg.ModelID, prompt, cfg.UseInferenceProfile)
+		return s.callBedrockForForm(cfg.AWSRegion, cfg.ModelID, prompt, cfg.UseInferenceProfile, cfg.CacheEnabled)
 	case "openai", "azure_openai", "qwen", "ollama":
 		return s.callOpenAICompatibleForForm(cfg.BaseURL, cfg.APIKey, cfg.ModelID, prompt)
 	default:
@@ -687,7 +687,7 @@ func (s *AIFormService) callAI(cfg *models.AIConfig, prompt string) (string, err
 }
 
 // callBedrockForForm 调用 Bedrock API 生成表单配置
-func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useInferenceProfile bool) (string, error) {
+func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useInferenceProfile bool, cacheEnabled bool) (string, error) {
 	// 使用与 AIAnalysisService 相同的逻辑，但返回原始文本
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
@@ -699,20 +699,18 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 	cfg.RetryMaxAttempts = 1
 	client := bedrockruntime.NewFromConfig(cfg)
 
+	systemBlock := map[string]interface{}{
+		"type": "text",
+		"text": prompt,
+	}
+	if cacheEnabled {
+		systemBlock["cache_control"] = map[string]interface{}{"type": "ephemeral"}
+	}
+
 	requestBody := map[string]interface{}{
 		"anthropic_version": "bedrock-2023-05-31",
 		"max_tokens":        4000,
-		// 把 prompt 放到 system message 并标记 cache_control,
-		// 使 Bedrock prompt caching 生效(相同前缀 5 分钟内复用享 90% 折扣)。
-		// prompt 前半段是静态 skills(每次相同),后半段是动态上下文(每次不同),
-		// Bedrock 会缓存匹配的静态前缀部分。
-		"system": []map[string]interface{}{
-			{
-				"type":          "text",
-				"text":          prompt,
-				"cache_control": map[string]interface{}{"type": "ephemeral"},
-			},
-		},
+		"system":            []map[string]interface{}{systemBlock},
 		"messages": []map[string]string{
 			{
 				"role":    "user",
@@ -727,6 +725,8 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 	}
 
 	finalModelID := modelID
+	log.Printf("[AIFormService/Bedrock] request: model=%s cache_enabled=%v prompt_hash=%s prompt_len=%d",
+		finalModelID, cacheEnabled, shortSHA256(prompt), len(prompt))
 
 	input := &bedrockruntime.InvokeModelInput{
 		ModelId:     aws.String(finalModelID),
@@ -744,10 +744,10 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 			Text string `json:"text"`
 		} `json:"content"`
 		Usage struct {
-			InputTokens               int `json:"input_tokens"`
-			OutputTokens              int `json:"output_tokens"`
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
 			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-			CacheReadInputTokens      int `json:"cache_read_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	}
 

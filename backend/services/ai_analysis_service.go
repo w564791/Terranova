@@ -394,7 +394,7 @@ func parseErrorAnalysisOutput(output string) (*AnalysisResult, error) {
 	return &result, nil
 }
 
-// callBedrock 调用 Bedrock API
+// Deprecated: callBedrock 已被 NewAICallerFromConfig + AIAgentLoop 替代，当前无调用者
 func (s *AIAnalysisService) callBedrock(region, modelID, prompt string, useInferenceProfile bool) (*AnalysisResult, error) {
 	// 加载 AWS 配置
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -574,7 +574,7 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
-// callOpenAICompatible 调用 OpenAI Compatible API
+// Deprecated: callOpenAICompatible 已被 NewAICallerFromConfig + AIAgentLoop 替代，当前无调用者
 func (s *AIAnalysisService) callOpenAICompatible(baseURL, apiKey, modelID, prompt string) (*AnalysisResult, error) {
 	// 构建请求体（OpenAI 格式）
 	requestBody := map[string]interface{}{

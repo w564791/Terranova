@@ -8,6 +8,7 @@ import (
 	appconfig "iac-platform/internal/config"
 	"iac-platform/internal/models"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -71,6 +72,8 @@ func (s *AIConfigService) GetConfigForCapability(capability string) (*models.AIC
 
 	if err == nil && len(configs) > 0 {
 		s.fillAPIKeyFallback(&configs[0])
+		log.Printf("[AIConfigService] capability=%s selected config_id=%d service=%s model=%s cache_enabled=%v optimized=%v",
+			capability, configs[0].ID, configs[0].ServiceType, configs[0].ModelID, configs[0].CacheEnabled, configs[0].UseOptimized)
 		return &configs[0], nil
 	}
 
@@ -81,6 +84,8 @@ func (s *AIConfigService) GetConfigForCapability(capability string) (*models.AIC
 
 	if err == nil {
 		s.fillAPIKeyFallback(&defaultConfig)
+		log.Printf("[AIConfigService] capability=%s selected default config_id=%d service=%s model=%s cache_enabled=%v optimized=%v",
+			capability, defaultConfig.ID, defaultConfig.ServiceType, defaultConfig.ModelID, defaultConfig.CacheEnabled, defaultConfig.UseOptimized)
 		return &defaultConfig, nil
 	}
 
@@ -290,6 +295,8 @@ func (s *AIConfigService) UpdateConfig(id uint, cfg *models.AIConfig, forceUpdat
 	// Extended Thinking 配置
 	existing.ThinkingEnabled = cfg.ThinkingEnabled
 	existing.ThinkingBudgetTokens = cfg.ThinkingBudgetTokens
+	// Prompt Caching 配置
+	existing.CacheEnabled = cfg.CacheEnabled
 
 	// API Key 更新逻辑：
 	// - service_type 变了 → 清掉旧 key（不同服务的 key 不通用）

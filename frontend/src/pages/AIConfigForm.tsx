@@ -95,6 +95,8 @@ const AIConfigForm = () => {
     // Extended Thinking 配置
     thinking_enabled: false,
     thinking_budget_tokens: 10000,
+    // Prompt Caching 配置（仅 Bedrock）
+    cache_enabled: true,
   });
 
   // 展开的 prompt 编辑器
@@ -201,6 +203,7 @@ const AIConfigForm = () => {
           embedding_batch_size: configData.embedding_batch_size || 10,
           thinking_enabled: configData.thinking_enabled || false,
           thinking_budget_tokens: configData.thinking_budget_tokens || 10000,
+          cache_enabled: configData.cache_enabled !== false,
         });
 
         if (configData.use_inference_profile) {
@@ -880,6 +883,23 @@ const AIConfigForm = () => {
                 </div>
               )}
             </>
+          )}
+
+          {/* Prompt Caching 配置（仅 Bedrock） */}
+          {formData.service_type === 'bedrock' && (
+            <div className={styles.formGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={formData.cache_enabled}
+                  onChange={(e) => setFormData({ ...formData, cache_enabled: e.target.checked })}
+                />
+                <span>Prompt Caching</span>
+              </label>
+              <div className={styles.hint}>
+                启用后，Bedrock 会缓存 system prompt 的静态前缀（5 分钟内复用，享 90% input token 折扣）。适用于 Skills、规则等静态内容较多的场景。
+              </div>
+            </div>
           )}
 
           <div className={styles.formGroup}>

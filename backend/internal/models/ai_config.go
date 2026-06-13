@@ -81,6 +81,8 @@ type AIConfig struct {
 	// Extended Thinking 配置
 	ThinkingEnabled      bool `gorm:"default:false" json:"thinking_enabled"`       // 是否启用 extended thinking
 	ThinkingBudgetTokens int  `gorm:"default:10000" json:"thinking_budget_tokens"` // thinking token 预算（最小 1024）
+	// Prompt Caching 配置（仅 Bedrock）
+	CacheEnabled bool `gorm:"default:true" json:"cache_enabled"` // 是否启用 Bedrock prompt caching
 	// Vector 搜索配置（仅 embedding 能力使用）
 	TopK                  int       `gorm:"default:50" json:"top_k"`                      // 向量搜索返回的最大结果数
 	SimilarityThreshold   float64   `gorm:"default:0.3" json:"similarity_threshold"`      // 向量搜索相似度阈值（0-1）

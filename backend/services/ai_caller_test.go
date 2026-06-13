@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildBedrockToolCallingRequest(t *testing.T) {
-	caller := &BedrockCaller{region: "us-west-2", modelID: "anthropic.claude-3-5-sonnet-20241022-v2:0"}
+	caller := &BedrockCaller{region: "us-west-2", modelID: "anthropic.claude-3-5-sonnet-20241022-v2:0", cacheEnabled: true}
 
 	messages := []AgentMessage{
 		{Role: "system", Content: "You are an assistant"},
@@ -29,9 +29,17 @@ func TestBuildBedrockToolCallingRequest(t *testing.T) {
 		t.Errorf("wrong anthropic_version: %v", body["anthropic_version"])
 	}
 
-	// Verify system prompt extracted to top level
-	if body["system"] != "You are an assistant" {
-		t.Errorf("system prompt not extracted: %v", body["system"])
+	// Verify system prompt extracted to top level (array with cache_control)
+	systemBlocks := body["system"].([]interface{})
+	if len(systemBlocks) != 1 {
+		t.Fatalf("expected 1 system block, got %d", len(systemBlocks))
+	}
+	systemBlock := systemBlocks[0].(map[string]interface{})
+	if systemBlock["text"] != "You are an assistant" {
+		t.Errorf("system text mismatch: %v", systemBlock["text"])
+	}
+	if _, ok := systemBlock["cache_control"]; !ok {
+		t.Error("expected cache_control on system block when cacheEnabled=true")
 	}
 
 	// Verify messages don't contain system
@@ -52,6 +60,60 @@ func TestBuildBedrockToolCallingRequest(t *testing.T) {
 	toolDef := toolsList[0].(map[string]interface{})
 	if toolDef["name"] != "query_cmdb" {
 		t.Errorf("wrong tool name: %v", toolDef["name"])
+	}
+}
+
+func TestBuildBedrockRequestWithCacheEnabled(t *testing.T) {
+	caller := &BedrockCaller{region: "us-west-2", modelID: "test-model", cacheEnabled: true}
+
+	messages := []AgentMessage{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Hello"},
+	}
+
+	body := caller.buildBedrockRequest(messages, nil)
+	systemBlocks := body["system"].([]interface{})
+	block := systemBlocks[0].(map[string]interface{})
+
+	if _, ok := block["cache_control"]; !ok {
+		t.Error("expected cache_control when cacheEnabled=true")
+	}
+	cc := block["cache_control"].(map[string]interface{})
+	if cc["type"] != "ephemeral" {
+		t.Errorf("cache_control type should be ephemeral, got %v", cc["type"])
+	}
+}
+
+func TestBuildBedrockRequestWithCacheDisabled(t *testing.T) {
+	caller := &BedrockCaller{region: "us-west-2", modelID: "test-model", cacheEnabled: false}
+
+	messages := []AgentMessage{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Hello"},
+	}
+
+	body := caller.buildBedrockRequest(messages, nil)
+	systemBlocks := body["system"].([]interface{})
+	block := systemBlocks[0].(map[string]interface{})
+
+	if _, ok := block["cache_control"]; ok {
+		t.Error("cache_control should NOT be present when cacheEnabled=false")
+	}
+	if block["text"] != "System prompt" {
+		t.Errorf("system text should still be present, got %v", block["text"])
+	}
+}
+
+func TestBuildBedrockRequestNoSystemPrompt(t *testing.T) {
+	caller := &BedrockCaller{region: "us-west-2", modelID: "test-model", cacheEnabled: true}
+
+	messages := []AgentMessage{
+		{Role: "user", Content: "Hello"},
+	}
+
+	body := caller.buildBedrockRequest(messages, nil)
+	if _, ok := body["system"]; ok {
+		t.Error("system block should not exist when there's no system message")
 	}
 }
 
@@ -401,6 +463,7 @@ func TestNewAICallerFromConfig_ThinkingPassthrough(t *testing.T) {
 		ModelID:              "anthropic.claude-opus-4-6-v1",
 		ThinkingEnabled:      true,
 		ThinkingBudgetTokens: 8000,
+		CacheEnabled:         true,
 	}
 	caller := NewAICallerFromConfig(cfg)
 	bc, ok := caller.(*BedrockCaller)
@@ -412,6 +475,26 @@ func TestNewAICallerFromConfig_ThinkingPassthrough(t *testing.T) {
 	}
 	if bc.thinkingBudgetTokens != 8000 {
 		t.Errorf("thinkingBudgetTokens should be 8000, got %d", bc.thinkingBudgetTokens)
+	}
+	if !bc.cacheEnabled {
+		t.Error("cacheEnabled should be true")
+	}
+}
+
+func TestNewAICallerFromConfig_CacheDisabled(t *testing.T) {
+	cfg := &models.AIConfig{
+		ServiceType:  "bedrock",
+		AWSRegion:    "us-west-2",
+		ModelID:      "anthropic.claude-3-5-sonnet-20241022-v2:0",
+		CacheEnabled: false,
+	}
+	caller := NewAICallerFromConfig(cfg)
+	bc, ok := caller.(*BedrockCaller)
+	if !ok {
+		t.Fatal("expected BedrockCaller")
+	}
+	if bc.cacheEnabled {
+		t.Error("cacheEnabled should be false")
 	}
 }
 

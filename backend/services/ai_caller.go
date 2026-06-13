@@ -32,6 +32,7 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 			useInferenceProfile:  cfg.UseInferenceProfile,
 			thinkingEnabled:      cfg.ThinkingEnabled,
 			thinkingBudgetTokens: cfg.ThinkingBudgetTokens,
+			cacheEnabled:         cfg.CacheEnabled,
 		}
 	case "qwen":
 		return &QwenCaller{
@@ -57,6 +58,7 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 			modelID:              cfg.ModelID,
 			thinkingEnabled:      cfg.ThinkingEnabled,
 			thinkingBudgetTokens: cfg.ThinkingBudgetTokens,
+			cacheEnabled:         cfg.CacheEnabled,
 		}
 	}
 }
@@ -70,6 +72,7 @@ type BedrockCaller struct {
 	useInferenceProfile  bool
 	thinkingEnabled      bool
 	thinkingBudgetTokens int
+	cacheEnabled         bool
 }
 
 // isGLMModel 判断是否为 GLM 模型（Z.AI on Bedrock）
@@ -232,14 +235,21 @@ func (c *BedrockCaller) buildBedrockRequest(messages []AgentMessage, tools []Age
 	}
 
 	if systemPrompt != "" {
-		// 使用 cache_control 标记 system prompt 以启用 Bedrock prompt caching
-		// 相同前缀在 5 分钟内复用可享受 90% input token 折扣
-		body["system"] = []interface{}{
-			map[string]interface{}{
-				"type":          "text",
-				"text":          systemPrompt,
-				"cache_control": map[string]interface{}{"type": "ephemeral"},
-			},
+		if c.cacheEnabled {
+			body["system"] = []interface{}{
+				map[string]interface{}{
+					"type":          "text",
+					"text":          systemPrompt,
+					"cache_control": map[string]interface{}{"type": "ephemeral"},
+				},
+			}
+		} else {
+			body["system"] = []interface{}{
+				map[string]interface{}{
+					"type": "text",
+					"text": systemPrompt,
+				},
+			}
 		}
 	}
 	body["messages"] = claudeMessages
