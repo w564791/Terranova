@@ -80,6 +80,8 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	userID string,
 	workspaceID string,
 	files []CheckFileInput,
+	userInstruction string,
+	conversationHistory string,
 	progressCallback ProgressCallback,
 ) (*ManifestCheckResult, error) {
 	totalTimer := NewTimer()
@@ -173,8 +175,20 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	// 把精确匹配加载的 module skill 名追加到 UsedSkillNames(pipeline 展示)
 	assembleResult.UsedSkillNames = append(assembleResult.UsedSkillNames, moduleSkillNames...)
 
+	// 注入用户自定义检查意见到 prompt（在 AI 调用前）
+	finalPrompt := assembleResult.Prompt
+	if userInstruction != "" {
+		log.Printf("[ManifestCheckService] 用户检查意见: %s", userInstruction)
+		finalPrompt += fmt.Sprintf("\n\n---\n\n## 用户检查意见\n\n%s\n\n请根据以上用户意见重点检查相关内容。\n\n---\n\n", userInstruction)
+	}
+
+	// 注入对话历史到 prompt 末尾（在 AI 调用前）
+	if conversationHistory != "" {
+		finalPrompt = finalPrompt + conversationHistory
+	}
+
 	aiTimer := NewTimer()
-	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
+	aiResult, err := s.aiFormService.callAI(aiConfig, finalPrompt)
 	RecordAICallDuration("manifest_check", "ai_call", aiTimer.ElapsedMs())
 	if err != nil {
 		IncAICallCount("manifest_check", "ai_error")
@@ -184,10 +198,12 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	tracker.addStep("AI检查", int64(aiTimer.ElapsedMs()), assembleResult.UsedSkillNames)
 
 	knownFiles := make(map[string]bool, len(files))
+	fileByPath := make(map[string]CheckFileInput, len(files))
 	for _, f := range files {
 		knownFiles[f.Path] = true
+		fileByPath[f.Path] = f
 	}
-	issues, ok := parseCheckIssues(aiResult, primaryFile, len(files) > 1, knownFiles)
+	issues, ok := parseCheckIssues(aiResult, primaryFile, len(files) > 1, knownFiles, fileByPath)
 	if !ok {
 		// AI 响应无法解析为问题列表，不能当作"无问题"。返回错误,由 controller 发 error 事件。
 		IncAICallCount("manifest_check", "parse_error")
@@ -425,7 +441,63 @@ func isNonIssueNarrative(message string) bool {
 	return false
 }
 
-func parseCheckIssues(aiResult, defaultFile string, multiFile bool, knownFiles map[string]bool) ([]ManifestIssue, bool) {
+func isHCLBlockHeader(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	return strings.HasPrefix(t, "module ") ||
+		strings.HasPrefix(t, "resource ") ||
+		strings.HasPrefix(t, "data ") ||
+		strings.HasPrefix(t, "variable ") ||
+		strings.HasPrefix(t, "output ") ||
+		strings.HasPrefix(t, "locals ") ||
+		t == "locals {" ||
+		strings.HasPrefix(t, "provider ") ||
+		strings.HasPrefix(t, "terraform ")
+}
+
+func firstNonEmptyLine(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func isSafeManifestFix(file CheckFileInput, startLine, endLine int, newText string) bool {
+	if startLine < 1 || endLine < startLine || strings.TrimSpace(newText) == "" {
+		return false
+	}
+	start := file.StartLine
+	if start < 1 {
+		start = 1
+	}
+	lines := strings.Split(file.Content, "\n")
+	if len(lines) == 0 {
+		return false
+	}
+	payloadEnd := start + len(lines) - 1
+	if startLine < start || endLine > payloadEnd {
+		return false
+	}
+
+	containsBlockHeader := false
+	for lineNo := startLine; lineNo <= endLine; lineNo++ {
+		idx := lineNo - start
+		if idx >= 0 && idx < len(lines) && isHCLBlockHeader(lines[idx]) {
+			containsBlockHeader = true
+			break
+		}
+	}
+	if containsBlockHeader && !isHCLBlockHeader(firstNonEmptyLine(newText)) {
+		return false
+	}
+	return true
+}
+
+func parseCheckIssues(aiResult, defaultFile string, multiFile bool, knownFiles map[string]bool, fileByPath map[string]CheckFileInput) ([]ManifestIssue, bool) {
 	jsonStr := extractJSON(aiResult)
 	var envelope checkIssuesEnvelope
 	if err := json.Unmarshal([]byte(jsonStr), &envelope); err != nil {
@@ -441,7 +513,9 @@ func parseCheckIssues(aiResult, defaultFile string, multiFile bool, knownFiles m
 		}
 		// 防御:AI 偶尔违反 prompt,把"自检叙述/已满足"当 issue 输出(且常自相矛盾,
 		// 如"缺少X不完整...已满足,无需补充")。这类不是真实违规,丢弃,避免误导用户。
-		if isNonIssueNarrative(it.Message) {
+		// 但如果 issue 带有 fix(结构化修复),说明 AI 确实发现了问题并给出了修复方案,
+		// 不应被误判为伪 issue。
+		if it.Fix == nil && isNonIssueNarrative(it.Message) {
 			log.Printf("[ManifestCheckService] 丢弃自检叙述类伪 issue: %q", it.Message)
 			continue
 		}
@@ -479,6 +553,10 @@ func parseCheckIssues(aiResult, defaultFile string, multiFile bool, knownFiles m
 			default:
 				if fixFile == "" {
 					fixFile = file // 单文件场景:落到唯一文件
+				}
+				if !isSafeManifestFix(fileByPath[fixFile], it.Fix.StartLine, it.Fix.EndLine, it.Fix.NewText) {
+					log.Printf("[ManifestCheckService] 丢弃 fix:目标行范围不可靠 file=%q start=%d end=%d", fixFile, it.Fix.StartLine, it.Fix.EndLine)
+					break
 				}
 				issue.Fix = &ManifestFix{
 					File:      fixFile,

@@ -63,13 +63,16 @@ import {
   type ManifestIssue,
   type ManifestProgressEvent,
   type ManifestCompletedStep,
+  type ConversationTurn,
 } from '../../../services/manifestAi'
 import { exportManifestZip, getManifest, updateManifest } from '../../../services/manifestApi'
+import { AI_PANEL_WIDTH } from './manifestAiStyles'
 import styles from './ManifestEditorV2.module.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 // 单文件上限,与后端 MANIFEST_MAX_FILE_SIZE 默认值(1MB)对齐
 const MANIFEST_MAX_FILE_SIZE = 1024 * 1024
+type RightPanel = 'ai' | 'check' | 'run' | 'deploy'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -104,6 +107,23 @@ function isTopLevelTfUnderSubpath(path: string, subpath: string): boolean {
   return relativePath.length > 0 && !relativePath.includes('/')
 }
 
+function isHclBlockHeader(line: string): boolean {
+  const text = line.trim()
+  return text.startsWith('module ') ||
+    text.startsWith('resource ') ||
+    text.startsWith('data ') ||
+    text.startsWith('variable ') ||
+    text.startsWith('output ') ||
+    text.startsWith('locals ') ||
+    text === 'locals {' ||
+    text.startsWith('provider ') ||
+    text.startsWith('terraform ')
+}
+
+function firstNonEmptyLine(text: string): string {
+  return text.split('\n').find((line) => line.trim()) ?? ''
+}
+
 export default function ManifestEditorV2() {
   const params = useParams<{ id: string; org_id?: string }>()
   const [searchParams] = useSearchParams()
@@ -115,27 +135,35 @@ export default function ManifestEditorV2() {
     searchParams.get('org') ||
     localStorage.getItem('current_org_id') ||
     '1'
-  const ctx: ManifestEditorContext = { orgId, manifestId }
+  const ctx: ManifestEditorContext = useMemo(() => ({ orgId, manifestId }), [orgId, manifestId])
 
   const rootRef = useRef<HTMLDivElement | null>(null) // 根容器(全屏目标)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  // 右侧面板系统:AI 生成 / 检查 / Run / 部署 四选一(互斥),共享右侧停靠区
-  const [aiPanelWidth, setAiPanelWidth] = useState(0)
-  const CHECK_PANEL_WIDTH = 360
-  const [checkPanelOpen, setCheckPanelOpen] = useState(false)
-  const [runPanelWidth, setRunPanelWidth] = useState(0)
-  const [deployPanelWidth, setDeployPanelWidth] = useState(0)
+  // 右侧面板系统:AI 生成 / 检查 / Run / 部署 四选一(互斥),共享同一个宽度状态
+  const [activeRightPanel, setActiveRightPanel] = useState<RightPanel | null>(null)
+  const [rightPanelWidth, setRightPanelWidth] = useState(AI_PANEL_WIDTH)
   const [checkBusy, setCheckBusy] = useState(false)
   const [checkIssues, setCheckIssues] = useState<ManifestIssue[]>([])
   const [checkCompletedSteps, setCheckCompletedSteps] = useState<ManifestCompletedStep[]>([])
   const [checkError, setCheckError] = useState<string | null>(null)
   const [checkCurrentStep, setCheckCurrentStep] = useState('')
+  const [checkContext, setCheckContext] = useState<{ kind: 'selection' | 'file'; filePath: string; startLine?: number; endLine?: number } | null>(null)
   const checkAbortRef = useRef<AbortController | null>(null)
   // 发布弹窗读取此状态决定是否解锁表单
   const [publishCheckSummary, setPublishCheckSummary] = useState<PublishCheckSummary | null>(null)
   const treeRef = useRef<HTMLDivElement | null>(null) // 文件树容器(键盘导航需聚焦它才收 keydown)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const fileContentCache = useRef<Map<string, string>>(new Map())
+  // 文件变更追踪:用于在文件树显示 U(新建)/M(修改) 标记
+  const originalFilesRef = useRef<Set<string>>(new Set()) // 初始加载时的文件路径集合
+  const originalContentRef = useRef<Map<string, string>>(new Map()) // 文件首次加载时的原始内容
+  const [newFiles, setNewFiles] = useState<Set<string>>(new Set()) // 本次会话新建的文件
+  const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set()) // 内容被修改过的文件
+  // Gutter diff 指示条:对比上次发布版本的变更标记
+  const baseVersionIdRef = useRef<string>('') // 上次发布的版本 ID
+  const publishedContentCache = useRef<Map<string, string>>(new Map()) // path → 发布版内容(仅 changed 文件)
+  const diffFilesSetRef = useRef<Set<string>>(new Set()) // diff 结果中 changed/added 的文件路径集合
+  const diffDecorationsRef = useRef<string[]>([]) // 当前 decoration IDs(deltaDecorations 返回值)
   // 每文件一个 model(保留 undo 历史)+ viewState(保留光标/滚动),切 tab 回到原状态
   const modelCache = useRef<Map<string, monaco.editor.ITextModel>>(new Map())
   const viewStateCache = useRef<Map<string, monaco.editor.ICodeEditorViewState | null>>(new Map())
@@ -161,11 +189,121 @@ export default function ManifestEditorV2() {
     monaco.editor.setModelMarkers(model, HCL_DIAG_OWNER, markers)
   }
 
+  // ===== Gutter Diff 指示条工具函数 =====
+  // 计算行级 diff:返回每行的状态 (added/modified/unchanged)
+  // publishedContent: 发布版内容(仅 changed 文件有值);isInDiff: 该文件是否在 diff 结果中
+  const computeLineDiff = useCallback((currentContent: string, publishedContent: string | undefined, isInDiff: boolean): ('added' | 'modified' | 'unchanged')[] => {
+    const currentLines = currentContent.split('\n')
+    if (!isInDiff) {
+      // 文件不在 diff 结果中 → 与发布版相同,全部 unchanged
+      return currentLines.map(() => 'unchanged')
+    }
+    if (!publishedContent) {
+      // 新文件(在 diff 中但无发布版内容):所有行都是 added
+      return currentLines.map(() => 'added')
+    }
+    const publishedLines = publishedContent.split('\n')
+    const m = currentLines.length
+    const n = publishedLines.length
+
+    // LCS DP
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0))
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (currentLines[i - 1] === publishedLines[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
+        }
+      }
+    }
+
+    // 回溯标记哪些 current 行在 LCS 中(与旧行精确匹配)
+    const matchedCurrent = new Set<number>()
+    let i = m, j = n
+    while (i > 0 && j > 0) {
+      if (currentLines[i - 1] === publishedLines[j - 1]) {
+        matchedCurrent.add(i - 1)
+        i--; j--
+      } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+        i--
+      } else {
+        j--
+      }
+    }
+
+    // 不在 LCS 中的行:对应位置有旧行 → modified;否则 → added
+    const result: ('added' | 'modified' | 'unchanged')[] = []
+    let pubIdx = 0 // 遍历旧行,用于判断当前行是否有对应旧行
+    for (let ci = 0; ci < m; ci++) {
+      if (matchedCurrent.has(ci)) {
+        result.push('unchanged')
+        pubIdx++ // 跳过匹配的旧行
+      } else if (pubIdx < n) {
+        result.push('modified') // 对应位置有旧行 → 修改
+        pubIdx++
+      } else {
+        result.push('added') // 没有对应旧行 → 纯新增
+      }
+    }
+
+    return result
+  }, [])
+
+  // 应用 diff decorations 到编辑器
+  const applyDiffDecorations = useCallback((path: string) => {
+    const ed = editorRef.current
+    if (!ed) return
+
+    const model = ed.getModel()
+    if (!model) return
+
+    // 没有 base version(未发布过) → 清除装饰
+    if (!baseVersionIdRef.current) {
+      diffDecorationsRef.current = ed.deltaDecorations(diffDecorationsRef.current, [])
+      return
+    }
+
+    const isInDiff = diffFilesSetRef.current.has(path)
+    if (!isInDiff) {
+      // 文件不在 diff 结果中 → 无变更,清除装饰
+      diffDecorationsRef.current = ed.deltaDecorations(diffDecorationsRef.current, [])
+      return
+    }
+
+    const currentContent = model.getValue()
+    const publishedContent = publishedContentCache.current.get(path)
+    const lineDiff = computeLineDiff(currentContent, publishedContent, isInDiff)
+
+    const decorations: monaco.editor.IModelDeltaDecoration[] = []
+    lineDiff.forEach((status, lineIdx) => {
+      if (status === 'added') {
+        decorations.push({
+          range: new monaco.Range(lineIdx + 1, 1, lineIdx + 1, 1),
+          options: {
+            isWholeLine: true,
+            linesDecorationsClassName: styles.lineAdded,
+            overviewRuler: { color: '#73c991', position: monaco.editor.OverviewRulerLane.Left },
+          },
+        })
+      } else if (status === 'modified') {
+        decorations.push({
+          range: new monaco.Range(lineIdx + 1, 1, lineIdx + 1, 1),
+          options: {
+            isWholeLine: true,
+            linesDecorationsClassName: styles.lineModified,
+            overviewRuler: { color: '#e2c08d', position: monaco.editor.OverviewRulerLane.Left },
+          },
+        })
+      }
+    })
+
+    diffDecorationsRef.current = ed.deltaDecorations(diffDecorationsRef.current, decorations)
+  }, [computeLineDiff])
+
   const [bootError, setBootError] = useState<string | null>(null)
   const [manifestMissing, setManifestMissing] = useState(false)
   const [publishOpen, setPublishOpen] = useState(false)
-  const [deployOpen, setDeployOpen] = useState(false)
-  const [runOpen, setRunOpen] = useState(false)
   const [runViewLast, setRunViewLast] = useState(false) // 打开 Run 面板时直接跳到上次任务
   const [lastRunTask, setLastRunTask] = useState<{ taskId: number; workspaceId: string } | null>(null)
   // 内联新建/重命名(VS Code 风格,不弹窗):
@@ -403,6 +541,8 @@ export default function ManifestEditorV2() {
         if (cancelled) return
         setManifestMissing(false)
         setFiles(items)
+        // 记录初始文件列表(用于区分新建/已有文件)
+        originalFilesRef.current = new Set(items.map((f) => f.path))
         // 深链(?file=&line= / ?resource=<id>)交给专门的 effect 处理;此处仅在无深链时打开首文件
         if (hasDeepLinkRef.current) return
         const firstTf = items.find((f) => f.path.endsWith('.tf'))
@@ -418,6 +558,49 @@ export default function ManifestEditorV2() {
         // eslint-disable-next-line no-console
         console.warn('[ManifestEditorV2] list files unavailable:', err)
         setManifestMissing(true)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifestId, orgId])
+
+  // ========== 加载上次发布版本(用于 gutter diff 指示条) ==========
+  useEffect(() => {
+    let cancelled = false
+    diffDraft(ctx)
+      .then((result) => {
+        if (cancelled) return
+        baseVersionIdRef.current = result.baseVersionId
+        // 记录所有 changed/added 的文件路径(用于区分"新文件" vs "未变更文件")
+        const diffFiles = result.files.filter((f) => f.state === 'changed' || f.state === 'added')
+        diffFilesSetRef.current = new Set(diffFiles.map((f) => f.path))
+        // 预加载所有 changed 文件的发布版内容
+        return Promise.all(
+          diffFiles.map(async (f) => {
+            if (f.state === 'added') {
+              // 新增文件:发布版不存在,缓存空串
+              publishedContentCache.current.set(f.path, '')
+            } else if (baseVersionIdRef.current) {
+              try {
+                const content = await readFile(ctx, f.path, baseVersionIdRef.current)
+                publishedContentCache.current.set(f.path, content.content ?? '')
+              } catch {
+                // 读取失败:忽略,该文件不会有 diff 标记
+              }
+            }
+          }),
+        )
+      })
+      .then(() => {
+        if (cancelled) return
+        // diff 加载完成后,对当前打开的文件重新应用 gutter 装饰(解决竞态:文件可能在 diff 之前打开)
+        if (currentFileRef.current) {
+          applyDiffDecorations(currentFileRef.current)
+        }
+      })
+      .catch(() => {
+        // diffDraft 失败(可能没有已发布版本):忽略,gutter 不会有标记
       })
     return () => {
       cancelled = true
@@ -493,6 +676,10 @@ export default function ManifestEditorV2() {
             }
             content = f.content ?? ''
             fileContentCache.current.set(path, content)
+            // 记录原始内容(用于判断文件是否被修改)
+            if (!originalContentRef.current.has(path)) {
+              originalContentRef.current.set(path, content)
+            }
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error('[ManifestEditorV2] read file failed', err)
@@ -514,12 +701,26 @@ export default function ManifestEditorV2() {
             next.add(path)
             return next
           })
+          // 追踪文件修改状态(与原始内容对比)
+          const currentContent = m.getValue()
+          const originalContent = originalContentRef.current.get(path)
+          const isModified = originalContent !== undefined && currentContent !== originalContent
+          setModifiedFiles((prev) => {
+            const wasModified = prev.has(path)
+            if (isModified === wasModified) return prev
+            const next = new Set(prev)
+            if (isModified) next.add(path)
+            else next.delete(path)
+            return next
+          })
           // 增量更新「转到定义」索引:该文件的 var/local 定义随编辑实时刷新
           if (path.endsWith('.tf')) {
             removePathFromIndex(defIndexRef.current, path)
             indexFile(defIndexRef.current, path, m.getValue())
             runDiagnosticsRef.current(m) // 索引更新后再算诊断(未定义引用依赖最新索引)
           }
+          // Gutter diff 实时更新:编辑时重新计算变更标记
+          applyDiffDecorations(path)
           setSaveStatus('saving')
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
           saveTimerRef.current = setTimeout(() => {
@@ -535,6 +736,9 @@ export default function ManifestEditorV2() {
       const vs = viewStateCache.current.get(path)
       if (vs) ed.restoreViewState(vs)
       ed.focus()
+
+      // Gutter diff 指示条:对比上次发布版本,在行号旁显示新增/修改标记
+      applyDiffDecorations(path)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [orgId, manifestId, files],
@@ -855,28 +1059,7 @@ export default function ManifestEditorV2() {
       diffEditorRef.current?.layout()
     })
     return () => cancelAnimationFrame(id)
-  }, [aiPanelWidth, checkPanelOpen, runPanelWidth, deployPanelWidth])
-
-  // 右侧面板互斥:AI 生成 / 检查 / Run / 部署 同时只能展开一个
-  useEffect(() => {
-    if (aiPanelWidth > 0 && checkPanelOpen) setCheckPanelOpen(false)
-  }, [aiPanelWidth, checkPanelOpen])
-
-  useEffect(() => {
-    if (runOpen) {
-      if (aiPanelWidth > 0) setAiPanelWidth(0)
-      if (checkPanelOpen) setCheckPanelOpen(false)
-      if (deployOpen) setDeployOpen(false)
-    }
-  }, [runOpen])
-
-  useEffect(() => {
-    if (deployOpen) {
-      if (aiPanelWidth > 0) setAiPanelWidth(0)
-      if (checkPanelOpen) setCheckPanelOpen(false)
-      if (runOpen) setRunOpen(false)
-    }
-  }, [deployOpen])
+  }, [activeRightPanel, rightPanelWidth])
 
   // AI 工具桥接:用现有 editorRef / openAt 拼出 EditorBridge,供 ManifestAiTools 解耦调用
   const aiBridge: EditorBridge = useMemo(
@@ -955,6 +1138,13 @@ export default function ManifestEditorV2() {
         ) {
           throw new Error(`修复行号超出文件范围(${fix.startLine}-${fix.endLine},共 ${lineCount} 行),请重新检查`)
         }
+        const touchesBlockHeader = Array.from(
+          { length: fix.endLine - fix.startLine + 1 },
+          (_, idx) => model.getLineContent(fix.startLine + idx),
+        ).some(isHclBlockHeader)
+        if (touchesBlockHeader && !isHclBlockHeader(firstNonEmptyLine(fix.newText))) {
+          throw new Error('AI 修复定位不可靠:目标范围包含 Terraform 块声明行,但替换内容不是完整块。请重新检查或手动修改。')
+        }
         const endLineLen = model.getLineMaxColumn(fix.endLine)
         const range = new monaco.Range(fix.startLine, 1, fix.endLine, endLineLen)
         ed.executeEdits('manifest-ai-fix', [{ range, text: fix.newText, forceMoveMarkers: true }])
@@ -964,6 +1154,53 @@ export default function ManifestEditorV2() {
     }),
     [orgId, manifestId, openAt, openFile, ctx],
   )
+
+  // Check 面板打开时持续跟踪选区/文件变化，动态更新 context chip
+  useEffect(() => {
+    if (activeRightPanel !== 'check') return
+
+    // 面板刚打开时初始化一次
+    const updateCtx = () => {
+      const sel = aiBridge.getSelectionInfo()
+      if (sel) {
+        setCheckContext({
+          kind: 'selection',
+          filePath: sel.filePath,
+          startLine: sel.startLine,
+          endLine: sel.endLine,
+        })
+      } else {
+        const filePath = aiBridge.getActiveFilePath()
+        setCheckContext(filePath ? { kind: 'file', filePath } : null)
+      }
+    }
+    updateCtx()
+
+    // 订阅选区变化
+    const unsubscribe = aiBridge.onSelectionChange(() => {
+      updateCtx()
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [activeRightPanel, aiBridge])
+
+  // 切换文件时也更新 context chip(currentFile 变化不触发 onSelectionChange)
+  useEffect(() => {
+    if (activeRightPanel !== 'check') return
+    const sel = aiBridge.getSelectionInfo()
+    if (sel) {
+      setCheckContext({
+        kind: 'selection',
+        filePath: sel.filePath,
+        startLine: sel.startLine,
+        endLine: sel.endLine,
+      })
+    } else {
+      setCheckContext(currentFile ? { kind: 'file', filePath: currentFile } : null)
+    }
+  }, [activeRightPanel, currentFile, aiBridge])
 
   // 拉所有 .tf 文件最新内容(已打开优先用 live model 含未保存改动,其余 readFile)。
   // 供「转到定义」索引和 AI 跨文件检查共用。
@@ -994,13 +1231,13 @@ export default function ManifestEditorV2() {
 
   /** 核心检查执行:收集文件 → 调 API → 更新面板状态 */
   const runCheckCore = useCallback(
-    async (source: 'ai' | 'publish') => {
+    async (source: 'ai' | 'publish', instruction?: string, history?: ConversationTurn[], sessionId?: string) => {
       setCheckBusy(true)
       setCheckIssues([])
       setCheckCompletedSteps([])
       setCheckError(null)
       setCheckCurrentStep('')
-      setCheckPanelOpen(true)
+      setActiveRightPanel('check')
 
       const controller = new AbortController()
       checkAbortRef.current = controller
@@ -1018,6 +1255,7 @@ export default function ManifestEditorV2() {
             const collected = await aiBridge.collectCheckFiles()
             if (collected.length === 0 || !collected.some((f) => f.content.trim())) {
               setCheckBusy(false)
+              setCheckError('没有可检查的文件内容')
               return []
             }
             files = collected.map((f) => ({ path: f.path, content: f.content, start_line: f.startLine }))
@@ -1026,13 +1264,20 @@ export default function ManifestEditorV2() {
           const collected = await aiBridge.collectCheckFiles()
           if (collected.length === 0 || !collected.some((f) => f.content.trim())) {
             setCheckBusy(false)
+            setCheckError('没有可检查的文件内容')
             return []
           }
           files = collected.map((f) => ({ path: f.path, content: f.content, start_line: f.startLine }))
         }
 
         const result = await checkManifestDraft(
-          { files, contextIds: aiBridge.contextIds },
+          {
+            files,
+            contextIds: aiBridge.contextIds,
+            userInstruction: source === 'ai' ? instruction : undefined,
+            history: source === 'ai' ? history : undefined,
+            sessionId: source === 'ai' ? sessionId : undefined,
+          },
           (ev: ManifestProgressEvent) => {
             setCheckCurrentStep(ev.step_name || '')
             if (ev.completed_steps?.length) setCheckCompletedSteps(ev.completed_steps)
@@ -1055,9 +1300,9 @@ export default function ManifestEditorV2() {
     [aiBridge],
   )
 
-  /** AI 工具栏触发的检查 */
-  const runAiCheck = useCallback(async () => {
-    await runCheckCore('ai')
+  /** AI 工具栏触发的检查(接受用户指令、历史、会话ID) */
+  const runAiCheck = useCallback(async (instruction?: string, history?: ConversationTurn[], sessionId?: string) => {
+    await runCheckCore('ai', instruction, history, sessionId)
   }, [runCheckCore])
 
   /** 发布弹窗触发的检查 */
@@ -1067,7 +1312,7 @@ export default function ManifestEditorV2() {
   }, [runCheckCore])
 
   const handleCheckApplyFix = useCallback(
-    async (issue: ManifestIssue, _idx: number) => {
+    async (issue: ManifestIssue) => {
       if (!issue.fix) return
       try {
         await aiBridge.applyFix({
@@ -1085,7 +1330,7 @@ export default function ManifestEditorV2() {
 
   const handleCheckPanelClose = useCallback(() => {
     checkAbortRef.current?.abort()
-    setCheckPanelOpen(false)
+    setActiveRightPanel((prev) => (prev === 'check' ? null : prev))
   }, [])
 
   // 全量重建「转到定义」索引。文件树结构变化(新建/删除/重命名/刷新)后跑一次;
@@ -1153,6 +1398,28 @@ export default function ManifestEditorV2() {
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [sidebarWidth])
+
+  // 右侧面板宽度拖拽:按住左缘分隔条横向拖,限 250–700px
+  const startPanelResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = rightPanelWidth
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(700, Math.max(250, startW - (ev.clientX - startX)))
+      setRightPanelWidth(w)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      editorRef.current?.layout()
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [rightPanelWidth])
 
   // 关闭编辑器(左上红灯):先 flush 当前文件,再返回 manifest 列表
   const handleClose = useCallback(async () => {
@@ -1536,6 +1803,14 @@ export default function ManifestEditorV2() {
       setGhostDir(null) // 文件已实体化,幽灵目录转正
       setInlineError(null)
       setManifestMissing(false)
+      // 标记为新建文件
+      setNewFiles((prev) => {
+        if (prev.has(path)) return prev
+        const next = new Set(prev)
+        next.add(path)
+        return next
+      })
+      originalContentRef.current.set(path, '')
       const items = await listFiles(ctx)
       setFiles(items)
       void openFile(path)
@@ -2241,7 +2516,14 @@ export default function ManifestEditorV2() {
               }}
             />
           ) : (
-            <span className={styles.name}>{node.name}</span>
+            <>
+              <span className={styles.name}>{node.name}</span>
+              {newFiles.has(node.path) ? (
+                <span className={`${styles.statusBadge} ${styles.new}`} title="新建文件">U</span>
+              ) : modifiedFiles.has(node.path) ? (
+                <span className={`${styles.statusBadge} ${styles.modified}`} title="已修改">M</span>
+              ) : null}
+            </>
           )}
           {deleting ? (
             deleteConfirmActions
@@ -2379,15 +2661,38 @@ export default function ManifestEditorV2() {
           <ManifestAiTools
             bridge={aiBridge}
             disabled={manifestMissing}
-            onPanelWidthChange={setAiPanelWidth}
-            onRequestCheck={() => void runAiCheck()}
+            open={activeRightPanel === 'ai'}
+            onOpen={() => setActiveRightPanel('ai')}
+            onClose={() => setActiveRightPanel((prev) => (prev === 'ai' ? null : prev))}
+            panelWidth={rightPanelWidth}
+            onRequestCheck={() => {
+              // 打开检查面板时快照当前选区/文件上下文
+              const sel = aiBridge.getSelectionInfo()
+              if (sel) {
+                setCheckContext({
+                  kind: 'selection',
+                  filePath: sel.filePath,
+                  startLine: sel.startLine,
+                  endLine: sel.endLine,
+                })
+              } else {
+                const filePath = aiBridge.getActiveFilePath()
+                setCheckContext(filePath ? { kind: 'file', filePath } : null)
+              }
+              // 清空上次检查的残留状态，避免跨 session 显示旧进度
+              setCheckIssues([])
+              setCheckCompletedSteps([])
+              setCheckError(null)
+              setCheckCurrentStep('')
+              setActiveRightPanel('check')
+            }}
           />
           <button
             title="对当前草稿在已部署 workspace 跑 plan-only 检测"
             disabled={manifestMissing}
             onClick={() => {
               setRunViewLast(false)
-              setRunOpen(true)
+              setActiveRightPanel('run')
             }}
           >
             <i className="codicon codicon-play" /> Run
@@ -2403,7 +2708,7 @@ export default function ManifestEditorV2() {
             className={styles.primary}
             title="把已发布版本部署到 Workspace"
             disabled={manifestMissing}
-            onClick={() => setDeployOpen(true)}
+            onClick={() => setActiveRightPanel('deploy')}
           >
             <i className="codicon codicon-rocket" /> 部署到 Workspace
           </button>
@@ -2738,7 +3043,7 @@ export default function ManifestEditorV2() {
         <div className={styles.sidebarResizer} onMouseDown={startSidebarResize} />
       </div>
 
-      <div className={styles.editorArea} style={{ marginRight: Math.max(checkPanelOpen ? CHECK_PANEL_WIDTH : 0, aiPanelWidth, runPanelWidth, deployPanelWidth) }}>
+      <div className={styles.editorArea} style={{ marginRight: activeRightPanel ? rightPanelWidth : 0 }}>
         <div className={styles.tabs}>
           {openTabs.map((path) => (
             <div
@@ -2842,7 +3147,7 @@ export default function ManifestEditorV2() {
             title={`查看上次运行: Task #${lastRunTask.taskId}`}
             onClick={() => {
               setRunViewLast(true)
-              setRunOpen(true)
+              setActiveRightPanel('run')
             }}
           >
             <i className="codicon codicon-output" />
@@ -2856,40 +3161,59 @@ export default function ManifestEditorV2() {
       </div>
 
       {/* 右侧停靠面板:检查 / Run / 部署(与 AI 生成面板共享布局,四选一互斥) */}
-      {checkPanelOpen && (
+      {activeRightPanel && (
+        <div
+          className={styles.panelResizer}
+          style={{ top: 65, bottom: 22, right: rightPanelWidth - 2 }}
+          onMouseDown={startPanelResize}
+        />
+      )}
+
+      {activeRightPanel === 'check' && (
         <CheckPanel
           busy={checkBusy}
           issues={checkIssues}
           completedSteps={checkCompletedSteps}
           checkError={checkError}
           currentStepName={checkCurrentStep}
+          manifestId={manifestId}
+          orgId={orgId}
+          checkContext={checkContext}
           onRevealAt={aiBridge.revealAt}
           onApplyFix={handleCheckApplyFix}
-          onRecheck={() => void runPublishCheck()}
+          onStartCheck={(instruction, history, sessionId) => void runAiCheck(instruction || undefined, history, sessionId)}
+          onRecheck={() => void runAiCheck()}
+          onSessionChange={() => {
+            setCheckIssues([])
+            setCheckCompletedSteps([])
+            setCheckError(null)
+            setCheckCurrentStep('')
+          }}
           onClose={handleCheckPanelClose}
+          panelWidth={rightPanelWidth}
         />
       )}
 
-      {runOpen && (
+      {activeRightPanel === 'run' && (
         <RunDialog
-          open={runOpen}
+          open
           ctx={ctx}
           lastRunTask={lastRunTask}
           viewLast={runViewLast}
           onRunTaskCreated={(taskId, workspaceId) => setLastRunTask({ taskId, workspaceId })}
           onClose={() => {
-            setRunOpen(false)
+            setActiveRightPanel((prev) => (prev === 'run' ? null : prev))
             setRunViewLast(false)
           }}
-          onPanelWidthChange={setRunPanelWidth}
+          panelWidth={rightPanelWidth}
         />
       )}
 
-      {deployOpen && (
+      {activeRightPanel === 'deploy' && (
         <DeployPanel
           ctx={ctx}
-          onClose={() => setDeployOpen(false)}
-          onPanelWidthChange={setDeployPanelWidth}
+          onClose={() => setActiveRightPanel((prev) => (prev === 'deploy' ? null : prev))}
+          panelWidth={rightPanelWidth}
         />
       )}
 

@@ -82,12 +82,14 @@ func (s *ManifestAIService) getManifestGenerationComposition() *models.SkillComp
 // GenerateResourceWithProgress 生成/修复 manifest 资源（带进度回调）
 //
 // currentContent 为编辑器当前光标处的上下文（选区或当前文件内容，可为空）。
+// conversationHistory 为会话历史上下文（前端传入，可为空）。
 func (s *ManifestAIService) GenerateResourceWithProgress(
 	userID string,
 	description string,
 	workspaceID string,
 	organizationID string,
 	currentContent string,
+	conversationHistory string,
 	progressCallback ProgressCallback,
 ) (*ManifestGenerateResult, error) {
 	totalTimer := NewTimer()
@@ -189,8 +191,14 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 	// 把精确匹配加载的 module skill 名追加到 UsedSkillNames(pipeline 展示)
 	assembleResult.UsedSkillNames = append(assembleResult.UsedSkillNames, moduleSkillNames...)
 
+	// 注入对话历史到 prompt 末尾（在 AI 调用前）
+	finalPrompt := assembleResult.Prompt
+	if conversationHistory != "" {
+		finalPrompt = assembleResult.Prompt + conversationHistory
+	}
+
 	aiTimer := NewTimer()
-	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
+	aiResult, err := s.aiFormService.callAI(aiConfig, finalPrompt)
 	RecordAICallDuration("manifest_resource_generation", "ai_call", aiTimer.ElapsedMs())
 	if err != nil {
 		IncAICallCount("manifest_resource_generation", "ai_error")

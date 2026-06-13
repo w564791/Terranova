@@ -32,7 +32,6 @@ import {
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import { variableSetService, type VariableSet } from '../../../services/variableSets'
 import {
-  AI_PANEL_WIDTH,
   chatPanelStyle,
   chatHeaderStyle,
   chatHeaderUnderline,
@@ -45,7 +44,7 @@ interface Props {
   ctx: ManifestEditorContext
   onClose: () => void
   onDeployed?: () => void
-  onPanelWidthChange?: (width: number) => void
+  panelWidth?: number
 }
 
 // ===== 内联样式(VS Code 暗色主题)=====
@@ -114,13 +113,6 @@ const btnDangerStyle: React.CSSProperties = {
   borderColor: '#f14c4c',
 }
 
-const btnDisabledStyle: React.CSSProperties = {
-  ...btnPrimaryStyle,
-  background: '#3a3a3a',
-  color: '#666',
-  cursor: 'default',
-}
-
 const footerStyle: React.CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -152,19 +144,6 @@ const tagBlueStyle: React.CSSProperties = {
   ...tagStyle,
   borderColor: '#3794ff',
   color: '#3794ff',
-}
-
-const infoBoxStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  background: 'rgba(55,148,255,0.1)',
-  border: '1px solid rgba(55,148,255,0.3)',
-  borderRadius: 4,
-  color: '#9cdcfe',
-  fontSize: 12,
-  marginBottom: 12,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
 }
 
 const warnBoxStyle: React.CSSProperties = {
@@ -250,7 +229,7 @@ const uninstallConfirmStyle: React.CSSProperties = {
 
 // ===== 组件 =====
 
-export default function DeployPanel({ ctx, onClose, onDeployed, onPanelWidthChange }: Props) {
+export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Props) {
   const navigate = useNavigate()
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
@@ -269,15 +248,6 @@ export default function DeployPanel({ ctx, onClose, onDeployed, onPanelWidthChan
   const [varsetDropdownOpen, setVarsetDropdownOpen] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmingUninstall, setConfirmingUninstall] = useState(false)
-
-  // 面板展开/折叠 → 通知父组件挤占宽度
-  useEffect(() => {
-    onPanelWidthChange?.(AI_PANEL_WIDTH)
-  }, [onPanelWidthChange])
-  useEffect(() => {
-    return () => onPanelWidthChange?.(0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // 加载数据
   useEffect(() => {
@@ -564,7 +534,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, onPanelWidthChan
   }
 
   return (
-    <div style={chatPanelStyle}>
+    <div style={panelWidth ? { ...chatPanelStyle, width: panelWidth } : chatPanelStyle}>
       {/* 顶栏 */}
       <div style={chatHeaderStyle}>
         <span style={{ color: '#cccccc', fontWeight: 600 }}>部署到 Workspace</span>

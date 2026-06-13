@@ -26,7 +26,6 @@ import { workspaceService, type Workspace } from '../../../services/workspaces'
 import api from '../../../services/api'
 import { useTerraformOutput } from '../../../hooks/useTerraformOutput'
 import {
-  AI_PANEL_WIDTH,
   chatPanelStyle,
   chatHeaderStyle,
   chatHeaderUnderline,
@@ -42,7 +41,7 @@ interface Props {
   viewLast: boolean
   onRunTaskCreated: (taskId: number, workspaceId: string) => void
   onClose: () => void
-  onPanelWidthChange?: (width: number) => void
+  panelWidth?: number
 }
 
 interface RunTarget {
@@ -386,7 +385,7 @@ export default function RunDialog({
   viewLast,
   onRunTaskCreated,
   onClose,
-  onPanelWidthChange,
+  panelWidth,
 }: Props) {
   const navigate = useNavigate()
   const [targets, setTargets] = useState<RunTarget[]>([])
@@ -397,15 +396,6 @@ export default function RunDialog({
   const [viewingTaskId, setViewingTaskId] = useState<number | null>(null)
   const [viewingWorkspaceId, setViewingWorkspaceId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-
-  // 面板展开/折叠 → 通知父组件挤占宽度
-  useEffect(() => {
-    onPanelWidthChange?.(open ? AI_PANEL_WIDTH : 0)
-  }, [open, onPanelWidthChange])
-  useEffect(() => {
-    return () => onPanelWidthChange?.(0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // viewLast 变化时自动跳到上次任务
   useEffect(() => {
@@ -517,7 +507,7 @@ export default function RunDialog({
   if (!open) return null
 
   return (
-    <div style={chatPanelStyle}>
+    <div style={panelWidth ? { ...chatPanelStyle, width: panelWidth } : chatPanelStyle}>
       {/* 顶栏 */}
       <div style={chatHeaderStyle}>
         <span style={{ color: '#cccccc', fontWeight: 600 }}>Run</span>

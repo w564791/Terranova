@@ -131,10 +131,24 @@ async function consumeSSE(
 
 // ========== 资源生成/修复 ==========
 
+export interface ConversationTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface ManifestAIContextPayload {
+  kind: 'selection' | 'file'
+  file_path: string
+  start_line?: number
+  end_line?: number
+}
+
 export interface GenerateResourceParams {
   description: string
   currentContent?: string // 当前选区或文件内容(修复时提供)
+  context?: ManifestAIContextPayload // 当前上下文来源元信息
   sessionId?: string // 非空则本次交互落入该会话
+  history?: ConversationTurn[] // 会话历史(上下文对话)
   contextIds?: {
     workspace_id?: string
     organization_id?: string
@@ -161,7 +175,9 @@ export async function generateManifestResource(
     {
       description: params.description,
       current_content: params.currentContent,
+      context: params.context,
       session_id: params.sessionId,
+      history: params.history,
       context_ids: params.contextIds,
     },
     onProgress,
@@ -193,6 +209,8 @@ export interface CheckFilePayload {
 export interface CheckDraftParams {
   files: CheckFilePayload[]
   sessionId?: string // 非空则本次检查落入该会话
+  userInstruction?: string // 用户自定义检查意见
+  history?: ConversationTurn[] // 会话历史(上下文对话)
   contextIds?: {
     workspace_id?: string
     organization_id?: string
@@ -217,6 +235,8 @@ export async function checkManifestDraft(
     {
       files: params.files,
       session_id: params.sessionId,
+      user_instruction: params.userInstruction,
+      history: params.history,
       context_ids: params.contextIds,
     },
     onProgress,

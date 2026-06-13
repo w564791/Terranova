@@ -3,6 +3,8 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
@@ -99,6 +101,7 @@ func (c *BedrockCaller) ChatWithTools(ctx context.Context, messages []AgentMessa
 
 	// 确定 model ID（GLM 不使用 inference profile）
 	finalModelID := c.resolveModelID()
+	logBedrockRequestFingerprint(finalModelID, messages, tools)
 
 	input := &bedrockruntime.InvokeModelInput{
 		ModelId:     aws.String(finalModelID),
@@ -115,6 +118,32 @@ func (c *BedrockCaller) ChatWithTools(ctx context.Context, messages []AgentMessa
 		return c.parseGLMResponse(output.Body)
 	}
 	return c.parseBedrockResponse(output.Body)
+}
+
+func logBedrockRequestFingerprint(modelID string, messages []AgentMessage, tools []AgentToolDef) {
+	systemPrompt := ""
+	roleCounts := make(map[string]int)
+	for _, msg := range messages {
+		roleCounts[msg.Role]++
+		if msg.Role == "system" && systemPrompt == "" {
+			systemPrompt = msg.Content
+		}
+	}
+	toolsJSON, _ := json.Marshal(tools)
+	log.Printf("[AICaller/Bedrock] request: model=%s system_hash=%s system_len=%d tools_hash=%s tools=%d messages=%d roles=%v",
+		modelID,
+		shortSHA256(systemPrompt),
+		len(systemPrompt),
+		shortSHA256(string(toolsJSON)),
+		len(tools),
+		len(messages),
+		roleCounts,
+	)
+}
+
+func shortSHA256(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 // buildBedrockRequest 构建 Bedrock Claude 请求体（支持 tool_use）
@@ -203,7 +232,15 @@ func (c *BedrockCaller) buildBedrockRequest(messages []AgentMessage, tools []Age
 	}
 
 	if systemPrompt != "" {
-		body["system"] = systemPrompt
+		// 使用 cache_control 标记 system prompt 以启用 Bedrock prompt caching
+		// 相同前缀在 5 分钟内复用可享受 90% input token 折扣
+		body["system"] = []interface{}{
+			map[string]interface{}{
+				"type":          "text",
+				"text":          systemPrompt,
+				"cache_control": map[string]interface{}{"type": "ephemeral"},
+			},
+		}
 	}
 	body["messages"] = claudeMessages
 
@@ -254,8 +291,10 @@ func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, err
 			Input     json.RawMessage `json:"input,omitempty"`
 		} `json:"content"`
 		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 		StopReason string `json:"stop_reason"`
 	}
@@ -264,11 +303,13 @@ func (c *BedrockCaller) parseBedrockResponse(body []byte) (*AgentAIResponse, err
 		return nil, fmt.Errorf("failed to parse bedrock response: %w", err)
 	}
 
-	// 记录 token 指标
+	// 记录 token 指标(含 cache 指标)
 	if response.Usage.InputTokens > 0 || response.Usage.OutputTokens > 0 {
 		metrics.IncAITokens("bedrock", "prompt", float64(response.Usage.InputTokens))
 		metrics.IncAITokens("bedrock", "completion", float64(response.Usage.OutputTokens))
-		log.Printf("[AICaller/Bedrock] tokens: input=%d, output=%d", response.Usage.InputTokens, response.Usage.OutputTokens)
+		log.Printf("[AICaller/Bedrock] tokens: input=%d, output=%d, cache_create=%d, cache_read=%d",
+			response.Usage.InputTokens, response.Usage.OutputTokens,
+			response.Usage.CacheCreationInputTokens, response.Usage.CacheReadInputTokens)
 	}
 
 	result := &AgentAIResponse{}

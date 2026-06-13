@@ -702,10 +702,21 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 	requestBody := map[string]interface{}{
 		"anthropic_version": "bedrock-2023-05-31",
 		"max_tokens":        4000,
+		// 把 prompt 放到 system message 并标记 cache_control,
+		// 使 Bedrock prompt caching 生效(相同前缀 5 分钟内复用享 90% 折扣)。
+		// prompt 前半段是静态 skills(每次相同),后半段是动态上下文(每次不同),
+		// Bedrock 会缓存匹配的静态前缀部分。
+		"system": []map[string]interface{}{
+			{
+				"type":          "text",
+				"text":          prompt,
+				"cache_control": map[string]interface{}{"type": "ephemeral"},
+			},
+		},
 		"messages": []map[string]string{
 			{
 				"role":    "user",
-				"content": prompt,
+				"content": "请根据以上指示完成任务。",
 			},
 		},
 	}
@@ -733,8 +744,10 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 			Text string `json:"text"`
 		} `json:"content"`
 		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens               int `json:"input_tokens"`
+			OutputTokens              int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens      int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	}
 
@@ -742,10 +755,14 @@ func (s *AIFormService) callBedrockForForm(region, modelID, prompt string, useIn
 		return "", fmt.Errorf("无法解析响应: %w", err)
 	}
 
-	// 记录 token 用量指标
+	// 记录 token 用量指标(含 cache 指标)
 	if response.Usage.InputTokens > 0 || response.Usage.OutputTokens > 0 {
 		metrics.IncAITokens("bedrock", "prompt", float64(response.Usage.InputTokens))
 		metrics.IncAITokens("bedrock", "completion", float64(response.Usage.OutputTokens))
+		if response.Usage.CacheCreationInputTokens > 0 || response.Usage.CacheReadInputTokens > 0 {
+			log.Printf("[AIFormService/Bedrock] cache: create=%d, read=%d",
+				response.Usage.CacheCreationInputTokens, response.Usage.CacheReadInputTokens)
+		}
 	}
 
 	if len(response.Content) == 0 {

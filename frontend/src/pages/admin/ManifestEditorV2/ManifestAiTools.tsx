@@ -18,9 +18,9 @@ import {
   type ManifestAISession,
   type ManifestAIMessage,
   type ManifestCompletedStep,
+  type ConversationTurn,
 } from '../../../services/manifestAi'
 import {
-  AI_PANEL_WIDTH,
   chatPanelStyle,
   chatHeaderStyle,
   chatHeaderUnderline,
@@ -113,8 +113,12 @@ export interface EditorBridge {
 interface Props {
   bridge: EditorBridge
   disabled?: boolean
-  /** 生成面板展开/折叠时回调其占用宽度(0=折叠),父组件据此挤占编辑区 */
-  onPanelWidthChange?: (width: number) => void
+  /** 生成面板是否展开。由父组件统一控制,用于和检查/Run/部署互斥。 */
+  open?: boolean
+  onOpen?: () => void
+  onClose?: () => void
+  /** 当前面板宽度(拖拽时由父组件传入,用于动态覆盖 chatPanelStyle 的固定宽度) */
+  panelWidth?: number
   /** 检查按钮点击:由父组件执行检查并在右侧面板展示结果 */
   onRequestCheck?: () => void
 }
@@ -130,9 +134,7 @@ const LEVEL_ICON: Record<string, string> = {
   info: 'codicon-info',
 }
 
-export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, onRequestCheck }: Props) {
-  // 生成弹窗
-  const [genOpen, setGenOpen] = useState(false)
+export default function ManifestAiTools({ bridge, disabled, open = false, onOpen, onClose, panelWidth, onRequestCheck }: Props) {
   const [description, setDescription] = useState('')
   const [genBusy, setGenBusy] = useState(false)
   const [genStep, setGenStep] = useState<ManifestProgressEvent | null>(null)
@@ -263,26 +265,38 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
       const text = bridge.getActiveFileContent()
       setAiContext(filePath && text ? { kind: 'file', text, filePath } : null)
     }
-    setGenOpen(true)
+    onOpen?.()
     void refreshSessions(true) // 打开面板时加载会话列表,默认续最近一条
-  }, [bridge, refreshSessions])
-
-  // 生成面板展开/折叠时,通知父组件挤占宽度(展开 AI_PANEL_WIDTH,折叠 0)。
-  // 注:不在此 effect 的 cleanup 里置 0——否则每次 genOpen 切换都会先 0 再 WIDTH,
-  // 造成一帧 0→WIDTH 闪烁 + Monaco 双 layout。
-  useEffect(() => {
-    onPanelWidthChange?.(genOpen ? AI_PANEL_WIDTH : 0)
-  }, [genOpen, onPanelWidthChange])
-  // 仅在组件卸载时恢复编辑器全宽(空依赖,cleanup 只在 unmount 跑一次)
-  useEffect(() => {
-    return () => onPanelWidthChange?.(0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [bridge, refreshSessions, onOpen])
 
   // 生成的 abort 控制器
   const genAbortRef = useRef<AbortController | null>(null)
 
   // ===== 生成/修复 =====
+  // 从本地历史消息构建对话上下文(发送给 AI 作为上下文参考)
+  const buildConversationHistory = useCallback((): ConversationTurn[] => {
+    if (history.length === 0) return []
+    const turns: ConversationTurn[] = []
+    for (const msg of history) {
+      let parsed: Record<string, unknown> = {}
+      try { parsed = JSON.parse(msg.content) } catch { /* ignore */ }
+      if (msg.role === 'user') {
+        const desc = String(parsed.description ?? '')
+        const truncated = desc.length > 500 ? desc.slice(0, 500) + '...(已截断)' : desc
+        if (truncated) turns.push({ role: 'user', content: truncated })
+      } else if (msg.role === 'assistant') {
+        // 提取 HCL 摘要或检查结论,避免传太多 token
+        const hcl = String(parsed.hcl ?? '')
+        const message = String(parsed.message ?? '')
+        const content = hcl ? `生成了 HCL 代码:\n\`\`\`hcl\n${hcl.slice(0, 500)}${hcl.length > 500 ? '\n...(已截断)' : ''}\n\`\`\`` : (message || '完成')
+        turns.push({ role: 'assistant', content })
+      }
+    }
+    // 限制历史轮数,避免 prompt 过大(最多保留最近 6 轮)
+    const maxTurns = 12 // 6 轮 = 12 条
+    return turns.length > maxTurns ? turns.slice(turns.length - maxTurns) : turns
+  }, [history])
+
   const runGenerate = useCallback(async () => {
     if (!description.trim() || genBusy) return
     setGenBusy(true)
@@ -291,16 +305,27 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
     setGenWarnings([])
     setGenCompletedSteps([])
     setGenCurrentStep('')
+    setDescription('')
     const controller = new AbortController()
     genAbortRef.current = controller
 
     const sid = await ensureSession() // 无当前会话则新建,把交互落入会话
+    const convHistory = buildConversationHistory()
     try {
       const result = await generateManifestResource(
         {
           description: description.trim(),
           currentContent: aiContext?.text || undefined,
+          context: aiContext
+            ? {
+                kind: aiContext.kind,
+                file_path: aiContext.filePath,
+                start_line: aiContext.startLine,
+                end_line: aiContext.endLine,
+              }
+            : undefined,
           sessionId: sid,
+          history: convHistory.length > 0 ? convHistory : undefined,
           contextIds: bridge.contextIds,
         },
         (ev) => {
@@ -320,7 +345,6 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
       }
       if (result.hcl) {
         bridge.insertText(result.hcl)
-        setDescription('')
         setGenWarnings(result.warnings ?? []) // schema 校验警告(若有)
         if (sid) {
           void loadHistory(sid) // 刷新会话历史
@@ -339,7 +363,7 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
       setGenBusy(false)
       genAbortRef.current = null
     }
-  }, [description, genBusy, bridge, aiContext, ensureSession, loadHistory, refreshSessions])
+  }, [description, genBusy, bridge, aiContext, ensureSession, loadHistory, refreshSessions, buildConversationHistory])
 
   return (
     <>
@@ -360,8 +384,8 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
       </button>
 
       {/* ===== 生成面板(VS Code 风格右侧停靠聊天面板)===== */}
-      {genOpen && (
-        <div style={chatPanelStyle}>
+      {open && (
+        <div style={panelWidth ? { ...chatPanelStyle, width: panelWidth } : chatPanelStyle}>
           {/* 顶栏:标题 + 右上角操作(含关闭按钮)*/}
           <div style={chatHeaderStyle}>
             <span style={{ color: '#cccccc', fontWeight: 600 }}>AI 生成</span>
@@ -409,7 +433,11 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
               className="codicon codicon-close"
               title="关闭智能体"
               style={chatHeaderIcon}
-              onClick={() => !genBusy && setGenOpen(false)}
+              onClick={() => {
+                if (!genBusy) {
+                  onClose?.()
+                }
+              }}
             />
           </div>
 
@@ -449,51 +477,52 @@ export default function ManifestAiTools({ bridge, disabled, onPanelWidthChange, 
             </div>
           )}
 
-          {/* 内容区:历史对话流 / 空态引导 / 进度 / 错误 */}
+          {/* pipeline 步骤:固定在侧边栏顶部,不随历史/结果滚动 */}
+          {(() => {
+            const hasSteps = genCompletedSteps.length > 0 || (genBusy && genCurrentStep)
+            const showPipeline = genBusy ? stepsExpanded : (stepsExpanded && genCompletedSteps.length > 0)
+            if (!hasSteps || !showPipeline) return null
+            return (
+              <div style={pipelineStyle}>
+                {genCompletedSteps.map((st, i) => (
+                  <div key={i} style={pipelineStepStyle}>
+                    <i className="codicon codicon-pass-filled" style={{ color: '#4ec9b0' }} />
+                    <span style={{ fontWeight: 500 }}>{st.name}</span>
+                    <span style={{ opacity: 0.6 }}>· {GEN_STEP_DESC[st.name] || ''}</span>
+                    <span style={{ marginLeft: 'auto', opacity: 0.5 }}>{Math.round(st.elapsed_ms)}ms</span>
+                    {st.used_skills && st.used_skills.length > 0 && (
+                      <div style={pipelineSkillStyle}>
+                        {st.used_skills.map((sk) => (
+                          <span key={sk} style={pipelineSkillTagStyle}>{sk}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {genBusy && genCurrentStep && !genCompletedSteps.some((s) => s.name === genCurrentStep) && (
+                  <div style={{ ...pipelineStepStyle, opacity: 0.6 }}>
+                    <i className="codicon codicon-loading codicon-modifier-spin" style={{ color: '#3794ff' }} />
+                    <span>{genCurrentStep}</span>
+                    <span style={{ opacity: 0.6 }}>· {GEN_STEP_DESC[genCurrentStep] || ''}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* 内容区:历史对话流 / 空态引导 / 错误 */}
           <div style={chatBodyStyle}>
             {/* 历史消息回放 */}
-            {history.map((m) => (
+            {history.filter((m) => m.kind === 'generate').map((m) => (
               <ManifestHistoryMessage key={m.id} msg={m} onJump={bridge.revealAt} />
             ))}
-            {!genBusy && !genStep && !genError && !genCompletedSteps.length && history.length === 0 && (
+            {!genBusy && !genStep && !genError && !genCompletedSteps.length && history.filter((m) => m.kind === 'generate').length === 0 && (
               <div style={chatEmptyStyle}>
                 <i className="codicon codicon-sparkle" style={{ fontSize: 40, opacity: 0.5 }} />
                 <div style={{ fontSize: 15, fontWeight: 600 }}>使用智能体构建</div>
                 <div style={{ fontSize: 12, opacity: 0.6 }}>AI 答复可能不准确</div>
               </div>
             )}
-            {/* pipeline 步骤:生成中默认展示(可 toggle),完成后需用户展开 */}
-            {(() => {
-              const hasSteps = genCompletedSteps.length > 0 || (genBusy && genCurrentStep)
-              const showPipeline = genBusy ? stepsExpanded : (stepsExpanded && genCompletedSteps.length > 0)
-              if (!hasSteps || !showPipeline) return null
-              return (
-                <div style={pipelineStyle}>
-                  {genCompletedSteps.map((st, i) => (
-                    <div key={i} style={pipelineStepStyle}>
-                      <i className="codicon codicon-pass-filled" style={{ color: '#4ec9b0' }} />
-                      <span style={{ fontWeight: 500 }}>{st.name}</span>
-                      <span style={{ opacity: 0.6 }}>· {GEN_STEP_DESC[st.name] || ''}</span>
-                      <span style={{ marginLeft: 'auto', opacity: 0.5 }}>{Math.round(st.elapsed_ms)}ms</span>
-                      {st.used_skills && st.used_skills.length > 0 && (
-                        <div style={pipelineSkillStyle}>
-                          {st.used_skills.map((sk) => (
-                            <span key={sk} style={pipelineSkillTagStyle}>{sk}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {genBusy && genCurrentStep && !genCompletedSteps.some((s) => s.name === genCurrentStep) && (
-                    <div style={{ ...pipelineStepStyle, opacity: 0.6 }}>
-                      <i className="codicon codicon-loading codicon-modifier-spin" style={{ color: '#3794ff' }} />
-                      <span>{genCurrentStep}</span>
-                      <span style={{ opacity: 0.6 }}>· {GEN_STEP_DESC[genCurrentStep] || ''}</span>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
             {genError && <div style={errorStyle}>{genError}</div>}
             {genWarnings.length > 0 && (
               <div style={genWarnStyle}>
@@ -576,6 +605,34 @@ function fileNameOf(path: string): string {
   return path.split('/').pop() || path
 }
 
+function formatHistoryContext(value: unknown): string {
+  if (!value || typeof value !== 'object') return ''
+  const ctx = value as Record<string, unknown>
+  const path = String(ctx.file_path ?? ctx.filePath ?? '')
+  if (!path) return ''
+  const kind = String(ctx.kind ?? '')
+  const start = Number(ctx.start_line ?? ctx.startLine ?? 0)
+  const end = Number(ctx.end_line ?? ctx.endLine ?? 0)
+  const range = start > 0 ? `:${start}${end > start ? `-${end}` : ''}` : ''
+  return `${kind === 'selection' ? '选区 ' : '文件 '}${path}${range}`
+}
+
+function formatHistoryFileItem(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (!value || typeof value !== 'object') return ''
+  const item = value as Record<string, unknown>
+  const path = String(item.path ?? item.file ?? '')
+  if (!path) return ''
+  const start = Number(item.start_line ?? item.startLine ?? 0)
+  const end = Number(item.end_line ?? item.endLine ?? 0)
+  return start > 0 ? `${path}:${start}${end > start ? `-${end}` : ''}` : path
+}
+
+function formatHistoryFiles(value: unknown): string {
+  if (!Array.isArray(value)) return ''
+  return value.map(formatHistoryFileItem).filter(Boolean).join(', ')
+}
+
 // ManifestHistoryMessage 渲染一条历史消息(用户输入 / AI 产出,按 kind 区分)
 function ManifestHistoryMessage({
   msg,
@@ -601,11 +658,18 @@ function ManifestHistoryMessage({
       </div>
       {/* 用户消息 */}
       {isUser && msg.kind === 'generate' && (
-        <div style={historyTextStyle}>{String(parsed.description ?? '')}</div>
+        <div style={historyTextStyle}>
+          <div>{String(parsed.description ?? '')}</div>
+          {formatHistoryContext(parsed.context) && (
+            <div style={{ marginTop: 4, color: '#9cdcfe', fontStyle: 'italic' }}>
+              上下文：{formatHistoryContext(parsed.context)}
+            </div>
+          )}
+        </div>
       )}
       {isUser && msg.kind === 'check' && (
         <div style={historyTextStyle}>
-          检查:{Array.isArray(parsed.files) ? (parsed.files as string[]).join(', ') : ''}
+          检查:{formatHistoryFiles(parsed.file_contexts ?? parsed.files)}
         </div>
       )}
       {/* AI 产出:生成 → HCL;检查 → 问题列表 */}

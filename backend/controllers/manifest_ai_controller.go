@@ -6,6 +6,7 @@ import (
 	"iac-platform/services"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,11 +31,27 @@ func NewManifestAIController(db *gorm.DB) *ManifestAIController {
 	}
 }
 
+// ConversationTurn 会话中的一轮对话（用于前端传递上下文历史）
+type ConversationTurn struct {
+	Role    string `json:"role"`    // "user" | "assistant"
+	Content string `json:"content"` // 该轮的文本内容
+}
+
+// ManifestAIContext 当前编辑器上下文来源(文件/选区),用于 prompt 与历史记录。
+type ManifestAIContext struct {
+	Kind      string `json:"kind,omitempty"`      // "file" | "selection"
+	FilePath  string `json:"file_path,omitempty"` // manifest 内路径
+	StartLine int    `json:"start_line,omitempty"`
+	EndLine   int    `json:"end_line,omitempty"`
+}
+
 // GenerateResourceRequest 生成/修复请求
 type GenerateResourceRequest struct {
-	Description    string `json:"description" binding:"required,max=2000"`
-	CurrentContent string `json:"current_content,omitempty"` // 当前选区或文件内容（修复时提供）
-	SessionID      string `json:"session_id,omitempty"`      // 非空则把本次交互落入该会话(向后兼容:空则不持久化)
+	Description    string             `json:"description" binding:"required,max=2000"`
+	CurrentContent string             `json:"current_content,omitempty"` // 当前选区或文件内容（修复时提供）
+	Context        ManifestAIContext  `json:"context,omitempty"`         // 当前上下文来源元信息
+	SessionID      string             `json:"session_id,omitempty"`      // 非空则把本次交互落入该会话(向后兼容:空则不持久化)
+	History        []ConversationTurn `json:"history,omitempty"`         // 会话历史(上下文对话)
 	ContextIDs     struct {
 		WorkspaceID    string `json:"workspace_id,omitempty"`
 		OrganizationID string `json:"organization_id,omitempty"`
@@ -50,12 +67,78 @@ type CheckFile struct {
 
 // CheckDraftRequest 检查请求
 type CheckDraftRequest struct {
-	Files      []CheckFile `json:"files" binding:"required,min=1"` // 当前文件 + 跨文件关联文件
-	SessionID  string      `json:"session_id,omitempty"`           // 非空则把本次检查落入该会话
-	ContextIDs struct {
+	Files           []CheckFile        `json:"files" binding:"required,min=1"`                // 当前文件 + 跨文件关联文件
+	SessionID       string             `json:"session_id,omitempty"`                          // 非空则把本次检查落入该会话
+	UserInstruction string             `json:"user_instruction,omitempty" binding:"max=2000"` // 用户自定义检查意见（如"重点检查安全组"）
+	History         []ConversationTurn `json:"history,omitempty"`                             // 会话历史(上下文对话)
+	ContextIDs      struct {
 		WorkspaceID    string `json:"workspace_id,omitempty"`
 		OrganizationID string `json:"organization_id,omitempty"`
 	} `json:"context_ids,omitempty"`
+}
+
+// formatConversationHistory 把对话历史格式化为 prompt 中的上下文文本
+func formatConversationHistory(history []ConversationTurn) string {
+	if len(history) == 0 {
+		return ""
+	}
+	const maxContentLen = 2000 // 单条历史内容最大字符数,防止 prompt 过大
+	var b strings.Builder
+	b.WriteString("\n\n---\n\n## 之前的对话上下文\n\n")
+	for _, turn := range history {
+		content := turn.Content
+		if len([]rune(content)) > maxContentLen {
+			content = string([]rune(content)[:maxContentLen]) + "...(已截断)"
+		}
+		switch turn.Role {
+		case "user":
+			fmt.Fprintf(&b, "**用户**: %s\n\n", content)
+		case "assistant":
+			fmt.Fprintf(&b, "**助手**: %s\n\n", content)
+		}
+	}
+	b.WriteString("---\n\n## 当前请求\n\n")
+	return b.String()
+}
+
+func formatCurrentContentWithContext(content string, ctx ManifestAIContext) string {
+	if strings.TrimSpace(content) == "" || ctx.FilePath == "" {
+		return content
+	}
+	var b strings.Builder
+	b.WriteString("### 上下文来源\n")
+	if ctx.Kind != "" {
+		fmt.Fprintf(&b, "- 类型: %s\n", ctx.Kind)
+	}
+	fmt.Fprintf(&b, "- 文件: %s\n", ctx.FilePath)
+	if ctx.StartLine > 0 {
+		fmt.Fprintf(&b, "- 行: %d", ctx.StartLine)
+		if ctx.EndLine > ctx.StartLine {
+			fmt.Fprintf(&b, "-%d", ctx.EndLine)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n### 上下文内容\n")
+	b.WriteString(content)
+	return b.String()
+}
+
+func checkedFileContexts(files []CheckFile) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(files))
+	for _, f := range files {
+		start := f.StartLine
+		if start < 1 {
+			start = 1
+		}
+		lineCount := strings.Count(f.Content, "\n") + 1
+		end := start + lineCount - 1
+		out = append(out, map[string]interface{}{
+			"path":       f.Path,
+			"start_line": start,
+			"end_line":   end,
+		})
+	}
+	return out
 }
 
 // GenerateResourceSSE 生成/修复 manifest 资源（SSE 实时进度）
@@ -86,12 +169,16 @@ func (c *ManifestAIController) GenerateResourceSSE(ctx *gin.Context) {
 
 	log.Printf("[ManifestAI-SSE] 开始资源生成: user_id=%s", userID)
 
+	historyText := formatConversationHistory(req.History)
+	currentContent := formatCurrentContentWithContext(req.CurrentContent, req.Context)
+
 	result, err := c.genService.GenerateResourceWithProgress(
 		userID.(string),
 		req.Description,
 		req.ContextIDs.WorkspaceID,
 		req.ContextIDs.OrganizationID,
-		req.CurrentContent,
+		currentContent,
+		historyText,
 		progressCallback,
 	)
 	if err != nil {
@@ -122,9 +209,13 @@ func (c *ManifestAIController) GenerateResourceSSE(ctx *gin.Context) {
 	})
 
 	// 落会话(session_id 为空则跳过)
+	userContent := map[string]interface{}{"description": req.Description}
+	if req.Context.FilePath != "" {
+		userContent["context"] = req.Context
+	}
 	c.sessionService.AppendExchange(
 		req.SessionID, userID.(string), "generate",
-		services.MarshalJSONContent(map[string]string{"description": req.Description}),
+		services.MarshalJSONContent(userContent),
 		services.MarshalJSONContent(map[string]interface{}{"hcl": result.HCL, "warnings": result.Warnings}),
 	)
 
@@ -157,17 +248,22 @@ func (c *ManifestAIController) CheckDraftSSE(ctx *gin.Context) {
 		c.sendSSEEvent(ctx, flusher, event)
 	}
 
-	log.Printf("[ManifestAI-SSE] 开始草稿检查: user_id=%s, files=%d", userID, len(req.Files))
+	log.Printf("[ManifestAI-SSE] 开始草稿检查: user_id=%s, files=%d, user_instruction=%q, session_id=%s, history_count=%d",
+		userID, len(req.Files), req.UserInstruction, req.SessionID, len(req.History))
 
 	files := make([]services.CheckFileInput, 0, len(req.Files))
 	for _, f := range req.Files {
 		files = append(files, services.CheckFileInput{Path: f.Path, Content: f.Content, StartLine: f.StartLine})
 	}
 
+	checkHistoryText := formatConversationHistory(req.History)
+
 	result, err := c.checkService.CheckDraftWithProgress(
 		userID.(string),
 		req.ContextIDs.WorkspaceID,
 		files,
+		req.UserInstruction,
+		checkHistoryText,
 		progressCallback,
 	)
 	if err != nil {
@@ -201,9 +297,14 @@ func (c *ManifestAIController) CheckDraftSSE(ctx *gin.Context) {
 	for _, f := range req.Files {
 		checkedPaths = append(checkedPaths, f.Path)
 	}
+	userMsgContent := map[string]interface{}{"files": checkedPaths}
+	if req.UserInstruction != "" {
+		userMsgContent["user_instruction"] = req.UserInstruction
+	}
+	userMsgContent["file_contexts"] = checkedFileContexts(req.Files)
 	c.sessionService.AppendExchange(
 		req.SessionID, userID.(string), "check",
-		services.MarshalJSONContent(map[string]interface{}{"files": checkedPaths}),
+		services.MarshalJSONContent(userMsgContent),
 		services.MarshalJSONContent(map[string]interface{}{"issues": result.Issues, "message": result.Message}),
 	)
 

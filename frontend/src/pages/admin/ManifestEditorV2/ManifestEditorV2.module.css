@@ -165,6 +165,14 @@
 }
 .sidebarResizer:hover { background: var(--accent, #007acc); }
 .sidebarResizer:active { background: var(--accent, #007acc); }
+
+/* 右侧面板左缘拖拽条:与面板同级,绝对定位到 .root */
+.panelResizer {
+  position: absolute; width: 4px;
+  cursor: col-resize; z-index: 70;
+}
+.panelResizer:hover { background: var(--accent, #007acc); }
+.panelResizer:active { background: var(--accent, #007acc); }
 .sideBar .header {
   padding: 8px 12px 4px; font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.5px; color: var(--fg-default);
@@ -208,6 +216,26 @@
 .treeNode .chevron.empty { visibility: hidden; }
 .treeNode .icon { width: 16px; display: inline-flex; align-items: center; justify-content: center; }
 .treeNode .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+/* 文件状态标记:U=新建(绿) M=修改(橙) — VS Code SCM 风格 */
+.treeNode .statusBadge {
+  font-size: 11px; font-weight: 700; font-style: italic;
+  margin-left: 4px; flex-shrink: 0; user-select: none;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+.treeNode .statusBadge.new { color: #73c991; }
+.treeNode .statusBadge.modified { color: #e2c08d; }
+
+/* Monaco gutter diff 指示条:新增/修改行的左侧彩色条 */
+.lineAdded {
+  background: #73c991 !important;
+  width: 3px !important;
+  margin-left: 3px;
+}
+.lineModified {
+  background: #e2c08d !important;
+  width: 3px !important;
+  margin-left: 3px;
+}
 /* 目录图标用 VS Code 的暖黄色 */
 .iconFolder { color: #dcb67a; }
 /* 内联删除确认中的行:淡红底强调 */

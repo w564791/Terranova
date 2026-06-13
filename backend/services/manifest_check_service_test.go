@@ -55,6 +55,92 @@ module "bucket" {
 	}
 }
 
+func TestParseCheckIssuesDropsFixOnBlockHeaderWithAttributeReplacement(t *testing.T) {
+	file := CheckFileInput{
+		Path: "main.tf",
+		Content: `module "app" {
+  source = "platform/app"
+}`,
+		StartLine: 1,
+	}
+	aiResult := `{
+  "issues": [
+    {
+      "file": "main.tf",
+      "line": 2,
+      "level": "warning",
+      "message": "module 缺少 policy 配置",
+      "fix": {
+        "file": "main.tf",
+        "start_line": 1,
+        "end_line": 1,
+        "new_text": "  policy = \"strict\""
+      }
+    }
+  ]
+}`
+
+	issues, ok := parseCheckIssues(
+		aiResult,
+		"main.tf",
+		false,
+		map[string]bool{"main.tf": true},
+		map[string]CheckFileInput{"main.tf": file},
+	)
+	if !ok {
+		t.Fatalf("parseCheckIssues() ok = false")
+	}
+	if len(issues) != 1 {
+		t.Fatalf("parseCheckIssues() issues length = %d, want 1", len(issues))
+	}
+	if issues[0].Fix != nil {
+		t.Fatalf("unsafe fix should be dropped, got %#v", issues[0].Fix)
+	}
+}
+
+func TestParseCheckIssuesKeepsWholeBlockReplacementFromHeader(t *testing.T) {
+	file := CheckFileInput{
+		Path: "main.tf",
+		Content: `module "app" {
+  source = "platform/app"
+}`,
+		StartLine: 1,
+	}
+	aiResult := `{
+  "issues": [
+    {
+      "file": "main.tf",
+      "line": 1,
+      "level": "warning",
+      "message": "module 缺少 policy 配置",
+      "fix": {
+        "file": "main.tf",
+        "start_line": 1,
+        "end_line": 3,
+        "new_text": "module \"app\" {\n  source = \"platform/app\"\n  policy = \"strict\"\n}"
+      }
+    }
+  ]
+}`
+
+	issues, ok := parseCheckIssues(
+		aiResult,
+		"main.tf",
+		false,
+		map[string]bool{"main.tf": true},
+		map[string]CheckFileInput{"main.tf": file},
+	)
+	if !ok {
+		t.Fatalf("parseCheckIssues() ok = false")
+	}
+	if len(issues) != 1 {
+		t.Fatalf("parseCheckIssues() issues length = %d, want 1", len(issues))
+	}
+	if issues[0].Fix == nil {
+		t.Fatalf("safe whole-block fix should be kept")
+	}
+}
+
 func newManifestCheckTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

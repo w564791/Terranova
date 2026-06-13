@@ -172,6 +172,7 @@ export default function PublishVersionDialog({
   onClose,
   onPublished,
 }: Props) {
+  const { orgId, manifestId } = ctx
   const [version, setVersion] = useState('v1.0.0')
   const [changelog, setChangelog] = useState('')
   const [versionError, setVersionError] = useState<string | null>(null)
@@ -185,10 +186,10 @@ export default function PublishVersionDialog({
     setVersionError(null)
     setSubmitError(null)
     setChangelog('')
-    listVersions(ctx)
+    listVersions({ orgId, manifestId })
       .then((vs) => setVersion(suggestNextVersion(vs)))
       .catch(() => setVersion('v1.0.0'))
-  }, [open, ctx])
+  }, [open, orgId, manifestId])
 
   const handleOk = async () => {
     if (!publishReady) return

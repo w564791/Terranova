@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
@@ -29,12 +30,12 @@ type AICaller interface {
 
 // AgentMessage 对话消息
 type AgentMessage struct {
-	Role            string          `json:"role"`                      // system / user / assistant / tool
-	Content         string          `json:"content"`                   // 文本内容
-	ToolCalls       []AgentToolCall `json:"tool_calls,omitempty"`      // assistant 角色的工具调用
-	ToolCallID      string          `json:"tool_call_id,omitempty"`    // tool 角色时对应的 tool call ID
-	ThinkingContent   string `json:"thinking_content,omitempty"`   // extended thinking 内容（回传给下一轮）
-	ThinkingSignature string `json:"thinking_signature,omitempty"` // Claude thinking signature（回传用）
+	Role              string          `json:"role"`                         // system / user / assistant / tool
+	Content           string          `json:"content"`                      // 文本内容
+	ToolCalls         []AgentToolCall `json:"tool_calls,omitempty"`         // assistant 角色的工具调用
+	ToolCallID        string          `json:"tool_call_id,omitempty"`       // tool 角色时对应的 tool call ID
+	ThinkingContent   string          `json:"thinking_content,omitempty"`   // extended thinking 内容（回传给下一轮）
+	ThinkingSignature string          `json:"thinking_signature,omitempty"` // Claude thinking signature（回传用）
 }
 
 // AgentToolCall AI 发起的工具调用
@@ -73,8 +74,8 @@ type AgentLoopResult struct {
 	FinalOutput      string                `json:"final_output"`
 	ToolCalls        []AgentToolCallRecord `json:"tool_calls"`
 	TotalSteps       int                   `json:"total_steps"`
-	Completed        bool                  `json:"completed"`          // true=AI 主动结束, false=达到上限
-	ThinkingContents []string              `json:"thinking_contents"`  // 每轮 AI 返回的 thinking 内容（调试用）
+	Completed        bool                  `json:"completed"`         // true=AI 主动结束, false=达到上限
+	ThinkingContents []string              `json:"thinking_contents"` // 每轮 AI 返回的 thinking 内容（调试用）
 }
 
 // AIAgentLoop 通用 AI Agent 循环
@@ -88,7 +89,7 @@ type AgentLoopEvent struct {
 	Step     int
 	Content  string
 	ToolName string
-	Duration int64  // ms, 仅 tool_result 有值
+	Duration int64 // ms, 仅 tool_result 有值
 	Error    string
 }
 
@@ -337,8 +338,15 @@ func (loop *AIAgentLoop) Run(ctx context.Context, systemPrompt, userPrompt strin
 
 // buildToolDefs 从注册的工具构建定义列表
 func (loop *AIAgentLoop) buildToolDefs() []AgentToolDef {
+	names := make([]string, 0, len(loop.tools))
+	for name := range loop.tools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	defs := make([]AgentToolDef, 0, len(loop.tools))
-	for _, tool := range loop.tools {
+	for _, name := range names {
+		tool := loop.tools[name]
 		defs = append(defs, AgentToolDef{
 			Name:        tool.Name(),
 			Description: tool.Description(),
