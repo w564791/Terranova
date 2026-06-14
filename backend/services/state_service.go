@@ -165,6 +165,14 @@ func (s *StateService) UploadState(
 	log.Printf("State uploaded successfully: workspace=%s, version=%d, size=%d bytes, force=%v",
 		workspaceID, newVersion, sizeBytes, force)
 
+	// 11. 异步触发 CMDB 同步 + embedding
+	go func() {
+		cmdbService := NewCMDBService(s.db)
+		if err := cmdbService.SyncWorkspaceResources(workspaceID, "upload"); err != nil {
+			log.Printf("[CMDB] Failed to sync after state upload for workspace %s: %v", workspaceID, err)
+		}
+	}()
+
 	return stateVersion, nil
 }
 
