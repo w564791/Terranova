@@ -90,6 +90,72 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
+// 递归遍历 FileSystemEntry(拖拽/粘贴的目录结构),收集所有文件及其相对路径
+type TraversedFile = { relativePath: string; file: File }
+async function traverseFileSystemEntry(entry: FileSystemEntry, basePath = ''): Promise<TraversedFile[]> {
+  if (entry.isFile) {
+    const fe = entry as FileSystemFileEntry
+    const file = await new Promise<File>((resolve, reject) => fe.file(resolve, reject))
+    const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name
+    return [{ relativePath, file }]
+  }
+  if (entry.isDirectory) {
+    const de = entry as FileSystemDirectoryEntry
+    const reader = de.createReader()
+    const allEntries: FileSystemEntry[] = []
+    try {
+      // readEntries 可能分批返回,需循环读到空
+      while (true) {
+        const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject))
+        if (batch.length === 0) break
+        allEntries.push(...batch)
+      }
+    } catch (err) {
+      console.warn(`读取目录 ${entry.name} 失败,跳过:`, err)
+      return []
+    }
+    const dirPath = basePath ? `${basePath}/${entry.name}` : entry.name
+    const results: TraversedFile[] = []
+    for (const child of allEntries) {
+      try {
+        results.push(...await traverseFileSystemEntry(child, dirPath))
+      } catch (err) {
+        console.warn(`遍历 ${child.name} 失败,跳过:`, err)
+      }
+    }
+    return results
+  }
+  return []
+}
+
+// 同步提取 FileSystemEntry 列表(必须在事件处理器同步阶段调用,事件返回后 items 失效)
+function collectFileEntries(items: DataTransferItemList): (FileSystemEntry | File)[] {
+  const result: (FileSystemEntry | File)[] = []
+  for (const item of Array.from(items)) {
+    const entry = item.webkitGetAsEntry?.() ?? item.getAsEntry?.()
+    if (entry) {
+      result.push(entry)
+    } else {
+      const file = item.getAsFile?.()
+      if (file) result.push(file)
+    }
+  }
+  return result
+}
+
+// 异步遍历已提取的条目列表
+async function traverseCollectedEntries(entries: (FileSystemEntry | File)[]): Promise<TraversedFile[]> {
+  const all: TraversedFile[] = []
+  for (const entry of entries) {
+    if (entry instanceof File) {
+      all.push({ relativePath: entry.name, file: entry })
+    } else {
+      all.push(...await traverseFileSystemEntry(entry))
+    }
+  }
+  return all
+}
+
 function normalizeManifestSubpath(value: string | null): string {
   if (!value) return ''
   return value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
@@ -348,6 +414,8 @@ export default function ManifestEditorV2() {
   const [dragOverDir, setDragOverDir] = useState<string | null>(null)
   // 复制/剪切剪贴板(单文件)。菜单在右键打开时即时读取 ref,无需 state 驱动重渲染。
   const clipboardRef = useRef<{ path: string; mode: 'copy' | 'cut' } | null>(null)
+  // 粘贴/拖拽上传进度:{current, total, fileName} 或 null(无进行中)
+  const [pasteProgress, setPasteProgress] = useState<{ current: number; total: number; fileName: string } | null>(null)
   // 跨文件导航历史栈(Cmd+←/→)。NavLoc 记 path + 光标/滚动 viewState
   const navStackRef = useRef<{
     back: { path: string; viewState: monaco.editor.ICodeEditorViewState | null }[]
@@ -2247,11 +2315,12 @@ export default function ManifestEditorV2() {
         return
       }
       if (mod && (e.key === 'v' || e.key === 'V')) {
-        if (node) {
+        if (clipboardRef.current && node) {
           e.preventDefault()
           const destDir = node.isDir ? node.path : node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : ''
           void pasteInto(destDir)
         }
+        // 内部剪贴板为空时不 preventDefault,让 onPaste 事件处理系统文件粘贴
         return
       }
       switch (e.key) {
@@ -2302,39 +2371,85 @@ export default function ManifestEditorV2() {
     [creating, creatingDir, renamingPath, focusedPath, visibleNodes, collapsedDirs, toggleDir, openFile, startRename, copyFile, cutFile, pasteInto],
   )
 
-  // ========== 拖拽上传本地文件(spec §4.3)==========
-  const handleDropFiles = useCallback(
-    async (dropped: FileList) => {
-      setDragOver(false)
-      const list = Array.from(dropped)
+  // ========== 上传遍历后的文件列表(拖拽/粘贴共用)==========
+  const uploadTraversedFiles = useCallback(
+    async (traversed: TraversedFile[], destDir: string) => {
+      const total = traversed.length
       let ok = 0
-      for (const file of list) {
+      let skipped = 0
+      for (let i = 0; i < total; i++) {
+        const { relativePath, file } = traversed[i]
+        const fullPath = destDir ? `${destDir}/${relativePath}` : relativePath
+        setPasteProgress({ current: i + 1, total, fileName: fullPath })
         if (file.size > MANIFEST_MAX_FILE_SIZE) {
-          message.error(`${file.name} 超过 ${MANIFEST_MAX_FILE_SIZE / 1024 / 1024}MB,跳过`)
+          message.error(`${relativePath} 超过 ${MANIFEST_MAX_FILE_SIZE / 1024 / 1024}MB,跳过`)
+          skipped++
           continue
         }
-        const errMsg = validatePath(file.name)
+        const errMsg = validatePath(fullPath)
         if (errMsg) {
-          message.error(`${file.name}: ${errMsg}`)
+          message.error(`${fullPath}: ${errMsg}`)
+          skipped++
           continue
         }
         try {
           const b64 = await fileToBase64(file)
-          await putFileB64(ctx, file.name, b64)
+          await putFileB64(ctx, fullPath, b64)
           ok++
         } catch (err: any) {
-          message.error(`${file.name} 上传失败: ${err?.message ?? err}`)
+          message.error(`${fullPath} 上传失败: ${err?.message ?? err}`)
+          skipped++
         }
       }
+      setPasteProgress(null)
       if (ok > 0) {
-        message.success(`已上传 ${ok} 个文件`)
+        message.success(`已上传 ${ok} 个文件${skipped > 0 ? `, ${skipped} 个跳过` : ''}`)
         setManifestMissing(false)
         const items = await listFiles(ctx)
         setFiles(items)
+        // 展开目标目录
+        if (destDir) {
+          setCollapsedDirs((prev) => {
+            const next = new Set(prev)
+            next.delete(destDir)
+            return next
+          })
+        }
+      } else if (skipped > 0) {
+        message.warning(`全部 ${skipped} 个文件上传失败`)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ctx, validatePath],
+  )
+
+  // ========== 拖拽上传本地文件(支持文件夹,保留目录结构)==========
+  const handleDropFiles = useCallback(
+    async (collected: (FileSystemEntry | File)[]) => {
+      setDragOver(false)
+      const traversed = await traverseCollectedEntries(collected)
+      if (traversed.length === 0) return
+      await uploadTraversedFiles(traversed, '')
+    },
+    [uploadTraversedFiles],
+  )
+
+  // ========== 从系统剪贴板粘贴文件(Cmd+V 或右键粘贴,支持文件夹)==========
+  const handlePasteFiles = useCallback(
+    async (collected: (FileSystemEntry | File)[]) => {
+      const traversed = await traverseCollectedEntries(collected)
+      if (traversed.length === 0) return
+      // 粘贴到当前聚焦的目录,无焦点则到根
+      const destDir = (() => {
+        if (!focusedPath) return ''
+        const node = visibleNodes.find((n) => n.path === focusedPath)
+        if (!node) return ''
+        if (node.isDir) return node.path
+        return node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : ''
+      })()
+      await uploadTraversedFiles(traversed, destDir)
+    },
+    [uploadTraversedFiles, focusedPath, visibleNodes],
   )
 
   // 内联删除确认 UI(文件/目录共用):替换该行右侧操作区
@@ -2845,11 +2960,23 @@ export default function ManifestEditorV2() {
               void moveNodeTo(src, '')
               return
             }
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              void handleDropFiles(e.dataTransfer.files)
+            if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+              // 同步提取 FileSystemEntry(事件返回后 items 失效)
+              const collected = collectFileEntries(e.dataTransfer.items)
+              void handleDropFiles(collected)
             } else {
               setDragOver(false)
             }
+          }}
+          onPaste={(e) => {
+            // 系统剪贴板粘贴文件(从 Finder/Explorer 复制的文件,或右键粘贴)
+            const items = e.clipboardData?.items
+            if (!items) return
+            const hasFileItem = Array.from(items).some((it) => it.kind === 'file')
+            if (!hasFileItem) return // 非文件粘贴,放行给内部剪贴板逻辑
+            e.preventDefault()
+            const collected = collectFileEntries(items)
+            void handlePasteFiles(collected)
           }}
         >
           {manifestMissing && (
@@ -3140,6 +3267,12 @@ export default function ManifestEditorV2() {
           {saveStatus === 'saved' ? '自动保存' : '编辑中'}
         </span>
         <div className={styles.spacer} />
+        {pasteProgress && (
+          <span className={styles.item} style={{ background: '#005a9e', padding: '0 8px' }}>
+            <i className="codicon codicon-cloud-upload" style={{ marginRight: 4 }} />
+            上传 {pasteProgress.current}/{pasteProgress.total} — {pasteProgress.fileName}
+          </span>
+        )}
         {lastRunTask && (
           <span
             className={styles.item}
