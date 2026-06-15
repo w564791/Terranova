@@ -3,6 +3,7 @@ name: aws_secrets_manager_policy_patterns
 layer: domain
 description: AWS Secrets Manager 资源策略的常见模式和最佳实践，包括版本控制、跨账户访问、Lambda 轮换、区域限制等场景
 tags: ["domain", "aws", "secrets-manager", "policy", "resource-policy", "security", "secrets"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS Secrets Manager 策略模式

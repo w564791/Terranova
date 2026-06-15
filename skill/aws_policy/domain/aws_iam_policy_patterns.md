@@ -3,6 +3,7 @@ name: aws_iam_policy_patterns
 layer: domain
 description: AWS IAM 身份策略的常见模式和最佳实践，包括 EC2、S3、Lambda、RDS、CloudFormation 等服务的策略示例
 tags: ["domain", "aws", "iam", "policy", "identity-policy", "ec2", "s3", "lambda", "rds", "cloudformation"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS IAM 策略模式

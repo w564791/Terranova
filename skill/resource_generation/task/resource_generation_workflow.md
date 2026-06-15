@@ -4,6 +4,7 @@ layer: task
 description: 资源配置生成的通用工作流。根据用户描述和 Module Skill，生成 Terraform 资源配置。
 tags: ["task", "generation", "workflow", "terraform", "resource", "config"]
 domain_tags: ["cmdb", "matching", "region", "resource-management", "tagging"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # 资源生成工作流

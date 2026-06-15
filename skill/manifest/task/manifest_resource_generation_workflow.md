@@ -3,6 +3,7 @@ name: manifest_resource_generation_workflow
 layer: task
 description: manifest 编辑器的资源生成/修复工作流。根据用户描述生成 Terraform HCL，优先复用 Module 库中的候选 module。
 tags: ["task", "manifest", "generation", "hcl", "terraform"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # Manifest 资源生成工作流

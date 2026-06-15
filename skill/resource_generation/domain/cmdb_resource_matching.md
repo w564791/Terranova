@@ -3,6 +3,7 @@ name: cmdb_resource_matching
 layer: domain
 description: 从 CMDB 查询结果中匹配用户需要的资源，支持精确匹配和模糊匹配,不需要查询请求请勿使用
 tags: ["domain", "cmdb", "matching", "resource", "lookup", "search"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## CMDB 资源匹配规则

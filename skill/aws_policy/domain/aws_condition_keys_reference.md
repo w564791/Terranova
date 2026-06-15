@@ -3,6 +3,7 @@ name: aws_condition_keys_reference
 layer: domain
 description: AWS IAM 策略常用条件键的快速参考，包括全局条件键、服务特定条件键、条件操作符和使用示例
 tags: ["domain", "aws", "iam", "policy", "condition-keys", "security", "reference"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS 条件键快速参考

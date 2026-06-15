@@ -4,6 +4,7 @@ layer: foundation
 description: AWS资源标签规范，定义所有AWS资源必须遵循的标签命名规则和要求
 tags: ["foundation", "aws", "tagging", "compliance", "governance", "resource-management"]
 priority: 50
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS 资源标签规范

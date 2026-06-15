@@ -3,6 +3,7 @@ name: json_output_format
 layer: foundation
 description: JSON 输出格式的强制技术规范，确保 AI 生成的资源配置输出格式正确、结构统一
 tags: ["foundation", "json", "output", "format", "validation"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## JSON 输出格式规范

@@ -3,6 +3,7 @@ name: markdown_output_format
 layer: foundation
 description: Markdown 文档输出的强制格式规范，确保生成的文档结构正确、格式统一
 tags: ["foundation", "markdown", "output", "format"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## Markdown 输出格式规范

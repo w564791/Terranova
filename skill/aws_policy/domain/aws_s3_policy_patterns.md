@@ -3,6 +3,7 @@ name: aws_s3_policy_patterns
 layer: domain
 description: AWS S3 桶策略的常见模式和最佳实践，包括 HTTPS 强制、跨账户访问、CloudFront OAI、VPC 端点限制等场景
 tags: ["domain", "aws", "s3", "policy", "bucket-policy", "resource-policy", "security", "encryption"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS S3 桶策略模式

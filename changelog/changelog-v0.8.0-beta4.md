@@ -1,47 +1,81 @@
 ## v0.8.0-beta4
 
-Bedrock Prompt Caching 从硬编码改为可配置:AI Config 新增 `cache_enabled` 字段,管理员可按配置灵活开关 prompt caching;覆盖全部 4 条 Bedrock 调用路径;前端 AI 配置表单仅在 Bedrock 类型下显示开关。
+数据库种子数据同步修复 + Skill 数据一致性治理:以本地运行数据库为准,补齐种子 SQL 中缺失的表结构、`ai_configs` 配置和 `skills` 数据;修复 3 处 migration 未同步到 seed SQL 导致的 schema drift;统一 Skill 本地 `.md` 文件与 DB `content` 的 frontmatter 边界;补充 `infrastructure_risk_baseline` 新增规则。
 
-### 新增功能
+### 种子 SQL 同步修复
 
-#### AI Config 缓存开关
+#### 表结构对齐 (Schema Drift Fix)
 
-- **新增** `cache_enabled` 字段:`AIConfig` 模型增加 `CacheEnabled bool` (默认 `true`),控制 Bedrock prompt caching 是否启用
-- **新增** SQL migration:`add_cache_enabled.sql` — `ALTER TABLE ai_configs ADD COLUMN cache_enabled boolean NOT NULL DEFAULT true`
-- **新增** 前端开关:`AIConfigForm.tsx` 仅在 `service_type === 'bedrock'` 时显示 "Prompt Caching" checkbox,带提示文案说明 90% 折扣效果
-- **新增** `UpdateConfig` 持久化:`ai_config_service.go` 手动字段拷贝块补充 `existing.CacheEnabled = cfg.CacheEnabled`
+- **修复** `workspace_tasks` 表:CREATE TABLE 补充 `snapshot_manifest_version_id character varying(36)` 列,与 `add_snapshot_manifest_version_id.sql` migration 对齐
+- **修复** `ai_configs` 表:CREATE TABLE 中 `cache_enabled` 默认值从 `false` 改为 `true`,与 `add_cache_enabled.sql` migration 对齐
+- **问题** 使用种子 SQL 全新初始化数据库时,缺失列或默认值不一致会导致 migration 执行异常或功能行为偏差
 
-#### 全路径条件缓存
+#### 缺失数据补充
 
-- **优化** `BedrockCaller.buildBedrockRequest`:system prompt 的 `cache_control` 由 `c.cacheEnabled` 控制,true 时附加 `{type: "ephemeral"}`,false 时不附加
-- **优化** `AIFormService.callBedrockForForm`:签名增加 `cacheEnabled bool`,条件化构建 system block
-- **优化** `ModuleSkillAIService.callBedrock`:prompt 移至 system message + 条件缓存(原先 prompt 在 user message)
-- **优化** `NewAICallerFromConfig`:bedrock 和 default 两个分支均传入 `cfg.CacheEnabled`
+- **新增** `ai_configs` ID 22 (`manifest_resource_generation`) 和 ID 23 (`manifest_check`) 的 INSERT 语句,使用 `ON CONFLICT (id) DO NOTHING` 幂等写入
+- **修复** `skills` COPY 块中 22 条 skill 的 `content` 字段:移除误包含的 frontmatter (`---\n...---\n`),只保留正文内容
+- **修复** `skills` 中 `execute_summary_workflow` 的 content:移除 `-----` 格式的 frontmatter
+- **效果** 全新初始化后 skills 表的 32 条数据与本地运行数据库完全一致
 
-### 优化改进
+### Skill 文件治理
 
-#### 死代码标注
+#### Frontmatter 边界规范化
 
-- **标注** `AIAnalysisService.callBedrock` 和 `callOpenAICompatible` 为 `Deprecated`,已被 `NewAICallerFromConfig + AIAgentLoop` 替代,当前无调用者
+- **新增** 32 个 `.md` 文件的 frontmatter 内部统一添加 HTML 注释:`<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->`
+- **修复** `execute_summary_workflow.md`:frontmatter 分隔符从 `-----` 改为标准 `---`,`## name:` 改为 `name:`
+- **修复** `skill_quality_rule_evaluation.md` / `skill_quality_semantic_evaluation.md`:同上格式修正
+- **效果** frontmatter 元数据(用途/作用域)与 skill 正文有明确边界,防止 skill 加载时将元数据误当作 prompt 内容
+
+#### 数据库 Content 清理
+
+- **修复** 32 个 skill 的 DB `content` 字段:统一移除 frontmatter,只保留正文内容
+- **修复** `infrastructure_risk_baseline`:DB content 同步到本地 `.md` 文件,新增"任何端口范围缩小的行为"、"源地址更改"、"计算资源"三个 Critical 风险规则
+- **效果** `skills.content` 字段不再包含 frontmatter 元数据,与 SkillAssembler 加载逻辑一致
+
+#### 缺失本地文件补建
+
+- **新增** `skill/cmdb/task/cmdb_query_plan_workflow.md` — CMDB 查询计划生成工作流
+- **新增** `skill/resource_generation/domain/cmdb_resource_types.md` — CMDB 资源类型映射表
+- **新增** `skill/resource_generation/domain/schema_validation_rules.md` — Schema 验证规则
+- **新增** `skill/resource_generation/foundation/platform_introduction.md` — 平台基础介绍
+
+### 其他变更 (已提交)
+
+#### Manifest 编辑器文件粘贴/拖拽
+
+- **新增** 递归 `FileSystemEntry` 遍历:支持拖拽文件夹粘贴,保留目录层级结构
+- **新增** 上传进度:状态栏显示文件上传进度百分比
+
+#### State 上传后异步 CMDB 同步
+
+- **新增** `state_service.go`:state 上传完成后异步触发 CMDB 资源同步,确保 workspace 资源被 embedding 索引和搜索收录
 
 ### 修改文件
 
-- `backend/internal/models/ai_config.go` — `CacheEnabled` 字段
-- `backend/migrations/add_cache_enabled.sql` — 新增列 migration
-- `backend/services/ai_caller.go` — `BedrockCaller.cacheEnabled` + 条件 cache_control
-- `backend/services/ai_caller_test.go` — 修复过期测试 + 新增 5 个缓存测试
-- `backend/services/ai_config_service.go` — `UpdateConfig` 补充 `CacheEnabled` 拷贝
-- `backend/services/ai_form_service.go` — `callBedrockForForm` 条件缓存
-- `backend/services/ai_analysis_service.go` — 死方法标记 `Deprecated`
-- `backend/services/module_skill_ai_service.go` — `callBedrock` 条件缓存 + prompt 移至 system
-- `frontend/src/services/ai.ts` — `AIConfig` interface 增加 `cache_enabled`
-- `frontend/src/pages/AIConfigForm.tsx` — 表单状态 + 编辑加载 + Bedrock 专用开关
-- `manifests/db/init_seed_data.sql` — CREATE TABLE + 19 条 INSERT 增加 `cache_enabled`
+- `manifests/db/init_seed_data.sql` — workspace_tasks 补列 + ai_configs 默认值修正 + 新增 ID 22/23 INSERT + skills COPY 块去 frontmatter
+- `skill/security/foundation/infrastructure_risk_baseline.md` — 同步 DB 新增 Critical 风险规则 + frontmatter 注释
+- `skill/execute_summary/task/execute_summary_workflow.md` — frontmatter 格式修正 + 注释
+- `skill/quality_assessment/task/skill_quality_rule_evaluation.md` — frontmatter 格式修正 + 注释
+- `skill/quality_assessment/task/skill_quality_semantic_evaluation.md` — frontmatter 格式修正 + 注释
+- 其余 27 个 `skill/**/*.md` — 仅添加 frontmatter 注释
+- `skill/cmdb/task/cmdb_query_plan_workflow.md` — 新建
+- `skill/resource_generation/domain/cmdb_resource_types.md` — 新建
+- `skill/resource_generation/domain/schema_validation_rules.md` — 新建
+- `skill/resource_generation/foundation/platform_introduction.md` — 新建
+- `backend/services/state_service.go` — state 上传后异步 CMDB 同步
+- `frontend/src/pages/admin/ManifestEditorV2/ManifestEditorV2.tsx` — 文件夹拖拽粘贴 + 上传进度
 
 ### 技术细节
 
-#### Review 发现的 Critical bug
+#### Schema Drift 问题根因
 
-- **问题**:`UpdateConfig` 逐字段手动拷贝 `cfg → existing`,`CacheEnabled` 被遗漏,导致 UI 切换缓存开关后保存无效
-- **方案**:在 `existing.ThinkingBudgetTokens` 之后补充 `existing.CacheEnabled = cfg.CacheEnabled`
-- **效果**:UI 切换 Prompt Caching 后点保存,数据库值正确持久化
+- **问题**:migration 文件(`add_cache_enabled.sql`、`add_snapshot_manifest_version_id.sql`)添加了新列,但 `init_seed_data.sql` 的 CREATE TABLE 语句未同步更新
+- **影响**:升级路径(upgrade)通过 migration 正常,但全新初始化(init)路径缺失列,导致后端启动报错或功能异常
+- **方案**:逐项对比本地运行 DB 的 `\d` 输出与 seed SQL 的 CREATE TABLE,补齐所有缺失列和默认值差异
+- **规则**:后续新增 migration 时必须同步更新 `init_seed_data.sql` 中对应的 CREATE TABLE 语句
+
+#### Skill Frontmatter 与 Content 边界
+
+- **问题**:部分 skill 的 DB `content` 字段包含了 `---\nname: ...\n---\n` 的 frontmatter,而另一部分不包含,导致 SkillAssembler 加载时行为不一致
+- **方案**:统一规范 — `.md` 文件保留 frontmatter(用于人类阅读和工具解析),DB `content` 字段只存正文(AI 实际使用的 prompt 内容)
+- **标注**:frontmatter 内添加 HTML 注释说明其用途,防止编辑时误将元数据复制到正文

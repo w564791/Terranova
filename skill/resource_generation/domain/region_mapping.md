@@ -3,6 +3,7 @@ name: region_mapping
 layer: domain
 description: 区域映射规则，定义用户自然语言描述与云服务商区域代码之间的映射关系
 tags: ["domain", "region", "mapping", "aws", "location", "geography"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## 区域映射规则

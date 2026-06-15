@@ -3,6 +3,7 @@ name: terraform_module_best_practices
 layer: domain
 description: Terraform Module 配置最佳实践，提供安全、高可用、成本优化等方面的配置建议
 tags: ["terraform", "terraform-docs", "module", "best-practices", "iac", "aws"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## Terraform Module 最佳实践

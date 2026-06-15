@@ -1,10 +1,11 @@
------
-
-## name: skill_quality_semantic_evaluation
+---
+name: skill_quality_semantic_evaluation
 layer: task
 description: Layer 3 语义质量评估 — 评估 AI 输出的表述质量、信息量和用户可读性
 tags: ["quality", "evaluation", "semantic"]
 priority: 0
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
+---
 
 # Skill 语义质量评估器
 

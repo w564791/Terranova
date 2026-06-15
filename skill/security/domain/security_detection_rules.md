@@ -4,6 +4,7 @@ layer: domain
 description: 安全威胁检测规则，用于识别恶意输入、越狱攻击、无意义输入等安全威胁
 tags: ["domain", "security", "detection", "threat", "rules"]
 priority: 50
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # Detection Patterns Reference

@@ -3,6 +3,7 @@ name: aws_kms_policy_patterns
 layer: domain
 description: AWS KMS 密钥策略的常见模式和最佳实践，包括管理员/用户分离、服务特定访问、加密上下文、跨账户访问等场景
 tags: ["domain", "aws", "kms", "policy", "key-policy", "resource-policy", "encryption", "security"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS KMS 密钥策略模式

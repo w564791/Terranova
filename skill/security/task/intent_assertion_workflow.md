@@ -3,6 +3,7 @@ name: intent_assertion_workflow
 layer: task
 description: 检测用户输入是否安全，防止越狱攻击、提示注入、无意义输入等安全威胁
 tags: ["task", "security", "assertion", "intent", "guard"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## 意图断言任务

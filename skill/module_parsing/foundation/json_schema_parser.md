@@ -3,6 +3,7 @@ name: json_schema_parser
 layer: foundation
 description: JSON Schema 解析的强制技术规范，确保正确解析 JSON 结构和数据类型
 tags: ["foundation", "json", "schema", "parser", "parsing"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## JSON Schema 解析规范

@@ -3,6 +3,7 @@ name: skill_doc_writing_standards
 layer: domain
 description: Skill 文档写作规范，定义如何编写高质量的 Module Skill 文档
 tags: ["skill-generation", "technical-writing", "documentation", "standards", "module"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## Skill 文档写作规范

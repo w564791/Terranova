@@ -5,6 +5,7 @@ description: 根据 Module 的 OpenAPI Schema 生成结构化的 Skill 文档，
 tags: ["module", "skill", "generation", "workflow", "task"]
 domain_tags: ["openapi", "skill-generation", "terraform-docs"]
 version: "1.1.0"
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # Module Skill 生成工作流

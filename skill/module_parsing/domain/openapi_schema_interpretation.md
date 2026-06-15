@@ -3,6 +3,7 @@ name: openapi_schema_interpretation
 layer: domain
 description: OpenAPI Schema 解读规范，定义如何从 OpenAPI 3.1.0 规范中提取和理解 Module 配置信息
 tags: ["openapi", "schema", "interpretation", "parsing", "module"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## OpenAPI Schema 解读规范

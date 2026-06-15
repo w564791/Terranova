@@ -4,6 +4,7 @@ layer: foundation
 description: 基础设施变更风险基线规则，定义 high 和 critical 级别的风险判定标准
 tags: ["foundation", "security", "risk", "baseline", "compliance"]
 priority: 100
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # 基础设施变更风险基线
@@ -17,8 +18,14 @@ priority: 100
   - 数据库端口：3306, 5432, 1521, 1433, 27017, 6379, 9200, 9300, 5984, 8529
   - 管理端口：22, 3389, 5900, 5985, 5986
   - 全端口：-1 或 0-65535
+  - 任何端口范围缩小的行为
 - 安全组 inbound 从限定 IP 变更为 `0.0.0.0/0`
 - 网络 ACL 允许全端口入站
+- 源地址更改
+
+### 计算资源
+- 创建/修改带公网访问的资源
+  - 包含且不仅包含ec2,loadblance,apigateway等
 
 ### 资源删除
 - 删除 VPC 或子网（且有依赖资源）

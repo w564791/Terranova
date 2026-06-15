@@ -1,10 +1,11 @@
------
-
-## name: skill_quality_rule_evaluation
+---
+name: skill_quality_rule_evaluation
 layer: task
 description: Layer 2 规则一致性评估 — 检查 AI 输出是否违反 Skill 定义中关于输出内容的规则
 tags: ["quality", "evaluation", "rule"]
 priority: 0
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
+---
 
 # Skill 输出规则一致性检查器
 

@@ -4,6 +4,7 @@ layer: foundation
 description: 占位符基线规范，定义所有需要用户补充的字段必须使用的统一占位符格式
 tags: ["foundation", "placeholder", "standard", "baseline"]
 priority: 0
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # 占位符基线规范

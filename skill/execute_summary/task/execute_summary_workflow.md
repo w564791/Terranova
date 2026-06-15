@@ -1,15 +1,15 @@
------
-
-## name: execute_summary_workflow
+---
+name: execute_summary_workflow
 layer: task
 description: 执行流程摘要工作流，在 Plan/Apply 阶段完成后分析变更影响、风险语义及执行结果，支持人机协同决策
 tags: [“task”, “summary”, “impact_analysis”, “risk_analysis”, “execute”, “plan”, “apply”]
 priority: 0
 domain_tags: [“cmdb”, “resource”, “risk”, “decision”]
 
-# 执行流程摘要工作流
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
+---
 
------
+# 执行流程摘要工作流
 
 ## 一、阶段识别（强约束）
 

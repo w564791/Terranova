@@ -3,6 +3,7 @@ name: aws_policy_core_principles
 layer: domain
 description: AWS IAM 和资源策略的核心原则，包括最小权限、显式拒绝、策略结构、验证规则和常见错误
 tags: ["domain", "aws", "iam", "policy", "security", "best-practices", "least-privilege"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # AWS 策略核心原则

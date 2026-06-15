@@ -5,6 +5,7 @@ description: CMDB 需求评估工作流，判断用户需求是否需要查询 C
 tags: ["task", "cmdb", "assessment", "resource", "detection"]
 priority: 0
 domain_tags: ["cmdb"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # CMDB 需求评估工作流

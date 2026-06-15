@@ -3,6 +3,7 @@ name: manifest_check_workflow
 layer: task
 description: manifest 编辑器的草稿检查工作流。检查 Terraform HCL 的基本问题，输出结构化问题列表（含可选修复）。
 tags: ["task", "manifest", "check", "lint", "terraform"]
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 # Manifest 草稿检查工作流

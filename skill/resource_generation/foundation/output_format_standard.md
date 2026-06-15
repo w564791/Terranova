@@ -4,6 +4,7 @@ layer: foundation
 description: 输出格式规范，定义 AI 生成资源配置的 JSON 输出结构
 tags: ["foundation", "output", "format", "json", "standard"]
 priority: 1
+<!-- 该部分内容只是为了说明skill用途以及作用域,不要复制到skill正文里 -->
 ---
 
 ## 输出格式规范
