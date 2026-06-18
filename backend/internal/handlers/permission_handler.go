@@ -70,6 +70,16 @@ func (h *PermissionHandler) CheckPermission(c *gin.Context) {
 		return
 	}
 
+	// 系统管理员直接放行，与中间件 bypass 逻辑对齐
+	if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
+		c.JSON(http.StatusOK, &service.CheckPermissionResult{
+			IsAllowed:      true,
+			EffectiveLevel: valueobject.PermissionLevelAdmin,
+			Source:         "system_admin",
+		})
+		return
+	}
+
 	// 解析参数
 	resourceType, err := valueobject.ParseResourceType(req.ResourceType)
 	if err != nil {
