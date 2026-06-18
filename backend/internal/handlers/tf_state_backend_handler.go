@@ -62,12 +62,13 @@ func (h *TFStateBackendHandler) GetState(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", stateBytes)
 }
 
-// getCrossWorkspaceState returns a filtered state containing only configured outputs.
-// Validates sharing permission before returning data.
+// getCrossWorkspaceState 返回过滤后的 state(workspace 级授权校验在前)。
+//   - 正常模式: 仅包含 workspace_outputs 表中声明过的 outputs;
+//   - manifest 模式: output 由 manifest .tf 管理,透传 state 全部 outputs。
 func (h *TFStateBackendHandler) getCrossWorkspaceState(c *gin.Context, targetWsID, requesterWsID string) {
-	// 1. Check sharing permission
+	// 1. Check sharing permission (顺带取 manifest 标记,用于决定是否跳过 output 级过滤)
 	var targetWs models.Workspace
-	if err := h.db.Select("workspace_id, outputs_sharing").
+	if err := h.db.Select("workspace_id, outputs_sharing, manifest_deployment_id, manifest_active_tag").
 		Where("workspace_id = ?", targetWsID).First(&targetWs).Error; err != nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
 		return
@@ -103,26 +104,39 @@ func (h *TFStateBackendHandler) getCrossWorkspaceState(c *gin.Context, targetWsI
 		return
 	}
 
-	// 3. Get configured outputs to build allowed key set
-	var configuredOutputs []models.WorkspaceOutput
-	if err := h.db.Where("workspace_id = ?", targetWsID).Find(&configuredOutputs).Error; err != nil {
-		log.Printf("[CrossWorkspaceState] Failed to query configured outputs for %s: %v", targetWsID, err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to query outputs configuration"})
-		return
-	}
+	// 3. 决定 output 级过滤策略
+	//    manifest 模式: output 由 manifest .tf 文件管理,workspace_outputs 表不维护,
+	//    直接透传 state 全部 outputs(workspace 级授权 outputs_sharing 已在第 1 步 gate)。
+	//    正常模式: 仅透传在 workspace_outputs 表中声明过的 outputs。
+	isManifest := targetWs.ManifestDeploymentID != nil && *targetWs.ManifestDeploymentID != "" &&
+		targetWs.ManifestActiveTag != nil && *targetWs.ManifestActiveTag != ""
 
-	allowedKeys := make(map[string]bool, len(configuredOutputs))
-	for _, o := range configuredOutputs {
-		allowedKeys[o.StateKey()] = true
-	}
-
-	// 4. Filter state outputs: only include configured keys
 	filteredOutputs := make(map[string]interface{})
-	if stateVersion.Content != nil {
-		if outputs, ok := stateVersion.Content["outputs"].(map[string]interface{}); ok {
-			for key, val := range outputs {
-				if allowedKeys[key] {
+	if isManifest {
+		if stateVersion.Content != nil {
+			if outputs, ok := stateVersion.Content["outputs"].(map[string]interface{}); ok {
+				for key, val := range outputs {
 					filteredOutputs[key] = val
+				}
+			}
+		}
+	} else {
+		var configuredOutputs []models.WorkspaceOutput
+		if err := h.db.Where("workspace_id = ?", targetWsID).Find(&configuredOutputs).Error; err != nil {
+			log.Printf("[CrossWorkspaceState] Failed to query configured outputs for %s: %v", targetWsID, err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to query outputs configuration"})
+			return
+		}
+		allowedKeys := make(map[string]bool, len(configuredOutputs))
+		for _, o := range configuredOutputs {
+			allowedKeys[o.StateKey()] = true
+		}
+		if stateVersion.Content != nil {
+			if outputs, ok := stateVersion.Content["outputs"].(map[string]interface{}); ok {
+				for key, val := range outputs {
+					if allowedKeys[key] {
+						filteredOutputs[key] = val
+					}
 				}
 			}
 		}
@@ -144,8 +158,12 @@ func (h *TFStateBackendHandler) getCrossWorkspaceState(c *gin.Context, targetWsI
 		return
 	}
 
-	log.Printf("[CrossWorkspaceState] Allowed: %s -> %s (%d/%d outputs exposed)",
-		requesterWsID, targetWsID, len(filteredOutputs), len(allowedKeys))
+	mode := "manifest"
+	if !isManifest {
+		mode = "configured"
+	}
+	log.Printf("[CrossWorkspaceState] Allowed: %s -> %s (mode=%s, %d outputs exposed)",
+		requesterWsID, targetWsID, mode, len(filteredOutputs))
 	c.Data(http.StatusOK, "application/json", stateBytes)
 }
 

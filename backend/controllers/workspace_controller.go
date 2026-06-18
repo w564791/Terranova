@@ -257,6 +257,7 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		// 对外把 manifest_subpath 列回显为 workdir(前端字段名),保证表单往返一致
 		"workdir":                  derefOr(workspace.ManifestSubpath, ""),
 		"manifest_deployment_id":   workspace.ManifestDeploymentID,
+		"manifest_active_tag":      workspace.ManifestActiveTag,
 		"state_backend":            workspace.StateBackend,
 		"state_config":             workspace.StateConfig,
 		"tags":                     workspace.Tags,

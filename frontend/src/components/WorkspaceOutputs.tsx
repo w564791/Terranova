@@ -64,12 +64,14 @@ interface AvailableOutput {
 
 interface WorkspaceOutputsProps {
   workspaceId: string;
+  // manifest 模式: output 由 manifest 文件管理,只允许授权配置(remote-data),禁止增删改 outputs
+  isManifest?: boolean;
 }
 
-const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
+const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId, isManifest }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  // 从URL获取子标签，默认为outputs
-  const subTabFromUrl = searchParams.get('subtab') || 'outputs';
+  // 从URL获取子标签,默认 outputs;manifest 模式下 output tab 已隐藏,默认 remote-data
+  const subTabFromUrl = searchParams.get('subtab') || (isManifest ? 'remote-data' : 'outputs');
   const [activeSubTab, setActiveSubTab] = useState(subTabFromUrl);
   
   const [outputs, setOutputs] = useState<EditableOutput[]>([]);
@@ -739,9 +741,10 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
     </Card>
   );
 
-  // Tab items
-  const tabItems = [
-    {
+  // Tab items —— manifest 模式只保留授权配置(remote-data),隐藏 output 增删改
+  const tabItems: { key: string; label: React.ReactNode; children: React.ReactNode }[] = [];
+  if (!isManifest) {
+    tabItems.push({
       key: 'outputs',
       label: (
         <span>
@@ -750,23 +753,23 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId }) => {
         </span>
       ),
       children: renderOutputsContent(),
-    },
-    {
-      key: 'remote-data',
-      label: (
-        <span>
-          <CloudDownloadOutlined />
-          Remote Data
-        </span>
-      ),
-      children: <WorkspaceRemoteDataConfig workspaceId={workspaceId} />,
-    },
-  ];
+    });
+  }
+  tabItems.push({
+    key: 'remote-data',
+    label: (
+      <span>
+        <CloudDownloadOutlined />
+        Remote Data
+      </span>
+    ),
+    children: <WorkspaceRemoteDataConfig workspaceId={workspaceId} isManifest={isManifest} />,
+  });
 
   return (
     <div className={styles.container}>
       <Tabs
-        activeKey={activeSubTab}
+        activeKey={isManifest && activeSubTab === 'outputs' ? 'remote-data' : activeSubTab}
         onChange={handleSubTabChange}
         items={tabItems}
         className={styles.tabs}

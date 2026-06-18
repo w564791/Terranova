@@ -41,9 +41,11 @@ interface AllowedWorkspace {
 
 interface WorkspaceRemoteDataConfigProps {
   workspaceId: string;
+  // manifest 模式: 远程数据引用由 manifest .tf 自行管理,界面只保留授权配置
+  isManifest?: boolean;
 }
 
-const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ workspaceId }) => {
+const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ workspaceId, isManifest }) => {
   const { success: showSuccess, error: showError, info: showInfo } = useToast();
   const [remoteDataList, setRemoteDataList] = useState<RemoteDataItem[]>([]);
   const [accessibleWorkspaces, setAccessibleWorkspaces] = useState<AccessibleWorkspace[]>([]);
@@ -514,6 +516,9 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
         )}
       </Card>
 
+      {/* manifest 模式: 远程数据引用由 manifest .tf 自行管理,以下区块隐藏 */}
+      {!isManifest && (
+        <>
       {/* Add Remote Data Form (inline) */}
       {showAddForm && (
         <Card
@@ -881,6 +886,8 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm({ show: false, id: '', name: '' })}
       />
+        </>
+      )}
     </div>
   );
 };

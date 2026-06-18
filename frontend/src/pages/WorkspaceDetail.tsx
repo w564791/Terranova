@@ -403,7 +403,7 @@ const WorkspaceDetail: React.FC = () => {
       case 'variables':
         return <VariablesTab workspaceId={id!} />;
       case 'outputs':
-        return <WorkspaceOutputs workspaceId={id!} />;
+        return <WorkspaceOutputs workspaceId={id!} isManifest={!!workspace?.manifest_deployment_id && !!workspace?.manifest_active_tag} />;
       case 'health':
         return <HealthTab workspaceId={id!} />;
       case 'settings':
