@@ -130,6 +130,35 @@
   gap: 16px;
 }
 
+/* Plan Triggers - 资源 structure 下方,workspace 超链接 */
+.planTriggers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.planTriggersLabel {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.planTriggerLink {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 13px;
+  width: fit-content;
+}
+
+.planTriggerLink:hover {
+  text-decoration: underline;
+}
+
 .resourceChanges {
   font-size: 13px;
   color: #6b7280;

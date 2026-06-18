@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Tooltip, Tag } from 'antd';
+import { Tag } from 'antd';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { ThunderboltOutlined, WarningOutlined } from '@ant-design/icons';
+import { WarningOutlined } from '@ant-design/icons';
 import NewRunDialog from '../components/NewRunDialog';
 import TaskComments from '../components/TaskComments';
 import CommentInput from '../components/CommentInput';
@@ -553,53 +553,26 @@ const TaskDetail: React.FC = () => {
 
         {/* Summary Stats with View Mode Toggle */}
         <div className={styles.statsRow}>
-          <div className={styles.statsCards}>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>Run Tasks</div>
-              <div className={styles.statValue}>
-                {runTaskResults.length > 0 ? runTaskResults.length : '0'}
-              </div>
+          <div className={styles.inlineStats}>
+            <div className={styles.statItem}>
+              <span className={styles.statNum}>{runTaskResults.length > 0 ? runTaskResults.length : '0'}</span>
+              <span className={styles.statLbl}>Run Tasks</span>
             </div>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>Duration</div>
-              <div className={styles.statValue}>
-                {task.duration ? `${Math.floor(task.duration / 60)}m` : '<1m'}
-              </div>
+            <span className={styles.statSep}>|</span>
+            <div className={styles.statItem}>
+              <span className={styles.statNum}>{task.duration ? `${Math.floor(task.duration / 60)}m` : '<1m'}</span>
+              <span className={styles.statLbl}>Duration</span>
             </div>
-            <Tooltip
-              title={
-                triggerExecutions.length > 0 ? (
-                  <div>
-                    <div style={{ marginBottom: 8, fontWeight: 500 }}>Will trigger after apply:</div>
-                    {triggerExecutions.map((exec: any, index: number) => (
-                      <div key={exec.id || index} style={{ marginBottom: 4 }}>
-                        <ThunderboltOutlined style={{ marginRight: 4 }} />
-                        {exec.run_trigger?.target_workspace?.name || exec.run_trigger?.target_workspace_id}
-                      </div>
-                    ))}
-                  </div>
-                ) : 'No workspaces will be triggered'
-              }
-            >
-              <div className={styles.statCard} style={{ cursor: 'help' }}>
-                <div className={styles.statLabel}>
-                  <ThunderboltOutlined style={{ marginRight: 4 }} />
-                  Run Triggers
-                </div>
-                <div className={styles.statValue}>
-                  {triggerExecutions.length}
-                </div>
-              </div>
-            </Tooltip>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>Resources</div>
-              <div className={styles.statValue}>
+            <span className={styles.statSep}>|</span>
+            <div className={styles.statItem}>
+              <span className={styles.statNum}>
                 <span className={styles.changeAdd}>+{task.changes_add || 0}</span>
                 {' '}
                 <span className={styles.changeModify}>~{task.changes_change || 0}</span>
                 {' '}
                 <span className={styles.changeDestroy}>-{task.changes_destroy || 0}</span>
-              </div>
+              </span>
+              <span className={styles.statLbl}>Resources</span>
             </div>
           </div>
           <div className={styles.viewModeToggle}>
@@ -625,6 +598,7 @@ const TaskDetail: React.FC = () => {
             workspaceId={workspaceId!}
             workspace={workspace}
             onStageChange={handleStageChange}
+            triggerExecutions={triggerExecutions}
           />
         ) : (
           <div className={styles.classicView}>

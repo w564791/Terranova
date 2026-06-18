@@ -117,12 +117,7 @@
 
 /* 任务标题区域 */
 .taskTitleSection {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  margin: 20px 20px 16px 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  margin: 20px 28px 16px 28px;
 }
 
 .taskTitleRow {
@@ -317,9 +312,9 @@
 }
 
 .cancelButton {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  border: none;
+  background: var(--color-white);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -332,18 +327,18 @@
 }
 
 .cancelButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
 }
 
 .cancelButton:active {
-  transform: translateY(0);
+  background: var(--color-gray-100);
 }
 
 .confirmApplyButton {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  border: none;
+  background: var(--color-blue-600);
+  color: var(--color-white);
+  border: 1px solid var(--color-blue-600);
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -356,19 +351,19 @@
 }
 
 .confirmApplyButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
 }
 
 .confirmApplyButton:active {
-  transform: translateY(0);
+  background: var(--color-blue-800);
 }
 
 /* Override Button for Advisory Run Task failures */
 .overrideButton {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  border: none;
+  background: var(--color-blue-600);
+  color: var(--color-white);
+  border: 1px solid var(--color-blue-600);
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -381,12 +376,12 @@
 }
 
 .overrideButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  background: var(--color-blue-700);
+  border-color: var(--color-blue-700);
 }
 
 .overrideButton:active {
-  transform: translateY(0);
+  background: var(--color-blue-800);
 }
 
 .overrideButton:disabled {
@@ -395,9 +390,9 @@
 }
 
 .cancelPreviousButton {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  color: white;
-  border: none;
+  background: var(--color-white);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -411,12 +406,12 @@
 }
 
 .cancelPreviousButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
 }
 
 .cancelPreviousButton:active {
-  transform: translateY(0);
+  background: var(--color-gray-100);
 }
 
 /* Modal样式 */
@@ -614,37 +609,34 @@
 }
 
 /* 统计信息卡片 */
-.statsCards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin: 0 20px 16px 20px;
+.inlineStats {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 28px 16px 28px;
 }
 
-.statCard {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+.statItem {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.statLabel {
-  font-size: 13px;
-  color: var(--color-gray-600);
-  margin-bottom: 8px;
+.statNum {
+  font-size: 14px;
   font-weight: 500;
-  display: flex;
-  align-items: center;
+  color: var(--color-gray-900);
 }
 
-.statValue {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-gray-900);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.statLbl {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-gray-500);
+}
+
+.statSep {
+  color: var(--color-gray-300);
+  font-size: 14px;
 }
 
 .changeAdd {
@@ -1079,9 +1071,9 @@
 
 /* Add Comment Button */
 .addCommentButton {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+  background: var(--color-white);
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-300);
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -1094,12 +1086,12 @@
 }
 
 .addCommentButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
 }
 
 .addCommentButton:active {
-  transform: translateY(0);
+  background: var(--color-gray-100);
 }
 
 .addCommentButton:disabled {
@@ -1363,23 +1355,11 @@
     padding: 3px 10px;
   }
 
-  /* 统计卡片 */
-  .statsCards {
-    grid-template-columns: 1fr;
-    gap: 12px;
+  /* 统计区 */
+  .inlineStats {
+    flex-wrap: wrap;
+    gap: 10px;
     margin: 0 12px 12px 12px;
-  }
-
-  .statCard {
-    padding: 14px;
-  }
-
-  .statLabel {
-    font-size: 12px;
-  }
-
-  .statValue {
-    font-size: 16px;
   }
 
   /* 触发信息 */
@@ -1568,7 +1548,7 @@
     font-size: 16px;
   }
 
-  .statsCards {
+  .inlineStats {
     margin: 0 8px 8px 8px;
   }
 
@@ -1600,10 +1580,10 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin: 0 20px 16px 20px;
+  margin: 0 28px 16px 28px;
 }
 
-.statsRow .statsCards {
+.statsRow .inlineStats {
   margin: 0;
   flex: 1;
 }
@@ -1671,7 +1651,7 @@
     margin: 0 12px 12px 12px;
   }
 
-  .statsRow .statsCards {
+  .statsRow .inlineStats {
     width: 100%;
   }
 

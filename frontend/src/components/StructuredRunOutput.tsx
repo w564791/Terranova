@@ -806,36 +806,26 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
         const total = summary.add + summary.change + summary.destroy;
         return (
           <div className={styles.resourceSummaryContainer}>
-            {summary.add > 0 && (
-              <div 
-                className={styles.resourceBarAdd}
-                style={{ flex: `${summary.add / total} 1 0%` }}
-              >
-                <span className={styles.changeIcon}>+</span>
-                <span className={styles.changeCount}>{summary.add}</span>
-                <span className={styles.changeText}>to create</span>
-              </div>
-            )}
-            {summary.change > 0 && (
-              <div 
-                className={styles.resourceBarModify}
-                style={{ flex: `${summary.change / total} 1 0%` }}
-              >
-                <span className={styles.changeIcon}>~</span>
-                <span className={styles.changeCount}>{summary.change}</span>
-                <span className={styles.changeText}>to change</span>
-              </div>
-            )}
-            {summary.destroy > 0 && (
-              <div 
-                className={styles.resourceBarDestroy}
-                style={{ flex: `${summary.destroy / total} 1 0%` }}
-              >
-                <span className={styles.changeIcon}>-</span>
-                <span className={styles.changeCount}>{summary.destroy}</span>
-                <span className={styles.changeText}>to destroy</span>
-              </div>
-            )}
+            <div className={styles.resourceBarTrack}>
+              {summary.add > 0 && (
+                <div
+                  className={styles.resourceSegAdd}
+                  style={{ width: `${(summary.add / total) * 100}%` }}
+                />
+              )}
+              {summary.change > 0 && (
+                <div
+                  className={styles.resourceSegModify}
+                  style={{ width: `${(summary.change / total) * 100}%` }}
+                />
+              )}
+              {summary.destroy > 0 && (
+                <div
+                  className={styles.resourceSegDestroy}
+                  style={{ width: `${(summary.destroy / total) * 100}%` }}
+                />
+              )}
+            </div>
           </div>
         );
       })()}

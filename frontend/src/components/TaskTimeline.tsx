@@ -7,6 +7,7 @@ import SmartLogViewer from './SmartLogViewer';
 import AIErrorAnalysis from './AIErrorAnalysis';
 import ExecuteSummary from './ExecuteSummary';
 import { parseBackendTime } from '../utils/time';
+import { Link } from 'react-router-dom';
 
 interface Task {
   id: number;
@@ -39,9 +40,10 @@ interface Props {
   workspace?: any;
   onStageChange?: (stage: string) => void;
   showAIAnalysis?: boolean;
+  triggerExecutions?: any[];
 }
 
-const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageChange, showAIAnalysis = true }) => {
+const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageChange, showAIAnalysis = true, triggerExecutions }) => {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['plan', 'run_tasks', 'plan_error', 'apply_error']));
   
   // 记录上一次的 apply_confirmed_by 状态，用于检测变化
@@ -352,6 +354,26 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
               workspace={workspace}
               mode="plan"
             />
+            {/* Run Triggers - apply 后触发的下游 workspace,无则不显示;workspace 为超链接 */}
+            {triggerExecutions && triggerExecutions.length > 0 && (
+              <div className={styles.planTriggers}>
+                <div className={styles.planTriggersLabel}>Triggers:</div>
+                {triggerExecutions.map((exec: any, index: number) => {
+                  const wsId = exec.run_trigger?.target_workspace_id;
+                  if (!wsId) return null;
+                  const wsName = exec.run_trigger?.target_workspace?.name || wsId;
+                  return (
+                    <Link
+                      key={exec.id || index}
+                      className={styles.planTriggerLink}
+                      to={`/workspaces/${wsId}`}
+                    >
+                      {wsName}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

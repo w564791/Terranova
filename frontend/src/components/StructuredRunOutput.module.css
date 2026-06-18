@@ -103,57 +103,35 @@
   font-weight: 600;
 }
 
-/* Resource Summary Bars Container */
+/* Resource Summary Bar - 连续分段比例条(无文字,降饱和) */
 .resourceSummaryContainer {
-  display: flex;
-  gap: 8px;
   padding: 8px 16px;
   background: var(--color-white);
   border-bottom: 1px solid var(--color-gray-200);
 }
 
-.resourceBarAdd,
-.resourceBarModify,
-.resourceBarDestroy {
+.resourceBarTrack {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: white;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  min-width: 80px;
+  height: 8px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-gray-100, #eef0f3);
 }
 
-.resourceBarAdd {
-  background: #0D652D;
+.resourceSegAdd {
+  background: #4ca774;
+  height: 100%;
 }
 
-.resourceBarModify {
-  background: #174EA6;
+.resourceSegModify {
+  background: #5b8def;
+  height: 100%;
 }
 
-.resourceBarDestroy {
-  background: #A50E0E;
-}
-
-.changeIcon {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.changeCount {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.changeText {
-  font-size: 12px;
-  font-weight: 500;
-  opacity: 0.9;
+.resourceSegDestroy {
+  background: #e07474;
+  height: 100%;
 }
 
 /* 阶段Tab导航 */

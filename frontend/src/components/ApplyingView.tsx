@@ -317,7 +317,7 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
                     className={styles.expandIcon}
                     onClick={() => toggleResource(resource.id)}
                   >
-                    {expandedResources.has(resource.id) ? '▼' : '▶'}
+                    {expandedResources.has(resource.id) ? '∨' : '›'}
                   </div>
                 )}
               </div>
@@ -396,7 +396,7 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
       {actionInvocations.length > 0 && (
         <div className={styles.actionInvocationsSection}>
           <div className={styles.actionInvocationsHeader} onClick={() => setActionsExpanded(!actionsExpanded)}>
-            <span className={styles.expandIcon}>{actionsExpanded ? '▼' : '▶'}</span>
+            <span className={styles.expandIcon}>{actionsExpanded ? '∨' : '›'}</span>
             <span className={styles.actionInvocationsTitle}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px', verticalAlign: 'middle' }}>
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -427,7 +427,7 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
                       }}
                     >
                       <div className={styles.actionInvocationLeft}>
-                        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+                        <span className={styles.expandIcon}>{isExpanded ? '∨' : '›'}</span>
                         <span className={styles.actionInvocationAddress}>{action.address}</span>
                         <button
                           className={styles.copyButton}
@@ -522,7 +522,7 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
             className={styles.outputsHeader}
             onClick={() => setOutputsExpanded(!outputsExpanded)}
           >
-            <span className={styles.chevron}>{outputsExpanded ? '▼' : '▶'}</span>
+            <span className={styles.chevron}>{outputsExpanded ? '∨' : '›'}</span>
             <span className={styles.outputsTitle}>Outputs</span>
             <span className={styles.outputsCount}>{outputChanges.length}</span>
           </div>

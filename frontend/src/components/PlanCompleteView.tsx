@@ -533,7 +533,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
               onClick={() => toggleUnchanged(resource.id)}
             >
               <span className={styles.toggleIcon}>
-                {showUnchanged.has(resource.id) ? '▼' : '▶'}
+                {showUnchanged.has(resource.id) ? '∨' : '›'}
               </span>
               {showUnchanged.has(resource.id)
                 ? `Hide ${unchanged.length} unchanged elements`
@@ -604,7 +604,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
               {selectedActions.size > 0 && (
                 <span className={styles.filterCount}>{selectedActions.size}</span>
               )}
-              <span className={styles.chevron}>{showActionFilter ? '▲' : '▼'}</span>
+              <span className={styles.chevron}>{showActionFilter ? '▲' : '∨'}</span>
             </button>
 
             {showActionFilter && (
@@ -675,7 +675,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
             <div key={resource.id} className={`${styles.resourceCard} ${config.className}`}>
               <div className={styles.resourceHeader} onClick={() => toggleResource(resource.id)}>
                 <div className={styles.resourceHeaderLeft}>
-                  <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+                  <span className={styles.expandIcon}>{isExpanded ? '∨' : '›'}</span>
                   <span className={`${styles.actionIcon} ${config.className}`}>{config.icon}</span>
                   <span className={styles.resourceAddress}>{resource.resource_address}</span>
                   <button
@@ -702,7 +702,6 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                 </div>
                 <div className={styles.resourceHeaderRight}>
                   <span className={styles.resourceTypeTag}>{resource.resource_type}</span>
-                  <span className={`${styles.actionBadge} ${config.className}`}>{config.label}</span>
                 </div>
               </div>
 
@@ -763,7 +762,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
       {actionInvocations.length > 0 && (
         <div className={styles.actionInvocationsSection}>
           <div className={styles.actionInvocationsHeader} onClick={() => setActionsExpanded(!actionsExpanded)}>
-            <span className={styles.expandIcon}>{actionsExpanded ? '▼' : '▶'}</span>
+            <span className={styles.expandIcon}>{actionsExpanded ? '∨' : '›'}</span>
             <span className={styles.actionInvocationsTitle}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px', verticalAlign: 'middle' }}>
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -804,7 +803,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                       }}
                     >
                       <div className={styles.actionInvocationLeft}>
-                        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+                        <span className={styles.expandIcon}>{isExpanded ? '∨' : '›'}</span>
                         <span className={styles.actionInvocationAddress}>{action.address}</span>
                         <button
                           className={styles.copyButton}
@@ -898,7 +897,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
         return (
           <div className={styles.outputChangesSection}>
             <div className={styles.outputChangesHeader} onClick={() => setOutputsExpanded(!outputsExpanded)}>
-              <span className={styles.expandIcon}>{outputsExpanded ? '▼' : '▶'}</span>
+              <span className={styles.expandIcon}>{outputsExpanded ? '∨' : '›'}</span>
               <span className={styles.outputChangesTitle}>Output Changes</span>
               <span className={styles.outputChangesCount}>{actualChanges.length}</span>
             </div>
