@@ -114,6 +114,14 @@ manifest-managed workspace 的 output 由 `.tf` 文件管理,不走 `workspace_o
 
 - **新增** `state_service.go`:state 上传完成后异步触发 CMDB 资源同步,确保 workspace 资源被 embedding 索引和搜索收录
 
+### Manifest 编辑器 demo 标签重复 + 变更色块错乱修复
+
+`module "x" {` 行尾的 `· N demos` demo 选择标签在编辑时一行渲染多份,两个独立原因一并修复:
+
+- **修复** HMR 叠加 provider:`hclProviders.ts` / `hclCompletion.ts` / `hclDefinitions.ts` 原用模块级 `let registered` 防重复注册,Vite HMR 重算模块时该变量被抹掉,而 Monaco 全局 provider 注册表不重置,导致每次保存源码热更都叠加一份 provider。改为把 disposable 存到 `globalThis`,重注册前先 dispose 旧的(与 `initServices.ts` 对 vscode-api `initialize` 的兜底思路一致)
+- **修复** InlayHint 范围外重复:`provideInlayHints` 原忽略 Monaco 传入的 `range`,每次都扫整个 model 返回所有 hint;滚动 / 草稿自动保存触发模型版本变化、对新可见范围重新请求时,范围外 hint 会让同一个标签渲染多份。改为接收并尊重 `range`,只返回落在请求可见范围内的 hint(边界外扩 ±3 行)
+- **修复** 行级变更色块(added/modified)分类错乱:`computeLineDiff` 原用反向 LCS 回溯(贪心匹配最右的同内容行)+ `pubIdx` 单游标分类,导致纯新增空行 / 重复行 / 尾部追加被错标成 modified;插入内容与已有行重复时还会被 LCS 匹配成 unchanged(新行无色、原行反被标 modified)。改为正向回溯产出有序 match/insert/delete 操作序列(左对齐匹配),再按改动 hunk 配对分类——纯插入 = added,插入 + 删除混合 = modified
+
 ### 修改文件
 
 - `manifests/db/init_seed_data.sql` — workspace_tasks 补列 + ai_configs 默认值修正 + 新增 ID 22/23 INSERT + skills COPY 块去 frontmatter
@@ -127,9 +135,12 @@ manifest-managed workspace 的 output 由 `.tf` 文件管理,不走 `workspace_o
 - `skill/resource_generation/domain/schema_validation_rules.md` — 新建
 - `skill/resource_generation/foundation/platform_introduction.md` — 新建
 - `backend/services/state_service.go` — state 上传后异步 CMDB 同步
-- `frontend/src/pages/admin/ManifestEditorV2/ManifestEditorV2.tsx` — 文件夹拖拽粘贴 + 上传进度
+- `frontend/src/pages/admin/ManifestEditorV2/ManifestEditorV2.tsx` — 文件夹拖拽粘贴 + 上传进度;行级变更色块 `computeLineDiff` 改为正向回溯 + hunk 配对分类(added/modified)
 - `frontend/src/components/PlanCompleteView.tsx` — create/delete 复杂值统一 HCL 展示;update/replace 行级标记 diff(normalize/sort/diff);删除冗余渲染函数
 - `frontend/src/components/PlanCompleteView.module.css` — `.jsonValueDelete` / `.diffTree` / `.diffRow` / `.diffKey` / `.diffBrace` / `.diffValueBefore` 等样式
+- `frontend/src/pages/admin/ManifestEditorV2/hclProviders.ts` — provider disposable 改存 globalThis 防叠加;`provideInlayHints` 尊重请求 range
+- `frontend/src/pages/admin/ManifestEditorV2/hclCompletion.ts` — 同上 disposable 防叠加
+- `frontend/src/pages/admin/ManifestEditorV2/hclDefinitions.ts` — 同上 disposable 防叠加
 
 ### 技术细节
 
