@@ -201,19 +201,18 @@
   color: #2563eb;
 }
 
-/* Impact analysis block — risk-colored left border */
+/* Impact analysis block — risk-colored background (no left status bar) */
 
 .impactBlock {
   padding: 14px 16px;
-  border-left: 3px solid #d1d5db;
-  border-radius: 0 6px 6px 0;
+  border-radius: 6px;
   margin-bottom: 4px;
 }
 
-.impact_critical { border-color: #dc2626; background-color: #fef2f2; }
-.impact_high { border-color: #ea580c; background-color: #fff7ed; }
-.impact_medium { border-color: #ca8a04; background-color: #fffbeb; }
-.impact_low { border-color: #16a34a; background-color: #f0fdf4; }
+.impact_critical { background-color: #fef2f2; }
+.impact_high { background-color: #fff7ed; }
+.impact_medium { background-color: #fffbeb; }
+.impact_low { background-color: #f0fdf4; }
 
 .impactLabel {
   font-size: 12px;
