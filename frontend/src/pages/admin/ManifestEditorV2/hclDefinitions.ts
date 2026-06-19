@@ -154,22 +154,28 @@ export function resolveReferenceAt(
 
 // ---- Provider 注册 ----
 
-let registered = false
+// HMR 会重算本模块、抹掉模块级变量,但 Monaco 全局 provider 注册表不会跟着重置。
+// 把 disposable 存到 globalThis,重注册前先 dispose 旧的,避免 provider 叠加。
+// (与 hclProviders.ts 同一思路;详见 initServices.ts 对 HMR 的说明。)
+const REGISTRY_KEY = '__manifestHclDefinition__'
 
 interface RegisterOpts {
   getIndex: () => DefinitionIndex
 }
 
 export function registerHclDefinition({ getIndex }: RegisterOpts): void {
-  if (registered) return
-  registered = true
+  const g = globalThis as unknown as { [k: string]: monaco.IDisposable[] | undefined }
+  const prev = g[REGISTRY_KEY]
+  if (prev) prev.forEach((d) => { try { d.dispose() } catch { /* 已 dispose 或已注销 */ } })
+  const disposables: monaco.IDisposable[] = []
+  g[REGISTRY_KEY] = disposables
 
   const lookup = (hit: RefHit): DefLoc | undefined => {
     const idx = getIndex()
     return hit.kind === 'var' ? idx.variables.get(hit.name) : idx.locals.get(hit.name)
   }
 
-  monaco.languages.registerDefinitionProvider('hcl', {
+  disposables.push(monaco.languages.registerDefinitionProvider('hcl', {
     provideDefinition(model, position) {
       const hit = resolveReferenceAt(model, position)
       if (!hit) return null
@@ -185,9 +191,9 @@ export function registerHclDefinition({ getIndex }: RegisterOpts): void {
         },
       }
     },
-  })
+  }))
 
-  monaco.languages.registerHoverProvider('hcl', {
+  disposables.push(monaco.languages.registerHoverProvider('hcl', {
     provideHover(model, position) {
       const hit = resolveReferenceAt(model, position)
       if (!hit) return null
@@ -208,5 +214,5 @@ export function registerHclDefinition({ getIndex }: RegisterOpts): void {
         contents: lines.map((value) => ({ value })),
       }
     },
-  })
+  }))
 }

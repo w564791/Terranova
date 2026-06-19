@@ -12,7 +12,10 @@
 import * as monaco from 'monaco-editor'
 import { getCachedModules, getCachedInputs, fetchInputs, type ModuleInputField } from './moduleDemoApi'
 
-let registered = false
+// HMR 会重算本模块、抹掉模块级变量,但 Monaco 全局 provider 注册表不会跟着重置。
+// 把 disposable 存到 globalThis,重注册前先 dispose 旧的,避免 provider 叠加。
+// (与 hclProviders.ts 同一思路;详见 initServices.ts 对 HMR 的说明。)
+const REGISTRY_KEY = '__manifestHclCompletion__'
 
 // ---- Tier 1 静态数据 ----
 
@@ -144,10 +147,13 @@ function findModuleSource(model: monaco.editor.ITextModel, headLine: number): st
 }
 
 export function registerHclCompletion(): void {
-  if (registered) return
-  registered = true
+  const g = globalThis as unknown as { [k: string]: monaco.IDisposable[] | undefined }
+  const prev = g[REGISTRY_KEY]
+  if (prev) prev.forEach((d) => { try { d.dispose() } catch { /* 已 dispose 或已注销 */ } })
+  const disposables: monaco.IDisposable[] = []
+  g[REGISTRY_KEY] = disposables
 
-  monaco.languages.registerCompletionItemProvider('hcl', {
+  disposables.push(monaco.languages.registerCompletionItemProvider('hcl', {
     triggerCharacters: ['.'],
     provideCompletionItems(model, position) {
       const lineContent = model.getLineContent(position.lineNumber)
@@ -311,7 +317,7 @@ export function registerHclCompletion(): void {
 
       return { suggestions }
     },
-  })
+  }))
 }
 
 function refItem(

@@ -28,17 +28,24 @@ import {
   type DemoSummary,
 } from './moduleDemoApi'
 
-let registered = false
+// HMR 会重算本模块、抹掉模块级变量,但 Monaco 全局 provider 注册表不会跟着重置。
+// 把各 provider 的 disposable 存到 globalThis,重注册前先 dispose 旧的,
+// 否则每次保存源码热更都会叠加一份 provider,导致 InlayHint「· N demos」等
+// 在同一行渲染多份。(initServices.ts 对 vscode-api initialize 用同样的兜底思路。)
+const REGISTRY_KEY = '__manifestHclProviders__'
 
 export function registerHclProviders(): void {
-  if (registered) return
-  registered = true
+  const g = globalThis as unknown as { [k: string]: monaco.IDisposable[] | undefined }
+  const prev = g[REGISTRY_KEY]
+  if (prev) prev.forEach((d) => { try { d.dispose() } catch { /* 已 dispose 或已注销 */ } })
+  const disposables: monaco.IDisposable[] = []
+  g[REGISTRY_KEY] = disposables
 
   // 后台预热缓存(不阻塞)
   void warmUpCache()
 
   // ---- 通道 1: Completion ----
-  monaco.languages.registerCompletionItemProvider('hcl', {
+  disposables.push(monaco.languages.registerCompletionItemProvider('hcl', {
     triggerCharacters: ['"', ' '],
     async provideCompletionItems(model, position) {
       const lineContent = model.getLineContent(position.lineNumber)
@@ -116,10 +123,10 @@ export function registerHclProviders(): void {
       })
       return { suggestions }
     },
-  })
+  }))
 
   // ---- 命令: 用 demo 替换指定 module 块 (Inlay Hint tooltip 链接调用) ----
-  monaco.editor.registerCommand(
+  disposables.push(monaco.editor.registerCommand(
     'manifestInsertDemo',
     (
       _accessor: unknown,
@@ -153,10 +160,10 @@ export function registerHclProviders(): void {
       editor.executeEdits('manifest-demo', [{ range: fullRange, text, forceMoveMarkers: true }])
       editor.focus()
     },
-  )
+  ))
 
   // ---- 通道 2: Hover ----
-  monaco.languages.registerHoverProvider('hcl', {
+  disposables.push(monaco.languages.registerHoverProvider('hcl', {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber)
       const sm = line.match(/source\s*=\s*"([^"]+)"/)
@@ -176,17 +183,25 @@ export function registerHclProviders(): void {
         ],
       }
     },
-  })
+  }))
 
   // ---- 通道 3: Inlay Hint (demo 选择主入口) ----
-  monaco.languages.registerInlayHintsProvider('hcl', {
-    async provideInlayHints(model) {
+  disposables.push(monaco.languages.registerInlayHintsProvider('hcl', {
+    async provideInlayHints(model, range) {
       const hints: monaco.languages.InlayHint[] = []
       const text = model.getValue()
       const lines = text.split('\n')
       const modules = getCachedModules()
 
-      for (let i = 0; i < lines.length; i++) {
+      // 关键: 必须只返回落在 Monaco 请求的可见范围(range)内的 hint。
+      // 否则 adapter 在滚动 / 草稿自动保存触发模型版本变化、对新可见范围重新请求时,
+      // 会把同一个 hint 当成属于多个范围请求的结果,在 module 行上渲染多份
+      // (上下滑表现不同正是「返回了范围外 hint」的典型特征)。
+      // 扫描范围放大一点(±3 行),覆盖 hint 标签可能跨行的边界情况。
+      const startLine = Math.max(0, range.startLineNumber - 4)
+      const endLine = Math.min(lines.length, range.endLineNumber + 3)
+
+      for (let i = startLine; i < endLine; i++) {
         const declMatch = lines[i].match(/^\s*module\s+"([^"]+)"\s*\{/)
         if (!declMatch) continue
         const instanceName = declMatch[1]
@@ -247,10 +262,10 @@ export function registerHclProviders(): void {
       }
       return { hints, dispose: () => {} }
     },
-  })
+  }))
 
   // ---- 通道 4: Code Action (Quick Fix 灯泡) ----
-  monaco.languages.registerCodeActionProvider('hcl', {
+  disposables.push(monaco.languages.registerCodeActionProvider('hcl', {
     provideCodeActions(model, range) {
       const text = model.getValue()
       const lines = text.split('\n')
@@ -328,7 +343,7 @@ export function registerHclProviders(): void {
       }))
       return { actions, dispose: () => {} }
     },
-  })
+  }))
 }
 
 // ============================================================
