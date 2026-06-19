@@ -284,33 +284,43 @@ export default function ManifestEditorV2() {
       }
     }
 
-    // 回溯标记哪些 current 行在 LCS 中(与旧行精确匹配)
-    const matchedCurrent = new Set<number>()
+    // 正向回溯产出有序操作序列(match/insert/delete),并尽量让匹配落在最左
+    // (左对齐)——旧的反向回溯会贪心匹配最右的同内容行,导致重复行/空行被
+    // 错配成 unchanged(新行无色)。
+    type Op = { t: 'match' | 'insert'; c: number } | { t: 'delete'; c?: undefined }
+    const ops: Op[] = []
     let i = m, j = n
-    while (i > 0 && j > 0) {
-      if (currentLines[i - 1] === publishedLines[j - 1]) {
-        matchedCurrent.add(i - 1)
-        i--; j--
-      } else if (dp[i - 1][j] >= dp[i][j - 1]) {
-        i--
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && currentLines[i - 1] === publishedLines[j - 1]) {
+        ops.push({ t: 'match', c: i - 1 }); i--; j--
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        ops.push({ t: 'delete' }); j--
       } else {
-        j--
+        ops.push({ t: 'insert', c: i - 1 }); i--
       }
     }
+    ops.reverse()
 
-    // 不在 LCS 中的行:对应位置有旧行 → modified;否则 → added
-    const result: ('added' | 'modified' | 'unchanged')[] = []
-    let pubIdx = 0 // 遍历旧行,用于判断当前行是否有对应旧行
-    for (let ci = 0; ci < m; ci++) {
-      if (matchedCurrent.has(ci)) {
-        result.push('unchanged')
-        pubIdx++ // 跳过匹配的旧行
-      } else if (pubIdx < n) {
-        result.push('modified') // 对应位置有旧行 → 修改
-        pubIdx++
-      } else {
-        result.push('added') // 没有对应旧行 → 纯新增
+    // 按改动 hunk 配对分类:
+    //   连续的非 match 操作为一个 hunk;
+    //   hunk 内既有 insert 又有 delete → 这些 insert 行是 modified(替换);
+    //   只有 insert → added(纯新增,无对应旧行)。
+    // 旧的 pubIdx 单游标会把所有未匹配行无脑当 modified,导致纯新增/空行被错标。
+    const result: ('added' | 'modified' | 'unchanged')[] = new Array(m).fill('unchanged')
+    let k = 0
+    while (k < ops.length) {
+      if (ops[k].t === 'match') { k++; continue }
+      const group: Op[] = []
+      let hasIns = false
+      let hasDel = false
+      while (k < ops.length && ops[k].t !== 'match') {
+        group.push(ops[k])
+        hasIns = hasIns || ops[k].t === 'insert'
+        hasDel = hasDel || ops[k].t === 'delete'
+        k++
       }
+      const cls: 'added' | 'modified' = hasIns && hasDel ? 'modified' : 'added'
+      for (const op of group) if (op.t === 'insert') result[op.c] = cls
     }
 
     return result
