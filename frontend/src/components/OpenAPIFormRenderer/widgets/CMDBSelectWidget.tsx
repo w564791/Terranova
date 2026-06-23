@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Form, AutoComplete, Select, Spin, Tag, Tooltip, Input } from 'antd';
+import { Form, AutoComplete, Select, Spin, Tag, Tooltip } from 'antd';
 import { DatabaseOutlined } from '@ant-design/icons';
 import type { WidgetProps } from '../types';
 import { cmdbService, type ResourceSearchResult } from '../../../services/cmdb';
@@ -94,21 +94,6 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
   // 有本地资源或远程数据时，都可以使用引用选择器
   const hasReferenceContext = hasWorkspaceResourceContext && (hasOtherResources || hasRemoteData);
   
-  // 调试日志：检查 context 和 workspaceResource
-  console.log('[CMDBSelectWidget] Debug context:', {
-    name,
-    hasContext: !!context,
-    hasWorkspaceResource: !!context?.workspaceResource,
-    workspaceId: workspaceResourceContext?.workspaceId,
-    currentResourceId: workspaceResourceContext?.currentResourceId,
-    resourcesCount: workspaceResourceContext?.resources?.length ?? 0,
-    remoteDataCount: workspaceResourceContext?.remoteData?.length ?? 0,
-    hasWorkspaceResourceContext,
-    hasOtherResources,
-    hasRemoteData,
-    hasReferenceContext,
-  });
-  
   // 将 workspace 资源转换为 ModuleNodeInfo 格式
   // instance_name 用于生成引用（完整的 tf_module_key）
   // display_name 用于显示（友好的 resource_name）
@@ -177,11 +162,8 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
 
   // 单值模式：处理搜索（用于检测 / 和触发 CMDB 搜索）
   const handleSingleSearch = useCallback((value: string) => {
-    console.log('[CMDBSelectWidget] handleSingleSearch:', value, 'hasReferenceContext:', hasReferenceContext);
-    
     // 检测 "/" 触发引用选择器
     if (hasReferenceContext && value.endsWith('/')) {
-      console.log('[CMDBSelectWidget] Detected /, opening reference popover');
       // 获取输入框位置 - 使用 DOM 查询而不是 ref
       const inputElement = document.querySelector(`[data-cmdb-autocomplete="${name}"]`);
       if (inputElement) {
@@ -190,9 +172,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
           x: rect.left,
           y: rect.bottom + 4,
         });
-        console.log('[CMDBSelectWidget] Popover position:', { x: rect.left, y: rect.bottom + 4 });
       } else {
-        console.log('[CMDBSelectWidget] Input element not found, using default position');
         // 使用默认位置
         setPopoverPosition({ x: 100, y: 200 });
       }
@@ -211,11 +191,8 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
 
   // 多值模式：处理搜索
   const handleMultipleSearch = useCallback((value: string) => {
-    console.log('[CMDBSelectWidget] handleMultipleSearch:', value, 'hasReferenceContext:', hasReferenceContext);
-    
     // 检测 "/" 触发引用选择器
     if (hasReferenceContext && value.endsWith('/')) {
-      console.log('[CMDBSelectWidget] Detected / in multiple mode, opening reference popover');
       // 获取输入框位置
       const selectElement = document.querySelector(`[data-cmdb-select="${name}"]`);
       if (selectElement) {
@@ -243,15 +220,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
   const handleReferenceSelect = useCallback((reference: string, _sourceNodeId: string, _outputName: string) => {
     // 将引用包装成 Terraform 插值语法 ${...}
     const terraformReference = `\${${reference}}`;
-    
-    console.log('[CMDBSelectWidget] handleReferenceSelect:', {
-      name,
-      reference,
-      terraformReference,
-      isArrayType,
-      currentValue: formValue,
-    });
-    
+
     if (isArrayType) {
       // 多值模式：追加到数组
       const currentValues = Array.isArray(formValue) ? formValue : [];

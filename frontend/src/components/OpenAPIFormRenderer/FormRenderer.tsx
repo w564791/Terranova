@@ -245,8 +245,6 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       }
     });
     
-    console.log('🔗 Generated cascade rules:', fieldRules.length, 'from field configs');
-    
     // 合并全局规则和字段级规则
     return [...globalRules, ...fieldRules];
   }, [schema]);
@@ -258,7 +256,6 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       // 初始评估
       const initialState = cascadeEngineRef.current.evaluate(mergedInitialValues);
       setCascadeState(initialState);
-      console.log('🔗 CascadeEngine initialized with', cascadeRules.length, 'rules');
     }
   }, [cascadeRules, mergedInitialValues]);
 
@@ -368,12 +365,6 @@ const FormRenderer: React.FC<FormRendererProps> = ({
     // 因为 allValues 只包含当前渲染的字段，隐藏的字段不会出现在其中
     const formValues = form.getFieldsValue(true);
     
-    console.log('[FormRenderer] handleValuesChange:', {
-      changedValues: _changedValues,
-      allValues: _allValues,
-      formValues,
-    });
-    
     // 评估级联规则
     let currentCascadeState = cascadeStateRef.current;
     if (cascadeEngineRef.current) {
@@ -465,7 +456,6 @@ const FormRenderer: React.FC<FormRendererProps> = ({
   // 手动触发值更新的回调（用于 Widget 在 setFieldsValue 后通知 FormRenderer）
   const triggerValuesUpdate = useCallback(() => {
     const formValues = form.getFieldsValue(true);
-    console.log('[FormRenderer] triggerValuesUpdate called, formValues:', formValues);
 
     // 合并原始数据和表单数据
     const mergedValues = {

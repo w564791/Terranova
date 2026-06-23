@@ -18,7 +18,6 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-  rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MonacoJsonEditor } from '../DynamicForm/MonacoJsonEditor';
@@ -26,6 +25,15 @@ import ConfirmDialog from '../ConfirmDialog';
 import type { OpenAPISchema } from '../../services/schemaV2';
 import api from '../../services/api';
 import styles from './OpenAPISchemaEditor.module.css';
+
+const cloneDeep = <T,>(value: T): T => {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value));
+};
+
+const DRAG_ACTIVATION_DISTANCE = 6;
 
 // ============ 自定义碰撞检测：分隔区优先 ============
 // 当拖拽时，优先检测分隔区（separator），再检测行（row）
@@ -66,6 +74,47 @@ const DEFAULT_GROUPS: UIGroup[] = [
   { id: 'basic', label: '基础配置', level: 'basic', layout: 'sections', order: 1 },
   { id: 'advanced', label: '高级配置', level: 'advanced', layout: 'accordion', order: 100 },
 ];
+
+const updateEditorSchema = (
+  schema: OpenAPISchema,
+  updater: (draft: OpenAPISchema & { 'x-iac-platform': any }) => void
+): OpenAPISchema => {
+  const currentPlatform = (schema as any)['x-iac-platform'] || {};
+  const currentUi = currentPlatform.ui || {};
+  const nextSchema = {
+    ...schema,
+    components: {
+      ...schema.components,
+      schemas: {
+        ...schema.components?.schemas,
+        ModuleInput: {
+          ...schema.components?.schemas?.ModuleInput,
+          properties: {
+            ...(schema.components?.schemas?.ModuleInput?.properties || {}),
+          },
+          required: [...(schema.components?.schemas?.ModuleInput?.required || [])],
+        },
+      },
+    },
+    'x-iac-platform': {
+      ...currentPlatform,
+      ui: {
+        ...currentUi,
+        fields: { ...(currentUi.fields || {}) },
+        groups: [...(currentUi.groups || [])],
+      },
+      outputs: currentPlatform.outputs
+        ? {
+            ...currentPlatform.outputs,
+            items: [...(currentPlatform.outputs.items || [])],
+          }
+        : currentPlatform.outputs,
+    },
+  } as OpenAPISchema & { 'x-iac-platform': any };
+
+  updater(nextSchema);
+  return nextSchema;
+};
 
 // ============ CMDB 字段定义 ============
 // CMDB 预定义字段（固定 Key）
@@ -642,7 +691,6 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
       order: typeof g.order === 'number' ? g.order : 100,
     }));
     
-    console.log('📋 Effective groups:', result);
     return result;
   }, [groups]);
 
@@ -876,7 +924,10 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
                   const sourceType = e.target.value;
                   // 创建新的 uiConfig 对象，一次性更新所有相关字段
                   // 使用深拷贝确保不会有引用问题
-                  const newUiConfig = JSON.parse(JSON.stringify(editedUiConfig));
+                  const newUiConfig = {
+                    ...editedUiConfig,
+                    cmdbSource: editedUiConfig.cmdbSource ? { ...editedUiConfig.cmdbSource } : undefined,
+                  };
                   
                   // 确保保留 order 属性
                   if (!newUiConfig.order && uiConfig.order) {
@@ -898,7 +949,6 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
                     // 保留 source 字段，让用户填写
                   }
                   
-                  console.log('📝 CMDB source type changed:', sourceType, 'cmdbSource:', newUiConfig.cmdbSource, 'full config:', newUiConfig);
                   setEditedUiConfig(newUiConfig);
                   // 立即触发 onChange，不使用 setTimeout
                   onChange(editedProperty, newUiConfig);
@@ -1699,15 +1749,15 @@ interface NestedFieldInlineEditorProps {
 }
 
 const NestedFieldInlineEditor: React.FC<NestedFieldInlineEditorProps> = ({ fieldName, fieldDef, onChange, depth = 1, groups }) => {
-  const [editedField, setEditedField] = useState(() => JSON.parse(JSON.stringify(fieldDef)));
+  const [editedField, setEditedField] = useState(() => cloneDeep(fieldDef));
   const [selectedType, setSelectedType] = useState(() => inferValueTypeFromSchema(fieldDef));
   const [activeSection, setActiveSection] = useState<string>('basic');
 
   // 当 fieldDef 变化时更新本地状态
   React.useEffect(() => { 
-    setEditedField(JSON.parse(JSON.stringify(fieldDef))); 
+    setEditedField(cloneDeep(fieldDef)); 
     setSelectedType(inferValueTypeFromSchema(fieldDef)); 
-  }, [JSON.stringify(fieldDef)]);
+  }, [fieldDef]);
 
   // 子参数的分组选项 - 使用传入的 groups 或默认分组
   const nestedGroups = useMemo(() => {
@@ -1737,7 +1787,7 @@ const NestedFieldInlineEditor: React.FC<NestedFieldInlineEditorProps> = ({ field
   };
 
   const handleFieldChange = (key: string, value: any) => {
-    const newFieldDef = JSON.parse(JSON.stringify(editedField));
+    const newFieldDef = cloneDeep(editedField);
     if (value === undefined || value === '') {
       delete newFieldDef[key];
     } else {
@@ -2033,7 +2083,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, onChange }) => {
   const [newGroupLabel, setNewGroupLabel] = useState('');
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_DISTANCE } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -2513,8 +2563,8 @@ export interface OpenAPISchemaEditorProps {
 }
 
 export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema, onSave, onCancel, title = 'OpenAPI Schema 编辑器' }) => {
-  const [editedSchema, setEditedSchema] = useState<OpenAPISchema>(JSON.parse(JSON.stringify(schema)));
-  const [originalSchema] = useState<OpenAPISchema>(JSON.parse(JSON.stringify(schema))); // 保存原始 Schema 用于对比
+  const [editedSchema, setEditedSchema] = useState<OpenAPISchema>(cloneDeep(schema));
+  const [originalSchema] = useState<OpenAPISchema>(cloneDeep(schema)); // 保存原始 Schema 用于对比
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'json' | 'groups' | 'layout'>('table');
@@ -2522,6 +2572,9 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
   const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge');
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [showAddFieldForm, setShowAddFieldForm] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [activeSortField, setActiveSortField] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tfFileInputRef = useRef<HTMLInputElement>(null);
   
@@ -2539,7 +2592,10 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
     onConfirm: () => void;
   }>({ isOpen: false, type: 'field', name: '', onConfirm: () => {} });
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_DISTANCE } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const properties = editedSchema.components?.schemas?.ModuleInput?.properties || {};
   const required = editedSchema.components?.schemas?.ModuleInput?.required || [];
@@ -2569,27 +2625,26 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
 
   // 更新分组配置
   const handleGroupsChange = (newGroups: UIGroup[]) => {
-    const newSchema = JSON.parse(JSON.stringify(editedSchema));
-    if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {}, groups: [] } };
-    if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {}, groups: [] };
-    newSchema['x-iac-platform'].ui.groups = newGroups;
-    setEditedSchema(newSchema);
+    setEditedSchema(prev =>
+      updateEditorSchema(prev, draft => {
+        draft['x-iac-platform'].ui.groups = newGroups;
+      })
+    );
   };
 
   // 布局视图回调：批量更新字段的 order 和 colSpan
   const handleLayoutFieldsChange = (updatedFields: Record<string, { order: number; colSpan: number }>) => {
-    const newSchema = JSON.parse(JSON.stringify(editedSchema));
-    if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {}, groups: [] } };
-    if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {}, groups: [] };
-    if (!newSchema['x-iac-platform'].ui.fields) newSchema['x-iac-platform'].ui.fields = {};
-    Object.entries(updatedFields).forEach(([name, { order, colSpan }]) => {
-      if (!newSchema['x-iac-platform'].ui.fields[name]) {
-        newSchema['x-iac-platform'].ui.fields[name] = {};
-      }
-      newSchema['x-iac-platform'].ui.fields[name].order = order;
-      newSchema['x-iac-platform'].ui.fields[name].colSpan = colSpan;
-    });
-    setEditedSchema(newSchema);
+    setEditedSchema(prev =>
+      updateEditorSchema(prev, draft => {
+        Object.entries(updatedFields).forEach(([name, { order, colSpan }]) => {
+          draft['x-iac-platform'].ui.fields[name] = {
+            ...(draft['x-iac-platform'].ui.fields[name] || {}),
+            order,
+            colSpan,
+          };
+        });
+      })
+    );
   };
 
   // 按 order 排序（不按分组排序，避免更改分组时导致重新排序）
@@ -2628,29 +2683,33 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
       name: outputName,
       label: outputName,
       onConfirm: () => {
-        const newSchema = JSON.parse(JSON.stringify(editedSchema));
-        if (newSchema['x-iac-platform']?.outputs?.items) {
-          newSchema['x-iac-platform'].outputs.items = newSchema['x-iac-platform'].outputs.items.filter((o: any) => o.name !== outputName);
-        }
-        setEditedSchema(newSchema);
+        setEditedSchema(prev =>
+          updateEditorSchema(prev, draft => {
+            if (draft['x-iac-platform']?.outputs?.items) {
+              draft['x-iac-platform'].outputs.items = draft['x-iac-platform'].outputs.items.filter((o: any) => o.name !== outputName);
+            }
+          })
+        );
         setDeleteConfirm({ isOpen: false, type: 'output', name: '', onConfirm: () => {} });
       }
     });
   };
 
   const updateFieldsOrder = useCallback((orderedFieldNames: string[]) => {
-    const newSchema = JSON.parse(JSON.stringify(editedSchema));
-    if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {}, groups: [] } };
-    if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {}, groups: [] };
-    if (!newSchema['x-iac-platform'].ui.fields) newSchema['x-iac-platform'].ui.fields = {};
-    orderedFieldNames.forEach((fieldName, index) => {
-      if (!newSchema['x-iac-platform'].ui.fields[fieldName]) newSchema['x-iac-platform'].ui.fields[fieldName] = {};
-      newSchema['x-iac-platform'].ui.fields[fieldName].order = index + 1;
-    });
-    setEditedSchema(newSchema);
-  }, [editedSchema]);
+    setEditedSchema(prev =>
+      updateEditorSchema(prev, draft => {
+        orderedFieldNames.forEach((fieldName, index) => {
+          draft['x-iac-platform'].ui.fields[fieldName] = {
+            ...(draft['x-iac-platform'].ui.fields[fieldName] || {}),
+            order: index + 1,
+          };
+        });
+      })
+    );
+  }, []);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveSortField(null);
     const { active, over } = event;
     if (over && active.id !== over.id) {
       const oldIndex = sortedFieldNames.indexOf(active.id as string);
@@ -2662,14 +2721,17 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
     }
   }, [sortedFieldNames, updateFieldsOrder]);
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveSortField(String(event.active.id));
+  }, []);
+
   const handleFieldChange = (fieldName: string, property: any, uiConfig: any) => {
-    const newSchema = JSON.parse(JSON.stringify(editedSchema));
-    newSchema.components.schemas.ModuleInput.properties[fieldName] = property;
-    if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {} } };
-    if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {} };
-    if (!newSchema['x-iac-platform'].ui.fields) newSchema['x-iac-platform'].ui.fields = {};
-    newSchema['x-iac-platform'].ui.fields[fieldName] = uiConfig;
-    setEditedSchema(newSchema);
+    setEditedSchema(prev =>
+      updateEditorSchema(prev, draft => {
+        draft.components.schemas.ModuleInput.properties[fieldName] = property;
+        draft['x-iac-platform'].ui.fields[fieldName] = uiConfig;
+      })
+    );
   };
 
   // 请求删除字段（显示确认弹窗）
@@ -2681,12 +2743,17 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
       name: fieldName,
       label: fieldLabel,
       onConfirm: () => {
-        const newSchema = JSON.parse(JSON.stringify(editedSchema));
-        delete newSchema.components.schemas.ModuleInput.properties[fieldName];
-        const reqIndex = newSchema.components.schemas.ModuleInput.required?.indexOf(fieldName);
-        if (reqIndex > -1) newSchema.components.schemas.ModuleInput.required.splice(reqIndex, 1);
-        if (newSchema['x-iac-platform']?.ui?.fields?.[fieldName]) delete newSchema['x-iac-platform'].ui.fields[fieldName];
-        setEditedSchema(newSchema);
+        setEditedSchema(prev =>
+          updateEditorSchema(prev, draft => {
+            delete draft.components.schemas.ModuleInput.properties[fieldName];
+            draft.components.schemas.ModuleInput.required = (draft.components.schemas.ModuleInput.required || []).filter(
+              (name: string) => name !== fieldName
+            );
+            if (draft['x-iac-platform']?.ui?.fields?.[fieldName]) {
+              delete draft['x-iac-platform'].ui.fields[fieldName];
+            }
+          })
+        );
         if (expandedField === fieldName) setExpandedField(null);
         setDeleteConfirm({ isOpen: false, type: 'field', name: '', onConfirm: () => {} });
       }
@@ -2694,12 +2761,14 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
   };
 
   const toggleRequired = (fieldName: string) => {
-    const newSchema = JSON.parse(JSON.stringify(editedSchema));
-    if (!newSchema.components.schemas.ModuleInput.required) newSchema.components.schemas.ModuleInput.required = [];
-    const reqIndex = newSchema.components.schemas.ModuleInput.required.indexOf(fieldName);
-    if (reqIndex > -1) newSchema.components.schemas.ModuleInput.required.splice(reqIndex, 1);
-    else newSchema.components.schemas.ModuleInput.required.push(fieldName);
-    setEditedSchema(newSchema);
+    setEditedSchema(prev =>
+      updateEditorSchema(prev, draft => {
+        const currentRequired = draft.components.schemas.ModuleInput.required || [];
+        draft.components.schemas.ModuleInput.required = currentRequired.includes(fieldName)
+          ? currentRequired.filter((name: string) => name !== fieldName)
+          : [...currentRequired, fieldName];
+      })
+    );
   };
 
   const getTypeDisplay = (prop: any): string => {
@@ -2728,16 +2797,18 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
       if (parseResponse.data?.schema) {
         const importedSchema = parseResponse.data.schema;
         if (importMode === 'replace') {
-          setEditedSchema(importedSchema);
+          setEditedSchema(cloneDeep(importedSchema));
         } else {
-          const newSchema = JSON.parse(JSON.stringify(editedSchema));
           const importedProps = importedSchema.components?.schemas?.ModuleInput?.properties || {};
-          Object.keys(importedProps).forEach(key => {
-            if (!newSchema.components.schemas.ModuleInput.properties[key]) {
-              newSchema.components.schemas.ModuleInput.properties[key] = importedProps[key];
-            }
-          });
-          setEditedSchema(newSchema);
+          setEditedSchema(prev =>
+            updateEditorSchema(prev, draft => {
+              Object.keys(importedProps).forEach(key => {
+                if (!draft.components.schemas.ModuleInput.properties[key]) {
+                  draft.components.schemas.ModuleInput.properties[key] = importedProps[key];
+                }
+              });
+            })
+          );
         }
         setImportMessage({ type: 'success', text: `成功导入 ${Object.keys(parseResponse.data.schema.components?.schemas?.ModuleInput?.properties || {}).length} 个字段` });
       }
@@ -2751,17 +2822,26 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
 
   // 添加新字段
   const handleAddField = () => {
-    const fieldName = prompt('请输入新字段名称（英文小写，下划线分隔）：');
-    if (!fieldName) return;
-    const normalizedName = fieldName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    if (properties[normalizedName]) { alert(`字段 "${normalizedName}" 已存在`); return; }
-    const newSchema = JSON.parse(JSON.stringify(editedSchema));
-    newSchema.components.schemas.ModuleInput.properties[normalizedName] = { type: 'string', description: '' };
-    if (!newSchema['x-iac-platform']) newSchema['x-iac-platform'] = { ui: { fields: {}, groups: [] } };
-    if (!newSchema['x-iac-platform'].ui) newSchema['x-iac-platform'].ui = { fields: {}, groups: [] };
-    if (!newSchema['x-iac-platform'].ui.fields) newSchema['x-iac-platform'].ui.fields = {};
-    newSchema['x-iac-platform'].ui.fields[normalizedName] = { order: sortedFieldNames.length + 1, group: 'advanced' };
-    setEditedSchema(newSchema);
+    const normalizedName = newFieldName.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!normalizedName) {
+      setImportMessage({ type: 'error', text: '请输入字段名' });
+      return;
+    }
+    if (properties[normalizedName]) {
+      setImportMessage({ type: 'error', text: `字段 "${normalizedName}" 已存在` });
+      return;
+    }
+    setEditedSchema(prev =>
+      updateEditorSchema(prev, draft => {
+        draft.components.schemas.ModuleInput.properties[normalizedName] = { type: 'string', description: '' };
+        draft['x-iac-platform'].ui.fields[normalizedName] = {
+          order: sortedFieldNames.length + 1,
+          group: 'advanced',
+        };
+      })
+    );
+    setNewFieldName('');
+    setShowAddFieldForm(false);
     setExpandedField(normalizedName);
   };
 
@@ -2832,10 +2912,46 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
             <>
               <div className={styles.searchBox}>
                 <input type="text" placeholder="搜索字段..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={styles.searchInput} />
-                <button type="button" onClick={handleAddField} className={styles.saveButton}>+ 添加字段</button>
+                {showAddFieldForm ? (
+                  <>
+                    <input
+                      type="text"
+                      value={newFieldName}
+                      onChange={(e) => setNewFieldName(e.target.value)}
+                      placeholder="新字段名，例如 bucket_name"
+                      className={styles.fieldInput}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddField();
+                        if (e.key === 'Escape') {
+                          setShowAddFieldForm(false);
+                          setNewFieldName('');
+                        }
+                      }}
+                    />
+                    <button type="button" onClick={handleAddField} className={styles.saveButton}>保存字段</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddFieldForm(false);
+                        setNewFieldName('');
+                      }}
+                      className={styles.cancelButton}
+                    >
+                      取消
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => setShowAddFieldForm(true)} className={styles.saveButton}>+ 添加字段</button>
+                )}
                 <span className={styles.dragHint}>💡 拖拽行可调整顺序</span>
               </div>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
                 <div className={styles.tableContainer}>
                   <table className={styles.schemaTable}>
                     <thead>
@@ -2879,6 +2995,20 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
                     </SortableContext>
                   </table>
                 </div>
+                <DragOverlay>
+                  {activeSortField ? (
+                    <div className={styles.layoutCard} style={{ width: 260, opacity: 0.92, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.18)' }}>
+                      <div className={styles.layoutCardHeader}>
+                        <span className={styles.layoutCardDrag}>⋮⋮</span>
+                        <span className={styles.layoutCardName}>{activeSortField}</span>
+                      </div>
+                      <div className={styles.layoutCardMeta}>
+                        <span className={styles.layoutCardType}>{getTypeDisplay(properties[activeSortField])}</span>
+                        <span className={styles.layoutCardLabel}>{uiFields[activeSortField]?.label || '未设置别名'}</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             </>
           )}
