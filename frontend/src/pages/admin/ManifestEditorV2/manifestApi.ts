@@ -129,6 +129,36 @@ export async function resetDraftFrom(
 }
 
 // =============================================================================
+// Provider schema（post_init 落库；按 manifest+subpath）
+// =============================================================================
+
+export interface ManifestProviderSchemaResponse {
+  exists: boolean
+  manifest_id: string
+  subpath: string
+  schema_kind?: string
+  providers?: { source: string; version: string }[]
+  provider_versions_key?: string
+  resources?: string[]
+  data?: string[]
+  content_hash?: string
+  version?: string
+  terraform_version?: string
+  captured_at?: string
+}
+
+/** 拉取编辑器类型补全目录；无缓存时 exists=false */
+export async function getProviderSchemas(
+  ctx: ManifestEditorContext,
+  subpath = '',
+): Promise<ManifestProviderSchemaResponse> {
+  const qs = subpath ? `?subpath=${encodeURIComponent(subpath)}` : ''
+  return (await api.get(
+    `${basePath(ctx)}/provider-schemas${qs}`,
+  )) as ManifestProviderSchemaResponse
+}
+
+// =============================================================================
 // 版本 / 部署
 // =============================================================================
 
@@ -324,7 +354,10 @@ export async function triggerWorkspacePlanApply(
 
 /** 路径 → 编辑器语言(PR2-C 会精细化, 当前最小集) */
 export function languageOfPath(path: string): string {
-  if (path.endsWith('.tf') || path.endsWith('.tfvars') || path.endsWith('.hcl')) return 'hcl'
+  // 对齐 HashiCorp 官方 language id 映射(hashicorp/syntax + marketplace 插件)
+  if (path.endsWith('.tf')) return 'terraform'
+  if (path.endsWith('.tfvars')) return 'terraform-vars'
+  if (path.endsWith('.hcl')) return 'hcl'
   if (path.endsWith('.md') || path.endsWith('.markdown')) return 'markdown'
   if (path.endsWith('.json')) return 'json'
   if (path.endsWith('.yaml') || path.endsWith('.yml')) return 'yaml'

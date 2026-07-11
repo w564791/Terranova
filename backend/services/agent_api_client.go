@@ -614,6 +614,68 @@ func (c *AgentAPIClient) SaveTerraformLockHCL(workspaceID string, lockContent st
 	return nil
 }
 
+// GetManifestProviderSchemaMeta 获取 workspace 对应 manifest+subpath 的 schema 元信息（版本指纹）
+// 非 manifest-managed 时返回 error（文案含 "not manifest-managed"），与 Local 路径一致。
+func (c *AgentAPIClient) GetManifestProviderSchemaMeta(workspaceID string) (*models.ManifestProviderSchema, error) {
+	path := fmt.Sprintf("/api/v1/agents/workspaces/%s/manifest-provider-schema/meta", workspaceID)
+	respBody, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provider schema meta: %w", err)
+	}
+	if managed, ok := respBody["managed"].(bool); ok && !managed {
+		return nil, fmt.Errorf("workspace %s is not manifest-managed", workspaceID)
+	}
+	row := &models.ManifestProviderSchema{
+		SchemaKind: models.ManifestProviderSchemaKindTypes,
+	}
+	if v, ok := respBody["manifest_id"].(string); ok {
+		row.ManifestID = v
+	}
+	if v, ok := respBody["subpath"].(string); ok {
+		row.Subpath = v
+	}
+	if v, ok := respBody["provider_versions_key"].(string); ok {
+		row.ProviderVersionsKey = v
+	}
+	if v, ok := respBody["content_hash"].(string); ok {
+		row.ContentHash = v
+	}
+	// exists=false 且 managed=true → 托管但无缓存；返回空 key 的 stub
+	return row, nil
+}
+
+// UpsertManifestProviderSchema 上传 provider types schema（服务端解析 manifest+subpath）
+func (c *AgentAPIClient) UpsertManifestProviderSchema(workspaceID string, row *models.ManifestProviderSchema) error {
+	if row == nil {
+		return fmt.Errorf("row is nil")
+	}
+	path := fmt.Sprintf("/api/v1/agents/workspaces/%s/manifest-provider-schema", workspaceID)
+
+	var providers interface{}
+	var resources interface{}
+	var dataSources interface{}
+	_ = json.Unmarshal(row.Providers, &providers)
+	_ = json.Unmarshal(row.Resources, &resources)
+	_ = json.Unmarshal(row.DataSources, &dataSources)
+
+	reqBody := map[string]interface{}{
+		"schema_kind":           row.SchemaKind,
+		"providers":             providers,
+		"provider_versions_key": row.ProviderVersionsKey,
+		"resources":             resources,
+		"data_sources":          dataSources,
+		"content_hash":          row.ContentHash,
+		"terraform_version":     row.TerraformVersion,
+		"source_task_id":        row.SourceTaskID,
+	}
+
+	_, err := c.doRequest("PUT", path, reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to upsert provider schema: %w", err)
+	}
+	return nil
+}
+
 // ============================================================================
 // 带重试的请求方法
 // ============================================================================

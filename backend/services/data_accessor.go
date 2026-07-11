@@ -25,6 +25,12 @@ type DataAccessor interface {
 	GetTerraformLockHCL(workspaceID string) (string, error)
 	SaveTerraformLockHCL(workspaceID string, lockContent string) error
 
+	// Manifest provider schema（post_init 落库；按 manifest+subpath，用 provider 版本指纹跳过重复提取）
+	// Meta 含 ProviderVersionsKey；无记录返回 (nil, nil)
+	GetManifestProviderSchemaMetaByWorkspace(workspaceID string) (*models.ManifestProviderSchema, error)
+	// Upsert：由 workspace 解析 manifest_id+subpath 后写入；row 可不填 ManifestID/Subpath/ID
+	UpsertManifestProviderSchemaByWorkspace(workspaceID string, row *models.ManifestProviderSchema) error
+
 	// State 相关
 	GetLatestStateVersion(workspaceID string) (*models.WorkspaceStateVersion, error)
 	GetMaxStateVersion(workspaceID string) (int, error)

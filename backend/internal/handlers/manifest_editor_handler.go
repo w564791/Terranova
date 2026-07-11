@@ -3,7 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -160,20 +162,23 @@ func (h *ManifestEditorHandler) ListDemos(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"demos": out})
 }
 
-// ModuleInputField 编辑器补全用的 module 输入变量定义
+// ModuleInputField 编辑器补全用的 module 输入变量定义（扁平参数+类型，不做条件分支）。
 type ModuleInputField struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`        // string / number / boolean / object / array
-	Required    bool   `json:"required"`
-	Description string `json:"description"`
-	Default     string `json:"default,omitempty"` // 有默认值时的展示字符串(原样,仅提示)
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`                  // OpenAPI base: string/number/boolean/object/array
+	TypeLabel   string   `json:"type_label"`            // 展示/snippet 用: string, number, bool, list(string), map(string), object...
+	Required    bool     `json:"required"`
+	Description string   `json:"description"`
+	Default     string   `json:"default,omitempty"`     // 默认值 JSON 串（仅提示）
+	Enum        []string `json:"enum,omitempty"`        // 枚举可选值（有则补全可提示）
+	Title       string   `json:"title,omitempty"`       // OpenAPI title
 }
 
 // ListModuleInputs GET /manifest-editor/modules/:module_id/inputs
 //
-// 从 module 活跃 schema 的 OpenAPI 定义提取输入变量(name/type/required/description),
-// 供编辑器在 module 块内做属性补全(Tier3)。数据源与输出提示同款:
-// components.schemas.ModuleInput.properties + required 数组。
+// 从 module 活跃 schema 的 OpenAPI 定义提取输入变量（name / type / type_label / required / …），
+// 供编辑器在 module 块内做属性补全（Tier3）。不做 x-iac-platform 条件过滤。
+// 数据源: components.schemas.ModuleInput.properties + required。
 func (h *ManifestEditorHandler) ListModuleInputs(c *gin.Context) {
 	idStr := c.Param("module_id")
 	moduleID, err := strconv.ParseUint(idStr, 10, 64)
@@ -199,8 +204,12 @@ func (h *ManifestEditorHandler) ListModuleInputs(c *gin.Context) {
 }
 
 // extractModuleInputs 从 OpenAPI schema 的 components.schemas.ModuleInput 提取输入变量。
+// 仅扁平 properties；解析 array/items、map(additionalProperties)、enum；$ref 简化为 ref 名。
 func extractModuleInputs(schema models.JSONB) []ModuleInputField {
 	out := []ModuleInputField{}
+	if schema == nil {
+		return out
+	}
 	components, ok := schema["components"].(map[string]interface{})
 	if !ok {
 		return out
@@ -214,7 +223,6 @@ func extractModuleInputs(schema models.JSONB) []ModuleInputField {
 		return out
 	}
 
-	// required 名单
 	requiredSet := map[string]bool{}
 	if reqArr, ok := moduleInput["required"].([]interface{}); ok {
 		for _, r := range reqArr {
@@ -233,19 +241,125 @@ func extractModuleInputs(schema models.JSONB) []ModuleInputField {
 		if !ok {
 			continue
 		}
-		field := ModuleInputField{Name: name, Required: requiredSet[name]}
-		if t, ok := p["type"].(string); ok {
-			field.Type = t
+		base, label := openAPITypeInfo(p)
+		field := ModuleInputField{
+			Name:      name,
+			Type:      base,
+			TypeLabel: label,
+			Required:  requiredSet[name],
 		}
 		if d, ok := p["description"].(string); ok {
 			field.Description = d
 		}
-		if dv, ok := p["default"]; ok {
+		if t, ok := p["title"].(string); ok {
+			field.Title = t
+		}
+		if dv, ok := p["default"]; ok && dv != nil {
 			if b, mErr := json.Marshal(dv); mErr == nil {
 				field.Default = string(b)
 			}
 		}
+		if enumVals := openAPIEnumStrings(p); len(enumVals) > 0 {
+			field.Enum = enumVals
+		}
 		out = append(out, field)
+	}
+
+	// 稳定顺序: required 优先，再按 name
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Required != out[j].Required {
+			return out[i].Required
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
+
+// openAPITypeInfo 返回 (baseType, typeLabel)。typeLabel 贴近 HCL/Terraform 习惯展示。
+func openAPITypeInfo(p map[string]interface{}) (base, label string) {
+	// $ref → 用最后一段作类型名
+	if ref, ok := p["$ref"].(string); ok && ref != "" {
+		name := ref
+		if i := strings.LastIndex(ref, "/"); i >= 0 {
+			name = ref[i+1:]
+		}
+		return "object", name
+	}
+
+	t := openAPITypeString(p["type"])
+	switch t {
+	case "string":
+		if enumVals := openAPIEnumStrings(p); len(enumVals) > 0 {
+			return "string", "string" // enum 在字段 Enum 里
+		}
+		return "string", "string"
+	case "integer", "number":
+		return "number", "number"
+	case "boolean":
+		return "boolean", "bool"
+	case "array":
+		itemLabel := "any"
+		if items, ok := p["items"].(map[string]interface{}); ok {
+			_, itemLabel = openAPITypeInfo(items)
+		}
+		return "array", "list(" + itemLabel + ")"
+	case "object":
+		// additionalProperties → map(T)（如 tags）
+		if ap, ok := p["additionalProperties"]; ok {
+			switch v := ap.(type) {
+			case bool:
+				if v {
+					return "object", "map(any)"
+				}
+			case map[string]interface{}:
+				_, elem := openAPITypeInfo(v)
+				return "object", "map(" + elem + ")"
+			}
+		}
+		// 有/无 properties 的 object 块（list(object) 的 item 常无 properties）
+		return "object", "object"
+	default:
+		if t != "" {
+			return t, t
+		}
+		// 无 type 但有 enum
+		if enumVals := openAPIEnumStrings(p); len(enumVals) > 0 {
+			return "string", "string"
+		}
+		return "any", "any"
+	}
+}
+
+func openAPITypeString(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []interface{}:
+		// type: ["string","null"] → 取第一个非 null
+		for _, x := range t {
+			if s, ok := x.(string); ok && s != "" && s != "null" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func openAPIEnumStrings(p map[string]interface{}) []string {
+	raw, ok := p["enum"].([]interface{})
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, e := range raw {
+		switch v := e.(type) {
+		case string:
+			out = append(out, v)
+		default:
+			if b, err := json.Marshal(v); err == nil {
+				out = append(out, string(b))
+			}
+		}
 	}
 	return out
 }

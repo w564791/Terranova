@@ -107,6 +107,10 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 		// Terraform lock hcl management (for init optimization - .terraform.lock.hcl)
 		agentWorkspaces.GET("/:workspace_id/terraform-lock-hcl", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.GetTerraformLockHCL)
 		agentWorkspaces.PUT("/:workspace_id/terraform-lock-hcl", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.SaveTerraformLockHCL)
+
+		// Manifest provider schema (post_init capture; keyed by manifest+subpath on server)
+		agentWorkspaces.GET("/:workspace_id/manifest-provider-schema/meta", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.GetManifestProviderSchemaMeta)
+		agentWorkspaces.PUT("/:workspace_id/manifest-provider-schema", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UpsertManifestProviderSchema)
 	}
 
 	// ===== Agent Terraform Version API Routes =====

@@ -375,6 +375,16 @@ func (a *RemoteDataAccessor) SaveTerraformLockHCL(workspaceID string, lockConten
 	return a.apiClient.SaveTerraformLockHCL(workspaceID, lockContent)
 }
 
+// GetManifestProviderSchemaMetaByWorkspace Agent 模式：服务端按 workspace 解析 manifest+subpath
+func (a *RemoteDataAccessor) GetManifestProviderSchemaMetaByWorkspace(workspaceID string) (*models.ManifestProviderSchema, error) {
+	return a.apiClient.GetManifestProviderSchemaMeta(workspaceID)
+}
+
+// UpsertManifestProviderSchemaByWorkspace Agent 模式：上传 types 目录，服务端解析键
+func (a *RemoteDataAccessor) UpsertManifestProviderSchemaByWorkspace(workspaceID string, row *models.ManifestProviderSchema) error {
+	return a.apiClient.UpsertManifestProviderSchema(workspaceID, row)
+}
+
 // ============================================================================
 // State 相关（扩展）
 // ============================================================================

@@ -19,6 +19,7 @@
  * 内存缓存(moduleDemoApi.ts)。
  */
 import * as monaco from 'monaco-editor'
+import { HCL_LANGUAGE_IDS } from './hclLanguage'
 import {
   warmUpCache,
   getCachedModules,
@@ -44,8 +45,10 @@ export function registerHclProviders(): void {
   // 后台预热缓存(不阻塞)
   void warmUpCache()
 
+  for (const langId of HCL_LANGUAGE_IDS) {
+
   // ---- 通道 1: Completion ----
-  disposables.push(monaco.languages.registerCompletionItemProvider('hcl', {
+  disposables.push(monaco.languages.registerCompletionItemProvider(langId as string, {
     triggerCharacters: ['"', ' '],
     async provideCompletionItems(model, position) {
       const lineContent = model.getLineContent(position.lineNumber)
@@ -86,11 +89,38 @@ export function registerHclProviders(): void {
         return { suggestions }
       }
 
-      // 场景 B: 普通位置 → (module × demo) 全部 block
-      // 这里是同步路径(已缓存)
+      // 场景 B: platform module / demo 模板
+      // - 正在敲 resource/variable 等关键字时不推(避免淹没骨架)
+      // - 其它情况可推,但 sortText 用 z_ 排在关键字后面
+      // - 有输入前缀时按 source/name 过滤,减少噪音
+      const trimmedBefore = before.trimStart()
+      const typingCoreKeyword =
+        /^(resource|data|variable|output|locals|provider|terraform)[\w-]*$/i.test(trimmedBefore) ||
+        /^(res|reso|resou|resour|resourc|var|vari|varia|variab|variabl|out|outp|outpu|dat|loc|loca|local|pro|prov|provi|provid|provide|ter|terr|terra|terraf|terrafo|terrafor)[\w-]*$/i.test(
+          trimmedBefore,
+        )
+      if (typingCoreKeyword) {
+        return { suggestions: [] }
+      }
+      // 仅顶层空行 / 行首像在插 module 时给模板(块内属性位置不刷 module 列表)
+      const atTopLevelInsert =
+        /^\s*$/.test(before) ||
+        /^\s*mod(u(le?)?)?$/i.test(before) ||
+        /^\s*module\s*$/i.test(before)
+      if (!atTopLevelInsert) {
+        return { suggestions: [] }
+      }
+
+      // 行首正在敲 module 关键字时 filter 视为空(展示全部模板);否则用已输入片段过滤 source
+      const rawFilter = trimmedBefore.toLowerCase()
+      const moduleKw = /^(m|mo|mod|modu|modul|module)$/
+      const filter = moduleKw.test(rawFilter) || rawFilter === '' ? '' : rawFilter.replace(/^module\s+/, '')
+
       modules.forEach((m) => {
+        const hay = `${m.source} ${m.name}`.toLowerCase()
+        if (filter && !hay.includes(filter)) return
         const demos = getCachedDemos(m.module_id)
-        // 空配置(只 source/version)
+
         suggestions.push({
           label: { label: `module "${m.source}"`, description: '空配置 — 仅 source/version' },
           kind: monaco.languages.CompletionItemKind.Module,
@@ -101,7 +131,9 @@ export function registerHclProviders(): void {
           insertText: renderDemoToSnippet(m, null),
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
           range,
-          sortText: `1_${m.source}_0`,
+          // z_ 排在 resource/variable 等 0_ 关键字之后
+          sortText: `z_${m.source}_0`,
+          filterText: `module ${m.source} ${m.name}`,
         })
         demos.forEach((d, i) => {
           suggestions.push({
@@ -117,7 +149,8 @@ export function registerHclProviders(): void {
             insertText: renderDemoToSnippet(m, d),
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             range,
-            sortText: `1_${m.source}_${i + 1}${d.is_default ? '_default' : ''}`,
+            sortText: `z_${m.source}_${i + 1}${d.is_default ? '_default' : ''}`,
+            filterText: `module ${m.source} ${d.name}`,
           })
         })
       })
@@ -125,45 +158,8 @@ export function registerHclProviders(): void {
     },
   }))
 
-  // ---- 命令: 用 demo 替换指定 module 块 (Inlay Hint tooltip 链接调用) ----
-  disposables.push(monaco.editor.registerCommand(
-    'manifestInsertDemo',
-    (
-      _accessor: unknown,
-      payload: {
-        moduleSource: string
-        demoId: number
-        blockStartLine: number
-        blockEndLine: number
-        instanceName: string
-      },
-    ) => {
-      const editor = monaco.editor.getEditors()[0]
-      if (!editor) return
-      const model = editor.getModel()
-      if (!model) return
-      const mod = getCachedModules().find((p) => p.source === payload.moduleSource)
-      if (!mod) return
-      const demo = getCachedDemos(mod.module_id).find((d) => d.demo_id === payload.demoId)
-      if (!demo) return
-      const endCol = (model.getLineContent(payload.blockEndLine) || '').length + 1
-      const fullRange = new monaco.Range(
-        payload.blockStartLine,
-        1,
-        payload.blockEndLine,
-        endCol,
-      )
-      const text = renderDemoToPreview(mod, demo).replace(
-        /^module\s+"[^"]+"/,
-        `module "${payload.instanceName}"`,
-      )
-      editor.executeEdits('manifest-demo', [{ range: fullRange, text, forceMoveMarkers: true }])
-      editor.focus()
-    },
-  ))
-
   // ---- 通道 2: Hover ----
-  disposables.push(monaco.languages.registerHoverProvider('hcl', {
+  disposables.push(monaco.languages.registerHoverProvider(langId as string, {
     provideHover(model, position) {
       const line = model.getLineContent(position.lineNumber)
       const sm = line.match(/source\s*=\s*"([^"]+)"/)
@@ -186,7 +182,7 @@ export function registerHclProviders(): void {
   }))
 
   // ---- 通道 3: Inlay Hint (demo 选择主入口) ----
-  disposables.push(monaco.languages.registerInlayHintsProvider('hcl', {
+  disposables.push(monaco.languages.registerInlayHintsProvider(langId as string, {
     async provideInlayHints(model, range) {
       const hints: monaco.languages.InlayHint[] = []
       const text = model.getValue()
@@ -265,7 +261,7 @@ export function registerHclProviders(): void {
   }))
 
   // ---- 通道 4: Code Action (Quick Fix 灯泡) ----
-  disposables.push(monaco.languages.registerCodeActionProvider('hcl', {
+  disposables.push(monaco.languages.registerCodeActionProvider(langId as string, {
     provideCodeActions(model, range) {
       const text = model.getValue()
       const lines = text.split('\n')
@@ -344,6 +340,44 @@ export function registerHclProviders(): void {
       return { actions, dispose: () => {} }
     },
   }))
+  } // end HCL_LANGUAGE_IDS
+
+  // ---- 命令: 用 demo 替换指定 module 块 (全局一次,不进语言循环) ----
+  disposables.push(monaco.editor.registerCommand(
+    'manifestInsertDemo',
+    (
+      _accessor: unknown,
+      payload: {
+        moduleSource: string
+        demoId: number
+        blockStartLine: number
+        blockEndLine: number
+        instanceName: string
+      },
+    ) => {
+      const editor = monaco.editor.getEditors()[0]
+      if (!editor) return
+      const model = editor.getModel()
+      if (!model) return
+      const mod = getCachedModules().find((p) => p.source === payload.moduleSource)
+      if (!mod) return
+      const demo = getCachedDemos(mod.module_id).find((d) => d.demo_id === payload.demoId)
+      if (!demo) return
+      const endCol = (model.getLineContent(payload.blockEndLine) || '').length + 1
+      const fullRange = new monaco.Range(
+        payload.blockStartLine,
+        1,
+        payload.blockEndLine,
+        endCol,
+      )
+      const text = renderDemoToPreview(mod, demo).replace(
+        /^module\s+"[^"]+"/,
+        `module "${payload.instanceName}"`,
+      )
+      editor.executeEdits('manifest-demo', [{ range: fullRange, text, forceMoveMarkers: true }])
+      editor.focus()
+    },
+  ))
 }
 
 // ============================================================

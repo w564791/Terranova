@@ -1,0 +1,21 @@
+{
+  "source": "https://github.com/hashicorp/syntax",
+  "ref": "main",
+  "fetchedAt": "2026-07-10T16:10:27.142Z",
+  "files": [
+    {
+      "name": "hcl.tmGrammar.json",
+      "bytes": 19217,
+      "url": "https://raw.githubusercontent.com/hashicorp/syntax/main/syntaxes/hcl.tmGrammar.json"
+    },
+    {
+      "name": "terraform.tmGrammar.json",
+      "bytes": 20934,
+      "url": "https://raw.githubusercontent.com/hashicorp/syntax/main/syntaxes/terraform.tmGrammar.json"
+    }
+  ],
+  "marketplaceEquivalents": [
+    "hashicorp.hcl",
+    "hashicorp.terraform (highlight only)"
+  ]
+}

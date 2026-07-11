@@ -6,7 +6,7 @@
  *
  * 覆盖:
  *  1. 结构性语法错误(error):括号/方括号/花括号不配对、字符串未闭合。
- *     —— 检测到 heredoc(<<EOT)时整文件放弃结构诊断(前端难精确解析,避免误报)。
+ *     —— 检测到 heredoc(<<EOT)时跳过结构诊断(前端难精确解析),仍保留重复定义/未定义引用。
  *  2. 重复定义(error):variable / output / module / resource / data / local 同名。
  *  3. 未定义引用(warning):var.X / local.X 在跨文件索引里找不到定义。
  *     —— 引用只在代码区与 ${} 插值区收集(不碰注释与普通字符串),零误报。
@@ -356,14 +356,15 @@ export function computeHclDiagnostics(
 ): monaco.editor.IMarkerData[] {
   const { structural, refs, hadHeredoc } = scan(content)
 
-  // heredoc 文件:结构诊断不可靠,整文件放弃(只在确无 heredoc 时报结构与重复)
-  if (hadHeredoc) return []
-
-  const markers: monaco.editor.IMarkerData[] = [...structural, ...findDuplicates(content)]
+  // heredoc 存在时结构诊断(括号配对)不可靠,跳过 structural;重复定义与未定义引用仍可用
+  const markers: monaco.editor.IMarkerData[] = hadHeredoc
+    ? [...findDuplicates(content)]
+    : [...structural, ...findDuplicates(content)]
 
   if (!indexReady) return markers
 
   // 未定义引用(warning):索引里查不到定义。索引含本文件(增量更新),故同文件定义也算。
+  // 仅对 var./local. 报未定义(module/resource 可能来自外部 module 源,误报风险高)。
   for (const r of refs) {
     const defined = r.kind === 'var' ? index.variables.has(r.name) : index.locals.has(r.name)
     if (!defined) {

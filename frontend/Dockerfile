@@ -1,4 +1,6 @@
 # -- Stage 1: Build --
+# Provider type 补全目录由 execute post_init 落库,不再打进镜像。
+# TextMate grammar 可在仓库中维护(make update-hcl-grammar)。
 FROM node:22-alpine AS builder
 WORKDIR /app
 
@@ -10,6 +12,7 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 COPY package.json package-lock.json* ./
 RUN npm ci --no-audit
 COPY . .
+
 RUN npx vite build
 
 # -- Stage 2: Runtime --

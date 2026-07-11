@@ -9,9 +9,13 @@
  *  - configuration: tab size / wordWrap / files.autoSave 等 settings.json 体系
  *  - keybindings:   vscode 标准快捷键(Ctrl+/, Alt+Up/Down 等)
  *  - languages:     语言注册基础设施(provider 都靠这个)
- *  - textmate:      .tmLanguage 引擎,真精度高亮(对比 demo 的 Monarch 正则)
+ *  - textmate:      .tmLanguage 引擎(HashiCorp 官方 grammar)
  *  - theme:         vscode 主题加载(配合 dark-plus 默认主题)
- *  - snippets:      vscode 真品 snippet 引擎(我们的 demo 插入会更稳)
+ *  - snippets:      vscode 真品 snippet 引擎
+ *  - extensions:    VS Code 扩展挂载点(registry 声明式"装插件")
+ *  - files:         扩展资源 / virtual fs(registerFileUrl 依赖)
+ *
+ * 扩展加载见 ./extensions/registry.ts
  */
 import { initialize as initializeMonacoServices, LogLevel } from '@codingame/monaco-vscode-api'
 import getConfigurationServiceOverride, {
@@ -22,9 +26,9 @@ import getLanguagesServiceOverride from '@codingame/monaco-vscode-languages-serv
 import getTextmateServiceOverride from '@codingame/monaco-vscode-textmate-service-override'
 import getThemeServiceOverride from '@codingame/monaco-vscode-theme-service-override'
 import getSnippetsServiceOverride from '@codingame/monaco-vscode-snippets-service-override'
-
-// 默认主题扩展(自带 dark-plus / light-plus 等)
-import '@codingame/monaco-vscode-theme-defaults-default-extension'
+import getExtensionsServiceOverride from '@codingame/monaco-vscode-extensions-service-override'
+import getFilesServiceOverride from '@codingame/monaco-vscode-files-service-override'
+import { bootstrapExtensions } from './extensions/bootstrap'
 
 // Manifest 编辑器默认 vscode 用户配置
 const DEFAULT_USER_CONFIG = JSON.stringify({
@@ -83,6 +87,9 @@ export function ensureVscodeServicesReady(): Promise<void> {
           ...getTextmateServiceOverride(),
           ...getThemeServiceOverride(),
           ...getSnippetsServiceOverride(),
+          // 扩展挂载框架:registry 里的 grammar / 未来 VSIX / LSP 桥都靠这个
+          ...getExtensionsServiceOverride(),
+          ...getFilesServiceOverride(),
         },
         undefined,
         {
@@ -105,6 +112,16 @@ export function ensureVscodeServicesReady(): Promise<void> {
         throw err
       }
     }
+
+    // 按 registry 声明加载扩展(theme / HashiCorp grammar / …)
+    try {
+      await bootstrapExtensions()
+    } catch (err) {
+      // 扩展失败不阻断编辑器(仍可 Monarch fallback)
+      // eslint-disable-next-line no-console
+      console.error('[ManifestEditorV2] extension bootstrap failed', err)
+    }
+
     // 写入默认配置(含 colorTheme), theme service 会自动 reload。
     // initUserConfiguration 是写文件操作, 重入安全。
     try {

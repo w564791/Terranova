@@ -2,9 +2,11 @@
 
 .PHONY: help dev-up dev-down dev-down-all db-init db-reset logs test vet check \
 	build-server build-agent build-all \
+	update-hcl-grammar update-editor-assets \
 	docker-build docker-build-frontend docker-build-agent docker-build-db-init docker-build-all \
 	docker-push docker-push-frontend docker-push-agent docker-push-db-init docker-push-all \
-	docker-push-arm64 docker-push-frontend-arm64 docker-push-agent-arm64 docker-push-db-init-arm64 docker-push-all-arm64 \
+	docker-push-arm64 docker-push-frontend-arm64 docker-push-frontend-amd64 \
+	docker-push-agent-arm64 docker-push-db-init-arm64 docker-push-all-arm64 \
 	run-server run-agent local-server local-frontend local-agent \
 	generate-secret deploy-local export-seed-data clean
 
@@ -129,6 +131,17 @@ build-agent: ## 构建Agent二进制文件（当前平台）
 	@echo "Agent构建完成: backend/iac-agent"
 
 build-all: build-server build-agent ## 构建所有二进制文件
+
+# =============================================================================
+# 前端打包前置（HashiCorp grammar 可选更新；provider schema 已改 execute 落库）
+# =============================================================================
+
+update-hcl-grammar: ## 从 hashicorp/syntax 拉取最新 HCL/Terraform TextMate grammar
+	@echo "更新 HCL grammar (hashicorp/syntax)..."
+	cd frontend && npm run update:hcl-grammar
+	@echo "  [OK] grammar 已更新"
+
+update-editor-assets: update-hcl-grammar ## 更新 Manifest 编辑器打包资产(目前仅 grammar)
 
 # =============================================================================
 # Docker 镜像构建与推送

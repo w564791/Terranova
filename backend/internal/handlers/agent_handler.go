@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -1776,6 +1777,107 @@ func (h *AgentHandler) SaveTerraformLockHCL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "terraform lock hcl saved successfully",
 	})
+}
+
+// GetManifestProviderSchemaMeta returns version fingerprint for workspace's manifest+subpath schema cache
+// @Summary Get manifest provider schema meta
+// @Tags Agent Workspace
+// @Produce json
+// @Security PoolTokenAuth
+// @Param workspace_id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/agents/workspaces/{workspace_id}/manifest-provider-schema/meta [get]
+func (h *AgentHandler) GetManifestProviderSchemaMeta(c *gin.Context) {
+	workspaceID := c.Param("workspace_id")
+	if workspaceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
+		return
+	}
+
+	accessor := services.NewLocalDataAccessor(h.db)
+	meta, err := accessor.GetManifestProviderSchemaMetaByWorkspace(workspaceID)
+	if err != nil {
+		// 区分「非 manifest 托管」与其它错误，避免 Agent 误跑 capture
+		if strings.Contains(err.Error(), "not manifest-managed") {
+			c.JSON(http.StatusOK, gin.H{"exists": false, "managed": false})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if meta == nil {
+		c.JSON(http.StatusOK, gin.H{"exists": false, "managed": true})
+		return
+	}
+	// ProviderVersionsKey 为空 = 托管但尚无缓存行
+	exists := meta.ProviderVersionsKey != ""
+	c.JSON(http.StatusOK, gin.H{
+		"exists":                exists,
+		"managed":               true,
+		"manifest_id":           meta.ManifestID,
+		"subpath":               meta.Subpath,
+		"schema_kind":           meta.SchemaKind,
+		"provider_versions_key": meta.ProviderVersionsKey,
+		"content_hash":          meta.ContentHash,
+	})
+}
+
+// UpsertManifestProviderSchema saves types catalog from agent post_init
+// @Summary Upsert manifest provider schema
+// @Tags Agent Workspace
+// @Accept json
+// @Produce json
+// @Security PoolTokenAuth
+// @Param workspace_id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/agents/workspaces/{workspace_id}/manifest-provider-schema [put]
+func (h *AgentHandler) UpsertManifestProviderSchema(c *gin.Context) {
+	workspaceID := c.Param("workspace_id")
+	if workspaceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "workspace_id is required"})
+		return
+	}
+
+	var req struct {
+		SchemaKind          string          `json:"schema_kind"`
+		Providers           json.RawMessage `json:"providers"`
+		ProviderVersionsKey string          `json:"provider_versions_key" binding:"required"`
+		Resources           json.RawMessage `json:"resources"`
+		DataSources         json.RawMessage `json:"data_sources"`
+		ContentHash         string          `json:"content_hash"`
+		TerraformVersion    string          `json:"terraform_version"`
+		SourceTaskID        *uint           `json:"source_task_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+		return
+	}
+	if req.SchemaKind == "" {
+		req.SchemaKind = models.ManifestProviderSchemaKindTypes
+	}
+
+	row := &models.ManifestProviderSchema{
+		SchemaKind:          req.SchemaKind,
+		Providers:           req.Providers,
+		ProviderVersionsKey: req.ProviderVersionsKey,
+		Resources:           req.Resources,
+		DataSources:         req.DataSources,
+		ContentHash:         req.ContentHash,
+		TerraformVersion:    req.TerraformVersion,
+		SourceWorkspaceID:   workspaceID,
+		SourceTaskID:        req.SourceTaskID,
+		CapturedAt:          time.Now().UTC(),
+	}
+	if len(row.Providers) == 0 {
+		row.Providers = json.RawMessage("[]")
+	}
+
+	accessor := services.NewLocalDataAccessor(h.db)
+	if err := accessor.UpsertManifestProviderSchemaByWorkspace(workspaceID, row); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upsert provider schema: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "manifest provider schema saved"})
 }
 
 // UpsertTempState handles temp state upsert from agent

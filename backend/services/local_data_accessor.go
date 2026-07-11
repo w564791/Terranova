@@ -405,6 +405,105 @@ func (a *LocalDataAccessor) SaveTerraformLockHCL(workspaceID string, lockContent
 	return nil
 }
 
+// resolveManifestSubpathKey 从 workspace 解析 (manifest_id, subpath)
+func (a *LocalDataAccessor) resolveManifestSubpathKey(workspaceID string) (manifestID, subpath string, err error) {
+	db := a.getDB()
+	var ws models.Workspace
+	if err := db.Select("manifest_deployment_id", "manifest_subpath").
+		Where("workspace_id = ?", workspaceID).
+		First(&ws).Error; err != nil {
+		return "", "", fmt.Errorf("workspace: %w", err)
+	}
+	if ws.ManifestDeploymentID == nil || *ws.ManifestDeploymentID == "" {
+		return "", "", fmt.Errorf("workspace %s is not manifest-managed", workspaceID)
+	}
+	var dep models.ManifestDeployment
+	if err := db.Select("manifest_id").Where("id = ?", *ws.ManifestDeploymentID).First(&dep).Error; err != nil {
+		return "", "", fmt.Errorf("deployment: %w", err)
+	}
+	subpath = ""
+	if ws.ManifestSubpath != nil {
+		subpath = *ws.ManifestSubpath
+	}
+	return dep.ManifestID, subpath, nil
+}
+
+// GetManifestProviderSchemaMetaByWorkspace 读取当前 workspace 对应 manifest+subpath 的 schema 元信息。
+// 非 manifest-managed：返回 error（文案含 "not manifest-managed"）。
+// 托管但尚无缓存行：返回 (nil, nil)。
+func (a *LocalDataAccessor) GetManifestProviderSchemaMetaByWorkspace(workspaceID string) (*models.ManifestProviderSchema, error) {
+	manifestID, subpath, err := a.resolveManifestSubpathKey(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	db := a.getDB()
+	var row models.ManifestProviderSchema
+	err = db.Select("id", "manifest_id", "subpath", "schema_kind", "provider_versions_key", "content_hash", "captured_at").
+		Where("manifest_id = ? AND subpath = ? AND schema_kind = ?",
+			manifestID, subpath, models.ManifestProviderSchemaKindTypes).
+		First(&row).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 托管但尚无缓存：把键填上方便日志（调用方只看 ProviderVersionsKey 是否匹配）
+			return &models.ManifestProviderSchema{
+				ManifestID:  manifestID,
+				Subpath:     subpath,
+				SchemaKind:  models.ManifestProviderSchemaKindTypes,
+			}, nil
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
+// UpsertManifestProviderSchemaByWorkspace 按 workspace 解析键后 upsert types 目录
+func (a *LocalDataAccessor) UpsertManifestProviderSchemaByWorkspace(workspaceID string, row *models.ManifestProviderSchema) error {
+	if row == nil {
+		return fmt.Errorf("row is nil")
+	}
+	manifestID, subpath, err := a.resolveManifestSubpathKey(workspaceID)
+	if err != nil {
+		return err
+	}
+	db := a.getDB()
+	row.ManifestID = manifestID
+	row.Subpath = subpath
+	if row.SchemaKind == "" {
+		row.SchemaKind = models.ManifestProviderSchemaKindTypes
+	}
+
+	var existing models.ManifestProviderSchema
+	err = db.Where("manifest_id = ? AND subpath = ? AND schema_kind = ?",
+		manifestID, subpath, row.SchemaKind).First(&existing).Error
+	if err == nil {
+		// 版本指纹相同则跳过写 payload
+		if existing.ProviderVersionsKey == row.ProviderVersionsKey &&
+			len(existing.Resources) > 0 {
+			return nil
+		}
+		updates := map[string]interface{}{
+			"providers":              row.Providers,
+			"provider_versions_key":  row.ProviderVersionsKey,
+			"resources":              row.Resources,
+			"data_sources":           row.DataSources,
+			"content_hash":           row.ContentHash,
+			"terraform_version":      row.TerraformVersion,
+			"source_workspace_id":    row.SourceWorkspaceID,
+			"source_task_id":         row.SourceTaskID,
+			"captured_at":            row.CapturedAt,
+			"updated_at":             time.Now().UTC(),
+		}
+		return db.Model(&existing).Updates(updates).Error
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	if row.ID == "" {
+		row.ID = newManifestProviderSchemaID()
+	}
+	return db.Create(row).Error
+}
+
 // ============================================================================
 // State 相关（扩展）
 // ============================================================================

@@ -6,6 +6,7 @@ import { registerHclLanguage } from '../../pages/admin/ManifestEditorV2/hclLangu
 import { registerHclCompletion } from '../../pages/admin/ManifestEditorV2/hclCompletion';
 import { registerHclProviders } from '../../pages/admin/ManifestEditorV2/hclProviders';
 import { registerHclDefinition, type DefinitionIndex } from '../../pages/admin/ManifestEditorV2/hclDefinitions';
+import { attachHclSuggestRetrigger } from '../../pages/admin/ManifestEditorV2/hclSuggestRetrigger';
 import styles from './MonacoHclEditor.module.css';
 
 const MONACO_EDITOR_STYLE_ID = 'terranova-monaco-editor-core-css';
@@ -157,6 +158,9 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
       onChangeRef.current(editor.getValue());
     });
 
+    // 退格 var.. → var. 时重新弹出补全
+    const suggestRetrigger = attachHclSuggestRetrigger(editor);
+
     // 初始计算高度并设置容器尺寸
     requestAnimationFrame(() => {
       layoutEditor();
@@ -169,6 +173,7 @@ export const MonacoHclEditor: React.FC<MonacoHclEditorProps> = ({
     resizeObserver.observe(container);
 
     return () => {
+      suggestRetrigger.dispose();
       resizeObserver.disconnect();
       editor.dispose();
     };

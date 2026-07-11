@@ -19,6 +19,9 @@ const monacoVscodeApiPackages = [
   '@codingame/monaco-vscode-theme-service-override',
   '@codingame/monaco-vscode-snippets-service-override',
   '@codingame/monaco-vscode-theme-defaults-default-extension',
+  '@codingame/monaco-vscode-extensions-service-override',
+  '@codingame/monaco-vscode-files-service-override',
+  '@codingame/monaco-vscode-api/extensions',
 ]
 
 export default defineConfig({

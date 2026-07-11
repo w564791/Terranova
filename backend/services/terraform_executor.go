@@ -1188,7 +1188,10 @@ func (s *TerraformExecutor) ExecutePlan(
 
 	logger.StageEnd("init")
 
-	// ========== 阶段2.5: Pre-Plan Run Tasks ==========
+	// ========== 阶段2.5: Post-Init (provider schema cache, best-effort) ==========
+	s.runPostInitStage(ctx, workDir, task, workspace, logger, true)
+
+	// ========== 阶段2.6: Pre-Plan Run Tasks ==========
 	logger.StageBegin("pre_plan_run_tasks")
 	logger.Info("Executing pre-plan Run Tasks...")
 	runTasksPassed, runTasksErr := s.executeRunTasksForStage(ctx, task, models.RunTaskStagePrePlan, logger)
@@ -2587,6 +2590,7 @@ func (s *TerraformExecutor) ExecuteApply(
 		}
 	}
 
+	initActuallyRan := false
 	if !canSkipInit {
 		logger.StageBegin("init")
 
@@ -2603,10 +2607,15 @@ func (s *TerraformExecutor) ExecuteApply(
 		}
 
 		logger.StageEnd("init")
+		initActuallyRan = true
 	} else {
 		// 跳过init，直接记录
 		logger.Info("Init stage skipped (using preserved workspace from plan on same agent)")
 	}
+
+	// ========== 阶段2.5: Post-Init (provider schema cache, best-effort) ==========
+	// 无论 init 是否 skip 都进入 stage；版本未变则内部 no-op（非“漏刷新”）
+	s.runPostInitStage(ctx, workDir, task, workspace, logger, initActuallyRan)
 
 	// ========== 阶段3: Restoring Plan（可能跳过）==========
 	// 【Phase 1优化】如果在同一 agent 且 plan 文件已存在，跳过恢复

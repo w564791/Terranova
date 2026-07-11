@@ -340,12 +340,13 @@
 /* ===== editor area ===== */
 .editorArea {
   grid-area: editor;
-  display: grid;
-  grid-template-rows: 35px 1fr;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--bg-editor);
 }
 .tabs {
+  flex-shrink: 0;
   display: flex; align-items: stretch;
   background: var(--bg-tab-inactive);
   border-bottom: 1px solid var(--border);
@@ -380,7 +381,7 @@
 .tab.dirty:hover .dirtyDot { display: none; }
 .tab.dirty:hover .close { display: inline-flex; opacity: 1; }
 
-.editorHost { width: 100%; height: 100%; position: relative; }
+.editorHost { width: 100%; flex: 1; min-height: 0; position: relative; }
 
 /* 二进制文件只读视图(spec §5.2) */
 .binaryView {
@@ -511,3 +512,79 @@
 .ctxMenuDisabled { opacity: 0.4; cursor: default; }
 .ctxMenuDisabled:hover { background: transparent; color: var(--fg-default, #ccc); }
 .ctxMenuSep { height: 1px; background: #454545; margin: 4px 0; }
+
+
+/* ===== Problems 面板 ===== */
+.problemsPanel { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.problemsSummary { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-muted); margin-left: auto; }
+.problemsList { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
+.problemsEmpty { padding: 16px 12px; color: var(--fg-muted); font-size: 12px; }
+.problemsFileGroup { margin-bottom: 4px; }
+.problemsFilePath {
+  display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+  font-size: 12px; color: var(--fg-default); font-weight: 600;
+}
+.problemsFilePath .codicon { color: var(--fg-muted); }
+.problemsFilePath span:nth-child(2) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.problemsFileCount {
+  min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px;
+  background: rgba(255,255,255,0.12); color: var(--fg-default);
+  font-size: 11px; line-height: 16px; text-align: center;
+}
+.problemsItem {
+  display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 22px;
+  font-size: 12px; cursor: pointer; line-height: 20px;
+}
+.problemsItem:hover { background: var(--hover); }
+.problemsMsg { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-default); }
+.problemsLoc { color: var(--fg-muted); font-size: 11px; flex-shrink: 0; }
+.statusBarClickable { cursor: pointer; }
+.statusBarClickable:hover { text-decoration: underline; }
+
+/* ===== Quick Open (Cmd+P) ===== */
+.quickOpenOverlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.35);
+  display: flex; justify-content: center; padding-top: 10vh;
+}
+.quickOpenBox {
+  width: min(560px, 92vw); max-height: 60vh;
+  background: #252526; border: 1px solid #454545; border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.quickOpenInputRow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid #3c3c3c;
+}
+.quickOpenInputRow .codicon { color: var(--fg-muted); font-size: 16px; }
+.quickOpenInput {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--fg-default); font-size: 14px; font-family: inherit;
+}
+.quickOpenList { flex: 1; overflow-y: auto; max-height: 42vh; }
+.quickOpenEmpty { padding: 16px; color: var(--fg-muted); font-size: 13px; text-align: center; }
+.quickOpenItem {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  cursor: pointer; font-size: 13px;
+}
+.quickOpenItem .codicon { color: var(--fg-muted); }
+.quickOpenItemActive, .quickOpenItem:hover { background: var(--selected); }
+.quickOpenName { color: var(--fg-default); }
+.quickOpenDir { color: var(--fg-muted); font-size: 12px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.quickOpenHint {
+  padding: 6px 12px; font-size: 11px; color: var(--fg-muted);
+  border-top: 1px solid #3c3c3c; background: #2d2d2d;
+}
+
+/* ===== 编辑器路径面包屑 ===== */
+.editorBreadcrumb {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 12px; height: 22px;
+  background: var(--bg-editor); border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--fg-muted); user-select: none;
+  overflow: hidden; white-space: nowrap;
+}
+.editorBreadcrumbSeg { color: var(--fg-muted); padding: 0 2px; }
+.editorBreadcrumbCurrent { color: var(--fg-default); }
+.editorBreadcrumbSep { color: #555; margin: 0 1px; }

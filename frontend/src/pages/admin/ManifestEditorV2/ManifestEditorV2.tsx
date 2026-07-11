@@ -16,7 +16,8 @@ import { message } from 'antd'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
-import { registerHclCompletion } from './hclCompletion'
+import { registerHclCompletion, getProviderSchemaVersion, setProviderTypeCatalog } from './hclCompletion'
+import { attachHclSuggestRetrigger } from './hclSuggestRetrigger'
 import {
   registerHclDefinition,
   pathToManifestUri,
@@ -33,6 +34,9 @@ import CheckPanel from './CheckPanel'
 import DeployPanel from './DeployPanel'
 import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
+import ProblemsPanel, { type ProblemItem } from './ProblemsPanel'
+import { collectManifestProblems } from './collectProblems'
+import QuickOpen from './QuickOpen'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
 import ManifestAiTools, { type EditorBridge, type CheckFile } from './ManifestAiTools'
 import { buildBlockIndex, findExternalRefs, locateBlock } from './hclBlockIndex'
@@ -50,6 +54,7 @@ import {
   listDeployments,
   diffVersions,
   diffDraft,
+  getProviderSchemas,
   languageOfPath,
   type ManifestFileEntry,
   type ManifestEditorContext,
@@ -243,6 +248,8 @@ export default function ManifestEditorV2() {
   const defIndexReadyRef = useRef(false)
   // editor opener(跨文件跳转路由)的 disposable,卸载时释放
   const openerDisposableRef = useRef<monaco.IDisposable | null>(null)
+  // var. 退格后 re-trigger 补全
+  const suggestRetriggerRef = useRef<monaco.IDisposable | null>(null)
   // openFile 的 ref:一次性注册的 opener 需调最新 openFile,避免 stale 闭包
   const openFileRef = useRef<(path: string) => Promise<void>>(async () => {})
   // 是否带深链参数(?file/?resource):有则首文件不自动打开,让深链 effect 定位。
@@ -253,6 +260,17 @@ export default function ManifestEditorV2() {
   runDiagnosticsRef.current = (model: monaco.editor.ITextModel) => {
     const markers = computeHclDiagnostics(model.getValue(), defIndexRef.current, defIndexReadyRef.current)
     monaco.editor.setModelMarkers(model, HCL_DIAG_OWNER, markers)
+    // markers 变更后刷新 Problems 列表(ref 调最新)
+    refreshProblemsRef.current()
+  }
+  const refreshProblemsRef = useRef<() => void>(() => {})
+  refreshProblemsRef.current = () => {
+    // 节流:合并同帧多次诊断刷新
+    const tick = ++problemTickRef.current
+    requestAnimationFrame(() => {
+      if (tick !== problemTickRef.current) return
+      setProblems(collectManifestProblems(manifestUriToPath))
+    })
   }
 
   // ===== Gutter Diff 指示条工具函数 =====
@@ -432,8 +450,12 @@ export default function ManifestEditorV2() {
     fwd: { path: string; viewState: monaco.editor.ICodeEditorViewState | null }[]
   }>({ back: [], fwd: [] })
   // sidebar 当前视图:explorer(文件树) | search(搜索) | deploy(已部署 workspace) | history(版本历史)
-  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'deploy' | 'history'>('explorer')
+  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'problems' | 'deploy' | 'history'>('explorer')
   const [searchShowReplace, setSearchShowReplace] = useState(false) // Cmd+Shift+H 进来时默认展开替换
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [problems, setProblems] = useState<ProblemItem[]>([])
+  const problemTickRef = useRef(0)
+  const gutterDiffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 侧栏宽度可拖拽(VS Code 行为),限 170–600px
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [versions, setVersions] = useState<ManifestVersion[]>([])
@@ -442,6 +464,8 @@ export default function ManifestEditorV2() {
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
   const [wsNameById, setWsNameById] = useState<Record<string, string>>({})
   const [deployLoading, setDeployLoading] = useState(false)
+  // post_init 落库的 provider schema 版本(状态栏);无缓存为 —
+  const [schemaVersionLabel, setSchemaVersionLabel] = useState<string>('—')
   // manifest 元信息(名称/描述),顶栏就地编辑。null=未加载
   const [manifestName, setManifestName] = useState<string>('')
   const [manifestDesc, setManifestDesc] = useState<string>('')
@@ -472,9 +496,9 @@ export default function ManifestEditorV2() {
         registerHclLanguage()
         // 注册 4 个 demo provider (Completion / Hover / InlayHint / CodeAction)
         registerHclProviders()
-        // 通用 HCL 补全 (Tier1 关键字/骨架 + Tier2 引用 + Tier3 平台 module 属性)
-        registerHclCompletion()
-        // var./local. 「转到定义」+ hover 提示(provider 读 defIndexRef.current 拿最新索引)
+        // 通用 HCL 补全 (跨文件工作区索引 + Tier1/Tier3)
+        registerHclCompletion({ getIndex: () => defIndexRef.current })
+        // 转到定义:var/local/module/resource/data + hover
         registerHclDefinition({ getIndex: () => defIndexRef.current })
         // spec §10.3.3: Inlay Hint (· N demos) 不用 monaco 默认灰,覆盖为高对比青绿,
         // 让 demo 标签看起来既"是信息"也"是按钮"。
@@ -501,8 +525,10 @@ export default function ManifestEditorV2() {
           // Code Action provider 本身保留,用户仍可用 Cmd+. 或右键触发"应用 demo"。
           lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
           // ===== VS Code 基础编辑体验补齐 =====
-          wordBasedSuggestions: 'allDocuments', // 页面内已有单词自动补全(与 HCL provider 候选合并)
-          quickSuggestions: { other: true, comments: false, strings: false },
+          // off:避免全文单词候选淹没 HCL 关键字/snippet(改完后体感"补全变乱/变难用"的主因之一)
+          wordBasedSuggestions: 'off',
+          // strings:true — resource "/data " 引号内要出类型补全;false 时引号里几乎不弹建议
+          quickSuggestions: { other: true, comments: false, strings: true },
           suggestOnTriggerCharacters: true,
           suggestSelection: 'first',
           folding: true, // 代码折叠
@@ -518,6 +544,9 @@ export default function ManifestEditorV2() {
         editorRef.current.onDidChangeCursorPosition((e) => {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
         })
+        // 退格把 var.. → var. 时 Monaco 不会自动再弹补全;主动 re-trigger
+        suggestRetriggerRef.current?.dispose()
+        suggestRetriggerRef.current = attachHclSuggestRetrigger(editorRef.current)
         // 注:脏检测不挂编辑器实例,而是每个 model 自己 onDidChangeContent(openFile 建 model 时绑定)。
         // 编辑器级监听依赖 currentFileRef,一旦 diff 让位/撤销/删除把 currentFile 置 null 就整条失效。
 
@@ -543,13 +572,17 @@ export default function ManifestEditorV2() {
           monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyH,
           () => openSearchRef.current(true),
         )
-        // Cmd/Ctrl+←/→ 跨文件导航回退/前进(覆盖默认"光标到行首/行尾",行首行尾可用 Home/End)
-        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () =>
+        // Alt+←/→ 跨文件导航回退/前进(对齐 VS Code;保留 Cmd/Ctrl+←/→ 行首行尾肌肉记忆)
+        editorRef.current.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.LeftArrow, () =>
           navBackRef.current(),
         )
-        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () =>
+        editorRef.current.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.RightArrow, () =>
           navForwardRef.current(),
         )
+        // Cmd/Ctrl+P 快速打开文件
+        editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, () => {
+          setQuickOpen(true)
+        })
 
         // 跨文件「转到定义」路由:目标 model 非当前文件时(manifest:/<path>),
         // 拦截跳转 → 用 openFile 打开目标文件 → 定位到定义行列。同文件跳转 monaco 原生处理。
@@ -582,6 +615,8 @@ export default function ManifestEditorV2() {
 
     return () => {
       cancelled = true
+      suggestRetriggerRef.current?.dispose()
+      suggestRetriggerRef.current = null
       editorRef.current?.dispose()
       editorRef.current = null
       const dm = diffEditorRef.current?.getModel()
@@ -599,12 +634,24 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 窗口级 Cmd/Ctrl+S 拦截:焦点不在 Monaco 内(如文件树)时也阻止浏览器"保存网页"
+  // 窗口级快捷键:Cmd/Ctrl+S 保存;Cmd/Ctrl+P 快速打开;Alt+←/→ 导航
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
         void flushSaveRef.current()
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'P') && !e.shiftKey) {
+        e.preventDefault()
+        setQuickOpen(true)
+      }
+      if (e.altKey && e.key === 'ArrowLeft' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        navBackRef.current()
+      }
+      if (e.altKey && e.key === 'ArrowRight' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        navForwardRef.current()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -797,8 +844,12 @@ export default function ManifestEditorV2() {
             indexFile(defIndexRef.current, path, m.getValue())
             runDiagnosticsRef.current(m) // 索引更新后再算诊断(未定义引用依赖最新索引)
           }
-          // Gutter diff 实时更新:编辑时重新计算变更标记
-          applyDiffDecorations(path)
+          // Gutter diff 防抖:大文件 LCS 昂贵,避免每键全量重算
+          if (gutterDiffTimerRef.current) clearTimeout(gutterDiffTimerRef.current)
+          gutterDiffTimerRef.current = setTimeout(() => {
+            applyDiffDecorations(path)
+            refreshProblemsRef.current()
+          }, 250)
           setSaveStatus('saving')
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
           saveTimerRef.current = setTimeout(() => {
@@ -1577,6 +1628,47 @@ export default function ManifestEditorV2() {
         setManifestName('')
         setManifestDesc('')
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifestId, orgId])
+
+  // 拉取 post_init 落库的 provider 类型目录(默认根 subpath;部署 workspace 的 subpath 优先)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      let subpath = ''
+      try {
+        const deps = await listDeployments(ctx).catch(() => [] as ManifestDeployment[])
+        const active = deps.filter((d) => d.status === 'active')
+        if (active.length > 0) {
+          const wss = await workspaceService
+            .getWorkspaces()
+            .then((r) => {
+              const d: any = (r as any)?.data
+              return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
+            })
+            .catch(() => [] as any[])
+          const ws = (wss as any[]).find(
+            (w) => (w.workspace_id || String(w.id)) === active[0].workspace_id,
+          )
+          if (ws?.manifest_subpath) subpath = String(ws.manifest_subpath)
+        }
+      } catch {
+        /* use root */
+      }
+      try {
+        const schema = await getProviderSchemas(ctx, subpath)
+        if (cancelled) return
+        setProviderTypeCatalog(schema)
+        setSchemaVersionLabel(getProviderSchemaVersion())
+      } catch {
+        if (cancelled) return
+        setProviderTypeCatalog(null)
+        setSchemaVersionLabel('—')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifestId, orgId])
 
@@ -2703,13 +2795,13 @@ export default function ManifestEditorV2() {
         <div className={styles.navArrows}>
           <i
             className="codicon codicon-arrow-left"
-            title="后退(上一个位置)"
+            title="后退(Alt+←)"
             role="button"
             onClick={() => navBackRef.current()}
           />
           <i
             className="codicon codicon-arrow-right"
-            title="前进(下一个位置)"
+            title="前进(Alt+→)"
             role="button"
             onClick={() => navForwardRef.current()}
           />
@@ -2861,6 +2953,17 @@ export default function ManifestEditorV2() {
           <i className="codicon codicon-search" />
         </div>
         <div
+          className={`${styles.item} ${activeView === 'problems' ? styles.active : ''}`}
+          title="问题"
+          role="button"
+          onClick={() => {
+            refreshProblemsRef.current()
+            setActiveView('problems')
+          }}
+        >
+          <i className="codicon codicon-warning" />
+        </div>
+        <div
           className={`${styles.item} ${activeView === 'deploy' ? styles.active : ''}`}
           title="已部署的 Workspace"
           role="button"
@@ -2889,6 +2992,12 @@ export default function ManifestEditorV2() {
             showReplace={searchShowReplace}
             onOpenAt={(p, line, col, endCol) => void openAt(p, line, col, endCol)}
             onAfterReplace={(changed) => refreshAfterReplace(changed)}
+          />
+        )}
+        {activeView === 'problems' && (
+          <ProblemsPanel
+            problems={problems}
+            onOpenAt={(p, line, col, endCol) => void openAt(p, line, col, endCol)}
           />
         )}
         {activeView === 'explorer' && (
@@ -3229,6 +3338,18 @@ export default function ManifestEditorV2() {
             </div>
           ))}
         </div>
+        {currentFile && !activeDiffKey && !binaryView ? (
+          <div className={styles.editorBreadcrumb} title={currentFile}>
+            {currentFile.split('/').map((seg, i, arr) => (
+              <span key={`${i}-${seg}`}>
+                {i > 0 ? <span className={styles.editorBreadcrumbSep}>/</span> : null}
+                <span className={`${styles.editorBreadcrumbSeg}${i === arr.length - 1 ? ' ' + styles.editorBreadcrumbCurrent : ''}`}>
+                  {seg}
+                </span>
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className={styles.editorHost}>
           {bootError ? (
             <div className={`${styles.overlay} ${styles.error}`}>
@@ -3276,6 +3397,17 @@ export default function ManifestEditorV2() {
           <i className="codicon codicon-circle-filled" style={{ color: saveStatus === 'saved' ? '#4ec9b0' : '#cca700' }} />
           {saveStatus === 'saved' ? '自动保存' : '编辑中'}
         </span>
+        <span
+          className={`${styles.item} ${styles.statusBarClickable}`}
+          title="打开问题面板"
+          onClick={() => {
+            refreshProblemsRef.current()
+            setActiveView('problems')
+          }}
+        >
+          <i className="codicon codicon-error" /> {problems.filter((p) => p.severity === monaco.MarkerSeverity.Error).length}
+          <i className="codicon codicon-warning" style={{ marginLeft: 6 }} /> {problems.filter((p) => p.severity === monaco.MarkerSeverity.Warning).length}
+        </span>
         <div className={styles.spacer} />
         {pasteProgress && (
           <span className={styles.item} style={{ background: '#005a9e', padding: '0 8px' }}>
@@ -3301,6 +3433,12 @@ export default function ManifestEditorV2() {
         <span className={styles.item}>UTF-8</span>
         <span className={styles.item}>LF</span>
         <span className={styles.item}>{currentFile ? languageDisplay(currentFile) : ''}</span>
+        <span
+          className={styles.item}
+          title="Provider 类型补全目录(execute post_init 落库;按 manifest+subpath;provider 版本未变不更新)"
+        >
+          schema {schemaVersionLabel}
+        </span>
       </div>
 
       {/* 右侧停靠面板:检查 / Run / 部署(与 AI 生成面板共享布局,四选一互斥) */}
@@ -3398,6 +3536,13 @@ export default function ManifestEditorV2() {
           onClose={() => setTabMenu(null)}
         />
       )}
+
+      <QuickOpen
+        open={quickOpen}
+        files={files.filter((f) => f.type === 'file').map((f) => f.path)}
+        onSelect={(path) => void openFile(path)}
+        onClose={() => setQuickOpen(false)}
+      />
     </div>
   )
 }

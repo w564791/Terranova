@@ -31,12 +31,18 @@ export interface DemoSummary {
 }
 
 // module 输入变量定义(Tier3 属性补全用),来自 /manifest-editor/modules/:id/inputs
+// 扁平参数+类型；不做 OpenAPI 条件分支。
 export interface ModuleInputField {
   name: string
+  /** OpenAPI base type: string | number | boolean | object | array | any */
   type: string
+  /** 展示/snippet: string, bool, number, list(string), map(string), object… */
+  type_label?: string
   required: boolean
   description: string
   default?: string
+  enum?: string[]
+  title?: string
 }
 
 const CACHE_TTL_MS = 60_000

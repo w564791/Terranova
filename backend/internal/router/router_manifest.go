@@ -73,10 +73,17 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	filesH := handlers.NewManifestFilesHandler(db)
 	versionsH := handlers.NewManifestVersionsHandler(db)
 	deploysH := handlers.NewManifestDeploymentsV2Handler(db, iamMiddleware)
+	schemaH := handlers.NewManifestProviderSchemaHandler(db)
 
 	g := r.Group("/organizations/:org_id/manifests/:id")
 	g.Use(middleware.JWTAuth())
 	{
+		// === post_init 落库的 provider 类型目录（编辑器补全）===
+		g.GET("/provider-schemas",
+			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			schemaH.GetProviderSchemas,
+		)
+
 		// === 文件 CRUD (草稿区,作用于当前用户私有副本) ===
 		g.GET("/files",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
