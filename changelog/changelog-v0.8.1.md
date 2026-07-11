@@ -1,4 +1,4 @@
-本版本核心交付 **Manifest 编辑器 Provider 类型补全体系**：terraform init 后自动落库 provider 资源/数据源类型目录（按 manifest+subpath 共享），编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强（resource/data/module 引用解析、Terraform 内置函数、Problems 面板、Quick Open、面包屑导航）。
+本版本包含两大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）。
 
 ---
 
@@ -157,3 +157,127 @@
 - **按需启用**：`ENABLED_EXTENSION_IDS` 白名单（null 时用各扩展 defaultEnabled），便于环境切换
 - **加载顺序**：`bootstrapExtensions()` 按注册表顺序 await 每个扩展的 `load()`，单个失败不影响后续
 - **Grammar 更新**：`scripts/update-hcl-grammar.mjs` 从 `hashicorp/syntax` GitHub raw 拉取 `.tmLanguage.json` 存入 `extensions/assets/`，CI 构建时通过 `build:ci` 自动执行
+
+### 11. Grok (xAI) 官方 Provider 集成
+
+新增 `service_type=grok` 作为 AI Provider，走 xAI 官方 OpenAI 兼容 `chat/completions` API，支持专属 `reasoning_effort` 参数（low / medium / high 三档，Grok reasoning 不可关闭）。
+
+**后端：**
+
+- **`GrokCaller` 结构**（`ai_caller.go`）：嵌入 `OpenAICaller`，重写 `ChatWithTools` 支持 tool calling；`buildGrokRequest` 注入 `reasoning_effort` 并移除 reasoning 模型不兼容的 `temperature` 参数；`parseGrokResponse` 解析 `reasoning_content` + 标准 content + tool_calls + token metrics
+- **公共传输层抽取**：`doGrokChatCompletion()` 统一 HTTP 传输（POST `{baseURL}/chat/completions`），`CallGrokSimple()` 面向单轮 user prompt 场景（Form / ModuleSkill / TestConfig 共用），避免 HTTP 调用代码在多处重复
+- **Effort-based timeout**：`GrokTimeoutForEffort()` 按 effort 档动态超时 — high=600s / medium=300s / low=120s
+- **Effort 规范化**：`NormalizeGrokReasoningEffort()` 统一处理大小写/空白/非法值，默认 high
+- **API Key 环境变量兜底**：`XAI_API_KEY` 环境变量，`fillAPIKeyFallback` 自动注入
+- **Create/Update/Test 全链路 grok 分支**：创建和更新时自动规范化 effort 和兜底 API Key；`TestConfig` 走 `CallGrokSimple(maxTokens=100)` 连通性探测
+- **Form 生成接入**：`AIFormService.callAI` 新增 grok 分支，复用 `CallGrokSimple(maxTokens=4000)`
+- **Module Skill 生成接入**：`ModuleSkillAIService.callAIOnce` 新增 grok 分支，复用 `CallGrokSimple(maxTokens=4096)`
+- **Model List API 兜底**：`ListOpenAIModels` handler 按 `baseURL` 含 `x.ai` 自动选择 `XAI_API_KEY` 环境变量
+- **DB Migration**：`add_grok_reasoning_effort.sql` — `grok_reasoning_effort varchar(20) NOT NULL DEFAULT 'high'`
+
+**前端：**
+
+- **Service Type 选择器**：新增 `Grok (xAI 官方)` 选项，切换时自动设置 `base_url=https://api.x.ai/v1`
+- **Reasoning Effort Radio**：紫色区块 UI，三档单选（低 / 中 / 高），选中态紫色边框 + 背景，附中文描述标签
+- **Grok 专属说明面板**：底部 Tips 区块说明 OpenAI 兼容协议、Base URL 默认值、环境变量、reasoning 不可关闭等
+- **编辑态自动拉模型**：编辑已有 grok 配置时自动从 API 拉取模型列表
+
+### 12. Provider 级 Fallback 容灾机制
+
+专用 AI config 访问失败时（认证/限流/超时/网络等），自动降级到全局 default config（`enabled=true, capabilities=["*"]`），**仅切换 Provider（模型/凭证），保留原任务 Skill/prompt 不变**。
+
+**核心组件：**
+
+- **`IsAIAccessError(err)`**：白名单机制区分访问错误 vs 业务错误。40+ access hints 覆盖 auth/throttle/timeout/network/HTTP status code/Bedrock/aws credentials 等；明确排除 output validation/parse/unmarshal/输出格式等业务错误，避免内容质量问题触发无意义重试
+- **`ResolveProviderFallback(capability, primary, err)`**：四重守卫 — embedding 不 fallback（向量模型语义不同）、已是 default 不 fallback（避免自环）、非访问错误不 fallback、default 与 primary 相同不 fallback
+- **`FallbackAICaller`**：包装 primary + fallback 两个 AICaller，**sticky** 语义 — 首次 fallback 后后续调用固定走 default，保证 Agent Loop 内模型一致
+- **`NewCallerWithFallback(skillCfg, capability)`**：工厂方法，为 Agent Loop 场景创建带 fallback 的 caller
+- **`callAIForCapability(capability, skillCfg, prompt)`**：`AIFormService` 新增方法，单次调用 + 非 sticky fallback（适用于非循环场景）
+
+**全服务接入（12 处调用点改造）：**
+
+| 模式 | 服务 | capability 标识 |
+|---|---|---|
+| `callAIForCapability` | AIFormService | `form_generation` / `intent_assertion` |
+| `callAIForCapability` | AICMDBService | `cmdb_query_plan` |
+| `callAIForCapability` | AICMDBSkillService | `form_generation` / `cmdb_need_assessment` |
+| `callAIForCapability` | ManifestAIService | `manifest_resource_generation` |
+| `callAIForCapability` | ManifestCheckService | `manifest_check` |
+| `callAIForCapability` | manifestDomainSkillSelector | `domain_skill_selection` |
+| `callAIForCapability` | AIFeedbackLoop | `form_generation` |
+| `NewCallerWithFallback` | AIAnalysisService | `error_analysis` |
+| `NewCallerWithFallback` | AISummaryService ×2 | `summary` |
+| `NewCallerWithFallback` | ResourceSummaryService | `cmdb_resource_summary` |
+| `NewCallerWithFallback` | SkillLLMEvaluator | `skill_rule/semantic_evaluation` |
+| `NewCallerWithFallback` | SummaryLLMEvaluator | `summary_rule/semantic_evaluation` |
+
+### 13. 自定义 Capability 场景 + 新预置场景
+
+**新预置场景：**
+
+- `change_analysis`（变更分析）— 分析 Plan 变更内容和影响
+- `result_analysis`（结果分析）— 分析 Apply 执行结果
+
+**自定义 Capability 支持：**
+
+- **前端新增场景面板**：「+ 新增场景」按钮 → 展开表单（场景标识 key + 显示名称），key 校验规则 `/^[a-z][a-z0-9_]{1,63}$/`
+- **自定义标签展示**：自定义场景在列表中显示橙色「自定义」标签 + key 标识
+- **`getCapabilityLabel()`**：统一获取场景展示名（支持自定义标签覆盖），替代直接引用 `CAPABILITY_LABELS`
+- **`KNOWN_CAPABILITY_VALUES`**：从 `CAPABILITIES` 常量导出的预置场景列表
+- **编辑态同步**：加载已有配置时自动识别 DB 中存在但不在预置列表的 capability，标记为自定义
+- **"加载默认模板" 按钮**：无内置模板时自动隐藏（自定义场景无 `DEFAULT_CAPABILITY_PROMPTS`）
+- **Default 描述更新**：「设置为default」→「设为全局兜底（default）」，提示文案明确说明 default 是访问层兜底而非任务默认 Skill
+
+---
+
+## 测试覆盖（v0.8.1 新增）
+
+### `ai_caller_test.go`
+
+- **`TestNormalizeGrokReasoningEffort`**：6 个 case — 空字符串/大写/合法值/非法值/none 均正确规范化
+- **`TestNewAICallerFromConfig_GrokType`**：验证 grok config 创建 `GrokCaller`，baseURL 回落默认，effort 正确传递
+- **`TestGrokCaller_buildGrokRequest`**：验证 `reasoning_effort` 注入 + `temperature` 移除 + model 正确
+
+### `ai_config_fallback_test.go` — **新增文件**
+
+- **`TestIsAIAccessError`**：10 个 case — nil / Bedrock AccessDenied / ValidationException / timeout / 401 / model not found 返回 true；output validation / 输出格式 / 业务错误返回 false；wrapped error 正确穿透
+- **`TestIsDefaultAIConfig`**：4 个 case — nil / enabled=false / 无 `*` / 正确 default
+- **`TestFallbackAICaller_RetriesOnAccessError`**：primary 访问失败 → 自动切到 fallback 并返回正确结果
+- **`TestFallbackAICaller_NoRetryOnBusinessError`**：业务错误直接返回，不触发 fallback
+- **`TestFallbackAICaller_StickyAfterFallback`**：首次 fallback 后第二次调用直接走 fallback，不再试 primary
+
+---
+
+## 修改文件（v0.8.1 新增）
+
+### 后端
+
+- `backend/services/ai_caller.go` — `GrokCaller` 结构 + `ChatWithTools` / `buildGrokRequest` / `parseGrokResponse`；公共 helpers `NormalizeGrokReasoningEffort` / `GrokTimeoutForEffort` / `ResolveGrokBaseURL` / `applyGrokReasoningToBody` / `doGrokChatCompletion` / `CallGrokSimple`；`FallbackAICaller` 结构 + sticky `ChatWithTools`；`NewAICallerFromConfig` 新增 grok case
+- `backend/services/ai_config_service.go` — `GetDefaultConfig` / `isDefaultAIConfig` / `IsAIAccessError` / `ResolveProviderFallback` / `NewCallerWithFallback`；Create/Update/Test/fillAPIKeyFallback 全链路 grok 分支；`testGrok` 连通性探测；`GetConfigForCapability` 兜底逻辑改用 `GetDefaultConfig`
+- `backend/services/ai_form_service.go` — grok 分支走 `CallGrokSimple`；`callAIForCapability` 新方法（fallback 包装）；`generateConfigInternal` / `AssertIntent` 改用 `callAIForCapability`
+- `backend/services/module_skill_ai_service.go` — `callAI` 改为 `callAI` + `callAIOnce`（fallback 包装）；`callAIOnce` grok 走 `CallGrokSimple`；`callOpenAICompatible` 兼容 grok
+- `backend/services/ai_analysis_service.go` — `NewAICallerFromConfig` → `NewCallerWithFallback`（error_analysis）
+- `backend/services/ai_summary_service.go` — 两处 `NewAICallerFromConfig` → `NewCallerWithFallback`（summary）
+- `backend/services/resource_summary_service.go` — `NewAICallerFromConfig` → `NewCallerWithFallback`（cmdb_resource_summary）
+- `backend/services/skill_llm_evaluator.go` — `callLLM` 新增 capability 参数；两处调用传入 `skill_rule_evaluation` / `skill_semantic_evaluation`；`NewAICallerFromConfig` → `NewCallerWithFallback`
+- `backend/services/summary_llm_evaluator.go` — 同上，`summary_rule_evaluation` / `summary_semantic_evaluation`
+- `backend/services/ai_cmdb_service.go` — `callAI` → `callAIForCapability`（cmdb_query_plan）
+- `backend/services/ai_cmdb_skill_service.go` — 三处 `callAI` → `callAIForCapability`（form_generation / cmdb_need_assessment）
+- `backend/services/ai_cmdb_skill_service_sse.go` — 两处 `callAI` → `callAIForCapability`（form_generation）
+- `backend/services/manifest_ai_service.go` — `callAI` → `callAIForCapability`（manifest_resource_generation）
+- `backend/services/manifest_check_service.go` — `callAI` → `callAIForCapability`（manifest_check）
+- `backend/services/manifest_domain_skill.go` — `callAI` → `callAIForCapability`（domain_skill_selection）
+- `backend/services/schema_solver_loop.go` — `callAI` → `callAIForCapability`（form_generation）
+- `backend/services/ai_caller_test.go` — 新增 3 个 Grok 相关测试
+- `backend/services/ai_config_fallback_test.go` — **新增**：5 个 fallback 机制测试
+- `backend/controllers/ai_controller.go` — `ListOpenAIModels` API Key 兜底按 baseURL 判断 provider
+- `backend/internal/models/ai_config.go` — 新增 `GrokReasoningEffort` 字段
+- `backend/internal/config/config.go` — 新增 `XAIAPIKey` 环境变量
+- `backend/migrations/add_grok_reasoning_effort.sql` — **新增**：migration
+- `manifests/db/init_seed_data.sql` — CREATE TABLE 同步 `grok_reasoning_effort` 列
+
+### 前端
+
+- `frontend/src/pages/AIConfigForm.tsx` — Grok service type 选项 + Base URL 默认值 + Reasoning Effort radio UI + Grok help 面板 + 编辑态自动拉模型 + 自定义 Capability 新增面板 + `getCapabilityLabel` 替代直接引用 + default 描述更新 + "加载默认模板" 按钮条件渲染
+- `frontend/src/pages/AIConfigList.tsx` — `CAPABILITY_LABELS` → `getCapabilityLabel()`
+- `frontend/src/services/ai.ts` — `GROK_REASONING_EFFORTS` / `GROK_REASONING_EFFORT_LABELS` / `DEFAULT_GROK_BASE_URL` 常量；`AIConfig` 接口新增 `grok_reasoning_effort`；`CAPABILITIES` 新增 `change_analysis` / `result_analysis`；`KNOWN_CAPABILITY_VALUES` / `isValidCapabilityKey` / `getCapabilityLabel` 导出

@@ -36,6 +36,7 @@ type AIConfig struct {
 	APIKey          string
 	Model           string
 	DashScopeAPIKey string // DashScope (Qwen) API Key，用于获取模型列表等
+	XAIAPIKey       string // xAI Grok 官方 API Key
 }
 
 func Load() *Config {
@@ -61,6 +62,7 @@ func Load() *Config {
 			APIKey:          getEnv("AI_API_KEY", ""),
 			Model:           getEnv("AI_MODEL", "gpt-4"),
 			DashScopeAPIKey: getEnv("DASHSCOPE_API_KEY", ""),
+			XAIAPIKey:       getEnv("XAI_API_KEY", ""),
 		},
 	}
 }

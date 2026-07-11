@@ -80,7 +80,7 @@ func (s *manifestDomainSkillSelector) Select(description string, modules []manif
 	prompt := s.buildPrompt(description, skills, modules)
 
 	// 4. 调 AI
-	result, err := s.aiFormService.callAI(aiConfig, prompt)
+	result, err := s.aiFormService.callAIForCapability("domain_skill_selection", aiConfig, prompt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("AI 调用失败: %w", err)
 	}

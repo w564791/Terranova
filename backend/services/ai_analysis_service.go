@@ -230,7 +230,7 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 	)
 
 	// 创建 Agent Loop
-	caller := NewAICallerFromConfig(cfg)
+	caller := s.configService.NewCallerWithFallback(cfg, "error_analysis")
 	loop := NewAIAgentLoop(caller, 5)
 
 	// 注册错误分析专用工具

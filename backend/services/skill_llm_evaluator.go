@@ -73,7 +73,7 @@ func (e *SkillLLMEvaluator) EvaluateRule(ctx context.Context, usageLog *models.S
 	prompt = strings.ReplaceAll(prompt, "{output}", snapshotToString(usageLog.OutputSnapshot))
 
 	// 6. Call LLM
-	result, err := e.callLLM(ctx, aiConfig, prompt)
+	result, err := e.callLLM(ctx, aiConfig, prompt, "skill_rule_evaluation")
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (e *SkillLLMEvaluator) EvaluateSemantic(ctx context.Context, usageLog *mode
 	prompt = strings.ReplaceAll(prompt, "{output}", snapshotToString(usageLog.OutputSnapshot))
 
 	// 5. Call LLM
-	result, err := e.callLLM(ctx, aiConfig, prompt)
+	result, err := e.callLLM(ctx, aiConfig, prompt, "skill_semantic_evaluation")
 	if err != nil {
 		return nil, err
 	}
@@ -119,12 +119,12 @@ func (e *SkillLLMEvaluator) EvaluateSemantic(ctx context.Context, usageLog *mode
 }
 
 // callLLM sends the prompt to the LLM and parses the response into LLMEvalResult.
-func (e *SkillLLMEvaluator) callLLM(ctx context.Context, aiConfig *models.AIConfig, prompt string) (*LLMEvalResult, error) {
+func (e *SkillLLMEvaluator) callLLM(ctx context.Context, aiConfig *models.AIConfig, prompt string, capability string) (*LLMEvalResult, error) {
 	// Apply 30-second timeout
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	caller := NewAICallerFromConfig(aiConfig)
+	caller := e.configService.NewCallerWithFallback(aiConfig, capability)
 	messages := []AgentMessage{
 		{Role: "user", Content: prompt},
 	}

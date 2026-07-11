@@ -872,6 +872,7 @@ CREATE TABLE public.ai_configs (
     thinking_enabled boolean DEFAULT false NOT NULL,
     thinking_budget_tokens integer DEFAULT 10000 NOT NULL,
     cache_enabled boolean DEFAULT true NOT NULL,
+    grok_reasoning_effort character varying(20) DEFAULT 'high'::character varying NOT NULL,
     CONSTRAINT ai_configs_mode_check CHECK (((mode)::text = ANY (ARRAY[('prompt'::character varying)::text, ('skill'::character varying)::text])))
 );
 
@@ -887,7 +888,13 @@ COMMENT ON TABLE public.ai_configs IS 'AI 服务配置表';
 -- Name: COLUMN ai_configs.service_type; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.ai_configs.service_type IS '服务类型：bedrock, openai, azure_openai, ollama 等';
+COMMENT ON COLUMN public.ai_configs.service_type IS '服务类型：bedrock, openai, azure_openai, qwen, grok, ollama 等';
+
+--
+-- Name: COLUMN ai_configs.grok_reasoning_effort; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.ai_configs.grok_reasoning_effort IS 'Grok reasoning effort: low | medium | high (only used when service_type=grok)';
 
 
 --

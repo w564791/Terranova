@@ -7,6 +7,7 @@ import (
 	"iac-platform/services"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -303,10 +304,18 @@ func (c *AIController) ListOpenAIModels(ctx *gin.Context) {
 		}
 	}
 
-	// 兜底：环境变量
+	// 兜底：环境变量（按 base_url 判断 provider）
 	if apiKey == "" {
 		cfg := appconfig.Load()
-		apiKey = cfg.AI.DashScopeAPIKey
+		if strings.Contains(baseURL, "x.ai") {
+			apiKey = cfg.AI.XAIAPIKey
+		} else {
+			apiKey = cfg.AI.DashScopeAPIKey
+			// 仍空时再试 XAI（用户可能只填了 base_url）
+			if apiKey == "" {
+				apiKey = cfg.AI.XAIAPIKey
+			}
+		}
 	}
 
 	if baseURL == "" {

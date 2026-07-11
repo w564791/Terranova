@@ -138,12 +138,34 @@ func (s *ModuleSkillAIService) getSkillComposition(aiConfig *models.AIConfig) *m
 	}
 }
 
-// callAI 调用 AI 服务
+// callAI 调用 AI 服务（访问失败时 fallback 到 default Provider，保留任务 skill prompt）
 func (s *ModuleSkillAIService) callAI(aiConfig *models.AIConfig, prompt string) (string, error) {
+	result, err := s.callAIOnce(aiConfig, prompt)
+	if err == nil {
+		return result, nil
+	}
+	fallbackCfg, ok := s.configService.ResolveProviderFallback("module_skill_generation", aiConfig, err)
+	if !ok {
+		return "", err
+	}
+	return s.callAIOnce(fallbackCfg, prompt)
+}
+
+func (s *ModuleSkillAIService) callAIOnce(aiConfig *models.AIConfig, prompt string) (string, error) {
 	switch aiConfig.ServiceType {
 	case "bedrock":
 		return s.callBedrock(aiConfig, prompt)
-	case "openai", "azure_openai", "ollama":
+	case "grok":
+		return CallGrokSimple(
+			context.Background(),
+			aiConfig.BaseURL,
+			aiConfig.APIKey,
+			aiConfig.ModelID,
+			aiConfig.GrokReasoningEffort,
+			prompt,
+			4096,
+		)
+	case "openai", "azure_openai", "qwen", "ollama":
 		return s.callOpenAICompatible(aiConfig, prompt)
 	default:
 		return "", fmt.Errorf("不支持的服务类型: %s", aiConfig.ServiceType)
@@ -227,7 +249,7 @@ func (s *ModuleSkillAIService) callBedrock(aiConfig *models.AIConfig, prompt str
 	return response.Content[0].Text, nil
 }
 
-// callOpenAICompatible 调用 OpenAI Compatible API
+// callOpenAICompatible 调用 OpenAI Compatible API（非 Grok）
 func (s *ModuleSkillAIService) callOpenAICompatible(aiConfig *models.AIConfig, prompt string) (string, error) {
 	requestBody := map[string]interface{}{
 		"model": aiConfig.ModelID,

@@ -262,7 +262,7 @@ func (s *AICMDBService) parseQueryPlan(userDescription string) (*CMDBQueryPlan, 
 	prompt := s.buildQueryPlanPrompt(aiConfig, userDescription)
 
 	// 调用 AI
-	result, err := s.aiFormService.callAI(aiConfig, prompt)
+	result, err := s.aiFormService.callAIForCapability("cmdb_query_plan", aiConfig, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}

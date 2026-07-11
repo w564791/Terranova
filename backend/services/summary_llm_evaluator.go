@@ -51,7 +51,7 @@ func (e *SummaryLLMEvaluator) EvaluateRule(ctx context.Context, summary, resourc
 {"verdict": "pass或warn或fail", "score": 0-100, "rule_violations": [{"rule": "规则描述", "detail": "违反详情", "severity": "fail或warn"}], "assessment_confidence": "high或medium或low"}`,
 		promptRules, resourceType, truncateForEval(string(attributes)), summary)
 
-	return e.callLLM(ctx, aiConfig, prompt)
+	return e.callLLM(ctx, aiConfig, prompt, "summary_rule_evaluation")
 }
 
 // EvaluateSemantic performs L3 evaluation: content accuracy and completeness
@@ -79,15 +79,15 @@ func (e *SummaryLLMEvaluator) EvaluateSemantic(ctx context.Context, summary, res
 {"verdict": "pass或warn或fail", "score": 0-100, "quality_issues": [{"type": "hallucination或omission或inaccuracy", "detail": "具体问题", "severity": "fail或warn"}], "assessment_confidence": "high或medium或low"}`,
 		resourceType, truncateForEval(string(attributes)), summary)
 
-	return e.callLLM(ctx, aiConfig, prompt)
+	return e.callLLM(ctx, aiConfig, prompt, "summary_semantic_evaluation")
 }
 
 // callLLM sends the prompt to the LLM and parses the response
-func (e *SummaryLLMEvaluator) callLLM(ctx context.Context, aiConfig *models.AIConfig, prompt string) (*LLMEvalResult, error) {
+func (e *SummaryLLMEvaluator) callLLM(ctx context.Context, aiConfig *models.AIConfig, prompt string, capability string) (*LLMEvalResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	caller := NewAICallerFromConfig(aiConfig)
+	caller := e.configService.NewCallerWithFallback(aiConfig, capability)
 	messages := []AgentMessage{
 		{Role: "user", Content: prompt},
 	}

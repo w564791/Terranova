@@ -8,7 +8,7 @@ import {
   updateAIFeatures,
   type AIConfig,
   type PriorityUpdate,
-  CAPABILITY_LABELS
+  getCapabilityLabel,
 } from '../services/ai';
 import { 
   listSkills, 
@@ -86,7 +86,7 @@ const SortableConfigCard = ({ config }: { config: AIConfig }) => {
             <span className={styles.disabledBadge}>
               {config.capabilities.includes('*') 
                 ? '全部支持' 
-                : config.capabilities.map(c => CAPABILITY_LABELS[c] || c).join('、')}
+                : config.capabilities.map(c => getCapabilityLabel(c)).join('、')}
             </span>
           )}
           {!config.enabled && (!config.capabilities || config.capabilities.length === 0) && (

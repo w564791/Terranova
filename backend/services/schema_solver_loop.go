@@ -106,7 +106,8 @@ func (loop *AIFeedbackLoop) ExecuteWithRetry(
 
 		// 调用 AI 重新生成参数
 		log.Printf("[AIFeedbackLoop] 迭代 %d: 调用 AI 修正参数", i+1)
-		aiResponse, err := loop.aiService.callAI(aiConfig, prompt)
+		// form 修正场景：访问失败时 fallback 到 default Provider
+		aiResponse, err := loop.aiService.callAIForCapability("form_generation", aiConfig, prompt)
 		if err != nil {
 			log.Printf("[AIFeedbackLoop] AI 调用失败: %v", err)
 			return &FeedbackLoopResult{

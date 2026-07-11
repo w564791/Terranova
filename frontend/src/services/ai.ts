@@ -23,14 +23,31 @@ export interface AIConfig {
   similarity_threshold?: number;
   embedding_batch_enabled?: boolean;
   embedding_batch_size?: number;
-  // Extended Thinking 配置
+  // Extended Thinking 配置（Bedrock Claude / Qwen 等）
   thinking_enabled?: boolean;
   thinking_budget_tokens?: number;
+  // Grok 专属 reasoning effort：low | medium | high
+  grok_reasoning_effort?: 'low' | 'medium' | 'high' | string;
   // Prompt Caching 配置（仅 Bedrock）
   cache_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }
+
+/** Grok reasoning effort 档位 */
+export const GROK_REASONING_EFFORTS = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+} as const;
+
+export const GROK_REASONING_EFFORT_LABELS: Record<string, string> = {
+  low: '低（Low）— 更快、适合简单工具调用',
+  medium: '中（Medium）— 平衡复杂度与延迟',
+  high: '高（High）— 更深推理，适合复杂任务',
+};
+
+export const DEFAULT_GROK_BASE_URL = 'https://api.x.ai/v1';
 
 export interface BedrockModel {
   id: string;
@@ -330,6 +347,8 @@ export const setAsDefault = async (id: number): Promise<void> => {
 export const CAPABILITIES = {
   ERROR_ANALYSIS: 'error_analysis',
   RESOURCE_GENERATION: 'resource_generation',
+  CHANGE_ANALYSIS: 'change_analysis',
+  RESULT_ANALYSIS: 'result_analysis',
   FORM_GENERATION: 'form_generation',
   INTENT_ASSERTION: 'intent_assertion',
   CMDB_QUERY_PLAN: 'cmdb_query_plan',
@@ -347,10 +366,20 @@ export const CAPABILITIES = {
   MANIFEST_CHECK: 'manifest_check',
 } as const;
 
+/** 预置场景标识列表（不含 "*"） */
+export const KNOWN_CAPABILITY_VALUES: string[] = Object.values(CAPABILITIES);
+
+/** 校验自定义场景 key：小写字母/数字/下划线，2-64 字符 */
+export function isValidCapabilityKey(key: string): boolean {
+  return /^[a-z][a-z0-9_]{1,63}$/.test(key);
+}
+
 // 能力场景标签映射
 export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.ERROR_ANALYSIS]: '错误分析',
   [CAPABILITIES.RESOURCE_GENERATION]: '资源生成',
+  [CAPABILITIES.CHANGE_ANALYSIS]: '变更分析',
+  [CAPABILITIES.RESULT_ANALYSIS]: '结果分析',
   [CAPABILITIES.FORM_GENERATION]: '表单生成',
   [CAPABILITIES.INTENT_ASSERTION]: '意图断言',
   [CAPABILITIES.CMDB_QUERY_PLAN]: 'CMDB 查询计划',
@@ -368,10 +397,18 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.MANIFEST_CHECK]: 'Manifest 草稿检查',
 };
 
+/** 获取场景展示名（支持自定义标签覆盖） */
+export function getCapabilityLabel(key: string, customLabels?: Record<string, string>): string {
+  if (customLabels?.[key]) return customLabels[key];
+  return CAPABILITY_LABELS[key] || key;
+}
+
 // 能力场景描述映射
 export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.ERROR_ANALYSIS]: '分析 Terraform 执行错误并提供解决方案',
   [CAPABILITIES.RESOURCE_GENERATION]: '基于需求生成 Terraform 资源代码',
+  [CAPABILITIES.CHANGE_ANALYSIS]: '分析 Plan 变更内容和影响',
+  [CAPABILITIES.RESULT_ANALYSIS]: '分析 Apply 执行结果',
   [CAPABILITIES.FORM_GENERATION]: 'AI 辅助填写 Module 表单配置',
   [CAPABILITIES.INTENT_ASSERTION]: '安全守卫：检测并拦截闲聊、越狱等非法意图',
   [CAPABILITIES.CMDB_QUERY_PLAN]: '解析用户描述，生成 CMDB 资源查询计划',

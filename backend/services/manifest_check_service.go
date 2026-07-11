@@ -188,7 +188,7 @@ func (s *ManifestCheckService) CheckDraftWithProgress(
 	}
 
 	aiTimer := NewTimer()
-	aiResult, err := s.aiFormService.callAI(aiConfig, finalPrompt)
+	aiResult, err := s.aiFormService.callAIForCapability("manifest_check", aiConfig, finalPrompt)
 	RecordAICallDuration("manifest_check", "ai_call", aiTimer.ElapsedMs())
 	if err != nil {
 		IncAICallCount("manifest_check", "ai_error")

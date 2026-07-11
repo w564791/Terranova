@@ -78,9 +78,11 @@ type AIConfig struct {
 	Mode             string           `gorm:"type:varchar(20);default:'prompt'" json:"mode"` // 模式：'prompt' 或 'skill'
 	SkillComposition SkillComposition `gorm:"type:jsonb" json:"skill_composition,omitempty"` // Skill 组合配置（mode='skill'时使用）
 	UseOptimized     bool             `gorm:"default:false" json:"use_optimized"`            // 是否使用优化版（并行执行 + AI 选择 Skills）
-	// Extended Thinking 配置
+	// Extended Thinking 配置（Bedrock Claude / Qwen 等）
 	ThinkingEnabled      bool `gorm:"default:false" json:"thinking_enabled"`       // 是否启用 extended thinking
 	ThinkingBudgetTokens int  `gorm:"default:10000" json:"thinking_budget_tokens"` // thinking token 预算（最小 1024）
+	// Grok 专属 reasoning effort（仅 service_type=grok）：low / medium / high
+	GrokReasoningEffort string `gorm:"type:varchar(20);default:'high'" json:"grok_reasoning_effort"`
 	// Prompt Caching 配置（仅 Bedrock）
 	CacheEnabled bool `gorm:"default:true" json:"cache_enabled"` // 是否启用 Bedrock prompt caching
 	// Vector 搜索配置（仅 embedding 能力使用）

@@ -22,6 +22,145 @@ import (
 
 // ========== AICaller Factory ==========
 
+// Grok reasoning effort 档位（官方 API 仅支持这三档，不能关闭 reasoning）
+const (
+	GrokEffortLow    = "low"
+	GrokEffortMedium = "medium"
+	GrokEffortHigh   = "high"
+	DefaultGrokBaseURL = "https://api.x.ai/v1"
+)
+
+// NormalizeGrokReasoningEffort 规范化 Grok effort：仅 low/medium/high，默认 high
+func NormalizeGrokReasoningEffort(effort string) string {
+	switch strings.ToLower(strings.TrimSpace(effort)) {
+	case GrokEffortLow, GrokEffortMedium, GrokEffortHigh:
+		return strings.ToLower(strings.TrimSpace(effort))
+	default:
+		return GrokEffortHigh
+	}
+}
+
+// GrokTimeoutForEffort 按 effort 档位返回 HTTP 超时
+func GrokTimeoutForEffort(effort string) time.Duration {
+	switch NormalizeGrokReasoningEffort(effort) {
+	case GrokEffortHigh:
+		return 600 * time.Second
+	case GrokEffortMedium:
+		return 300 * time.Second
+	case GrokEffortLow:
+		return 120 * time.Second
+	default:
+		return 180 * time.Second
+	}
+}
+
+// ResolveGrokBaseURL 空则回落官方默认
+func ResolveGrokBaseURL(baseURL string) string {
+	if strings.TrimSpace(baseURL) == "" {
+		return DefaultGrokBaseURL
+	}
+	return baseURL
+}
+
+// applyGrokReasoningToBody 注入 reasoning_effort，并去掉 reasoning 模型不兼容字段
+func applyGrokReasoningToBody(body map[string]interface{}, effort string) {
+	body["reasoning_effort"] = NormalizeGrokReasoningEffort(effort)
+	delete(body, "temperature")
+}
+
+// doGrokChatCompletion 公共 HTTP：POST {baseURL}/chat/completions
+// 所有 Grok 调用（Agent / Form / ModuleSkill / Test）共用此传输层。
+func doGrokChatCompletion(ctx context.Context, baseURL, apiKey string, requestBody map[string]interface{}, timeout time.Duration) ([]byte, error) {
+	requestJSON, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := ResolveGrokBaseURL(baseURL)
+	if !strings.HasSuffix(url, "/") {
+		url += "/"
+	}
+	url += "chat/completions"
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+	}
+
+	if timeout <= 0 {
+		timeout = 180 * time.Second
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+	return body, nil
+}
+
+// CallGrokSimple 单轮 user prompt 调用（Form / ModuleSkill / TestConfig 共用）
+// 返回 assistant content；metrics 记为 grok。
+func CallGrokSimple(ctx context.Context, baseURL, apiKey, modelID, effort, prompt string, maxTokens int) (string, error) {
+	if maxTokens <= 0 {
+		maxTokens = 4000
+	}
+	effort = NormalizeGrokReasoningEffort(effort)
+	requestBody := map[string]interface{}{
+		"model": modelID,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"max_tokens": maxTokens,
+	}
+	applyGrokReasoningToBody(requestBody, effort)
+
+	log.Printf("[Grok] simple request: model=%s reasoning_effort=%s max_tokens=%d", modelID, effort, maxTokens)
+
+	raw, err := doGrokChatCompletion(ctx, baseURL, apiKey, requestBody, GrokTimeoutForEffort(effort))
+	if err != nil {
+		return "", err
+	}
+
+	var response struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return "", fmt.Errorf("failed to parse grok response: %w", err)
+	}
+	if response.Usage.PromptTokens > 0 || response.Usage.CompletionTokens > 0 {
+		metrics.IncAITokens("grok", "prompt", float64(response.Usage.PromptTokens))
+		metrics.IncAITokens("grok", "completion", float64(response.Usage.CompletionTokens))
+	}
+	if len(response.Choices) == 0 {
+		return "", fmt.Errorf("empty response from Grok API")
+	}
+	return response.Choices[0].Message.Content, nil
+}
+
 // NewAICallerFromConfig 根据 AIConfig 创建对应的 AICaller
 func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 	switch cfg.ServiceType {
@@ -45,6 +184,20 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 			thinkingEnabled:      cfg.ThinkingEnabled,
 			thinkingBudgetTokens: cfg.ThinkingBudgetTokens,
 		}
+	case "grok":
+		baseURL := cfg.BaseURL
+		if baseURL == "" {
+			baseURL = DefaultGrokBaseURL
+		}
+		return &GrokCaller{
+			OpenAICaller: OpenAICaller{
+				baseURL:     baseURL,
+				apiKey:      cfg.APIKey,
+				modelID:     cfg.ModelID,
+				serviceType: "grok",
+			},
+			reasoningEffort: NormalizeGrokReasoningEffort(cfg.GrokReasoningEffort),
+		}
 	case "openai", "azure_openai", "ollama":
 		return &OpenAICaller{
 			baseURL:     cfg.BaseURL,
@@ -61,6 +214,39 @@ func NewAICallerFromConfig(cfg *models.AIConfig) AICaller {
 			cacheEnabled:         cfg.CacheEnabled,
 		}
 	}
+}
+
+// FallbackAICaller 主 Provider 访问失败时自动切换到 default Provider。
+// 消息（含已组装的 task skill prompt）不变，仅换模型/凭证访问层。
+// 一旦发生 fallback，后续调用固定走 default，避免 Agent Loop 中途换模型。
+type FallbackAICaller struct {
+	primary       AICaller
+	fallback      AICaller
+	capability    string
+	primaryID     uint
+	primaryModel  string
+	fallbackID    uint
+	fallbackModel string
+	useFallback   bool // sticky：访问失败后全程使用 default
+}
+
+// ChatWithTools 先走主配置；访问失败时 fallback 到 default 并粘滞后续调用。
+func (c *FallbackAICaller) ChatWithTools(ctx context.Context, messages []AgentMessage, tools []AgentToolDef) (*AgentAIResponse, error) {
+	if c.useFallback && c.fallback != nil {
+		return c.fallback.ChatWithTools(ctx, messages, tools)
+	}
+
+	resp, err := c.primary.ChatWithTools(ctx, messages, tools)
+	if err == nil {
+		return resp, nil
+	}
+	if !IsAIAccessError(err) || c.fallback == nil {
+		return nil, err
+	}
+	c.useFallback = true
+	log.Printf("[FallbackAICaller] capability=%s primary_id=%d model=%s access failed: %v; sticky fallback to default_id=%d model=%s",
+		c.capability, c.primaryID, c.primaryModel, err, c.fallbackID, c.fallbackModel)
+	return c.fallback.ChatWithTools(ctx, messages, tools)
 }
 
 // ========== Bedrock Caller (Claude tool_use format) ==========
@@ -815,6 +1001,103 @@ func (c *QwenCaller) parseQwenResponse(body []byte) (*AgentAIResponse, error) {
 		if tc.Function.Arguments != "" {
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
 				log.Printf("[AICaller/Qwen] failed to parse tool arguments for %s: %v", tc.Function.Name, err)
+			}
+		}
+		result.ToolCalls = append(result.ToolCalls, AgentToolCall{
+			ID:     tc.ID,
+			Name:   tc.Function.Name,
+			Params: params,
+		})
+	}
+
+	return result, nil
+}
+
+// ========== Grok / xAI Official Caller (OpenAI compatible + reasoning_effort) ==========
+
+// GrokCaller xAI Grok 官方 API：OpenAI 兼容 chat/completions + 专属 reasoning_effort
+// effort 仅 low / medium / high 三档（官方不可关闭 reasoning）
+type GrokCaller struct {
+	OpenAICaller
+	reasoningEffort string // low | medium | high
+}
+
+// ChatWithTools 调用 xAI Grok API（传输层走 doGrokChatCompletion）
+func (c *GrokCaller) ChatWithTools(ctx context.Context, messages []AgentMessage, tools []AgentToolDef) (*AgentAIResponse, error) {
+	requestBody := c.buildGrokRequest(messages, tools)
+	raw, err := doGrokChatCompletion(ctx, c.baseURL, c.apiKey, requestBody, GrokTimeoutForEffort(c.reasoningEffort))
+	if err != nil {
+		return nil, err
+	}
+	return c.parseGrokResponse(raw)
+}
+
+// buildGrokRequest 构建 Grok 请求：OpenAI 格式 + reasoning_effort
+func (c *GrokCaller) buildGrokRequest(messages []AgentMessage, tools []AgentToolDef) map[string]interface{} {
+	body := c.OpenAICaller.buildOpenAIRequest(messages, tools)
+	effort := NormalizeGrokReasoningEffort(c.reasoningEffort)
+	applyGrokReasoningToBody(body, effort)
+	log.Printf("[AICaller/Grok] request: model=%s reasoning_effort=%s tools=%d", c.modelID, effort, len(tools))
+	return body
+}
+
+// parseGrokResponse 解析 Grok 响应（兼容 reasoning_content / 标准 content）
+func (c *GrokCaller) parseGrokResponse(body []byte) (*AgentAIResponse, error) {
+	var response struct {
+		Choices []struct {
+			Message struct {
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content,omitempty"`
+				ToolCalls        []struct {
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			CompletionTokensDetails struct {
+				ReasoningTokens int `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details"`
+		} `json:"usage"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse grok response: %w", err)
+	}
+
+	if response.Usage.PromptTokens > 0 || response.Usage.CompletionTokens > 0 {
+		metrics.IncAITokens("grok", "prompt", float64(response.Usage.PromptTokens))
+		metrics.IncAITokens("grok", "completion", float64(response.Usage.CompletionTokens))
+		log.Printf("[AICaller/Grok] tokens: prompt=%d, completion=%d, reasoning=%d, effort=%s",
+			response.Usage.PromptTokens, response.Usage.CompletionTokens,
+			response.Usage.CompletionTokensDetails.ReasoningTokens, c.reasoningEffort)
+	}
+
+	if len(response.Choices) == 0 {
+		return nil, fmt.Errorf("empty response from Grok API")
+	}
+
+	msg := response.Choices[0].Message
+	result := &AgentAIResponse{
+		Content:         msg.Content,
+		ThinkingContent: msg.ReasoningContent,
+	}
+
+	if result.ThinkingContent != "" {
+		log.Printf("[AICaller/Grok] reasoning content received (%d chars)", len(result.ThinkingContent))
+	}
+
+	for _, tc := range msg.ToolCalls {
+		var params map[string]interface{}
+		if tc.Function.Arguments != "" {
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
+				log.Printf("[AICaller/Grok] failed to parse tool arguments for %s: %v", tc.Function.Name, err)
 			}
 		}
 		result.ToolCalls = append(result.ToolCalls, AgentToolCall{

@@ -14,9 +14,14 @@ import {
   type InferenceProfile,
   type OpenAIModel,
   CAPABILITIES,
-  CAPABILITY_LABELS,
   CAPABILITY_DESCRIPTIONS,
   DEFAULT_CAPABILITY_PROMPTS,
+  KNOWN_CAPABILITY_VALUES,
+  isValidCapabilityKey,
+  getCapabilityLabel,
+  GROK_REASONING_EFFORTS,
+  GROK_REASONING_EFFORT_LABELS,
+  DEFAULT_GROK_BASE_URL,
 } from '../services/ai';
 import {
   listSkills,
@@ -95,12 +100,21 @@ const AIConfigForm = () => {
     // Extended Thinking 配置
     thinking_enabled: false,
     thinking_budget_tokens: 10000,
+    // Grok 专属 effort
+    grok_reasoning_effort: 'high' as string,
     // Prompt Caching 配置（仅 Bedrock）
     cache_enabled: true,
   });
 
   // 展开的 prompt 编辑器
   const [expandedPrompts, setExpandedPrompts] = useState<Record<string, boolean>>({});
+  // 自定义场景（不在预置 CAPABILITIES 列表中的）标签
+  const [customCapabilityLabels, setCustomCapabilityLabels] = useState<Record<string, string>>({});
+  // 新增自定义场景表单
+  const [showAddCapability, setShowAddCapability] = useState(false);
+  const [newCapabilityKey, setNewCapabilityKey] = useState('');
+  const [newCapabilityLabel, setNewCapabilityLabel] = useState('');
+  const [addCapabilityError, setAddCapabilityError] = useState<string | null>(null);
 
   const defaultPrompt = `你是一个专业的 Terraform 和云基础设施专家。
 
@@ -203,6 +217,7 @@ const AIConfigForm = () => {
           embedding_batch_size: configData.embedding_batch_size || 10,
           thinking_enabled: configData.thinking_enabled || false,
           thinking_budget_tokens: configData.thinking_budget_tokens || 10000,
+          grok_reasoning_effort: configData.grok_reasoning_effort || 'high',
           cache_enabled: configData.cache_enabled !== false,
         });
 
@@ -211,6 +226,16 @@ const AIConfigForm = () => {
         } else {
           setModelSource('foundation');
         }
+
+        // 同步自定义场景标签（DB 中存在但不在预置列表的 capability）
+        const known = new Set(KNOWN_CAPABILITY_VALUES);
+        const customLabels: Record<string, string> = {};
+        for (const cap of configData.capabilities || []) {
+          if (cap !== '*' && !known.has(cap)) {
+            customLabels[cap] = cap;
+          }
+        }
+        setCustomCapabilityLabels(customLabels);
 
         // 加载已保存的 skill_composition
         if (configData.skill_composition && typeof configData.skill_composition === 'object') {
@@ -230,6 +255,31 @@ const AIConfigForm = () => {
             loadModels(configData.aws_region),
             loadInferenceProfiles(configData.aws_region),
           ]);
+        }
+
+        // 编辑态：Qwen / Grok 自动从 API 拉模型列表（依赖已存 API Key 或环境变量兜底）
+        if (
+          configData.service_type === 'qwen' ||
+          configData.service_type === 'grok'
+        ) {
+          try {
+            setLoadingOpenaiModels(true);
+            const baseURL =
+              configData.base_url ||
+              (configData.service_type === 'grok' ? DEFAULT_GROK_BASE_URL : '');
+            if (baseURL) {
+              const result = await listOpenAIModels(
+                baseURL,
+                undefined,
+                parseInt(id)
+              );
+              setOpenaiModels(result || []);
+            }
+          } catch (e) {
+            console.warn('自动获取模型列表失败（可手动点击「获取模型」）:', e);
+          } finally {
+            setLoadingOpenaiModels(false);
+          }
         }
       }
     } catch (error: any) {
@@ -546,20 +596,31 @@ const AIConfigForm = () => {
               value={formData.service_type}
               onChange={(e) => {
                 const newType = e.target.value;
+                let defaultBase = '';
+                if (newType === 'qwen') {
+                  defaultBase = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+                } else if (newType === 'grok') {
+                  defaultBase = DEFAULT_GROK_BASE_URL;
+                } else if (newType === 'openai') {
+                  defaultBase = 'https://api.openai.com/v1';
+                }
+                setOpenaiModels([]);
                 setFormData({
                 ...formData,
                 service_type: newType,
                 // 切换服务类型时重置相关字段
                 aws_region: '',
                 model_id: '',
-                base_url: newType === 'qwen' ? 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' : '',
+                base_url: defaultBase,
                 api_key: '',
+                grok_reasoning_effort: newType === 'grok' ? (formData.grok_reasoning_effort || 'high') : formData.grok_reasoning_effort,
               })}}
             >
               <option value="bedrock">AWS Bedrock</option>
               <option value="openai">OpenAI</option>
               <option value="azure_openai">Azure OpenAI</option>
               <option value="qwen">Qwen (DashScope)</option>
+              <option value="grok">Grok (xAI 官方)</option>
               <option value="ollama">Ollama</option>
             </select>
           </div>
@@ -669,6 +730,7 @@ const AIConfigForm = () => {
           {(formData.service_type === 'openai' ||
             formData.service_type === 'azure_openai' ||
             formData.service_type === 'qwen' ||
+            formData.service_type === 'grok' ||
             formData.service_type === 'ollama') && (
             <>
               <div className={styles.formGroup}>
@@ -683,6 +745,8 @@ const AIConfigForm = () => {
                       ? 'https://api.openai.com/v1'
                       : formData.service_type === 'qwen'
                       ? 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
+                      : formData.service_type === 'grok'
+                      ? DEFAULT_GROK_BASE_URL
                       : formData.service_type === 'ollama'
                       ? 'http://localhost:11434/v1'
                       : 'https://your-resource.openai.azure.com'
@@ -693,6 +757,7 @@ const AIConfigForm = () => {
                   {formData.service_type === 'openai' && 'OpenAI API 基础 URL'}
                   {formData.service_type === 'azure_openai' && 'Azure OpenAI 端点 URL'}
                   {formData.service_type === 'qwen' && 'DashScope API 地址（国际版 dashscope-intl，国内版 dashscope）'}
+                  {formData.service_type === 'grok' && 'xAI 官方 API 地址，默认 https://api.x.ai/v1'}
                   {formData.service_type === 'ollama' && 'Ollama 服务地址'}
                 </div>
               </div>
@@ -726,7 +791,7 @@ const AIConfigForm = () => {
 
               <div className={styles.formGroup}>
                 <label className={styles.label}>模型</label>
-                {formData.service_type === 'qwen' ? (
+                {(formData.service_type === 'qwen' || formData.service_type === 'grok') ? (
                   <>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <select
@@ -736,42 +801,96 @@ const AIConfigForm = () => {
                         style={{ flex: 1 }}
                         required
                       >
-                        <option value="">{loadingOpenaiModels ? '加载中...' : '请选择模型（先点击获取）'}</option>
+                        <option value="">
+                          {loadingOpenaiModels
+                            ? '加载中...'
+                            : openaiModels.length === 0
+                              ? '请先点击「获取模型」'
+                              : '请选择模型'}
+                        </option>
+                        {/* 编辑态：当前 model 尚未出现在列表中时仍可选 */}
+                        {formData.model_id &&
+                          !openaiModels.some((m) => m.id === formData.model_id) && (
+                            <option value={formData.model_id}>{formData.model_id}（当前）</option>
+                          )}
                         {openaiModels
                           .filter((m) => {
-                            if (formData.service_type !== 'qwen') return true;
-                            // Qwen: 过滤非文本对话模型
-                            const skip = /image|vl-|tts|asr|omni|s2s|mt-|ocr|captioner|realtime|livetranslate|character/i;
-                            return !skip.test(m.id);
+                            if (formData.service_type === 'qwen') {
+                              // Qwen: 过滤非文本对话模型
+                              const skip =
+                                /image|vl-|tts|asr|omni|s2s|mt-|ocr|captioner|realtime|livetranslate|character/i;
+                              return !skip.test(m.id);
+                            }
+                            if (formData.service_type === 'grok') {
+                              // Grok: 只要对话文本模型，排除 image / voice / embedding 等
+                              const skip =
+                                /image|imagine|vision|voice|tts|asr|embed|embedding|audio|video/i;
+                              return !skip.test(m.id);
+                            }
+                            return true;
                           })
                           .map((m) => (
-                          <option key={m.id} value={m.id}>{m.id}{m.owned_by ? ` (${m.owned_by})` : ''}</option>
-                        ))}
+                            <option key={m.id} value={m.id}>
+                              {m.id}
+                              {m.owned_by ? ` (${m.owned_by})` : ''}
+                            </option>
+                          ))}
                       </select>
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!formData.base_url) {
+                          const baseURL =
+                            formData.base_url ||
+                            (formData.service_type === 'grok' ? DEFAULT_GROK_BASE_URL : '');
+                          if (!baseURL) {
                             setMessage({ type: 'error', text: '请先填写 Base URL' });
                             return;
                           }
                           if (!formData.api_key && !isEditMode) {
-                            setMessage({ type: 'error', text: '请先填写 API Key' });
+                            setMessage({
+                              type: 'error',
+                              text:
+                                formData.service_type === 'grok'
+                                  ? '请先填写 API Key（或配置环境变量 XAI_API_KEY 后用编辑模式获取）'
+                                  : '请先填写 API Key',
+                            });
                             return;
                           }
                           try {
                             setLoadingOpenaiModels(true);
                             const isClearKey = formData.api_key === '__CLEAR__';
-                            const apiKeyParam = formData.api_key && !isClearKey ? formData.api_key : undefined;
+                            const apiKeyParam =
+                              formData.api_key && !isClearKey ? formData.api_key : undefined;
                             // 勾了"清空"时不传 config_id，跳过 DB 直接走环境变量兜底
-                            const configIdParam = isEditMode && id && !isClearKey ? parseInt(id) : undefined;
-                            const result = await listOpenAIModels(formData.base_url, apiKeyParam, configIdParam);
+                            const configIdParam =
+                              isEditMode && id && !isClearKey ? parseInt(id) : undefined;
+                            const result = await listOpenAIModels(
+                              baseURL,
+                              apiKeyParam,
+                              configIdParam
+                            );
                             setOpenaiModels(result);
                             if (result.length === 0) {
-                              setMessage({ type: 'error', text: '未获取到模型列表，请检查 API Key 是否正确' });
+                              setMessage({
+                                type: 'error',
+                                text: '未获取到模型列表，请检查 API Key / Base URL 是否正确',
+                              });
+                            } else {
+                              // 当前选中不在列表中则自动选第一项
+                              const ids = result.map((m) => m.id);
+                              if (!formData.model_id || !ids.includes(formData.model_id)) {
+                                setFormData((prev) => ({ ...prev, model_id: result[0].id }));
+                              }
+                              setMessage({
+                                type: 'success',
+                                text: `已从 API 获取 ${result.length} 个模型`,
+                              });
                             }
                           } catch (err: any) {
-                            setMessage({ type: 'error', text: err.response?.data?.message || '获取模型列表失败' });
+                            setMessage({
+                              type: 'error',
+                              text: err.response?.data?.message || '获取模型列表失败',
+                            });
                           } finally {
                             setLoadingOpenaiModels(false);
                           }
@@ -790,29 +909,36 @@ const AIConfigForm = () => {
                         {loadingOpenaiModels ? '获取中...' : '获取模型'}
                       </button>
                     </div>
+                    <div className={styles.hint}>
+                      {formData.service_type === 'qwen' &&
+                        '填写 API Key 后点击「获取模型」，从 DashScope 拉取可用模型'}
+                      {formData.service_type === 'grok' &&
+                        '填写 API Key 后点击「获取模型」，从 xAI 官方 API（/v1/models）拉取，无需手填模型 ID'}
+                    </div>
                   </>
                 ) : (
-                  <input
-                    type="text"
-                    className={styles.select}
-                    value={formData.model_id}
-                    onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
-                    placeholder={
-                      formData.service_type === 'openai'
-                        ? 'gpt-4, gpt-3.5-turbo'
-                        : formData.service_type === 'ollama'
-                        ? 'llama2, mistral'
-                        : 'your-deployment-name'
-                    }
-                    required
-                  />
+                  <>
+                    <input
+                      type="text"
+                      className={styles.select}
+                      value={formData.model_id}
+                      onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+                      placeholder={
+                        formData.service_type === 'openai'
+                          ? 'gpt-4, gpt-3.5-turbo'
+                          : formData.service_type === 'ollama'
+                            ? 'llama2, mistral'
+                            : 'your-deployment-name'
+                      }
+                      required
+                    />
+                    <div className={styles.hint}>
+                      {formData.service_type === 'openai' && '如：gpt-4, gpt-4-turbo, gpt-3.5-turbo'}
+                      {formData.service_type === 'azure_openai' && 'Azure 部署名称'}
+                      {formData.service_type === 'ollama' && '本地模型名称'}
+                    </div>
+                  </>
                 )}
-                <div className={styles.hint}>
-                  {formData.service_type === 'openai' && '如：gpt-4, gpt-4-turbo, gpt-3.5-turbo'}
-                  {formData.service_type === 'azure_openai' && 'Azure 部署名称'}
-                  {formData.service_type === 'qwen' && '填写 API Key 后点击「获取模型」拉取可用模型列表'}
-                  {formData.service_type === 'ollama' && '本地模型名称'}
-                </div>
               </div>
             </>
           )}
@@ -847,8 +973,71 @@ const AIConfigForm = () => {
             </div>
           </div>
 
-          {/* Extended Thinking 配置（GLM 模型不支持） */}
-          {!(formData.service_type === 'bedrock' && formData.model_id.startsWith('zai.')) && (
+          {/* Grok 专属 Reasoning Effort（高 / 中 / 低 三档） */}
+          {formData.service_type === 'grok' && (
+            <div
+              className={styles.formGroup}
+              style={{
+                border: '1px solid #722ed1',
+                borderRadius: '8px',
+                padding: '16px',
+                backgroundColor: '#f9f0ff',
+              }}
+            >
+              <label className={styles.label} style={{ color: '#531dab' }}>
+                Grok Reasoning Effort（专属）
+              </label>
+              <div className={styles.hint} style={{ marginBottom: '12px' }}>
+                xAI Grok 官方 API 使用 <code>reasoning_effort</code> 控制推理深度，仅三档：
+                低 / 中 / 高。Grok 推理不可关闭（与 Claude Extended Thinking 不同）。
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {([GROK_REASONING_EFFORTS.LOW, GROK_REASONING_EFFORTS.MEDIUM, GROK_REASONING_EFFORTS.HIGH] as const).map(
+                  (level) => (
+                    <label
+                      key={level}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        border:
+                          formData.grok_reasoning_effort === level
+                            ? '2px solid #722ed1'
+                            : '1px solid #d9d9d9',
+                        backgroundColor:
+                          formData.grok_reasoning_effort === level ? '#efdbff' : '#fff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="grok_reasoning_effort"
+                        checked={formData.grok_reasoning_effort === level}
+                        onChange={() =>
+                          setFormData({ ...formData, grok_reasoning_effort: level })
+                        }
+                      />
+                      <span style={{ fontWeight: 500 }}>
+                        {level === 'low' ? '低' : level === 'medium' ? '中' : '高'}
+                        <span style={{ marginLeft: 8, color: '#666', fontWeight: 400, fontSize: 13 }}>
+                          {GROK_REASONING_EFFORT_LABELS[level]}
+                        </span>
+                      </span>
+                    </label>
+                  )
+                )}
+              </div>
+              <div className={styles.hint} style={{ marginTop: '10px' }}>
+                默认 <strong>高</strong>。复杂任务（summary / form 生成）建议高；简单意图断言可用低以降低延迟与费用。
+              </div>
+            </div>
+          )}
+
+          {/* Extended Thinking 配置（Grok / GLM 不适用） */}
+          {formData.service_type !== 'grok' &&
+            !(formData.service_type === 'bedrock' && formData.model_id.startsWith('zai.')) && (
             <>
               <div className={styles.formGroup}>
                 <label className={styles.checkboxLabel}>
@@ -918,10 +1107,11 @@ const AIConfigForm = () => {
                   }
                 }}
               />
-              <span>设置为default</span>
+              <span>设为全局兜底（default）</span>
             </label>
             <div className={styles.hint}>
-              注意：启用此配置会自动禁用其他所有 AI 配置（全局唯一），并自动设置为支持所有场景
+              default 是访问失败时的全局 Provider 兜底配置（capabilities=*），不是任务默认 Skill。
+              全局仅能有一个 default；专用场景配置请勿勾选此项，改为下方选择具体能力场景。
             </div>
           </div>
 
@@ -1649,17 +1839,162 @@ const AIConfigForm = () => {
           <div className={styles.formGroup}>
             <label className={styles.label}>支持的能力场景</label>
             <div className={styles.hint} style={{ marginBottom: '12px' }}>
-              选择此配置支持的 AI 能力场景，可为每个场景自定义 Prompt
+              选择此配置支持的 AI 能力场景，可为每个场景自定义 Prompt。也可新增自定义场景标识（需后端代码识别后才会生效）。
             </div>
 
-            {/* 专用场景选择 */}
-            <div style={{ marginBottom: '8px', fontWeight: 500 }}>专用场景（可多选）</div>
+            {/* 专用场景选择：预置 + 自定义 */}
+            <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 500 }}>专用场景（可多选）</span>
+              {!formData.enabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddCapability((v) => !v);
+                    setAddCapabilityError(null);
+                  }}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    backgroundColor: showAddCapability ? '#f0f0f0' : '#1890ff',
+                    color: showAddCapability ? '#333' : 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showAddCapability ? '收起' : '+ 新增场景'}
+                </button>
+              )}
+            </div>
+
+            {showAddCapability && !formData.enabled && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  border: '1px dashed #1890ff',
+                  borderRadius: '8px',
+                  backgroundColor: '#f0f7ff',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
+                  新增自定义能力场景
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 180px' }}>
+                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                      场景标识（key）*
+                    </label>
+                    <input
+                      type="text"
+                      className={styles.select}
+                      value={newCapabilityKey}
+                      placeholder="例如 my_custom_task"
+                      onChange={(e) => {
+                        setNewCapabilityKey(e.target.value.trim().toLowerCase());
+                        setAddCapabilityError(null);
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 180px' }}>
+                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                      显示名称（可选）
+                    </label>
+                    <input
+                      type="text"
+                      className={styles.select}
+                      value={newCapabilityLabel}
+                      placeholder="例如 我的自定义任务"
+                      onChange={(e) => setNewCapabilityLabel(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const key = newCapabilityKey.trim().toLowerCase();
+                      if (!key) {
+                        setAddCapabilityError('请填写场景标识');
+                        return;
+                      }
+                      if (!isValidCapabilityKey(key)) {
+                        setAddCapabilityError('标识须为小写字母开头，仅含 a-z / 0-9 / _，长度 2-64');
+                        return;
+                      }
+                      if (key === '*') {
+                        setAddCapabilityError('不能使用 * 作为专用场景标识');
+                        return;
+                      }
+                      const known = new Set([
+                        ...KNOWN_CAPABILITY_VALUES,
+                        ...Object.keys(customCapabilityLabels),
+                        ...formData.capabilities.filter((c) => c !== '*'),
+                      ]);
+                      if (known.has(key)) {
+                        setAddCapabilityError(`场景「${key}」已存在`);
+                        return;
+                      }
+                      setCustomCapabilityLabels((prev) => ({
+                        ...prev,
+                        [key]: newCapabilityLabel.trim() || key,
+                      }));
+                      setFormData({
+                        ...formData,
+                        capabilities: formData.capabilities.includes('*')
+                          ? formData.capabilities
+                          : [...formData.capabilities, key],
+                      });
+                      setNewCapabilityKey('');
+                      setNewCapabilityLabel('');
+                      setAddCapabilityError(null);
+                      setShowAddCapability(false);
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '13px',
+                      backgroundColor: '#52c41a',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    添加并选中
+                  </button>
+                </div>
+                {addCapabilityError && (
+                  <div style={{ marginTop: '8px', color: '#ff4d4f', fontSize: '12px' }}>
+                    {addCapabilityError}
+                  </div>
+                )}
+                <div className={styles.hint} style={{ marginTop: '8px' }}>
+                  后端通过 GetConfigForCapability(&quot;场景标识&quot;) 匹配；新增后还需在代码中注册调用才会实际使用。
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {Object.entries(CAPABILITIES).map(([key, value]) => {
+              {(() => {
+                // 预置场景 + 自定义场景（去重）
+                const knownValues = KNOWN_CAPABILITY_VALUES;
+                const customValues = Object.keys(customCapabilityLabels).filter(
+                  (k) => !knownValues.includes(k)
+                );
+                // 编辑时 DB 中有、但不在 customLabels 的也展示
+                const fromConfig = formData.capabilities.filter(
+                  (c) => c !== '*' && !knownValues.includes(c) && !customValues.includes(c)
+                );
+                const allValues = [...knownValues, ...customValues, ...fromConfig];
+
+                return allValues.map((value) => {
+                const isCustom = !KNOWN_CAPABILITY_VALUES.includes(value);
                 const isChecked = formData.capabilities.includes('*') || formData.capabilities.includes(value);
                 const isExpanded = expandedPrompts[value];
                 const customPrompt = formData.capability_prompts[value] || '';
                 const defaultPromptForCapability = DEFAULT_CAPABILITY_PROMPTS[value] || '';
+                const label = getCapabilityLabel(value, customCapabilityLabels);
                 
                 return (
                   <div key={value} style={{ 
@@ -1678,10 +2013,10 @@ const AIConfigForm = () => {
                             if (e.target.checked) {
                               // 添加场景
                               if (formData.capabilities.includes('*')) {
-                                const allCapabilities = Object.values(CAPABILITIES);
+                                const allCapabilities = [...KNOWN_CAPABILITY_VALUES, ...Object.keys(customCapabilityLabels)];
                                 setFormData({
                                   ...formData,
-                                  capabilities: allCapabilities,
+                                  capabilities: Array.from(new Set([...allCapabilities, value])),
                                 });
                               } else {
                                 setFormData({
@@ -1692,7 +2027,10 @@ const AIConfigForm = () => {
                             } else {
                               // 移除场景
                               if (formData.capabilities.includes('*')) {
-                                const allCapabilities = Object.values(CAPABILITIES).filter(c => c !== value);
+                                const allCapabilities = [
+                                  ...KNOWN_CAPABILITY_VALUES,
+                                  ...Object.keys(customCapabilityLabels),
+                                ].filter((c) => c !== value);
                                 setFormData({
                                   ...formData,
                                   capabilities: allCapabilities,
@@ -1706,7 +2044,27 @@ const AIConfigForm = () => {
                             }
                           }}
                         />
-                        <span style={{ fontWeight: 500 }}>{CAPABILITY_LABELS[value]}</span>
+                        <span style={{ fontWeight: 500 }}>
+                          {label}
+                          {isCustom && (
+                            <span
+                              style={{
+                                marginLeft: '8px',
+                                fontSize: '11px',
+                                padding: '1px 6px',
+                                borderRadius: '3px',
+                                backgroundColor: '#fff7e6',
+                                color: '#d46b08',
+                                border: '1px solid #ffd591',
+                              }}
+                            >
+                              自定义
+                            </span>
+                          )}
+                          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#999', fontWeight: 400 }}>
+                            {value}
+                          </span>
+                        </span>
                       </label>
                       {isChecked && (
                         <button
@@ -1731,7 +2089,7 @@ const AIConfigForm = () => {
                       )}
                     </div>
                     <div className={styles.hint} style={{ marginLeft: '24px', marginTop: '4px' }}>
-                      {CAPABILITY_DESCRIPTIONS[value]}
+                      {CAPABILITY_DESCRIPTIONS[value] || (isCustom ? '自定义能力场景，后端需通过此标识获取配置' : '')}
                     </div>
                     
                     {/* Prompt 编辑器 */}
@@ -1763,29 +2121,31 @@ const AIConfigForm = () => {
                                 清除自定义
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFormData({
-                                  ...formData,
-                                  capability_prompts: {
-                                    ...formData.capability_prompts,
-                                    [value]: defaultPromptForCapability,
-                                  },
-                                });
-                              }}
-                              style={{
-                                padding: '2px 8px',
-                                fontSize: '11px',
-                                backgroundColor: '#faad14',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              加载默认模板
-                            </button>
+                            {defaultPromptForCapability && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData,
+                                    capability_prompts: {
+                                      ...formData.capability_prompts,
+                                      [value]: defaultPromptForCapability,
+                                    },
+                                  });
+                                }}
+                                style={{
+                                  padding: '2px 8px',
+                                  fontSize: '11px',
+                                  backgroundColor: '#faad14',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                加载默认模板
+                              </button>
+                            )}
                           </div>
                         </div>
                         <textarea
@@ -1799,7 +2159,7 @@ const AIConfigForm = () => {
                               },
                             });
                           }}
-                          placeholder={`输入 ${CAPABILITY_LABELS[value]} 的自定义 Prompt...\n\n点击"加载默认模板"可以查看和修改默认 Prompt`}
+                          placeholder={`输入 ${label} 的自定义 Prompt...\n\n${defaultPromptForCapability ? '点击"加载默认模板"可以查看和修改默认 Prompt' : '该场景暂无内置默认模板'}`}
                           style={{
                             width: '100%',
                             minHeight: '200px',
@@ -1819,11 +2179,12 @@ const AIConfigForm = () => {
                     )}
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
             {!formData.capabilities.includes('*') && formData.capabilities.length === 0 && (
               <div className={styles.hint} style={{ marginTop: '12px' }}>
-                提示：不选择任何场景表示"未配置"，该配置不会被使用
+                提示：不选择任何场景表示&quot;未配置&quot;，该配置不会被使用
               </div>
             )}
           </div>
@@ -1914,6 +2275,20 @@ const AIConfigForm = () => {
                 <li>支持 OpenAI Compatible API</li>
                 <li>API Key 加密存储，查询时不返回</li>
                 <li>兼容 OpenAI、Azure OpenAI、Ollama、vLLM 等</li>
+              </>
+            )}
+            {formData.service_type === 'grok' && (
+              <>
+                <li>xAI Grok 官方 API（OpenAI 兼容 chat/completions）</li>
+                <li>Base URL 默认 https://api.x.ai/v1，API Key 可填或使用环境变量 XAI_API_KEY</li>
+                <li>使用专属 Reasoning Effort：低 / 中 / 高（对应 API reasoning_effort）</li>
+                <li>Grok 推理不可关闭；不使用 Claude 的 Extended Thinking / budget tokens</li>
+              </>
+            )}
+            {formData.service_type === 'qwen' && (
+              <>
+                <li>DashScope / Qwen OpenAI 兼容 API</li>
+                <li>API Key 可使用环境变量 DASHSCOPE_API_KEY 兜底</li>
               </>
             )}
             <li>可配置频率限制（默认 10 秒）</li>

@@ -160,7 +160,7 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	)
 
 	// 创建 Agent Loop
-	caller := NewAICallerFromConfig(cfg)
+	caller := s.configService.NewCallerWithFallback(cfg, "summary")
 	loop := NewAIAgentLoop(caller, 10)
 	loop.RegisterTool(NewQueryModuleResourcesTool(s.db))
 	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db))
@@ -256,7 +256,7 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 		string(task.Status),
 	)
 
-	caller := NewAICallerFromConfig(cfg)
+	caller := s.configService.NewCallerWithFallback(cfg, "summary")
 	loop := NewAIAgentLoop(caller, 10)
 	loop.RegisterTool(NewQueryModuleResourcesTool(s.db))
 	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db))

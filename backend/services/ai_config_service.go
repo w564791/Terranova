@@ -60,6 +60,10 @@ func (s *AIConfigService) GetEnabledConfig() (*models.AIConfig, error) {
 // 优先级规则：
 // 1. 先查找专用配置（enabled=false，capabilities 包含指定能力），按优先级降序
 // 2. 如果没找到，再查找默认配置（enabled=true，capabilities 包含 "*"）
+//
+// 注意：返回的配置同时承载 Provider（模型/凭证）与 Skill（composition/prompt）。
+// 运行时访问失败时请用 ResolveProviderFallback / NewCallerWithFallback /
+// callAIForCapability，仅切换 Provider，保留任务 Skill。
 func (s *AIConfigService) GetConfigForCapability(capability string) (*models.AIConfig, error) {
 	// 1. 查找专用配置（enabled=false，按优先级降序，ID 升序）
 	var configs []models.AIConfig
@@ -77,24 +81,196 @@ func (s *AIConfigService) GetConfigForCapability(capability string) (*models.AIC
 		return &configs[0], nil
 	}
 
-	// 2. 查找默认配置（enabled=true，capabilities 包含 "*"）
-	var defaultConfig models.AIConfig
-	err = s.db.Where("enabled = ? AND capabilities @> ?", true, `["*"]`).
-		First(&defaultConfig).Error
-
-	if err == nil {
-		s.fillAPIKeyFallback(&defaultConfig)
+	// 2. 查找默认配置（全局兜底，enabled=true，capabilities 包含 "*"）
+	defaultConfig, err := s.GetDefaultConfig()
+	if err == nil && defaultConfig != nil {
 		log.Printf("[AIConfigService] capability=%s selected default config_id=%d service=%s model=%s cache_enabled=%v optimized=%v",
 			capability, defaultConfig.ID, defaultConfig.ServiceType, defaultConfig.ModelID, defaultConfig.CacheEnabled, defaultConfig.UseOptimized)
-		return &defaultConfig, nil
+		return defaultConfig, nil
 	}
 
 	// 3. 如果都没找到，返回错误
-	if err == gorm.ErrRecordNotFound {
+	if err == gorm.ErrRecordNotFound || defaultConfig == nil {
 		return nil, fmt.Errorf("未找到支持 %s 的 AI 配置", capability)
 	}
 
 	return nil, err
+}
+
+// GetDefaultConfig 获取全局兜底 AI 配置（enabled=true 且 capabilities 含 "*"）
+// 注意：这是访问层兜底，不是任务默认 Skill 配置。
+func (s *AIConfigService) GetDefaultConfig() (*models.AIConfig, error) {
+	var defaultConfig models.AIConfig
+	err := s.db.Where("enabled = ? AND capabilities @> ?", true, `["*"]`).
+		First(&defaultConfig).Error
+	if err != nil {
+		return nil, err
+	}
+	s.fillAPIKeyFallback(&defaultConfig)
+	return &defaultConfig, nil
+}
+
+// isDefaultAIConfig 判断是否已是全局兜底配置
+func isDefaultAIConfig(cfg *models.AIConfig) bool {
+	if cfg == nil || !cfg.Enabled {
+		return false
+	}
+	for _, c := range cfg.Capabilities {
+		if c == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAIAccessError 判断是否为 AI Provider 访问失败（可 fallback）
+// 业务错误（输出校验失败、JSON 格式等）返回 false，不应切换模型重试。
+func IsAIAccessError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+
+	// 明确的业务/内容错误：不 fallback
+	businessHints := []string{
+		"output validation",
+		"输出格式",
+		"输出不是有效",
+		"缺少 execution_summary",
+		"未返回有效的 hcl",
+		"parse",
+		"unmarshal",
+		"json 格式",
+	}
+	// 仅当错误看起来像内容问题时才排除；API 错误体里也可能含 json 字样，
+	// 因此用更具体的业务提示，而不是裸 "json"。
+	for _, h := range businessHints {
+		if strings.Contains(msg, h) {
+			// 若同时含访问类关键词，仍视为访问错误（例如 "failed to parse API response" 较少）
+			break
+		}
+	}
+
+	accessHints := []string{
+		"accessdenied",
+		"access denied",
+		"unauthorized",
+		"not authorized",
+		"forbidden",
+		"invalid api key",
+		"incorrect api key",
+		"authentication",
+		"unauthenticated",
+		"validationexception",
+		"resourcenotfoundexception",
+		"resourcenotfound",
+		"model not found",
+		"does not have access",
+		"is not authorized to perform",
+		"throttl",
+		"too many requests",
+		"rate limit",
+		"rate exceeded",
+		"service unavailable",
+		"timeout",
+		"deadline exceeded",
+		"context deadline",
+		"connection refused",
+		"connection reset",
+		"no such host",
+		"network is unreachable",
+		"i/o timeout",
+		"tls handshake",
+		"status code 401",
+		"status code 403",
+		"status code 404",
+		"status code 429",
+		"status code 500",
+		"status code 502",
+		"status code 503",
+		"api 返回错误状态码",
+		"api 返回 401",
+		"api 返回 403",
+		"api 返回 404",
+		"api 返回 429",
+		"api 返回 500",
+		"api 返回 502",
+		"api 返回 503",
+		"bedrock invocation failed",
+		"调用 bedrock 失败",
+		"api 请求失败",
+		"failed to load aws config",
+		"无法加载 aws",
+		"unable to locate credentials",
+		"expiredtoken",
+		"security token",
+		"no credential",
+		"ai call failed",
+		"llm call failed",
+	}
+	for _, h := range accessHints {
+		if strings.Contains(msg, h) {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveProviderFallback 在专用 config 访问失败时，解析出可用于重试的 Provider 配置。
+// - embedding 不参与 fallback
+// - 已是 default / 无 default / 非访问错误 → 返回 nil, false
+// - 成功时返回的配置仅切换 Provider 字段；Skill 语义由调用方继续使用原 semantic 配置（prompt 已组装好）
+func (s *AIConfigService) ResolveProviderFallback(capability string, primary *models.AIConfig, callErr error) (*models.AIConfig, bool) {
+	if primary == nil || callErr == nil {
+		return nil, false
+	}
+	if capability == "embedding" {
+		return nil, false
+	}
+	if !IsAIAccessError(callErr) {
+		return nil, false
+	}
+	if isDefaultAIConfig(primary) {
+		return nil, false
+	}
+
+	defaultCfg, err := s.GetDefaultConfig()
+	if err != nil || defaultCfg == nil || defaultCfg.ID == primary.ID {
+		return nil, false
+	}
+
+	// 访问层用 default；语义层（skill）已在 prompt 中，不再从 default 取
+	log.Printf("[AIConfigService] capability=%s provider fallback: primary_id=%d model=%s failed (%v) → default_id=%d model=%s",
+		capability, primary.ID, primary.ModelID, callErr, defaultCfg.ID, defaultCfg.ModelID)
+	return defaultCfg, true
+}
+
+// NewCallerWithFallback 创建带 Provider 级 fallback 的 AICaller。
+// 主 caller 使用 skillCfg 的模型/凭证；访问失败时自动切换到 default 的模型/凭证。
+// Skill / system prompt 由调用方事先用 skillCfg 组装，fallback 不改变语义。
+func (s *AIConfigService) NewCallerWithFallback(skillCfg *models.AIConfig, capability string) AICaller {
+	if skillCfg == nil {
+		return NewAICallerFromConfig(&models.AIConfig{ServiceType: "bedrock"})
+	}
+	primary := NewAICallerFromConfig(skillCfg)
+	if capability == "embedding" || isDefaultAIConfig(skillCfg) {
+		return primary
+	}
+
+	defaultCfg, err := s.GetDefaultConfig()
+	if err != nil || defaultCfg == nil || defaultCfg.ID == skillCfg.ID {
+		return primary
+	}
+
+	return &FallbackAICaller{
+		primary:      primary,
+		fallback:     NewAICallerFromConfig(defaultCfg),
+		capability:   capability,
+		primaryID:    skillCfg.ID,
+		primaryModel: skillCfg.ModelID,
+		fallbackID:   defaultCfg.ID,
+		fallbackModel: defaultCfg.ModelID,
+	}
 }
 
 // PriorityUpdate 优先级更新结构
@@ -176,6 +352,16 @@ func (s *AIConfigService) GetConfigByID(id uint) (*models.AIConfig, error) {
 
 // CreateConfig 创建新的 AI 配置
 func (s *AIConfigService) CreateConfig(cfg *models.AIConfig, forceUpdate bool) error {
+	if cfg.ServiceType == "grok" {
+		if cfg.BaseURL == "" {
+			cfg.BaseURL = DefaultGrokBaseURL
+		}
+		cfg.GrokReasoningEffort = NormalizeGrokReasoningEffort(cfg.GrokReasoningEffort)
+		if cfg.APIKey == "" {
+			cfg.APIKey = appconfig.Load().AI.XAIAPIKey
+		}
+	}
+
 	// 先测试配置是否有效
 	if err := s.TestConfig(cfg); err != nil {
 		return fmt.Errorf("配置测试失败: %w", err)
@@ -240,6 +426,15 @@ func (s *AIConfigService) UpdateConfig(id uint, cfg *models.AIConfig, forceUpdat
 	if testCfg.APIKey == "" && testCfg.ServiceType == "qwen" {
 		testCfg.APIKey = appconfig.Load().AI.DashScopeAPIKey
 	}
+	if testCfg.APIKey == "" && testCfg.ServiceType == "grok" {
+		testCfg.APIKey = appconfig.Load().AI.XAIAPIKey
+	}
+	if testCfg.ServiceType == "grok" {
+		if testCfg.BaseURL == "" {
+			testCfg.BaseURL = DefaultGrokBaseURL
+		}
+		testCfg.GrokReasoningEffort = NormalizeGrokReasoningEffort(cfg.GrokReasoningEffort)
+	}
 
 	// 先测试配置是否有效
 	if err := s.TestConfig(testCfg); err != nil {
@@ -295,6 +490,12 @@ func (s *AIConfigService) UpdateConfig(id uint, cfg *models.AIConfig, forceUpdat
 	// Extended Thinking 配置
 	existing.ThinkingEnabled = cfg.ThinkingEnabled
 	existing.ThinkingBudgetTokens = cfg.ThinkingBudgetTokens
+	// Grok reasoning effort
+	if cfg.ServiceType == "grok" {
+		existing.GrokReasoningEffort = NormalizeGrokReasoningEffort(cfg.GrokReasoningEffort)
+	} else {
+		existing.GrokReasoningEffort = cfg.GrokReasoningEffort
+	}
 	// Prompt Caching 配置
 	existing.CacheEnabled = cfg.CacheEnabled
 
@@ -488,6 +689,18 @@ func (s *AIConfigService) TestConfig(cfg *models.AIConfig) error {
 	switch cfg.ServiceType {
 	case "bedrock":
 		return s.testBedrock(cfg.AWSRegion, cfg.ModelID, testPrompt)
+	case "grok":
+		// 连通性探测：走公共 CallGrokSimple（max_tokens 小）
+		_, err := CallGrokSimple(
+			context.Background(),
+			cfg.BaseURL,
+			cfg.APIKey,
+			cfg.ModelID,
+			cfg.GrokReasoningEffort,
+			testPrompt,
+			100,
+		)
+		return err
 	case "openai", "azure_openai", "qwen", "ollama":
 		return s.testOpenAICompatible(cfg.BaseURL, cfg.APIKey, cfg.ModelID, testPrompt)
 	default:
@@ -625,6 +838,14 @@ func (s *AIConfigService) fillAPIKeyFallback(cfg *models.AIConfig) {
 	switch cfg.ServiceType {
 	case "qwen":
 		cfg.APIKey = appconfig.Load().AI.DashScopeAPIKey
+	case "grok":
+		cfg.APIKey = appconfig.Load().AI.XAIAPIKey
+	}
+	if cfg.ServiceType == "grok" {
+		cfg.BaseURL = ResolveGrokBaseURL(cfg.BaseURL)
+	}
+	if cfg.ServiceType == "grok" {
+		cfg.GrokReasoningEffort = NormalizeGrokReasoningEffort(cfg.GrokReasoningEffort)
 	}
 }
 

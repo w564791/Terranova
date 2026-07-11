@@ -219,7 +219,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 	// 9. 调用 AI 生成配置
 	aiTimer := NewTimer()
 	log.Printf("[AICMDBSkillService] 步骤 4: 调用 AI 生成配置")
-	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
+	aiResult, err := s.aiFormService.callAIForCapability("form_generation", aiConfig, assembleResult.Prompt)
 	RecordAICallDuration("form_generation", "ai_call", aiTimer.ElapsedMs())
 	log.Printf("[AICMDBSkillService] [耗时] 步骤 4 AI 调用: %.0fms", aiTimer.ElapsedMs())
 	if err != nil {
@@ -434,7 +434,7 @@ func (s *AICMDBSkillService) shouldUseCMDBByAI(userDescription string) (bool, st
 	prompt := s.buildCMDBNeedAssessmentPromptWithSkill(aiConfig, userDescription)
 
 	// 调用 AI
-	result, err := s.aiFormService.callAI(aiConfig, prompt)
+	result, err := s.aiFormService.callAIForCapability("cmdb_need_assessment", aiConfig, prompt)
 	if err != nil {
 		log.Printf("[AICMDBSkillService] AI 调用失败，跳过 AI 判断: %v", err)
 		return false, ""
@@ -982,7 +982,7 @@ func (s *AICMDBSkillService) selectDomainSkillsByAI(userDescription string, phas
 
 	// 4. 调用 AI
 	aiTimer := NewTimer()
-	result, err := s.aiFormService.callAI(aiConfig, prompt)
+	result, err := s.aiFormService.callAIForCapability("domain_skill_selection", aiConfig, prompt)
 	RecordAICallDuration("domain_skill_selection", "ai_call", aiTimer.ElapsedMs())
 	log.Printf("[AICMDBSkillService] [耗时] Domain Skill 选择 AI 调用: %.0fms", aiTimer.ElapsedMs())
 	if err != nil {
@@ -1235,7 +1235,7 @@ func (s *AICMDBSkillService) assessCMDBWithQueryPlan(userDescription string) (*C
 	prompt := s.buildCMDBAssessmentWithQueryPlanPrompt(aiConfig, userDescription)
 
 	// 调用 AI
-	result, err := s.aiFormService.callAI(aiConfig, prompt)
+	result, err := s.aiFormService.callAIForCapability("cmdb_need_assessment", aiConfig, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}
@@ -1742,7 +1742,7 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkills(
 	// 6. 调用 AI 生成配置
 	aiTimer := NewTimer()
 	log.Printf("[AICMDBSkillService] 步骤 5: 调用 AI 生成配置")
-	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
+	aiResult, err := s.aiFormService.callAIForCapability("form_generation", aiConfig, assembleResult.Prompt)
 	RecordAICallDuration("form_generation_optimized", "ai_call", aiTimer.ElapsedMs())
 	log.Printf("[AICMDBSkillService] [耗时] 步骤 5 AI 调用: %.0fms", aiTimer.ElapsedMs())
 	if err != nil {

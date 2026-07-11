@@ -247,8 +247,8 @@ func (s *AIFormService) generateConfigInternal(
 		}
 	}
 
-	// 9. 调用 AI
-	result, err := s.callAI(aiConfig, prompt)
+	// 9. 调用 AI（访问失败时 fallback 到 default Provider，保留任务 skill prompt）
+	result, err := s.callAIForCapability("form_generation", aiConfig, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}
@@ -679,11 +679,35 @@ func (s *AIFormService) callAI(cfg *models.AIConfig, prompt string) (string, err
 	switch cfg.ServiceType {
 	case "bedrock":
 		return s.callBedrockForForm(cfg.AWSRegion, cfg.ModelID, prompt, cfg.UseInferenceProfile, cfg.CacheEnabled)
+	case "grok":
+		return CallGrokSimple(
+			context.Background(),
+			cfg.BaseURL,
+			cfg.APIKey,
+			cfg.ModelID,
+			cfg.GrokReasoningEffort,
+			prompt,
+			4000,
+		)
 	case "openai", "azure_openai", "qwen", "ollama":
 		return s.callOpenAICompatibleForForm(cfg.BaseURL, cfg.APIKey, cfg.ModelID, prompt)
 	default:
 		return "", fmt.Errorf("不支持的服务类型: %s", cfg.ServiceType)
 	}
+}
+
+// callAIForCapability 调用 AI；专用 config 访问失败时 fallback 到 default Provider。
+// prompt 应由任务自身 skill/composition 事先组装好，fallback 只换访问层。
+func (s *AIFormService) callAIForCapability(capability string, skillCfg *models.AIConfig, prompt string) (string, error) {
+	result, err := s.callAI(skillCfg, prompt)
+	if err == nil {
+		return result, nil
+	}
+	fallbackCfg, ok := s.configService.ResolveProviderFallback(capability, skillCfg, err)
+	if !ok {
+		return "", err
+	}
+	return s.callAI(fallbackCfg, prompt)
 }
 
 // callBedrockForForm 调用 Bedrock API 生成表单配置
@@ -1208,9 +1232,9 @@ func (s *AIFormService) AssertIntent(userID string, userInput string) (*IntentAs
 	prompt := s.buildIntentAssertionPrompt(aiConfig, userInput)
 	log.Printf("[AIFormService] Prompt 长度: %d 字符", len(prompt))
 
-	// 3. 调用 AI
+	// 3. 调用 AI（访问失败时 fallback 到 default Provider，保留任务 skill prompt）
 	log.Printf("[AIFormService] 正在调用 AI 进行意图断言...")
-	result, err := s.callAI(aiConfig, prompt)
+	result, err := s.callAIForCapability("intent_assertion", aiConfig, prompt)
 	if err != nil {
 		log.Printf("[AIFormService] 意图断言 AI 调用失败: %v", err)
 		log.Printf("[AIFormService] ========== 意图断言结束（失败）==========")

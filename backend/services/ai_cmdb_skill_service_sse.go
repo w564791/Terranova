@@ -169,7 +169,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 	// 步骤 5: AI 生成
 	reportProgress(5, "AI生成", "正在调用 AI 生成配置...")
 	aiTimer := NewTimer()
-	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
+	aiResult, err := s.aiFormService.callAIForCapability("form_generation", aiConfig, assembleResult.Prompt)
 	RecordAICallDuration("form_generation", "ai_call", aiTimer.ElapsedMs())
 	if err != nil {
 		IncAICallCount("form_generation", "ai_error")
@@ -574,7 +574,7 @@ func (s *AICMDBSkillService) generateWithCMDBDataAndSkillsWithProgress(
 	// 步骤 5: AI 生成
 	reportProgress(5, "AI生成", "正在调用 AI 生成配置...", completedSteps)
 	aiTimer := NewTimer()
-	aiResult, err := s.aiFormService.callAI(aiConfig, assembleResult.Prompt)
+	aiResult, err := s.aiFormService.callAIForCapability("form_generation", aiConfig, assembleResult.Prompt)
 	RecordAICallDuration("form_generation_optimized", "ai_call", aiTimer.ElapsedMs())
 	if err != nil {
 		IncAICallCount("form_generation_optimized", "ai_error")

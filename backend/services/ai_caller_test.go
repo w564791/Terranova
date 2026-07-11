@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"iac-platform/internal/models"
 	"testing"
+	"time"
 )
 
 func TestBuildBedrockToolCallingRequest(t *testing.T) {
@@ -625,3 +626,97 @@ func TestNewAICallerFromConfig_QwenType(t *testing.T) {
 
 // suppress unused import warning
 var _ = json.Marshal
+
+func TestNormalizeGrokReasoningEffort(t *testing.T) {
+	cases := map[string]string{
+		"":       GrokEffortHigh,
+		"LOW":    GrokEffortLow,
+		"medium": GrokEffortMedium,
+		"high":   GrokEffortHigh,
+		"xhigh":  GrokEffortHigh, // 不支持 xhigh，回落 high
+		"none":   GrokEffortHigh,
+	}
+	for in, want := range cases {
+		if got := NormalizeGrokReasoningEffort(in); got != want {
+			t.Errorf("NormalizeGrokReasoningEffort(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestNewAICallerFromConfig_GrokType(t *testing.T) {
+	cfg := &models.AIConfig{
+		ServiceType:         "grok",
+		BaseURL:             "",
+		APIKey:              "xai-test",
+		ModelID:             "grok-4.5",
+		GrokReasoningEffort: "medium",
+	}
+	caller := NewAICallerFromConfig(cfg)
+	gc, ok := caller.(*GrokCaller)
+	if !ok {
+		t.Fatalf("expected *GrokCaller, got %T", caller)
+	}
+	if gc.baseURL != DefaultGrokBaseURL {
+		t.Errorf("baseURL=%q want default %q", gc.baseURL, DefaultGrokBaseURL)
+	}
+	if gc.reasoningEffort != GrokEffortMedium {
+		t.Errorf("effort=%q want medium", gc.reasoningEffort)
+	}
+	if gc.modelID != "grok-4.5" {
+		t.Errorf("model=%q", gc.modelID)
+	}
+}
+
+func TestGrokCaller_buildGrokRequest(t *testing.T) {
+	c := &GrokCaller{
+		OpenAICaller: OpenAICaller{
+			baseURL:     DefaultGrokBaseURL,
+			apiKey:      "k",
+			modelID:     "grok-4.5",
+			serviceType: "grok",
+		},
+		reasoningEffort: GrokEffortLow,
+	}
+	body := c.buildGrokRequest([]AgentMessage{{Role: "user", Content: "hi"}}, nil)
+	if body["reasoning_effort"] != GrokEffortLow {
+		t.Errorf("reasoning_effort=%v", body["reasoning_effort"])
+	}
+	if _, hasTemp := body["temperature"]; hasTemp {
+		t.Error("temperature should be removed for reasoning models")
+	}
+	if body["model"] != "grok-4.5" {
+		t.Errorf("model=%v", body["model"])
+	}
+}
+
+func TestGrokTimeoutForEffort(t *testing.T) {
+	if GrokTimeoutForEffort(GrokEffortLow) != 120*time.Second {
+		t.Fatal("low timeout")
+	}
+	if GrokTimeoutForEffort(GrokEffortMedium) != 300*time.Second {
+		t.Fatal("medium timeout")
+	}
+	if GrokTimeoutForEffort(GrokEffortHigh) != 600*time.Second {
+		t.Fatal("high timeout")
+	}
+}
+
+func TestResolveGrokBaseURL(t *testing.T) {
+	if ResolveGrokBaseURL("") != DefaultGrokBaseURL {
+		t.Fatal("empty should default")
+	}
+	if ResolveGrokBaseURL("https://custom.example/v1") != "https://custom.example/v1" {
+		t.Fatal("custom should keep")
+	}
+}
+
+func TestApplyGrokReasoningToBody(t *testing.T) {
+	body := map[string]interface{}{"temperature": 0.7, "model": "grok-4.5"}
+	applyGrokReasoningToBody(body, "medium")
+	if body["reasoning_effort"] != GrokEffortMedium {
+		t.Fatalf("effort=%v", body["reasoning_effort"])
+	}
+	if _, ok := body["temperature"]; ok {
+		t.Fatal("temperature should be deleted")
+	}
+}

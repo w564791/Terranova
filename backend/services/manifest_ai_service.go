@@ -198,7 +198,7 @@ func (s *ManifestAIService) GenerateResourceWithProgress(
 	}
 
 	aiTimer := NewTimer()
-	aiResult, err := s.aiFormService.callAI(aiConfig, finalPrompt)
+	aiResult, err := s.aiFormService.callAIForCapability("manifest_resource_generation", aiConfig, finalPrompt)
 	RecordAICallDuration("manifest_resource_generation", "ai_call", aiTimer.ElapsedMs())
 	if err != nil {
 		IncAICallCount("manifest_resource_generation", "ai_error")

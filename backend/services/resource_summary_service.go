@@ -99,7 +99,7 @@ func (s *ResourceSummaryService) generateSummariesForResources(ctx context.Conte
 	}
 
 	// 创建 AI caller
-	caller := NewAICallerFromConfig(cfg)
+	caller := s.configService.NewCallerWithFallback(cfg, "cmdb_resource_summary")
 	rateLimitSleep := time.Duration(cfg.RateLimitSeconds) * time.Second
 	if rateLimitSleep < time.Second {
 		rateLimitSleep = time.Second
