@@ -271,13 +271,13 @@
 .periodButtonActive {
   background: var(--brand);
   border-color: var(--brand);
-  color: var(--surface);
+  color: #fff;
 }
 
 .periodButtonActive:hover {
   background: var(--brand-400);
   border-color: var(--brand-400);
-  color: var(--surface);
+  color: #fff;
 }
 
 .searchMetricsRow {

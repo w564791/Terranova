@@ -300,10 +300,10 @@
 
 .saveButton {
   padding: 10px 24px;
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
   border-radius: var(--radius-md);
-  color: var(--surface);
+  color: #fff;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -311,8 +311,8 @@
 }
 
 .saveButton:hover:not(:disabled) {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .saveButton:disabled {
@@ -384,10 +384,10 @@
 
 .primaryButton {
   padding: 10px 20px;
-  background: var(--brand-ink);
-  border: 1px solid var(--brand-ink);
+  background: var(--brand);
+  border: 1px solid var(--brand);
   border-radius: var(--radius-md);
-  color: var(--surface);
+  color: #fff;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -395,8 +395,8 @@
 }
 
 .primaryButton:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .cancelButton {
@@ -421,7 +421,7 @@
   background: var(--red-hover);
   border: 1px solid var(--red-hover);
   border-radius: var(--radius-md);
-  color: var(--surface);
+  color: #fff;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -710,7 +710,7 @@
   background: var(--red-hover);
   border: 1px solid var(--red-hover);
   border-radius: var(--radius-md);
-  color: var(--surface);
+  color: #fff;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -772,7 +772,7 @@
 }
 
 .toggle input:checked + .toggleSlider {
-  background-color: var(--brand-ink);
+  background-color: var(--brand);
 }
 
 .toggle input:checked + .toggleSlider:before {

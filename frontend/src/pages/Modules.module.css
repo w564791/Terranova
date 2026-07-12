@@ -56,7 +56,7 @@
 }
 
 .addButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .loading {
@@ -424,7 +424,7 @@
 }
 
 .retryButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 /* 空状态 */

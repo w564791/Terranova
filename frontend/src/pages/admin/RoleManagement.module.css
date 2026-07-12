@@ -657,12 +657,12 @@
 }
 
 .button.primary {
-  background: var(--green);
+  background: var(--brand);
   color: #fff;
 }
 
 .button.primary:hover:not(:disabled) {
-  background: var(--green-hover);
+  background: var(--brand-ink);
 }
 
 .button.primary:disabled {

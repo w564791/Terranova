@@ -229,7 +229,7 @@
 }
 
 .submitButton {
-  background: var(--green);
+  background: var(--brand);
   color: #fff;
   border: none;
   padding: 10px 24px;
@@ -241,7 +241,7 @@
 }
 
 .submitButton:hover {
-  background: var(--green-hover);
+  background: var(--brand-ink);
 }
 
 /* 成员列表 */

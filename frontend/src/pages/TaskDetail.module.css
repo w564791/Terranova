@@ -316,7 +316,7 @@
   gap: 12px;
 }
 
-/* 底部操作按钮 — 对齐 demo/button.html
+/* 底部操作按钮 — 色板对齐 demo；尺寸用原 14px + 10/20 padding（约 40px 高）
  * solid brand = 主操作；neutral outline = 次操作；outline red = 危险次操作
  */
 .actionBtn {
@@ -324,16 +324,18 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   font-family: var(--font-sans, inherit);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
   white-space: nowrap;
-  line-height: 1.5;
+  line-height: 1.4;
+  box-sizing: border-box;
 }
 
 .actionBtn:disabled {
@@ -574,16 +576,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   border: 1px solid var(--line-2);
   background: var(--surface);
   color: var(--ink);
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .btnCancel:hover:not(:disabled) {
@@ -606,16 +611,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   border: 1px solid transparent;
   background: var(--brand);
   color: #fff;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .btnConfirm:hover:not(:disabled) {
@@ -927,12 +935,13 @@
 }
 
 .toggleButtonActive {
-  color: var(--surface);
-  background: var(--brand-ink);
+  color: #fff;
+  background: var(--brand);
 }
 
 .toggleButtonActive:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
+  color: #fff;
 }
 
 /* Log Tabs for Classic mode */
@@ -1034,16 +1043,19 @@
 .retryButton {
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   background: var(--brand);
   color: #fff;
   border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   transition: background 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .retryButton:hover {
@@ -1058,16 +1070,19 @@
 .downloadButton {
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   background: transparent;
   color: var(--brand-ink);
   border: 1px solid var(--brand-line);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .downloadButton:hover {
@@ -1646,14 +1661,14 @@
 }
 
 .viewModeBtnActive {
-  color: var(--surface);
-  background: var(--brand-ink);
+  color: #fff;
+  background: var(--brand);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .viewModeBtnActive:hover {
-  color: var(--surface);
-  background: var(--brand-700);
+  color: #fff;
+  background: var(--brand-ink);
 }
 
 /* Classic View Container */

@@ -450,9 +450,9 @@
 }
 
 .saveButton {
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  color: #fff;
   padding: 10px 24px;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -462,8 +462,8 @@
 }
 
 .saveButton:hover:not(:disabled) {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .saveButton:disabled {

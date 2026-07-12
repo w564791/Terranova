@@ -266,7 +266,7 @@
   border: none;
   border-radius: 6px;
   font-size: 14px;
-  color: var(--surface);
+  color: #fff;
   cursor: pointer;
   transition: background 0.2s;
 }

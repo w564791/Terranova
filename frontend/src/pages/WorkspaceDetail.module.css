@@ -191,13 +191,13 @@
 }
 
 .newRunButton {
-  background: var(--brand-ink);
-  border-color: var(--brand-ink);
-  color: var(--surface);
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .newRunButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .pageHeaderMeta {
@@ -1051,9 +1051,9 @@ a.stateRow {
 }
 
 .filterActive {
-  background: var(--brand-ink);
-  border-color: var(--brand-ink);
-  color: var(--surface);
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .filterActive:hover {
@@ -2033,9 +2033,9 @@ a.stateRow {
 }
 
 .downloadButton {
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  color: #fff;
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -2045,8 +2045,8 @@ a.stateRow {
 }
 
 .downloadButton:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .statesTable {
@@ -2359,9 +2359,9 @@ a.stateRow {
 }
 
 .primaryButton {
-  background: var(--brand-ink);
-  border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  color: #fff;
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -2371,8 +2371,8 @@ a.stateRow {
 }
 
 .primaryButton:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 /* 响应式设计 */
@@ -3218,7 +3218,7 @@ a.stateRow {
 
 .triggerCheckButton {
   padding: 8px 16px;
-  background: var(--brand-ink);
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: var(--radius-md);
@@ -3229,7 +3229,7 @@ a.stateRow {
 }
 
 .triggerCheckButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .triggerCheckButton:disabled {

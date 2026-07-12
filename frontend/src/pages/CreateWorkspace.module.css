@@ -342,13 +342,13 @@
 }
 
 .submitButton {
-  background: var(--brand-ink);
-  color: var(--color-white, var(--surface));
+  background: var(--brand);
+  color: #fff;
   min-width: 160px;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .cancelButton:disabled,

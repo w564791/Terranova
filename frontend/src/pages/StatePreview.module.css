@@ -177,13 +177,13 @@
 }
 
 .newRunButton {
-  background: var(--brand-ink);
-  border-color: var(--brand-ink);
-  color: var(--surface);
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .newRunButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 /* State内容区 */
@@ -223,9 +223,9 @@
 }
 
 .downloadButton {
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  color: #fff;
   padding: 8px 16px;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -235,8 +235,8 @@
 }
 
 .downloadButton:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .rollbackButton {
@@ -310,9 +310,9 @@
 }
 
 .viewTaskButton {
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  color: #fff;
   padding: 8px 16px;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -323,8 +323,8 @@
 }
 
 .viewTaskButton:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .stateMetadata {
@@ -421,9 +421,9 @@
 }
 
 .applyButton {
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  color: #fff;
   padding: 8px 16px;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -433,7 +433,7 @@
 }
 
 .applyButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .learnMoreLink {
@@ -644,9 +644,9 @@
 }
 
 .retrieveButton {
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
-  color: var(--surface);
+  color: #fff;
   padding: 12px 24px;
   border-radius: var(--radius-md);
   font-size: 16px;
@@ -656,8 +656,8 @@
 }
 
 .retrieveButton:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .retryButton {

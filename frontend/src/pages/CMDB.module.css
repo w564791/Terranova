@@ -228,7 +228,7 @@
 
 .searchButton {
   padding: 12px 24px;
-  background: var(--brand-ink);
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -239,7 +239,7 @@
 }
 
 .searchButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .searchButton:disabled {
@@ -1301,7 +1301,7 @@
   display: inline-block;
   margin-left: 8px;
   padding: 4px 12px;
-  background: var(--brand-ink);
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -1310,7 +1310,7 @@
 }
 
 .syncInlineButton:hover {
-  background: var(--brand-700);
+  background: var(--brand-ink);
 }
 
 .syncInlineButton:disabled {

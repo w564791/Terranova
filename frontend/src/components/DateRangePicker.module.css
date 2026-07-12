@@ -145,8 +145,8 @@
 
 .calendar :global(.react-datepicker__day--range-start),
 .calendar :global(.react-datepicker__day--range-end) {
-  background-color: var(--brand-ink);
-  color: var(--surface);
+  background-color: var(--brand);
+  color: #fff;
   font-weight: 600;
 }
 
@@ -227,19 +227,19 @@
 
 .applyButton {
   padding: 6px 16px;
-  background: var(--brand-ink);
+  background: var(--brand);
   border: 1px solid var(--brand-ink);
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 600;
-  color: var(--surface);
+  color: #fff;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .applyButton:hover:not(:disabled) {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .applyButton:disabled {

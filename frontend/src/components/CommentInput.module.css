@@ -62,21 +62,24 @@
   gap: 10px;
 }
 
-/* Cancel — neutral outline */
+/* Cancel — neutral outline（高度与任务页操作按钮一致） */
 .cancelButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line-2);
+  box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .cancelButton:hover:not(:disabled) {
@@ -99,16 +102,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 13px;
+  min-height: 40px;
+  height: auto;
+  padding: 10px 20px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, box-shadow 0.12s;
   border: 1px solid transparent;
   background: var(--brand);
   color: #fff;
+  box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .submitButton:hover:not(:disabled) {
