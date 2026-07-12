@@ -358,6 +358,8 @@ export const CAPABILITIES = {
   DOMAIN_SKILL_SELECTION: 'domain_skill_selection',
   SUMMARY: 'summary',
   CMDB_RESOURCE_SUMMARY: 'cmdb_resource_summary',
+  /** CMDB 搜索页结果友好解读（与 cmdb_query_plan 业务流程分离） */
+  CMDB_SEARCH_SUMMARY: 'cmdb_search_summary',
   SKILL_RULE_EVALUATION: 'skill_rule_evaluation',
   SKILL_SEMANTIC_EVALUATION: 'skill_semantic_evaluation',
   SUMMARY_RULE_EVALUATION: 'summary_rule_evaluation',
@@ -389,6 +391,7 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   [CAPABILITIES.DOMAIN_SKILL_SELECTION]: 'Domain Skill 智能选择',
   [CAPABILITIES.SUMMARY]: '执行摘要',
   [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 资源摘要',
+  [CAPABILITIES.CMDB_SEARCH_SUMMARY]: 'CMDB 搜索结果解读',
   [CAPABILITIES.SKILL_RULE_EVALUATION]: 'Skill 规则评估 (L2)',
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Skill 语义评估 (L3)',
   [CAPABILITIES.SUMMARY_RULE_EVALUATION]: '摘要规则评估 (L2)',
@@ -418,6 +421,7 @@ export const CAPABILITY_DESCRIPTIONS: Record<string, string> = {
   [CAPABILITIES.DOMAIN_SKILL_SELECTION]: '根据用户需求智能选择需要的 Domain Skills（优化 Prompt 长度）',
   [CAPABILITIES.SUMMARY]: 'Plan/Apply 完成后自动生成变更影响分析和执行结果摘要',
   [CAPABILITIES.CMDB_RESOURCE_SUMMARY]: 'CMDB 同步时为资源生成配置摘要，增强向量搜索和变更影响分析',
+  [CAPABILITIES.CMDB_SEARCH_SUMMARY]: '搜索页结果 AI 解读 + 相关性筛查：总览/重点/建议，并剔除明显不相关的召回噪声（与 cmdb_query_plan 业务流程无关）',
   [CAPABILITIES.SKILL_RULE_EVALUATION]: 'Layer 2 规则一致性评估：对照 Skill 定义中的规则，检查 AI 输出是否违反条件逻辑和业务规则',
   [CAPABILITIES.SKILL_SEMANTIC_EVALUATION]: 'Layer 3 语义质量评估：评估 AI 输出的表述质量、信息量和用户可读性',
   [CAPABILITIES.SUMMARY_RULE_EVALUATION]: 'Layer 2 摘要规则评估：检查 CMDB 资源摘要是否严格遵守生成 Prompt 的所有规则',
@@ -832,4 +836,46 @@ export const DEFAULT_CAPABILITY_PROMPTS: Record<string, string> = {
 
 【注意】
 此能力的 Prompt 由系统自动生成，无需手动配置。如需自定义评估标准，可在此处编写完整 Prompt，系统将使用自定义版本替代默认版本。`,
+
+  [CAPABILITIES.CMDB_SEARCH_SUMMARY]: `你是 CMDB 资源搜索结果解读与筛查助手。根据用户查询和召回的资源列表：
+1) 用简洁中文帮助用户理解结果
+2) 剔除与查询意图明显不相关的条目（筛查）
+
+【严格规则】
+1. 只基于提供的资源数据作答，禁止编造不存在的资源、ID、账号或配置
+2. 禁止输出 markdown 标题（#）、代码块、表格
+3. overview 不超过 120 字；highlights 最多 5 条；groups 最多 6 组；suggestions 最多 4 条
+4. 必须返回合法 JSON，不要有任何额外文字或 markdown 包裹
+5. 若结果为空：overview 说明未找到，suggestions 给出 2-4 条改写建议；highlights/groups/dropped 为空数组
+6. 若结果非空：概述命中情况与主要分布，highlights 指出最值得关注的资源
+7. 筛查（dropped）须做主题对齐：查询含 policy 时剔除无策略语义的条目（如仅 versioning）；禁止用「同桶」当保留理由
+8. dropped 中的 index 必须使用资源列表里每条的 index 字段（0 起），reason 不超过 40 字
+9. 不要把全部结果都 drop 掉；若筛后为空，保留相似度最高的 1-3 条并在 overview 说明
+10. suggestions 必须是可直接填入搜索框的「纯查询词」，禁止说明/引导前缀
+   - 正确: "test-ken-manifest policy"、"s3 public"
+   - 错误: "可查询存储桶策略详情：test-ken-manifest policy"
+
+【用户查询】
+{query}
+
+【结果数量】
+{result_count}
+
+【资源列表 JSON】（每条含 index，筛查时用该 index）
+{results_json}
+
+【输出格式】
+{
+  "overview": "一句话总览（可提及剔除了几条不相关结果）",
+  "highlights": [
+    {"name": "资源显示名或 ID", "reason": "为何值得关注（不超过40字）"}
+  ],
+  "groups": [
+    {"label": "分组名如类型/区域/账号", "count": 1}
+  ],
+  "suggestions": ["test-ken-manifest policy"],
+  "dropped": [
+    {"index": 0, "reason": "剔除原因（不超过40字）"}
+  ]
+}`,
 };

@@ -156,6 +156,18 @@ func (w *EmbeddingWorker) processPendingTasks() {
 		return
 	}
 
+	// 先快速检查是否有待处理任务，避免无任务时查询配置和打日志
+	expireTime := time.Now().AddDate(0, 0, -w.expireDays)
+	var hasTask bool
+	w.db.Model(&models.EmbeddingTask{}).
+		Where("status = ? AND retry_count < ? AND created_at > ?",
+			models.EmbeddingTaskStatusPending, w.maxRetries, expireTime).
+		Select("count(*) > 0").
+		Find(&hasTask)
+	if !hasTask {
+		return
+	}
+
 	// 检查 embedding 配置是否可用
 	configStatus := w.embeddingService.GetConfigStatus()
 	if !configStatus.Configured || !configStatus.HasAPIKey {
@@ -170,8 +182,6 @@ func (w *EmbeddingWorker) processPendingTasks() {
 	if config != nil && config.EmbeddingBatchEnabled && config.EmbeddingBatchSize > 0 {
 		batchSize = config.EmbeddingBatchSize // 使用 AI Config 的 batch size
 	}
-
-	expireTime := time.Now().AddDate(0, 0, -w.expireDays)
 
 	for {
 		// 获取一批待处理的任务（排除过期任务）

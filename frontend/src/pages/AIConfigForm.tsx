@@ -1845,7 +1845,7 @@ const AIConfigForm = () => {
             {/* 专用场景选择：预置 + 自定义 */}
             <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 500 }}>专用场景（可多选）</span>
-              {!formData.enabled && (
+              {!formData.enabled ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1864,6 +1864,10 @@ const AIConfigForm = () => {
                 >
                   {showAddCapability ? '收起' : '+ 新增场景'}
                 </button>
+              ) : (
+                <span style={{ fontSize: '12px', color: '#999' }}>
+                  默认配置（capabilities=*）无需新增场景；请创建「非默认」专用配置
+                </span>
               )}
             </div>
 

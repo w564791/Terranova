@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
 import api from '../services/api';
-import cmdbService, { externalSourceService, getWorkspaceEmbeddingStatus, rebuildWorkspaceEmbedding, warmupEmbeddingCache, getEmbeddingCacheStats, getWarmupProgress, type EmbeddingStatus, type VectorSearchResponse, type EmbeddingCacheStats, type WarmupProgress } from '../services/cmdb';
+import cmdbService, { externalSourceService, getWorkspaceEmbeddingStatus, rebuildWorkspaceEmbedding, warmupEmbeddingCache, getEmbeddingCacheStats, getWarmupProgress, type EmbeddingStatus, type VectorSearchResponse, type EmbeddingCacheStats, type WarmupProgress, type SearchSummaryResult, type SearchSummaryProgressEvent } from '../services/cmdb';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
 import type {
@@ -27,6 +27,41 @@ const copyToClipboard = async (text: string) => {
   } catch {
     return false;
   }
+};
+
+/**
+ * 清洗 AI「试试」建议：去掉「可查询XXX：」类说明前缀，只保留可回填搜索框的查询词。
+ * 例: "可查询存储桶策略详情：test-ken-manifest policy" → "test-ken-manifest policy"
+ */
+const normalizeAISearchSuggestion = (raw: string): string => {
+  let s = (raw || '').trim().replace(/^["'`「」『』“”]+|["'`「」『』“”]+$/g, '');
+  if (!s) return '';
+
+  // 中文说明 + 冒号 + 查询词 → 取右侧
+  for (const sep of ['：', ':'] as const) {
+    const i = s.lastIndexOf(sep);
+    if (i < 0) continue;
+    const left = s.slice(0, i).trim();
+    const right = s.slice(i + sep.length).trim();
+    if (right && /[\u4e00-\u9fff]/.test(left)) {
+      s = right;
+      break;
+    }
+  }
+
+  const prefixes = [
+    '试试搜索', '试试查询', '建议搜索', '建议查询', '可以搜索', '可以查询',
+    '可搜索', '可查询', '请搜索', '请查询',
+    '搜索：', '查询：', '搜索:', '查询:', '试试：', '试试:', '建议：', '建议:',
+    '试试 ', '建议 ', '搜索 ', '查询 ',
+  ];
+  for (const p of prefixes) {
+    if (s.startsWith(p)) {
+      s = s.slice(p.length).trim();
+    }
+  }
+
+  return s.slice(0, 80);
 };
 
 // Copyable value component
@@ -820,6 +855,55 @@ const CMDB: React.FC = () => {
   const [actualSearchMethod, setActualSearchMethod] = useState<'vector' | 'keyword' | 'hybrid' | null>(null); // 实际使用的搜索方式
   const [fallbackReason, setFallbackReason] = useState<string | null>(null); // 降级原因
 
+  // AI 搜索结果解读 + 筛查（cmdb_search_summary，SSE 进度）
+  // 默认屏蔽列表直到 AI 完成；用户可「跳过」立刻看原始结果，AI 仍后台出 summary（跳过后不应用筛选）
+  const [aiSummary, setAiSummary] = useState<SearchSummaryResult | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  const [aiSummaryStep, setAiSummaryStep] = useState<string>('');
+  const [aiSummaryProgress, setAiSummaryProgress] = useState<SearchSummaryProgressEvent | null>(null);
+  const [showDroppedResults, setShowDroppedResults] = useState(false);
+  /** blocked=等 AI；revealed=可展示列表 */
+  const [resultsGate, setResultsGate] = useState<'blocked' | 'revealed'>('revealed');
+  /** 用户点了跳过：展示全部召回，不应用 AI dropped */
+  const [skipAIFilter, setSkipAIFilter] = useState(false);
+  const aiSummaryRequestRef = useRef(0);
+  const aiSummaryAbortRef = useRef<AbortController | null>(null);
+
+  // 是否对列表应用 AI 筛查
+  const applyAIFilter = !skipAIFilter && !!aiSummary?.dropped?.length;
+
+  // AI 筛查：按 dropped.index 拆分主列表 / 已剔除（跳过时不应用）
+  const { keptResults, droppedResults, dropReasonByIndex } = useMemo(() => {
+    const dropped = applyAIFilter ? (aiSummary?.dropped || []) : [];
+    const reasonMap = new Map<number, string>();
+    for (const d of dropped) {
+      if (typeof d.index === 'number' && d.index >= 0) {
+        reasonMap.set(d.index, d.reason || '相关度低');
+      }
+    }
+    // 未应用筛选时：全部当 kept；仍记录 AI 原始 dropped 供 summary 文案（见 aiDroppedCount）
+    if (reasonMap.size === 0) {
+      return {
+        keptResults: searchResults.map((r, i) => ({ result: r, originalIndex: i })),
+        droppedResults: [] as { result: ResourceSearchResult; originalIndex: number; reason: string }[],
+        dropReasonByIndex: reasonMap,
+      };
+    }
+    const kept: { result: ResourceSearchResult; originalIndex: number }[] = [];
+    const droppedList: { result: ResourceSearchResult; originalIndex: number; reason: string }[] = [];
+    searchResults.forEach((r, i) => {
+      if (reasonMap.has(i)) {
+        droppedList.push({ result: r, originalIndex: i, reason: reasonMap.get(i)! });
+      } else {
+        kept.push({ result: r, originalIndex: i });
+      }
+    });
+    return { keptResults: kept, droppedResults: droppedList, dropReasonByIndex: reasonMap };
+  }, [searchResults, aiSummary, applyAIFilter]);
+
+  const aiDroppedCount = aiSummary?.dropped?.length || 0;
+
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -1082,6 +1166,78 @@ const CMDB: React.FC = () => {
     }
   };
 
+  // 跳过 AI 筛选：立刻展示原始召回，AI 继续跑，完成后只补 summary 不筛列表
+  const handleSkipAIFilter = useCallback(() => {
+    setSkipAIFilter(true);
+    setResultsGate('revealed');
+    setShowDroppedResults(false);
+  }, []);
+
+  // AI 解读（SSE）：默认屏蔽列表；完成/失败后放行。跳过时不应用筛选但仍写 summary
+  const fetchAISummary = useCallback(async (query: string, results: ResourceSearchResult[]) => {
+    const requestId = ++aiSummaryRequestRef.current;
+
+    // 取消上一次未完成的 SSE
+    if (aiSummaryAbortRef.current) {
+      aiSummaryAbortRef.current.abort();
+    }
+    const abort = new AbortController();
+    aiSummaryAbortRef.current = abort;
+
+    setAiSummaryLoading(true);
+    setAiSummaryError(null);
+    setAiSummary(null);
+    setAiSummaryStep('准备中…');
+    setAiSummaryProgress(null);
+
+    try {
+      console.log('[CMDB] fetchAISummary SSE start', { query, count: results.length, requestId });
+      const summary = await cmdbService.searchSummarySSE(
+        query,
+        results,
+        (event) => {
+          if (requestId !== aiSummaryRequestRef.current) return;
+          setAiSummaryProgress(event);
+          if (event.step_name) {
+            setAiSummaryStep(
+              event.message
+                ? `${event.step_name}：${event.message}`
+                : event.step_name
+            );
+          }
+        },
+        abort.signal
+      );
+      if (requestId !== aiSummaryRequestRef.current) return;
+      console.log('[CMDB] fetchAISummary SSE complete', summary);
+      setAiSummary(summary);
+      setAiSummaryStep('完成');
+      setAiSummaryError(null);
+      // 未跳过则按筛选结果展示；已跳过则只补 summary，列表保持全量
+      setResultsGate('revealed');
+    } catch (err: unknown) {
+      if (requestId !== aiSummaryRequestRef.current) return;
+      if ((err as { name?: string })?.name === 'AbortError') {
+        console.log('[CMDB] fetchAISummary aborted', requestId);
+        return;
+      }
+      console.warn('[CMDB] AI search summary failed:', err);
+      const message =
+        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ||
+        (err as { message?: string })?.message ||
+        'AI 解读暂不可用';
+      setAiSummaryError(message);
+      setAiSummary(null);
+      setAiSummaryStep('');
+      // 失败时自动放行原始结果，避免一直卡住
+      setResultsGate('revealed');
+    } finally {
+      if (requestId === aiSummaryRequestRef.current) {
+        setAiSummaryLoading(false);
+      }
+    }
+  }, []);
+
   // Perform search (extracted for reuse)
   const performSearch = async (query: string, source: 'manual' | 'auto' = 'manual') => {
     if (!query.trim()) return;
@@ -1101,6 +1257,20 @@ const CMDB: React.FC = () => {
       setActualSearchMethod(null);
       setFallbackReason(null);
       setShowSuggestions(false); // 搜索时隐藏建议
+      // 新搜索时作废上一次 AI 解读 / 筛查
+      if (aiSummaryAbortRef.current) {
+        aiSummaryAbortRef.current.abort();
+        aiSummaryAbortRef.current = null;
+      }
+      aiSummaryRequestRef.current += 1;
+      setAiSummary(null);
+      setAiSummaryError(null);
+      setAiSummaryLoading(false);
+      setAiSummaryStep('');
+      setAiSummaryProgress(null);
+      setShowDroppedResults(false);
+      setSkipAIFilter(false);
+      setResultsGate('blocked'); // 默认屏蔽列表，等 AI 或用户跳过
 
       // 使用混合搜索（向量 + 关键词并行）
       const response = await cmdbService.vectorSearch(query, {
@@ -1108,13 +1278,29 @@ const CMDB: React.FC = () => {
         limit: 50,
         source,
       });
-      setSearchResults(response.results || []);
+      const results = response.results || [];
+      setSearchResults(results);
       setActualSearchMethod(response.search_method);
       setFallbackReason(response.fallback_reason || null);
+
+      // 零结果：无需筛选，直接展示空态；仍跑 AI 给改写建议
+      if (results.length === 0) {
+        setResultsGate('revealed');
+      }
+
+      setAiSummaryLoading(true);
+      setAiSummaryStep('搜索完成，启动 AI 解读…');
+      setSearchLoading(false);
+      void fetchAISummary(query, results);
     } catch (err) {
       console.error('Search failed:', err);
       setSearchResults([]);
       setActualSearchMethod(null);
+      setAiSummary(null);
+      setAiSummaryError(null);
+      setAiSummaryLoading(false);
+      setAiSummaryStep('');
+      setResultsGate('revealed');
     } finally {
       setSearchLoading(false);
     }
@@ -1532,26 +1718,240 @@ const CMDB: React.FC = () => {
                       {fallbackReason && ' (fallback)'}
                     </span>
                   )}
-                  <span className={styles.resultsCount}>
-                    Found {searchResults.length} results
-                  </span>
+                  {resultsGate === 'revealed' && (
+                    <span className={styles.resultsCount}>
+                      {applyAIFilter && droppedResults.length > 0 && !showDroppedResults
+                        ? `显示 ${keptResults.length} / 共 ${searchResults.length} 条`
+                        : `Found ${searchResults.length} results`}
+                      {applyAIFilter && droppedResults.length > 0 && !showDroppedResults && (
+                        <span className={styles.aiFilteredHint}> · AI 已筛掉 {droppedResults.length}</span>
+                      )}
+                      {skipAIFilter && searchResults.length > 0 && (
+                        <span className={styles.aiFilteredHint}> · 已跳过筛选</span>
+                      )}
+                    </span>
+                  )}
+                  {resultsGate === 'blocked' && !searchLoading && (
+                    <span className={styles.resultsCount}>
+                      已召回 {searchResults.length} 条 · 等待 AI 筛查
+                    </span>
+                  )}
                 </div>
               </div>
 
+              {/* AI 结果解读 + 筛查卡片 */}
+              <div className={styles.aiSummaryCard}>
+                <div className={styles.aiSummaryHeader}>
+                  <span className={styles.aiSummaryBadge}>AI 解读</span>
+                  {searchLoading && (
+                    <span className={styles.aiSummaryStatus}>等待搜索结果…</span>
+                  )}
+                  {!searchLoading && aiSummaryLoading && (
+                    <span className={styles.aiSummaryStatus}>
+                      {aiSummaryProgress
+                        ? `步骤 ${aiSummaryProgress.step}/${aiSummaryProgress.total_steps}`
+                        : '分析中…'}
+                    </span>
+                  )}
+                  {!searchLoading && !aiSummaryLoading && aiSummary && (
+                    <span className={styles.aiSummaryStatus}>
+                      {skipAIFilter
+                        ? `解读完成${aiDroppedCount > 0 ? `（建议剔除 ${aiDroppedCount} 条，未应用）` : ''}`
+                        : `解读 + 相关性筛查${aiDroppedCount > 0 ? ` · 已剔除 ${aiDroppedCount} 条` : ''}`}
+                    </span>
+                  )}
+                  {!searchLoading && !aiSummaryLoading && !aiSummary && !aiSummaryError && (
+                    <span className={styles.aiSummaryStatus}>就绪</span>
+                  )}
+                </div>
+
+                {/* 等待 AI：屏蔽列表时给出说明（跳过按钮在下方结果占位区） */}
+                {!searchLoading && resultsGate === 'blocked' && (
+                  <div className={styles.aiResultsGate}>
+                    <p className={styles.aiResultsGateText}>
+                      已召回 <strong>{searchResults.length}</strong> 条结果，正在 AI 筛查与解读。
+                      完成后将展示筛选后的结果与摘要；也可跳过，先看全部原始结果。
+                    </p>
+                  </div>
+                )}
+
+                {/* SSE 步骤条 */}
+                {(aiSummaryLoading || aiSummaryProgress) && (
+                  <div className={styles.aiProgressSteps}>
+                    {['准备上下文', 'AI 解读与筛查', '完成'].map((name, i) => {
+                      const stepNum = i + 1;
+                      const current = aiSummaryProgress?.step || (aiSummaryLoading ? 1 : 0);
+                      const done = !!aiSummary || current > stepNum || (aiSummaryProgress?.type === 'complete');
+                      const active = aiSummaryLoading && current === stepNum;
+                      return (
+                        <div
+                          key={name}
+                          className={`${styles.aiProgressStep} ${done ? styles.aiProgressStepDone : ''} ${active ? styles.aiProgressStepActive : ''}`}
+                        >
+                          <span className={styles.aiProgressDot}>{done ? '✓' : stepNum}</span>
+                          <span>{name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 列表已 blocked 时下方占位区有「结果已暂存…」，不再重复 loading 文案；仅跳过后仍等 summary 时显示 */}
+                {aiSummaryLoading && !aiSummary && resultsGate === 'revealed' && (
+                  <div className={styles.aiSummaryLoading}>
+                    <div className={styles.spinner} style={{ width: 18, height: 18 }} />
+                    <span>{aiSummaryStep || '正在生成结果总览…'}</span>
+                  </div>
+                )}
+                {aiSummaryError && !aiSummaryLoading && (
+                  <div className={styles.aiSummaryError}>
+                    {aiSummaryError.includes('未找到') || aiSummaryError.includes('AI 配置')
+                      ? 'AI 解读未配置：请在 AI Config 中添加 cmdb_search_summary 场景'
+                      : `AI 解读失败：${aiSummaryError}`}
+                    <button
+                      type="button"
+                      className={styles.aiScreeningToggle}
+                      style={{ marginLeft: 8 }}
+                      onClick={() => {
+                        setResultsGate(searchResults.length > 0 ? 'blocked' : 'revealed');
+                        setSkipAIFilter(false);
+                        void fetchAISummary(searchQuery, searchResults);
+                      }}
+                    >
+                      重试
+                    </button>
+                  </div>
+                )}
+                {aiSummary && (
+                  <div className={styles.aiSummaryBody}>
+                    <p className={styles.aiSummaryOverview}>{aiSummary.overview}</p>
+                    {aiSummary.highlights && aiSummary.highlights.length > 0 && (
+                      <ul className={styles.aiSummaryHighlights}>
+                        {aiSummary.highlights.map((h, i) => (
+                          <li key={`${h.name}-${i}`}>
+                            <strong>{h.name}</strong>
+                            {h.reason ? <span> — {h.reason}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {aiSummary.groups && aiSummary.groups.length > 0 && (
+                      <div className={styles.aiSummaryGroups}>
+                        {aiSummary.groups.map((g, i) => (
+                          <span key={`${g.label}-${i}`} className={styles.aiSummaryGroupChip}>
+                            {g.label}
+                            {typeof g.count === 'number' ? ` (${g.count})` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {applyAIFilter && droppedResults.length > 0 && (
+                      <div className={styles.aiScreeningBar}>
+                        <span className={styles.aiScreeningText}>
+                          已自动隐藏 {droppedResults.length} 条低相关结果
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.aiScreeningToggle}
+                          onClick={() => setShowDroppedResults((v) => !v)}
+                        >
+                          {showDroppedResults ? '仅看相关结果' : '显示已剔除'}
+                        </button>
+                      </div>
+                    )}
+                    {skipAIFilter && aiDroppedCount > 0 && (
+                      <div className={styles.aiScreeningBar}>
+                        <span className={styles.aiScreeningText}>
+                          你已跳过筛选，当前展示全部 {searchResults.length} 条；AI 建议剔除 {aiDroppedCount} 条
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.aiScreeningToggle}
+                          onClick={() => {
+                            setSkipAIFilter(false);
+                            setShowDroppedResults(false);
+                          }}
+                        >
+                          应用 AI 筛选
+                        </button>
+                      </div>
+                    )}
+                    {aiSummary.suggestions && aiSummary.suggestions.length > 0 && (
+                      <div className={styles.aiSummarySuggestions}>
+                        <span className={styles.aiSummarySuggestionsLabel}>试试：</span>
+                        {aiSummary.suggestions.map((s, i) => {
+                          // 兜底：清洗「说明：查询词」，避免把引导语回填进搜索框
+                          const query = normalizeAISearchSuggestion(s);
+                          if (!query) return null;
+                          return (
+                            <button
+                              key={`${query}-${i}`}
+                              type="button"
+                              className={styles.aiSummarySuggestionBtn}
+                              title={query !== s ? `将搜索：${query}` : undefined}
+                              onClick={() => {
+                                setSearchQuery(query);
+                                void performSearch(query, 'manual');
+                              }}
+                            >
+                              {query}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 列表：blocked 时不展示（等 AI 或用户跳过） */}
               {searchLoading ? (
                 <div className={styles.loading}>
                   <div className={styles.spinner}></div>
+                </div>
+              ) : resultsGate === 'blocked' ? (
+                <div className={styles.resultsGatePlaceholder}>
+                  <div className={styles.spinner} style={{ width: 22, height: 22 }} />
+                  <p>结果已暂存，AI 筛查完成后展示</p>
+                  <button type="button" className={styles.aiSkipButton} onClick={handleSkipAIFilter}>
+                    跳过，直接看结果
+                  </button>
                 </div>
               ) : searchResults.length === 0 ? (
                 <div className={styles.emptyState}>
                   <p className={styles.emptyText}>No matching resources found</p>
                 </div>
+              ) : !showDroppedResults && keptResults.length === 0 && droppedResults.length > 0 ? (
+                <div className={styles.emptyState}>
+                  <p className={styles.emptyText}>相关结果为空，AI 已剔除全部低相关命中</p>
+                  <button
+                    type="button"
+                    className={styles.aiScreeningToggle}
+                    style={{ marginTop: 12 }}
+                    onClick={() => setShowDroppedResults(true)}
+                  >
+                    查看已剔除的 {droppedResults.length} 条
+                  </button>
+                </div>
               ) : (
                 <div className={styles.resultsList}>
-                  {searchResults.map((result, index) => (
+                  {(showDroppedResults
+                    ? searchResults.map((result, originalIndex) => ({
+                        result,
+                        originalIndex,
+                        dropped: dropReasonByIndex.has(originalIndex),
+                        reason: dropReasonByIndex.get(originalIndex),
+                      }))
+                    : keptResults.map(({ result, originalIndex }) => ({
+                        result,
+                        originalIndex,
+                        dropped: false,
+                        reason: undefined as string | undefined,
+                      }))
+                  ).map(({ result, originalIndex, dropped, reason }) => (
                     <div
-                      key={`${result.workspace_id}-${result.terraform_address}-${index}`}
-                      className={`${result.jump_url ? styles.resultItemClickable : styles.resultItem} ${expandedResultIndex === index ? styles.resultItemExpanded : ''}`}
+                      key={`${result.workspace_id}-${result.terraform_address}-${originalIndex}`}
+                      className={`${result.jump_url ? styles.resultItemClickable : styles.resultItem} ${expandedResultIndex === originalIndex ? styles.resultItemExpanded : ''} ${dropped ? styles.resultItemDropped : ''}`}
                       onClick={() => handleResultClick(result)}
                       style={{ cursor: result.jump_url ? 'pointer' : 'default' }}
                     >
@@ -1559,6 +1959,11 @@ const CMDB: React.FC = () => {
                         <span className={styles.resourceType}>
                           {result.resource_type}
                         </span>
+                        {dropped && (
+                          <span className={styles.droppedBadge} title={reason || 'AI 判定相关度低'}>
+                            已剔除{reason ? `：${reason}` : ''}
+                          </span>
+                        )}
                         {result.source_type === 'external' ? (
                           <span className={styles.externalBadge}>
                             {result.external_source_name || 'External'}
@@ -1582,11 +1987,11 @@ const CMDB: React.FC = () => {
                           className={styles.expandToggle}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleToggleExpand(result, index);
+                            handleToggleExpand(result, originalIndex);
                           }}
-                          title={expandedResultIndex === index ? '点击收起' : '点击展开详情'}
+                          title={expandedResultIndex === originalIndex ? '点击收起' : '点击展开详情'}
                         >
-                          {expandedResultIndex === index ? '▲' : '▼'}
+                          {expandedResultIndex === originalIndex ? '▲' : '▼'}
                         </button>
                       </div>
                       <h4 className={styles.resourceName}>
@@ -1625,12 +2030,12 @@ const CMDB: React.FC = () => {
                       </div>
                       {result.resource_summary && (
                         <div
-                          className={`${styles.resourceSummaryPreview} ${expandedSummaryIndex === index ? styles.expanded : ''}`}
+                          className={`${styles.resourceSummaryPreview} ${expandedSummaryIndex === originalIndex ? styles.expanded : ''}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setExpandedSummaryIndex(expandedSummaryIndex === index ? null : index);
+                            setExpandedSummaryIndex(expandedSummaryIndex === originalIndex ? null : originalIndex);
                           }}
-                          title={expandedSummaryIndex === index ? '点击折叠' : '点击展开摘要'}
+                          title={expandedSummaryIndex === originalIndex ? '点击折叠' : '点击展开摘要'}
                         >
                           {/* 跳过第一行（标题行，和卡片上的资源名/ID 重复） */}
                           {result.resource_summary.includes('\n')
@@ -1640,7 +2045,7 @@ const CMDB: React.FC = () => {
                       )}
 
                       {/* Inline detail panel (accordion) - 仅展示 summary 和 tags，不暴露内部字段 */}
-                      {expandedResultIndex === index && (
+                      {expandedResultIndex === originalIndex && (
                         <div className={styles.resultDetailPanel} onClick={(e) => e.stopPropagation()}>
                           {expandedDetailLoading ? (
                             <div className={styles.resultDetailLoading}>Loading...</div>

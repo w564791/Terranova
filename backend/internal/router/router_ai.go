@@ -198,6 +198,16 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			}),
 			embeddingController.VectorSearch,
 		)
+
+		// CMDB 搜索结果 AI 解读（cmdb_search_summary capability，与 cmdb_query_plan 业务查询计划分离）
+		searchSummaryPerm := iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+			{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "WRITE"},
+			{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+		})
+		ai.POST("/cmdb/search-summary", searchSummaryPerm, embeddingController.SearchSummary)
+		// 进度 SSE（推荐前端使用）
+		ai.POST("/cmdb/search-summary-sse", searchSummaryPerm, embeddingController.SearchSummarySSE)
 	}
 
 	// Admin 路由 - embedding 管理

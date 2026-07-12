@@ -1,4 +1,4 @@
-本版本包含两大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）。
+本版本包含三大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）+ **CMDB 搜索结果 AI 解读 + 相关性筛查**（新增 `cmdb_search_summary` capability，搜索召回结果经 AI 生成总览/重点/分组/改写建议，并按查询意图自动剔除低相关项；前端 CMDB 搜索页全面接入 SSE 进度与筛查交互）。
 
 ---
 
@@ -281,3 +281,171 @@
 - `frontend/src/pages/AIConfigForm.tsx` — Grok service type 选项 + Base URL 默认值 + Reasoning Effort radio UI + Grok help 面板 + 编辑态自动拉模型 + 自定义 Capability 新增面板 + `getCapabilityLabel` 替代直接引用 + default 描述更新 + "加载默认模板" 按钮条件渲染
 - `frontend/src/pages/AIConfigList.tsx` — `CAPABILITY_LABELS` → `getCapabilityLabel()`
 - `frontend/src/services/ai.ts` — `GROK_REASONING_EFFORTS` / `GROK_REASONING_EFFORT_LABELS` / `DEFAULT_GROK_BASE_URL` 常量；`AIConfig` 接口新增 `grok_reasoning_effort`；`CAPABILITIES` 新增 `change_analysis` / `result_analysis`；`KNOWN_CAPABILITY_VALUES` / `isValidCapabilityKey` / `getCapabilityLabel` 导出
+
+---
+
+### 14. CMDB 搜索结果 AI 解读 + 相关性筛查
+
+**新增 `cmdb_search_summary` capability**，与 `cmdb_query_plan`（表单/业务流程的查询计划）完全分离，仅服务于 `/cmdb?tab=search` 搜索结果页的友好解读。
+
+**后端：**
+
+- **`cmdb_search_summary_service.go`（新增）**：完整的解读 + 筛查服务
+  - 常量控制：送入大模型最多 12 条（`searchSummaryAIMaxItems`），确定性主题筛查最多 40 条（`searchSummaryIntentMaxItems`），单条摘要截断 72 字符
+  - `Generate(ctx, query, results)` 入口：调用 `GetConfigForCapability` 获取专用 AI config，构建 prompt 后调用模型，解析 JSON 输出
+  - `parseSearchSummaryJSON` 多策略解析：先直接 Unmarshal，失败后尝试提取 `{...}` 子串（容错 AI 输出的 markdown 包裹）
+  - `buildSearchSummaryPrompt` 动态构建 prompt：注入 `{query}` / `{result_count}` / `{results_json}` 占位符
+  - 空结果处理：`overview` 说明未找到 + `suggestions` 给出改写建议
+  - `SearchSummaryResult` / `SearchSummaryInputResource` / `SearchSummaryHighlight` / `SearchSummaryGroup` / `SearchSummaryDropped` 完整类型定义
+
+- **`cmdb_search_summary_service_test.go`（新增）**：覆盖 prompt 构建、JSON 解析（含 markdown 包裹容错）、空结果处理、截断逻辑
+
+- **`embedding_controller.go`**：新增两个 handler
+  - `SearchSummary`：同步 JSON 接口（兼容保留）
+  - `SearchSummarySSE`：SSE 进度流式接口，三步进度（准备上下文 → AI 解读与筛查 → 完成），complete 事件携带完整 `SearchSummary` 结果
+
+- **`router_ai.go`**：注册两个新路由，IAM 权限守卫（`AI_ANALYSIS` READ/WRITE/ADMIN）
+  - `POST /ai/cmdb/search-summary`
+  - `POST /ai/cmdb/search-summary-sse`
+
+- **`progress_event.go`**：`ProgressEvent` 新增 `SearchSummary *SearchSummaryResult` 字段，complete 事件携带解读结果
+
+**前端：**
+
+- **`cmdb.ts`（Service 层）**：
+  - 新增 `SearchSummaryResult` / `SearchSummaryProgressEvent` / `SearchSummaryDropped` 等类型定义
+  - `buildSearchSummaryPayload()` 精简字段（去 workspace/account 噪声），截断长文本，限 40 条
+  - `searchSummary()` 同步兜底接口
+  - `searchSummarySSE()` SSE 流式接口：fetch + ReadableStream，逐块解析 SSE 事件，`onProgress` 回调实时通知进度
+  - `ResourceSearchResult` 接口新增 `resource_summary` / `similarity` 可选字段
+
+- **`CMDB.tsx`（页面）**：
+  - 新增状态：`aiSummary` / `aiSummaryLoading` / `aiSummaryError` / `aiSummaryStep` / `aiSummaryProgress` / `resultsGate`（blocked/revealed）/ `skipAIFilter` / `showDroppedResults`
+  - `fetchAISummary()` 核心逻辑：调用 SSE 接口，实时进度回调，complete 时解析 dropped 列表构建 `dropIndexSet` / `dropReasonByIndex`
+  - `keptResults` / `droppedResults` 计算：按 `dropped` 数组分流，支持"查看已剔除"切换
+  - `handleSkipAIFilter` 跳过按钮：用户可跳过 AI 筛查直接看全部结果
+  - `normalizeAISearchSuggestion()` 清洗建议词：去除"建议搜索："/"试试："等引导前缀，只保留纯查询词
+  - `performSearch` 改造：搜索后自动触发 AI 解读，零结果时直接放行（`resultsGate=revealed`），新搜索自动 abort 上一次 SSE
+  - 结果列表改造：按 `showDroppedResults` 切换全量/筛查视图，被剔除项显示紫色"已剔除"badge + 原因 tooltip
+  - AI 解读卡片：overview 总览 / highlights 重点列表 / groups 分组 chip / suggestions 可点击回填搜索 / dropped 筛查工具栏
+
+- **`CMDB.module.css`（样式）**：~280 行新增样式
+  - AI 解读卡片：渐变背景 + 圆角 + indigo 主色调
+  - 进度步骤条：三态（pending/active/done）胶囊样式
+  - 结果屏蔽占位：loading + "跳过，直接看结果"按钮
+  - 筛查工具栏：已剔除数提示 + "显示已剔除/仅看相关"切换
+  - 建议词按钮：圆角胶囊，hover 变色
+  - 剔除 badge：紫色背景 + 原因 tooltip
+  - 列表项剔除态：`resultItemDropped` 半透明 + 划线
+
+**数据库：**
+
+- **AI Config 种子数据（`init_seed_data.sql`）**：新增 id=24 的 `cmdb_search_summary` 专用配置，mode=prompt，使用 Claude Sonnet 4
+- **3 个 Migration 文件**：
+  - `add_cmdb_search_summary_ai_config.sql`：幂等 INSERT（`WHERE NOT EXISTS` capabilities 判重）
+  - `update_cmdb_search_summary_screening.sql`：更新 prompt 增加 dropped 筛查规则
+  - `update_cmdb_search_summary_suggestions.sql`：强化 suggestions 规则（必须为纯查询词，禁止说明前缀）
+
+**基础设施：**
+
+- **`docker-compose.nginx.conf`**：Nginx `/api/` location 新增 SSE 支持配置
+  - `proxy_buffering off`：关闭代理缓冲，progress 事件实时刷出
+  - `proxy_cache off` + `chunked_transfer_encoding on`
+
+### 15. AI Access Error 分类增强
+
+扩展 `IsAIAccessError()` 白名单，覆盖 DashScope 国际站偶发的对端提前断开连接场景：
+
+- 新增 access hints：`unexpected eof` / `eof` / `broken pipe` / `http2: server sent goaway` / `request failed`
+- 新增测试用例：`unexpected EOF`（DashScope intl URL）/ `connection reset by peer`
+
+**影响**：这些错误现在正确触发 Provider 级 Fallback 容灾（切换到 default config），而非作为业务错误直接返回失败。
+
+### 16. Embedding Worker 优化
+
+`processPendingTasks()` 新增快速退出检查：
+
+- 在查询 embedding 配置之前，先 `SELECT count(*) > 0` 检查是否有待处理任务
+- 无任务时直接 return，避免每次都查询 AI config 状态 + 打日志
+- 减少无 embedding 需求时的 DB 查询和日志噪声
+
+### 17. AIConfigForm 交互优化
+
+- 默认配置（`capabilities=["*"]`）时隐藏"+ 新增场景"按钮，改为灰色提示文案："默认配置（capabilities=*）无需新增场景；请创建「非默认」专用配置"
+- 修复条件渲染：`!formData.enabled &&` → `!formData.enabled ?` 三元表达式
+
+---
+
+## 修改文件（v0.8.1 CMDB 搜索解读 + 增强）
+
+### 后端
+
+- `backend/controllers/embedding_controller.go` — 新增 `SearchSummary` / `SearchSummarySSE` handler + 请求绑定/SSE 发送 helpers
+- `backend/internal/router/router_ai.go` — 注册 `/ai/cmdb/search-summary` + `/ai/cmdb/search-summary-sse` 路由
+- `backend/services/cmdb_search_summary_service.go` — **新增**：CMDB 搜索结果 AI 解读 + 筛查服务
+- `backend/services/cmdb_search_summary_service_test.go` — **新增**：解读服务单元测试
+- `backend/services/progress_event.go` — `ProgressEvent` 新增 `SearchSummary` 字段
+- `backend/services/ai_config_service.go` — `IsAIAccessError` 新增 5 个 access hints（EOF/pipe/goaway/request failed）
+- `backend/services/ai_config_fallback_test.go` — 新增 2 个测试用例（unexpected EOF / connection reset）
+- `backend/services/embedding_worker.go` — `processPendingTasks` 新增无任务快速退出
+- `backend/migrations/add_cmdb_search_summary_ai_config.sql` — **新增**：cmdb_search_summary AI config migration
+- `backend/migrations/update_cmdb_search_summary_screening.sql` — **新增**：prompt 增加 dropped 筛查规则
+- `backend/migrations/update_cmdb_search_summary_suggestions.sql` — **新增**：强化 suggestions 纯查询词规则
+- `manifests/db/init_seed_data.sql` — 种子数据新增 ai_config id=24 + 同步 CREATE TABLE
+
+### 前端
+
+- `frontend/src/pages/CMDB.tsx` — AI 解读卡片 + SSE 进度 + 筛查交互 + 结果列表改造
+- `frontend/src/pages/CMDB.module.css` — ~280 行新增样式（AI 卡片/进度条/筛查工具栏/剔除态）
+- `frontend/src/services/cmdb.ts` — `searchSummary` / `searchSummarySSE` 接口 + 类型定义 + payload 构建
+- `frontend/src/services/ai.ts` — `CAPABILITIES` / `CAPABILITY_LABELS` / `CAPABILITY_DESCRIPTIONS` / `DEFAULT_CAPABILITY_PROMPTS` 新增 `cmdb_search_summary`
+- `frontend/src/pages/AIConfigForm.tsx` — 默认配置隐藏"新增场景"按钮 + 条件渲染修复
+
+### 基础设施
+
+- `docker-compose.nginx.conf` — Nginx SSE 代理配置（proxy_buffering off + proxy_cache off + chunked_transfer_encoding on）
+
+---
+
+## 技术细节（v0.8.1 CMDB 搜索解读）
+
+### CMDB Search Summary 架构
+
+```
+用户搜索 → vectorSearch 返回结果 → fetchAISummary()
+  ↓
+searchSummarySSE (POST /ai/cmdb/search-summary-sse)
+  ↓
+[Step 1: 准备上下文] → 精简 payload（12 条 top + 字段截断）
+  ↓
+[Step 2: AI 解读与筛查] → cmdb_search_summary_service.Generate()
+  ↓
+  - GetConfigForCapability("cmdb_search_summary")
+  - buildSearchSummaryPrompt (注入 query/results)
+  - AI 调用（带 fallback 容灾）
+  - parseSearchSummaryJSON（多策略解析 + 容错）
+  ↓
+[Step 3: 完成] → SSE complete 事件携带 SearchSummaryResult
+  ↓
+前端解析 dropped → 分流 keptResults / droppedResults → UI 渲染
+```
+
+### SSE 进度协议
+
+对齐 manifest/form SSE 事件格式：
+- `event: progress` — 步骤进度（step/total_steps/step_name/message/elapsed_ms）
+- `event: complete` — 完成，`search_summary` 字段携带完整结果
+- `event: error` — 错误，`error` 字段携带错误信息
+
+### 筛查策略
+
+- **AI 筛查**：模型返回 `dropped` 数组，每项含 `index`（对应请求 results 下标）+ `reason`
+- **Fail-open 原则**：不确定时保留（"只剔除明显不符合查询意图的条目"）
+- **不全部剔除**：prompt 规则明确"不要把全部结果都 drop 掉"
+- **Suggestions 清洗**：前端 `normalizeAISearchSuggestion()` 去除引导前缀，只保留可回填搜索框的纯查询词
+
+### Payload 优化
+
+- 前端 `buildSearchSummaryPayload()` 只传必要字段（resource_type / resource_name / cloud_resource_id / resource_summary / similarity / is_resource_deleted），去掉 workspace/account 等噪声
+- 单条文本截断：summary 72 字符 / name 64 字符 / description 60 字符
+- 最多 40 条参与筛查，12 条送入 AI prompt（后端二次截断）

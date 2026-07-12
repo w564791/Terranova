@@ -95,6 +95,8 @@ export interface ResourceSearchResult {
   jump_url?: string;
   is_resource_deleted?: boolean;
   match_rank: number;
+  resource_summary?: string;      // AI 预生成的资源配置摘要
+  similarity?: number;            // 向量相似度（向量/混合搜索时有值）
   // 外部数据源相关字段
   source_type?: string;           // terraform 或 external
   external_source_id?: string;    // 外部数据源ID
@@ -190,6 +192,74 @@ export interface VectorSearchResponse {
   fallback_reason?: string;
 }
 
+// CMDB 搜索结果 AI 解读 + 筛查
+export interface SearchSummaryHighlight {
+  name: string;
+  reason: string;
+}
+
+export interface SearchSummaryGroup {
+  label: string;
+  count: number;
+}
+
+export interface SearchSummaryDropped {
+  index: number;
+  reason: string;
+}
+
+export interface SearchSummaryResult {
+  overview: string;
+  highlights: SearchSummaryHighlight[];
+  groups: SearchSummaryGroup[];
+  suggestions: string[];
+  /** AI 建议剔除的结果（index 对应请求 results 数组下标，0 起） */
+  dropped?: SearchSummaryDropped[];
+  /** 实际送入 AI 筛查的条数 */
+  screened_count?: number;
+}
+
+/** SSE 进度事件（对齐 ProgressEvent） */
+export interface SearchSummaryProgressEvent {
+  type: 'progress' | 'complete' | 'error';
+  step: number;
+  total_steps: number;
+  step_name: string;
+  message?: string;
+  elapsed_ms?: number;
+  completed_steps?: { name: string; elapsed_ms: number }[];
+  search_summary?: SearchSummaryResult;
+  error?: string;
+}
+
+/** 与后端 searchSummaryIntentMaxItems 对齐；AI 侧再压到 top-12 精简字段 */
+const SEARCH_SUMMARY_PAYLOAD_MAX = 40;
+
+function clipText(s: string | undefined, max: number): string | undefined {
+  if (!s) return undefined;
+  const chars = [...s];
+  if (chars.length <= max) return s;
+  return chars.slice(0, max).join('') + '…';
+}
+
+function buildSearchSummaryPayload(query: string, results: ResourceSearchResult[]) {
+  // 只传筛查/解读必要字段，去掉 workspace/account 等噪声，减轻超时
+  return {
+    query: clipText(query, 120) || query,
+    results: (results || []).slice(0, SEARCH_SUMMARY_PAYLOAD_MAX).map((r, index) => ({
+      index,
+      resource_type: r.resource_type,
+      resource_name: clipText(r.resource_name, 64),
+      cloud_resource_id: clipText(r.cloud_resource_id, 48),
+      cloud_resource_name: clipText(r.cloud_resource_name, 64),
+      description: clipText(r.description, 60),
+      resource_summary: clipText(r.resource_summary, 100),
+      similarity: r.similarity,
+      is_resource_deleted: r.is_resource_deleted,
+    })),
+  };
+}
+
 // 搜索召回质量分析
 export interface CMDBSearchAnalytics {
   period: string;
@@ -266,6 +336,127 @@ export const cmdbService = {
     });
     // 后端返回 {code: 200, data: {...}}
     return response.data || response;
+  },
+
+  // 搜索结果 AI 解读 + 相关性筛查（capability: cmdb_search_summary）
+  // 与后端 searchSummaryMaxItems=30 对齐
+  // 推荐使用 searchSummarySSE（进度可见）；本方法保留为同步兜底
+  searchSummary: async (
+    query: string,
+    results: ResourceSearchResult[]
+  ): Promise<SearchSummaryResult> => {
+    const payload = buildSearchSummaryPayload(query, results);
+    const response: any = await api.post('/ai/cmdb/search-summary', payload);
+    return response.data || response;
+  },
+
+  /**
+   * 搜索结果 AI 解读（SSE 进度）
+   * 协议对齐 manifest/form SSE：event progress|complete|error
+   */
+  searchSummarySSE: async (
+    query: string,
+    results: ResourceSearchResult[],
+    onProgress?: (event: SearchSummaryProgressEvent) => void,
+    signal?: AbortSignal
+  ): Promise<SearchSummaryResult> => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('未登录');
+    }
+
+    // 与 api.ts getApiBaseUrl 一致
+    let base: string;
+    if (import.meta.env.VITE_API_BASE_URL) {
+      base = import.meta.env.VITE_API_BASE_URL as string;
+    } else {
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+      const apiPort = window.location.port === '5173' ? '8080' : window.location.port;
+      base = apiPort
+        ? `${protocol}//${hostname}:${apiPort}/api/v1`
+        : `${protocol}//${hostname}/api/v1`;
+    }
+
+    const payload = buildSearchSummaryPayload(query, results);
+    const url = `${base}/ai/cmdb/search-summary-sse`;
+
+    console.log('[cmdb] searchSummarySSE start', { url, query, resultCount: payload.results.length });
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+
+    if (!response.ok) {
+      let msg = `HTTP ${response.status}`;
+      try {
+        const errBody = await response.json();
+        msg = errBody.message || errBody.error || msg;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(msg);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('ReadableStream not supported');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalSummary: SearchSummaryResult | null = null;
+    let finalError: string | null = null;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          let eventData = '';
+          for (const line of block.split('\n')) {
+            if (line.startsWith('data: ')) eventData = line.slice(6);
+          }
+          if (!eventData) continue;
+
+          try {
+            const event = JSON.parse(eventData) as SearchSummaryProgressEvent;
+            onProgress?.(event);
+            if (event.type === 'complete' && event.search_summary) {
+              finalSummary = event.search_summary;
+            }
+            if (event.type === 'error') {
+              finalError = event.error || 'AI 解读失败';
+            }
+          } catch (e) {
+            console.error('[cmdb] parse SSE event failed:', e, eventData);
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    if (finalError) {
+      throw new Error(finalError);
+    }
+    if (!finalSummary) {
+      throw new Error('SSE 流结束但未返回解读结果');
+    }
+    return finalSummary;
   },
 
   // 获取CMDB统计信息

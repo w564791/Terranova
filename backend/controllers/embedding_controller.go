@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -771,4 +772,171 @@ func (c *EmbeddingController) isWorkspaceBusy(workspaceID string) (bool, string)
 	}
 
 	return false, ""
+}
+
+// SearchSummaryRequest CMDB 搜索结果 AI 解读请求
+type SearchSummaryRequest struct {
+	Query   string                                `json:"query" binding:"required"`
+	Results []services.SearchSummaryInputResource `json:"results"`
+}
+
+// SearchSummary 对 CMDB 搜索结果做 AI 友好解读（同步 JSON，兼容保留）
+// @Summary CMDB search result AI summary
+// @Description Interpret hybrid search results for the user in natural language
+// @Tags Embedding
+// @Accept json
+// @Produce json
+// @Param request body SearchSummaryRequest true "Search summary request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/cmdb/search-summary [post]
+func (c *EmbeddingController) SearchSummary(ctx *gin.Context) {
+	req, ok := c.bindSearchSummaryRequest(ctx)
+	if !ok {
+		return
+	}
+
+	svc := services.NewCMDBSearchSummaryService(c.db)
+	result, err := svc.Generate(ctx.Request.Context(), req.Query, req.Results)
+	if err != nil {
+		log.Printf("[SearchSummary] failed: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": result,
+	})
+}
+
+// SearchSummarySSE 进度 SSE：准备上下文 → 调用 AI → 完成（含筛查结果）
+// @Summary CMDB search result AI summary (SSE progress)
+// @Description Stream progress events while generating CMDB search interpretation
+// @Tags Embedding
+// @Accept json
+// @Produce text/event-stream
+// @Param request body SearchSummaryRequest true "Search summary request"
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/ai/cmdb/search-summary-sse [post]
+func (c *EmbeddingController) SearchSummarySSE(ctx *gin.Context) {
+	start := time.Now()
+	const totalSteps = 3
+
+	req, ok := c.bindSearchSummaryRequest(ctx)
+	if !ok {
+		return
+	}
+
+	flusher, ok := c.prepareSearchSummarySSE(ctx)
+	if !ok {
+		return
+	}
+
+	send := func(event services.ProgressEvent) {
+		c.sendSearchSummarySSEEvent(ctx, flusher, event)
+	}
+
+	// Step 1: 准备
+	send(services.ProgressEvent{
+		Type:       "progress",
+		Step:       1,
+		TotalSteps: totalSteps,
+		StepName:   "准备上下文",
+		Message:    fmt.Sprintf("整理 %d 条召回结果…", len(req.Results)),
+		ElapsedMs:  time.Since(start).Milliseconds(),
+	})
+
+	// Step 2: 调用 AI
+	send(services.ProgressEvent{
+		Type:       "progress",
+		Step:       2,
+		TotalSteps: totalSteps,
+		StepName:   "AI 解读与筛查",
+		Message:    "正在生成结果总览并筛查低相关项…",
+		ElapsedMs:  time.Since(start).Milliseconds(),
+		CompletedSteps: []services.CompletedStep{
+			{Name: "准备上下文", ElapsedMs: time.Since(start).Milliseconds()},
+		},
+	})
+
+	svc := services.NewCMDBSearchSummaryService(c.db)
+	result, err := svc.Generate(ctx.Request.Context(), req.Query, req.Results)
+	if err != nil {
+		log.Printf("[SearchSummarySSE] failed: %v", err)
+		send(services.ProgressEvent{
+			Type:       "error",
+			Step:       2,
+			TotalSteps: totalSteps,
+			StepName:   "AI 解读与筛查",
+			Error:      err.Error(),
+			ElapsedMs:  time.Since(start).Milliseconds(),
+		})
+		return
+	}
+
+	// Step 3: 完成
+	send(services.ProgressEvent{
+		Type:       "complete",
+		Step:       3,
+		TotalSteps: totalSteps,
+		StepName:   "完成",
+		Message:    "解读完成",
+		ElapsedMs:  time.Since(start).Milliseconds(),
+		CompletedSteps: []services.CompletedStep{
+			{Name: "准备上下文", ElapsedMs: 0},
+			{Name: "AI 解读与筛查", ElapsedMs: time.Since(start).Milliseconds()},
+			{Name: "完成", ElapsedMs: time.Since(start).Milliseconds()},
+		},
+		SearchSummary: result,
+	})
+}
+
+func (c *EmbeddingController) bindSearchSummaryRequest(ctx *gin.Context) (SearchSummaryRequest, bool) {
+	var req SearchSummaryRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return req, false
+	}
+	if strings.TrimSpace(req.Query) == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "query 不能为空"})
+		return req, false
+	}
+	if req.Results == nil {
+		req.Results = []services.SearchSummaryInputResource{}
+	}
+	if len(req.Results) > 50 {
+		req.Results = req.Results[:50]
+	}
+	return req, true
+}
+
+func (c *EmbeddingController) prepareSearchSummarySSE(ctx *gin.Context) (http.Flusher, bool) {
+	ctx.Header("Content-Type", "text/event-stream")
+	ctx.Header("Cache-Control", "no-cache")
+	ctx.Header("Connection", "keep-alive")
+	ctx.Header("X-Accel-Buffering", "no")
+
+	flusher, ok := ctx.Writer.(http.Flusher)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Streaming not supported"})
+		return nil, false
+	}
+	return flusher, true
+}
+
+func (c *EmbeddingController) sendSearchSummarySSEEvent(ctx *gin.Context, flusher http.Flusher, event services.ProgressEvent) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("[SearchSummarySSE] JSON marshal failed: %v", err)
+		return
+	}
+	fmt.Fprintf(ctx.Writer, "event: %s\ndata: %s\n\n", event.Type, data)
+	flusher.Flush()
 }

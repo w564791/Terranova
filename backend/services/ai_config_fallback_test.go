@@ -25,6 +25,9 @@ func TestIsAIAccessError(t *testing.T) {
 		{"输出格式", fmt.Errorf("输出格式不正确: 缺少 execution_summary"), false},
 		{"generic business", fmt.Errorf("AI 未返回有效的 HCL 内容"), false},
 		{"wrapped access", fmt.Errorf("AI call failed at step 1: %w", errors.New("bedrock invocation failed: throttle")), true},
+		// DashScope / 国际链路偶发掐连接
+		{"unexpected eof", fmt.Errorf(`request failed: Post "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions": unexpected EOF`), true},
+		{"connection reset", fmt.Errorf("request failed: read: connection reset by peer"), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

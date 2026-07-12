@@ -29,6 +29,9 @@ type ProgressEvent struct {
 	Issues   []ManifestIssue `json:"issues,omitempty"`   // manifest check 结果（问题列表）
 	Warnings []string        `json:"warnings,omitempty"` // 生成结果的 schema 校验警告
 
+	// CMDB 搜索结果 AI 解读完成时的数据
+	SearchSummary *SearchSummaryResult `json:"search_summary,omitempty"`
+
 	// 错误时的数据
 	Error string `json:"error,omitempty"` // 错误信息
 }

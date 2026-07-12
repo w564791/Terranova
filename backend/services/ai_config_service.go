@@ -181,6 +181,11 @@ func IsAIAccessError(err error) bool {
 		"network is unreachable",
 		"i/o timeout",
 		"tls handshake",
+		// 对端提前掐连接 / 代理中断（DashScope 国际站偶发）
+		"unexpected eof",
+		"eof",
+		"broken pipe",
+		"http2: server sent goaway",
 		"status code 401",
 		"status code 403",
 		"status code 404",
@@ -207,6 +212,7 @@ func IsAIAccessError(err error) bool {
 		"no credential",
 		"ai call failed",
 		"llm call failed",
+		"request failed",
 	}
 	for _, h := range accessHints {
 		if strings.Contains(msg, h) {
