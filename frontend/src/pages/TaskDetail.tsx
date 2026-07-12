@@ -12,6 +12,7 @@ import SmartLogViewer from '../components/SmartLogViewer';
 import WorkspaceSidebar from '../components/WorkspaceSidebar';
 import { useNotificationContext } from '../contexts/NotificationContext';
 import api from '../services/api';
+import { getTaskStatusLabel } from '../utils/taskStatus';
 import styles from './TaskDetail.module.css';
 
 interface Task {
@@ -509,44 +510,34 @@ const TaskDetail: React.FC = () => {
               {task.description || `${task.task_type.toUpperCase()} #${task.id}`}
             </h2>
             <div className={styles.taskStatusBadge}>
-              {task.status === 'pending' && (
-                <span className={styles.statusTagPending}>Pending</span>
-              )}
-              {task.status === 'running' && (
-                <span className={styles.statusTagRunning}>
-                  {/* If apply has been confirmed, show Applying regardless of stage */}
-                  {(task.apply_confirmed_by || task.apply_confirmed_at) ? 'Applying...' : (
-                    <>
-                      {task.stage === 'init' && 'Initializing...'}
-                      {task.stage === 'fetching' && 'Fetching...'}
-                      {(task.stage === 'plan' || task.stage === 'planning') && 'Planning...'}
-                      {(task.stage === 'apply' || task.stage === 'applying' || task.stage === 'pre_apply' || task.stage === 'restoring_plan') && 'Applying...'}
-                      {task.stage === 'pending' && 'Pending...'}
-                      {(!task.stage || !['init', 'fetching', 'plan', 'planning', 'apply', 'applying', 'pre_apply', 'restoring_plan', 'pending'].includes(task.stage)) && 'Running...'}
-                    </>
-                  )}
-                </span>
-              )}
-              {(task.status === 'plan_completed' || task.status === 'apply_pending') && (
-                <span className={styles.statusTagWarning}>Awaiting Confirmation</span>
-              )}
-              {task.status === 'decision_required' && (
-                <span className={styles.statusTagWarning}>Decision Required</span>
-              )}
-              {task.status === 'planned_and_finished' && (
-                <span className={styles.statusTagSuccess}>Planned and Finished</span>
-              )}
-              {(task.status === 'success' || task.status === 'applied') && (
-                <span className={styles.statusTagSuccess}>
-                  {task.task_type === 'plan' ? 'Planned' : 'Applied'}
-                </span>
-              )}
-              {task.status === 'failed' && (
-                <span className={styles.statusTagError}>Failed</span>
-              )}
-              {task.status === 'cancelled' && (
-                <span className={styles.statusTagCancelled}>Cancelled</span>
-              )}
+              {(() => {
+                const label = getTaskStatusLabel(
+                  {
+                    status: task.status,
+                    task_type: task.task_type,
+                    stage: task.stage,
+                    apply_confirmed_by: task.apply_confirmed_by,
+                    apply_confirmed_at: task.apply_confirmed_at,
+                  },
+                  { detailedRunning: true }
+                );
+                const tagClass =
+                  task.status === 'pending' || task.status === 'waiting'
+                    ? styles.statusTagPending
+                    : task.status === 'running'
+                      ? styles.statusTagRunning
+                      : task.status === 'plan_completed' ||
+                          task.status === 'apply_pending' ||
+                          task.status === 'decision_required' ||
+                          task.status === 'requires_approval'
+                        ? styles.statusTagWarning
+                        : task.status === 'failed'
+                          ? styles.statusTagError
+                          : task.status === 'cancelled'
+                            ? styles.statusTagCancelled
+                            : styles.statusTagSuccess;
+                return <span className={tagClass}>{label}</span>;
+              })()}
             </div>
           </div>
         </div>

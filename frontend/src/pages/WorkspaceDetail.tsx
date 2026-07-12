@@ -18,6 +18,8 @@ import NewRunDialog from '../components/NewRunDialog';
 import DateRangePicker from '../components/DateRangePicker';
 import TopBar from '../components/TopBar';
 import { useTaskAutoRefresh } from '../hooks/useTaskAutoRefresh';
+import { useWorkspaceManifestSummary } from '../hooks/useWorkspaceManifestSummary';
+import { getTaskStatusLabel, getTaskStatusCategory } from '../utils/taskStatus';
 import styles from './WorkspaceDetail.module.css';
 
 interface Workspace {
@@ -39,6 +41,8 @@ interface Workspace {
     created?: string;
   };
   auto_apply: boolean;
+  manifest_deployment_id?: string | null;
+  manifest_active_tag?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -687,7 +691,9 @@ const OverviewTab: React.FC<{
   onTabChange
 }) => {
   const navigate = useNavigate();
-  
+  const { showToast } = useToast();
+  const { summary: manifestSummary, loading: manifestSummaryLoading } = useWorkspaceManifestSummary(workspaceId);
+
   // 格式化日期
   const formatDate = (dateString: string) => {
     const date = parseBackendTime(dateString);
@@ -699,54 +705,46 @@ const OverviewTab: React.FC<{
       minute: '2-digit'
     });
   };
-  
-  // 获取任务的最终状态显示（与Runs页面一致）
-  const getFinalStatus = (run: any): string => {
-    if (run.status === 'decision_required') {
-      return 'Decision Required';
-    } else if (run.status === 'apply_pending') {
-      return 'Apply Pending';
-    } else if (run.status === 'success' || run.status === 'applied') {
-      if (run.task_type === 'plan' || (run.task_type === 'plan_and_apply' && run.status === 'success')) {
-        return 'Planned';
-      } else if (run.task_type === 'apply' || (run.task_type === 'plan_and_apply' && run.status === 'applied')) {
-        return 'Applied';
-      }
-      return 'Success';
-    } else if (run.status === 'failed') {
-      return 'Errored';
-    } else if (run.status === 'cancelled') {
-      return 'Cancelled';
-    } else if (run.status === 'running') {
-      return 'Running';
-    } else if (run.status === 'pending') {
-      return 'Pending';
+
+  const buildManifestEditorUrl = (resource?: { resource_id?: string }) => {
+    if (manifestSummary?.manifest_id == null || manifestSummary?.org_id == null) return null;
+    const params = new URLSearchParams({
+      org: String(manifestSummary.org_id),
+      subpath: manifestSummary.subpath ?? '',
+    });
+    if (manifestSummary.version_id) {
+      params.set('version', manifestSummary.version_id);
     }
-    return run.status;
+    if (resource?.resource_id) {
+      params.set('resource', resource.resource_id);
+    }
+    return `/admin/manifests-v2/${manifestSummary.manifest_id}/edit?${params.toString()}`;
   };
 
-  // 获取状态分类（与Runs页面一致）
-  const getStatusCategory = (status: string): string => {
-    if (status === 'success' || status === 'applied' || status === 'planned_and_finished') {
-      return 'success';
+  const handleResourceClick = (e: React.MouseEvent, resource: any) => {
+    // Manifest 管理的资源无 module schema，走 ViewResource 会报「资源不存在或Schema未定义」
+    if (resource.manifest_deployment_id) {
+      e.preventDefault();
+      if (manifestSummaryLoading) {
+        showToast('Manifest 信息加载中,请稍候再试', 'info');
+        return;
+      }
+      const url = buildManifestEditorUrl(resource);
+      if (url) {
+        navigate(url);
+        return;
+      }
+      showToast('无法定位该资源对应的 Manifest 位置', 'error');
+      return;
     }
-    if (status === 'decision_required') {
-      return 'attention';
-    }
-    if (status === 'requires_approval' || status === 'apply_pending') {
-      return 'attention';
-    }
-    if (status === 'failed') {
-      return 'error';
-    }
-    if (status === 'running') {
-      return 'running';
-    }
-    if (status === 'pending') {
-      return 'pending';
-    }
-    return 'neutral';
   };
+
+  // 获取任务的最终状态显示（与任务详情 / Workspaces 列表一致）
+  const getFinalStatus = (run: any): string =>
+    getTaskStatusLabel({ status: run.status, task_type: run.task_type });
+
+  // 获取状态分类（与 Runs 页面一致）
+  const getStatusCategory = (status: string): string => getTaskStatusCategory(status);
   
   if (!overview || !workspace) {
     return <div className={styles.loading}>加载中...</div>;
@@ -859,7 +857,12 @@ const OverviewTab: React.FC<{
                   {globalResources.map((resource) => (
                     <Link 
                       key={resource.id} 
-                      to={`/workspaces/${workspaceId}/resources/${resource.id}`}
+                      to={
+                        resource.manifest_deployment_id
+                          ? (buildManifestEditorUrl(resource) || `#`)
+                          : `/workspaces/${workspaceId}/resources/${resource.id}`
+                      }
+                      onClick={(e) => handleResourceClick(e, resource)}
                       className={styles.resourceRow}
                     >
                       <div className={styles.resourceName}>
@@ -1317,65 +1320,12 @@ const RunsTab: React.FC<{ workspaceId: string; latestRun: any; onLatestRunChange
   // 计算总页数（基于过滤后的结果）
   const totalPages = Math.ceil(total / pageSize);
   
-  // 获取任务的最终状态显示
-  const getFinalStatus = (run: Run): string => {
-    if (run.status === 'decision_required') {
-      return 'Decision Required';
-    }
-    // apply_pending状态表示plan完成，等待apply确认
-    if (run.status === 'apply_pending') {
-      return 'Apply Pending';
-    } else if (run.status === 'planned_and_finished') {
-      // Plan完成，无需Apply（无变更）
-      return 'Planned and Finished';
-    } else if (run.status === 'success' || run.status === 'applied') {
-      // 根据任务类型和stage判断最终状态
-      if (run.task_type === 'plan' || (run.task_type === 'plan_and_apply' && run.status === 'success')) {
-        return 'Planned';
-      } else if (run.task_type === 'apply' || (run.task_type === 'plan_and_apply' && run.status === 'applied')) {
-        return 'Applied';
-      }
-      return 'Success';
-    } else if (run.status === 'failed') {
-      return 'Errored';
-    } else if (run.status === 'cancelled') {
-      return 'Cancelled';
-    } else if (run.status === 'running') {
-      return 'Running';
-    } else if (run.status === 'pending') {
-      return 'Pending';
-    }
-    return run.status;
-  };
+  // 获取任务的最终状态显示（与任务详情 / Workspaces 列表一致）
+  const getFinalStatus = (run: Run): string =>
+    getTaskStatusLabel({ status: run.status, task_type: run.task_type });
 
   // 获取状态分类（用于左侧指示条颜色）
-  const getStatusCategory = (status: string): string => {
-    // 成功状态 - 绿色
-    if (status === 'success' || status === 'applied' || status === 'planned_and_finished') {
-      return 'success';
-    }
-    // Needs Attention状态 - 黄色
-    if (status === 'decision_required') {
-      return 'attention';
-    }
-    if (status === 'requires_approval' || status === 'apply_pending') {
-      return 'attention';
-    }
-    // 失败状态 - 红色
-    if (status === 'failed') {
-      return 'error';
-    }
-    // 运行中状态 - 蓝色
-    if (status === 'running') {
-      return 'running';
-    }
-    // Pending状态 - 青色
-    if (status === 'pending') {
-      return 'pending';
-    }
-    // 其他状态 - 灰色
-    return 'neutral';
-  };
+  const getStatusCategory = (status: string): string => getTaskStatusCategory(status);
 
   return (
     <div className={styles.runsContainer}>

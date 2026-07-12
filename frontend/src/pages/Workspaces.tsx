@@ -4,6 +4,7 @@ import { type Workspace } from '../services/workspaces';
 import { getProjects, createProject, type Project, type CreateProjectRequest } from '../services/projects';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
+import { getTaskStatusLabel } from '../utils/taskStatus';
 import styles from './Workspaces.module.css';
 
 console.log('Workspaces component loaded');
@@ -593,38 +594,10 @@ const Workspaces: React.FC = () => {
                     <div className={styles.colStatus}>
                       {workspace.latestRunStatus && (
                         <span className={`${styles.statusBadge} ${styles[`status-${workspace.latestRunStatus}`]}`}>
-                          {workspace.latestRunStatus === 'applied' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Applied</>
-                          )}
-                          {workspace.latestRunStatus === 'success' && (workspace.latestRunTaskType === 'plan' ? (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Planned</>
-                          ) : (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Applied</>
-                          ))}
-                          {workspace.latestRunStatus === 'failed' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Failed</>
-                          )}
-                          {workspace.latestRunStatus === 'running' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Running</>
-                          )}
-                          {workspace.latestRunStatus === 'decision_required' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Decision Required</>
-                          )}
-                          {(workspace.latestRunStatus === 'requires_approval' || workspace.latestRunStatus === 'plan_completed' || workspace.latestRunStatus === 'apply_pending') && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pending</>
-                          )}
-                          {workspace.latestRunStatus === 'planned_and_finished' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="20 6 9 17 4 12"/></svg> Planned (No Changes)</>
-                          )}
-                          {workspace.latestRunStatus === 'pending' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Pending</>
-                          )}
-                          {workspace.latestRunStatus === 'waiting' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Waiting</>
-                          )}
-                          {workspace.latestRunStatus === 'cancelled' && (
-                            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Cancelled</>
-                          )}
+                          {getTaskStatusLabel({
+                            status: workspace.latestRunStatus,
+                            task_type: workspace.latestRunTaskType,
+                          })}
                         </span>
                       )}
                     </div>
