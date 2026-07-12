@@ -560,6 +560,48 @@ func (s *CMDBService) extractModuleNameAndKey(modulePath string) (name, key stri
 	return
 }
 
+// platformResourceJoinSQL 将 resource_index 关联到 workspace_resources。
+// 覆盖：
+//  1. 精确 terraform_address / 去索引后的 address（manifest 原生资源）
+//  2. module 路径 / module.name（manifest module 块）
+//  3. root_module_name 精确匹配（manifest 根 module 名）
+//  4. 平台 module 命名：Provider_type_resourceName 后缀匹配
+const platformResourceJoinSQL = `
+	ri.workspace_id = wr.workspace_id
+	AND ri.source_type = 'terraform'
+	AND (
+		wr.resource_id = ri.terraform_address
+		OR wr.resource_id = split_part(ri.terraform_address, '[', 1)
+		OR (wr.resource_type = 'module' AND ri.module_path <> '' AND wr.resource_id = ri.module_path)
+		OR (wr.resource_type = 'module' AND ri.root_module_name <> '' AND wr.resource_id = 'module.' || ri.root_module_name)
+		OR (wr.resource_type = 'module' AND ri.root_module_name <> '' AND wr.resource_name = ri.root_module_name)
+		OR (ri.root_module_name <> '' AND ri.root_module_name LIKE '%\_' || wr.resource_name)
+	)
+`
+
+// jumpURLSelectSQL 生成 CMDB 跳转链接：
+// - manifest workspace → manifest 编辑器（带 resource 深链，优先 terraform address）
+// - 普通 module workspace → /workspaces/.../resources/{id}
+// - 外部数据源 → NULL
+const jumpURLSelectSQL = `
+	CASE
+		WHEN ri.source_type = 'external' THEN NULL
+		WHEN m.id IS NOT NULL THEN
+			CONCAT(
+				'/admin/manifests-v2/', m.id, '/edit?org=', m.organization_id::text,
+				'&resource=', COALESCE(
+					NULLIF(split_part(ri.terraform_address, '[', 1), ''),
+					NULLIF(wr.resource_id, ''),
+					ri.terraform_address
+				),
+				CASE WHEN COALESCE(w.manifest_subpath, '') <> '' THEN CONCAT('&subpath=', w.manifest_subpath) ELSE '' END,
+				CASE WHEN COALESCE(md.version_id, '') <> '' THEN CONCAT('&version=', md.version_id) ELSE '' END
+			)
+		WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
+		ELSE NULL
+	END
+`
+
 // SearchResources 搜索资源
 func (s *CMDBService) SearchResources(query string, workspaceID string, resourceType string, limit int) ([]models.ResourceSearchResult, error) {
 	if limit <= 0 {
@@ -568,9 +610,9 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 
 	var results []models.ResourceSearchResult
 
-	// 构建查询 - 使用模糊匹配关联workspace_resources和cmdb_external_sources
+	// 构建查询 - 使用多策略匹配关联 workspace_resources；manifest workspace 跳编辑器
 	db := s.db.Table("resource_index ri").
-		Select(`
+		Select(fmt.Sprintf(`
 			ri.workspace_id,
 			w.name as workspace_name,
 			ri.terraform_address,
@@ -592,11 +634,7 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 			ri.resource_summary,
 			wr.id as platform_resource_id,
 			wr.resource_name as platform_resource_name,
-			CASE
-				WHEN ri.source_type = 'external' THEN NULL
-				WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
-				ELSE NULL
-			END as jump_url,
+			%s as jump_url,
 			CASE
 				WHEN wr.id IS NOT NULL AND wr.is_active = false THEN true
 				ELSE false
@@ -615,9 +653,11 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 				WHEN ri.terraform_address LIKE ? THEN 0.3
 				ELSE 0.1
 			END as match_rank
-		`, query, query, query, query+"%", query+"%", query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
-		Joins("LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id AND ri.source_type = 'terraform' AND ri.root_module_name LIKE '%\\_' || wr.resource_name").
+		`, jumpURLSelectSQL), query, query, query, query+"%", query+"%", query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
 		Joins("LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id").
+		Joins("LEFT JOIN workspace_resources wr ON " + platformResourceJoinSQL).
+		Joins("LEFT JOIN manifest_deployments md ON md.id = COALESCE(wr.manifest_deployment_id, w.manifest_deployment_id)").
+		Joins("LEFT JOIN manifests m ON m.id = md.manifest_id").
 		Joins("LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id").
 		Where("ri.resource_mode = ?", "managed").
 		Where(`
@@ -661,6 +701,76 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 	return results, nil
 }
 
+// manifestJumpInfo 用于构建 manifest 编辑器跳转链接
+type manifestJumpInfo struct {
+	ManifestID string
+	OrgID      int
+	VersionID  string
+	Subpath    string
+}
+
+// loadManifestJumpInfo 若 workspace 绑定了 manifest deployment，返回跳转所需字段
+func (s *CMDBService) loadManifestJumpInfo(workspace *models.Workspace) *manifestJumpInfo {
+	if workspace == nil || workspace.ManifestDeploymentID == nil || *workspace.ManifestDeploymentID == "" {
+		return nil
+	}
+	type row struct {
+		ManifestID string
+		OrgID      int
+		VersionID  string
+	}
+	var r row
+	err := s.db.Table("manifest_deployments md").
+		Select("md.manifest_id, m.organization_id as org_id, md.version_id").
+		Joins("JOIN manifests m ON m.id = md.manifest_id").
+		Where("md.id = ?", *workspace.ManifestDeploymentID).
+		Take(&r).Error
+	if err != nil || r.ManifestID == "" {
+		return nil
+	}
+	info := &manifestJumpInfo{
+		ManifestID: r.ManifestID,
+		OrgID:      r.OrgID,
+		VersionID:  r.VersionID,
+	}
+	if workspace.ManifestSubpath != nil {
+		info.Subpath = *workspace.ManifestSubpath
+	}
+	return info
+}
+
+// buildResourceJumpURL 生成资源跳转 URL（manifest 编辑器或平台资源详情）
+// terraformAddress 优先用于深链定位；无 address 时回退到 platform resource_id。
+func buildResourceJumpURL(workspaceID string, pr *models.WorkspaceResource, terraformAddress string, mInfo *manifestJumpInfo) string {
+	resourceRef := terraformAddress
+	if idx := strings.Index(resourceRef, "["); idx > 0 {
+		resourceRef = resourceRef[:idx]
+	}
+	if resourceRef == "" && pr != nil {
+		resourceRef = pr.ResourceID
+	}
+
+	// Manifest 管理：跳编辑器并定位到对应 HCL 块
+	if mInfo != nil && mInfo.ManifestID != "" {
+		if resourceRef == "" {
+			resourceRef = "module"
+		}
+		url := fmt.Sprintf("/admin/manifests-v2/%s/edit?org=%d&resource=%s", mInfo.ManifestID, mInfo.OrgID, resourceRef)
+		if mInfo.Subpath != "" {
+			url += "&subpath=" + mInfo.Subpath
+		}
+		if mInfo.VersionID != "" {
+			url += "&version=" + mInfo.VersionID
+		}
+		return url
+	}
+
+	if pr != nil {
+		return fmt.Sprintf("/workspaces/%s/resources/%d", workspaceID, pr.ID)
+	}
+	return ""
+}
+
 // GetWorkspaceResourceTree 获取workspace的资源树
 func (s *CMDBService) GetWorkspaceResourceTree(workspaceID string) (*models.WorkspaceResourceTree, error) {
 	// 获取workspace信息
@@ -685,17 +795,12 @@ func (s *CMDBService) GetWorkspaceResourceTree(workspaceID string) (*models.Work
 		return nil, err
 	}
 
-	// 获取平台资源映射
-	platformResources := make(map[string]*models.WorkspaceResource)
+	// 获取平台资源列表（按 name / resource_id 多 key 索引）
 	var wsResources []models.WorkspaceResource
-	if err := s.db.Where("workspace_id = ? AND is_active = true", workspaceID).Find(&wsResources).Error; err == nil {
-		for i := range wsResources {
-			platformResources[wsResources[i].ResourceName] = &wsResources[i]
-		}
-	}
+	_ = s.db.Where("workspace_id = ? AND is_active = true", workspaceID).Find(&wsResources).Error
 
 	// 构建树结构
-	tree := s.buildResourceTree(modules, resources, platformResources, workspaceID)
+	tree := s.buildResourceTree(modules, resources, wsResources, workspaceID, &workspace)
 
 	return &models.WorkspaceResourceTree{
 		WorkspaceID:    workspaceID,
@@ -706,28 +811,71 @@ func (s *CMDBService) GetWorkspaceResourceTree(workspaceID string) (*models.Work
 }
 
 // buildResourceTree 构建资源树
-func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resources []models.ResourceIndex, platformResources map[string]*models.WorkspaceResource, workspaceID string) []*models.ResourceTreeNode {
-	// 创建module节点映射
-	moduleNodes := make(map[string]*models.ResourceTreeNode)
+func (s *CMDBService) buildResourceTree(
+	modules []models.ModuleHierarchy,
+	resources []models.ResourceIndex,
+	wsResources []models.WorkspaceResource,
+	workspaceID string,
+	workspace *models.Workspace,
+) []*models.ResourceTreeNode {
+	mInfo := s.loadManifestJumpInfo(workspace)
 
-	// 为根module查找对应的平台资源
-	findPlatformResource := func(moduleName string) *models.WorkspaceResource {
-		// 精确匹配
-		if pr, ok := platformResources[moduleName]; ok {
-			return pr
+	// 多 key 索引：resource_name / resource_id / type.name
+	byName := make(map[string]*models.WorkspaceResource)
+	byResourceID := make(map[string]*models.WorkspaceResource)
+	for i := range wsResources {
+		pr := &wsResources[i]
+		byName[pr.ResourceName] = pr
+		if pr.ResourceID != "" {
+			byResourceID[pr.ResourceID] = pr
 		}
-		// 后缀匹配：module name 格式为 Provider_type_resourceName，匹配 _resName 后缀
-		var bestMatch *models.WorkspaceResource
-		bestLen := 0
-		for resName, pr := range platformResources {
-			suffix := "_" + resName
-			if strings.HasSuffix(moduleName, suffix) && len(resName) > bestLen {
-				bestMatch = pr
-				bestLen = len(resName)
+	}
+
+	// 查找平台资源：支持 module 名、resource_id、type.name、后缀匹配
+	findPlatformResource := func(moduleName, resourceID, resourceType, resourceName string) *models.WorkspaceResource {
+		if resourceID != "" {
+			if pr, ok := byResourceID[resourceID]; ok {
+				return pr
+			}
+			// 去索引：aws_s3_bucket.this[0] → aws_s3_bucket.this
+			if idx := strings.Index(resourceID, "["); idx > 0 {
+				if pr, ok := byResourceID[resourceID[:idx]]; ok {
+					return pr
+				}
 			}
 		}
-		return bestMatch
+		if resourceType != "" && resourceName != "" {
+			key := resourceType + "." + resourceName
+			if pr, ok := byResourceID[key]; ok {
+				return pr
+			}
+		}
+		if moduleName != "" {
+			if pr, ok := byName[moduleName]; ok {
+				return pr
+			}
+			if pr, ok := byResourceID["module."+moduleName]; ok {
+				return pr
+			}
+			// 后缀匹配：平台 module 命名 Provider_type_resourceName
+			var bestMatch *models.WorkspaceResource
+			bestLen := 0
+			for resName, pr := range byName {
+				suffix := "_" + resName
+				if strings.HasSuffix(moduleName, suffix) && len(resName) > bestLen {
+					bestMatch = pr
+					bestLen = len(resName)
+				}
+			}
+			if bestMatch != nil {
+				return bestMatch
+			}
+		}
+		return nil
 	}
+
+	// 创建module节点映射
+	moduleNodes := make(map[string]*models.ResourceTreeNode)
 
 	for _, m := range modules {
 		node := &models.ResourceTreeNode{
@@ -740,9 +888,12 @@ func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resour
 
 		// 为根module添加跳转链接
 		if m.ParentPath == "" {
-			if pr := findPlatformResource(m.ModuleName); pr != nil {
+			if pr := findPlatformResource(m.ModuleName, m.ModulePath, "module", m.ModuleName); pr != nil {
 				node.PlatformResourceID = &pr.ID
-				node.JumpURL = fmt.Sprintf("/workspaces/%s/resources/%d", workspaceID, pr.ID)
+				node.JumpURL = buildResourceJumpURL(workspaceID, pr, m.ModulePath, mInfo)
+			} else if mInfo != nil {
+				// manifest workspace：即使无 platform resource 也可跳编辑器
+				node.JumpURL = buildResourceJumpURL(workspaceID, nil, m.ModulePath, mInfo)
 			}
 		}
 
@@ -774,12 +925,12 @@ func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resour
 			ResourceSummary:  r.ResourceSummary,
 		}
 
-		// 添加平台资源跳转链接（使用模糊匹配）
-		if r.RootModuleName != "" {
-			if pr := findPlatformResource(r.RootModuleName); pr != nil {
-				resourceNode.PlatformResourceID = &pr.ID
-				resourceNode.JumpURL = fmt.Sprintf("/workspaces/%s/resources/%d", workspaceID, pr.ID)
-			}
+		pr := findPlatformResource(r.RootModuleName, r.TerraformAddress, r.ResourceType, r.ResourceName)
+		if pr != nil {
+			resourceNode.PlatformResourceID = &pr.ID
+		}
+		if jump := buildResourceJumpURL(workspaceID, pr, r.TerraformAddress, mInfo); jump != "" {
+			resourceNode.JumpURL = jump
 		}
 
 		if r.ModulePath != "" {
@@ -812,6 +963,13 @@ func (s *CMDBService) buildResourceTree(modules []models.ModuleHierarchy, resour
 				Description:      r.Description,
 				Mode:             r.ResourceMode,
 				ResourceSummary:  r.ResourceSummary,
+			}
+			pr := findPlatformResource(r.RootModuleName, r.TerraformAddress, r.ResourceType, r.ResourceName)
+			if pr != nil {
+				resourceNode.PlatformResourceID = &pr.ID
+			}
+			if jump := buildResourceJumpURL(workspaceID, pr, r.TerraformAddress, mInfo); jump != "" {
+				resourceNode.JumpURL = jump
 			}
 			rootNodes = append(rootNodes, resourceNode)
 		}

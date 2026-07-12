@@ -34,6 +34,7 @@ interface Resource {
   };
   description?: string;
   is_active: boolean;
+  manifest_deployment_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -212,6 +213,32 @@ const ViewResource: React.FC = () => {
       const resourceResponse: any = await api.get(`/workspaces/${id}/resources/${resourceId}`);
       const resourceData = resourceResponse.data?.resource || resourceResponse.resource || resourceResponse;
       setResource(resourceData);
+
+      // Manifest 管理的资源：无 module schema，跳转 manifest 编辑器并定位资源块
+      if (resourceData.manifest_deployment_id) {
+        try {
+          const summary: any = await api.get(`/workspaces/${id}/manifest-summary`);
+          if (summary?.has_manifest && summary?.manifest_id != null && summary?.org_id != null) {
+            const params = new URLSearchParams({
+              org: String(summary.org_id),
+              subpath: summary.subpath ?? '',
+            });
+            if (summary.version_id) {
+              params.set('version', summary.version_id);
+            }
+            if (resourceData.resource_id) {
+              params.set('resource', resourceData.resource_id);
+            }
+            navigate(`/admin/manifests-v2/${summary.manifest_id}/edit?${params.toString()}`, { replace: true });
+            return;
+          }
+        } catch (e) {
+          console.warn('Failed to resolve manifest editor URL for resource', e);
+        }
+        showToast('此资源由 Manifest 管理，但无法定位到编辑器', 'error');
+        setLoading(false);
+        return;
+      }
       
       // 2. 从tf_code中提取module配置
       const tfCode = resourceData.current_version?.tf_code || {};

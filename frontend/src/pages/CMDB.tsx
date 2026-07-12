@@ -150,8 +150,8 @@ const TreeNode: React.FC<{
     }
   }, [expandAll]);
 
-  // Only show jump link for root modules (level 0 and type module)
-  const showJumpLink = node.type === 'module' && level === 0 && node.jump_url;
+  // Show jump link when backend provided jump_url (module or resource, including manifest editor)
+  const showJumpLink = !!node.jump_url;
 
   // Handle copy cloud ID
   const handleCopyCloudId = async (e: React.MouseEvent) => {

@@ -605,6 +605,8 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 		topK = req.Limit
 	}
 
+	// jump_url：manifest workspace 跳编辑器；普通 workspace 跳资源详情
+	// platform resource 匹配覆盖 address / module path / 后缀命名
 	sql := `
 		SELECT
 			ri.id,
@@ -630,6 +632,17 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 			wr.id as platform_resource_id,
 			CASE
 				WHEN ri.source_type = 'external' THEN NULL
+				WHEN m.id IS NOT NULL THEN
+					CONCAT(
+						'/admin/manifests-v2/', m.id, '/edit?org=', m.organization_id::text,
+						'&resource=', COALESCE(
+							NULLIF(split_part(ri.terraform_address, '[', 1), ''),
+							NULLIF(wr.resource_id, ''),
+							ri.terraform_address
+						),
+						CASE WHEN COALESCE(w.manifest_subpath, '') <> '' THEN CONCAT('&subpath=', w.manifest_subpath) ELSE '' END,
+						CASE WHEN COALESCE(md.version_id, '') <> '' THEN CONCAT('&version=', md.version_id) ELSE '' END
+					)
 				WHEN wr.id IS NOT NULL THEN CONCAT('/workspaces/', ri.workspace_id, '/resources/', wr.id)
 				ELSE NULL
 			END as jump_url,
@@ -643,7 +656,16 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 		LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id
 		LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id
 			AND ri.source_type = 'terraform'
-			AND ri.root_module_name LIKE '%\_' || wr.resource_name
+			AND (
+				wr.resource_id = ri.terraform_address
+				OR wr.resource_id = split_part(ri.terraform_address, '[', 1)
+				OR (wr.resource_type = 'module' AND ri.module_path <> '' AND wr.resource_id = ri.module_path)
+				OR (wr.resource_type = 'module' AND ri.root_module_name <> '' AND wr.resource_id = 'module.' || ri.root_module_name)
+				OR (wr.resource_type = 'module' AND ri.root_module_name <> '' AND wr.resource_name = ri.root_module_name)
+				OR (ri.root_module_name <> '' AND ri.root_module_name LIKE '%\_' || wr.resource_name)
+			)
+		LEFT JOIN manifest_deployments md ON md.id = COALESCE(wr.manifest_deployment_id, w.manifest_deployment_id)
+		LEFT JOIN manifests m ON m.id = md.manifest_id
 		WHERE ri.embedding IS NOT NULL
 		  AND ri.resource_mode = 'managed'
 		  AND 1 - (ri.embedding <=> $1::vector) >= $2
