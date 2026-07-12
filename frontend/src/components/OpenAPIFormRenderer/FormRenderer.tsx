@@ -245,7 +245,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       }
     });
     
-    console.log('🔗 Generated cascade rules:', fieldRules.length, 'from field configs');
+    console.log('Generated cascade rules:', fieldRules.length, 'from field configs');
     
     // 合并全局规则和字段级规则
     return [...globalRules, ...fieldRules];
@@ -258,7 +258,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       // 初始评估
       const initialState = cascadeEngineRef.current.evaluate(mergedInitialValues);
       setCascadeState(initialState);
-      console.log('🔗 CascadeEngine initialized with', cascadeRules.length, 'rules');
+      console.log('CascadeEngine initialized with', cascadeRules.length, 'rules');
     }
   }, [cascadeRules, mergedInitialValues]);
 

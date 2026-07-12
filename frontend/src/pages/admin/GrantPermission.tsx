@@ -609,7 +609,7 @@ const GrantPermission: React.FC = () => {
       </div>
       {urlPrincipalType === 'TEAM' && (
         <div className={styles.hint} style={{ marginTop: '8px', color: 'var(--brand)', fontSize: '14px', background: 'var(--brand-soft)', padding: '12px', borderRadius: '4px' }}>
-          💡 提示：{grantType === 'permission' ? '为团队授予权限后，团队的所有成员将自动继承这些权限。' : '为团队分配角色后，团队的所有成员将自动继承角色包含的权限。'}
+          提示：{grantType === 'permission' ? '为团队授予权限后，团队的所有成员将自动继承这些权限。' : '为团队分配角色后，团队的所有成员将自动继承角色包含的权限。'}
         </div>
       )}
 

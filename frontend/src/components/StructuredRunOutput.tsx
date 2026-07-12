@@ -434,7 +434,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
 
   // silent=true 用于 apply 期间的轮询兜底：不触发 loading 态，避免每次轮询闪烁 spinner
   const loadResourceChanges = async (silent = false) => {
-    console.log('🔍 loadResourceChanges called', silent ? '(silent poll)' : '');
+    console.log('loadResourceChanges called', silent ? '(silent poll)' : '');
     console.log('Task ID:', task.id);
     console.log('Workspace ID:', workspaceId);
     console.log('Task status:', task.status);
@@ -446,7 +446,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
       }
 
       const apiUrl = `/workspaces/${workspaceId}/tasks/${task.id}/resource-changes`;
-      console.log('📡 Making API request to:', apiUrl);
+      console.log('Making API request to:', apiUrl);
       
       const response: ResourceChangesResponse = await api.get(apiUrl);
       
@@ -504,7 +504,7 @@ const StructuredRunOutput: React.FC<Props> = ({ task, workspaceId, workspace, mo
       
       console.log('✓ State updated successfully');
     } catch (err) {
-      console.error('❌ Error loading resource changes');
+      console.error('Error loading resource changes');
       console.error('Error object:', err);
       console.error('Error message:', err instanceof Error ? err.message : 'Unknown error');
       console.error('Error stack:', err instanceof Error ? err.stack : 'No stack trace');

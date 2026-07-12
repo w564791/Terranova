@@ -153,7 +153,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
         </div>
         
         <div className={styles.waitingContainer}>
-          <div className={styles.waitingIcon}>⏳</div>
+          <div className={styles.waitingIcon}></div>
           <h3 className={styles.waitingTitle}>Waiting for Plan to Complete</h3>
           <p className={styles.waitingDesc}>
             This Apply task is waiting for the associated Plan task to complete successfully.

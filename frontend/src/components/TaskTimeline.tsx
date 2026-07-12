@@ -230,7 +230,7 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
           onClick={() => toggleSection('trigger')}
         >
           <div className={styles.triggerInfo}>
-            <span className={styles.triggerAvatar}>👤</span>
+            <span className={styles.triggerAvatar}></span>
             <span className={styles.triggerText}>
               <strong>{task.created_by_username || 'System'}</strong> triggered a{' '}
               <strong>{task.task_type}</strong> {formatRelativeTime(task.created_at)}

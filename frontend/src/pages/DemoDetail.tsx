@@ -215,7 +215,7 @@ const DemoDetail: React.FC = () => {
 
   const handleCompareVersions = async (fromVer: number, toVer: number) => {
     try {
-      console.log(`🔀 Comparing demo versions: v${fromVer} → v${toVer}`);
+      console.log(`Comparing demo versions: v${fromVer} → v${toVer}`);
       
       const [fromVersion, toVersion] = await Promise.all([
         moduleDemoService.getVersionById(
@@ -230,11 +230,11 @@ const DemoDetail: React.FC = () => {
       const toConfig = toVersion.config_data || {};
       
       const diff = calculateDiff(fromConfig, toConfig);
-      console.log('📊 Diff fields:', diff);
+      console.log('Diff fields:', diff);
       
       setDiffFields(diff);
     } catch (error: any) {
-      console.error('❌ 对比版本失败:', error);
+      console.error('对比版本失败:', error);
       showToast(extractErrorMessage(error), 'error');
     }
   };

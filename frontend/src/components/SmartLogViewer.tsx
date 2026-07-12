@@ -77,7 +77,7 @@ const SmartLogViewer: React.FC<Props> = ({ taskId, viewMode = 'plan', onStageCha
         gap: '16px',
         color: 'var(--red-hover)'
       }}>
-        <span>❌ 加载失败: {error}</span>
+        <span>加载失败: {error}</span>
         <button 
           onClick={fetchTaskStatus}
           style={{

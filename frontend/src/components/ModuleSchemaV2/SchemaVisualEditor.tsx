@@ -43,18 +43,18 @@ interface FieldData {
 }
 
 const WIDGET_OPTIONS = [
-  { value: 'text', label: '文本输入', icon: '📝' },
-  { value: 'textarea', label: '多行文本', icon: '📄' },
-  { value: 'number', label: '数字输入', icon: '🔢' },
-  { value: 'select', label: '下拉选择', icon: '📋' },
-  { value: 'multi-select', label: '多选', icon: '☑️' },
-  { value: 'switch', label: '开关', icon: '🔘' },
-  { value: 'tags', label: '标签', icon: '🏷️' },
-  { value: 'key-value', label: '键值对', icon: '🔑' },
-  { value: 'object', label: '对象', icon: '📦' },
-  { value: 'object-list', label: '对象列表', icon: '📚' },
-  { value: 'json-editor', label: 'JSON编辑器', icon: '{ }' },
-  { value: 'password', label: '密码', icon: '🔒' },
+  { value: 'text', label: '文本输入' },
+  { value: 'textarea', label: '多行文本' },
+  { value: 'number', label: '数字输入' },
+  { value: 'select', label: '下拉选择' },
+  { value: 'multi-select', label: '多选' },
+  { value: 'switch', label: '开关' },
+  { value: 'tags', label: '标签' },
+  { value: 'key-value', label: '键值对' },
+  { value: 'object', label: '对象' },
+  { value: 'object-list', label: '对象列表' },
+  { value: 'json-editor', label: 'JSON编辑器' },
+  { value: 'password', label: '密码' },
 ];
 
 const TYPE_OPTIONS = [
@@ -144,7 +144,7 @@ const SortableFieldItem: React.FC<SortableFieldItemProps> = ({
             <Select>
               {WIDGET_OPTIONS.map(opt => (
                 <Option key={opt.value} value={opt.value}>
-                  {opt.icon} {opt.label}
+                  {opt.label}
                 </Option>
               ))}
             </Select>
@@ -514,7 +514,7 @@ const SchemaVisualEditor: React.FC<SchemaVisualEditorProps> = ({
             <Select>
               {WIDGET_OPTIONS.map(opt => (
                 <Option key={opt.value} value={opt.value}>
-                  {opt.icon} {opt.label}
+                  {opt.label}
                 </Option>
               ))}
             </Select>
@@ -570,7 +570,7 @@ const SchemaVisualEditor: React.FC<SchemaVisualEditorProps> = ({
             添加字段
           </Button>
           <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>
-            💡 拖拽字段可调整顺序
+            拖拽字段可调整顺序
           </span>
         </div>
       )}

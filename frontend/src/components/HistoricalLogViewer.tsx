@@ -58,7 +58,7 @@ const HistoricalLogViewer: React.FC<Props> = ({ taskId }) => {
     return (
       <div className={styles.container}>
         <div className={styles.error}>
-          <span>❌ 加载失败: {error}</span>
+          <span>加载失败: {error}</span>
           <button onClick={fetchLogs} className={styles.retryBtn}>
             重试
           </button>

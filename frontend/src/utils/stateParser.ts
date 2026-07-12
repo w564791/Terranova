@@ -337,7 +337,7 @@ export function formatAttributeValue(value: any, maxLength: number = 100): strin
  * 获取资源类型的图标
  */
 export function getResourceTypeIcon(mode: 'data' | 'managed'): string {
-  return mode === 'data' ? '📊' : '⚙️';
+  return mode === 'data' ? 'data' : 'managed';
 }
 
 /**

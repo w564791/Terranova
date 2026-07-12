@@ -892,7 +892,7 @@ const EditResource: React.FC = () => {
 
           // 确保不是自己的当前session
           if (firstEditor.session_id === sessionId) {
-            console.error('❌ 错误：检测到的其他编辑者是自己！');
+            console.error('错误：检测到的其他编辑者是自己！');
             return;
           }
           
@@ -959,7 +959,7 @@ const EditResource: React.FC = () => {
             const currentSession = status.editors.find(e => e.is_current_session);
             
             if (status.editors.length > 0 && !currentSession && !editingDisabled && !hasShownTakeoverWarning && heartbeatTimerRef.current && !takenOverSessionIdRef.current) {
-              console.warn(' 未找到当前session,可能被接管');
+              console.warn('未找到当前session,可能被接管');
               setEditingDisabled(true);
               setHasShownTakeoverWarning(true);
               showToast('编辑已被其他窗口接管', 'warning');
@@ -989,7 +989,7 @@ const EditResource: React.FC = () => {
             consecutiveFailures++;
             
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !editingDisabled && !hasShownTakeoverWarning) {
-              console.warn(' 连续多次状态轮询失败');
+              console.warn('连续多次状态轮询失败');
               setEditingDisabled(true);
               setHasShownTakeoverWarning(true);
               showToast('编辑会话已断开,请刷新页面重新编辑', 'warning');

@@ -177,7 +177,7 @@ const TaskTriggerExecutions: React.FC<Props> = ({ workspaceId, taskId, taskStatu
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <span className={styles.icon}>⚡</span>
+          <span className={styles.icon}></span>
           <h3 className={styles.title}>Run Triggers</h3>
           <span className={styles.count}>{displayData.length}</span>
         </div>
@@ -235,7 +235,7 @@ const TaskTriggerExecutions: React.FC<Props> = ({ workspaceId, taskId, taskStatu
                 <tr key={execution.id}>
                   <td>
                     <div className={styles.targetCell}>
-                      <span className={styles.linkIcon}>🔗</span>
+                      <span className={styles.linkIcon}></span>
                       <span className={styles.targetName}>
                         {execution.run_trigger?.target_workspace?.name || 
                          execution.run_trigger?.target_workspace_id || 
@@ -286,7 +286,7 @@ const TaskTriggerExecutions: React.FC<Props> = ({ workspaceId, taskId, taskStatu
                 <tr key={trigger.id}>
                   <td>
                     <div className={styles.targetCell}>
-                      <span className={styles.linkIcon}>🔗</span>
+                      <span className={styles.linkIcon}></span>
                       <span className={styles.targetName}>
                         {trigger.target_workspace?.name || trigger.target_workspace_id}
                       </span>

@@ -32,7 +32,7 @@ const DemoList: React.FC<DemoListProps> = ({
       setLoading(true);
       setError(null);
       const data = await moduleDemoService.getDemosByModuleId(moduleId);
-      console.log('📊 Loaded demos:', data);
+      console.log('Loaded demos:', data);
       setDemos(data || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load demos');

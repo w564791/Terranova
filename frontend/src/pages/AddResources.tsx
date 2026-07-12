@@ -591,7 +591,7 @@ const AddResources: React.FC = () => {
           versionToSelect = versionItems.find((v: ModuleVersion) => v.version === urlVersionParam);
           if (versionToSelect) {
           } else {
-            console.warn(`📦 URL version param "${urlVersionParam}" not found for module ${moduleId}, falling back to default`);
+            console.warn(`URL version param "${urlVersionParam}" not found for module ${moduleId}, falling back to default`);
           }
         } else if (urlVersionParam && !urlModuleMatches) {
           // URL version param ignored due to module mismatch

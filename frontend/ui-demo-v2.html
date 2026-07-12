@@ -392,7 +392,7 @@
 
       <!-- 问题1: 无 source/version 信息 -->
       <div style="padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin-bottom:16px;font-size:12px;color:#92400e;">
-        ⚠️ 当前表单不显示 source 和 version 信息——它们被 <code>const { source, version, ...configData }</code> 过滤掉了，用户无法感知资源的模块来源。
+        当前表单不显示 source 和 version 信息——它们被 <code>const { source, version, ...configData }</code> 过滤掉了，用户无法感知资源的模块来源。
       </div>
 
       <!-- Section: 基础配置 -->
@@ -465,10 +465,10 @@
 
   <!-- ========== RIGHT: PROPOSED ========== -->
   <div class="panel">
-    <div class="panel-label proposed">✦ 建议方案</div>
+    <div class="panel-label proposed">建议方案</div>
     <div class="pro-form">
 
-      <!-- ✅ 新增: Source & Version 信息卡 -->
+      <!-- 新增: Source & Version 信息卡 -->
       <div style="padding: 16px 24px 0;">
         <div class="pro-source-card">
           <div class="pro-source-item">
@@ -486,7 +486,7 @@
       <!-- Section: 基础配置 -->
       <div class="pro-section" style="margin-top: 4px;">
         <div class="pro-section-hd">
-          <div class="pro-icon blue">⚙</div>
+          <div class="pro-icon blue"></div>
           <span class="pro-section-title">基础配置</span>
           <span class="pro-fcount">4 fields</span>
         </div>
@@ -512,7 +512,7 @@
             <div class="pro-desc">Amazon Machine Image 的唯一标识符，用于指定实例的操作系统镜像。</div>
           </div>
 
-          <!-- ✅ 修复: bool 开关 — 带状态文字 + 蓝色统一 -->
+          <!-- 修复: bool 开关 — 带状态文字 + 蓝色统一 -->
           <div class="pro-field">
             <div class="pro-label-row">
               <span class="pro-label">启用监控</span>
@@ -540,7 +540,7 @@
         </div>
       </div>
 
-      <!-- ✅ 新: HCL 视图取代 JSON 视图 -->
+      <!-- 新: HCL 视图取代 JSON 视图 -->
       <div class="pro-section">
         <div class="pro-section-hd">
           <div class="pro-icon green">{ }</div>
@@ -627,7 +627,7 @@
       <!-- Read-only 示例 -->
       <div class="pro-section">
         <div class="pro-section-hd">
-          <div class="pro-icon purple">👁</div>
+          <div class="pro-icon purple"></div>
           <span class="pro-section-title">查看模式（只读 — bool 对比）</span>
           <span class="pro-fcount">2 fields</span>
         </div>
@@ -665,7 +665,7 @@
 <!-- ===== Design Notes ===== -->
 <div class="notes">
   <div class="notes-card">
-    <h2>🔧 变更说明</h2>
+    <h2>变更说明</h2>
     <div class="notes-grid">
 
       <div class="note-item">

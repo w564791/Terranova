@@ -257,7 +257,7 @@ const ViewResource: React.FC = () => {
 
       if (!foundModule) {
         showToast('找不到对应的Module', 'error');
-        console.error('❌ No module found for source:', moduleSource);
+        console.error('No module found for source:', moduleSource);
         return;
       }
 
@@ -418,13 +418,13 @@ const ViewResource: React.FC = () => {
     const moduleData = tfCode?.module || tfCode?.modules;
     
     if (!moduleData) {
-      console.warn(' No module/modules found in tf_code');
+      console.warn('No module/modules found in tf_code');
       return {};
     }
     
     const moduleKeys = Object.keys(moduleData);
     if (moduleKeys.length === 0) {
-      console.warn(' Module data is empty');
+      console.warn('Module data is empty');
       return {};
     }
     
@@ -436,7 +436,7 @@ const ViewResource: React.FC = () => {
       return config;
     }
     
-    console.warn(' Module array is invalid');
+    console.warn('Module array is invalid');
     return {};
   };
 
@@ -458,13 +458,13 @@ const ViewResource: React.FC = () => {
         try {
           tfCode = JSON.parse(tfCode);
         } catch (e) {
-          console.error('❌ Failed to parse tf_code:', e);
+          console.error('Failed to parse tf_code:', e);
         }
       }
 
       if (!tfCode) {
-        console.error('❌ tf_code is undefined or null!');
-        console.error('❌ versionDataResponse keys:', Object.keys(versionDataResponse));
+        console.error('tf_code is undefined or null!');
+        console.error('versionDataResponse keys:', Object.keys(versionDataResponse));
         showToast('无法获取版本数据', 'error');
         return;
       }
@@ -474,10 +474,10 @@ const ViewResource: React.FC = () => {
       if (Object.keys(config).length > 0) {
         setDisplayData(config);
       } else {
-        console.error('❌ Extracted config is empty!');
+        console.error('Extracted config is empty!');
       }
     } catch (error: any) {
-      console.error('❌ 加载版本失败:', error);
+      console.error('加载版本失败:', error);
       showToast(extractErrorMessage(error), 'error');
     }
   };
@@ -651,7 +651,7 @@ const ViewResource: React.FC = () => {
       }
 
       if (!fromTfCode || !toTfCode) {
-        console.error('❌ tf_code is missing!');
+        console.error('tf_code is missing!');
         showToast('无法获取版本数据', 'error');
         return;
       }
@@ -660,7 +660,7 @@ const ViewResource: React.FC = () => {
       const toConfig = extractModuleConfig(toTfCode);
 
       if (Object.keys(fromConfig).length === 0 && Object.keys(toConfig).length === 0) {
-        console.error('❌ Both configs are empty!');
+        console.error('Both configs are empty!');
         showToast('无法提取配置数据', 'error');
         return;
       }
@@ -669,7 +669,7 @@ const ViewResource: React.FC = () => {
 
       setDiffFields(diff);
     } catch (error: any) {
-      console.error('❌ 对比版本失败:', error);
+      console.error('对比版本失败:', error);
       showToast(extractErrorMessage(error), 'error');
     }
   };

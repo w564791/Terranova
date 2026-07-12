@@ -274,7 +274,7 @@ const TaskDetail: React.FC = () => {
   };
 
   const handleStageChange = useCallback((stage: string) => {
-    console.log('📊 Stage changed:', stage);
+    console.log('Stage changed:', stage);
     // 在 Classic 模式下，自动切换到对应的日志视图
     if (stage === 'apply' && logViewMode !== 'apply') {
       setLogViewMode('apply');
@@ -455,7 +455,7 @@ const TaskDetail: React.FC = () => {
       return (
         <div className={styles.errorContainer}>
           <div className={styles.error}>
-            <span>❌ {error || '任务不存在'}</span>
+            <span>{error || '任务不存在'}</span>
             <button onClick={() => navigate(`/workspaces/${workspaceId}`)} className={styles.backBtn}>
               返回Workspace
             </button>

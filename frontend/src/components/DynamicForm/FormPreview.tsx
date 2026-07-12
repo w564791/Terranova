@@ -243,7 +243,7 @@ export const FormPreview: React.FC<FormPreviewProps> = ({
     return (
       <div className={styles.formView}>
         <div className={styles.readOnlyNotice}>
-          <span>📋 配置预览（只读）</span>
+          <span>配置预览（只读）</span>
         </div>
         
         {requiredFields.length > 0 && (

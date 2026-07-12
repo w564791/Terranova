@@ -313,27 +313,27 @@ const ImportModule: React.FC = () => {
           className={`${styles.methodButton} ${importMethod === 'json' ? styles.active : ''}`}
           onClick={() => setImportMethod('json')}
         >
-          📋 JSON配置
+          JSON配置
         </button>
         <button
           className={`${styles.methodButton} ${importMethod === 'tf-file' ? styles.active : ''}`}
           onClick={() => setImportMethod('tf-file')}
         >
-          📄 TF文件
+          TF文件
         </button>
         <button
           className={`${styles.methodButton} ${importMethod === 'tar' ? styles.active : ''}`}
           onClick={() => setImportMethod('tar')}
           disabled
         >
-          📦 TAR包 (开发中)
+          TAR包 (开发中)
         </button>
         <button
           className={`${styles.methodButton} ${importMethod === 'git' ? styles.active : ''}`}
           onClick={() => setImportMethod('git')}
           disabled
         >
-          🔗 Git仓库 (开发中)
+          Git仓库 (开发中)
         </button>
       </div>
 

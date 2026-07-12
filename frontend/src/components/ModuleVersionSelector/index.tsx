@@ -274,7 +274,7 @@ const ModuleVersionSelector: React.FC<ModuleVersionSelectorProps> = ({
                         }}
                         title="删除"
                       >
-                        🗑
+                        删除
                       </button>
                     )}
                   </div>

@@ -124,14 +124,14 @@ const SkillManagement = () => {
             onClick={() => handleEditClick(skill)}
             title="编辑"
           >
-            ✏️
+            编辑
           </button>
           <button 
             className={`${styles.actionBtn} ${skill.is_active ? styles.active : ''}`}
             onClick={() => handleToggleActive(skill)}
             title={skill.is_active ? '停用' : '激活'}
           >
-            {skill.is_active ? '🟢' : '⚪'}
+            {skill.is_active ? '启用' : '停用'}
           </button>
           {skill.source_type === 'manual' && (
             <button 
@@ -139,7 +139,7 @@ const SkillManagement = () => {
               onClick={() => handleDeleteClick(skill)}
               title="删除"
             >
-              🗑️
+              删除
             </button>
           )}
         </div>
@@ -216,7 +216,7 @@ const SkillManagement = () => {
           {groupedSkills.foundation.length > 0 && (
             <div className={styles.section}>
               <h2 className={styles.sectionTitle}>
-                🏛️ 基础层 (Foundation)
+                基础层 (Foundation)
                 <span className={styles.sectionDesc}>最通用的基础知识，所有功能复用</span>
               </h2>
               <div className={styles.skillList}>
@@ -228,7 +228,7 @@ const SkillManagement = () => {
           {groupedSkills.domain.length > 0 && (
             <div className={styles.section}>
               <h2 className={styles.sectionTitle}>
-                🎯 领域层 (Domain)
+                领域层 (Domain)
                 <span className={styles.sectionDesc}>专业领域知识，部分功能复用</span>
               </h2>
               <div className={styles.skillList}>
@@ -240,7 +240,7 @@ const SkillManagement = () => {
           {groupedSkills.task.length > 0 && (
             <div className={styles.section}>
               <h2 className={styles.sectionTitle}>
-                ⚡ 任务层 (Task)
+                任务层 (Task)
                 <span className={styles.sectionDesc}>特定功能的专属工作流程</span>
               </h2>
               <div className={styles.skillList}>

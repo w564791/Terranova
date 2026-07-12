@@ -57,7 +57,7 @@ export class ResourceEditingService {
       `/workspaces/${workspaceId}/resources/${resourceId}/editing/start`,
       { session_id: sessionId }
     );
-    console.log('🔍 StartEditing API Response:', response.data);
+    console.log('StartEditing API Response:', response.data);
     // 后端返回格式: {success: true, data: {...}}
     return response.data.data || response.data;
   }

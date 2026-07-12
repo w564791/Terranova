@@ -19,7 +19,7 @@ const NoPermission: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        <div className={styles.icon}>🔒</div>
+        <div className={styles.icon}></div>
         <h1 className={styles.title}>您好，{user?.username || '用户'}</h1>
         <p className={styles.message}>
           您尚未加入任何组织，暂时无法访问系统功能。

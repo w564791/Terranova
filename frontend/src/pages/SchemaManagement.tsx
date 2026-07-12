@@ -578,7 +578,7 @@ const SchemaManagement: React.FC = () => {
             className={styles.diffButton}
             disabled={schemas.length < 2}
           >
-            📊 对比版本
+            对比版本
           </button>
         </div>
         
@@ -684,7 +684,7 @@ const SchemaManagement: React.FC = () => {
               className={styles.createButton}
               disabled={uploading}
             >
-              {uploading ? '解析中...' : '📄 上传 TF 文件（支持多选）'}
+              {uploading ? '解析中...' : '上传 TF 文件（支持多选）'}
             </button>
           </div>
         </div>
@@ -727,14 +727,14 @@ const SchemaManagement: React.FC = () => {
             disabled={uploading}
             title="支持同时选择 variables.tf 和 outputs.tf"
           >
-            {uploading ? '解析中...' : '📄 新建版本'}
+            {uploading ? '解析中...' : '新建版本'}
           </button>
           {isV2Schema(activeSchema) && (
             <button 
               onClick={() => enterEditMode(activeSchema.openapi_schema, activeSchema.variables_tf || '')} 
               className={styles.editSchemaButton}
             >
-              ✏️ 编辑 Schema
+              编辑 Schema
             </button>
           )}
         </div>

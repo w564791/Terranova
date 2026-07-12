@@ -56,7 +56,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   React.useEffect(() => {
     // 只在首次初始化时设置，避免后续更新导致循环
     if (!hasInitializedRef.current && initialFieldsToShow && initialFieldsToShow.length > 0) {
-      console.log('🔄 Updating selectedAdvancedFields with:', initialFieldsToShow);
+      console.log('Updating selectedAdvancedFields with:', initialFieldsToShow);
       setSelectedAdvancedFields(initialFieldsToShow);
       hasInitializedRef.current = true;
     }
@@ -121,12 +121,12 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   const visibleAdvancedFields = selectedAdvancedFields
     .filter(fieldName => {
       const exists = schema[fieldName];
-      console.log(`🔍 Field "${fieldName}": exists=${!!exists}`);
+      console.log(`Field "${fieldName}": exists=${!!exists}`);
       return exists;  // 只检查字段是否存在，不检查hidden_default
     })
     .map(fieldName => [fieldName, schema[fieldName]] as [string, typeof schema[string]]);
   
-  console.log('👁️ visibleAdvancedFields:', visibleAdvancedFields.map(([name]) => name));
+  console.log('visibleAdvancedFields:', visibleAdvancedFields.map(([name]) => name));
   
   // 优化3: 支持搜索的可用高级字段 - 修复bug2
   const allAvailableAdvancedFields = allAdvancedFields

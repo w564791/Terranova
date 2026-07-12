@@ -33,9 +33,9 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
-    console.log('🚀 开始执行handleSubmit');
-    console.log('📝 resourceName:', resourceName);
-    console.log('📝 workspaceId:', workspaceId);
+    console.log('开始执行handleSubmit');
+    console.log('resourceName:', resourceName);
+    console.log('workspaceId:', workspaceId);
     
     try {
       setLoading(true);
@@ -44,9 +44,9 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
       // 构建完整的module名称：resource_type_resource_name
       const moduleName = resourceType ? `${resourceType}_${resourceName}` : resourceName;
       const targetValue = `--target=module.${moduleName}`;
-      console.log('🎯 目标变量值:', targetValue);
-      console.log('📝 resourceType:', resourceType);
-      console.log('📝 moduleName:', moduleName);
+      console.log('目标变量值:', targetValue);
+      console.log('resourceType:', resourceType);
+      console.log('moduleName:', moduleName);
       
       try {
         // 尝试获取现有变量
@@ -54,12 +54,12 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
         // API返回格式：{code: 200, data: [...], timestamp: "..."}
         const variables = variablesResponse.data?.data || variablesResponse.data || [];
         
-        console.log('📋 当前变量列表:', variables);
-        console.log('🔍 查找TF_CLI_ARGS变量...');
+        console.log('当前变量列表:', variables);
+        console.log('查找TF_CLI_ARGS变量...');
         
         const existingVar = variables.find((v: any) => v.key === 'TF_CLI_ARGS');
         
-        console.log('🔍 找到的变量:', existingVar);
+        console.log('找到的变量:', existingVar);
         
         if (existingVar) {
           // 更新现有变量（必须包含version字段）
@@ -72,7 +72,7 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
             sensitive: false,
             description: 'Auto-generated for resource-specific run'
           });
-          console.log(' TF_CLI_ARGS变量已更新');
+          console.log('TF_CLI_ARGS变量已更新');
         } else {
           // 创建新变量
           try {
@@ -84,18 +84,18 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
               sensitive: false,
               description: 'Auto-generated for resource-specific run'
             });
-            console.log(' TF_CLI_ARGS变量已创建');
+            console.log('TF_CLI_ARGS变量已创建');
           } catch (createError: any) {
-            console.log('❌ [ViewResource] 创建变量失败:', createError);
+            console.log('[ViewResource] 创建变量失败:', createError);
             
             // 如果创建失败是因为变量已存在，尝试重新获取并更新
             const errorMessage = createError?.response?.data?.message || createError?.message || '';
-            console.log('🔍 [ViewResource] 最终错误消息:', errorMessage);
+            console.log('[ViewResource] 最终错误消息:', errorMessage);
             if (errorMessage.includes('已存在') || errorMessage.includes('exist')) {
-              console.log('🔄 [ViewResource] 检测到变量已存在，尝试重新获取并更新...');
+              console.log('[ViewResource] 检测到变量已存在，尝试重新获取并更新...');
               const retryResponse: any = await api.get(`/workspaces/${workspaceId}/variables`);
               const retryVariables = retryResponse.data?.data || retryResponse.data || [];
-              console.log('🔄 [ViewResource] 重试获取到的变量列表:', retryVariables);
+              console.log('[ViewResource] 重试获取到的变量列表:', retryVariables);
               const retryExistingVar = retryVariables.find((v: any) => v.key === 'TF_CLI_ARGS');
               
               if (retryExistingVar) {
@@ -108,9 +108,9 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
                   sensitive: false,
                   description: 'Auto-generated for resource-specific run'
                 });
-                console.log(' [ViewResource] TF_CLI_ARGS变量已更新（重试成功）');
+                console.log('[ViewResource] TF_CLI_ARGS变量已更新（重试成功）');
               } else {
-                console.log(' [ViewResource] 重试时仍未找到变量，尝试通过key查询...');
+                console.log('[ViewResource] 重试时仍未找到变量，尝试通过key查询...');
                 try {
                   const singleVarResponse: any = await api.get(`/workspaces/${workspaceId}/variables/by-key/TF_CLI_ARGS`);
                   const singleVar = singleVarResponse.data?.variable || singleVarResponse.variable || singleVarResponse;
@@ -125,12 +125,12 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
                       sensitive: false,
                       description: 'Auto-generated for resource-specific run'
                     });
-                    console.log(' [ViewResource] TF_CLI_ARGS变量已更新（通过key查询成功）');
+                    console.log('[ViewResource] TF_CLI_ARGS变量已更新（通过key查询成功）');
                   } else {
-                    console.warn(' [ViewResource] 无法找到变量但后端说已存在，忽略此错误继续执行');
+                    console.warn('[ViewResource] 无法找到变量但后端说已存在，忽略此错误继续执行');
                   }
                 } catch (queryError) {
-                  console.warn(' [ViewResource] 通过key查询变量也失败，忽略此错误继续执行:', queryError);
+                  console.warn('[ViewResource] 通过key查询变量也失败，忽略此错误继续执行:', queryError);
                 }
               }
             } else {

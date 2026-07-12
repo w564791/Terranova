@@ -139,13 +139,13 @@ export const adminService = {
     await api.delete(`/global/settings/terraform-versions/${id}`);
   },
 
-  // 获取默认版本 ⭐ 新增
+  // 获取默认版本
   getDefaultVersion: async (): Promise<TerraformVersion> => {
     const response = await api.get('/global/settings/terraform-versions/default');
     return response.data;
   },
 
-  // 设置默认版本 ⭐ 新增
+  // 设置默认版本
   setDefaultVersion: async (id: number): Promise<TerraformVersion> => {
     const response = await api.post(`/global/settings/terraform-versions/${id}/set-default`);
     return response.data;

@@ -248,7 +248,7 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
     return (
       <div className={styles.container}>
         <div className={isCancelled ? styles.info : styles.error}>
-          <span>{isCancelled ? '' : '❌ '}{error}</span>
+          <span>{error}</span>
           {!isCancelled && (
             <button onClick={fetchAndParseLogs} className={styles.retryBtn}>
               重试

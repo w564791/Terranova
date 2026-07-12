@@ -52,7 +52,7 @@ class WebSocketService {
       this.ws = new WebSocket(wsUrl, ['access_token', token]);
 
       this.ws.onopen = () => {
-        console.log(' WebSocket connected');
+        console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         
         // 发送认证信息（如果需要）
@@ -69,7 +69,7 @@ class WebSocketService {
       };
 
       this.ws.onclose = (event) => {
-        console.log('❌ WebSocket disconnected', event.code, event.reason);
+        console.log('WebSocket disconnected', event.code, event.reason);
         this.ws = null;
 
         // 如果不是主动关闭，尝试重连
@@ -91,7 +91,7 @@ class WebSocketService {
    * 处理接收到的消息
    */
   private handleMessage(message: WebSocketMessage): void {
-    console.log('📥 WebSocket message received:', message.type, message.data);
+    console.log('WebSocket message received:', message.type, message.data);
 
     const handlers = this.listeners.get(message.type);
     if (handlers && handlers.length > 0) {
@@ -119,7 +119,7 @@ class WebSocketService {
     }
 
     this.reconnectAttempts++;
-    console.log(`🔄 Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    console.log(`Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
@@ -166,7 +166,7 @@ class WebSocketService {
 
     try {
       this.ws.send(JSON.stringify(message));
-      console.log('📤 WebSocket message sent:', type);
+      console.log('WebSocket message sent:', type);
     } catch (error) {
       console.error('Failed to send WebSocket message:', error);
     }

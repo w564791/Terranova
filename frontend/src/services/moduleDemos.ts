@@ -64,10 +64,10 @@ export const moduleDemoService = {
   // 获取模块的所有 Demo
   // versionId 可选，不传则返回默认版本的 Demo
   getDemosByModuleId: async (moduleId: number, versionId?: string): Promise<ModuleDemo[]> => {
-    console.log('🔍 Fetching demos for module:', moduleId, 'version:', versionId);
+    console.log('Fetching demos for module:', moduleId, 'version:', versionId);
     const params = versionId ? { version_id: versionId } : {};
     const response = await api.get(`/modules/${moduleId}/demos`, { params });
-    console.log('🔍 API response:', response);
+    console.log('API response:', response);
     
     // 处理不同的响应格式
     let demos: ModuleDemo[] = [];
@@ -83,7 +83,7 @@ export const moduleDemoService = {
       demos = data.demos;
     }
     
-    console.log('🔍 Parsed demos:', demos);
+    console.log('Parsed demos:', demos);
     return demos;
   },
 

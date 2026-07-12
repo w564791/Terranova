@@ -41,7 +41,6 @@ const getQuoteByTime = () => {
   
   if (hour >= 5 && hour < 12) {
     return {
-      icon: '🌅',
       text: '新的一天，迎接挑战',
       background: 'linear-gradient(135deg, #ff9a56 0%, #ff6a88 50%, #ffd3a5 100%)'
     };
@@ -49,7 +48,6 @@ const getQuoteByTime = () => {
 
   if (hour >= 12 && hour < 18) {
     return {
-      icon: '🌞',
       text: '保持节奏，稳步前行',
       background: 'linear-gradient(135deg, var(--brand-300) 0%, var(--brand) 100%)'
     };
@@ -57,14 +55,12 @@ const getQuoteByTime = () => {
 
   if (hour >= 18 && hour < 23) {
     return {
-      icon: '🌇',
       text: '辛苦了，今天也在进步',
       background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%)'
     };
   }
 
   return {
-    icon: '🌙',
     text: '夜深了，注意休息',
     background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-ink) 50%, var(--brand-ink) 100%)'
   };
@@ -86,7 +82,6 @@ const MotivationalQuote: React.FC<MotivationalQuoteProps> = ({ username = '用�
 
   return (
     <div className={styles.container} style={{ background: quote.background }}>
-      <span className={styles.icon}>{quote.icon}</span>
       <span className={styles.greeting}>{greeting}</span>
       <span className={styles.separator}>|</span>
       <span className={styles.text}>{quote.text}</span>

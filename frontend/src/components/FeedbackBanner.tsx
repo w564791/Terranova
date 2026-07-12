@@ -17,7 +17,7 @@ const capabilityLabels: Record<string, string> = {
   module_skill_generation: 'Module Skill 生成',
 };
 
-const stars = ['😞', '😕', '😐', '🙂', '😊'];
+const stars = ['1', '2', '3', '4', '5'];
 
 // 记住已跳过的 ID，避免轮询再弹出
 const DISMISSED_KEY = 'skill_feedback_dismissed';
@@ -132,19 +132,28 @@ const FeedbackBanner: React.FC = () => {
           {item.created_at} · {item.user_action === 'accepted' ? '已应用' : '已终止'}
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-          {stars.map((emoji, i) => (
+          {stars.map((label, i) => (
             <span
               key={i}
               onClick={() => submitFeedback(item.id, i + 1)}
               title={`${i + 1} 分`}
               style={{
                 cursor: 'pointer',
-                fontSize: 26,
+                fontSize: 14,
+                fontWeight: 600,
+                width: 32,
+                height: 32,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 6,
+                border: '1px solid var(--line)',
+                color: 'var(--ink)',
                 transition: 'transform 0.15s',
               }}
-              onMouseEnter={e => { (e.target as HTMLElement).style.transform = 'scale(1.3)'; }}
+              onMouseEnter={e => { (e.target as HTMLElement).style.transform = 'scale(1.1)'; }}
               onMouseLeave={e => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
-            >{emoji}</span>
+            >{label}</span>
           ))}
         </div>
       </div>

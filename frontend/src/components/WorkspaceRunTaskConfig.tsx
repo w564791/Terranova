@@ -311,7 +311,7 @@ const WorkspaceRunTaskConfig: React.FC<Props> = ({ workspaceId }) => {
       {globalRunTasks.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <h4 style={{ marginBottom: 12, color: 'var(--brand)' }}>
-            🌐 Global Run Tasks (Auto-applied to all workspaces)
+            Global Run Tasks (Auto-applied to all workspaces)
           </h4>
           <Table
             columns={globalColumns}
@@ -327,7 +327,7 @@ const WorkspaceRunTaskConfig: React.FC<Props> = ({ workspaceId }) => {
 
       {/* Workspace-specific Run Tasks Section */}
       <h4 style={{ marginBottom: 12 }}>
-        📋 Workspace-specific Run Tasks
+        Workspace-specific Run Tasks
       </h4>
       {workspaceRunTasks.length === 0 ? (
         <Empty description="No workspace-specific run tasks configured" />

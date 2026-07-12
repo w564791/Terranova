@@ -20,9 +20,9 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // 关键：不依赖 simpleToast 对象本身，而是依赖其方法
   const contextValue: ToastContextType = useMemo(() => ({
     showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
-      console.log('🔔 showToast called:', { message, type, featureEnabled: FEATURES.TOAST_NOTIFICATIONS });
+      console.log('showToast called:', { message, type, featureEnabled: FEATURES.TOAST_NOTIFICATIONS });
       if (FEATURES.TOAST_NOTIFICATIONS) {
-        console.log('🔔 Calling simpleToast[type]:', type);
+        console.log('Calling simpleToast[type]:', type);
         simpleToast[type](message);
       } else {
         alert(message);

@@ -720,12 +720,12 @@ const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = React.memo(({ sectio
                   <div className={styles.statusBadge}>
                     {isLocked ? (
                       <>
-                        <span className={styles.lockedIcon}>🔒</span>
+                        <span className={styles.lockedIcon}></span>
                         <span>Locked</span>
                       </>
                     ) : (
                       <>
-                        <span className={styles.unlockedIcon}>🔓</span>
+                        <span className={styles.unlockedIcon}></span>
                         <span>Unlocked</span>
                       </>
                     )}

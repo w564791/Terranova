@@ -1277,7 +1277,7 @@ const AIConfigForm = () => {
               backgroundColor: 'var(--brand-soft)' 
             }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--brand)' }}>
-                🧠 Skill 模式配置
+                Skill 模式配置
                 {formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) && 
                  !formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) && 
                  !formData.capabilities.includes('*') && 
@@ -1305,7 +1305,7 @@ const AIConfigForm = () => {
                   启用后，AI 将使用分层 Skill 系统组装 Prompt，而不是使用固定的 capability_prompts。
                   <br />
                   <span style={{ color: 'var(--brand)' }}>
-                    ✨ Skill 模式支持：基础层（通用知识）+ 领域层（专业知识）+ 任务层（工作流程）
+                    Skill 模式支持：基础层（通用知识）+ 领域层（专业知识）+ 任务层（工作流程）
                     {formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) && ' + Module Skill（自动生成）'}
                   </span>
                 </div>
@@ -1329,7 +1329,7 @@ const AIConfigForm = () => {
                         checked={formData.use_optimized}
                         onChange={(e) => setFormData({ ...formData, use_optimized: e.target.checked })}
                       />
-                      <span style={{ fontWeight: 500, color: '#13c2c2' }}>🚀 使用优化版（实验性）</span>
+                      <span style={{ fontWeight: 500, color: '#13c2c2' }}>使用优化版（实验性）</span>
                     </label>
                     <div className={styles.hint} style={{ marginLeft: '24px', marginTop: '4px' }}>
                       启用后，由 AI 根据需求/内容自动选择最相关的 Domain Skills（而非使用下方固定配置），
@@ -1345,7 +1345,7 @@ const AIConfigForm = () => {
                     <>
                       <br />
                       <span style={{ color: '#eb2f96' }}>
-                        📝 Module Skill 生成默认使用：platform_introduction + output_format_standard + schema_validation_rules + module_skill_generation_workflow
+                        Module Skill 生成默认使用：platform_introduction + output_format_standard + schema_validation_rules + module_skill_generation_workflow
                       </span>
                     </>
                   )}
@@ -1519,7 +1519,7 @@ const AIConfigForm = () => {
                                 fontSize: '12px',
                                 color: 'var(--amber-hover)'
                               }}>
-                                💡 自动发现模式会解析 Task Skill 内容中的 <code>@require-domain</code> 声明
+                                自动发现模式会解析 Task Skill 内容中的 <code>@require-domain</code> 声明
                               </div>
                             )}
                           </div>
@@ -1592,7 +1592,7 @@ const AIConfigForm = () => {
                                     cursor: skillComposition.task_skill ? 'pointer' : 'not-allowed',
                                   }}
                                 >
-                                  {loadingPreview ? '预览中...' : '🔍 预览发现结果'}
+                                  {loadingPreview ? '预览中...' : '预览发现结果'}
                                 </button>
                               </div>
                               
@@ -1606,7 +1606,7 @@ const AIConfigForm = () => {
                                   borderRadius: '4px'
                                 }}>
                                   <div style={{ fontWeight: 500, marginBottom: '8px', color: 'var(--green-active)' }}>
-                                    📋 预览结果（保存后生效）
+                                    预览结果（保存后生效）
                                   </div>
                                   <div style={{ marginBottom: '8px' }}>
                                     <span style={{ color: 'var(--ink-2)' }}>Task Skill:</span>{' '}
@@ -1660,7 +1660,7 @@ const AIConfigForm = () => {
                                   </div>
                                   {discoveryPreview.message && (
                                     <div style={{ marginTop: '8px', color: 'var(--amber)', fontSize: '11px' }}>
-                                      💡 {discoveryPreview.message}
+                                      {discoveryPreview.message}
                                     </div>
                                   )}
                                 </div>
@@ -1767,7 +1767,7 @@ const AIConfigForm = () => {
                             fontSize: '12px',
                             color: 'var(--amber-hover)'
                           }}>
-                            💡 Module Skill 生成场景不需要"自动加载 Module Skill"，因为它是用来生成 Module Skill 的。
+                            Module Skill 生成场景不需要"自动加载 Module Skill"，因为它是用来生成 Module Skill 的。
                           </div>
                         )}
 
@@ -1780,7 +1780,7 @@ const AIConfigForm = () => {
                           borderRadius: '4px',
                           fontSize: '12px',
                         }}>
-                          <strong style={{ color: 'var(--brand-ink)' }}>📋 当前 Skill 组合配置：</strong>
+                          <strong style={{ color: 'var(--brand-ink)' }}>当前 Skill 组合配置：</strong>
                           <div style={{ marginTop: '8px', lineHeight: '1.8' }}>
                             <div>
                               <span style={{ color: 'var(--brand)' }}>Foundation:</span>{' '}

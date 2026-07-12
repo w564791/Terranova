@@ -52,7 +52,7 @@ const TakeoverConfirmDialog: React.FC<TakeoverConfirmDialogProps> = ({
           {isSameUser ? (
             // 同一用户：简化提示，直接确认即可
             <div className={styles.warningBox} style={{ background: 'var(--brand-soft)', borderColor: 'var(--brand)' }}>
-              <span className={styles.warningIcon}>ℹ️</span>
+              <span className={styles.warningIcon}></span>
               <p className={styles.warningText} style={{ color: 'var(--brand-700)' }}>
                 确认后将关闭另一个窗口的编辑会话，在此窗口继续编辑。
               </p>

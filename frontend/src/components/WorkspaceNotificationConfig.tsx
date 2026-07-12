@@ -373,7 +373,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
       {globalNotifications.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <h4 style={{ marginBottom: 12, color: 'var(--brand)' }}>
-            🌐 Global Notifications (Auto-applied to all workspaces)
+            Global Notifications (Auto-applied to all workspaces)
           </h4>
           <Table
             columns={globalColumns}
@@ -389,7 +389,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
 
       {/* Workspace-specific Notifications Section */}
       <h4 style={{ marginBottom: 12 }}>
-        📋 Workspace-specific Notifications
+        Workspace-specific Notifications
       </h4>
       {workspaceNotifications.length === 0 ? (
         <Empty description="No workspace-specific notifications configured" />

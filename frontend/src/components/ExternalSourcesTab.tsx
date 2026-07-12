@@ -108,7 +108,7 @@ const HeaderEditor: React.FC<{
         + 添加Header
       </button>
       <p className={styles.headerHint}>
-        💡 Header值将加密存储，无法查看。如需修改请输入新值。
+        Header值将加密存储，无法查看。如需修改请输入新值。
       </p>
     </div>
   );

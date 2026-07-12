@@ -133,12 +133,12 @@ const Login: React.FC = () => {
     
     try {
       const response = await authService.login(formData);
-      console.log(' Login response:', response);
+      console.log('Login response:', response);
       
       // 检查是否需要MFA验证
       if (response.data.mfa_required) {
-        console.log('🔐 MFA required, redirecting to MFA verify page');
-        console.log('🔐 Backend returned required_backup_codes:', response.data.required_backup_codes);
+        console.log('MFA required, redirecting to MFA verify page');
+        console.log('Backend returned required_backup_codes:', response.data.required_backup_codes);
         navigate('/login/mfa', {
           state: {
             mfa_token: response.data.mfa_token,
@@ -152,7 +152,7 @@ const Login: React.FC = () => {
       
       // 检查是否需要设置MFA
       if (response.data.mfa_setup_required) {
-        console.log('🔐 MFA setup required, redirecting to MFA setup page');
+        console.log('MFA setup required, redirecting to MFA setup page');
         navigate('/setup/mfa', {
           state: {
             mfa_token: response.data.mfa_token,
@@ -167,8 +167,8 @@ const Login: React.FC = () => {
       const token = response.data.token;
       const user = response.data.user;
       
-      console.log(' Token:', token?.substring(0, 30) + '...');
-      console.log(' User:', user);
+      console.log('Token:', token?.substring(0, 30) + '...');
+      console.log('User:', user);
       
       if (!token || !user) {
         console.error('Missing token or user in response!', response);
@@ -180,7 +180,7 @@ const Login: React.FC = () => {
         token: token,
       }));
       
-      console.log(' Token saved to localStorage:', localStorage.getItem('token')?.substring(0, 30) + '...');
+      console.log('Token saved to localStorage:', localStorage.getItem('token')?.substring(0, 30) + '...');
       
       localStorage.removeItem('loginUsername');
       navigate(from, { replace: true });

@@ -781,7 +781,7 @@ const OverviewTab: React.FC<{
               <div className={`${styles.statusIndicator} ${styles[`indicator-${getStatusCategory(latestRun.status)}`]}`}></div>
               {/* 左侧头像 */}
               <div className={styles.runAvatar}>
-                <span className={styles.avatarIcon}>👤</span>
+                <span className={styles.avatarIcon}></span>
               </div>
 
               {/* 中间内容区 */}
@@ -1407,7 +1407,7 @@ const RunsTab: React.FC<{ workspaceId: string; latestRun: any; onLatestRunChange
             <div className={`${styles.statusIndicator} ${styles[`indicator-${getStatusCategory(latestRun.status)}`]}`}></div>
             {/* 左侧头像 */}
             <div className={styles.runAvatar}>
-              <span className={styles.avatarIcon}>👤</span>
+              <span className={styles.avatarIcon}></span>
             </div>
 
             {/* 中间内容区 */}
@@ -1615,7 +1615,7 @@ const RunsTab: React.FC<{ workspaceId: string; latestRun: any; onLatestRunChange
                 )}
                 {/* 左侧头像 */}
                 <div className={styles.runAvatar}>
-                  <span className={styles.avatarIcon}>👤</span>
+                  <span className={styles.avatarIcon}></span>
                 </div>
                 
                 {/* 中间内容区 */}

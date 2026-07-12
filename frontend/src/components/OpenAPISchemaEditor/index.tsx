@@ -616,20 +616,20 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
 
   // 直接使用传入的 groups，确保始终使用最新的分组列表
   const effectiveGroups = useMemo((): UIGroup[] => {
-    // console.log('🔍 InlineFieldEditor groups prop:', groups);
+    // console.log('InlineFieldEditor groups prop:', groups);
     
     // 如果 groups 为空或无效，使用默认分组
     if (!groups || !Array.isArray(groups) || groups.length === 0) {
-      // console.log(' Using DEFAULT_GROUPS because groups is empty or invalid');
+      // console.log('Using DEFAULT_GROUPS because groups is empty or invalid');
       return DEFAULT_GROUPS;
     }
     
     // 检查 groups 是否有有效的 id 和 label
     const validGroups = groups.filter(g => g && typeof g === 'object' && g.id && g.label);
-    // console.log('✅ Valid groups:', validGroups);
+    // console.log('Valid groups:', validGroups);
     
     if (validGroups.length === 0) {
-      // console.log(' Using DEFAULT_GROUPS because no valid groups found');
+      // console.log('Using DEFAULT_GROUPS because no valid groups found');
       return DEFAULT_GROUPS;
     }
     
@@ -642,7 +642,7 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
       order: typeof g.order === 'number' ? g.order : 100,
     }));
     
-    console.log('📋 Effective groups:', result);
+    console.log('Effective groups:', result);
     return result;
   }, [groups]);
 
@@ -898,7 +898,7 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
                     // 保留 source 字段，让用户填写
                   }
                   
-                  console.log('📝 CMDB source type changed:', sourceType, 'cmdbSource:', newUiConfig.cmdbSource, 'full config:', newUiConfig);
+                  console.log('CMDB source type changed:', sourceType, 'cmdbSource:', newUiConfig.cmdbSource, 'full config:', newUiConfig);
                   setEditedUiConfig(newUiConfig);
                   // 立即触发 onChange，不使用 setTimeout
                   onChange(editedProperty, newUiConfig);
@@ -967,7 +967,7 @@ const InlineFieldEditor: React.FC<InlineFieldEditorProps> = ({ fieldName, proper
                 </div>
               </div>
               <div className={styles.cmdbSourceInfo}>
-                <span className={styles.cmdbInfoIcon}>💡</span>
+                <span className={styles.cmdbInfoIcon}></span>
                 <span>从 CMDB 搜索已有云资源，选择后自动填充对应字段值，用户也可手动输入</span>
               </div>
             </div>
@@ -2090,7 +2090,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ groups, onChange }) => {
     <div className={styles.groupManager}>
       <div className={styles.groupManagerHeader}>
         <h4>分组管理</h4>
-        <span className={styles.dragHint}>💡 拖拽调整顺序，直接编辑即时保存</span>
+        <span className={styles.dragHint}>拖拽调整顺序，直接编辑即时保存</span>
         <button type="button" onClick={() => setShowAddGroup(true)} className={styles.addGroupButton}>+ 添加</button>
       </div>
       
@@ -2833,7 +2833,7 @@ export const OpenAPISchemaEditor: React.FC<OpenAPISchemaEditorProps> = ({ schema
               <div className={styles.searchBox}>
                 <input type="text" placeholder="搜索字段..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={styles.searchInput} />
                 <button type="button" onClick={handleAddField} className={styles.saveButton}>+ 添加字段</button>
-                <span className={styles.dragHint}>💡 拖拽行可调整顺序</span>
+                <span className={styles.dragHint}>拖拽行可调整顺序</span>
               </div>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <div className={styles.tableContainer}>
@@ -3359,7 +3359,7 @@ const SchemaChangesJsonPreview: React.FC<SchemaChangesJsonPreviewProps> = ({
         {/* 左侧 - 原始数据 */}
         <div className={styles.jsonDiffPanel}>
           <div className={styles.jsonDiffPanelHeader}>
-            <span className={styles.panelTitle}>📄 原始 Schema</span>
+            <span className={styles.panelTitle}>原始 Schema</span>
             <span className={styles.panelSubtitle}>修改前</span>
           </div>
           <div className={styles.jsonDiffCodeWrapper}>
@@ -3408,7 +3408,7 @@ const SchemaChangesJsonPreview: React.FC<SchemaChangesJsonPreviewProps> = ({
         {/* 右侧 - 新数据 */}
         <div className={styles.jsonDiffPanel}>
           <div className={styles.jsonDiffPanelHeader}>
-            <span className={styles.panelTitle}>📝 修改后 Schema</span>
+            <span className={styles.panelTitle}>修改后 Schema</span>
             <span className={styles.panelSubtitle}>当前编辑</span>
           </div>
           <div className={styles.jsonDiffCodeWrapper}>

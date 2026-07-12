@@ -106,18 +106,18 @@ const AgentPoolDetail: React.FC = () => {
   // WebSocket connection for agent metrics
   useEffect(() => {
     if (!poolId) {
-      console.log('  [AgentMetrics] No poolId, skipping WebSocket connection');
+      console.log('[AgentMetrics] No poolId, skipping WebSocket connection');
       return;
     }
 
     // Get JWT token from localStorage
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('❌ [AgentMetrics] No JWT token found, cannot establish WebSocket connection');
+      console.error('[AgentMetrics] No JWT token found, cannot establish WebSocket connection');
       return;
     }
 
-    console.log(`🔌 [AgentMetrics] Initializing WebSocket connection for pool: ${poolId}`);
+    console.log(`[AgentMetrics] Initializing WebSocket connection for pool: ${poolId}`);
     
     // Construct WebSocket URL with token as query parameter
     // Use the same logic as api.ts to determine the correct host
@@ -132,56 +132,56 @@ const AgentPoolDetail: React.FC = () => {
     const ws = new WebSocket(wsUrl, ['access_token', token]);
 
     ws.onopen = () => {
-      console.log(` [AgentMetrics] WebSocket connected successfully for pool: ${poolId}`);
-      console.log(` [AgentMetrics] WebSocket readyState: ${ws.readyState} (OPEN)`);
+      console.log(`[AgentMetrics] WebSocket connected successfully for pool: ${poolId}`);
+      console.log(`[AgentMetrics] WebSocket readyState: ${ws.readyState} (OPEN)`);
     };
 
     ws.onmessage = (event) => {
-      console.log(`📨 [AgentMetrics] Received WebSocket message:`, event.data);
+      console.log(`[AgentMetrics] Received WebSocket message:`, event.data);
       
       try {
         const message = JSON.parse(event.data);
-        console.log(`📨 [AgentMetrics] Parsed message type: ${message.type}`, message);
+        console.log(`[AgentMetrics] Parsed message type: ${message.type}`, message);
         
         if (message.type === 'initial_metrics') {
-          console.log(`📊 [AgentMetrics] Processing initial_metrics, count: ${message.metrics?.length || 0}`);
+          console.log(`[AgentMetrics] Processing initial_metrics, count: ${message.metrics?.length || 0}`);
           
           if (!message.metrics || !Array.isArray(message.metrics)) {
-            console.warn('  [AgentMetrics] Invalid initial_metrics format:', message);
+            console.warn('[AgentMetrics] Invalid initial_metrics format:', message);
             return;
           }
           
           const metricsMap = new Map<string, AgentMetrics>();
           message.metrics.forEach((m: AgentMetrics) => {
-            console.log(`📊 [AgentMetrics] Adding initial metric for agent: ${m.agent_id}, CPU: ${m.cpu_usage}%, Memory: ${m.memory_usage}%`);
+            console.log(`[AgentMetrics] Adding initial metric for agent: ${m.agent_id}, CPU: ${m.cpu_usage}%, Memory: ${m.memory_usage}%`);
             metricsMap.set(m.agent_id, m);
           });
           
           setAgentMetrics(metricsMap);
-          console.log(` [AgentMetrics] Initial metrics loaded: ${metricsMap.size} agents`);
+          console.log(`[AgentMetrics] Initial metrics loaded: ${metricsMap.size} agents`);
           
         } else if (message.type === 'metrics_update') {
-          console.log(`📊 [AgentMetrics] Processing metrics_update for agent: ${message.metrics?.agent_id}`);
+          console.log(`[AgentMetrics] Processing metrics_update for agent: ${message.metrics?.agent_id}`);
           
           if (!message.metrics || !message.metrics.agent_id) {
-            console.warn('  [AgentMetrics] Invalid metrics_update format:', message);
+            console.warn('[AgentMetrics] Invalid metrics_update format:', message);
             return;
           }
           
-          console.log(`📊 [AgentMetrics] Update details - Agent: ${message.metrics.agent_id}, CPU: ${message.metrics.cpu_usage}%, Memory: ${message.metrics.memory_usage}%, Tasks: ${message.metrics.running_tasks?.length || 0}`);
+          console.log(`[AgentMetrics] Update details - Agent: ${message.metrics.agent_id}, CPU: ${message.metrics.cpu_usage}%, Memory: ${message.metrics.memory_usage}%, Tasks: ${message.metrics.running_tasks?.length || 0}`);
           
           setAgentMetrics(prev => {
             const newMap = new Map(prev);
             newMap.set(message.metrics.agent_id, message.metrics);
-            console.log(` [AgentMetrics] Updated metrics map, total agents: ${newMap.size}`);
+            console.log(`[AgentMetrics] Updated metrics map, total agents: ${newMap.size}`);
             return newMap;
           });
           
         } else if (message.type === 'agent_offline') {
-          console.log(`📊 [AgentMetrics] Processing agent_offline for agent: ${message.metrics?.agent_id}`);
+          console.log(`[AgentMetrics] Processing agent_offline for agent: ${message.metrics?.agent_id}`);
           
           if (!message.metrics || !message.metrics.agent_id) {
-            console.warn('  [AgentMetrics] Invalid agent_offline format:', message);
+            console.warn('[AgentMetrics] Invalid agent_offline format:', message);
             return;
           }
           
@@ -193,36 +193,36 @@ const AgentPoolDetail: React.FC = () => {
           });
           
         } else {
-          console.warn(`  [AgentMetrics] Unknown message type: ${message.type}`, message);
+          console.warn(`[AgentMetrics] Unknown message type: ${message.type}`, message);
         }
       } catch (error) {
-        console.error('❌ [AgentMetrics] Failed to parse WebSocket message:', error);
-        console.error('❌ [AgentMetrics] Raw message data:', event.data);
+        console.error('[AgentMetrics] Failed to parse WebSocket message:', error);
+        console.error('[AgentMetrics] Raw message data:', event.data);
       }
     };
 
     ws.onerror = (error) => {
-      console.error('❌ [AgentMetrics] WebSocket error occurred:', error);
-      console.error('❌ [AgentMetrics] WebSocket readyState:', ws.readyState);
-      console.error('❌ [AgentMetrics] WebSocket URL:', wsUrl);
+      console.error('[AgentMetrics] WebSocket error occurred:', error);
+      console.error('[AgentMetrics] WebSocket readyState:', ws.readyState);
+      console.error('[AgentMetrics] WebSocket URL:', wsUrl);
     };
 
     ws.onclose = (event) => {
-      console.log(`❌ [AgentMetrics] WebSocket disconnected for pool: ${poolId}`);
-      console.log(`❌ [AgentMetrics] Close code: ${event.code}, reason: ${event.reason || 'No reason provided'}`);
-      console.log(`❌ [AgentMetrics] Was clean close: ${event.wasClean}`);
+      console.log(`[AgentMetrics] WebSocket disconnected for pool: ${poolId}`);
+      console.log(`[AgentMetrics] Close code: ${event.code}, reason: ${event.reason || 'No reason provided'}`);
+      console.log(`[AgentMetrics] Was clean close: ${event.wasClean}`);
     };
 
     setMetricsWs(ws);
-    console.log(`🔌 [AgentMetrics] WebSocket instance created and stored`);
+    console.log(`[AgentMetrics] WebSocket instance created and stored`);
 
     return () => {
-      console.log(`🔌 [AgentMetrics] Cleanup: Closing WebSocket for pool: ${poolId}`);
+      console.log(`[AgentMetrics] Cleanup: Closing WebSocket for pool: ${poolId}`);
       if (ws.readyState === WebSocket.OPEN) {
-        console.log(`🔌 [AgentMetrics] WebSocket is OPEN, closing...`);
+        console.log(`[AgentMetrics] WebSocket is OPEN, closing...`);
         ws.close();
       } else {
-        console.log(`🔌 [AgentMetrics] WebSocket already closed or closing, readyState: ${ws.readyState}`);
+        console.log(`[AgentMetrics] WebSocket already closed or closing, readyState: ${ws.readyState}`);
       }
     };
   }, [poolId]);
@@ -1635,7 +1635,7 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                       <div key={index} className={styles.scheduleItem}>
                         <div className={styles.scheduleInfo}>
                           <div className={styles.scheduleTime}>
-                            <span className={styles.scheduleIcon}>🕐</span>
+                            <span className={styles.scheduleIcon}></span>
                             <span className={styles.scheduleTimeText}>
                               {schedule.from_time} - {schedule.to_time}
                             </span>

@@ -118,7 +118,7 @@ const SelectWidget: React.FC<SelectWidgetProps> = ({
   // 调试日志
   useEffect(() => {
     if (externalSource) {
-      console.log(`🔍 SelectWidget "${name}" using external source:`, {
+      console.log(`SelectWidget "${name}" using external source:`, {
         sourceId: externalSource.id,
         api: externalSource.api,
         loading: sourceLoading,

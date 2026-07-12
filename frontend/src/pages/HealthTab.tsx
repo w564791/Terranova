@@ -492,7 +492,7 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
           {driftedCount > 0 && (
             <div className={styles.aiSummaryPlaceholder}>
               <div className={styles.aiSummaryHeader}>
-                <span className={styles.aiIcon}>🤖</span>
+                <span className={styles.aiIcon}></span>
                 <span className={styles.aiTitle}>AI Analysis</span>
               </div>
               <div className={styles.aiSummaryContent}>
