@@ -250,12 +250,12 @@ const EditDemo: React.FC = () => {
             onClick={handleCancel}
             style={{
               padding: '8px 16px',
-              background: '#f8f9fa',
-              border: '1px solid #dee2e6',
+              background: 'var(--bg)',
+              border: '1px solid var(--line-2)',
               borderRadius: '6px',
               cursor: 'pointer',
               fontSize: '14px',
-              color: '#495057'
+              color: 'var(--ink-2)'
             }}
           >
             ← 返回
@@ -279,12 +279,12 @@ const EditDemo: React.FC = () => {
             }}
             style={{
               padding: '6px 12px',
-              background: useJsonEditor ? '#1890ff' : '#f8f9fa',
-              border: '1px solid #dee2e6',
+              background: useJsonEditor ? 'var(--brand)' : 'var(--bg)',
+              border: '1px solid var(--line-2)',
               borderRadius: '6px',
               cursor: 'pointer',
               fontSize: '13px',
-              color: useJsonEditor ? '#fff' : '#495057'
+              color: useJsonEditor ? 'var(--surface)' : 'var(--ink-2)'
             }}
           >
             {useJsonEditor ? '使用表单编辑' : '使用 JSON 编辑'}
@@ -331,7 +331,7 @@ const EditDemo: React.FC = () => {
             <div className={styles.formGroup}>
               <label className={styles.label}>配置数据</label>
               {schemaLoading ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#8c8c8c' }}>
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-3)' }}>
                   加载 Schema 中...
                 </div>
               ) : useJsonEditor || !schema ? (
@@ -350,10 +350,10 @@ const EditDemo: React.FC = () => {
                 />
               ) : (
                 <div style={{ 
-                  border: '1px solid #d9d9d9', 
+                  border: '1px solid var(--line-2)', 
                   borderRadius: '8px', 
                   padding: '16px',
-                  background: '#fafafa'
+                  background: 'var(--bg)'
                 }}>
                   <ModuleFormRenderer
                     schema={schema}

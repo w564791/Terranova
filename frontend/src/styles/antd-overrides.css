@@ -1,0 +1,91 @@
+/*
+ * Ant Design soft overrides — brand focus ring & status alignment
+ * Theme tokens live in antd-theme.ts; this file covers residual CSS gaps.
+ */
+
+/* Focus ring consistency with design system */
+.ant-btn-primary:focus-visible,
+.ant-btn-default:focus-visible,
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+  box-shadow: 0 0 0 3px var(--ring-brand) !important;
+}
+
+/* Modal footer buttons spacing already handled by antd; ensure radius */
+.ant-modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ant-modal-header {
+  border-bottom-color: var(--line);
+}
+
+.ant-modal-footer {
+  border-top-color: var(--line);
+}
+
+/* Message / notification use semantic fills when type set */
+.ant-message-notice-content {
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.ant-notification-notice {
+  border-radius: 8px;
+  border-left: 4px solid var(--brand);
+}
+
+.ant-notification-notice-success {
+  border-left-color: var(--green);
+}
+
+.ant-notification-notice-error {
+  border-left-color: var(--red);
+}
+
+.ant-notification-notice-warning {
+  border-left-color: var(--amber);
+}
+
+.ant-notification-notice-info {
+  border-left-color: var(--brand);
+}
+
+/* Tag defaults */
+.ant-tag-blue,
+.ant-tag-processing {
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border-color: var(--brand-line);
+}
+
+.ant-tag-green,
+.ant-tag-success {
+  color: var(--green-active);
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+
+.ant-tag-red,
+.ant-tag-error {
+  color: var(--red-active);
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+
+.ant-tag-orange,
+.ant-tag-gold,
+.ant-tag-warning {
+  color: var(--amber-hover);
+  background: var(--amber-soft);
+  border-color: var(--amber-line);
+}
+
+/* Progress / switch already themed via token; soft fill */
+.ant-progress-bg {
+  background-color: var(--brand) !important;
+}

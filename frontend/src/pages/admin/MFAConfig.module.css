@@ -22,7 +22,7 @@
 
 .headerIcon {
   font-size: 48px;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .statsCard {
@@ -40,7 +40,7 @@
 }
 
 .infoCard {
-  background: #f6f8fa;
+  background: var(--bg);
 }
 
 .infoCard ul {

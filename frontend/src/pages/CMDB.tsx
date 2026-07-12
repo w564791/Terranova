@@ -298,7 +298,7 @@ const ExternalResourceNode: React.FC<{
       {expanded && (
         <div className={styles.resourceDetails} style={{ marginLeft: '32px', padding: '8px 0' }}>
           {detailLoading ? (
-            <div style={{ fontSize: '12px', color: '#6b7280' }}>Loading...</div>
+            <div style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Loading...</div>
           ) : (
             <>
               {data.cloud_resource_name && (
@@ -315,8 +315,8 @@ const ExternalResourceNode: React.FC<{
               )}
               {data.resource_summary && (
                 <div style={{ marginTop: '4px' }}>
-                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>AI Summary:</span>
-                  <div style={{ fontSize: '13px', color: '#374151', lineHeight: '1.5', marginTop: '2px', whiteSpace: 'pre-wrap' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-2)', fontWeight: 500 }}>AI Summary:</span>
+                  <div style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: '1.5', marginTop: '2px', whiteSpace: 'pre-wrap' }}>
                     {data.resource_summary}
                   </div>
                 </div>
@@ -324,13 +324,13 @@ const ExternalResourceNode: React.FC<{
               {data.attributes && typeof data.attributes === 'object' && Object.keys(data.attributes).length > 0 && (
                 <div style={{ marginTop: '4px' }}>
                   <span
-                    style={{ fontSize: '12px', color: '#3b82f6', cursor: 'pointer', userSelect: 'none' }}
+                    style={{ fontSize: '12px', color: 'var(--brand)', cursor: 'pointer', userSelect: 'none' }}
                     onClick={() => setShowAttributes(!showAttributes)}
                   >
                     {showAttributes ? '∧' : '∨'} Attributes ({Object.keys(data.attributes).length} keys)
                   </span>
                   {showAttributes && (
-                    <pre style={{ fontSize: '11px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', marginTop: '4px', overflow: 'auto', maxHeight: '300px' }}>
+                    <pre style={{ fontSize: '11px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '4px', padding: '8px', marginTop: '4px', overflow: 'auto', maxHeight: '300px' }}>
                       {JSON.stringify(data.attributes, null, 2)}
                     </pre>
                   )}
@@ -468,7 +468,7 @@ const ExternalSourcesTreeView: React.FC = () => {
         <span className={styles.resourceCountBadge}>
           {totalResources} resources
         </span>
-        <span className={styles.lastSyncedBadge} style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+        <span className={styles.lastSyncedBadge} style={{ background: 'var(--ring-brand)', color: 'var(--brand)' }}>
           External Data
         </span>
         <div className={styles.workspaceActions} onClick={(e) => e.stopPropagation()}>
@@ -517,7 +517,7 @@ const ExternalSourcesTreeView: React.FC = () => {
 // Embedding 状态徽章组件
 const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: boolean }> = ({ status, loading }) => {
   if (loading) {
-    return <span className={styles.embeddingBadge} style={{ background: 'rgba(156, 163, 175, 0.2)', color: '#6b7280' }}>...</span>;
+    return <span className={styles.embeddingBadge} style={{ background: 'rgba(156, 163, 175, 0.2)', color: 'var(--ink-2)' }}>...</span>;
   }
   
   if (!status) {
@@ -539,7 +539,7 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
     return (
       <span
         className={styles.embeddingBadge}
-        style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
+        style={{ background: 'var(--ring-brand)', color: 'var(--brand)' }}
         title={`Embedding: ${with_embedding}/${total_resources}\nPending: ${pending_tasks}, Processing: ${processing_tasks}\n预计: ${estimatedMinutes} 分钟`}
       >
         处理中 ({remainingTasks} 个任务待完成)
@@ -552,7 +552,7 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
     return (
       <span 
         className={styles.embeddingBadge} 
-        style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#16a34a' }}
+        style={{ background: 'rgba(34, 197, 94, 0.15)', color: 'var(--green-hover)' }}
         title={`All ${total_resources} resources have embeddings`}
       >
         Vector Ready
@@ -566,7 +566,7 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
     return (
       <span 
         className={styles.embeddingBadge} 
-        style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#ca8a04' }}
+        style={{ background: 'rgba(234, 179, 8, 0.15)', color: 'var(--amber)' }}
         title={`Embedding: ${with_embedding}/${total_resources} (${progress.toFixed(0)}%)\nSync to generate remaining embeddings`}
       >
         Embedding {progress.toFixed(0)}%
@@ -1393,17 +1393,11 @@ const CMDB: React.FC = () => {
       <div className={styles.header}>
         <h1 className={styles.title}>CMDB Resource Index</h1>
         {isAdmin && (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className={styles.headerActions}>
             {/* 缓存统计徽章 */}
             {cacheStats && cacheStats.total_count > 0 && (
               <span
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  color: '#16a34a',
-                }}
+                className={styles.cacheBadge}
                 title={`缓存关键词: ${cacheStats.total_count}\n总命中次数: ${cacheStats.total_hits}\n平均命中: ${cacheStats.avg_hit_count?.toFixed(1) || 0}`}
               >
                 Cache: {cacheStats.total_count} keywords
@@ -1412,21 +1406,16 @@ const CMDB: React.FC = () => {
             {/* 预热进度显示 */}
             {warmupProgress && warmupProgress.is_running && (
               <span
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  color: '#3b82f6',
-                }}
+                className={styles.warmingBadge}
                 title={`内部: ${warmupProgress.internal_count}, 外部: ${warmupProgress.external_count}, 静态: ${warmupProgress.static_count}`}
               >
                 Warming: {warmupProgress.processed_count}/{warmupProgress.total_keywords} ({Math.round((warmupProgress.processed_count / warmupProgress.total_keywords) * 100)}%)
               </span>
             )}
-            {/* 预热按钮 */}
+            {/* 预热按钮 — outline brand */}
             <button
-              className={styles.syncButton}
+              type="button"
+              className={styles.warmupButton}
               onClick={async () => {
                 try {
                   setWarming(true);
@@ -1460,14 +1449,14 @@ const CMDB: React.FC = () => {
                 }
               }}
               disabled={warming || (warmupProgress?.is_running ?? false)}
-              style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#9333ea' }}
               title="预热 Embedding 缓存，加速向量搜索"
             >
               {warming || warmupProgress?.is_running ? 'Warming...' : 'Warmup'}
             </button>
-            {/* 强制重新预热按钮 */}
+            {/* 强制重新预热 — outline red */}
             <button
-              className={styles.syncButton}
+              type="button"
+              className={styles.forceWarmupButton}
               onClick={async () => {
                 try {
                   setWarming(true);
@@ -1500,13 +1489,13 @@ const CMDB: React.FC = () => {
                 }
               }}
               disabled={warming || (warmupProgress?.is_running ?? false)}
-              style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626' }}
               title="强制重新生成所有 Embedding 缓存"
             >
               Force Warmup
             </button>
-            {/* 同步按钮 */}
+            {/* 同步按钮 — solid brand 主操作 */}
             <button
+              type="button"
               className={styles.syncButton}
               onClick={handleSyncAll}
               disabled={syncing}
@@ -1618,8 +1607,8 @@ const CMDB: React.FC = () => {
                 padding: '4px 12px',
                 borderRadius: '4px',
                 fontSize: '12px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                color: '#3b82f6',
+                background: 'var(--ring-brand)',
+                color: 'var(--brand)',
               }}>
                 Hybrid Search
               </span>
@@ -1709,8 +1698,8 @@ const CMDB: React.FC = () => {
                         padding: '2px 8px',
                         borderRadius: '4px',
                         fontSize: '12px',
-                        background: actualSearchMethod === 'keyword' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                        color: actualSearchMethod === 'keyword' ? '#16a34a' : '#3b82f6',
+                        background: actualSearchMethod === 'keyword' ? 'rgba(34, 197, 94, 0.15)' : 'var(--ring-brand)',
+                        color: actualSearchMethod === 'keyword' ? 'var(--green-hover)' : 'var(--brand)',
                       }}
                       title={fallbackReason || undefined}
                     >

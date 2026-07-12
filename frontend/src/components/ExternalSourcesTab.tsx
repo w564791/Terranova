@@ -506,7 +506,7 @@ const SourceForm: React.FC<{
 // Embedding 状态徽章组件
 const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: boolean }> = ({ status, loading }) => {
   if (loading) {
-    return <span style={{ background: 'rgba(156, 163, 175, 0.2)', color: '#6b7280', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>...</span>;
+    return <span style={{ background: 'rgba(156, 163, 175, 0.2)', color: 'var(--ink-2)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>...</span>;
   }
   
   if (!status) {
@@ -530,8 +530,8 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
     const statusText = isProcessing
       ? `处理中 (${remainingTasks} 个任务待完成)`
       : `队列中 (${pending_tasks} 个任务等待)`;
-    const bgColor = isProcessing ? 'rgba(59, 130, 246, 0.15)' : 'rgba(156, 163, 175, 0.15)';
-    const textColor = isProcessing ? '#3b82f6' : '#6b7280';
+    const bgColor = isProcessing ? 'var(--ring-brand)' : 'rgba(156, 163, 175, 0.15)';
+    const textColor = isProcessing ? 'var(--brand)' : 'var(--ink-2)';
 
     return (
       <span
@@ -547,7 +547,7 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
   if (with_embedding === total_resources && with_embedding > 0) {
     return (
       <span 
-        style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
+        style={{ background: 'rgba(34, 197, 94, 0.15)', color: 'var(--green-hover)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
         title={`All ${total_resources} resources have embeddings`}
       >
         Vector Ready
@@ -560,7 +560,7 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
     const progress = (with_embedding / total_resources) * 100;
     return (
       <span 
-        style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#ca8a04', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
+        style={{ background: 'rgba(234, 179, 8, 0.15)', color: 'var(--amber)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
         title={`Embedding: ${with_embedding}/${total_resources} (${progress.toFixed(0)}%)\n点击"重建 Embedding"生成剩余的向量`}
       >
         Embedding {progress.toFixed(0)}%
@@ -572,7 +572,7 @@ const EmbeddingStatusBadge: React.FC<{ status: EmbeddingStatus | null; loading: 
   if (with_embedding === 0 && total_resources > 0) {
     return (
       <span 
-        style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
+        style={{ background: 'rgba(200, 48, 47, 0.15)', color: 'var(--red-hover)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}
         title={`${total_resources} 个资源没有 embedding\n点击"重建 Embedding"生成向量`}
       >
         需要重建
@@ -897,7 +897,7 @@ const ExternalSourcesTab: React.FC = () => {
                       onClick={() => handleSync(source)}
                       disabled={syncingId === source.source_id || !source.is_enabled}
                       title="重新同步（会重新生成 embedding）"
-                      style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#ca8a04' }}
+                      style={{ background: 'rgba(234, 179, 8, 0.15)', color: 'var(--amber)' }}
                     >
                       重新同步
                     </button>

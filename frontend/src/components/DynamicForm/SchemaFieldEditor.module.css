@@ -4,16 +4,18 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   padding: 20px;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 12px;
   width: 100%;
   max-width: 700px;
@@ -28,21 +30,21 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .header h3 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .closeButton {
   background: none;
   border: none;
   font-size: 24px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -55,8 +57,8 @@
 }
 
 .closeButton:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .content {
@@ -77,7 +79,7 @@
   margin: 0 0 16px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
 }
 
 .sectionHeader {
@@ -104,7 +106,7 @@
   margin-bottom: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
 }
 
 .input,
@@ -112,7 +114,7 @@
 .textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
@@ -123,13 +125,13 @@
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .input:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--surface-2);
+  color: var(--ink-faint);
   cursor: not-allowed;
 }
 
@@ -155,13 +157,13 @@
 
 .checkboxLabel span {
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
 }
 
 .addButton {
   padding: 6px 12px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -171,7 +173,7 @@
 }
 
 .addButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .validationRules {
@@ -182,8 +184,8 @@
 
 .validationRule {
   padding: 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
@@ -193,19 +195,19 @@
   align-items: center;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .ruleHeader span {
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   font-size: 14px;
 }
 
 .removeButton {
   padding: 4px 10px;
-  background: #ef4444;
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   border-radius: 4px;
   font-size: 12px;
@@ -215,13 +217,13 @@
 }
 
 .removeButton:hover {
-  background: #dc2626;
+  background: var(--red-hover);
 }
 
 .emptyState {
   text-align: center;
   padding: 24px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-style: italic;
   font-size: 14px;
 }
@@ -235,7 +237,7 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
 }
 
 .saveButton,
@@ -250,21 +252,21 @@
 }
 
 .saveButton {
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .saveButton:hover {
-  background: #059669;
+  background: var(--green-hover);
 }
 
 .cancelButton {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .cancelButton:hover {
-  background: #d1d5db;
+  background: var(--line-2);
 }
 
 /* 滚动条样式 */
@@ -273,14 +275,14 @@
 }
 
 .content::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .content::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--line-2);
   border-radius: 4px;
 }
 
 .content::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--ink-faint);
 }

@@ -6,19 +6,19 @@
 
 .label {
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 14px;
 }
 
 .required {
-  color: var(--color-red-500);
+  color: var(--red);
   margin-left: 4px;
 }
 
 .input,
 .select {
   padding: var(--spacing-sm);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
   transition: border-color 0.2s;
@@ -27,8 +27,8 @@
 .input:focus,
 .select:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 /* Number输入框样式 */
@@ -42,7 +42,7 @@
   width: 100%;
   padding: var(--spacing-sm);
   padding-right: 25px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
   transition: border-color 0.2s;
@@ -65,8 +65,8 @@
 
 .numberInput:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .numberControls {
@@ -85,8 +85,8 @@
   width: 100%;
   padding: 0;
   border: none;
-  background: var(--color-gray-100);
-  color: var(--color-gray-600);
+  background: var(--surface-2);
+  color: var(--ink-2);
   cursor: pointer;
   font-size: 8px;
   line-height: 1;
@@ -94,12 +94,12 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  border-left: 1px solid var(--color-gray-300);
+  border-left: 1px solid var(--line-2);
 }
 
 .numberUp {
   border-radius: 0 calc(var(--radius-md) - 1px) 0 0;
-  border-bottom: 1px solid var(--color-gray-300);
+  border-bottom: 1px solid var(--line-2);
 }
 
 .numberDown {
@@ -108,13 +108,13 @@
 
 .numberUp:hover,
 .numberDown:hover {
-  background: var(--color-gray-200);
-  color: var(--color-gray-800);
+  background: var(--line);
+  color: var(--ink);
 }
 
 .numberUp:active,
 .numberDown:active {
-  background: var(--color-gray-300);
+  background: var(--line-2);
 }
 
 .checkbox {
@@ -131,19 +131,19 @@
 
 .description {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .error {
   font-size: 12px;
-  color: var(--color-red-500);
+  color: var(--red);
 }
 
 .objectField {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  background: var(--color-gray-50);
+  background: var(--bg);
   margin-top: var(--spacing-xs);
 }
 
@@ -157,24 +157,24 @@
 
 /* 数组字段 - 统一浅色块 */
 .arrayField {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  background: var(--color-gray-50);
+  background: var(--bg);
   position: relative;
 }
 
 .arrayDescription {
   margin-bottom: var(--spacing-sm);
   font-size: 12px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .arrayDescription small {
   display: inline-block;
   font-size: 11px;
-  color: var(--color-gray-600);
-  background: var(--color-gray-200);
+  color: var(--ink-2);
+  background: var(--line);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-weight: 500;
@@ -182,11 +182,11 @@
 }
 
 .arrayItem {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  background: var(--color-white);
+  background: var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   position: relative;
   margin-left: var(--spacing-sm);
@@ -200,7 +200,7 @@
   top: 20px;
   width: 6px;
   height: 1px;
-  background: var(--color-gray-300);
+  background: var(--line-2);
 }
 
 .arrayItem:last-child {
@@ -219,8 +219,8 @@
 }
 
 .removeButton {
-  background: var(--color-red-500);
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
@@ -229,7 +229,7 @@
 }
 
 .removeButton:hover {
-  background: var(--color-red-600);
+  background: var(--red-hover);
 }
 
 .arrayItemContent {
@@ -237,13 +237,13 @@
   flex-direction: column;
   gap: var(--spacing-sm);
   padding-left: var(--spacing-sm);
-  border-left: 1px solid var(--color-gray-200);
+  border-left: 1px solid var(--line);
   margin-left: 4px;
 }
 
 .addButton {
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
@@ -253,29 +253,29 @@
 }
 
 .addButton:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 /* TypeMap样式 - 统一浅色块 */
 .mapField {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  background: var(--color-gray-50);
+  background: var(--bg);
   position: relative;
 }
 
 .mapDescription {
   margin-bottom: var(--spacing-sm);
   font-size: 12px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .mapDescription small {
   display: inline-block;
   font-size: 11px;
-  color: var(--color-gray-600);
-  background: var(--color-blue-100);
+  color: var(--ink-2);
+  background: var(--brand-soft);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-weight: 500;
@@ -287,16 +287,16 @@
   align-items: center;
   margin-bottom: var(--spacing-sm);
   padding: var(--spacing-sm);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--color-white);
+  background: var(--surface);
   margin-left: var(--spacing-sm);
 }
 
 /* TypeObject样式 - 统一浅色块 */
 .objectField {
-  border: 1px solid var(--color-gray-200);
-  background: var(--color-gray-50);
+  border: 1px solid var(--line);
+  background: var(--bg);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
   margin-top: var(--spacing-xs);
@@ -306,14 +306,14 @@
 .objectDescription {
   margin-bottom: var(--spacing-sm);
   font-size: 12px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .objectDescription small {
   display: inline-block;
   font-size: 11px;
-  color: var(--color-gray-600);
-  background: var(--color-gray-200);
+  color: var(--ink-2);
+  background: var(--line);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-weight: 500;
@@ -322,7 +322,7 @@
 
 .objectProperties {
   padding-left: var(--spacing-sm);
-  border-left: 1px solid var(--color-gray-200);
+  border-left: 1px solid var(--line);
   margin-left: 4px;
 }
 
@@ -340,11 +340,11 @@
 }
 
 .switchOn {
-  background-color: #10b981;
+  background-color: var(--green);
 }
 
 .switchOff {
-  background-color: #d1d5db;
+  background-color: var(--line-2);
 }
 
 .switchThumb {
@@ -353,7 +353,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background-color: white;
+  background-color: #fff;
   transition: transform 0.3s;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -376,7 +376,7 @@
 
 /* HTML描述样式 - 优化5 */
 .description a {
-  color: var(--color-blue-500);
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -389,7 +389,7 @@
 }
 
 .description code {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
   padding: 2px 4px;
   border-radius: 3px;
   font-family: 'JetBrains Mono', monospace;
@@ -398,7 +398,7 @@
 
 /* must_include提示 - 优化7 */
 .mapDescription .required {
-  color: #ef4444;
+  color: var(--red);
   font-weight: 500;
   display: block;
   margin-top: 4px;
@@ -411,7 +411,7 @@
 
 .selectDisplay {
   padding: var(--spacing-sm);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
   cursor: pointer;
@@ -423,12 +423,12 @@
 }
 
 .selectDisplay:hover {
-  border-color: var(--color-gray-400);
+  border-color: var(--ink-faint);
 }
 
 .selectArrow {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   transition: transform 0.2s;
 }
 
@@ -439,7 +439,7 @@
   right: 0;
   margin-top: 4px;
   background: white;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   z-index: 1000;
@@ -452,13 +452,13 @@
 .selectSearch {
   padding: var(--spacing-sm);
   border: none;
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
   font-size: 14px;
 }
 
 .selectSearch:focus {
   outline: none;
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .selectOptions {
@@ -474,39 +474,39 @@
 }
 
 .selectOption:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .selectOption.selected {
-  background: var(--color-blue-50);
-  color: var(--color-blue-600);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
   font-weight: 500;
 }
 
 .noOptions {
   padding: var(--spacing-md);
   text-align: center;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 13px;
 }
 
 /* 必填Map项样式 - 优化4 */
 .requiredMapItem {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--red-soft);
+  border-color: var(--red-line);
 }
 
 .requiredMapItem input:disabled {
-  background: #f3f4f6;
+  background: var(--surface-2);
   cursor: not-allowed;
 }
 
 .requiredInput {
-  border-color: #ef4444 !important;
+  border-color: var(--red) !important;
 }
 
 .requiredInput:focus {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+  box-shadow: 0 0 0 3px rgba(200, 48, 47, 0.1) !important;
 }
 
 /* 嵌套Object的高级字段样式 */
@@ -527,8 +527,8 @@
 }
 
 .removePropButton {
-  background: var(--color-white);
-  color: var(--color-red-600);
+  background: var(--surface);
+  color: var(--red-hover);
   border: 1px solid var(--color-red-300);
   padding: 6px 16px;
   border-radius: var(--radius-sm);
@@ -539,24 +539,24 @@
 }
 
 .removePropButton:hover {
-  background: var(--color-red-50);
+  background: var(--red-soft);
   border-color: var(--color-red-400);
-  color: var(--color-red-700);
+  color: var(--red-active);
 }
 
 /* 嵌套Object的字段选择器 */
 .propSelector {
   margin-top: var(--spacing-md);
   padding: var(--spacing-sm);
-  border: 1px dashed var(--color-gray-300);
+  border: 1px dashed var(--line-2);
   border-radius: var(--radius-sm);
   text-align: center;
 }
 
 .addPropButton {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -565,13 +565,13 @@
 }
 
 .addPropButton:hover {
-  background: var(--color-gray-200);
-  border-color: var(--color-gray-400);
+  background: var(--line);
+  border-color: var(--ink-faint);
 }
 
 .propSelectorPanel {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   padding: 0;
   margin-top: var(--spacing-sm);
@@ -585,19 +585,19 @@
   align-items: center;
   padding: var(--spacing-md);
   padding-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .propSelectorHeader span {
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 13px;
 }
 
 .cancelButton {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   padding: 4px 12px;
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -606,8 +606,8 @@
 }
 
 .cancelButton:hover {
-  background: var(--color-gray-200);
-  border-color: var(--color-gray-400);
+  background: var(--line);
+  border-color: var(--ink-faint);
 }
 
 .searchBox {
@@ -618,15 +618,15 @@
 .searchInput {
   width: 100%;
   padding: var(--spacing-sm);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   font-size: 13px;
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .propSelectorList {
@@ -644,8 +644,8 @@
   flex-direction: column;
   align-items: flex-start;
   padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
@@ -654,20 +654,20 @@
 }
 
 .propOption:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-300);
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
 }
 
 .propName {
   font-weight: 500;
-  color: var(--color-gray-800);
+  color: var(--ink);
   font-size: 12px;
   margin-bottom: 2px;
 }
 
 .propDescription {
   font-size: 11px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   line-height: 1.3;
 }
 

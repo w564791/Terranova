@@ -11,7 +11,7 @@
 
 .label {
   font-weight: 500;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--ink-2));
   font-size: 14px;
 }
 
@@ -24,8 +24,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--bg-secondary, #f5f5f5);
-  border: 1px solid var(--border-color, #e0e0e0);
+  background: var(--bg-secondary, var(--surface-2));
+  border: 1px solid var(--border-color, var(--line));
   border-radius: 6px;
   cursor: pointer;
   min-width: 200px;
@@ -34,7 +34,7 @@
 
 .selectorButton:hover {
   background: var(--bg-hover, #ebebeb);
-  border-color: var(--primary-color, #1890ff);
+  border-color: var(--primary-color, var(--brand));
 }
 
 .selectorButton:disabled {
@@ -47,25 +47,25 @@
   align-items: center;
   gap: 6px;
   font-weight: 500;
-  color: var(--text-primary, #333);
+  color: var(--text-primary, var(--ink));
 }
 
 .versionMeta {
   font-size: 12px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary, var(--ink-3));
 }
 
 .arrow {
   margin-left: auto;
   font-size: 10px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary, var(--ink-3));
 }
 
 .defaultBadge {
   display: inline-block;
   padding: 2px 6px;
-  background: var(--primary-color, #1890ff);
-  color: white;
+  background: var(--primary-color, var(--brand));
+  color: #fff;
   font-size: 10px;
   border-radius: 4px;
   font-weight: normal;
@@ -78,7 +78,7 @@
   right: 0;
   margin-top: 4px;
   background: white;
-  border: 1px solid var(--border-color, #e0e0e0);
+  border: 1px solid var(--border-color, var(--line));
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 100;
@@ -94,7 +94,7 @@
   padding: 10px 12px;
   cursor: pointer;
   transition: background 0.2s;
-  border-bottom: 1px solid var(--border-light, #f0f0f0);
+  border-bottom: 1px solid var(--border-light, var(--surface-2));
 }
 
 .dropdownItem:last-child {
@@ -102,11 +102,11 @@
 }
 
 .dropdownItem:hover {
-  background: var(--bg-hover, #f5f5f5);
+  background: var(--bg-hover, var(--surface-2));
 }
 
 .dropdownItem.selected {
-  background: var(--primary-light, #e6f7ff);
+  background: var(--primary-light, var(--brand-soft));
 }
 
 .versionInfo {
@@ -121,12 +121,12 @@
   align-items: center;
   gap: 6px;
   font-weight: 500;
-  color: var(--text-primary, #333);
+  color: var(--text-primary, var(--ink));
 }
 
 .versionStats {
   font-size: 12px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary, var(--ink-3));
 }
 
 .versionActions {
@@ -149,7 +149,7 @@
 }
 
 .addVersion {
-  color: var(--primary-color, #1890ff);
+  color: var(--primary-color, var(--brand));
   font-weight: 500;
 }
 
@@ -163,20 +163,20 @@
 }
 
 .setDefaultButton {
-  background: var(--warning-light, #fff7e6);
-  color: var(--warning-color, #fa8c16);
-  border: 1px solid var(--warning-color, #fa8c16);
+  background: var(--warning-light, var(--amber-soft));
+  color: var(--warning-color, var(--amber));
+  border: 1px solid var(--warning-color, var(--amber));
 }
 
 .setDefaultButton:hover {
-  background: var(--warning-color, #fa8c16);
-  color: white;
+  background: var(--warning-color, var(--amber));
+  color: #fff;
 }
 
 .defaultButton {
-  background: var(--success-light, #f6ffed);
-  color: var(--success-color, #52c41a);
-  border: 1px solid var(--success-color, #52c41a);
+  background: var(--success-light, var(--green-soft));
+  color: var(--success-color, var(--green));
+  border: 1px solid var(--success-color, var(--green));
   cursor: default;
   opacity: 0.8;
 }
@@ -186,14 +186,14 @@
 }
 
 .inheritButton {
-  background: var(--success-light, #f6ffed);
-  color: var(--success-color, #52c41a);
-  border: 1px solid var(--success-color, #52c41a);
+  background: var(--success-light, var(--green-soft));
+  color: var(--success-color, var(--green));
+  border: 1px solid var(--success-color, var(--green));
 }
 
 .inheritButton:hover {
-  background: var(--success-color, #52c41a);
-  color: white;
+  background: var(--success-color, var(--green));
+  color: #fff;
 }
 
 /* 无版本状态 */
@@ -202,19 +202,19 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--bg-secondary, #f5f5f5);
+  background: var(--bg-secondary, var(--surface-2));
   border-radius: 6px;
 }
 
 .noVersionsText {
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary, var(--ink-3));
   font-size: 14px;
 }
 
 .createButton {
   padding: 6px 12px;
-  background: var(--primary-color, #1890ff);
-  color: white;
+  background: var(--primary-color, var(--brand));
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -223,7 +223,7 @@
 }
 
 .createButton:hover {
-  background: var(--primary-dark, #096dd9);
+  background: var(--primary-dark, var(--brand-ink));
 }
 
 /* 弹窗样式 */
@@ -233,15 +233,17 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 8px;
   padding: 24px;
   min-width: 400px;
@@ -252,11 +254,11 @@
 .modal h3 {
   margin: 0 0 20px 0;
   font-size: 18px;
-  color: var(--text-primary, #333);
+  color: var(--text-primary, var(--ink));
 }
 
 .modalDescription {
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--ink-2));
   font-size: 14px;
   margin-bottom: 16px;
 }
@@ -269,14 +271,14 @@
   display: block;
   margin-bottom: 6px;
   font-size: 14px;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--ink-2));
 }
 
 .formGroup input[type="text"],
 .formGroup select {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid var(--border-color, #e0e0e0);
+  border: 1px solid var(--border-color, var(--line));
   border-radius: 4px;
   font-size: 14px;
   box-sizing: border-box;
@@ -285,8 +287,8 @@
 .formGroup input[type="text"]:focus,
 .formGroup select:focus {
   outline: none;
-  border-color: var(--primary-color, #1890ff);
-  box-shadow: 0 0 0 2px var(--primary-light, #e6f7ff);
+  border-color: var(--primary-color, var(--brand));
+  box-shadow: 0 0 0 2px var(--primary-light, var(--brand-soft));
 }
 
 .formGroup input[type="checkbox"] {
@@ -310,22 +312,22 @@
 
 .modalActions button:first-child {
   background: white;
-  border: 1px solid var(--border-color, #e0e0e0);
-  color: var(--text-secondary, #666);
+  border: 1px solid var(--border-color, var(--line));
+  color: var(--text-secondary, var(--ink-2));
 }
 
 .modalActions button:first-child:hover {
-  background: var(--bg-hover, #f5f5f5);
+  background: var(--bg-hover, var(--surface-2));
 }
 
 .primaryButton {
-  background: var(--primary-color, #1890ff) !important;
-  color: white !important;
+  background: var(--primary-color, var(--brand)) !important;
+  color: #fff !important;
   border: none !important;
 }
 
 .primaryButton:hover {
-  background: var(--primary-dark, #096dd9) !important;
+  background: var(--primary-dark, var(--brand-ink)) !important;
 }
 
 .primaryButton:disabled {
@@ -337,7 +339,7 @@
 .versionList {
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--border-color, #e0e0e0);
+  border: 1px solid var(--border-color, var(--line));
   border-radius: 4px;
 }
 
@@ -348,7 +350,7 @@
   padding: 12px 16px;
   cursor: pointer;
   transition: background 0.2s;
-  border-bottom: 1px solid var(--border-light, #f0f0f0);
+  border-bottom: 1px solid var(--border-light, var(--surface-2));
 }
 
 .inheritOption:last-child {
@@ -356,19 +358,24 @@
 }
 
 .inheritOption:hover {
-  background: var(--bg-hover, #f5f5f5);
+  background: var(--bg-hover, var(--surface-2));
 }
 
 .demoCount {
   font-size: 12px;
-  color: var(--text-tertiary, #999);
-  background: var(--bg-secondary, #f5f5f5);
+  color: var(--text-tertiary, var(--ink-3));
+  background: var(--bg-secondary, var(--surface-2));
   padding: 2px 8px;
   border-radius: 10px;
 }
 
 .noData {
   text-align: center;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary, var(--ink-3));
   padding: 20px;
+}
+
+.primaryButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

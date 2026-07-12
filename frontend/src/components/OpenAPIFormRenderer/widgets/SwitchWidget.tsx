@@ -132,7 +132,7 @@ const SwitchV3Label: React.FC<{ name: string }> = ({ name }) => {
       style={{
         fontSize: '12.5px',
         fontWeight: 450,
-        color: checked ? '#3b82f6' : '#9ca3af',
+        color: checked ? 'var(--brand)' : 'var(--ink-faint)',
         userSelect: 'none',
         marginTop: '22px', // align with switch (account for Form.Item label height)
       }}

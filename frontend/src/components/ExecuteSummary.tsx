@@ -332,7 +332,7 @@ const PlanSummaryResult: React.FC<{
   const affectedCount = summary.affected_resources?.length || 0;
 
   const riskLevel = summary.risk_score_breakdown?.risk_level || summary.risk_level || '';
-  const scoreColor = riskLevel === 'critical' ? '#dc2626' : riskLevel === 'high' ? '#ea580c' : riskLevel === 'medium' ? '#ca8a04' : '#16a34a';
+  const scoreColor = riskLevel === 'critical' ? 'var(--red-hover)' : riskLevel === 'high' ? 'var(--amber)' : riskLevel === 'medium' ? 'var(--amber)' : 'var(--green-hover)';
 
   return (
     <div className={styles.result}>
@@ -359,7 +359,7 @@ const PlanSummaryResult: React.FC<{
             <span style={{ marginLeft: 8, fontFamily: '"SF Mono", monospace', fontWeight: 700, color: scoreColor }}>
               {summary.risk_score_value.toFixed(1)}
             </span>
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>/ 100</span>
+            <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>/ 100</span>
             <span className={styles.scoreBarInline}>
               <span className={styles.scoreBarInlineFill} style={{ width: `${summary.risk_score_value}%`, backgroundColor: scoreColor }} />
             </span>
@@ -462,7 +462,7 @@ const PlanSummaryResult: React.FC<{
                   <div className={styles.detailHeader}>
                     <span className={styles.detailResource}>Round {i + 1}</span>
                   </div>
-                  <div className={styles.detailImpact} style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#666' }}>{t}</div>
+                  <div className={styles.detailImpact} style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: 'var(--ink-2)' }}>{t}</div>
                 </div>
               ))}
             </div>
@@ -578,7 +578,7 @@ const ApplySummaryResult: React.FC<{ summary: ApplySummary }> = ({ summary }) =>
                   <div className={styles.detailHeader}>
                     <span className={styles.detailResource}>Round {i + 1}</span>
                   </div>
-                  <div className={styles.detailImpact} style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#666' }}>{t}</div>
+                  <div className={styles.detailImpact} style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: 'var(--ink-2)' }}>{t}</div>
                 </div>
               ))}
             </div>
@@ -617,8 +617,8 @@ const DecisionConfirmation: React.FC<{
       .filter(Boolean);
     return (
       <div className={`${styles.decisionBox} ${isAborted ? styles.decisionCancelled : styles.decisionConfirmedBox}`}>
-        <div className={styles.decisionHeader} style={{ backgroundColor: isAborted ? '#f9fafb' : '#f0fdf4' }}>
-          <span className={styles.decisionTitle} style={{ color: isAborted ? '#374151' : '#065f46' }}>
+        <div className={styles.decisionHeader} style={{ backgroundColor: isAborted ? 'var(--bg)' : 'var(--green-soft)' }}>
+          <span className={styles.decisionTitle} style={{ color: isAborted ? 'var(--ink)' : 'var(--green-active)' }}>
             {summary.decision_title || summary.decision_scenario || 'Risk Decision'}
           </span>
           <span className={isAborted ? styles.decisionCancelledBadge : styles.decisionConfirmed}>
@@ -627,15 +627,15 @@ const DecisionConfirmation: React.FC<{
         </div>
         <div className={styles.decisionResult}>
           {confirmedLabels.map((label, i) => (
-            <div key={i} style={{ fontSize: '13px', color: isAborted ? '#6b7280' : '#374151', marginBottom: '2px' }}>
+            <div key={i} style={{ fontSize: '13px', color: isAborted ? 'var(--ink-2)' : 'var(--ink)', marginBottom: '2px' }}>
               {isAborted ? '✗' : '✓'} {label}
             </div>
           ))}
-          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginTop: '6px' }}>
             {summary.user_decision_by} 于 {summary.user_decision_at ? new Date(summary.user_decision_at).toLocaleString() : ''} {isAborted ? '取消' : '确认'}
           </div>
           {summary.user_decision_note && (
-            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>备注: {summary.user_decision_note}</div>
+            <div style={{ fontSize: '13px', color: 'var(--ink)', marginTop: '4px' }}>备注: {summary.user_decision_note}</div>
           )}
         </div>
       </div>
@@ -735,7 +735,7 @@ const DecisionConfirmation: React.FC<{
           onChange={(e) => setNote(e.target.value)}
           rows={2}
         />
-        {error && <div style={{ color: '#dc2626', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
+        {error && <div style={{ color: 'var(--red-hover)', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
         <div className={styles.decisionButtonGroup}>
           <button
             className={styles.decisionAbort}
@@ -775,7 +775,7 @@ const AIIncompleteWarning: React.FC<{
   // Already bypassed
   if (summary.bypassed_by) {
     return (
-      <div className={styles.aiIncompleteWarning} style={{ borderColor: '#f59e0b' }}>
+      <div className={styles.aiIncompleteWarning} style={{ borderColor: 'var(--amber)' }}>
         <div className={styles.warningHeader}>AI Analysis Incomplete (Bypassed)</div>
         <div className={styles.warningBody}>
           <p>AI analysis did not complete successfully. Admin {summary.bypassed_by} bypassed at {summary.bypassed_at ? new Date(summary.bypassed_at).toLocaleString() : ''}.</p>
@@ -813,7 +813,7 @@ const AIIncompleteWarning: React.FC<{
               onChange={(e) => setBypassReason(e.target.value)}
               rows={2}
             />
-            {error && <div style={{ color: '#dc2626', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
+            {error && <div style={{ color: 'var(--red-hover)', fontSize: '13px', marginTop: '4px' }}>{error}</div>}
             <button
               className={styles.bypassButton}
               onClick={handleBypass}

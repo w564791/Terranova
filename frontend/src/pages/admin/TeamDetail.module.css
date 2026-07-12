@@ -13,7 +13,7 @@
 .backButton {
   background: none;
   border: none;
-  color: #0066cc;
+  color: var(--brand);
   cursor: pointer;
   font-size: 14px;
   padding: 8px 0;
@@ -24,7 +24,7 @@
 }
 
 .backButton:hover {
-  color: #0052a3;
+  color: var(--brand-ink);
   text-decoration: underline;
 }
 
@@ -37,19 +37,19 @@
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .subtitle {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   margin: 0;
 }
 
 .deleteButton {
-  background: #dc3545;
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   padding: 10px 20px;
   border-radius: 6px;
@@ -60,7 +60,7 @@
 }
 
 .deleteButton:hover {
-  background: #c82333;
+  background: var(--red-hover);
 }
 
 /* 区块 */
@@ -75,7 +75,7 @@
 .sectionTitle {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -96,7 +96,7 @@
 .infoRow {
   display: flex;
   padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .infoRow:last-child {
@@ -105,19 +105,19 @@
 
 .infoLabel {
   font-weight: 500;
-  color: #666;
+  color: var(--ink-2);
   min-width: 120px;
 }
 
 .infoValue {
-  color: #1a1a1a;
+  color: var(--ink);
   flex: 1;
 }
 
 /* 内联表单 */
 .inlineForm {
-  background: #f8f9fa;
-  border: 2px solid #0066cc;
+  background: var(--bg);
+  border: 2px solid var(--brand);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
@@ -138,7 +138,7 @@
 
 .formLabel {
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   font-size: 14px;
 }
 
@@ -150,7 +150,7 @@
 
 .input {
   padding: 10px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -159,11 +159,11 @@
 
 .input:focus {
   outline: none;
-  border-color: #0066cc;
+  border-color: var(--brand);
 }
 
 .input.inputError {
-  border-color: #dc3545;
+  border-color: var(--red);
 }
 
 .selectWrapper {
@@ -174,19 +174,19 @@
 
 .searchInput {
   padding: 8px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: #0066cc;
+  border-color: var(--brand);
 }
 
 .select {
   padding: 8px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   min-width: 400px;
@@ -194,22 +194,22 @@
 
 .select:focus {
   outline: none;
-  border-color: #0066cc;
+  border-color: var(--brand);
 }
 
 .errorText {
-  color: #dc3545;
+  color: var(--red);
   font-size: 12px;
 }
 
 .hint {
-  color: #666;
+  color: var(--ink-2);
   font-size: 12px;
 }
 
 .addButton {
-  background: #0066cc;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -220,17 +220,17 @@
 }
 
 .addButton:hover:not(:disabled) {
-  background: #0052a3;
+  background: var(--brand-ink);
 }
 
 .addButton:disabled {
-  background: #ccc;
+  background: var(--line-2);
   cursor: not-allowed;
 }
 
 .submitButton {
-  background: #28a745;
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
   padding: 10px 24px;
   border-radius: 4px;
@@ -241,7 +241,7 @@
 }
 
 .submitButton:hover {
-  background: #218838;
+  background: var(--green-hover);
 }
 
 /* 成员列表 */
@@ -256,9 +256,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #f8f9fa;
+  background: var(--bg);
   border-radius: 6px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--line);
 }
 
 .memberInfo {
@@ -269,22 +269,22 @@
 
 .memberName {
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   font-size: 15px;
 }
 
 .memberUserId {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .memberLabel {
   font-weight: 500;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .memberValue {
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .memberActions {
@@ -294,8 +294,8 @@
 }
 
 .removeButton {
-  background: #dc3545;
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   padding: 6px 12px;
   border-radius: 4px;
@@ -305,7 +305,7 @@
 }
 
 .removeButton:hover {
-  background: #c82333;
+  background: var(--red-hover);
 }
 
 /* 角色徽章 */
@@ -318,29 +318,29 @@
 }
 
 .roleBadge.maintainer {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 .roleBadge.member {
   background: #f3e5f5;
-  color: #7b1fa2;
+  color: var(--brand-ink);
 }
 
 /* Token相关 */
 .tokenHint {
-  background: #e7f3ff;
+  background: var(--brand-soft);
   padding: 12px 16px;
   border-radius: 6px;
   font-size: 14px;
   color: #004085;
   margin-bottom: 16px;
-  border-left: 4px solid #0066cc;
+  border-left: 4px solid var(--brand);
 }
 
 .createdTokenBox {
-  background: #fff3cd;
-  border: 2px solid #ffc107;
+  background: var(--amber-soft);
+  border: 2px solid var(--amber);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
@@ -353,13 +353,13 @@
 .warningBox strong {
   display: block;
   margin-bottom: 8px;
-  color: #856404;
+  color: var(--amber-hover);
   font-size: 15px;
 }
 
 .warningBox p {
   margin: 0;
-  color: #856404;
+  color: var(--amber-hover);
   font-size: 14px;
 }
 
@@ -377,12 +377,12 @@
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 12px;
   word-break: break-all;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--line-2);
 }
 
 .copyButton {
-  background: #28a745;
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
   padding: 10px 20px;
   border-radius: 4px;
@@ -394,12 +394,12 @@
 }
 
 .copyButton:hover {
-  background: #218838;
+  background: var(--green-hover);
 }
 
 .clearButton {
-  background: #6c757d;
-  color: white;
+  background: var(--ink-2);
+  color: #fff;
   border: none;
   padding: 10px 20px;
   border-radius: 4px;
@@ -421,10 +421,10 @@
 }
 
 .tokenCard {
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .tokenHeader {
@@ -437,7 +437,7 @@
 .tokenName {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .statusBadge {
@@ -454,13 +454,13 @@
 }
 
 .statusBadge.revoked {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .statusBadge.expired {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .tokenBody {
@@ -477,13 +477,13 @@
 }
 
 .tokenLabel {
-  color: #666;
+  color: var(--ink-2);
   font-weight: 500;
   min-width: 80px;
 }
 
 .tokenValue {
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .tokenActions {
@@ -491,12 +491,12 @@
   justify-content: flex-end;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #dee2e6;
+  border-top: 1px solid var(--line-2);
 }
 
 .revokeButton {
-  background: #dc3545;
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   padding: 6px 16px;
   border-radius: 4px;
@@ -506,7 +506,7 @@
 }
 
 .revokeButton:hover {
-  background: #c82333;
+  background: var(--red-hover);
 }
 
 /* 权限表格 */
@@ -517,39 +517,39 @@
 }
 
 .permissionsTable thead {
-  background: #f8f9fa;
+  background: var(--bg);
 }
 
 .permissionsTable th {
   padding: 12px;
   text-align: left;
   font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
+  color: var(--ink-2);
+  border-bottom: 2px solid var(--line-2);
 }
 
 .permissionsTable td {
   padding: 12px;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--line-2);
 }
 
 .permissionsTable tbody tr:hover {
-  background: #f8f9fa;
+  background: var(--bg);
 }
 
 .scopeIdCell {
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 13px;
-  color: #495057;
+  color: var(--ink-2);
 }
 
 .permissionCell {
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .dateCell {
-  color: #666;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
@@ -565,18 +565,18 @@
 }
 
 .scopeBadge.organization {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 .scopeBadge.project {
   background: #f3e5f5;
-  color: #7b1fa2;
+  color: var(--brand-ink);
 }
 
 .scopeBadge.workspace {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 /* 权限级别徽章 */
@@ -589,23 +589,23 @@
 }
 
 .levelBadge.none {
-  background: #f8f9fa;
-  color: #6c757d;
+  background: var(--bg);
+  color: var(--ink-2);
 }
 
 .levelBadge.read {
-  background: #e7f3ff;
-  color: #0066cc;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .levelBadge.write {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .levelBadge.admin {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 /* 标签页选择器 */
@@ -613,7 +613,7 @@
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
-  border-bottom: 2px solid #e9ecef;
+  border-bottom: 2px solid var(--line);
 }
 
 .tabButton {
@@ -622,7 +622,7 @@
   padding: 12px 24px;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
+  color: var(--ink-2);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
@@ -630,12 +630,12 @@
 }
 
 .tabButton:hover {
-  color: #0066cc;
+  color: var(--brand);
 }
 
 .tabButton.active {
-  color: #0066cc;
-  border-bottom-color: #0066cc;
+  color: var(--brand);
+  border-bottom-color: var(--brand);
 }
 
 /* 角色列表 */
@@ -650,9 +650,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #f8f9fa;
+  background: var(--bg);
   border-radius: 6px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--line);
 }
 
 .roleInfo {
@@ -670,23 +670,23 @@
 
 .roleName {
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   font-size: 15px;
 }
 
 .roleScope {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .roleTime {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .revokeRoleButton {
-  background: #dc3545;
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   padding: 6px 16px;
   border-radius: 4px;
@@ -696,7 +696,7 @@
 }
 
 .revokeRoleButton:hover {
-  background: #c82333;
+  background: var(--red-hover);
 }
 
 /* 编辑操作 */
@@ -717,26 +717,26 @@
 }
 
 .actionButton.edit {
-  background: #0066cc;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .actionButton.edit:hover {
-  background: #0052a3;
+  background: var(--brand-ink);
 }
 
 .actionButton.save {
-  background: #28a745;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .actionButton.save:hover {
-  background: #218838;
+  background: var(--green-hover);
 }
 
 .actionButton.cancel {
-  background: #6c757d;
-  color: white;
+  background: var(--ink-2);
+  color: #fff;
 }
 
 .actionButton.cancel:hover {
@@ -744,17 +744,17 @@
 }
 
 .actionButton.revoke {
-  background: #dc3545;
-  color: white;
+  background: var(--red);
+  color: #fff;
 }
 
 .actionButton.revoke:hover {
-  background: #c82333;
+  background: var(--red-hover);
 }
 
 .levelSelect {
   padding: 6px 12px;
-  border: 2px solid #0066cc;
+  border: 2px solid var(--brand);
   border-radius: 4px;
   font-size: 14px;
   font-weight: 500;
@@ -764,7 +764,7 @@
 
 .levelSelect:focus {
   outline: none;
-  border-color: #0052a3;
+  border-color: var(--brand-ink);
 }
 
 /* 状态 */
@@ -773,10 +773,15 @@
 .empty {
   text-align: center;
   padding: 40px 20px;
-  color: #666;
+  color: var(--ink-2);
   font-size: 16px;
 }
 
 .error {
-  color: #dc3545;
+  color: var(--red);
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

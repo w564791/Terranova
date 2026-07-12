@@ -863,7 +863,7 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                             value={metrics.cpu_usage} 
                           />
                         ) : (
-                          <span style={{ color: '#8c8c8c', fontSize: '12px' }}>-</span>
+                          <span style={{ color: 'var(--ink-3)', fontSize: '12px' }}>-</span>
                         )}
                       </td>
                       <td style={{ minWidth: '200px', padding: '12px 16px' }}>
@@ -873,7 +873,7 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                             value={metrics.memory_usage} 
                           />
                         ) : (
-                          <span style={{ color: '#8c8c8c', fontSize: '12px' }}>-</span>
+                          <span style={{ color: 'var(--ink-3)', fontSize: '12px' }}>-</span>
                         )}
                       </td>
                       <td>
@@ -881,17 +881,17 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                           <div style={{ fontSize: '12px' }}>
                             {metrics.running_tasks.map((task, idx) => (
                               <div key={idx} style={{ marginBottom: '4px' }}>
-                                <span style={{ fontWeight: 500, color: '#1890ff' }}>
+                                <span style={{ fontWeight: 500, color: 'var(--brand)' }}>
                                   Task #{task.task_id}
                                 </span>
-                                <span style={{ color: '#8c8c8c', marginLeft: '8px' }}>
+                                <span style={{ color: 'var(--ink-3)', marginLeft: '8px' }}>
                                   {task.task_type}
                                 </span>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <span style={{ color: '#8c8c8c' }}>-</span>
+                          <span style={{ color: 'var(--ink-3)' }}>-</span>
                         )}
                       </td>
                     </tr>
@@ -1372,7 +1372,7 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                           className={styles.input}
                           style={{ flex: 1 }}
                         />
-                        <span style={{ padding: '0 8px', color: '#8c8c8c' }}>=</span>
+                        <span style={{ padding: '0 8px', color: 'var(--ink-3)' }}>=</span>
                         <input
                           type="text"
                           value={pair.value}
@@ -1471,7 +1471,7 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                 {pool.one_time_unfreeze_until && new Date(pool.one_time_unfreeze_until) > new Date() && (
                   <span style={{ 
                     padding: '4px 12px', 
-                    background: '#52c41a', 
+                    background: 'var(--green)', 
                     color: 'white', 
                     borderRadius: '4px',
                     fontSize: '12px',

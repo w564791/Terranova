@@ -2,7 +2,7 @@
 .workspaceLayout {
   display: flex;
   min-height: 100vh;
-  background: var(--color-gray-50);
+  background: var(--bg);
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
@@ -11,7 +11,7 @@
 /* 左侧导航栏 - 深色主题（与 Layout sidebar 一致） */
 .workspaceSidebar {
   width: 260px;
-  background: linear-gradient(180deg, #1a1a1a 0%, #1e1e1e 100%);
+  background: linear-gradient(180deg, var(--ink) 0%, #1e1e1e 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
@@ -26,13 +26,13 @@
 /* Workspace信息头部 - 简洁版 */
 .workspaceHeader {
   padding: 20px 16px;
-  border-bottom: 1px solid #2D2D2D;
+  border-bottom: 1px solid var(--ink);
 }
 
 .backButton {
   background: none;
   border: none;
-  color: #BFBFBF;
+  color: var(--ink-faint);
   cursor: pointer;
   font-size: 13px;
   padding: 0;
@@ -44,13 +44,13 @@
 }
 
 .backButton:hover {
-  color: #FFFFFF;
+  color: var(--surface);
 }
 
 .workspaceTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #FFFFFF;
+  color: var(--surface);
   margin: 0;
   line-height: 1.3;
   overflow: hidden;
@@ -60,8 +60,8 @@
 
 /* 全局头部 - 在所有标签页顶部显示（Settings除外） */
 .globalHeader {
-  background: var(--color-white);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
   padding: 20px;
   display: flex;
   justify-content: space-between;
@@ -76,7 +76,7 @@
 .globalTitle {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0 0 12px 0;
 }
 
@@ -91,7 +91,7 @@
 
 .globalDescription {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin: 8px 0 0 0;
   line-height: 1.5;
 }
@@ -104,8 +104,8 @@
 
 /* Page Header - 在主内容区顶部（已废弃，保留用于兼容） */
 .pageHeader {
-  background: var(--color-white);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
   padding: 20px;
   margin-bottom: 20px;
 }
@@ -120,7 +120,7 @@
 .pageTitle {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -132,9 +132,9 @@
 .lockButton,
 .refreshCMDBButton {
   padding: 8px 16px;
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
@@ -143,8 +143,8 @@
 }
 
 .refreshCMDBButton:hover {
-  background: var(--color-gray-200);
-  border-color: var(--color-gray-400);
+  background: var(--line);
+  border-color: var(--ink-faint);
 }
 
 .refreshCMDBButton:disabled {
@@ -154,8 +154,8 @@
 
 .newRunButton {
   padding: 8px 16px;
-  background: var(--color-primary);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -165,24 +165,24 @@
 }
 
 .newRunButton:hover {
-  background: var(--color-primary-dark);
+  background: var(--brand-ink);
 }
 
 .lockButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .lockButton.locked {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #991b1b;
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  color: var(--red-active);
   cursor: not-allowed;
 }
 
 .lockButton.locked:hover {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--red-soft);
+  border-color: var(--red-line);
 }
 
 .lockButton:disabled {
@@ -191,13 +191,13 @@
 }
 
 .newRunButton {
-  background: var(--color-blue-600);
-  border-color: var(--color-blue-600);
-  color: var(--color-white);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
+  color: var(--surface);
 }
 
 .newRunButton:hover {
-  background: var(--color-blue-700);
+  background: var(--brand-700);
 }
 
 .pageHeaderMeta {
@@ -209,7 +209,7 @@
 
 .metaItem {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   display: flex;
   align-items: center;
   white-space: nowrap;
@@ -220,7 +220,7 @@
 .metaItem::after {
   content: '•';
   margin-left: 16px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   flex-shrink: 0;
 }
 
@@ -230,7 +230,7 @@
 
 .pageDescription {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin: 8px 0 0 0;
   line-height: 1.5;
 }
@@ -245,7 +245,7 @@
   display: flex;
   align-items: center;
   padding: 10px var(--spacing-md);
-  color: #BFBFBF;
+  color: var(--ink-faint);
   background: none;
   border: none;
   border-left: 3px solid transparent;
@@ -260,14 +260,14 @@
 }
 
 .navItem:hover {
-  background: #2D2D2D;
-  color: #FFFFFF;
+  background: var(--ink);
+  color: var(--surface);
 }
 
 .navItemActive {
   background: #1E1E1E;
-  color: #1677FF;
-  border-left-color: #1677FF;
+  color: var(--brand);
+  border-left-color: var(--brand);
 }
 
 .navIcon {
@@ -290,7 +290,7 @@
 .expandIcon {
   font-size: 10px;
   transition: transform 0.2s;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .expandIconOpen {
@@ -309,7 +309,7 @@
   display: flex;
   align-items: center;
   padding: 8px var(--spacing-md) 8px calc(var(--spacing-md) + 20px);
-  color: #999999;
+  color: var(--ink-3);
   background: none;
   border: none;
   border-left: 3px solid transparent;
@@ -324,14 +324,14 @@
 }
 
 .subMenuItem:hover {
-  background: #2D2D2D;
-  color: #FFFFFF;
+  background: var(--ink);
+  color: var(--surface);
 }
 
 .subMenuItemActive {
   background: #1E1E1E;
-  color: #1677FF;
-  border-left-color: #1677FF;
+  color: var(--brand);
+  border-left-color: var(--brand);
 }
 
 /* 右侧主内容区 */
@@ -340,7 +340,7 @@
   margin-left: 260px;
   display: flex;
   flex-direction: column;
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .workspaceContent {
@@ -354,7 +354,7 @@
   max-width: 1600px;
   margin: 0 auto;
   padding: 0;
-  background: var(--color-gray-50);
+  background: var(--bg);
   min-height: 100vh;
 }
 
@@ -362,20 +362,20 @@
 .error {
   text-align: center;
   padding: var(--spacing-xl);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 16px;
 }
 
 .error {
-  color: var(--color-red-500);
+  color: var(--red);
 }
 
 .placeholder {
   text-align: center;
   padding: var(--spacing-xl);
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 16px;
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-md);
 }
 
@@ -395,8 +395,8 @@
 }
 
 .section {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 20px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -408,18 +408,18 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
 .viewAllLink {
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-size: 14px;
   text-decoration: none;
 }
@@ -429,17 +429,17 @@
 }
 
 .resourceCount {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 /* Latest Run */
 .latestRun {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
   position: relative;
@@ -487,12 +487,12 @@ a.stateRow {
 
 .runType {
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: 14px;
 }
 
 .runId {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 13px;
 }
 
@@ -505,35 +505,35 @@ a.stateRow {
 }
 
 .status-pending {
-  background: #e0f2f1;
-  color: #00897b;
-  color: var(--color-gray-700);
+  background: var(--brand-soft);
+  color: var(--green);
+  color: var(--ink);
 }
 
 .status-running {
-  background: var(--color-blue-100);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .status-success {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .status-failed {
-  background: #FEE2E2;
-  color: #991B1B;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .runMeta {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin-bottom: var(--spacing-md);
 }
 
 .runOutput {
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
@@ -543,16 +543,16 @@ a.stateRow {
 .runOutput pre {
   margin: 0;
   font-size: 12px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', monospace;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
 .seeDetailsButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -562,7 +562,7 @@ a.stateRow {
 }
 
 .seeDetailsButton:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 /* Resources */
@@ -572,12 +572,12 @@ a.stateRow {
 
 .infoText {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin: 0;
 }
 
 .resourcesList {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -591,11 +591,11 @@ a.stateRow {
   grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  background: var(--color-gray-50);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   text-transform: uppercase;
 }
 
@@ -610,7 +610,7 @@ a.stateRow {
   grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--surface-2);
   align-items: center;
   transition: background 0.2s;
 }
@@ -620,7 +620,7 @@ a.stateRow {
 }
 
 .resourceRow:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .resourceName {
@@ -633,7 +633,7 @@ a.stateRow {
 
 .resourceNameText {
   font-weight: 500;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: 14px;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -642,7 +642,7 @@ a.stateRow {
 
 .resourceDesc {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -654,7 +654,7 @@ a.stateRow {
   flex-direction: row;
   align-items: center;
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   margin-top: 4px;
   gap: 0;
 }
@@ -662,22 +662,22 @@ a.stateRow {
 .resourceMetaSeparator {
   display: inline;
   margin: 0 6px;
-  color: var(--color-gray-300);
+  color: var(--line-2);
 }
 
 .resourceMetaEnabled {
   display: inline;
-  color: #059669;
+  color: var(--green-hover);
 }
 
 .resourceMetaDeprecated {
   display: inline;
-  color: #d97706;
+  color: var(--amber-hover);
 }
 
 .resourceType {
   font-size: 13px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .resourceVersion {
@@ -688,13 +688,13 @@ a.stateRow {
 
 .versionNumber {
   font-size: 13px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-weight: 500;
 }
 
 .defaultBadge {
-  background: #DBEAFE;
-  color: #1E40AF;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 10px;
@@ -716,31 +716,31 @@ a.stateRow {
 }
 
 .statusEnabled {
-  background: #D1FAE5;
-  color: #065F46;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .statusDeprecated {
-  background: #FEF3C7;
-  color: #92400E;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .resourceCreated {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 /* View All Row */
 .viewAllRow {
   padding: var(--spacing-md);
   text-align: center;
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .viewAllButton {
   background: none;
   border: none;
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -750,14 +750,14 @@ a.stateRow {
 }
 
 .viewAllButton:hover {
-  background: var(--color-blue-50);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .emptyState {
   text-align: center;
   padding: var(--spacing-xl);
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .emptyState p {
@@ -774,8 +774,8 @@ a.stateRow {
 }
 
 .sidebarCard {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 16px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -787,26 +787,26 @@ a.stateRow {
   align-items: center;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .sidebarTitle {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
 .sidebarTime {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .sidebarItem {
   display: flex;
   align-items: flex-start;
   padding: 8px 0;
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .sidebarItem:last-child {
@@ -828,12 +828,12 @@ a.stateRow {
 
 .sidebarLabel {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .sidebarValue {
   font-size: 13px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -852,13 +852,13 @@ a.stateRow {
 
 .healthLabel {
   font-size: 13px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-weight: 500;
 }
 
 .healthLink {
   font-size: 13px;
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   text-decoration: none;
 }
 
@@ -868,14 +868,14 @@ a.stateRow {
 
 .healthBar {
   height: 8px;
-  background: var(--color-gray-200);
+  background: var(--line);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .healthBarGreen {
   height: 100%;
-  background: var(--color-green-500);
+  background: var(--green);
   transition: width 0.3s;
 }
 
@@ -893,13 +893,13 @@ a.stateRow {
 
 .healthStatLabel {
   font-size: 12px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .healthStatValue {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 /* Metrics */
@@ -908,7 +908,7 @@ a.stateRow {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .metricsItem:last-child {
@@ -917,12 +917,12 @@ a.stateRow {
 
 .metricsLabel {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .metricsValue {
   font-size: 13px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -943,7 +943,7 @@ a.stateRow {
 .runsTitle {
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -953,10 +953,10 @@ a.stateRow {
 }
 
 .currentRun {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  background: var(--color-gray-50);
+  background: var(--bg);
   position: relative;
   padding-left: calc(var(--spacing-md) + 4px);
 }
@@ -972,31 +972,31 @@ a.stateRow {
 }
 
 .indicator-success {
-  background-color: #10B981;
+  background-color: var(--green);
 }
 
 .indicator-attention {
-  background-color: #F59E0B;
+  background-color: var(--amber);
 }
 
 .indicator-warning {
-  background-color: #EA580C;
+  background-color: var(--amber);
 }
 
 .indicator-error {
-  background-color: #EF4444;
+  background-color: var(--red);
 }
 
 .indicator-neutral {
-  background-color: var(--color-gray-400);
+  background-color: var(--ink-faint);
 }
 
 .indicator-running {
-  background-color: #3B82F6;
+  background-color: var(--brand);
 }
 
 .indicator-pending {
-  background-color: #00897b;
+  background-color: var(--green);
 }
 
 .runActions {
@@ -1006,9 +1006,9 @@ a.stateRow {
 }
 
 .cancelButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-red-500);
-  color: var(--color-red-500);
+  background: var(--surface);
+  border: 1px solid var(--red);
+  color: var(--red);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -1018,8 +1018,8 @@ a.stateRow {
 }
 
 .cancelButton:hover {
-  background: var(--color-red-500);
-  color: var(--color-white);
+  background: var(--red);
+  color: #fff;
 }
 
 /* 过滤器 */
@@ -1032,10 +1032,10 @@ a.stateRow {
 
 .filterButton {
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1046,19 +1046,19 @@ a.stateRow {
 }
 
 .filterButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .filterActive {
-  background: var(--color-blue-600);
-  border-color: var(--color-blue-600);
-  color: var(--color-white);
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
+  color: var(--surface);
 }
 
 .filterActive:hover {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 .filterCount {
@@ -1093,10 +1093,10 @@ a.stateRow {
 
 .timeFilterButton {
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1105,19 +1105,19 @@ a.stateRow {
 }
 
 .timeFilterButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .timeFilterActive {
-  background: var(--color-gray-900);
-  border-color: var(--color-gray-900);
-  color: var(--color-white);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
 }
 
 .timeFilterActive:hover {
-  background: var(--color-gray-800);
-  border-color: var(--color-gray-800);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
 /* 搜索框 */
@@ -1129,27 +1129,27 @@ a.stateRow {
 .searchInput {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   transition: all 0.2s;
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .searchInput::placeholder {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 /* 自定义日期选择器 */
 .customDatePicker {
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
   margin-top: var(--spacing-sm);
@@ -1171,32 +1171,32 @@ a.stateRow {
 .datePickerLabel {
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .datePickerInput {
   padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
-  color: var(--color-gray-900);
-  background: var(--color-white);
+  color: var(--ink);
+  background: var(--surface);
   transition: all 0.2s;
   min-width: 150px;
 }
 
 .datePickerInput:focus {
   outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .datePickerClearButton {
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -1205,8 +1205,8 @@ a.stateRow {
 }
 
 .datePickerClearButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 /* Runs列表 - TFE风格 */
@@ -1214,16 +1214,16 @@ a.stateRow {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .runItem {
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
   padding: 20px;
   padding-left: 24px;
-  background: var(--color-white);
+  background: var(--surface);
   transition: all 0.2s;
   cursor: pointer;
   display: flex;
@@ -1237,16 +1237,16 @@ a.stateRow {
 }
 
 .runItem:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 /* TFE风格紧凑布局 - Latest Run卡片 */
 .latestRunCompact {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   padding-left: 24px;
-  background: var(--color-white);
+  background: var(--surface);
   transition: all 0.15s ease;
   cursor: pointer;
   display: flex;
@@ -1258,13 +1258,13 @@ a.stateRow {
 }
 
 .latestRunCompact:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 /* Latest Run Section - 更紧凑的标题 */
 .latestRunSection {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 16px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -1280,15 +1280,15 @@ a.stateRow {
 .latestRunTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-700);
+  color: var(--ink);
   margin: 0;
 }
 
 /* TFE风格紧凑布局 - Run List */
 .runItemCompact {
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
   padding: 16px 20px;
-  background: var(--color-white);
+  background: var(--surface);
   transition: all 0.15s ease;
   cursor: pointer;
   display: flex;
@@ -1303,7 +1303,7 @@ a.stateRow {
 }
 
 .runItemCompact:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 /* 第一个任务项 - 有左侧颜色条 */
@@ -1317,7 +1317,7 @@ a.stateRow {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--color-gray-200);
+  background: var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1326,7 +1326,7 @@ a.stateRow {
 
 .avatarIcon {
   font-size: 16px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 /* 中间内容区 */
@@ -1348,7 +1348,7 @@ a.stateRow {
 .runTitleText {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1360,23 +1360,23 @@ a.stateRow {
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   flex-wrap: wrap;
   margin-top: 2px;
 }
 
 .runIdMeta {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 12px;
 }
 
 .metaSeparator {
-  color: var(--color-gray-300);
+  color: var(--line-2);
 }
 
 .runUserMeta {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .runChangesMeta {
@@ -1386,17 +1386,17 @@ a.stateRow {
 }
 
 .changeAddMeta {
-  color: #16a34a;
+  color: var(--green-hover);
   font-weight: 500;
 }
 
 .changeModifyMeta {
-  color: #2563eb;
+  color: var(--brand-ink);
   font-weight: 500;
 }
 
 .changeDestroyMeta {
-  color: #dc2626;
+  color: var(--red-hover);
   font-weight: 500;
 }
 
@@ -1419,43 +1419,43 @@ a.stateRow {
 }
 
 .statusBadge-success {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .statusBadge-attention {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .statusBadge-warning {
-  background: #fed7aa;
-  color: #9a3412;
+  background: var(--amber-line);
+  color: var(--amber-hover);
 }
 
 .statusBadge-error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .statusBadge-running {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .statusBadge-pending {
-  background: #e0f2f1;
+  background: var(--brand-soft);
   color: #00695c;
 }
 
 .statusBadge-neutral {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .runTimeMeta {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   white-space: nowrap;
 }
 
@@ -1464,12 +1464,12 @@ a.stateRow {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--color-gray-200);
+  background: var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   flex-shrink: 0;
 }
 
@@ -1497,17 +1497,17 @@ a.stateRow {
 
 .runType {
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: 15px;
 }
 
 .runId {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 14px;
 }
 
 .runDescription {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 14px;
   font-weight: 400;
 }
@@ -1516,7 +1516,7 @@ a.stateRow {
 .runDescriptionPrimary {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: 8px;
   line-height: 1.4;
   word-break: break-word;
@@ -1535,43 +1535,43 @@ a.stateRow {
 }
 
 .status-pending {
-  background: var(--color-gray-200);
-  color: var(--color-gray-700);
+  background: var(--line);
+  color: var(--ink);
 }
 
 .status-running {
-  background: var(--color-blue-100);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .status-success {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .status-failed {
-  background: #FEE2E2;
-  color: #991B1B;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .status-cancelled {
-  background: var(--color-gray-200);
-  color: var(--color-gray-700);
+  background: var(--line);
+  color: var(--ink);
 }
 
 .status-applied {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .status-plan_completed {
-  background: #FEF3C7;
-  color: #92400E;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .runMeta {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -1587,7 +1587,7 @@ a.stateRow {
 }
 
 .changeLabel {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-weight: 500;
 }
 
@@ -1598,17 +1598,17 @@ a.stateRow {
 }
 
 .changeAdd {
-  color: var(--color-green-600);
+  color: var(--green-hover);
   font-weight: 600;
 }
 
 .changeModify {
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-weight: 600;
 }
 
 .changeDestroy {
-  color: var(--color-red-600);
+  color: var(--red-hover);
   font-weight: 600;
 }
 
@@ -1628,7 +1628,7 @@ a.stateRow {
   align-items: center;
   padding: var(--spacing-md) 0;
   margin-top: var(--spacing-md);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
   flex-wrap: wrap;
   gap: var(--spacing-md);
 }
@@ -1642,7 +1642,7 @@ a.stateRow {
 
 .paginationInfo {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .pageSizeSelector {
@@ -1653,29 +1653,29 @@ a.stateRow {
 
 .pageSizeLabel {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-weight: 500;
 }
 
 .pageSizeSelect {
   padding: 6px 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
-  color: var(--color-gray-900);
-  background: var(--color-white);
+  color: var(--ink);
+  background: var(--surface);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .pageSizeSelect:hover {
-  border-color: var(--color-gray-400);
+  border-color: var(--ink-faint);
 }
 
 .pageSizeSelect:focus {
   outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .paginationControls {
@@ -1686,16 +1686,16 @@ a.stateRow {
 
 .paginationPages {
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-weight: 500;
 }
 
 .paginationButton {
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -1703,8 +1703,8 @@ a.stateRow {
 }
 
 .paginationButton:hover:not(:disabled) {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .paginationButton:disabled {
@@ -1722,12 +1722,12 @@ a.stateRow {
 .infoTitle {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0 0 var(--spacing-sm) 0;
 }
 
 .infoLink {
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   text-decoration: none;
 }
 
@@ -1738,7 +1738,7 @@ a.stateRow {
 .variablesSectionTitle {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0 0 var(--spacing-sm) 0;
 }
 
@@ -1747,12 +1747,12 @@ a.stateRow {
   grid-template-columns: 2fr 3fr 1fr 80px;
   gap: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-gray-50);
-  border: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   text-transform: uppercase;
   margin-top: var(--spacing-md);
 }
@@ -1762,10 +1762,10 @@ a.stateRow {
   grid-template-columns: 2fr 3fr 1fr 80px;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-top: none;
   align-items: start;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .variableRow:last-child {
@@ -1773,7 +1773,7 @@ a.stateRow {
 }
 
 .variableRow:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .variableKeyCell {
@@ -1784,7 +1784,7 @@ a.stateRow {
 
 .variableKey {
   font-weight: 500;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -1792,8 +1792,8 @@ a.stateRow {
 }
 
 .hclBadge {
-  background: var(--color-blue-100);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  color: var(--brand-700);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 11px;
@@ -1802,8 +1802,8 @@ a.stateRow {
 }
 
 .sensitiveBadge {
-  background: #FEF3C7;
-  color: #92400E;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 11px;
@@ -1812,20 +1812,20 @@ a.stateRow {
 }
 
 .variableDescription {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.4;
   margin-top: 2px;
 }
 
 .variableValue {
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 13px;
   word-break: break-all;
 }
 
 .variableCategory {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 13px;
 }
 
@@ -1841,7 +1841,7 @@ a.stateRow {
 .deleteButton {
   background: none;
   border: none;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 20px;
   cursor: pointer;
   padding: 4px 8px;
@@ -1850,8 +1850,8 @@ a.stateRow {
 }
 
 .deleteButton:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .dropdownMenu {
@@ -1859,8 +1859,8 @@ a.stateRow {
   right: 0;
   top: 100%;
   margin-top: 4px;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-width: 160px;
@@ -1882,26 +1882,26 @@ a.stateRow {
 }
 
 .menuItem {
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .menuItem:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .menuItemDanger {
-  color: var(--color-red-600);
+  color: var(--red-hover);
 }
 
 .menuItemDanger:hover {
-  background: var(--color-red-50);
+  background: var(--red-soft);
 }
 
 .variableEditRow {
   grid-column: 1 / -1;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-top: none;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .variableEditRow .addVariableForm {
@@ -1912,10 +1912,10 @@ a.stateRow {
 
 /* Add Variable Form */
 .addVariableForm {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--spacing-lg);
-  background: var(--color-gray-50);
+  background: var(--bg);
   margin-top: var(--spacing-md);
 }
 
@@ -1926,7 +1926,7 @@ a.stateRow {
 .formSectionTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0 0 var(--spacing-md) 0;
 }
 
@@ -1952,9 +1952,9 @@ a.stateRow {
 }
 
 .addVariableButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -1965,14 +1965,14 @@ a.stateRow {
 }
 
 .addVariableButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .cancelButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -1982,8 +1982,8 @@ a.stateRow {
 }
 
 .cancelButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 /* States标签页 */
@@ -1998,9 +1998,9 @@ a.stateRow {
   justify-content: space-between;
   align-items: flex-start;
   padding: var(--spacing-md);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .stateInfo {
@@ -2018,13 +2018,13 @@ a.stateRow {
 .stateLabel {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   min-width: 140px;
 }
 
 .stateValue {
   font-size: 13px;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .stateActions {
@@ -2033,9 +2033,9 @@ a.stateRow {
 }
 
 .downloadButton {
-  background: var(--color-blue-600);
-  border: 1px solid var(--color-blue-600);
-  color: var(--color-white);
+  background: var(--brand-ink);
+  border: 1px solid var(--brand-ink);
+  color: var(--surface);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -2045,12 +2045,12 @@ a.stateRow {
 }
 
 .downloadButton:hover {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 .statesTable {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -2058,19 +2058,19 @@ a.stateRow {
 .statesTableHeader {
   display: flex;
   padding: 12px 20px;
-  background: var(--color-gray-50);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .stateRow {
   display: flex;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
   align-items: center;
-  background: var(--color-white);
+  background: var(--surface);
   transition: background 0.2s;
 }
 
@@ -2079,12 +2079,12 @@ a.stateRow {
 }
 
 .stateRow:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .stateVersion {
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: 15px;
   display: flex;
   align-items: center;
@@ -2092,8 +2092,8 @@ a.stateRow {
 }
 
 .currentBadge {
-  background: #DBEAFE;
-  color: #1E40AF;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -2103,13 +2103,13 @@ a.stateRow {
 
 .stateDownloadLink {
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .linkButton {
   background: none;
   border: none;
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   cursor: pointer;
   padding: 0;
   font-size: 14px;
@@ -2118,19 +2118,19 @@ a.stateRow {
 }
 
 .linkButton:hover {
-  color: var(--color-blue-700);
+  color: var(--brand-700);
   text-decoration: underline;
 }
 
 .stateChecksum {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .statusEnabled {
-  background: #D1FAE5;
-  color: #065F46;
+  background: var(--green-soft);
+  color: var(--green-active);
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 13px;
@@ -2139,8 +2139,8 @@ a.stateRow {
 }
 
 .statusDisabled {
-  background: #FEF3C7;
-  color: #92400E;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 13px;
@@ -2150,7 +2150,7 @@ a.stateRow {
 
 .stateCreated {
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .stateRowActions {
@@ -2161,8 +2161,8 @@ a.stateRow {
 
 .actionBtn {
   background: none;
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -2171,14 +2171,14 @@ a.stateRow {
 }
 
 .actionBtn:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .actionButton {
   background: none;
   border: none;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 18px;
   cursor: pointer;
   padding: 4px 8px;
@@ -2187,8 +2187,8 @@ a.stateRow {
 }
 
 .actionButton:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 /* Dialog */
@@ -2198,15 +2198,15 @@ a.stateRow {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .dialog {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   width: 90%;
   max-width: 600px;
@@ -2220,13 +2220,13 @@ a.stateRow {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .dialogTitle {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -2234,7 +2234,7 @@ a.stateRow {
   background: none;
   border: none;
   font-size: 24px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -2247,8 +2247,8 @@ a.stateRow {
 }
 
 .dialogClose:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .dialogForm {
@@ -2263,7 +2263,7 @@ a.stateRow {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   margin-bottom: var(--spacing-xs);
 }
 
@@ -2271,18 +2271,18 @@ a.stateRow {
 .formTextarea {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   transition: all 0.2s;
 }
 
 .formInput:focus,
 .formTextarea:focus {
   outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .formTextarea {
@@ -2307,7 +2307,7 @@ a.stateRow {
 }
 
 .radioLabel:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .radioLabel input[type="radio"] {
@@ -2316,7 +2316,7 @@ a.stateRow {
 
 .radioLabel span {
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .checkboxLabel {
@@ -2330,7 +2330,7 @@ a.stateRow {
 }
 
 .checkboxLabel:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .checkboxLabel input[type="checkbox"] {
@@ -2339,12 +2339,12 @@ a.stateRow {
 
 .checkboxLabel span {
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .disabledHint {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-style: italic;
   margin-left: 4px;
 }
@@ -2355,13 +2355,13 @@ a.stateRow {
   justify-content: flex-end;
   margin-top: var(--spacing-lg);
   padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .primaryButton {
-  background: var(--color-blue-600);
-  border: 1px solid var(--color-blue-600);
-  color: var(--color-white);
+  background: var(--brand-ink);
+  border: 1px solid var(--brand-ink);
+  color: var(--surface);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -2371,8 +2371,8 @@ a.stateRow {
 }
 
 .primaryButton:hover {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 /* 响应式设计 */
@@ -2393,21 +2393,21 @@ a.stateRow {
   top: 16px;
   left: 16px;
   z-index: 1001;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
   border: none;
-  color: white;
+  color: #fff;
   width: 44px;
   height: 44px;
   border-radius: 12px;
   font-size: 20px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.4);
   transition: all 0.3s ease;
 }
 
 .mobileSidebarButton:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+  box-shadow: 0 6px 16px rgba(28, 110, 140, 0.5);
 }
 
 .mobileSidebarButton:active {
@@ -2457,7 +2457,7 @@ a.stateRow {
     transform: translateX(-100%);
     z-index: 1000;
     box-shadow: none;
-    border-right: 1px solid #2D2D2D;
+    border-right: 1px solid var(--ink);
     border-bottom: none;
   }
 
@@ -2712,9 +2712,9 @@ a.stateRow {
     gap: 4px 12px !important;
     padding: 12px 16px !important;
     border: none !important;
-    border-bottom: 1px solid var(--color-gray-200) !important;
+    border-bottom: 1px solid var(--line) !important;
     border-radius: 0 !important;
-    background: var(--color-white);
+    background: var(--surface);
   }
 
   .resourceRow:last-child {
@@ -2722,7 +2722,7 @@ a.stateRow {
   }
 
   .resourceRow:hover {
-    background: var(--color-gray-50);
+    background: var(--bg);
   }
 
   /* 资源名称区域 */
@@ -2738,7 +2738,7 @@ a.stateRow {
   .resourceNameText {
     font-size: 14px;
     font-weight: 600;
-    color: var(--color-gray-900);
+    color: var(--ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2753,7 +2753,7 @@ a.stateRow {
     align-items: center !important;
     gap: 0 !important;
     font-size: 12px;
-    color: var(--color-gray-500);
+    color: var(--ink-3);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2833,7 +2833,7 @@ a.stateRow {
   .variableActions {
     justify-content: flex-start;
     padding-top: 8px;
-    border-top: 1px solid var(--color-gray-100);
+    border-top: 1px solid var(--surface-2);
   }
 
   /* Add Variable Form */
@@ -2873,7 +2873,7 @@ a.stateRow {
     justify-content: space-between;
     gap: 12px;
     padding: 14px 16px;
-    border: 1px solid var(--color-gray-200);
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
     min-height: auto;
   }
@@ -2891,12 +2891,12 @@ a.stateRow {
 
   .stateChecksum {
     font-size: 13px;
-    color: var(--color-gray-600);
+    color: var(--ink-2);
   }
 
   .stateCreated {
     font-size: 12px;
-    color: var(--color-gray-500);
+    color: var(--ink-3);
     text-align: right;
   }
 
@@ -3073,11 +3073,11 @@ a.stateRow {
 .datePickerHint {
   margin-top: 12px;
   padding: 10px 12px;
-  background-color: #EFF6FF;
-  border: 1px solid #BFDBFE;
+  background-color: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: var(--radius-md);
   font-size: 13px;
-  color: #1E40AF;
+  color: var(--brand-700);
   line-height: 1.5;
 }
 
@@ -3103,7 +3103,7 @@ a.stateRow {
 
 .driftStatusLabel {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .driftCheckStatus {
@@ -3115,48 +3115,48 @@ a.stateRow {
 }
 
 .driftCheckStatus.status-success {
-  background: #D1FAE5;
-  color: #065F46;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .driftCheckStatus.status-failed {
-  background: #FEE2E2;
-  color: #991B1B;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .driftCheckStatus.status-pending {
-  background: #E0F2F1;
+  background: var(--brand-soft);
   color: #00695C;
 }
 
 .driftCheckStatus.status-running {
-  background: #DBEAFE;
-  color: #1E40AF;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 /* Drift 状态条 */
 .driftStatusBar {
   height: 12px;
-  background: var(--color-gray-200);
+  background: var(--line);
   border-radius: 6px;
   overflow: hidden;
   display: flex;
 }
 
 .driftStatusBarDrift {
-  background: #FFC107;
+  background: var(--amber);
   height: 100%;
   transition: width 0.3s;
 }
 
 .driftStatusBarSynced {
-  background: #28A745;
+  background: var(--green);
   height: 100%;
   transition: width 0.3s;
 }
 
 .driftStatusBarUnapplied {
-  background: #6C757D;
+  background: var(--ink-2);
   height: 100%;
   transition: width 0.3s;
 }
@@ -3177,12 +3177,12 @@ a.stateRow {
 .driftStatValue {
   font-size: 24px;
   font-weight: 700;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .driftStatLabel {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 /* Drift 配置头部 - 可折叠 */
@@ -3200,7 +3200,7 @@ a.stateRow {
 
 .driftConfigToggle {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   cursor: pointer;
   width: 20px;
   height: 20px;
@@ -3212,14 +3212,14 @@ a.stateRow {
 }
 
 .driftConfigToggle:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .triggerCheckButton {
   padding: 8px 16px;
-  background: var(--color-blue-600);
-  color: white;
+  background: var(--brand-ink);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -3229,17 +3229,17 @@ a.stateRow {
 }
 
 .triggerCheckButton:hover {
-  background: var(--color-blue-700);
+  background: var(--brand-700);
 }
 
 .triggerCheckButton:disabled {
-  background: var(--color-gray-400);
+  background: var(--ink-faint);
   cursor: not-allowed;
 }
 
 .driftLastCheck {
   font-size: 13px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 /* Drift 资源列表 - 简洁版 */
@@ -3254,14 +3254,14 @@ a.stateRow {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #FFFBEB;
-  border-left: 3px solid #F59E0B;
+  background: var(--amber-soft);
+  border-left: 3px solid var(--amber);
   border-radius: var(--radius-sm);
   transition: all 0.15s ease;
 }
 
 .driftResourceItemSimple:hover {
-  background: #FEF3C7;
+  background: var(--amber-soft);
 }
 
 .driftResourceInfo {
@@ -3272,20 +3272,20 @@ a.stateRow {
 
 .driftResourceNameSimple {
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: 14px;
 }
 
 .driftResourceMeta {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .driftBadge {
   font-size: 11px;
   font-weight: 600;
-  color: #B45309;
-  background: #FDE68A;
+  color: var(--amber-hover);
+  background: var(--amber-line);
   padding: 4px 10px;
   border-radius: 12px;
   text-transform: uppercase;
@@ -3333,4 +3333,9 @@ a.stateRow {
   .driftDetailLabel {
     min-width: auto;
   }
+}
+
+.primaryButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

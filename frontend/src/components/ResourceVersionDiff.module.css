@@ -4,16 +4,18 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   backdrop-filter: blur(4px);
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 12px;
   width: 95%;
   max-width: 1200px;
@@ -25,7 +27,7 @@
 
 .header {
   padding: 20px 24px;
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -40,7 +42,7 @@
 .title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -49,20 +51,20 @@
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  background: var(--color-gray-50);
+  background: var(--bg);
   border-radius: 8px;
 }
 
 .versionSelector label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   white-space: nowrap;
 }
 
 .versionSelector select {
   padding: 6px 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 13px;
   background: white;
@@ -71,17 +73,17 @@
 }
 
 .versionSelector select:hover {
-  border-color: var(--color-primary);
+  border-color: var(--brand);
 }
 
 .versionSelector select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .arrow {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   font-size: 16px;
 }
 
@@ -89,7 +91,7 @@
   padding: 8px;
   background: none;
   border: none;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   cursor: pointer;
   border-radius: 6px;
   display: flex;
@@ -99,8 +101,8 @@
 }
 
 .closeButton:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .content {
@@ -114,16 +116,16 @@
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 14px;
 }
 
 .error {
   padding: 20px;
-  background: var(--color-red-50);
+  background: var(--red-soft);
   border: 1px solid var(--color-red-200);
   border-radius: 8px;
-  color: var(--color-red-700);
+  color: var(--red-active);
   font-size: 14px;
 }
 
@@ -134,7 +136,7 @@
 }
 
 .fieldGroup {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   background: white;
@@ -145,14 +147,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--color-gray-50);
+  background: var(--bg);
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
 }
 
 .fieldHeader:hover {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
 }
 
 .fieldHeaderLeft {
@@ -163,7 +165,7 @@
 }
 
 .expandIcon {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   font-size: 14px;
   transition: transform 0.2s;
 }
@@ -175,7 +177,7 @@
 .fieldName {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
 }
 
@@ -189,13 +191,13 @@
 }
 
 .changeBadge.added {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .changeBadge.removed {
-  background: var(--color-red-100);
-  color: var(--color-red-700);
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .changeBadge.modified {
@@ -204,12 +206,12 @@
 }
 
 .changeBadge.unchanged {
-  background: var(--color-gray-100);
-  color: var(--color-gray-600);
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .fieldContent {
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .diffLine {
@@ -220,11 +222,11 @@
 }
 
 .diffLine.added {
-  background: var(--color-green-50);
+  background: var(--green-soft);
 }
 
 .diffLine.removed {
-  background: var(--color-red-50);
+  background: var(--red-soft);
 }
 
 .diffLine.unchanged {
@@ -233,11 +235,11 @@
 
 .lineNumber {
   padding: 4px 12px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   text-align: right;
   min-width: 50px;
   user-select: none;
-  border-right: 1px solid var(--color-gray-200);
+  border-right: 1px solid var(--line);
 }
 
 .lineIndicator {
@@ -249,15 +251,15 @@
 }
 
 .lineIndicator.added {
-  color: var(--color-green-600);
+  color: var(--green-hover);
 }
 
 .lineIndicator.removed {
-  color: var(--color-red-600);
+  color: var(--red-hover);
 }
 
 .lineIndicator.unchanged {
-  color: var(--color-gray-300);
+  color: var(--line-2);
 }
 
 .lineContent {
@@ -270,14 +272,14 @@
 .noChanges {
   padding: 40px 20px;
   text-align: center;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .noChanges svg {
   width: 48px;
   height: 48px;
   margin-bottom: 12px;
-  color: var(--color-gray-300);
+  color: var(--line-2);
 }
 
 .noChanges p {
@@ -287,8 +289,8 @@
 
 .summary {
   padding: 16px;
-  background: var(--color-blue-50);
-  border: 1px solid var(--color-blue-200);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 8px;
   margin-bottom: 16px;
 }
@@ -297,7 +299,7 @@
   margin: 0 0 8px 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-blue-900);
+  color: var(--brand-700);
 }
 
 .summaryStats {
@@ -313,11 +315,11 @@
 }
 
 .stat.added {
-  color: var(--color-green-700);
+  color: var(--green-active);
 }
 
 .stat.removed {
-  color: var(--color-red-700);
+  color: var(--red-active);
 }
 
 .stat.modified {
@@ -333,7 +335,7 @@
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -363,21 +365,21 @@
 }
 
 .lineAdded {
-  background: var(--color-green-50);
+  background: var(--green-soft);
 }
 
 .lineAdded .linePrefix {
-  color: var(--color-green-600);
-  background: var(--color-green-100);
+  color: var(--green-hover);
+  background: var(--green-soft);
 }
 
 .lineRemoved {
-  background: var(--color-red-50);
+  background: var(--red-soft);
 }
 
 .lineRemoved .linePrefix {
-  color: var(--color-red-600);
-  background: var(--color-red-100);
+  color: var(--red-hover);
+  background: var(--red-soft);
 }
 
 .lineUnchanged {
@@ -385,6 +387,6 @@
 }
 
 .lineUnchanged .linePrefix {
-  color: var(--color-gray-400);
-  background: var(--color-gray-50);
+  color: var(--ink-faint);
+  background: var(--bg);
 }

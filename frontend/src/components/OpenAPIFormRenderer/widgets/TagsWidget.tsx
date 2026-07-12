@@ -153,7 +153,7 @@ const TagsWidget: React.FC<WidgetProps> = ({
           <span>
             {help}
             {hasReferenceContext && (
-              <span style={{ color: '#1890ff', marginLeft: 8, fontSize: 11 }}>
+              <span style={{ color: 'var(--brand)', marginLeft: 8, fontSize: 11 }}>
                 输入 / 可引用其他 {hasManifestContext ? 'Module' : '资源'} 的输出
               </span>
             )}

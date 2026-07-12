@@ -360,12 +360,12 @@ const DemoDetail: React.FC = () => {
             onClick={handleBack}
             style={{
               padding: '8px 16px',
-              background: '#f8f9fa',
-              border: '1px solid #dee2e6',
+              background: 'var(--bg)',
+              border: '1px solid var(--line-2)',
               borderRadius: '6px',
               cursor: 'pointer',
               fontSize: '14px',
-              color: '#495057'
+              color: 'var(--ink-2)'
             }}
           >
             ← 返回模块
@@ -457,7 +457,7 @@ const DemoDetail: React.FC = () => {
                       onChange={(e) => handleVersionChange(parseInt(e.target.value))}
                       style={{
                         padding: '10px 12px',
-                        border: '1px solid var(--color-gray-300)',
+                        border: '1px solid var(--line-2)',
                         borderRadius: '6px',
                         fontSize: '14px',
                         background: 'white',
@@ -480,7 +480,7 @@ const DemoDetail: React.FC = () => {
                           onClick={handleStartCompare}
                           style={{
                             padding: '10px 16px',
-                            background: '#007bff',
+                            background: 'var(--brand)',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
@@ -501,10 +501,10 @@ const DemoDetail: React.FC = () => {
                 {formRenderError && dataViewMode === 'json' && (
                   <div style={{
                     padding: '12px 16px',
-                    background: '#fff3cd',
-                    border: '1px solid #ffc107',
+                    background: 'var(--amber-soft)',
+                    border: '1px solid var(--amber)',
                     borderRadius: '6px',
-                    color: '#856404',
+                    color: 'var(--amber-hover)',
                     marginBottom: '16px'
                   }}>
                      表单渲染失败，已自动切换到JSON视图
@@ -513,7 +513,7 @@ const DemoDetail: React.FC = () => {
 
                 <div>
                   {schemaLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#8c8c8c' }}>
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-3)' }}>
                       加载 Schema 中...
                     </div>
                   ) : dataViewMode === 'form' && !formRenderError ? (
@@ -526,10 +526,10 @@ const DemoDetail: React.FC = () => {
                         }}
                       >
                         <div style={{ 
-                          border: '1px solid #d9d9d9', 
+                          border: '1px solid var(--line-2)', 
                           borderRadius: '8px', 
                           padding: '16px',
-                          background: '#fafafa'
+                          background: 'var(--bg)'
                         }}>
                           <ModuleFormRenderer
                             schema={schema}
@@ -545,9 +545,9 @@ const DemoDetail: React.FC = () => {
                       <div style={{ 
                         textAlign: 'center', 
                         padding: '40px', 
-                        background: '#fff3cd',
+                        background: 'var(--amber-soft)',
                         borderRadius: '6px',
-                        color: '#856404'
+                        color: 'var(--amber-hover)'
                       }}>
                         <p>该模块暂无 Schema 定义</p>
                         <p style={{ fontSize: '14px', marginTop: '8px' }}>
@@ -562,8 +562,8 @@ const DemoDetail: React.FC = () => {
                     />
                   ) : (
                     <div style={{
-                      background: '#f8f9fa',
-                      border: '1px solid #dee2e6',
+                      background: 'var(--bg)',
+                      border: '1px solid var(--line-2)',
                       borderRadius: '6px',
                       padding: '16px',
                       maxHeight: '600px',
@@ -603,9 +603,9 @@ const DemoDetail: React.FC = () => {
                   }}
                   style={{
                     padding: '8px 16px',
-                    background: '#f8f9fa',
-                    color: '#495057',
-                    border: '1px solid #dee2e6',
+                    background: 'var(--bg)',
+                    color: 'var(--ink-2)',
+                    border: '1px solid var(--line-2)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '14px',
@@ -623,7 +623,7 @@ const DemoDetail: React.FC = () => {
                 marginBottom: '20px', 
                 alignItems: 'center',
                 padding: '16px',
-                background: 'var(--color-gray-50)',
+                background: 'var(--bg)',
                 borderRadius: '8px'
               }}>
                 <div style={{ flex: 1 }}>
@@ -632,7 +632,7 @@ const DemoDetail: React.FC = () => {
                     fontWeight: 500, 
                     marginBottom: '8px', 
                     display: 'block',
-                    color: 'var(--color-gray-700)'
+                    color: 'var(--ink)'
                   }}>
                     From (旧版本):
                   </label>
@@ -647,7 +647,7 @@ const DemoDetail: React.FC = () => {
                     }}
                     style={{
                       padding: '10px 12px',
-                      border: '1px solid var(--color-gray-300)',
+                      border: '1px solid var(--line-2)',
                       borderRadius: '6px',
                       fontSize: '14px',
                       background: 'white',
@@ -667,7 +667,7 @@ const DemoDetail: React.FC = () => {
                 
                 <div style={{ 
                   fontSize: '24px', 
-                  color: 'var(--color-gray-400)',
+                  color: 'var(--ink-faint)',
                   marginTop: '24px'
                 }}>
                   →
@@ -679,7 +679,7 @@ const DemoDetail: React.FC = () => {
                     fontWeight: 500, 
                     marginBottom: '8px', 
                     display: 'block',
-                    color: 'var(--color-gray-700)'
+                    color: 'var(--ink)'
                   }}>
                     To (新版本):
                   </label>
@@ -694,7 +694,7 @@ const DemoDetail: React.FC = () => {
                     }}
                     style={{
                       padding: '10px 12px',
-                      border: '1px solid var(--color-gray-300)',
+                      border: '1px solid var(--line-2)',
                       borderRadius: '6px',
                       fontSize: '14px',
                       background: 'white',
@@ -715,7 +715,7 @@ const DemoDetail: React.FC = () => {
 
               {/* 差异显示 */}
               {diffFields.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--color-gray-200)', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--line)', borderRadius: '8px', overflow: 'hidden' }}>
                   {diffFields.map((field, index) => (
                     <div key={field.field} style={{ background: 'white' }}>
                       <div
@@ -734,14 +734,14 @@ const DemoDetail: React.FC = () => {
                             width: '4px', 
                             height: '20px', 
                             borderRadius: '2px',
-                            background: field.type === 'added' ? 'var(--color-green-500)' :
-                                       field.type === 'removed' ? 'var(--color-red-500)' :
-                                       field.type === 'modified' ? 'var(--color-yellow-500)' : 'var(--color-gray-300)',
+                            background: field.type === 'added' ? 'var(--green)' :
+                                       field.type === 'removed' ? 'var(--red)' :
+                                       field.type === 'modified' ? 'var(--color-yellow-500)' : 'var(--line-2)',
                             flexShrink: 0
                           }} />
                           
                           {field.type === 'unchanged' && (
-                            <span style={{ color: 'var(--color-gray-400)', width: '16px', flexShrink: 0 }}>
+                            <span style={{ color: 'var(--ink-faint)', width: '16px', flexShrink: 0 }}>
                               {field.expanded ? '▼' : '▶'}
                             </span>
                           )}
@@ -749,22 +749,22 @@ const DemoDetail: React.FC = () => {
                             <span style={{ color: 'var(--color-yellow-600)', width: '16px', flexShrink: 0 }}>~</span>
                           )}
                           {field.type === 'added' && (
-                            <span style={{ color: 'var(--color-green-600)', width: '16px', flexShrink: 0 }}>+</span>
+                            <span style={{ color: 'var(--green-hover)', width: '16px', flexShrink: 0 }}>+</span>
                           )}
                           {field.type === 'removed' && (
-                            <span style={{ color: 'var(--color-red-600)', width: '16px', flexShrink: 0 }}>-</span>
+                            <span style={{ color: 'var(--red-hover)', width: '16px', flexShrink: 0 }}>-</span>
                           )}
                           
                           <span style={{ 
                             fontFamily: 'monospace', 
                             fontWeight: 500,
-                            color: 'var(--color-gray-900)'
+                            color: 'var(--ink)'
                           }}>
                             {field.field}:
                           </span>
                           
                           {field.type === 'unchanged' && !field.expanded && (
-                            <span style={{ fontSize: '13px', color: 'var(--color-gray-500)' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--ink-3)' }}>
                               ··· 1 unchanged attribute hidden
                             </span>
                           )}
@@ -775,10 +775,10 @@ const DemoDetail: React.FC = () => {
                             borderRadius: '4px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: field.type === 'added' ? 'var(--color-green-100)' :
-                                       field.type === 'removed' ? 'var(--color-red-100)' : 'var(--color-yellow-100)',
-                            color: field.type === 'added' ? 'var(--color-green-700)' :
-                                   field.type === 'removed' ? 'var(--color-red-700)' : 'var(--color-yellow-700)',
+                            background: field.type === 'added' ? 'var(--green-soft)' :
+                                       field.type === 'removed' ? 'var(--red-soft)' : 'var(--color-yellow-100)',
+                            color: field.type === 'added' ? 'var(--green-active)' :
+                                   field.type === 'removed' ? 'var(--red-active)' : 'var(--color-yellow-700)',
                             flexShrink: 0
                           }}>
                             {field.type}
@@ -789,17 +789,17 @@ const DemoDetail: React.FC = () => {
                         <div style={{ padding: '0 16px 12px 48px' }}>
                           {field.type === 'removed' && (
                             <div>
-                              <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                 删除的值：
                               </div>
                               <pre style={{ 
                                 margin: 0, 
                                 padding: '12px', 
-                                background: 'var(--color-red-50)', 
+                                background: 'var(--red-soft)', 
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
-                                color: 'var(--color-red-700)',
+                                color: 'var(--red-active)',
                                 border: '1px solid var(--color-red-200)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
@@ -810,17 +810,17 @@ const DemoDetail: React.FC = () => {
                           )}
                           {field.type === 'added' && (
                             <div>
-                              <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                 新增的值：
                               </div>
                               <pre style={{ 
                                 margin: 0, 
                                 padding: '12px', 
-                                background: 'var(--color-green-50)', 
+                                background: 'var(--green-soft)', 
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
-                                color: 'var(--color-green-700)',
+                                color: 'var(--green-active)',
                                 border: '1px solid var(--color-green-200)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
@@ -832,17 +832,17 @@ const DemoDetail: React.FC = () => {
                           {field.type === 'modified' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                               <div>
-                                <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                   旧版本：
                                 </div>
                                 <pre style={{ 
                                   margin: 0, 
                                   padding: '12px', 
-                                  background: 'var(--color-red-50)', 
+                                  background: 'var(--red-soft)', 
                                   borderRadius: '6px',
                                   fontSize: '13px',
                                   fontFamily: 'monospace',
-                                  color: 'var(--color-red-700)',
+                                  color: 'var(--red-active)',
                                   border: '1px solid var(--color-red-200)',
                                   whiteSpace: 'pre-wrap',
                                   wordBreak: 'break-word'
@@ -851,17 +851,17 @@ const DemoDetail: React.FC = () => {
                                 </pre>
                               </div>
                               <div>
-                                <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                   新版本：
                                 </div>
                                 <pre style={{ 
                                   margin: 0, 
                                   padding: '12px', 
-                                  background: 'var(--color-green-50)', 
+                                  background: 'var(--green-soft)', 
                                   borderRadius: '6px',
                                   fontSize: '13px',
                                   fontFamily: 'monospace',
-                                  color: 'var(--color-green-700)',
+                                  color: 'var(--green-active)',
                                   border: '1px solid var(--color-green-200)',
                                   whiteSpace: 'pre-wrap',
                                   wordBreak: 'break-word'
@@ -873,18 +873,18 @@ const DemoDetail: React.FC = () => {
                           )}
                           {field.type === 'unchanged' && field.expanded && (
                             <div>
-                              <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                 值：
                               </div>
                               <pre style={{ 
                                 margin: 0, 
                                 padding: '12px', 
-                                background: 'var(--color-gray-50)', 
+                                background: 'var(--bg)', 
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
-                                color: 'var(--color-gray-700)',
-                                border: '1px solid var(--color-gray-200)',
+                                color: 'var(--ink)',
+                                border: '1px solid var(--line)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
                               }}>
@@ -911,7 +911,7 @@ const DemoDetail: React.FC = () => {
               onClick={() => setShowDeleteDialog(true)}
               style={{
                 padding: '10px 20px',
-                background: '#dc3545',
+                background: 'var(--red)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -929,9 +929,9 @@ const DemoDetail: React.FC = () => {
               onClick={handleBack}
               style={{
                 padding: '10px 20px',
-                background: '#f8f9fa',
-                color: '#495057',
-                border: '1px solid #dee2e6',
+                background: 'var(--bg)',
+                color: 'var(--ink-2)',
+                border: '1px solid var(--line-2)',
                 borderRadius: '6px',
                 cursor: 'pointer',
                 fontSize: '14px',
@@ -948,7 +948,7 @@ const DemoDetail: React.FC = () => {
                 onClick={handleRollbackVersion}
                 style={{
                   padding: '10px 20px',
-                  background: '#28a745',
+                  background: 'var(--green)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -964,7 +964,7 @@ const DemoDetail: React.FC = () => {
                 onClick={handleEdit}
                 style={{
                   padding: '10px 20px',
-                  background: '#007bff',
+                  background: 'var(--brand)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',

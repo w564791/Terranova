@@ -10,8 +10,8 @@
   position: fixed;
   top: 80px;
   right: 20px;
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
   padding: 10px 16px;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -34,7 +34,7 @@
 }
 
 .resourceItem {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   background: white;
   overflow: hidden;
@@ -54,7 +54,7 @@
 }
 
 .resourceHeader:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 /* Status Icon */
@@ -69,7 +69,7 @@
 }
 
 .statusApplying {
-  color: #f59e0b;
+  color: var(--amber);
   animation: spin 1s linear infinite;
 }
 
@@ -79,19 +79,19 @@
 }
 
 .statusCompleted {
-  color: #16a34a;
+  color: var(--green-hover);
 }
 
 .statusFailed {
-  color: #dc2626;
+  color: var(--red-hover);
 }
 
 .statusPending {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .statusUnchanged {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 /* Action Icon */
@@ -107,19 +107,19 @@
 }
 
 .actionCreate {
-  color: #16a34a;
+  color: var(--green-hover);
 }
 
 .actionUpdate {
-  color: #2563eb;
+  color: var(--brand-ink);
 }
 
 .actionDelete {
-  color: #dc2626;
+  color: var(--red-hover);
 }
 
 .actionReplace {
-  color: #ea580c;
+  color: var(--amber);
 }
 
 /* Resource Address */
@@ -131,7 +131,7 @@
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 13px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--ink);
   min-width: 0;
   word-break: break-all;
 }
@@ -142,7 +142,7 @@
   border: none;
   padding: 2px;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--ink-faint);
   opacity: 0;
   transition: all 0.2s;
   border-radius: 3px;
@@ -161,16 +161,16 @@
 .copyButton:hover {
   opacity: 1 !important;
   background: rgba(0, 0, 0, 0.05);
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* Status Text */
 .resourceStatusText {
   flex-shrink: 0;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--ink-2);
   padding: 3px 8px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 3px;
   font-weight: 500;
 }
@@ -178,50 +178,50 @@
 .statusTextCreated {
   flex-shrink: 0;
   font-size: 11px;
-  color: #166534;
+  color: var(--green-active);
   font-weight: 600;
   padding: 3px 8px;
-  background: #dcfce7;
+  background: var(--green-soft);
   border-radius: 3px;
 }
 
 .statusTextUpdated {
   flex-shrink: 0;
   font-size: 11px;
-  color: #1e40af;
+  color: var(--brand-700);
   font-weight: 600;
   padding: 3px 8px;
-  background: #dbeafe;
+  background: var(--brand-soft);
   border-radius: 3px;
 }
 
 .statusTextDestroyed {
   flex-shrink: 0;
   font-size: 11px;
-  color: #991b1b;
+  color: var(--red-active);
   font-weight: 600;
   padding: 3px 8px;
-  background: #fee2e2;
+  background: var(--red-soft);
   border-radius: 3px;
 }
 
 .statusTextFailed {
   flex-shrink: 0;
   font-size: 11px;
-  color: #991b1b;
+  color: var(--red-active);
   font-weight: 600;
   padding: 3px 8px;
-  background: #fee2e2;
+  background: var(--red-soft);
   border-radius: 3px;
 }
 
 .statusTextUnchanged {
   flex-shrink: 0;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-weight: 500;
   padding: 3px 8px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 4px;
 }
 
@@ -234,15 +234,15 @@
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   cursor: pointer;
 }
 
 /* Resource Details */
 .resourceDetails {
   padding: 10px 16px 10px 58px; /* 左侧对齐资源地址 */
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
 }
 
 .detailItem {
@@ -256,7 +256,7 @@
   flex-shrink: 0;
   font-weight: 500;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .detailValue {
@@ -265,8 +265,8 @@
   gap: 6px;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 12px;
-  color: #1f2937;
-  background: #e5e7eb;
+  color: var(--ink);
+  background: var(--line);
   padding: 4px 10px;
   border-radius: 4px;
   word-break: break-all;
@@ -275,17 +275,17 @@
 .detailValueMuted {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-style: italic;
 }
 
 /* Outputs Section */
 .outputsSection {
   margin-top: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
 }
 
 .outputsHeader {
@@ -293,30 +293,30 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, var(--green-soft) 0%, var(--green-soft) 100%);
+  border-bottom: 1px solid var(--line);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .outputsHeader:hover {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  background: linear-gradient(135deg, var(--green-soft) 0%, var(--green-line) 100%);
 }
 
 .chevron {
   font-size: 10px;
-  color: #166534;
+  color: var(--green-active);
 }
 
 .outputsTitle {
   font-size: 13px;
   font-weight: 600;
-  color: #166534;
+  color: var(--green-active);
 }
 
 .outputsCount {
   font-size: 11px;
-  color: #16a34a;
+  color: var(--green-hover);
   background: white;
   padding: 2px 8px;
   border-radius: 10px;
@@ -334,7 +334,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
   background: white;
   transition: background 0.2s;
 }
@@ -344,14 +344,14 @@
 }
 
 .outputItem:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .outputName {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 12px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   flex-shrink: 0;
 }
 
@@ -367,24 +367,24 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #166534;
-  background: #dcfce7;
+  color: var(--green-active);
+  background: var(--green-soft);
   padding: 4px 10px;
   border-radius: 3px;
 }
 
 .outputSensitive {
-  color: #991b1b;
+  color: var(--red-active);
   font-style: italic;
-  background: #fee2e2;
+  background: var(--red-soft);
   padding: 4px 10px;
   border-radius: 3px;
 }
 
 .outputUnknown {
-  color: #7c3aed;
+  color: var(--brand);
   font-style: italic;
-  background: #faf5ff;
+  background: var(--brand-soft);
   padding: 4px 10px;
   border-radius: 3px;
 }
@@ -393,16 +393,16 @@
 .summary {
   margin-bottom: 16px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
 }
 
 .summary h3 {
   margin: 0 0 10px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
 }
 
 .stats {
@@ -419,23 +419,23 @@
 }
 
 .statInProgress {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .statCompleted {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .statFailed {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .statPending {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 /* Triggers Action Indicator */
@@ -444,7 +444,7 @@
   align-items: center;
   gap: 4px;
   margin-left: 8px;
-  color: #7c3aed;
+  color: var(--brand);
   font-size: 12px;
 }
 
@@ -455,8 +455,8 @@
 .triggersActionBadge {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 11px;
-  color: #7c3aed;
-  background: #f5f3ff;
+  color: var(--brand);
+  background: var(--brand-soft);
   padding: 2px 6px;
   border-radius: 3px;
   font-weight: 500;
@@ -467,13 +467,13 @@
 .triggeredActionsSection {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px dashed var(--line);
 }
 
 .triggeredActionsLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #7c3aed;
+  color: var(--brand);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -488,14 +488,14 @@
 }
 
 .triggeredActionArrow {
-  color: #7c3aed;
+  color: var(--brand);
   font-weight: bold;
   flex-shrink: 0;
 }
 
 .triggeredActionAddress {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  color: #1f2937;
+  color: var(--ink);
   word-break: break-all;
   flex: 1;
   min-width: 0;
@@ -503,31 +503,32 @@
 
 .triggeredActionType {
   font-size: 10px;
-  color: #7c3aed;
-  background: #f5f3ff;
+  color: var(--brand);
+  background: var(--brand-soft);
   padding: 2px 6px;
   border-radius: 3px;
   font-weight: 500;
   flex-shrink: 0;
 }
 
+/* 颜色由 triggerEventStyle() 注入（对比度自适应） */
 .triggeredActionEvent {
   font-size: 10px;
-  color: #059669;
-  background: #d1fae5;
   padding: 2px 6px;
   border-radius: 3px;
   font-weight: 500;
   flex-shrink: 0;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 /* Action Invocations Section */
 .actionInvocationsSection {
   margin-top: 16px;
-  border: 1px solid #e9d5ff;
+  border: 1px solid var(--brand-200);
   border-radius: 8px;
   overflow: hidden;
-  background: #faf5ff;
+  background: var(--brand-soft);
 }
 
 .actionInvocationsHeader {
@@ -535,37 +536,37 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--brand-soft) 100%);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .actionInvocationsHeader:hover {
-  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--brand-200) 100%);
 }
 
 .actionInvocationsTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #7c3aed;
+  color: var(--brand);
   display: flex;
   align-items: center;
 }
 
 .actionInvocationsCount {
   font-size: 12px;
-  color: #7c3aed;
+  color: var(--brand);
   background: white;
   padding: 2px 10px;
   border-radius: 12px;
   font-weight: 600;
-  border: 1px solid #e9d5ff;
+  border: 1px solid var(--brand-200);
 }
 
 .actionInvocationsBadge {
   font-size: 10px;
-  color: #059669;
-  background: #d1fae5;
+  color: var(--green-hover);
+  background: var(--green-soft);
   padding: 3px 8px;
   border-radius: 4px;
   font-weight: 500;
@@ -579,7 +580,7 @@
 }
 
 .actionInvocationItem {
-  border-bottom: 1px solid #f3e8ff;
+  border-bottom: 1px solid var(--brand-soft);
 }
 
 .actionInvocationItem:last-child {
@@ -596,7 +597,7 @@
 }
 
 .actionInvocationHeader:hover {
-  background: #faf5ff;
+  background: var(--brand-soft);
 }
 
 .actionInvocationLeft {
@@ -611,7 +612,7 @@
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 13px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--ink);
   word-break: break-all;
 }
 
@@ -624,27 +625,28 @@
 
 .actionInvocationTypeTag {
   font-size: 11px;
-  color: #7c3aed;
-  background: #f5f3ff;
+  color: var(--brand);
+  background: var(--brand-soft);
   padding: 3px 8px;
   border-radius: 4px;
   font-weight: 500;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
 }
 
+/* 颜色由 triggerEventStyle() 注入（对比度自适应） */
 .actionInvocationTriggerBadge {
   font-size: 10px;
-  color: #059669;
-  background: #d1fae5;
   padding: 3px 8px;
   border-radius: 4px;
   font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .actionInvocationBody {
   padding: 12px 14px 14px 36px;
-  background: #fafafa;
-  border-top: 1px solid #f3e8ff;
+  background: var(--bg);
+  border-top: 1px solid var(--brand-soft);
 }
 
 /* Action Trigger Relation */
@@ -655,7 +657,7 @@
 .triggerRelationLabel {
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-bottom: 6px;
 }
 
@@ -668,8 +670,8 @@
 .triggerResourceAddress {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 12px;
-  color: #1f2937;
-  background: #f3f4f6;
+  color: var(--ink);
+  background: var(--surface-2);
   padding: 4px 8px;
   border-radius: 4px;
   word-break: break-all;
@@ -683,7 +685,7 @@
 .actionConfigLabel {
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-bottom: 6px;
 }
 
@@ -701,34 +703,34 @@
 
 .actionConfigKey {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  color: #6b7280;
+  color: var(--ink-2);
   flex-shrink: 0;
 }
 
 .actionConfigValue {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  color: #166534;
+  color: var(--green-active);
   word-break: break-all;
 }
 
 .knownAfterApply {
   font-style: italic;
-  color: #7c3aed;
+  color: var(--brand);
   font-size: 11px;
 }
 
 .executedValue {
   font-style: italic;
-  color: #059669;
+  color: var(--green-hover);
   font-size: 11px;
-  background: #d1fae5;
+  background: var(--green-soft);
   padding: 2px 6px;
   border-radius: 3px;
 }
 
 .resolvedValue {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  color: #059669;
+  color: var(--green-hover);
   word-break: break-all;
   display: flex;
   align-items: center;
@@ -738,8 +740,8 @@
 
 .resolvedBadge {
   font-size: 9px;
-  color: #059669;
-  background: #d1fae5;
+  color: var(--green-hover);
+  background: var(--green-soft);
   padding: 1px 5px;
   border-radius: 3px;
   font-weight: 600;
@@ -755,11 +757,11 @@
 }
 
 .actionProviderLabel {
-  color: #6b7280;
+  color: var(--ink-2);
   font-weight: 500;
 }
 
 .actionProviderValue {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  color: #1f2937;
+  color: var(--ink);
 }

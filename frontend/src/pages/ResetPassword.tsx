@@ -96,7 +96,7 @@ const ResetPassword: React.FC = () => {
               className={styles.input}
               value={formData.currentPassword}
               onChange={(e) => handleInputChange('currentPassword', e.target.value)}
-              style={{ borderColor: errors.currentPassword ? '#ef4444' : undefined }}
+              style={{ borderColor: errors.currentPassword ? 'var(--red)' : undefined }}
             />
             {errors.currentPassword && (
               <div className={styles.error}>{errors.currentPassword}</div>
@@ -110,7 +110,7 @@ const ResetPassword: React.FC = () => {
               className={styles.input}
               value={formData.newPassword}
               onChange={(e) => handleInputChange('newPassword', e.target.value)}
-              style={{ borderColor: errors.newPassword ? '#ef4444' : undefined }}
+              style={{ borderColor: errors.newPassword ? 'var(--red)' : undefined }}
             />
             {errors.newPassword && (
               <div className={styles.error}>{errors.newPassword}</div>
@@ -124,7 +124,7 @@ const ResetPassword: React.FC = () => {
               className={styles.input}
               value={formData.confirmPassword}
               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-              style={{ borderColor: errors.confirmPassword ? '#ef4444' : undefined }}
+              style={{ borderColor: errors.confirmPassword ? 'var(--red)' : undefined }}
             />
             {errors.confirmPassword && (
               <div className={styles.error}>{errors.confirmPassword}</div>

@@ -27,17 +27,17 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: linear-gradient(to bottom, #fafafa, #f5f5f5);
-  border-bottom: 1px solid #e8e8e8;
+  background: linear-gradient(to bottom, var(--bg), var(--surface-2));
+  border-bottom: 1px solid var(--line);
   border-radius: 8px 8px 0 0;
   font-weight: 600;
   font-size: 14px;
-  color: #262626;
+  color: var(--ink);
   user-select: none;
 }
 
 .dragIcon {
-  color: #bfbfbf;
+  color: var(--ink-faint);
   font-size: 12px;
   letter-spacing: -2px;
 }
@@ -54,8 +54,8 @@
   padding: 12px 16px;
   font-weight: 600;
   font-size: 14px;
-  border-bottom: 1px solid #f0f0f0;
-  color: #262626;
+  border-bottom: 1px solid var(--surface-2);
+  color: var(--ink);
 }
 
 .listContainer {
@@ -73,18 +73,18 @@
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-bottom: 1px solid var(--surface-2);
+  background: var(--bg);
 }
 
 .backLink {
-  color: #1890ff;
+  color: var(--brand);
   cursor: pointer;
   font-size: 12px;
 }
 
 .backLink:hover {
-  color: #40a9ff;
+  color: var(--brand-400);
 }
 
 .listItem {
@@ -94,7 +94,7 @@
 }
 
 .listItem:hover {
-  background: #f5f5f5;
+  background: var(--surface-2);
 }
 
 .moduleItem {
@@ -106,7 +106,7 @@
 
 .moduleIcon {
   font-size: 18px;
-  color: #1890ff;
+  color: var(--brand);
   margin-top: 2px;
 }
 
@@ -137,7 +137,7 @@
 
 .outputIcon {
   font-size: 16px;
-  color: #52c41a;
+  color: var(--green);
   margin-top: 2px;
 }
 
@@ -193,17 +193,17 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .typeCard:hover {
-  border-color: #1890ff;
-  background: #f0f7ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.15);
 }
 
 .typeIcon {

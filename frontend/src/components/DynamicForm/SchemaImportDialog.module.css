@@ -9,13 +9,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   padding: var(--spacing-lg);
 }
 
 .dialog {
-  background: var(--color-white);
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 800px;
@@ -41,14 +43,14 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .title {
   font-family: var(--font-heading);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -56,7 +58,7 @@
   background: none;
   border: none;
   font-size: 28px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -69,8 +71,8 @@
 }
 
 .closeButton:hover {
-  background-color: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background-color: var(--surface-2);
+  color: var(--ink);
 }
 
 .content {
@@ -85,22 +87,22 @@
   justify-content: space-between;
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-md);
-  background-color: var(--color-blue-50);
+  background-color: var(--brand-soft);
   border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-blue-500);
+  border-left: 3px solid var(--brand);
 }
 
 .description p {
   margin: 0;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: var(--font-size-sm);
   flex: 1;
 }
 
 .exampleButton {
-  background-color: var(--color-white);
-  border: 1px solid var(--color-blue-300);
-  color: var(--color-blue-600);
+  background-color: var(--surface);
+  border: 1px solid var(--brand-300);
+  color: var(--brand-ink);
   padding: 6px 12px;
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
@@ -112,8 +114,8 @@
 }
 
 .exampleButton:hover {
-  background-color: var(--color-blue-50);
-  border-color: var(--color-blue-500);
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 .formGroup {
@@ -124,18 +126,18 @@
   display: block;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--color-gray-700);
+  color: var(--ink);
   margin-bottom: var(--spacing-sm);
 }
 
 .required {
-  color: var(--color-red-500);
+  color: var(--red);
 }
 
 .input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   font-family: var(--font-primary);
@@ -144,12 +146,12 @@
 
 .input:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .input::placeholder {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
 }
 
 .error {
@@ -157,10 +159,10 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
-  background-color: var(--color-red-50);
+  background-color: var(--red-soft);
   border: 1px solid var(--color-red-200);
   border-radius: var(--radius-md);
-  color: var(--color-red-700);
+  color: var(--red-active);
   font-size: var(--font-size-sm);
   margin-top: var(--spacing-md);
 }
@@ -175,7 +177,7 @@
   justify-content: flex-end;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .cancelButton,
@@ -190,23 +192,23 @@
 }
 
 .cancelButton {
-  background-color: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
+  background-color: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
 }
 
 .cancelButton:hover:not(:disabled) {
-  background-color: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background-color: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .importButton {
-  background-color: var(--color-blue-500);
-  color: var(--color-white);
+  background-color: var(--brand);
+  color: #fff;
 }
 
 .importButton:hover:not(:disabled) {
-  background-color: var(--color-blue-600);
+  background-color: var(--brand-ink);
   box-shadow: var(--shadow-md);
 }
 

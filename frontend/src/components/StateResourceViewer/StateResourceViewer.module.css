@@ -24,7 +24,7 @@
   flex: 1;
   min-width: 200px;
   padding: 8px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -32,13 +32,13 @@
 
 .searchInput:focus {
   outline: none;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px rgba(19, 82, 105, 0.1);
 }
 
 .filterSelect {
   padding: 8px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
   background: white;
@@ -48,19 +48,19 @@
 
 .actionButton {
   padding: 8px 14px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
 }
 
 .actionButton:hover {
-  background: #e5e7eb;
-  color: #1f2937;
+  background: var(--line);
+  color: var(--ink);
 }
 
 /* 资源列表 */
@@ -72,7 +72,7 @@
 
 /* 第一级：资源卡片 */
 .resourceCard {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   background: white;
@@ -83,13 +83,13 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: #f9fafb;
+  background: var(--bg);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .resourceCardHeader:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .expandIcon {
@@ -99,7 +99,7 @@
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   flex-shrink: 0;
 }
 
@@ -112,8 +112,8 @@
 
 .resourceCount {
   padding: 3px 10px;
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
@@ -121,13 +121,13 @@
 }
 
 .resourceCardContent {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   background: white;
 }
 
 /* 第二级：地址项 */
 .addressItem {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .addressItem:last-child {
@@ -144,7 +144,7 @@
 }
 
 .addressHeader:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .modeIcon {
@@ -160,29 +160,29 @@
 }
 
 .managedIcon {
-  color: #047857;
-  background: #d1fae5;
+  color: var(--green-active);
+  background: var(--green-soft);
 }
 
 .dataIcon {
-  color: #1e40af;
-  background: #dbeafe;
+  color: var(--brand-700);
+  background: var(--brand-soft);
 }
 
 .addressText {
   flex: 1;
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   word-break: break-all;
 }
 
 .typeTag {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-family: 'Monaco', 'Menlo', monospace;
   padding: 2px 8px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 4px;
   cursor: pointer;
   position: relative;
@@ -191,8 +191,8 @@
 }
 
 .typeTag:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .addressContent {
@@ -211,7 +211,7 @@
   display: flex;
   justify-content: flex-end;
   padding: 8px 12px;
-  background: #2d2d2d;
+  background: var(--ink);
   border-bottom: 1px solid #3d3d3d;
 }
 
@@ -220,7 +220,7 @@
   background: #3d3d3d;
   border: 1px solid #4d4d4d;
   border-radius: 4px;
-  color: #e0e0e0;
+  color: var(--line);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
@@ -228,7 +228,7 @@
 
 .copyButton:hover {
   background: #4d4d4d;
-  color: #fff;
+  color: var(--surface);
 }
 
 .stateShowOutput {
@@ -237,7 +237,7 @@
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.5;
-  color: #d4d4d4;
+  color: var(--line-2);
   overflow-x: auto;
   white-space: pre;
   max-height: 500px;
@@ -254,8 +254,8 @@
   top: -24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 10px;
@@ -275,7 +275,7 @@
 .emptyState {
   text-align: center;
   padding: 48px 24px;
-  color: #6b7280;
+  color: var(--ink-2);
   background: white;
   border-radius: 8px;
 }

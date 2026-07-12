@@ -12,7 +12,7 @@
 }
 
 .formRendererReadOnly :global(.ant-form-item-label > label) {
-  color: var(--color-gray-500) !important;
+  color: var(--ink-3) !important;
 }
 
 .formRendererReadOnly :global(.ant-input),
@@ -20,9 +20,9 @@
 .formRendererReadOnly :global(.ant-select-selector),
 .formRendererReadOnly :global(.ant-picker),
 .formRendererReadOnly :global(.ant-input-textarea textarea) {
-  background-color: var(--color-gray-100) !important;
-  border-color: var(--color-gray-300) !important;
-  color: var(--color-gray-600) !important;
+  background-color: var(--surface-2) !important;
+  border-color: var(--line-2) !important;
+  color: var(--ink-2) !important;
   cursor: not-allowed !important;
 }
 
@@ -31,14 +31,14 @@
 .formRendererReadOnly :global(.ant-select-disabled .ant-select-selector),
 .formRendererReadOnly :global(.ant-picker-disabled),
 .formRendererReadOnly :global(.ant-input-textarea-disabled textarea) {
-  background-color: var(--color-gray-100) !important;
-  border-color: var(--color-gray-300) !important;
-  color: var(--color-gray-600) !important;
+  background-color: var(--surface-2) !important;
+  border-color: var(--line-2) !important;
+  color: var(--ink-2) !important;
 }
 
 .formRendererReadOnly :global(.ant-select-selection-item),
 .formRendererReadOnly :global(.ant-select-selection-placeholder) {
-  color: var(--color-gray-600) !important;
+  color: var(--ink-2) !important;
 }
 
 .formRendererReadOnly :global(.ant-switch) {
@@ -46,9 +46,9 @@
 }
 
 .formRendererReadOnly :global(.ant-tag) {
-  background-color: var(--color-gray-200) !important;
-  border-color: var(--color-gray-300) !important;
-  color: var(--color-gray-600) !important;
+  background-color: var(--line) !important;
+  border-color: var(--line-2) !important;
+  color: var(--ink-2) !important;
 }
 
 .formRendererReadOnly :global(.ant-btn) {
@@ -58,7 +58,7 @@
 
 .formRendererReadOnly :global(.ant-form-item-explain),
 .formRendererReadOnly :global(.ant-form-item-extra) {
-  color: var(--color-gray-400) !important;
+  color: var(--ink-faint) !important;
 }
 
 /* 只读模式下的代码编辑器 */
@@ -70,17 +70,17 @@
 /* 只读模式下的 Collapse 和 Section */
 .formRendererReadOnly .sectionHeader,
 .formRendererReadOnly .groupHeader {
-  background-color: var(--color-gray-100) !important;
-  color: var(--color-gray-600) !important;
+  background-color: var(--surface-2) !important;
+  color: var(--ink-2) !important;
 }
 
 .formRendererReadOnly .sectionTitle {
-  color: var(--color-gray-600) !important;
+  color: var(--ink-2) !important;
 }
 
 .formRendererReadOnly .fieldCount {
-  background: var(--color-gray-200) !important;
-  color: var(--color-gray-500) !important;
+  background: var(--line) !important;
+  color: var(--ink-3) !important;
 }
 
 /* AI 助手包装器 */
@@ -94,19 +94,19 @@
 }
 
 .formCollapse :global(.ant-collapse-item) {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-md);
   overflow: hidden;
 }
 
 .formCollapse :global(.ant-collapse-header) {
-  background: var(--color-gray-50);
+  background: var(--bg);
   font-weight: var(--font-weight-medium);
 }
 
 .formCollapse :global(.ant-collapse-content) {
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .groupHeader {
@@ -116,8 +116,8 @@
 }
 
 .fieldCount {
-  background: var(--color-blue-100);
-  color: var(--color-blue-600);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
   padding: 2px 8px;
   border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
@@ -153,7 +153,7 @@
 }
 
 .formSection {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -163,13 +163,13 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-gray-50);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 
 .sectionTitle {
   font-weight: var(--font-weight-medium);
-  color: var(--color-gray-800);
+  color: var(--ink);
 }
 
 .formSection .fieldGroup {

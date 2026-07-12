@@ -616,7 +616,7 @@ const ModuleDetail: React.FC = () => {
               console.log('[Render] versions:', versions, 'length:', versions.length);
               return (
               <div className={styles.versionDropdown}>
-                {versions.length === 0 && <div style={{padding: '12px', color: '#999'}}>加载中...</div>}
+                {versions.length === 0 && <div style={{padding: '12px', color: 'var(--ink-3)'}}>加载中...</div>}
                 {versions.map(version => (
                   <div
                     key={version.id}
@@ -744,7 +744,7 @@ const ModuleDetail: React.FC = () => {
         {/* AI Skill 卡片 */}
         <div 
           className={styles.quickAction}
-          style={{ borderColor: '#722ed1', backgroundColor: '#f9f0ff' }}
+          style={{ borderColor: 'var(--brand)', backgroundColor: 'var(--brand-soft)' }}
           onClick={() => {
             const url = selectedVersion 
               ? `/modules/${module.id}/skill?version_id=${selectedVersion.id}`
@@ -752,13 +752,13 @@ const ModuleDetail: React.FC = () => {
             navigate(url);
           }}
         >
-          <div className={styles.quickActionIcon} style={{ color: '#722ed1' }}>
+          <div className={styles.quickActionIcon} style={{ color: 'var(--brand)' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 18h6M10 22h4M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
             </svg>
           </div>
           <div className={styles.quickActionText}>
-            <span className={styles.quickActionTitle} style={{ color: '#722ed1' }}>AI Skill</span>
+            <span className={styles.quickActionTitle} style={{ color: 'var(--brand)' }}>AI Skill</span>
             <span className={styles.quickActionDesc}>配置 AI 知识</span>
           </div>
           <span className={styles.quickActionArrow}>→</span>

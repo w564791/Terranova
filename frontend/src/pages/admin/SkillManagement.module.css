@@ -9,7 +9,7 @@
   justify-content: center;
   align-items: center;
   height: 200px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .header {
@@ -22,13 +22,13 @@
 .title {
   font-size: 24px;
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
   margin: 0;
 }
 
 .createBtn {
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -38,7 +38,7 @@
 }
 
 .createBtn:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .message {
@@ -51,15 +51,15 @@
 }
 
 .message.success {
-  background: #f6ffed;
-  border: 1px solid #b7eb8f;
-  color: #52c41a;
+  background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  color: var(--green);
 }
 
 .message.error {
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  border: 1px solid var(--red-line);
+  color: var(--red);
 }
 
 .message button {
@@ -79,30 +79,30 @@
   display: flex;
   gap: 8px;
   margin-bottom: 24px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line);
   padding-bottom: 12px;
 }
 
 .tab {
   background: none;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   padding: 6px 16px;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
-  color: #666;
+  color: var(--ink-2);
   transition: all 0.2s;
 }
 
 .tab:hover {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .tab.active {
-  background: #1890ff;
-  border-color: #1890ff;
-  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .section {
@@ -112,7 +112,7 @@
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
   margin: 0 0 16px 0;
   display: flex;
   align-items: center;
@@ -122,7 +122,7 @@
 .sectionDesc {
   font-size: 13px;
   font-weight: 400;
-  color: #999;
+  color: var(--ink-3);
   margin-left: 8px;
 }
 
@@ -133,7 +133,7 @@
 
 .skillCard {
   background: white;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   transition: box-shadow 0.2s;
@@ -145,7 +145,7 @@
 
 .skillCard.inactive {
   opacity: 0.6;
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .skillHeader {
@@ -165,7 +165,7 @@
 .skillName {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
 }
 
 .layerBadge {
@@ -176,26 +176,26 @@
 }
 
 .layerBadge.foundation {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .layerBadge.domain {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 .layerBadge.task {
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .sourceBadge {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 3px;
-  background: #f0f0f0;
-  color: #666;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .skillActions {
@@ -214,11 +214,11 @@
 }
 
 .actionBtn:hover {
-  background: #f0f0f0;
+  background: var(--surface-2);
 }
 
 .actionBtn.danger:hover {
-  background: #fff2f0;
+  background: var(--red-soft);
 }
 
 .skillMeta {
@@ -230,15 +230,15 @@
 
 .metaItem {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .metaLabel {
-  color: #999;
+  color: var(--ink-3);
 }
 
 .skillContent {
-  background: #f9f9f9;
+  background: var(--bg);
   border-radius: 4px;
   padding: 12px;
   max-height: 100px;
@@ -248,7 +248,7 @@
 .skillContent pre {
   margin: 0;
   font-size: 12px;
-  color: #666;
+  color: var(--ink-2);
   white-space: pre-wrap;
   word-break: break-word;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -257,7 +257,7 @@
 .empty {
   text-align: center;
   padding: 60px 20px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .empty p {

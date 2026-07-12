@@ -126,13 +126,13 @@ const VariableSetDetail: React.FC = () => {
   };
 
   // Styles
-  const sectionTitle: React.CSSProperties = { fontSize: '18px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 8px 0' };
-  const subText: React.CSSProperties = { fontSize: '13px', color: '#6b7280', lineHeight: '1.5' };
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' as const };
-  const fieldLabel: React.CSSProperties = { fontSize: '15px', fontWeight: 600, color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' };
-  const cardBox: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', marginTop: '12px' };
-  const tagStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#f3f4f6', borderRadius: '4px', fontSize: '13px' };
-  const outerStyle: React.CSSProperties = { margin: '12px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+  const sectionTitle: React.CSSProperties = { fontSize: '18px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px 0' };
+  const subText: React.CSSProperties = { fontSize: '13px', color: 'var(--ink-2)', lineHeight: '1.5' };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid var(--line-2)', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' as const };
+  const fieldLabel: React.CSSProperties = { fontSize: '15px', fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' };
+  const cardBox: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '8px', padding: '20px', marginTop: '12px' };
+  const tagStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'var(--surface-2)', borderRadius: '4px', fontSize: '13px' };
+  const outerStyle: React.CSSProperties = { margin: '12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
   if (loading && !varset) return <div className={styles.container} style={outerStyle}><div className={styles.loading}>Loading...</div></div>;
   if (!varset) return <div className={styles.container} style={outerStyle}><div className={styles.empty}><div className={styles.emptyText}>Variable set not found</div></div></div>;
@@ -143,14 +143,14 @@ const VariableSetDetail: React.FC = () => {
   return (
     <div className={styles.container} style={outerStyle}>
       <div style={{ marginBottom: '16px' }}>
-        <span style={{ color: '#3b82f6', cursor: 'pointer', fontSize: '14px' }} onClick={() => navigate('/variable-sets')}>&larr; Back to Variable Sets</span>
+        <span style={{ color: 'var(--brand)', cursor: 'pointer', fontSize: '14px' }} onClick={() => navigate('/variable-sets')}>&larr; Back to Variable Sets</span>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '32px' }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', padding: '32px' }}>
 
         {/* Name (always editable) */}
         <div style={{ marginBottom: '24px' }}>
-          <div style={fieldLabel}>Name <span style={{ fontSize: '11px', padding: '2px 8px', background: '#f3f4f6', color: '#6b7280', borderRadius: '4px', fontWeight: 500 }}>Required</span></div>
+          <div style={fieldLabel}>Name <span style={{ fontSize: '11px', padding: '2px 8px', background: 'var(--surface-2)', color: 'var(--ink-2)', borderRadius: '4px', fontWeight: 500 }}>Required</span></div>
           <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} />
         </div>
 
@@ -164,13 +164,13 @@ const VariableSetDetail: React.FC = () => {
         <div style={{ marginBottom: '32px' }}>
           <h2 style={sectionTitle}>Variable set scope</h2>
           {varset.scope === 'global' ? (
-            <div style={{ padding: '12px 16px', background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: '6px', color: '#1E40AF', fontSize: '14px', lineHeight: '1.6' }}>
+            <div style={{ padding: '12px 16px', background: 'var(--brand-soft)', border: '1px solid var(--brand-300)', borderRadius: '6px', color: 'var(--brand-700)', fontSize: '14px', lineHeight: '1.6' }}>
               Apply to all projects and workspaces. All current and future workspaces in this organization will access this variable set.
             </div>
           ) : (
             <div style={cardBox}>
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a', marginBottom: '4px' }}>Apply to projects</div>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)', marginBottom: '4px' }}>Apply to projects</div>
                 <div style={{ ...subText, marginBottom: '8px' }}>All current and future workspaces in the selected projects will access this variable set.</div>
                 <select style={inputStyle} value="" onChange={e => { const pid = Number(e.target.value); if (pid) addAssignment('project', pid); }}>
                   <option value="">Select projects</option>
@@ -180,13 +180,13 @@ const VariableSetDetail: React.FC = () => {
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                     {assignments.filter(a => a.scope_type === 'project').map(a => {
                       const p = projects.find(x => x.id === a.project_id);
-                      return <span key={a.id} style={tagStyle}>{p?.display_name || p?.name || `#${a.project_id}`} <span style={{ cursor: 'pointer', color: '#9ca3af', fontWeight: 700 }} onClick={() => { setAssignToDelete(a); setDeleteAssignDialog(true); }}>x</span></span>;
+                      return <span key={a.id} style={tagStyle}>{p?.display_name || p?.name || `#${a.project_id}`} <span style={{ cursor: 'pointer', color: 'var(--ink-faint)', fontWeight: 700 }} onClick={() => { setAssignToDelete(a); setDeleteAssignDialog(true); }}>x</span></span>;
                     })}
                   </div>
                 )}
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a', marginBottom: '4px' }}>Apply to workspaces</div>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)', marginBottom: '4px' }}>Apply to workspaces</div>
                 <div style={{ ...subText, marginBottom: '8px' }}>Only the selected workspaces will access this variable set.</div>
                 <select style={inputStyle} value="" onChange={e => { const wid = e.target.value; if (wid) addAssignment('workspace', wid); }}>
                   <option value="">Select workspaces</option>
@@ -196,7 +196,7 @@ const VariableSetDetail: React.FC = () => {
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                     {assignments.filter(a => a.scope_type === 'workspace').map(a => {
                       const w = workspaces.find(x => x.workspace_id === a.workspace_id);
-                      return <span key={a.id} style={tagStyle}>{w?.name || a.workspace_id} <span style={{ cursor: 'pointer', color: '#9ca3af', fontWeight: 700 }} onClick={() => { setAssignToDelete(a); setDeleteAssignDialog(true); }}>x</span></span>;
+                      return <span key={a.id} style={tagStyle}>{w?.name || a.workspace_id} <span style={{ cursor: 'pointer', color: 'var(--ink-faint)', fontWeight: 700 }} onClick={() => { setAssignToDelete(a); setDeleteAssignDialog(true); }}>x</span></span>;
                     })}
                   </div>
                 )}
@@ -211,31 +211,31 @@ const VariableSetDetail: React.FC = () => {
           <p style={{ ...subText, marginBottom: '16px' }}>You can add any number of Terraform and Environment variables. Terraform will use these variables for all plan and apply operations.</p>
 
           {variables.length > 0 && (
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px' }}>
+            <div style={{ border: '1px solid var(--line)', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#f9fafb' }}>
-                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Key</th>
-                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Value</th>
-                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Category</th>
+                  <tr style={{ background: 'var(--bg)' }}>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Key</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Value</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Category</th>
                     <th style={{ width: '120px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {variables.map(v => (
-                    <tr key={v.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                    <tr key={v.id} style={{ borderTop: '1px solid var(--line)' }}>
                       <td style={{ padding: '12px 16px' }}>
                         <span style={{ fontWeight: 500, fontSize: '14px' }}>{v.key}</span>
-                        {v.sensitive && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: '#FEF3C7', color: '#92400E', borderRadius: '4px', fontWeight: 600 }}>SENSITIVE</span>}
+                        {v.sensitive && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: 'var(--amber-soft)', color: 'var(--amber-hover)', borderRadius: '4px', fontWeight: 600 }}>SENSITIVE</span>}
                       </td>
-                      <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '14px' }}>
-                        {v.sensitive ? '-- sensitive value --' : (v.value || <span style={{ color: '#d1d5db' }}>(empty)</span>)}
+                      <td style={{ padding: '12px 16px', color: 'var(--ink-2)', fontSize: '14px' }}>
+                        {v.sensitive ? '-- sensitive value --' : (v.value || <span style={{ color: 'var(--line-2)' }}>(empty)</span>)}
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: '14px', color: '#374151' }}>{v.variable_type === 'terraform' ? 'Terraform' : 'Environment'}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '14px', color: 'var(--ink)' }}>{v.variable_type === 'terraform' ? 'Terraform' : 'Environment'}</td>
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', gap: '6px' }}>
-                          <button style={{ padding: '3px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleEditVar(v)}>Edit</button>
-                          <button style={{ padding: '3px 10px', border: '1px solid #fca5a5', background: '#fff', color: '#ef4444', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }} onClick={() => { setVarToDelete(v); setDeleteVarDialog(true); }}>Delete</button>
+                          <button style={{ padding: '3px 10px', border: '1px solid var(--line-2)', background: 'var(--surface)', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }} onClick={() => handleEditVar(v)}>Edit</button>
+                          <button style={{ padding: '3px 10px', border: '1px solid var(--red-line)', background: 'var(--surface)', color: 'var(--red)', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }} onClick={() => { setVarToDelete(v); setDeleteVarDialog(true); }}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -247,7 +247,7 @@ const VariableSetDetail: React.FC = () => {
 
           {showVarInput ? (
             <div style={cardBox}>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#1a1a1a', marginBottom: '16px' }}>{editingVar ? `Edit variable: ${editingVar.key}` : 'Add new variable'}</div>
+              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px' }}>{editingVar ? `Edit variable: ${editingVar.key}` : 'Add new variable'}</div>
               {!editingVar && (
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', marginBottom: '12px' }}>
@@ -261,18 +261,18 @@ const VariableSetDetail: React.FC = () => {
                 </div>
               )}
               {editingVar && (
-                <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#f9fafb', borderRadius: '6px', fontSize: '13px', color: '#6b7280' }}>
+                <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--bg)', borderRadius: '6px', fontSize: '13px', color: 'var(--ink-2)' }}>
                   Type: <strong>{varForm.variable_type === 'terraform' ? 'Terraform' : 'Environment'}</strong> | Format: <strong>{varForm.value_format}</strong> (immutable)
                 </div>
               )}
               <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '16px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Key</label>
-                  {editingVar ? <div style={{ padding: '10px 12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '14px', fontFamily: 'var(--font-mono)' }}>{varForm.key}</div>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Key</label>
+                  {editingVar ? <div style={{ padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px', fontFamily: 'var(--font-mono)' }}>{varForm.key}</div>
                     : <input style={inputStyle} value={varForm.key} onChange={e => setVarForm({ ...varForm, key: e.target.value })} placeholder="key" />}
                 </div>
                 <div style={{ flex: 1.5 }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Value</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Value</label>
                   <input style={inputStyle} type={varForm.sensitive ? 'password' : 'text'} value={varForm.value} onChange={e => setVarForm({ ...varForm, value: e.target.value })} placeholder={editingVar?.sensitive ? 'Enter new value' : 'value'} />
                 </div>
                 {!editingVar && <>
@@ -284,27 +284,27 @@ const VariableSetDetail: React.FC = () => {
                 )}
               </div>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Description (Optional)</label>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Description (Optional)</label>
                 <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const }} value={varForm.description} onChange={e => setVarForm({ ...varForm, description: e.target.value })} placeholder="description (optional)" />
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button style={{ padding: '8px 18px', border: 'none', background: '#3b82f6', color: '#fff', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} onClick={submitVar}>{editingVar ? 'Update variable' : 'Add variable'}</button>
-                <button style={{ padding: '8px 18px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }} onClick={() => { setShowVarInput(false); setEditingVar(null); }}>Cancel</button>
+                <button style={{ padding: '8px 18px', border: 'none', background: 'var(--brand)', color: 'var(--surface)', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} onClick={submitVar}>{editingVar ? 'Update variable' : 'Add variable'}</button>
+                <button style={{ padding: '8px 18px', border: '1px solid var(--line-2)', background: 'var(--surface)', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }} onClick={() => { setShowVarInput(false); setEditingVar(null); }}>Cancel</button>
               </div>
             </div>
           ) : (
-            <button style={{ padding: '10px 20px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', color: '#374151' }} onClick={handleAddVar}>+ Add variable</button>
+            <button style={{ padding: '10px 20px', border: '1px solid var(--line-2)', background: 'var(--surface)', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', color: 'var(--ink)' }} onClick={handleAddVar}>+ Add variable</button>
           )}
         </div>
 
         {/* Save button (always visible, disabled when no changes) */}
-        <div style={{ display: 'flex', gap: '12px', paddingTop: '24px', borderTop: '1px solid #e5e7eb', marginTop: '8px' }}>
+        <div style={{ display: 'flex', gap: '12px', paddingTop: '24px', borderTop: '1px solid var(--line)', marginTop: '8px' }}>
           <button
             style={{
               padding: '10px 24px', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 600,
               cursor: isDirty && !saving ? 'pointer' : 'not-allowed',
-              background: isDirty ? '#3b82f6' : '#9ca3af',
-              color: '#fff', opacity: saving ? 0.7 : 1,
+              background: isDirty ? 'var(--brand)' : 'var(--ink-faint)',
+              color: 'var(--surface)', opacity: saving ? 0.7 : 1,
             }}
             onClick={handleSave}
             disabled={!isDirty || saving}
@@ -318,10 +318,10 @@ const VariableSetDetail: React.FC = () => {
       </div>
 
       <ConfirmDialog isOpen={deleteVarDialog} title={`Delete "${varToDelete?.key}"`} confirmText="Confirm" cancelText="Cancel" type="danger" onConfirm={confirmDeleteVar} onCancel={() => { setDeleteVarDialog(false); setVarToDelete(null); }}>
-        <p style={{ margin: 0, color: '#374151', fontSize: '14px' }}>Permanently delete <strong>{varToDelete?.key}</strong>. This cannot be undone.</p>
+        <p style={{ margin: 0, color: 'var(--ink)', fontSize: '14px' }}>Permanently delete <strong>{varToDelete?.key}</strong>. This cannot be undone.</p>
       </ConfirmDialog>
       <ConfirmDialog isOpen={deleteAssignDialog} title="Remove assignment" confirmText="Confirm" cancelText="Cancel" type="danger" onConfirm={confirmDeleteAssign} onCancel={() => { setDeleteAssignDialog(false); setAssignToDelete(null); }}>
-        <p style={{ margin: 0, color: '#374151', fontSize: '14px' }}>Remove this {assignToDelete?.scope_type} assignment?</p>
+        <p style={{ margin: 0, color: 'var(--ink)', fontSize: '14px' }}>Remove this {assignToDelete?.scope_type} assignment?</p>
       </ConfirmDialog>
     </div>
   );

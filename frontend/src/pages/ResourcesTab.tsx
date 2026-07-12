@@ -295,18 +295,18 @@ const ResourcesTab: React.FC<ResourcesTabProps> = ({ workspaceId }) => {
             >
               <span>
                 此 workspace 由 Manifest{' '}
-                <strong style={{ color: '#fff' }}>
+                <strong style={{ color: 'var(--surface)' }}>
                   {manifestSummary.manifest_name ?? manifestSummary.manifest_id}
                 </strong>{' '}
-                @ <strong style={{ color: '#fff' }}>{manifestSummary.active_tag}</strong> 管理。
+                @ <strong style={{ color: 'var(--surface)' }}>{manifestSummary.active_tag}</strong> 管理。
                 资源变更请在 manifest 编辑器中统一修改。
               </span>
               <span style={{ flex: 1 }} />
               {manifestSummary.manifest_id && manifestSummary.org_id && (
                 <button
                   style={{
-                    background: '#0e639c',
-                    color: '#fff',
+                    background: 'var(--brand)',
+                    color: 'var(--surface)',
                     border: 'none',
                     padding: '4px 12px',
                     borderRadius: 3,

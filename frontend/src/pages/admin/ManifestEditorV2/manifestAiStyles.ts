@@ -169,7 +169,7 @@ export const errorStyle: React.CSSProperties = {
   background: 'rgba(241,76,76,0.12)',
   border: '1px solid rgba(241,76,76,0.4)',
   borderRadius: 4,
-  color: '#f14c4c',
+  color: 'var(--red)',
   fontSize: 13,
 }
 export const genWarnStyle: React.CSSProperties = {

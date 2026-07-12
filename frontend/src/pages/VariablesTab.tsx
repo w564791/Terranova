@@ -555,12 +555,12 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                   gridTemplateColumns: '2fr 2fr 1fr 1.5fr 100px',
                   gap: 'var(--spacing-md)',
                   padding: 'var(--spacing-sm) var(--spacing-md)',
-                  background: 'var(--color-gray-50)',
-                  border: '1px solid var(--color-gray-200)',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--line)',
                   borderRadius: 'var(--radius-md) var(--radius-md) 0 0',
                   fontSize: '12px',
                   fontWeight: 600,
-                  color: 'var(--color-gray-600)',
+                  color: 'var(--ink-2)',
                   textTransform: 'uppercase' as const,
                 }}>
                   <div>Key</div>
@@ -580,29 +580,29 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                       gridTemplateColumns: '2fr 2fr 1fr 1.5fr 100px',
                       gap: 'var(--spacing-md)',
                       padding: 'var(--spacing-md)',
-                      border: '1px solid var(--color-gray-200)',
+                      border: '1px solid var(--line)',
                       borderTop: 'none',
-                      background: 'var(--color-white)',
+                      background: 'var(--surface)',
                       alignItems: 'center',
                       textDecoration: ev.is_overridden ? 'line-through' : 'none',
                       opacity: ev.is_overridden ? 0.6 : 1,
                     }}
                   >
-                    <div style={{ fontWeight: 500, color: 'var(--color-gray-900)', fontSize: '14px' }}>
+                    <div style={{ fontWeight: 500, color: 'var(--ink)', fontSize: '14px' }}>
                       {ev.key}
                     </div>
-                    <div style={{ color: 'var(--color-gray-700)', fontSize: '13px', wordBreak: 'break-all' }}>
+                    <div style={{ color: 'var(--ink)', fontSize: '13px', wordBreak: 'break-all' }}>
                       {ev.is_overridden && ev.overridden_by ? (
                         <>
                           <a
                             href={`#var-${ev.overridden_by.variable_id}`}
-                            style={{ color: 'var(--color-blue-600)', textDecoration: 'none', fontWeight: 500 }}
+                            style={{ color: 'var(--brand-ink)', textDecoration: 'none', fontWeight: 500 }}
                             onClick={(e) => {
                               e.preventDefault();
                               const el = document.getElementById(`var-${ev.overridden_by!.variable_id}`);
                               if (el) {
                                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                el.style.background = '#DBEAFE';
+                                el.style.background = 'var(--brand-soft)';
                                 setTimeout(() => { el.style.background = ''; }, 2000);
                               }
                             }}
@@ -612,22 +612,22 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                           {' '}{ev.key}
                         </>
                       ) : ev.sensitive ? (
-                        <span style={{ fontStyle: 'italic', color: 'var(--color-gray-500)' }}>-- sensitive --</span>
+                        <span style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>-- sensitive --</span>
                       ) : (
                         ev.value
                       )}
                     </div>
-                    <div style={{ color: 'var(--color-gray-600)', fontSize: '13px' }}>
+                    <div style={{ color: 'var(--ink-2)', fontSize: '13px' }}>
                       {ev.variable_type === 'terraform' ? 'Terraform' : 'Environment'}
                     </div>
-                    <div style={{ color: 'var(--color-gray-600)', fontSize: '13px' }}>
+                    <div style={{ color: 'var(--ink-2)', fontSize: '13px' }}>
                       {formatSource(ev)}
                     </div>
                     <div>
                       {ev.is_overridden ? (
                         <span style={{
-                          background: 'var(--color-gray-100)',
-                          color: 'var(--color-gray-600)',
+                          background: 'var(--surface-2)',
+                          color: 'var(--ink-2)',
                           padding: '3px 10px',
                           borderRadius: '12px',
                           fontSize: '12px',
@@ -637,8 +637,8 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                         </span>
                       ) : (
                         <span style={{
-                          background: '#D1FAE5',
-                          color: '#065F46',
+                          background: 'var(--green-soft)',
+                          color: 'var(--green-active)',
                           padding: '3px 10px',
                           borderRadius: '12px',
                           fontSize: '12px',
@@ -665,10 +665,10 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
         onCancel={handleDeleteCancel}
       >
         <div style={{ marginBottom: '16px' }}>
-          <p style={{ margin: '0 0 12px 0', color: 'var(--color-gray-700)', fontSize: '14px', lineHeight: '1.5' }}>
+          <p style={{ margin: '0 0 12px 0', color: 'var(--ink)', fontSize: '14px', lineHeight: '1.5' }}>
             Deleting the <strong>{variableToDelete?.key}</strong> variable will permanently remove its value, and it will no longer be used in future runs.
           </p>
-          <p style={{ margin: 0, color: 'var(--color-gray-700)', fontSize: '14px', lineHeight: '1.5' }}>
+          <p style={{ margin: 0, color: 'var(--ink)', fontSize: '14px', lineHeight: '1.5' }}>
             This operation <strong>cannot be undone</strong>. Are you sure?
           </p>
         </div>

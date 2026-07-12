@@ -265,12 +265,12 @@ const SelectWidget: React.FC<SelectWidgetProps> = ({
           <span>
             {help}
             {sourceError && (
-              <span style={{ color: '#ff4d4f', marginLeft: 8, fontSize: 11 }}>
+              <span style={{ color: 'var(--red)', marginLeft: 8, fontSize: 11 }}>
                 加载失败: {sourceError}
               </span>
             )}
             {hasManifestContext && hasOtherNodes && !isModuleReference && (
-              <span style={{ color: '#1890ff', marginLeft: 8, fontSize: 11 }}>
+              <span style={{ color: 'var(--brand)', marginLeft: 8, fontSize: 11 }}>
                 搜索时输入 / 可引用其他 Module 的输出
               </span>
             )}
@@ -318,7 +318,7 @@ const SelectWidget: React.FC<SelectWidgetProps> = ({
             >
               {opt.label}
               {opt.description && (
-                <span style={{ color: '#8c8c8c', marginLeft: 8, fontSize: 12 }}>
+                <span style={{ color: 'var(--ink-3)', marginLeft: 8, fontSize: 12 }}>
                   {opt.description}
                 </span>
               )}

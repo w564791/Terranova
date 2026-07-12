@@ -124,7 +124,7 @@ interface Props {
 }
 
 const LEVEL_COLOR: Record<string, string> = {
-  error: '#f14c4c',
+  error: 'var(--red)',
   warning: '#cca700',
   info: '#3794ff',
 }

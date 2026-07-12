@@ -601,7 +601,7 @@ const WorkspaceDetail: React.FC = () => {
         confirmDisabled={!lockReason.trim()}
       >
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: 'var(--color-gray-700)' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: 'var(--ink)' }}>
             锁定原因 *
           </label>
           <input
@@ -612,7 +612,7 @@ const WorkspaceDetail: React.FC = () => {
             style={{
               width: '100%',
               padding: '10px 12px',
-              border: '1px solid var(--color-gray-300)',
+              border: '1px solid var(--line-2)',
               borderRadius: 'var(--radius-md)',
               fontSize: '14px'
             }}

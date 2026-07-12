@@ -176,8 +176,8 @@ const DemoForm: React.FC<DemoFormProps> = ({
               className={styles.toggleButton}
               style={{
                 padding: '4px 10px',
-                background: useJsonEditor ? '#1890ff' : '#f0f0f0',
-                color: useJsonEditor ? '#fff' : '#666',
+                background: useJsonEditor ? 'var(--brand)' : 'var(--surface-2)',
+                color: useJsonEditor ? 'var(--surface)' : 'var(--ink-2)',
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
@@ -256,7 +256,7 @@ const DemoForm: React.FC<DemoFormProps> = ({
             </div>
             
             {schemaLoading ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#8c8c8c' }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-3)' }}>
                 加载 Schema 中...
               </div>
             ) : useJsonEditor || !schema ? (
@@ -275,10 +275,10 @@ const DemoForm: React.FC<DemoFormProps> = ({
               </>
             ) : (
               <div style={{ 
-                border: '1px solid #d9d9d9', 
+                border: '1px solid var(--line-2)', 
                 borderRadius: '6px', 
                 padding: '12px',
-                background: '#fafafa',
+                background: 'var(--bg)',
                 maxHeight: '400px',
                 overflow: 'auto'
               }}>

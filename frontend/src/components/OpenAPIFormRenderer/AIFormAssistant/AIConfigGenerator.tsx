@@ -200,7 +200,7 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
               ? `${prompts[currentScrollIndex % prompts.length].title}: ${prompts[currentScrollIndex % prompts.length].prompt}` 
               : prompts[currentScrollIndex % prompts.length].prompt}
           >
-            {prompts.length > 1 && <span style={{ color: '#bbb', marginRight: 4 }}>[{(currentScrollIndex % prompts.length) + 1}/{prompts.length}]</span>}
+            {prompts.length > 1 && <span style={{ color: 'var(--ink-faint)', marginRight: 4 }}>[{(currentScrollIndex % prompts.length) + 1}/{prompts.length}]</span>}
             {prompts[currentScrollIndex % prompts.length].prompt}
           </span>
         )}
@@ -272,28 +272,28 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                   {/* 已完成的步骤（绿色） */}
                   {progress.completedSteps?.map((step, index) => (
                     <React.Fragment key={index}>
-                      <span style={{ color: '#52c41a', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: 'var(--green)', whiteSpace: 'nowrap' }}>
                         ✓{step.name}({(step.elapsed_ms / 1000).toFixed(1)}s)
                       </span>
-                      <span style={{ color: '#d9d9d9' }}>→</span>
+                      <span style={{ color: 'var(--line-2)' }}>→</span>
                     </React.Fragment>
                   ))}
                   {/* 当前步骤（蓝色，带动态计时） */}
-                  <span style={{ color: '#4F7CFF', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--brand)', fontWeight: 500, whiteSpace: 'nowrap' }}>
                     {progress.stepName}({elapsedSeconds}s)
                   </span>
                 </div>
               ) : (
                 // 没有进度数据时显示默认文本
-                <span style={{ fontSize: 12, color: '#999' }}>正在处理...</span>
+                <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>正在处理...</span>
               )}
             </div>
           </div>
         ) : finalProgress?.completedSteps && finalProgress.completedSteps.length > 0 ? (
           // 执行摘要 - 独立一行显示
-          <div style={{ width: '100%', marginTop: 8, padding: '8px 0', borderTop: '1px dashed #e8e8e8' }}>
+          <div style={{ width: '100%', marginTop: 8, padding: '8px 0', borderTop: '1px dashed var(--line)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2 }} />
+              <CheckCircleOutlined style={{ color: 'var(--green)', marginTop: 2 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', fontSize: 12 }}>
                   {finalProgress.completedSteps.map((step, index) => {
@@ -321,7 +321,7 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                         <div style={{ fontSize: 11 }}>
                           <div style={{ fontWeight: 500, marginBottom: 4 }}>使用的 Skills:</div>
                           {step.used_skills.map((skill, i) => (
-                            <div key={i} style={{ color: '#52c41a' }}>• {skill}</div>
+                            <div key={i} style={{ color: 'var(--green)' }}>• {skill}</div>
                           ))}
                         </div>
                       )
@@ -337,7 +337,7 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                           <Tooltip title={skillsTooltip} placement="top">
                             <span 
                               style={{ 
-                                color: isSkipped ? '#999' : '#52c41a', 
+                                color: isSkipped ? 'var(--ink-3)' : 'var(--green)', 
                                 whiteSpace: 'nowrap',
                                 cursor: 'help', 
                                 borderBottom: '1px dashed currentColor' 
@@ -347,7 +347,7 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                             </span>
                           </Tooltip>
                         ) : (
-                          <span style={{ color: isSkipped ? '#999' : '#52c41a', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: isSkipped ? 'var(--ink-3)' : 'var(--green)', whiteSpace: 'nowrap' }}>
                             {stepContent}
                           </span>
                         )}
@@ -355,19 +355,19 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                           isPhaseBreak ? (
                             // 两步流程的分界点，显示"用户选择"
                             <>
-                              <span style={{ color: '#d9d9d9' }}>→</span>
-                              <span style={{ color: '#333', fontWeight: 500, whiteSpace: 'nowrap' }}>用户选择</span>
-                              <span style={{ color: '#d9d9d9' }}>→</span>
+                              <span style={{ color: 'var(--line-2)' }}>→</span>
+                              <span style={{ color: 'var(--ink)', fontWeight: 500, whiteSpace: 'nowrap' }}>用户选择</span>
+                              <span style={{ color: 'var(--line-2)' }}>→</span>
                             </>
                           ) : (
-                            <span style={{ color: '#d9d9d9' }}>→</span>
+                            <span style={{ color: 'var(--line-2)' }}>→</span>
                           )
                         )}
                       </React.Fragment>
                     );
                   })}
                   {/* 总耗时跟在步骤后面 */}
-                  <span style={{ color: '#666', marginLeft: 4, whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--ink-2)', marginLeft: 4, whiteSpace: 'nowrap' }}>
                     | 总耗时: {formatStepTime(finalProgress.completedSteps.reduce((sum, s) => sum + s.elapsed_ms, 0))}s
                   </span>
                 </div>
@@ -388,14 +388,14 @@ export const AIInputPanel: React.FC<AIInputPanelProps> = ({
                 onChange={onCmdbModeChange}
                 disabled={loading}
               />
-              <span style={{ fontSize: 12, color: cmdbMode ? '#1890ff' : '#666' }}>
+              <span style={{ fontSize: 12, color: cmdbMode ? 'var(--brand)' : 'var(--ink-2)' }}>
                 <DatabaseOutlined style={{ marginRight: 4 }} />
                 CMDB 智能查询
               </span>
             </div>
           </Tooltip>
         )}
-        <span style={{ color: '#999' }}>
+        <span style={{ color: 'var(--ink-3)' }}>
           {hasCurrentData 
             ? '当前表单已有数据，可以选择"修复现有配置"进行优化'
             : '输入描述后点击"生成新配置"'
@@ -1123,23 +1123,23 @@ export const useAIConfigGenerator = (options: UseAIConfigGeneratorOptions): UseA
                 
                 return (
                   <React.Fragment key={index}>
-                    <span style={{ color: isSkipped ? '#999' : '#52c41a', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: isSkipped ? 'var(--ink-3)' : 'var(--green)', whiteSpace: 'nowrap' }}>
                       {isSkipped ? `○${s.name}(跳过)` : `✓${s.name}(${formatStepTime(s.elapsed_ms)}s)`}
                     </span>
                     {index < progressData.completedSteps!.length - 1 && (
-                      <span style={{ color: '#999' }}>→</span>
+                      <span style={{ color: 'var(--ink-3)' }}>→</span>
                     )}
                     {isPhaseBreak && (
                       <>
-                        <span style={{ color: '#333', fontWeight: 500 }}>用户选择</span>
-                        <span style={{ color: '#999' }}>→</span>
+                        <span style={{ color: 'var(--ink)', fontWeight: 500 }}>用户选择</span>
+                        <span style={{ color: 'var(--ink-3)' }}>→</span>
                       </>
                     )}
                   </React.Fragment>
                 );
               })}
             </div>
-            <div style={{ marginTop: 4, color: '#666' }}>
+            <div style={{ marginTop: 4, color: 'var(--ink-2)' }}>
               总耗时: {formatStepTime(totalMs)}s
             </div>
           </div>
@@ -1318,17 +1318,17 @@ const ModalProgressDisplay: React.FC<{ progress: ProgressInfo }> = ({ progress }
         gap: 8,
         flexWrap: 'wrap',
         fontSize: 12,
-        color: '#666'
+        color: 'var(--ink-2)'
       }}>
         {/* 已完成的步骤（绿色） */}
         {progress.completedSteps?.map((step, index) => (
-          <span key={index} style={{ display: 'inline-flex', alignItems: 'center', color: '#52c41a' }}>
+          <span key={index} style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--green)' }}>
             ✓{step.name}({formatStepTime(step.elapsed_ms)}s)
-            <span style={{ margin: '0 4px', color: '#999' }}>→</span>
+            <span style={{ margin: '0 4px', color: 'var(--ink-3)' }}>→</span>
           </span>
         ))}
         {/* 当前步骤（蓝色，带动态计时） */}
-        <span style={{ color: '#1890ff', fontWeight: 500 }}>
+        <span style={{ color: 'var(--brand)', fontWeight: 500 }}>
           {progress.stepName}({elapsedSeconds}s)...
         </span>
       </div>
@@ -1382,9 +1382,9 @@ const CMDBLookupsDisplay: React.FC<{
                       key={index} 
                       style={{ 
                         padding: '8px 12px', 
-                        background: lookup.found ? '#f6ffed' : '#fff2f0',
+                        background: lookup.found ? 'var(--green-soft)' : 'var(--red-soft)',
                         borderRadius: 6,
-                        border: `1px solid ${lookup.found ? '#b7eb8f' : '#ffccc7'}`
+                        border: `1px solid ${lookup.found ? 'var(--green-line)' : 'var(--red-line)'}`
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -1392,12 +1392,12 @@ const CMDBLookupsDisplay: React.FC<{
                           {lookup.found ? '已找到' : '未找到'}
                         </Tag>
                         <span style={{ fontWeight: 500 }}>{lookup.query}</span>
-                        <span style={{ color: '#999', fontSize: 12 }}>({lookup.resource_type})</span>
+                        <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>({lookup.resource_type})</span>
                       </div>
                       
                       {/* 单个结果 - 只有一个候选时显示详情 */}
                       {lookup.found && lookup.result && (!lookup.candidates || lookup.candidates.length <= 1) && (
-                        <div style={{ fontSize: 12, color: '#666', marginLeft: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--ink-2)', marginLeft: 8 }}>
                           <div><strong>ID:</strong> <code>{lookup.result.id}</code></div>
                           <div><strong>名称:</strong> {lookup.result.name}</div>
                           {lookup.result.workspace_name && (
@@ -1409,7 +1409,7 @@ const CMDBLookupsDisplay: React.FC<{
                       {/* 多选情况 - 数组字段默认全选，非数组字段默认选第一个 */}
                       {lookup.found && lookup.candidates && lookup.candidates.length > 1 && (
                         <div style={{ marginTop: 8 }}>
-                          <div style={{ fontSize: 12, color: isArrayField ? '#1890ff' : '#faad14', marginBottom: 4 }}>
+                          <div style={{ fontSize: 12, color: isArrayField ? 'var(--brand)' : 'var(--amber)', marginBottom: 4 }}>
                             {isArrayField ? (
                               <>
                                 <CheckCircleOutlined style={{ marginRight: 4 }} />
@@ -1436,7 +1436,7 @@ const CMDBLookupsDisplay: React.FC<{
                       )}
                       
                       {!lookup.found && lookup.error && (
-                        <div style={{ fontSize: 12, color: '#ff4d4f', marginLeft: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--red)', marginLeft: 8 }}>
                           {lookup.error}
                         </div>
                       )}
@@ -1678,14 +1678,14 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
         {userDescription && (
           <div style={{ 
             padding: '12px 16px', 
-            background: '#f5f5f5', 
+            background: 'var(--surface-2)', 
             borderRadius: 8, 
             marginBottom: 12,
             fontSize: 14,
-            color: '#333',
-            borderLeft: '4px solid #1890ff'
+            color: 'var(--ink)',
+            borderLeft: '4px solid var(--brand)'
           }}>
-            <div style={{ fontWeight: 500, marginBottom: 4, color: '#666', fontSize: 12 }}>您的需求：</div>
+            <div style={{ fontWeight: 500, marginBottom: 4, color: 'var(--ink-2)', fontSize: 12 }}>您的需求：</div>
             {userDescription}
           </div>
         )}
@@ -1694,11 +1694,11 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
         {finalProgress?.completedSteps && finalProgress.completedSteps.length > 0 && (
           <div style={{ 
             padding: '8px 12px', 
-            background: '#e6f7ff', 
+            background: 'var(--brand-soft)', 
             borderRadius: 6, 
             marginBottom: 12,
             fontSize: 12,
-            color: '#1890ff',
+            color: 'var(--brand)',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
@@ -1728,7 +1728,7 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
                   <div style={{ fontSize: 11 }}>
                     <div style={{ fontWeight: 500, marginBottom: 4 }}>使用的 Skills:</div>
                     {step.used_skills!.map((skill, i) => (
-                      <div key={i} style={{ color: '#52c41a' }}>• {skill}</div>
+                      <div key={i} style={{ color: 'var(--green)' }}>• {skill}</div>
                     ))}
                   </div>
                 )
@@ -1747,7 +1747,7 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
                       <span style={{ 
                         display: 'inline-flex', 
                         alignItems: 'center', 
-                        color: isSkipped ? '#999' : '#52c41a',
+                        color: isSkipped ? 'var(--ink-3)' : 'var(--green)',
                         cursor: 'help',
                         borderBottom: '1px dashed currentColor'
                       }}>
@@ -1758,7 +1758,7 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
                     <span style={{ 
                       display: 'inline-flex', 
                       alignItems: 'center', 
-                      color: isSkipped ? '#999' : '#52c41a' 
+                      color: isSkipped ? 'var(--ink-3)' : 'var(--green)' 
                     }}>
                       {stepContent}
                     </span>
@@ -1767,19 +1767,19 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
                     isPhaseBreak ? (
                       // 两步流程的分界点，显示"用户选择"
                       <>
-                        <span style={{ margin: '0 4px', color: '#999' }}>→</span>
-                        <span style={{ color: '#333', fontWeight: 500 }}>用户选择</span>
-                        <span style={{ margin: '0 4px', color: '#999' }}>→</span>
+                        <span style={{ margin: '0 4px', color: 'var(--ink-3)' }}>→</span>
+                        <span style={{ color: 'var(--ink)', fontWeight: 500 }}>用户选择</span>
+                        <span style={{ margin: '0 4px', color: 'var(--ink-3)' }}>→</span>
                       </>
                     ) : (
-                      <span style={{ margin: '0 4px', color: '#999' }}>→</span>
+                      <span style={{ margin: '0 4px', color: 'var(--ink-3)' }}>→</span>
                     )
                   )}
                 </React.Fragment>
               );
             })}
             {/* 总耗时单独一行显示 */}
-            <div style={{ width: '100%', marginTop: 4, color: '#666', fontSize: 11 }}>
+            <div style={{ width: '100%', marginTop: 4, color: 'var(--ink-2)', fontSize: 11 }}>
               总耗时: {formatStepTime(finalProgress.completedSteps.reduce((sum, s) => sum + s.elapsed_ms, 0))}s
             </div>
           </div>
@@ -1805,7 +1805,7 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
               // 显示真实的 SSE 进度
               <ModalProgressDisplay progress={progress} />
             ) : (
-              <p style={{ marginTop: '12px', color: '#666' }}>AI 正在重新检查配置...</p>
+              <p style={{ marginTop: '12px', color: 'var(--ink-2)' }}>AI 正在重新检查配置...</p>
             )}
           </div>
         ) : cmdbLookups.length > 0 ? (
@@ -1818,7 +1818,7 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
               <div>
                 根据您的描述，我们查询到如下信息：
                 {needSelection && (
-                  <div style={{ marginTop: 8, color: '#1890ff', fontWeight: 500 }}>
+                  <div style={{ marginTop: 8, color: 'var(--brand)', fontWeight: 500 }}>
                     存在多个匹配结果，请在下方选择正确的资源后点击「使用该资源生成配置」
                   </div>
                 )}
@@ -1978,11 +1978,11 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
             defaultActiveKey={['emptyFields']}
             items={[{
               key: 'emptyFields',
-              label: <span style={{ color: '#faad14' }}>{emptyFields.length} 个字段值为空</span>,
+              label: <span style={{ color: 'var(--amber)' }}>{emptyFields.length} 个字段值为空</span>,
               children: (
                 <div className={styles.placeholderList}>
                   {emptyFields.map((f, index) => (
-                    <div key={index} className={styles.placeholderItem} style={{ borderLeftColor: '#faad14' }}>
+                    <div key={index} className={styles.placeholderItem} style={{ borderLeftColor: 'var(--amber)' }}>
                       <div className={styles.placeholderHeader}>
                         <code className={styles.fieldName}>{f.field}</code>
                       </div>

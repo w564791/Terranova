@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-md);
@@ -13,8 +13,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid var(--color-gray-200);
-  background: var(--color-gray-50);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
   gap: 16px;
 }
 
@@ -27,38 +27,38 @@
 
 .tabs button {
   padding: 8px 16px;
-  border: 1px solid var(--color-gray-300);
-  background: var(--color-white);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   transition: all 0.2s;
 }
 
 .tabs button:hover:not(:disabled) {
-  background: var(--color-gray-100);
-  border-color: var(--color-gray-400);
+  background: var(--surface-2);
+  border-color: var(--ink-faint);
 }
 
 .tabs button.active {
-  background: var(--color-blue-500);
-  color: var(--color-white);
-  border-color: var(--color-blue-500);
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
 }
 
 .tabs button.disabled {
-  background: var(--color-gray-100);
-  color: var(--color-gray-400);
-  border-color: var(--color-gray-200);
+  background: var(--surface-2);
+  color: var(--ink-faint);
+  border-color: var(--line);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .tabs button.disabled:hover {
-  background: var(--color-gray-100);
-  border-color: var(--color-gray-200);
+  background: var(--surface-2);
+  border-color: var(--line);
 }
 
 .headerRight {
@@ -78,7 +78,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-weight: 500;
 }
 
@@ -104,16 +104,16 @@
 }
 
 .completed {
-  color: var(--color-green-600);
+  color: var(--green-hover);
   font-weight: 500;
 }
 
 .disconnected {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .lineCount {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 13px;
 }
 
@@ -121,7 +121,7 @@
   flex: 1;
   overflow-y: auto;
   background: #1e1e1e;
-  color: #d4d4d4;
+  color: var(--line-2);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
@@ -150,11 +150,11 @@
 
 .content {
   flex: 1;
-  color: #d4d4d4;
+  color: var(--line-2);
 }
 
 .line.error .content {
-  color: #f48771;
+  color: var(--red-line);
 }
 
 /* 阶段标记样式 */
@@ -163,17 +163,17 @@
   align-items: center;
   padding: 12px 16px;
   margin: 8px 0;
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
-  border-left: 4px solid #3b82f6;
+  background: linear-gradient(90deg, var(--ring-brand) 0%, rgba(28, 110, 140, 0.05) 100%);
+  border-left: 4px solid var(--brand);
   font-weight: 600;
-  color: #60a5fa;
+  color: var(--brand-400);
   border-radius: 4px;
 }
 
 .stageIcon {
   margin-right: 12px;
   font-size: 14px;
-  color: #3b82f6;
+  color: var(--brand);
 }
 
 .stageName {
@@ -186,13 +186,13 @@
 .stageStatus {
   margin-right: auto;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--ink-faint);
   text-transform: uppercase;
 }
 
 .stageTime {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ink-2);
   font-weight: normal;
 }
 
@@ -201,8 +201,8 @@
   bottom: 24px;
   right: 24px;
   padding: 8px 16px;
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -213,9 +213,9 @@
 }
 
 .scrollButton:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 8px 16px rgba(28, 110, 140, 0.3);
 }
 
 .scrollButton:active {
@@ -228,7 +228,7 @@
 }
 
 .output::-webkit-scrollbar-track {
-  background: #2d2d2d;
+  background: var(--ink);
 }
 
 .output::-webkit-scrollbar-thumb {
@@ -237,7 +237,7 @@
 }
 
 .output::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--ink-2);
 }
 
 /* Waiting状态样式 */
@@ -259,14 +259,14 @@
 .waitingTitle {
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: 12px;
   font-family: var(--font-heading);
 }
 
 .waitingDesc {
   font-size: 16px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin-bottom: 24px;
   max-width: 500px;
   line-height: 1.6;
@@ -277,7 +277,7 @@
 }
 
 .waitingLink a {
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   text-decoration: none;
   font-weight: 500;
   font-size: 15px;
@@ -294,8 +294,8 @@
 
 .cancelButton {
   padding: 10px 24px;
-  background: var(--color-red-500);
-  color: white;
+  background: var(--red);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -305,7 +305,7 @@
 }
 
 .cancelButton:hover {
-  background: var(--color-red-600);
+  background: var(--red-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }

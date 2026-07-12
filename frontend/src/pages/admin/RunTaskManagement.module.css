@@ -19,12 +19,12 @@
 .title {
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .description {
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
   margin: 0;
   line-height: 1.5;
@@ -51,13 +51,13 @@
 
 .refreshButton {
   background: white;
-  border: 1px solid #d9d9d9;
-  color: #595959;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
 }
 
 .refreshButton:hover:not(:disabled) {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .refreshButton:disabled {
@@ -66,13 +66,13 @@
 }
 
 .createButton {
-  background: #1890ff;
+  background: var(--brand);
   border: none;
-  color: white;
+  color: #fff;
 }
 
 .createButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .content {
@@ -84,7 +84,7 @@
 .loading {
   text-align: center;
   padding: 48px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 /* Empty state */
@@ -94,19 +94,19 @@
 }
 
 .emptyIcon {
-  color: #d9d9d9;
+  color: var(--line-2);
   margin-bottom: 16px;
 }
 
 .empty h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .empty p {
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
   margin: 0 0 24px 0;
 }
@@ -125,20 +125,20 @@
 .table td {
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .table th {
-  background: #fafafa;
+  background: var(--bg);
   font-weight: 600;
   font-size: 13px;
-  color: #595959;
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .table tbody tr:hover {
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .table tbody tr:last-child td {
@@ -150,17 +150,17 @@
   align-items: center;
   gap: 8px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .taskName svg {
-  color: #8c8c8c;
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 
 .taskMeta {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--ink-3);
   margin-top: 4px;
   margin-left: 24px;
 }
@@ -169,8 +169,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
   font-size: 12px;
   font-weight: 500;
   border-radius: 4px;
@@ -181,7 +181,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #595959;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
@@ -194,8 +194,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
   font-size: 12px;
   font-weight: 500;
   border-radius: 4px;
@@ -205,8 +205,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #f5f5f5;
-  color: #8c8c8c;
+  background: var(--surface-2);
+  color: var(--ink-3);
   font-size: 12px;
   font-weight: 500;
   border-radius: 4px;
@@ -222,11 +222,11 @@
 }
 
 .statusEnabled {
-  color: #52c41a;
+  color: var(--green);
 }
 
 .statusDisabled {
-  color: #ff4d4f;
+  color: var(--red);
 }
 
 /* Actions */
@@ -247,13 +247,13 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #595959;
+  color: var(--ink-2);
   transition: all 0.2s;
 }
 
 .actionButton:hover:not(:disabled) {
-  background: #f5f5f5;
-  color: #1890ff;
+  background: var(--surface-2);
+  color: var(--brand);
 }
 
 .actionButton:disabled {
@@ -262,7 +262,7 @@
 }
 
 .deleteButton:hover:not(:disabled) {
-  color: #ff4d4f;
+  color: var(--red);
 }
 
 /* Delete confirmation */
@@ -271,7 +271,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #595959;
+  color: var(--ink-2);
 }
 
 .confirmYes,
@@ -284,24 +284,24 @@
 }
 
 .confirmYes {
-  background: #ff4d4f;
+  background: var(--red);
   border: none;
-  color: white;
+  color: #fff;
 }
 
 .confirmYes:hover {
-  background: #ff7875;
+  background: var(--red-line);
 }
 
 .confirmNo {
   background: white;
-  border: 1px solid #d9d9d9;
-  color: #595959;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
 }
 
 .confirmNo:hover {
-  border-color: #40a9ff;
-  color: #1890ff;
+  border-color: var(--brand-400);
+  color: var(--brand);
 }
 
 /* Spinner */
@@ -309,8 +309,8 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid #f0f0f0;
-  border-top-color: #1890ff;
+  border: 2px solid var(--surface-2);
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -324,7 +324,7 @@
 /* Delete dialog content */
 .deleteDialogContent {
   font-size: 14px;
-  color: #4b5563;
+  color: var(--ink-2);
 }
 
 .deleteDialogContent p {
@@ -333,7 +333,7 @@
 }
 
 .deleteDialogContent strong {
-  color: #1f2937;
+  color: var(--ink);
 }
 
 .deleteWarning {
@@ -341,26 +341,26 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber);
   border-radius: 6px;
   margin: 16px 0;
 }
 
 .deleteWarning svg {
   flex-shrink: 0;
-  color: #d97706;
+  color: var(--amber-hover);
 }
 
 .deleteWarning span {
   font-size: 13px;
-  color: #92400e;
+  color: var(--amber-hover);
   line-height: 1.5;
 }
 
 .deleteNote {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-style: italic;
   margin-top: 16px !important;
 }

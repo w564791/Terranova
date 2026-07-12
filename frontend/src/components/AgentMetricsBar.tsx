@@ -13,9 +13,9 @@ const AgentMetricsBar: React.FC<AgentMetricsBarProps> = ({ label, value, unit = 
   
   // 根据使用率确定颜色
   const getColor = (val: number): string => {
-    if (val < 70) return '#52c41a'; // 绿色
-    if (val < 90) return '#faad14'; // 黄色
-    return '#ff4d4f'; // 红色
+    if (val < 70) return 'var(--green)'; // 绿色
+    if (val < 90) return 'var(--amber)'; // 黄色
+    return 'var(--red)'; // 红色
   };
 
   const color = getColor(normalizedValue);

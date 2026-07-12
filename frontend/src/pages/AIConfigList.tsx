@@ -71,7 +71,7 @@ const SortableConfigCard = ({ config }: { config: AIConfig }) => {
               style={{ 
                 cursor: 'grab', 
                 fontSize: '18px', 
-                color: '#999',
+                color: 'var(--ink-3)',
                 userSelect: 'none',
               }}
             >
@@ -262,7 +262,7 @@ const ConfigsTab = () => {
         <>
           {defaultConfigs.length > 0 && (
             <div style={{ marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: '#333' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--ink)' }}>
                 默认配置（支持所有场景）
               </h3>
               <div className={styles.list}>
@@ -316,7 +316,7 @@ const ConfigsTab = () => {
 
           {specialConfigs.length > 0 && (
             <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: '#333' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--ink)' }}>
                 专用配置（按优先级排序，可拖拽调整）
               </h3>
               <DndContext
@@ -541,16 +541,16 @@ const SkillsTab = () => {
           onClick={() => handlePageChange(layer, pagination.page - 1)}
           style={{
             padding: '6px 12px',
-            border: '1px solid #d9d9d9',
+            border: '1px solid var(--line-2)',
             borderRadius: '4px',
-            background: pagination.page <= 1 ? '#f5f5f5' : '#fff',
+            background: pagination.page <= 1 ? 'var(--surface-2)' : 'var(--surface)',
             cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
-            color: pagination.page <= 1 ? '#999' : '#333'
+            color: pagination.page <= 1 ? 'var(--ink-3)' : 'var(--ink)'
           }}
         >
           上一页
         </button>
-        <span style={{ color: '#666', fontSize: '14px' }}>
+        <span style={{ color: 'var(--ink-2)', fontSize: '14px' }}>
           第 {pagination.page} / {pagination.totalPages} 页，共 {pagination.total} 条
         </span>
         <button 
@@ -559,11 +559,11 @@ const SkillsTab = () => {
           onClick={() => handlePageChange(layer, pagination.page + 1)}
           style={{
             padding: '6px 12px',
-            border: '1px solid #d9d9d9',
+            border: '1px solid var(--line-2)',
             borderRadius: '4px',
-            background: pagination.page >= pagination.totalPages ? '#f5f5f5' : '#fff',
+            background: pagination.page >= pagination.totalPages ? 'var(--surface-2)' : 'var(--surface)',
             cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer',
-            color: pagination.page >= pagination.totalPages ? '#999' : '#333'
+            color: pagination.page >= pagination.totalPages ? 'var(--ink-3)' : 'var(--ink)'
           }}
         >
           下一页
@@ -628,7 +628,7 @@ const SkillsTab = () => {
           <span className={styles.skillSectionDesc}>{description}</span>
         </h3>
         {data.loading ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>加载中...</div>
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-3)' }}>加载中...</div>
         ) : (
           <>
             <div className={styles.skillList}>
@@ -688,14 +688,14 @@ const SkillsTab = () => {
               style={{
                 width: '240px',
                 padding: '8px 32px 8px 12px',
-                border: '1px solid #d9d9d9',
+                border: '1px solid var(--line-2)',
                 borderRadius: '6px',
                 fontSize: '14px',
                 outline: 'none',
                 transition: 'border-color 0.2s',
               }}
-              onFocus={(e) => e.target.style.borderColor = '#1890ff'}
-              onBlur={(e) => e.target.style.borderColor = '#d9d9d9'}
+              onFocus={(e) => e.target.style.borderColor = 'var(--brand)'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--line-2)'}
             />
             {searchKeyword && (
               <button
@@ -706,7 +706,7 @@ const SkillsTab = () => {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#999',
+                  color: 'var(--ink-3)',
                   fontSize: '16px',
                   padding: '0',
                   lineHeight: '1',
@@ -747,7 +747,7 @@ const SkillsTab = () => {
               {searchResults.map(renderSkillCard)}
             </div>
           ) : (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-3)' }}>
               未找到匹配的 Skill
             </div>
           )}
@@ -776,7 +776,7 @@ const SkillsTab = () => {
       ) : (
         <>
           {currentPagination?.loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>加载中...</div>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-3)' }}>加载中...</div>
           ) : (
             <>
               <div className={styles.skillList}>
@@ -879,13 +879,13 @@ const FeaturesTab = () => {
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Loading...</div>;
+    return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-2)' }}>Loading...</div>;
   }
 
   return (
     <div style={{ maxWidth: 720, padding: '8px 0' }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', marginBottom: 4 }}>AI 能力开关</h2>
-      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24, lineHeight: 1.5 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>AI 能力开关</h2>
+      <p style={{ fontSize: 14, color: 'var(--ink-2)', marginBottom: 24, lineHeight: 1.5 }}>
         控制平台中嵌入的 AI 能力。关闭后对应功能将不再自动触发，已有数据不受影响。
       </p>
 
@@ -897,13 +897,13 @@ const FeaturesTab = () => {
               fontSize: 11, fontWeight: 500, letterSpacing: 0.5,
               textTransform: 'uppercase' as const,
               padding: '3px 8px', borderRadius: 5,
-              background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb'
+              background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--line)'
             }}>{group.group}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#4b5563' }}>{group.groupLabel}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>{group.groupLabel}</span>
           </div>
 
           <div style={{
-            background: '#fff', border: '1px solid #e5e7eb',
+            background: 'var(--surface)', border: '1px solid var(--line)',
             borderRadius: 10, overflow: 'hidden',
             boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
           }}>
@@ -911,30 +911,30 @@ const FeaturesTab = () => {
               <div key={item.key} style={{
                 display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
                 padding: '18px 22px', gap: 20,
-                borderTop: idx > 0 ? '1px solid #f3f4f6' : 'none',
+                borderTop: idx > 0 ? '1px solid var(--surface-2)' : 'none',
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: '#1f2937' }}>{item.title}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>{item.title}</span>
                     <span style={{
                       fontFamily: '"JetBrains Mono", monospace',
                       fontSize: 10, fontWeight: 500, padding: '2px 6px', borderRadius: 4,
-                      background: 'rgba(59,130,246,0.08)', color: '#2563eb', letterSpacing: 0.3,
+                      background: 'rgba(28, 110, 140, 0.08)', color: 'var(--brand-ink)', letterSpacing: 0.3,
                     }}>{item.badge}</span>
                   </div>
-                  <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{item.desc}</div>
+                  <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{item.desc}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
                     <div style={{
                       width: 6, height: 6, borderRadius: '50%',
-                      background: features[item.key] !== false ? '#10b981' : '#d1d5db',
+                      background: features[item.key] !== false ? 'var(--green)' : 'var(--line-2)',
                       boxShadow: features[item.key] !== false
-                        ? '0 0 0 3px rgba(16,185,129,0.12)'
+                        ? '0 0 0 3px rgba(26, 138, 74, 0.12)'
                         : '0 0 0 3px rgba(209,213,219,0.12)',
                     }} />
                     <span style={{
                       fontFamily: '"JetBrains Mono", monospace',
                       fontSize: 11, fontWeight: 500,
-                      color: features[item.key] !== false ? '#059669' : '#9ca3af',
+                      color: features[item.key] !== false ? 'var(--green-hover)' : 'var(--ink-faint)',
                     }}>
                       {features[item.key] !== false ? 'ENABLED' : 'DISABLED'}
                     </span>
@@ -952,12 +952,12 @@ const FeaturesTab = () => {
                     />
                     <span style={{
                       position: 'absolute', inset: 0, borderRadius: 12,
-                      background: features[item.key] !== false ? '#3b82f6' : '#d1d5db',
+                      background: features[item.key] !== false ? 'var(--brand)' : 'var(--line-2)',
                       transition: 'background 0.25s',
                     }} />
                     <span style={{
                       position: 'absolute', top: 2, left: features[item.key] !== false ? 22 : 2,
-                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      width: 20, height: 20, borderRadius: '50%', background: 'var(--surface)',
                       boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                       transition: 'left 0.25s',
                     }} />
@@ -974,7 +974,7 @@ const FeaturesTab = () => {
           onClick={loadFeatures}
           style={{
             padding: '10px 24px', fontSize: 14, fontWeight: 600, borderRadius: 8,
-            background: '#fff', color: '#4b5563', border: '1px solid #d1d5db', cursor: 'pointer',
+            background: 'var(--surface)', color: 'var(--ink-2)', border: '1px solid var(--line-2)', cursor: 'pointer',
           }}
         >
           重置
@@ -984,9 +984,9 @@ const FeaturesTab = () => {
           disabled={saving}
           style={{
             padding: '10px 24px', fontSize: 14, fontWeight: 600, borderRadius: 8,
-            background: saving ? '#9ca3af' : '#3b82f6', color: '#fff', border: 'none',
+            background: saving ? 'var(--ink-faint)' : 'var(--brand)', color: 'var(--surface)', border: 'none',
             cursor: saving ? 'not-allowed' : 'pointer',
-            boxShadow: '0 1px 3px rgba(59,130,246,0.3)',
+            boxShadow: '0 1px 3px rgba(28, 110, 140, 0.3)',
           }}
         >
           {saving ? '保存中...' : saved ? '已保存' : '保存配置'}

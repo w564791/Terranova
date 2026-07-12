@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   padding: var(--spacing-lg, 16px);
   animation: fadeIn 0.2s ease-out;
 }
@@ -25,8 +25,8 @@
 
 /* Dialog Container */
 .dialogContainer {
-  background: var(--color-white, #FFFFFF);
-  border-radius: var(--radius-lg, 12px);
+  background: var(--color-white, var(--surface));
+  border-radius: 12px;
   box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04));
   width: 100%;
   max-width: 800px;
@@ -53,7 +53,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-lg, 24px);
-  border-bottom: 1px solid var(--color-gray-200, #E5E7EB);
+  border-bottom: 1px solid var(--color-gray-200, var(--line));
 }
 
 .headerContent {
@@ -63,7 +63,7 @@
 .dialogTitle {
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-gray-900, #111827);
+  color: var(--color-gray-900, var(--ink));
   margin: 0 0 8px 0;
   font-family: var(--font-heading, 'Poppins', sans-serif);
 }
@@ -73,24 +73,24 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: var(--color-gray-600, #6B7280);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .resourceType {
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  background: var(--color-gray-100, #F3F4F6);
+  background: var(--color-gray-100, var(--surface-2));
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 13px;
 }
 
 .resourceSeparator {
-  color: var(--color-gray-400, #9CA3AF);
+  color: var(--color-gray-400, var(--ink-faint));
 }
 
 .resourceName {
   font-weight: 500;
-  color: var(--color-gray-700, #374151);
+  color: var(--color-gray-700, var(--ink));
 }
 
 .closeButton {
@@ -98,7 +98,7 @@
   height: 32px;
   border: none;
   background: transparent;
-  color: var(--color-gray-500, #6B7280);
+  color: var(--color-gray-500, var(--ink-2));
   font-size: 24px;
   cursor: pointer;
   border-radius: 6px;
@@ -111,8 +111,8 @@
 }
 
 .closeButton:hover {
-  background: var(--color-gray-100, #F3F4F6);
-  color: var(--color-gray-700, #374151);
+  background: var(--color-gray-100, var(--surface-2));
+  color: var(--color-gray-700, var(--ink));
 }
 
 /* Dialog Content */
@@ -129,14 +129,14 @@
   align-items: center;
   justify-content: center;
   padding: var(--spacing-2xl, 48px);
-  color: var(--color-gray-600, #6B7280);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--color-gray-200, #E5E7EB);
-  border-top-color: var(--color-blue-500, #3B82F6);
+  border: 3px solid var(--color-gray-200, var(--line));
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: var(--spacing-md, 16px);
@@ -152,7 +152,7 @@
 .emptyState {
   text-align: center;
   padding: var(--spacing-2xl, 48px);
-  color: var(--color-gray-600, #6B7280);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .emptyState p {
@@ -162,7 +162,7 @@
 
 .emptyStateHint {
   font-size: 14px;
-  color: var(--color-gray-500, #6B7280);
+  color: var(--color-gray-500, var(--ink-2));
 }
 
 /* Form Section */
@@ -172,8 +172,8 @@
 
 /* Change Summary Section */
 .changeSummarySection {
-  background: var(--color-gray-50, #F9FAFB);
-  border: 1px solid var(--color-gray-200, #E5E7EB);
+  background: var(--color-gray-50, var(--bg));
+  border: 1px solid var(--color-gray-200, var(--line));
   border-radius: var(--radius-md, 8px);
   padding: var(--spacing-lg, 20px);
 }
@@ -182,55 +182,55 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-gray-700, #374151);
+  color: var(--color-gray-700, var(--ink));
   margin-bottom: var(--spacing-sm, 8px);
 }
 
 .required {
-  color: var(--color-red-500, #EF4444);
+  color: var(--color-red-500, var(--red));
   margin-left: 2px;
 }
 
 .changeSummaryInput {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-gray-300, #D1D5DB);
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: var(--radius-md, 6px);
   font-size: 14px;
   font-family: var(--font-body, 'Inter', sans-serif);
   transition: all 0.2s;
-  background: var(--color-white, #FFFFFF);
+  background: var(--color-white, var(--surface));
 }
 
 .changeSummaryInput:focus {
   outline: none;
-  border-color: var(--color-blue-500, #3B82F6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .changeSummaryInput:disabled {
-  background: var(--color-gray-100, #F3F4F6);
+  background: var(--color-gray-100, var(--surface-2));
   cursor: not-allowed;
 }
 
 .changeSummaryInput.inputError {
-  border-color: var(--color-red-500, #EF4444);
+  border-color: var(--color-red-500, var(--red));
 }
 
 .changeSummaryInput.inputError:focus {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 0 3px rgba(200, 48, 47, 0.1);
 }
 
 .errorMessage {
   margin-top: var(--spacing-sm, 8px);
   font-size: 13px;
-  color: var(--color-red-600, #DC2626);
+  color: var(--color-red-600, var(--red-hover));
 }
 
 .changeSummaryHint {
   margin-top: var(--spacing-sm, 8px);
   font-size: 13px;
-  color: var(--color-gray-500, #6B7280);
+  color: var(--color-gray-500, var(--ink-2));
   line-height: 1.5;
 }
 
@@ -241,8 +241,8 @@
   justify-content: flex-end;
   gap: var(--spacing-md, 12px);
   padding: var(--spacing-lg, 20px) var(--spacing-lg, 24px);
-  border-top: 1px solid var(--color-gray-200, #E5E7EB);
-  background: var(--color-gray-50, #F9FAFB);
+  border-top: 1px solid var(--color-gray-200, var(--line));
+  background: var(--color-gray-50, var(--bg));
 }
 
 /* Buttons */
@@ -262,23 +262,23 @@
 }
 
 .btnCancel {
-  background: var(--color-white, #FFFFFF);
-  color: var(--color-gray-700, #374151);
-  border: 1px solid var(--color-gray-300, #D1D5DB);
+  background: var(--color-white, var(--surface));
+  color: var(--color-gray-700, var(--ink));
+  border: 1px solid var(--color-gray-300, var(--line-2));
 }
 
 .btnCancel:hover:not(:disabled) {
-  background: var(--color-gray-50, #F9FAFB);
-  border-color: var(--color-gray-400, #9CA3AF);
+  background: var(--color-gray-50, var(--bg));
+  border-color: var(--color-gray-400, var(--ink-faint));
 }
 
 .btnPrimary {
-  background: var(--color-blue-500, #3B82F6);
-  color: var(--color-white, #FFFFFF);
+  background: var(--brand);
+  color: #fff;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: var(--color-blue-600, #2563EB);
+  background: var(--brand-ink);
   box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.07));
 }
 
@@ -292,7 +292,7 @@
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: var(--color-white, #FFFFFF);
+  border-top-color: var(--color-white, var(--surface));
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -324,4 +324,9 @@
     width: 100%;
     justify-content: center;
   }
+}
+
+.btnPrimary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

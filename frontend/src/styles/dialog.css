@@ -1,0 +1,316 @@
+/*
+ * Unified dialog shell — 干净圆角卡片（无侧条、无厚重装饰）
+ *
+ *   .tn-overlay
+ *     .tn-dialog[.tn-dialog--sm|md|lg][.tn-dialog--danger|warning|info]
+ *       .tn-dialog__header > .tn-dialog__title
+ *       .tn-dialog__body
+ *       .tn-dialog__footer
+ */
+
+.tn-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 24px 16px;
+  box-sizing: border-box;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: tn-overlay-in 0.15s ease-out;
+}
+
+@keyframes tn-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.tn-dialog {
+  position: relative;
+  background: #fff;
+  color: var(--ink, #1c1f24);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  max-height: min(86vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  animation: tn-dialog-in 0.2s ease-out;
+  font-family: var(--font-sans, inherit);
+}
+
+.tn-dialog--sm { max-width: 400px; }
+.tn-dialog--md { max-width: 480px; }
+.tn-dialog--lg { max-width: 640px; }
+.tn-dialog--xl { max-width: 800px; }
+
+@keyframes tn-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header — 默认白底；danger/warning 仅浅底，无侧边色条 */
+.tn-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line, #e3e6ea);
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.tn-dialog--danger .tn-dialog__header {
+  background: var(--red-soft, #fbecec);
+  border-bottom-color: rgba(200, 48, 47, 0.18);
+}
+
+.tn-dialog--warning .tn-dialog__header {
+  background: var(--amber-soft, #fdf3e0);
+  border-bottom-color: rgba(154, 103, 0, 0.18);
+}
+
+.tn-dialog--info .tn-dialog__header {
+  background: #fff;
+  border-bottom-color: var(--line, #e3e6ea);
+}
+
+.tn-dialog__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink, #1c1f24);
+}
+
+.tn-dialog--danger .tn-dialog__title {
+  color: var(--red-active, #9f2326);
+}
+
+.tn-dialog--warning .tn-dialog__title {
+  color: var(--amber-hover, #825700);
+}
+
+.tn-dialog--info .tn-dialog__title {
+  color: var(--ink, #1c1f24);
+}
+
+.tn-dialog__close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0 -4px 0 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3, #8a929e);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.tn-dialog__close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--ink, #1c1f24);
+}
+
+.tn-dialog__close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+/* Body */
+.tn-dialog__body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2, #5c6470);
+  background: #fff;
+}
+
+.tn-dialog__message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2, #5c6470);
+  white-space: pre-line;
+}
+
+/* Footer */
+.tn-dialog__footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--line, #e3e6ea);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+/* 弹窗内按钮：保证 solid 文字始终为白 */
+.tn-dialog__footer .btn {
+  min-width: 72px;
+}
+
+.tn-dialog__footer .btn.solid,
+.tn-dialog__footer .btn.solid.red,
+.tn-dialog__footer .btn.solid.brand,
+.tn-dialog__footer .btn.solid.green {
+  color: #fff !important;
+}
+
+/* ========== Ant Design Modal 对齐 ========== */
+.ant-modal-root .ant-modal-mask {
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px);
+}
+
+.ant-modal-root .ant-modal-content {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: none !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28) !important;
+  padding: 0 !important;
+  background: #fff !important;
+}
+
+.ant-modal-root .ant-modal-header {
+  margin: 0 !important;
+  padding: 20px 24px !important;
+  border-bottom: 1px solid var(--line, #e3e6ea) !important;
+  background: #fff !important;
+}
+
+.ant-modal-root .ant-modal-title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--ink, #1c1f24) !important;
+  line-height: 1.4 !important;
+}
+
+.ant-modal-root .ant-modal-body {
+  padding: 24px !important;
+  color: var(--ink-2, #5c6470) !important;
+  font-size: 14px !important;
+}
+
+.ant-modal-root .ant-modal-footer {
+  margin: 0 !important;
+  padding: 16px 24px !important;
+  border-top: 1px solid var(--line, #e3e6ea) !important;
+  background: #fff !important;
+}
+
+.ant-modal-root .ant-modal-close {
+  top: 16px !important;
+  inset-inline-end: 16px !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+}
+
+.ant-modal-root .ant-modal-close:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.ant-modal-confirm .ant-modal-body {
+  padding: 24px !important;
+}
+
+.ant-modal-confirm .ant-modal-confirm-title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--ink, #1c1f24) !important;
+}
+
+.ant-modal-confirm .ant-modal-confirm-content {
+  color: var(--ink-2, #5c6470) !important;
+  margin-top: 10px !important;
+  font-size: 14px !important;
+  line-height: 1.65 !important;
+}
+
+.ant-modal-confirm-btns {
+  margin-top: 20px !important;
+}
+
+.ant-modal-confirm-btns .ant-btn {
+  border-radius: 6px !important;
+  height: 30px !important;
+  font-weight: 500 !important;
+}
+
+.ant-modal-confirm-btns .ant-btn-primary {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #fff !important;
+}
+
+.ant-modal-confirm-btns .ant-btn-primary:hover {
+  background: var(--brand-ink) !important;
+  border-color: var(--brand-ink) !important;
+  color: #fff !important;
+}
+
+.ant-modal-confirm-error .ant-modal-confirm-btns .ant-btn-primary,
+.ant-modal-confirm-confirm .ant-modal-confirm-btns .ant-btn-dangerous,
+.ant-modal-confirm-btns .ant-btn-dangerous {
+  background: var(--red) !important;
+  border-color: var(--red) !important;
+  color: #fff !important;
+}
+
+.ant-modal-confirm-error .ant-modal-confirm-btns .ant-btn-primary:hover,
+.ant-modal-confirm-confirm .ant-modal-confirm-btns .ant-btn-dangerous:hover,
+.ant-modal-confirm-btns .ant-btn-dangerous:hover {
+  background: var(--red-hover) !important;
+  border-color: var(--red-hover) !important;
+  color: #fff !important;
+}
+
+/* Popconfirm */
+.ant-popover .ant-popover-inner {
+  border-radius: 10px !important;
+  border: 1px solid var(--line, #e3e6ea) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12) !important;
+  padding: 12px 14px !important;
+  background: #fff !important;
+}
+
+.ant-popconfirm-buttons .ant-btn {
+  border-radius: 6px !important;
+  height: 28px !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+}
+
+.ant-popconfirm-buttons .ant-btn-primary {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #fff !important;
+}
+
+.ant-popconfirm-buttons .ant-btn-dangerous {
+  background: var(--red) !important;
+  border-color: var(--red) !important;
+  color: #fff !important;
+}

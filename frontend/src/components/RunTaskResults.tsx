@@ -41,13 +41,13 @@ const stageLabels: Record<string, string> = {
 };
 
 const statusIcons: Record<string, { icon: string; color: string }> = {
-  pending: { icon: '○', color: '#6b7280' },
-  running: { icon: '◐', color: '#3b82f6' },
-  passed: { icon: '✓', color: '#10b981' },
-  failed: { icon: '✗', color: '#ef4444' },
-  error: { icon: '!', color: '#ef4444' },
-  timeout: { icon: '⏱', color: '#f59e0b' },
-  skipped: { icon: '⊘', color: '#6b7280' },
+  pending: { icon: '○', color: 'var(--ink-2)' },
+  running: { icon: '◐', color: 'var(--brand)' },
+  passed: { icon: '✓', color: 'var(--green)' },
+  failed: { icon: '✗', color: 'var(--red)' },
+  error: { icon: '!', color: 'var(--red)' },
+  timeout: { icon: '⏱', color: 'var(--amber)' },
+  skipped: { icon: '⊘', color: 'var(--ink-2)' },
 };
 
 const RunTaskResults: React.FC<Props> = ({ workspaceId, taskId, stage }) => {

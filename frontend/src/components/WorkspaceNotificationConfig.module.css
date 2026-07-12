@@ -4,8 +4,8 @@
 
 .globalCard {
   margin-bottom: 16px;
-  background-color: #fffbe6;
-  border-color: #ffe58f;
+  background-color: var(--amber-soft);
+  border-color: var(--amber-line);
 }
 
 .logItem {
@@ -29,6 +29,6 @@
 .logError {
   margin-top: 4px;
   padding: 8px;
-  background-color: #fff2f0;
+  background-color: var(--red-soft);
   border-radius: 4px;
 }

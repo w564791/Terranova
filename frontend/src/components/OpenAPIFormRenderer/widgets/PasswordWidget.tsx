@@ -29,7 +29,7 @@ interface StrengthInfo {
  */
 const calculateStrength = (password: string): StrengthInfo => {
   if (!password) {
-    return { level: 'weak', percent: 0, color: '#ff4d4f', text: '' };
+    return { level: 'weak', percent: 0, color: 'var(--red)', text: '' };
   }
 
   let score = 0;
@@ -56,13 +56,13 @@ const calculateStrength = (password: string): StrengthInfo => {
 
   // 计算等级
   if (score <= 2) {
-    return { level: 'weak', percent: 25, color: '#ff4d4f', text: '弱' };
+    return { level: 'weak', percent: 25, color: 'var(--red)', text: '弱' };
   } else if (score <= 4) {
-    return { level: 'medium', percent: 50, color: '#faad14', text: '中' };
+    return { level: 'medium', percent: 50, color: 'var(--amber)', text: '中' };
   } else if (score <= 6) {
-    return { level: 'strong', percent: 75, color: '#52c41a', text: '强' };
+    return { level: 'strong', percent: 75, color: 'var(--green)', text: '强' };
   } else {
-    return { level: 'very-strong', percent: 100, color: '#1890ff', text: '非常强' };
+    return { level: 'very-strong', percent: 100, color: 'var(--brand)', text: '非常强' };
   }
 };
 

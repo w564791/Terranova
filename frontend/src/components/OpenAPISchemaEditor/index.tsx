@@ -1783,7 +1783,7 @@ const NestedFieldInlineEditor: React.FC<NestedFieldInlineEditorProps> = ({ field
             </div>
             <div className={styles.inlineEditorField}>
               <label>字段名</label>
-              <input type="text" value={fieldName} disabled className={styles.fieldInput} style={{ background: '#f3f4f6', color: '#6b7280' }} />
+              <input type="text" value={fieldName} disabled className={styles.fieldInput} style={{ background: 'var(--surface-2)', color: 'var(--ink-2)' }} />
             </div>
           </div>
           <div className={styles.inlineEditorFormRow}>
@@ -1965,7 +1965,7 @@ const SortableGroupItem: React.FC<SortableGroupItemProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    backgroundColor: isDragging ? '#f0f9ff' : undefined,
+    backgroundColor: isDragging ? 'var(--brand-soft)' : undefined,
   };
 
   // 直接编辑，即时保存
@@ -2386,7 +2386,7 @@ const ExpandableRow: React.FC<ExpandableRowProps> = ({
   fieldName, property, uiConfig, isRequired, order, groups, allFields, isExpanded, onToggleExpand, onDelete, onToggleRequired, onChange, getTypeDisplay,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: fieldName });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, backgroundColor: isDragging ? '#f0f9ff' : undefined };
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, backgroundColor: isDragging ? 'var(--brand-soft)' : undefined };
   const currentGroup = groups.find(g => g.id === (uiConfig.group || 'advanced'));
 
   return (

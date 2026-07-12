@@ -408,7 +408,7 @@ const ProviderTemplatesAdmin: React.FC = () => {
                         {template.constraint_op || '~>'} {template.version}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--color-gray-400)' }}>-</span>
+                      <span style={{ color: 'var(--ink-faint)' }}>-</span>
                     )}
                   </td>
                   <td>{renderStatusBadge(template)}</td>

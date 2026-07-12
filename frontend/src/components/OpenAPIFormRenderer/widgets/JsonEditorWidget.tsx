@@ -553,7 +553,7 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
               <pre
                 ref={preRef}
                 className={styles.v3HighlightPre}
-                dangerouslySetInnerHTML={{ __html: highlightedHTML || '<span style="color:#475569">点击此处编辑 JSON...</span>' }}
+                dangerouslySetInnerHTML={{ __html: highlightedHTML || '<span style="color:var(--ink-2)">点击此处编辑 JSON...</span>' }}
               />
               {isEditing && (
                 <textarea
@@ -598,7 +598,7 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
         <span>
           {help}
           {hasManifestContext && !isModuleReference && (
-            <span style={{ color: '#1890ff', marginLeft: 8, fontSize: 11 }}>
+            <span style={{ color: 'var(--brand)', marginLeft: 8, fontSize: 11 }}>
               输入 module. 开头的引用表达式
             </span>
           )}
@@ -636,8 +636,8 @@ const JsonEditorWidget: React.FC<WidgetProps> = ({
             fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
             fontSize: 13,
             lineHeight: 1.5,
-            ...(isModuleReference ? { color: '#1890ff' } : {}),
-            ...(jsonError ? { borderColor: '#ff4d4f' } : {}),
+            ...(isModuleReference ? { color: 'var(--brand)' } : {}),
+            ...(jsonError ? { borderColor: 'var(--red)' } : {}),
           }}
         />
 

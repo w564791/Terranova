@@ -1,4 +1,4 @@
-本版本包含三大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）+ **CMDB 搜索结果 AI 解读 + 相关性筛查**（新增 `cmdb_search_summary` capability，搜索召回结果经 AI 生成总览/重点/分组/改写建议，并按查询意图自动剔除低相关项；前端 CMDB 搜索页全面接入 SSE 进度与筛查交互）。
+本版本包含四大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）+ **CMDB 搜索结果 AI 解读 + 相关性筛查**（新增 `cmdb_search_summary` capability，搜索召回结果经 AI 生成总览/重点/分组/改写建议，并按查询意图自动剔除低相关项；前端 CMDB 搜索页全面接入 SSE 进度与筛查交互）+ **前端设计系统 v3 — Design Token 统一 + UI 基元组件 + Ant Design 主题集成**（建立 `theme.css` 单一 token 源，语义化 surface/ink/brand/green/red/amber 色阶；新增 Dialog/Button/Feedback CSS 基元；Ant Design 5 `ConfigProvider` 全局主题对齐深青品牌色；~228 文件从硬编码 `--color-*` 迁移至语义 token，旧变量自动 alias 兼容）。
 
 ---
 
@@ -449,3 +449,146 @@ searchSummarySSE (POST /ai/cmdb/search-summary-sse)
 - 前端 `buildSearchSummaryPayload()` 只传必要字段（resource_type / resource_name / cloud_resource_id / resource_summary / similarity / is_resource_deleted），去掉 workspace/account 等噪声
 - 单条文本截断：summary 72 字符 / name 64 字符 / description 60 字符
 - 最多 40 条参与筛查，12 条送入 AI prompt（后端二次截断）
+
+### 18. 前端设计系统 v3 — Design Token 统一与 UI 基元组件
+
+建立全应用统一的设计 token 体系（`theme.css` 作为 single source of truth），引入语义化色阶命名（surface/ink/brand/green/red/amber），新增 Dialog/Button/Feedback CSS 基元组件，集成 Ant Design 5 `ConfigProvider` 全局主题，并将 ~228 个前端文件从硬编码 `--color-*` 变量迁移至语义 token；旧变量通过 alias 映射保持向后兼容。
+
+**Design Token 体系：**
+
+- **`theme.css`（新增）**：全局 `:root` token 定义 —
+  - Surfaces & ink：`--bg` / `--surface` / `--surface-2` / `--surface-3` / `--line` / `--line-2` / `--ink` / `--ink-2` / `--ink-3` / `--ink-faint`
+  - Brand scale（深青 #1c6e8c）：`--brand-100` ~ `--brand-700` + 语义别名 `--brand` / `--brand-ink` / `--brand-soft` / `--brand-line`
+  - 独立语义色：green / red / amber（各自含 soft / line / hover / active 阶）
+  - Blue 仅限非按钮场景（link / focus ring / progress）：`--blue` / `--blue-soft` / `--blue-line`
+  - 同色系 alpha focus ring：`--ring-brand` / `--ring-green` / `--ring-red` / `--ring-amber` / `--ring-blue`
+  - Status aliases：`--status-success` / `--status-danger` / `--status-warning` / `--status-info`（toast/banner/badge 统一引用）
+  - Primary action aliases：`--color-primary` → `--brand`，兼容旧代码
+  - Legacy 兼容层：`--color-gray-*` → surface/ink，`--color-blue-*` → brand scale，`--color-green-*` / `--color-red-*` → semantic 色，保证未迁移组件自动切到新色板
+- **`tokens.ts`（新增）**：JS/TS inline style 专用 token 对象 — `colors` / `rings` / `statusColors` + `statusColor(type)` helper，与 `theme.css` 手动同步
+- **`variables.css`（精简）**：移除全部硬编码 token，改为 `@import './theme.css'`；保留为兼容 shim（`App.css` 仍 import 此文件）
+- **`v3-theme.css`（对齐）**：`[data-ui-version="v3"]` 作用域下的色阶从 Tailwind Slate / 蓝色系改为引用 `theme.css` 语义 token（`var(--bg)` / `var(--brand)` / `var(--green)` 等），v2/v3 色板统一
+
+**CSS 基元组件：**
+
+- **`buttons.css`（新增）**：`.btn` 基元 — 4 色（neutral/brand/green/red）× 3 档（solid/outline/ghost）× 4 尺寸（xs/sm/md/lg）矩阵；含 loading spinner、icon-only、count badge、btn-group / toolbar 组合；兼容旧 class `.btn.primary` / `.btn.brand` 映射到 `solid brand`
+- **`dialog.css`（新增）**：`.tn-overlay` + `.tn-dialog` 弹窗壳 — 圆角卡片（12px），sm/md/lg/xl 四档宽度，default/info/warning/danger 四种 tone；含 Ant Design Modal / Popconfirm 对齐样式
+- **`feedback.css`（新增）**：Toast（左色条卡片）/ Notice（填充条）/ Banner（inline alert）/ Badge（pill）四种反馈基元，各含 success/error/warning/info 变体
+- **`antd-overrides.css`（新增）**：Ant Design CSS 软覆盖 — 统一 focus ring（`--ring-brand`）、Modal 圆角、Notification 左色条、Tag 语义色、Progress fill 色
+
+**UI 基元组件：**
+
+- **`ui/Dialog.tsx`（新增）**：Portal-based 统一弹窗壳 — 支持 `tone` / `size` / `closeOnOverlay` / `closeOnEsc` / `showClose` / `aria-label`；ESC 关闭 + body scroll lock + overlay click dismiss
+- **`ui/Button.tsx`（新增）**：设计系统按钮组件（封装 `.btn` class 矩阵）
+- **`ui/index.ts`（新增）**：统一导出
+
+**Ant Design 5 主题集成：**
+
+- **`antd-theme.ts`（新增）**：完整 `ThemeConfig` — 全局 token（colorPrimary=brand / colorSuccess=green / colorError=red / colorWarning=amber / colorLink=blue / 中性色=ink 系列 / borderRadius=6 / fontFamily=Inter）；组件级覆盖（Button / Modal / Popconfirm / Message / Notification / Tag / Input / Select / Tabs / Switch）
+- **`App.tsx`（修改）**：顶层包裹 `<ConfigProvider locale={zhCN} theme={antdTheme}>`，全应用 Ant Design 组件自动对齐深青品牌色
+
+**全局样式清理：**
+
+- **`index.css`（精简）**：移除全部内联 token 定义（~90 行），改为 `@import` theme.css / buttons.css / feedback.css / dialog.css / antd-overrides.css；`:root` 仅保留 font / color / background 引用语义 token；移除 `button` / `h1` / `@media` 等 Vite 模板残留
+- **`App.css`（迁移）**：`--color-gray-*` → `--ink` / `--bg`
+
+**组件迁移（~228 文件）：**
+
+- 所有 `.module.css` 文件中的 `var(--color-gray-*)` / `var(--color-blue-*)` / `var(--color-green-*)` / `var(--color-red-*)` 批量迁移至语义 token（`var(--ink)` / `var(--bg)` / `var(--brand)` / `var(--green)` / `var(--red)` 等）
+- `ConfirmDialog.module.css` 删除 — 改用 `ui/Dialog` 基元 + `dialog.css` class
+- `ConfirmDialog.tsx` 重构 — 基于 `Dialog` shell + 设计系统按钮，新增 `size` / `showClose` prop，deprecated `onClose` 保留兼容
+- 多个组件 `.tsx` 文件中的 inline style 硬编码色值改用 `tokens.ts` 导出
+- `SimpleNotification.tsx` / `SimpleToast.tsx` / `FeedbackBanner.tsx` 迁移至 feedback.css 基元 class
+
+### 19. 样式 README 文档
+
+- **`styles/README.md`（新增）**：设计系统使用指南 — token 层级说明、CSS 基元用法、组件集成示例
+
+---
+
+## 修改文件（v0.8.1 设计系统 + Token 迁移）
+
+### 前端 — 设计系统核心
+
+- `frontend/src/styles/theme.css` — **新增**：全局 design token 定义（surface/ink/brand/semantic 色阶 + focus ring + status alias + legacy 兼容层 + spacing/radius/shadow/font）
+- `frontend/src/styles/tokens.ts` — **新增**：JS/TS token 对象（colors / rings / statusColors / statusColor helper）
+- `frontend/src/styles/variables.css` — 移除硬编码 token，改为 `@import './theme.css'` 兼容 shim
+- `frontend/src/styles/v3-theme.css` — 色阶引用对齐 `theme.css` 语义 token
+- `frontend/src/styles/buttons.css` — **新增**：`.btn` 基元（4 色 × 3 档 × 4 尺寸 + loading/icon/badge/group/toolbar）
+- `frontend/src/styles/dialog.css` — **新增**：`.tn-overlay` / `.tn-dialog` 弹窗壳 + Ant Design Modal/Popconfirm 对齐
+- `frontend/src/styles/feedback.css` — **新增**：Toast / Notice / Banner / Badge 反馈基元
+- `frontend/src/styles/antd-overrides.css` — **新增**：Ant Design focus ring / Modal / Notification / Tag / Progress 软覆盖
+- `frontend/src/styles/antd-theme.ts` — **新增**：Ant Design 5 ThemeConfig（全局 token + 组件级覆盖）
+- `frontend/src/styles/README.md` — **新增**：设计系统使用文档
+- `frontend/src/components/ui/Dialog.tsx` — **新增**：Portal 弹窗壳组件
+- `frontend/src/components/ui/Button.tsx` — **新增**：设计系统按钮组件
+- `frontend/src/components/ui/index.ts` — **新增**：统一导出
+
+### 前端 — 入口与全局样式
+
+- `frontend/src/App.tsx` — 顶层包裹 `<ConfigProvider locale={zhCN} theme={antdTheme}>`
+- `frontend/src/App.css` — `--color-gray-*` → `--ink` / `--bg` 迁移
+- `frontend/src/index.css` — 移除内联 token，改为 `@import` 五个设计系统文件；移除 Vite 模板残留
+- `frontend/src/main.tsx` — v3-theme import 注释更新
+
+### 前端 — 组件迁移（CSS token 替换）
+
+- `frontend/src/components/ConfirmDialog.tsx` — 基于 `Dialog` shell 重构，新增 `size` / `showClose` prop
+- `frontend/src/components/ConfirmDialog.module.css` — **删除**（改用 `dialog.css` 基元）
+- `frontend/src/components/SimpleNotification.tsx` — 迁移至 feedback.css 基元
+- `frontend/src/components/SimpleToast.tsx` — 迁移至 feedback.css 基元
+- `frontend/src/components/FeedbackBanner.tsx` — 迁移至 feedback.css 基元
+- `frontend/src/components/TopBar.tsx` / `Layout.tsx` / `AuthProvider.tsx` / `ProtectedRoute.tsx` — token 迁移
+- `frontend/src/components/DynamicForm/` — 全部 `.module.css` token 迁移
+- `frontend/src/components/OpenAPIFormRenderer/` — 全部 `.module.css` + widget `.tsx` token 迁移
+- `frontend/src/components/OpenAPISchemaEditor/` — `.module.css` + `index.tsx` token 迁移
+- `frontend/src/components/ModuleSchemaV2/` — `.module.css` + `.tsx` token 迁移
+- `frontend/src/components/ModuleReference/` — `.module.css` + `.tsx` token 迁移
+- `frontend/src/components/SourceVersionCard/` — `.module.css` token 迁移
+- `frontend/src/components/StateResourceViewer/` — `.module.css` token 迁移
+- `frontend/src/components/HCLEditor/` / `HCLView/` — `.module.css` token 迁移
+- `frontend/src/components/JsonDiff/` — `.module.css` token 迁移
+- `frontend/src/components/DriftConfig/` / `DriftStatusTag/` — token 迁移
+- 其余 ~100+ 组件 `.module.css` 文件 — 统一 `--color-*` → 语义 token 替换
+- `frontend/src/pages/` — 全部页面 `.module.css` + 部分 `.tsx` 文件 token 迁移
+- `frontend/src/pages/admin/` — 全部管理页面 `.module.css` + 部分 `.tsx` token 迁移
+- `frontend/src/pages/admin/ManifestEditorV2/` — `.module.css` + `.tsx` token 迁移
+
+---
+
+## 技术细节（v0.8.1 设计系统）
+
+### Token 架构分层
+
+```
+theme.css (single source of truth)
+  ├── 语义 token: --bg / --surface / --ink / --brand / --green / --red / --amber / --blue
+  ├── 语义别名: --status-success / --color-primary / --brand-ink / --brand-soft
+  ├── Legacy 兼容: --color-gray-* → surface/ink, --color-blue-* → brand, --color-green/red-* → semantic
+  ├── 布局 token: --spacing-* / --radius-* / --shadow-* / --font-*
+  └── Focus ring: --ring-brand / --ring-green / --ring-red / --ring-amber / --ring-blue
+
+tokens.ts (JS mirror)
+  ├── colors: { bg, surface, ink, brand, green, red, amber, blue, ... }
+  ├── rings: { brand, green, red, amber, blue }
+  └── statusColors: { success, error, danger, warning, info }
+
+antd-theme.ts (Ant Design bridge)
+  └── ThemeConfig: global token + per-component overrides
+
+v3-theme.css (v3 scope overlay)
+  └── [data-ui-version="v3"] { --v3-gray-*: var(--bg/ink), --v3-blue-*: var(--brand-*) }
+```
+
+### 色板设计决策
+
+- **Brand 深青 (#1c6e8c)** 作为唯一主色 — 主操作按钮、Tab 选中态、品牌强调均使用，替代旧蓝色系 (#3B82F6)
+- **Blue 限定非按钮场景** — 仅用于链接文字、输入聚焦环、进度条 fill，避免与 brand 按钮混淆
+- **语义色独立于品牌色** — green（成功）/ red（危险）/ amber（警告）不随 brand 变化，保证状态含义稳定
+- **Legacy alias 策略** — `--color-blue-600` → `var(--brand-600)`，未迁移组件自动从蓝色切到深青，无需逐文件修改即可生效
+
+### CSS 基元设计
+
+- **Button 矩阵** — 通过组合 class（`.btn .solid .brand`）而非 CSS-in-JS 实现，与 Ant Design Button 互不干扰
+- **Dialog shell** — `createPortal` 到 `document.body`，避免父级 `overflow: hidden` 裁切；统一 `.tn-overlay` + `.tn-dialog` class 便于全局样式覆盖
+- **Feedback 基元** — Toast（左色条卡片）、Notice（填充条）、Banner（inline alert）、Badge（pill）四种形态覆盖所有反馈场景，每种形态含 4 色变体

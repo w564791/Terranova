@@ -306,7 +306,7 @@ const DriftConfigComponent: React.FC<DriftConfigProps> = ({ workspaceId }) => {
                             <span>
                               失败后继续
                               <Tooltip title="当 Drift 检测失败时，是否在下一个检测周期继续尝试检测">
-                                <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                                <InfoCircleOutlined style={{ marginLeft: 8, color: 'var(--ink-3)' }} />
                               </Tooltip>
                             </span>
                           }
@@ -326,7 +326,7 @@ const DriftConfigComponent: React.FC<DriftConfigProps> = ({ workspaceId }) => {
                             <span>
                               成功后继续
                               <Tooltip title="当 Drift 检测成功时，是否在下一个检测周期继续检测">
-                                <InfoCircleOutlined style={{ marginLeft: 8, color: '#999' }} />
+                                <InfoCircleOutlined style={{ marginLeft: 8, color: 'var(--ink-3)' }} />
                               </Tooltip>
                             </span>
                           }

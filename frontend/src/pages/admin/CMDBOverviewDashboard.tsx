@@ -76,7 +76,7 @@ const CMDBOverviewDashboard: React.FC = () => {
     const queries = [...searchAnalytics.top_queries].slice(0, 30);
     const maxCount = Math.max(...queries.map(q => q.count));
     const minCount = Math.min(...queries.map(q => q.count));
-    const colors = ['#1677ff','#597ef7','#85a5ff','#9333ea','#f759ab','#fa8c16','#52c41a','#13c2c2','#ff4d4f','#faad14'];
+    const colors = ['var(--brand)','var(--brand)','var(--brand-300)','var(--brand)','#f759ab','var(--amber)','var(--green)','#13c2c2','var(--red)','var(--amber)'];
     const rotations = [-5, 0, 0, 0, 5];
     // 随机打乱
     for (let i = queries.length - 1; i > 0; i--) {
@@ -101,7 +101,7 @@ const CMDBOverviewDashboard: React.FC = () => {
   if (!data) return <div className={styles.emptyHint}>暂无数据</div>;
 
   const coverageColor = (pct: number) =>
-    pct >= 90 ? '#52c41a' : pct >= 60 ? '#fa8c16' : '#ff4d4f';
+    pct >= 90 ? 'var(--green)' : pct >= 60 ? 'var(--amber)' : 'var(--red)';
 
   const formatTime = (ts?: string) => {
     if (!ts) return '-';
@@ -124,7 +124,7 @@ const CMDBOverviewDashboard: React.FC = () => {
           <div className={styles.cardHint}>
             {data.sources.external_source_healthy} 正常
             {data.sources.external_source_error > 0 && (
-              <span style={{ color: '#ff4d4f' }}> / {data.sources.external_source_error} 异常</span>
+              <span style={{ color: 'var(--red)' }}> / {data.sources.external_source_error} 异常</span>
             )}
           </div>
         </div>
@@ -216,7 +216,7 @@ const CMDBOverviewDashboard: React.FC = () => {
                 <div className={styles.searchMetricLabel}>搜索次数</div>
               </div>
               <div className={styles.searchMetric}>
-                <div className={styles.searchMetricValue} style={{ color: searchAnalytics.usage.zero_result_rate > 20 ? '#ff4d4f' : undefined }}>
+                <div className={styles.searchMetricValue} style={{ color: searchAnalytics.usage.zero_result_rate > 20 ? 'var(--red)' : undefined }}>
                   {searchAnalytics.usage.zero_result_rate.toFixed(1)}%
                 </div>
                 <div className={styles.searchMetricLabel}>零结果率</div>
@@ -230,7 +230,7 @@ const CMDBOverviewDashboard: React.FC = () => {
                 <div className={styles.searchMetricLabel}>平均耗时</div>
               </div>
               <div className={styles.searchMetric}>
-                <div className={styles.searchMetricValue} style={{ color: searchAnalytics.quality.fallback_rate > 30 ? '#ff4d4f' : undefined }}>
+                <div className={styles.searchMetricValue} style={{ color: searchAnalytics.quality.fallback_rate > 30 ? 'var(--red)' : undefined }}>
                   {searchAnalytics.quality.fallback_rate.toFixed(1)}%
                 </div>
                 <div className={styles.searchMetricLabel}>Fallback 率</div>
@@ -246,12 +246,12 @@ const CMDBOverviewDashboard: React.FC = () => {
                   {Object.entries(searchAnalytics.quality.method_distribution).map(([method, count]) => {
                     const total = searchAnalytics.usage.total_searches;
                     const pct = total > 0 ? (count as number) / total * 100 : 0;
-                    const barColors: Record<string, string> = { hybrid: '#1677ff', vector: '#52c41a', keyword: '#fa8c16' };
+                    const barColors: Record<string, string> = { hybrid: 'var(--brand)', vector: 'var(--green)', keyword: 'var(--amber)' };
                     return (
                       <div key={method} className={styles.methodBarRow}>
                         <span className={styles.methodBarLabel}>{method}</span>
                         <div className={styles.methodBarTrack}>
-                          <div className={styles.methodBarFill} style={{ width: `${pct}%`, background: barColors[method] || '#999' }} />
+                          <div className={styles.methodBarFill} style={{ width: `${pct}%`, background: barColors[method] || 'var(--ink-3)' }} />
                         </div>
                         <span className={styles.methodBarCount}>{count as number}</span>
                       </div>
@@ -314,7 +314,7 @@ const CMDBOverviewDashboard: React.FC = () => {
               <span className={styles.queueSep}>/</span>
               <span>{data.queue.embedding_processing}</span>
               <span className={styles.queueSep}>/</span>
-              <span style={{ color: data.queue.embedding_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.embedding_failed}</span>
+              <span style={{ color: data.queue.embedding_failed > 0 ? 'var(--red)' : undefined }}>{data.queue.embedding_failed}</span>
             </span>
           </div>
           <div className={styles.queueRow}>
@@ -324,7 +324,7 @@ const CMDBOverviewDashboard: React.FC = () => {
               <span className={styles.queueSep}>/</span>
               <span>{data.queue.summary_processing}</span>
               <span className={styles.queueSep}>/</span>
-              <span style={{ color: data.queue.summary_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.summary_failed}</span>
+              <span style={{ color: data.queue.summary_failed > 0 ? 'var(--red)' : undefined }}>{data.queue.summary_failed}</span>
             </span>
           </div>
           <div className={styles.queueRow}>
@@ -334,7 +334,7 @@ const CMDBOverviewDashboard: React.FC = () => {
               <span className={styles.queueSep}>/</span>
               <span>{data.queue.ext_embedding_processing}</span>
               <span className={styles.queueSep}>/</span>
-              <span style={{ color: data.queue.ext_embedding_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.ext_embedding_failed}</span>
+              <span style={{ color: data.queue.ext_embedding_failed > 0 ? 'var(--red)' : undefined }}>{data.queue.ext_embedding_failed}</span>
             </span>
           </div>
           <div className={styles.queueRow}>
@@ -344,14 +344,14 @@ const CMDBOverviewDashboard: React.FC = () => {
               <span className={styles.queueSep}>/</span>
               <span>{data.queue.assessment_processing}</span>
               <span className={styles.queueSep}>/</span>
-              <span style={{ color: data.queue.assessment_failed > 0 ? '#ff4d4f' : undefined }}>{data.queue.assessment_failed}</span>
+              <span style={{ color: data.queue.assessment_failed > 0 ? 'var(--red)' : undefined }}>{data.queue.assessment_failed}</span>
             </span>
           </div>
           {data.queue.assessment_partial > 0 && (
             <div className={styles.queueRow}>
-              <span className={styles.queueLabel} style={{ paddingLeft: 16, fontSize: 12, color: '#fa8c16' }}>L2/L3 待补偿</span>
+              <span className={styles.queueLabel} style={{ paddingLeft: 16, fontSize: 12, color: 'var(--amber)' }}>L2/L3 待补偿</span>
               <span className={styles.queueCounts}>
-                <span style={{ color: '#fa8c16' }}>{data.queue.assessment_partial} 个资源</span>
+                <span style={{ color: 'var(--amber)' }}>{data.queue.assessment_partial} 个资源</span>
               </span>
             </div>
           )}
@@ -363,7 +363,7 @@ const CMDBOverviewDashboard: React.FC = () => {
             const items = data.resources.type_top10;
             if (!items?.length) return null;
             const maxVal = items[0].count;
-            const barColors = ['#1677ff','#597ef7','#85a5ff','#adc6ff','#bae7ff','#87e8de','#b7eb8f','#ffe58f','#ffd591','#ffbb96'];
+            const barColors = ['var(--brand)','var(--brand)','var(--brand-300)','var(--brand-200)','var(--brand-100)','#87e8de','var(--green-line)','var(--amber-line)','var(--amber-line)','#ffbb96'];
             const top10Total = items.reduce((sum, t) => sum + t.count, 0);
             const otherCount = data.resources.total - top10Total;
             return (
@@ -392,22 +392,22 @@ const CMDBOverviewDashboard: React.FC = () => {
                         className={styles.sourceBarFill}
                         style={{
                           width: data.resources.total > 0 ? `${(data.resources.from_workspace / data.resources.total * 100).toFixed(1)}%` : '0%',
-                          background: '#1677ff',
+                          background: 'var(--brand)',
                         }}
                       />
                       <div
                         className={styles.sourceBarFill}
                         style={{
                           width: data.resources.total > 0 ? `${(data.resources.from_external / data.resources.total * 100).toFixed(1)}%` : '0%',
-                          background: '#fa8c16',
+                          background: 'var(--amber)',
                         }}
                       />
                     </div>
                     <span className={styles.sourceBarSpacer} />
                   </div>
                   <div className={styles.sourceBarLegend}>
-                    <span><span className={styles.legendDot} style={{ background: '#1677ff' }} />Workspace {data.resources.from_workspace}</span>
-                    <span><span className={styles.legendDot} style={{ background: '#fa8c16' }} />外部源 {data.resources.from_external}</span>
+                    <span><span className={styles.legendDot} style={{ background: 'var(--brand)' }} />Workspace {data.resources.from_workspace}</span>
+                    <span><span className={styles.legendDot} style={{ background: 'var(--amber)' }} />外部源 {data.resources.from_external}</span>
                   </div>
                 </div>
               </>

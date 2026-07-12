@@ -5,7 +5,7 @@
 .loading {
   text-align: center;
   padding: 48px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .section {
@@ -15,14 +15,14 @@
 .section h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 16px 0;
 }
 
 /* Current Agent Styles */
 .currentAgent {
-  background: #e6f7ff;
-  border: 2px solid #91d5ff;
+  background: var(--brand-soft);
+  border: 2px solid var(--brand-200);
   border-radius: 8px;
   padding: 16px;
   display: flex;
@@ -31,8 +31,8 @@
 }
 
 .noAgent {
-  background: #fafafa;
-  border: 1px dashed #d9d9d9;
+  background: var(--bg);
+  border: 1px dashed var(--line-2);
   border-radius: 8px;
   padding: 24px;
   text-align: center;
@@ -40,12 +40,12 @@
 
 .noAgent p {
   margin: 0 0 8px 0;
-  color: #595959;
+  color: var(--ink-2);
 }
 
 .hint {
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--ink-3);
 }
 
 /* Agent Info Styles */
@@ -56,7 +56,7 @@
 .agentName {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin-bottom: 4px;
   display: flex;
   align-items: center;
@@ -65,7 +65,7 @@
 
 .agentId {
   font-size: 13px;
-  color: #8c8c8c;
+  color: var(--ink-3);
   font-family: 'Monaco', 'Menlo', monospace;
   margin-bottom: 8px;
 }
@@ -80,16 +80,16 @@
 .version,
 .ip {
   font-size: 12px;
-  color: #595959;
+  color: var(--ink-2);
   background: white;
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
 }
 
 .allowedAt {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--ink-3);
   margin-top: 8px;
 }
 
@@ -102,26 +102,26 @@
 }
 
 .statusIdle {
-  background: #f6ffed;
-  color: #52c41a;
-  border: 1px solid #b7eb8f;
+  background: var(--green-soft);
+  color: var(--green);
+  border: 1px solid var(--green-line);
 }
 
 .statusBusy {
-  background: #fff7e6;
-  color: #fa8c16;
-  border: 1px solid #ffd591;
+  background: var(--amber-soft);
+  color: var(--amber);
+  border: 1px solid var(--amber-line);
 }
 
 .statusOffline {
-  background: #fff1f0;
-  color: #ff4d4f;
-  border: 1px solid #ffccc7;
+  background: var(--red-soft);
+  color: var(--red);
+  border: 1px solid var(--red-line);
 }
 
 .currentBadge {
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -130,8 +130,8 @@
 
 /* Agent List Styles */
 .emptyState {
-  background: #fafafa;
-  border: 1px dashed #d9d9d9;
+  background: var(--bg);
+  border: 1px dashed var(--line-2);
   border-radius: 8px;
   padding: 32px;
   text-align: center;
@@ -139,7 +139,7 @@
 
 .emptyState p {
   margin: 0 0 8px 0;
-  color: #595959;
+  color: var(--ink-2);
 }
 
 .agentList {
@@ -149,7 +149,7 @@
 
 .agentCard {
   background: white;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   padding: 16px;
   display: flex;
@@ -159,14 +159,14 @@
 }
 
 .agentCard:hover {
-  border-color: #40a9ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand-400);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.1);
 }
 
 .currentCard {
-  border-color: #1890ff;
+  border-color: var(--brand);
   border-width: 2px;
-  background: #f0f9ff;
+  background: var(--brand-soft);
 }
 
 /* Action Buttons */
@@ -187,25 +187,25 @@
 }
 
 .setCurrentButton {
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
 }
 
 .setCurrentButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .revokeButton {
   background: white;
-  color: #ff4d4f;
-  border: 1px solid #ff4d4f;
+  color: var(--red);
+  border: 1px solid var(--red);
 }
 
 .revokeButton:hover {
-  background: #fff1f0;
-  border-color: #ff7875;
-  color: #ff7875;
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  color: var(--red-line);
 }
 
 /* Responsive Design */
@@ -243,13 +243,13 @@
 }
 
 .poolTypeStatic {
-  background: #e6f7ff;
-  color: #0958d9;
-  border: 1px solid #91d5ff;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-200);
 }
 
 .poolTypeK8s {
-  background: #f6ffed;
-  color: #389e0d;
-  border: 1px solid #b7eb8f;
+  background: var(--green-soft);
+  color: var(--green-active);
+  border: 1px solid var(--green-line);
 }

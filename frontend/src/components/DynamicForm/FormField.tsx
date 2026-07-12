@@ -566,7 +566,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         {schema.force_new && (
           <span 
             className={styles.forceNew} 
-            style={{ color: schema.color || '#ff9800' }}
+            style={{ color: schema.color || 'var(--amber)' }}
             title="修改此字段将强制重建资源"
           >
             

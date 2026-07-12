@@ -11,23 +11,23 @@
   align-items: center;
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--line);
 }
 
 .header h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .summary {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .summary strong {
-  color: #3b82f6;
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -38,7 +38,7 @@
 .searchInput {
   width: 100%;
   padding: 10px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   transition: all 0.2s;
@@ -46,14 +46,14 @@
 
 .searchInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .tableContainer {
   overflow-x: auto;
   margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
@@ -64,26 +64,26 @@
 }
 
 .table thead {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .table th {
   padding: 12px 16px;
   text-align: left;
   font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid #e5e7eb;
+  color: var(--ink);
+  border-bottom: 2px solid var(--line);
   user-select: none;
   white-space: nowrap;
 }
 
 .table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
   transition: background-color 0.2s;
 }
 
 .table tbody tr:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .table tbody tr:last-child {
@@ -92,18 +92,18 @@
 
 .table td {
   padding: 12px 16px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .fieldName {
   font-weight: 500;
-  color: #111827;
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
 }
 
 .alias {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-left: 8px;
   font-weight: 400;
   font-family: inherit;
@@ -112,8 +112,8 @@
 .basicLevel {
   display: inline-block;
   padding: 2px 8px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -122,20 +122,20 @@
 .advancedLevel {
   display: inline-block;
   padding: 2px 8px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
 }
 
 .required {
-  color: #10b981;
+  color: var(--green);
   font-weight: 600;
 }
 
 .optional {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .defaultValue {
@@ -174,27 +174,27 @@
 }
 
 .editButton {
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .editButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .deleteButton {
-  background: #ef4444;
-  color: white;
+  background: var(--red);
+  color: #fff;
 }
 
 .deleteButton:hover {
-  background: #dc2626;
+  background: var(--red-hover);
 }
 
 .emptyState {
   text-align: center;
   padding: 48px 16px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-style: italic;
 }
 
@@ -203,7 +203,7 @@
   justify-content: flex-end;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
 }
 
 .saveButton,
@@ -218,19 +218,19 @@
 }
 
 .saveButton {
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .saveButton:hover {
-  background: #059669;
+  background: var(--green-hover);
 }
 
 .cancelButton {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .cancelButton:hover {
-  background: #d1d5db;
+  background: var(--line-2);
 }

@@ -1,7 +1,7 @@
 /* 页面包装器 - 整体外框 */
 .pageWrapper {
   min-height: 100vh;
-  background: #f3f4f6;
+  background: var(--surface-2);
   padding: 24px;
 }
 
@@ -22,15 +22,15 @@
   align-items: center;
   justify-content: center;
   padding: 100px 20px;
-  color: #6b7280;
+  color: var(--ink-2);
   gap: 16px;
 }
 
 .spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #6366f1;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -42,7 +42,7 @@
 .error {
   text-align: center;
   padding: 100px 20px;
-  color: #ef4444;
+  color: var(--red);
   font-size: 16px;
 }
 
@@ -60,7 +60,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
   cursor: pointer;
   padding: 8px 0;
@@ -68,7 +68,7 @@
 }
 
 .backButton:hover {
-  color: #6366f1;
+  color: var(--brand);
 }
 
 .backIcon {
@@ -87,43 +87,43 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  color: #374151;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
 }
 
 .topBtn:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 .topBtn.success {
-  background: #dcfce7;
-  border-color: #86efac;
-  color: #166534;
+  background: var(--green-soft);
+  border-color: var(--green-line);
+  color: var(--green-active);
 }
 
 .topBtn.success:hover {
-  background: #bbf7d0;
+  background: var(--green-line);
 }
 
 .topBtn.warning {
-  background: #fef3c7;
-  border-color: #fcd34d;
-  color: #92400e;
+  background: var(--amber-soft);
+  border-color: var(--amber-line);
+  color: var(--amber-hover);
 }
 
 .topBtn.warning:hover {
-  background: #fde68a;
+  background: var(--amber-line);
 }
 
 .topBtn.danger {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #991b1b;
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  color: var(--red-active);
 }
 
 .topBtn.danger:hover:not(:disabled) {
-  background: #fecaca;
+  background: var(--red-line);
 }
 
 .topBtn:disabled {
@@ -152,8 +152,8 @@
 }
 
 .providerBadge {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand) 100%);
+  color: #fff;
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 11px;
@@ -169,30 +169,30 @@
 }
 
 .statusDot.active {
-  background: #22c55e;
+  background: var(--green);
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
 }
 
 .statusDot.inactive {
-  background: #9ca3af;
+  background: var(--ink-faint);
 }
 
 .statusText {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .moduleName {
   font-size: 32px;
   font-weight: 700;
-  color: #111827;
+  color: var(--ink);
   margin: 0 0 8px 0;
   line-height: 1.2;
 }
 
 .moduleDescription {
   font-size: 15px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin: 0;
   line-height: 1.5;
 }
@@ -205,7 +205,7 @@
 
 .versionLabel {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 6px;
@@ -221,7 +221,7 @@
   gap: 8px;
   padding: 10px 16px;
   background: white;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--line);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
@@ -229,18 +229,18 @@
 }
 
 .versionButton:hover {
-  border-color: #6366f1;
+  border-color: var(--brand);
 }
 
 .versionNumber {
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: var(--ink);
 }
 
 .defaultTag {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 10px;
@@ -249,7 +249,7 @@
 
 .dropdownArrow {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   margin-left: auto;
 }
 
@@ -258,7 +258,7 @@
   top: calc(100% + 8px);
   right: 0;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
   z-index: 100;
@@ -270,16 +270,16 @@
   padding: 14px 16px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
   position: relative;
 }
 
 .versionItem:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .versionItem.active {
-  background: #eef2ff;
+  background: var(--brand-soft);
 }
 
 .versionItemInfo {
@@ -291,12 +291,12 @@
 
 .versionItemNumber {
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .versionItemMeta {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .versionActions {
@@ -316,46 +316,46 @@
 
 .setDefaultBtn {
   padding: 4px 10px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border: none;
   border-radius: 6px;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--ink-2);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .setDefaultBtn:hover {
-  background: #6366f1;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .deleteVersionBtn {
   padding: 4px 10px;
-  background: #fef2f2;
+  background: var(--red-soft);
   border: none;
   border-radius: 6px;
   font-size: 11px;
-  color: #dc2626;
+  color: var(--red-hover);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .deleteVersionBtn:hover {
-  background: #dc2626;
-  color: white;
+  background: var(--red-hover);
+  color: #fff;
 }
 
 .addVersionItem {
   padding: 14px 16px;
-  color: #6366f1;
+  color: var(--brand);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .addVersionItem:hover {
-  background: #eef2ff;
+  background: var(--brand-soft);
 }
 
 /* Source 信息条 */
@@ -364,8 +364,8 @@
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 10px;
   margin-bottom: 24px;
 }
@@ -373,7 +373,7 @@
 .sourceLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   flex-shrink: 0;
@@ -382,7 +382,7 @@
 .sourceCode {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
   background: none;
   word-break: break-all;
 }
@@ -401,15 +401,15 @@
   gap: 14px;
   padding: 16px 20px;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .quickAction:hover {
-  border-color: #6366f1;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.1);
 }
 
 .quickActionIcon {
@@ -418,9 +418,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 10px;
-  color: #6366f1;
+  color: var(--brand);
   flex-shrink: 0;
 }
 
@@ -438,30 +438,30 @@
 .quickActionTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .quickActionDesc {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .quickActionArrow {
   font-size: 18px;
-  color: #d1d5db;
+  color: var(--line-2);
   margin-left: auto;
   transition: all 0.2s;
 }
 
 .quickAction:hover .quickActionArrow {
-  color: #6366f1;
+  color: var(--brand);
   transform: translateX(4px);
 }
 
 /* 区块样式 */
 .section {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 12px;
   margin-bottom: 20px;
   overflow: hidden;
@@ -474,7 +474,7 @@
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -487,7 +487,7 @@
   display: flex;
   gap: 32px;
   padding: 16px 20px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 10px;
 }
 
@@ -499,14 +499,14 @@
 
 .infoLabel {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .infoValue {
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -557,14 +557,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand) 100%);
   flex-shrink: 0;
 }
 
 .drawerTitle {
   font-size: 17px;
   font-weight: 600;
-  color: white;
+  color: #fff;
   margin: 0;
   display: flex;
   align-items: center;
@@ -579,7 +579,7 @@
   justify-content: center;
   background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
-  color: white;
+  color: #fff;
 }
 
 .drawerTitleIcon svg {
@@ -597,7 +597,7 @@
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  color: white;
+  color: #fff;
   transition: all 0.2s;
 }
 
@@ -614,12 +614,12 @@
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  background: #fafbfc;
+  background: var(--bg);
 }
 
 .drawerFooter {
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -630,7 +630,7 @@
 /* 内联表单样式 */
 .inlineForm {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 16px;
@@ -640,13 +640,13 @@
 .inlineFormHeader {
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .inlineFormTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -672,7 +672,7 @@
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   margin-bottom: 6px;
 }
 
@@ -680,7 +680,7 @@
 .inlineFormSelect {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -691,18 +691,18 @@
 .inlineFormInput:focus,
 .inlineFormSelect:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.1);
 }
 
 .inlineFormInput::placeholder {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .inlineFormTextarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
@@ -714,17 +714,17 @@
 
 .inlineFormTextarea:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.1);
 }
 
 .inlineFormTextarea::placeholder {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .inlineFormHint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   margin-top: 4px;
   margin-bottom: 0;
 }
@@ -742,13 +742,13 @@
   gap: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
 }
 
 .inlineCheckboxLabel input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #6366f1;
+  accent-color: var(--brand);
   cursor: pointer;
 }
 
@@ -760,8 +760,8 @@
 
 .inlineFormSubmit {
   padding: 10px 20px;
-  background: #6366f1;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -771,7 +771,7 @@
 }
 
 .inlineFormSubmit:hover:not(:disabled) {
-  background: #4f46e5;
+  background: var(--brand-ink);
 }
 
 .inlineFormSubmit:disabled {
@@ -781,9 +781,9 @@
 
 .inlineFormCancel {
   padding: 10px 20px;
-  background: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -792,8 +792,8 @@
 }
 
 .inlineFormCancel:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--line);
+  color: var(--ink);
 }
 
 /* 保留旧的弹窗样式用于确认对话框 */
@@ -803,15 +803,17 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 16px;
   padding: 28px;
   width: 400px;
@@ -822,7 +824,7 @@
 .modalTitle {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
   margin: 0 0 24px 0;
 }
 
@@ -834,7 +836,7 @@
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   margin-bottom: 8px;
 }
 
@@ -842,7 +844,7 @@
 .select {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -852,8 +854,8 @@
 .input:focus,
 .select:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.1);
 }
 
 .checkboxLabel {
@@ -866,7 +868,7 @@
 .checkboxLabel input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #6366f1;
+  accent-color: var(--brand);
 }
 
 .modalActions {
@@ -887,23 +889,23 @@
 }
 
 .cancelBtn {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  color: #6b7280;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
 }
 
 .cancelBtn:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 .confirmBtn {
-  background: #6366f1;
+  background: var(--brand);
   border: none;
-  color: white;
+  color: #fff;
 }
 
 .confirmBtn:hover {
-  background: #4f46e5;
+  background: var(--brand-ink);
 }
 
 .confirmBtn:disabled {
@@ -920,12 +922,12 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   margin-bottom: 8px;
 }
 
 .drawerFormGroup .required {
-  color: #ef4444;
+  color: var(--red);
   margin-left: 2px;
 }
 
@@ -934,7 +936,7 @@
 .drawerTextarea {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 10px;
   font-size: 14px;
   transition: all 0.2s;
@@ -946,13 +948,13 @@
 .drawerSelect:focus,
 .drawerTextarea:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.1);
 }
 
 .drawerInput::placeholder,
 .drawerTextarea::placeholder {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .drawerTextarea {
@@ -967,21 +969,21 @@
   gap: 12px;
   cursor: pointer;
   padding: 14px 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 10px;
   transition: all 0.2s;
 }
 
 .drawerCheckboxLabel:hover {
-  border-color: #6366f1;
-  background: #eef2ff;
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .drawerCheckboxLabel input[type="checkbox"] {
   width: 20px;
   height: 20px;
-  accent-color: #6366f1;
+  accent-color: var(--brand);
   cursor: pointer;
 }
 
@@ -994,30 +996,30 @@
 .drawerCheckboxTitle {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--ink);
 }
 
 .drawerCheckboxDesc {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .drawerHint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   margin-top: 6px;
 }
 
 .drawerDivider {
   height: 1px;
-  background: #e5e7eb;
+  background: var(--line);
   margin: 24px 0;
 }
 
 .drawerSectionTitle {
   font-size: 12px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 16px;
@@ -1088,8 +1090,8 @@
 
 /* AI 提示词区块 */
 .promptsSection {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
@@ -1108,18 +1110,18 @@
   gap: 8px;
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .promptsIcon {
-  color: #6366f1;
+  color: var(--brand);
   flex-shrink: 0;
 }
 
 .addPromptBtn {
   padding: 8px 16px;
-  background: #6366f1;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 13px;
@@ -1129,7 +1131,7 @@
 }
 
 .addPromptBtn:hover {
-  background: #4f46e5;
+  background: var(--brand-ink);
 }
 
 /* 空状态 */
@@ -1138,24 +1140,24 @@
   padding: 32px 20px;
   background: white;
   border-radius: 8px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--line-2);
 }
 
 .promptsEmptyIcon {
-  color: #9ca3af;
+  color: var(--ink-faint);
   margin-bottom: 12px;
 }
 
 .promptsEmpty p {
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
   margin: 0 0 16px 0;
 }
 
 .addFirstPromptBtn {
   padding: 10px 20px;
-  background: #6366f1;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -1165,7 +1167,7 @@
 }
 
 .addFirstPromptBtn:hover {
-  background: #4f46e5;
+  background: var(--brand-ink);
 }
 
 /* 提示词列表 */
@@ -1177,15 +1179,15 @@
 
 .promptCard {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .promptCard:hover {
-  border-color: #6366f1;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.1);
 }
 
 .promptCardHeader {
@@ -1198,7 +1200,7 @@
 .promptCardTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -1224,28 +1226,28 @@
 }
 
 .promptEditBtn {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .promptEditBtn:hover {
-  background: #6366f1;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .promptDeleteBtn {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--red-soft);
+  color: var(--red-hover);
 }
 
 .promptDeleteBtn:hover {
-  background: #dc2626;
-  color: white;
+  background: var(--red-hover);
+  color: #fff;
 }
 
 .promptCardContent {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin: 0;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -1256,7 +1258,7 @@
 .textarea {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
@@ -1267,8 +1269,8 @@
 
 .textarea:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.1);
 }
 
 @media (max-width: 480px) {

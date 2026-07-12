@@ -183,7 +183,7 @@ const V1FormRenderer: React.FC<V1FormRendererProps> = ({
   }
 
   return (
-    <div style={{ padding: 16, background: '#fafafa', borderRadius: 8 }}>
+    <div style={{ padding: 16, background: 'var(--bg)', borderRadius: 8 }}>
       <Alert
         type="info"
         message="V1 Schema 预览"
@@ -191,7 +191,7 @@ const V1FormRenderer: React.FC<V1FormRendererProps> = ({
         style={{ marginBottom: 16 }}
       />
       <pre style={{ 
-        background: '#f5f5f5', 
+        background: 'var(--surface-2)', 
         padding: 16, 
         borderRadius: 4,
         maxHeight: 400,

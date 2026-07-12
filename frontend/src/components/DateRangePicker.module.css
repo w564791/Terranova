@@ -20,7 +20,7 @@
 .label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .dateButton {
@@ -29,30 +29,30 @@
   justify-content: space-between;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 13px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
   min-width: 130px;
 }
 
 .dateButton:hover {
-  border-color: var(--color-gray-400);
-  background: var(--color-gray-50);
+  border-color: var(--ink-faint);
+  background: var(--bg);
 }
 
 .dateButton:focus {
   outline: none;
-  border-color: var(--color-blue-600);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .arrow {
   font-size: 14px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   margin-top: 16px;
 }
 
@@ -62,8 +62,8 @@
   top: 100%;
   left: 0;
   margin-top: 4px;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
@@ -89,8 +89,8 @@
 }
 
 .calendar :global(.react-datepicker__header) {
-  background-color: var(--color-gray-50);
-  border-bottom: 1px solid var(--color-gray-200);
+  background-color: var(--bg);
+  border-bottom: 1px solid var(--line);
   padding: 6px 0;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
@@ -98,7 +98,7 @@
 .calendar :global(.react-datepicker__current-month) {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: 6px;
 }
 
@@ -113,7 +113,7 @@
   line-height: 28px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .calendar :global(.react-datepicker__week) {
@@ -127,46 +127,46 @@
   margin: 1px;
   border-radius: var(--radius-sm);
   font-size: 12px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .calendar :global(.react-datepicker__day:hover) {
-  background-color: var(--color-gray-100);
+  background-color: var(--surface-2);
 }
 
 .calendar :global(.react-datepicker__day--selected),
 .calendar :global(.react-datepicker__day--in-range),
 .calendar :global(.react-datepicker__day--in-selecting-range) {
-  background-color: var(--color-blue-100);
-  color: var(--color-blue-700);
+  background-color: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .calendar :global(.react-datepicker__day--range-start),
 .calendar :global(.react-datepicker__day--range-end) {
-  background-color: var(--color-blue-600);
-  color: var(--color-white);
+  background-color: var(--brand-ink);
+  color: var(--surface);
   font-weight: 600;
 }
 
 .calendar :global(.react-datepicker__day--keyboard-selected) {
-  background-color: var(--color-blue-50);
-  color: var(--color-blue-900);
+  background-color: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .calendar :global(.react-datepicker__day--outside-month) {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
 }
 
 .calendar :global(.react-datepicker__day--disabled) {
-  color: var(--color-gray-300);
+  color: var(--line-2);
   cursor: not-allowed;
 }
 
 .calendar :global(.react-datepicker__day--today) {
   font-weight: 600;
-  border: 1px solid var(--color-blue-600);
+  border: 1px solid var(--brand-ink);
 }
 
 .calendar :global(.react-datepicker__navigation) {
@@ -174,7 +174,7 @@
 }
 
 .calendar :global(.react-datepicker__navigation-icon::before) {
-  border-color: var(--color-gray-600);
+  border-color: var(--ink-2);
 }
 
 /* 操作按钮 */
@@ -183,7 +183,7 @@
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .actionRight {
@@ -193,53 +193,53 @@
 
 .clearButton {
   padding: 6px 12px;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .clearButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .cancelButton {
   padding: 6px 12px;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .cancelButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .applyButton {
   padding: 6px 16px;
-  background: var(--color-blue-600);
-  border: 1px solid var(--color-blue-600);
+  background: var(--brand-ink);
+  border: 1px solid var(--brand-ink);
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-white);
+  color: var(--surface);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .applyButton:hover:not(:disabled) {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 .applyButton:disabled {

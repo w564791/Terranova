@@ -1,8 +1,8 @@
 /* Import Module页面样式 */
 /* Schema 编辑器区域 */
 .schemaEditorSection {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
@@ -15,13 +15,13 @@
 .schemaEditorHeader h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .schemaEditorHeader p {
   font-size: 14px;
-  color: #64748b;
+  color: var(--ink-2);
   margin: 0;
 }
 
@@ -41,7 +41,7 @@
 .backButton {
   background: none;
   border: none;
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-size: var(--font-size-base);
   cursor: pointer;
   padding: var(--spacing-sm);
@@ -49,19 +49,19 @@
 }
 
 .backButton:hover {
-  color: var(--color-blue-700);
+  color: var(--brand-700);
 }
 
 .title {
   font-family: var(--font-heading);
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-bold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
 .content {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--spacing-xl);
@@ -74,7 +74,7 @@
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-xl);
   padding-bottom: var(--spacing-xl);
-  border-bottom: 2px solid var(--color-gray-200);
+  border-bottom: 2px solid var(--line);
 }
 
 .methodButton {
@@ -83,24 +83,24 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-lg);
-  border: 2px solid var(--color-gray-200);
+  border: 2px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--color-white);
+  background: var(--surface);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .methodButton:hover {
-  border-color: var(--color-blue-300);
-  background: var(--color-blue-50);
+  border-color: var(--brand-300);
+  background: var(--brand-soft);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
 .methodButton.active {
-  border-color: var(--color-blue-500);
-  background: var(--color-blue-50);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .methodIcon {
@@ -109,13 +109,13 @@
 
 .methodName {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-size: var(--font-size-base);
 }
 
 .methodDesc {
   font-size: var(--font-size-sm);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   text-align: center;
 }
 
@@ -131,7 +131,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 8px;
   margin-bottom: 24px;
 }
@@ -145,18 +145,18 @@
 .label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .required {
-  color: var(--color-red-500);
+  color: var(--red);
 }
 
 .input,
 .select,
 .textarea {
   padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   font-family: var(--font-primary);
@@ -167,8 +167,8 @@
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .textarea {
@@ -181,22 +181,22 @@
   font-size: var(--font-size-sm);
   line-height: 1.6;
   padding: 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  background: var(--color-gray-50);
+  background: var(--bg);
   resize: vertical;
 }
 
 .codeTextarea:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 /* 导入区域 */
 .importSection {
   padding: var(--spacing-lg);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
 }
 
@@ -204,7 +204,7 @@
   margin: 0 0 var(--spacing-lg) 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .sectionHeader {
@@ -219,9 +219,9 @@
 }
 
 .exampleButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-blue-300);
-  color: var(--color-blue-600);
+  background: var(--surface);
+  border: 1px solid var(--brand-300);
+  color: var(--brand-ink);
   padding: 6px 12px;
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
@@ -231,8 +231,8 @@
 }
 
 .exampleButton:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-500);
+  background: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 /* 文件上传 */
@@ -251,24 +251,24 @@
 .fileLabel {
   display: block;
   padding: var(--spacing-lg);
-  border: 2px dashed var(--color-gray-300);
+  border: 2px dashed var(--line-2);
   border-radius: var(--radius-md);
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  color: var(--color-gray-600);
-  background: var(--color-gray-50);
+  color: var(--ink-2);
+  background: var(--bg);
 }
 
 .fileLabel:hover {
-  border-color: var(--color-blue-400);
-  background: var(--color-blue-50);
-  color: var(--color-blue-600);
+  border-color: var(--brand-400);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 .or {
   text-align: center;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   margin: var(--spacing-md) 0;
   font-size: var(--font-size-sm);
 }
@@ -278,9 +278,9 @@
   align-items: flex-start;
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
-  background: var(--color-blue-50);
+  background: var(--brand-soft);
   border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-blue-500);
+  border-left: 3px solid var(--brand);
   margin-top: var(--spacing-md);
 }
 
@@ -290,7 +290,7 @@
 
 .hint p {
   margin: 0;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: var(--font-size-sm);
 }
 
@@ -300,7 +300,7 @@
   justify-content: flex-end;
   gap: var(--spacing-md);
   padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .cancelButton,
@@ -315,23 +315,23 @@
 }
 
 .cancelButton {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
-  color: var(--color-gray-700);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
 }
 
 .cancelButton:hover:not(:disabled) {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .submitButton {
-  background: var(--color-blue-500);
-  color: var(--color-white);
+  background: var(--brand);
+  color: #fff;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
   box-shadow: var(--shadow-md);
 }
 
@@ -354,11 +354,11 @@
 }
 
 .inputError {
-  border-color: var(--color-red-500) !important;
+  border-color: var(--red) !important;
 }
 
 .inputSuccess {
-  border-color: var(--color-green-500) !important;
+  border-color: var(--green) !important;
 }
 
 .checkingIcon,
@@ -383,25 +383,25 @@
 }
 
 .availableIcon {
-  color: var(--color-green-500);
+  color: var(--green);
   font-weight: bold;
 }
 
 .existsIcon {
-  color: var(--color-red-500);
+  color: var(--red);
   font-weight: bold;
 }
 
 .errorHint {
   margin: 4px 0 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-red-600);
+  color: var(--red-hover);
 }
 
 .successHint {
   margin: 4px 0 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-green-600);
+  color: var(--green-hover);
 }
 
 /* 响应式设计 */
@@ -438,19 +438,19 @@
   align-items: flex-start;
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--line);
 }
 
 .schemaEditorTitle h2 {
   margin: 0 0 8px 0;
   font-size: 24px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .schemaStats {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .schemaStats strong {
@@ -458,11 +458,11 @@
 }
 
 .basicCount {
-  color: #3b82f6;
+  color: var(--brand);
 }
 
 .advancedCount {
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .schemaEditorActions {
@@ -472,7 +472,7 @@
 
 .viewModeButton {
   padding: 8px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   background: white;
   font-size: 14px;
@@ -481,13 +481,13 @@
 }
 
 .viewModeButton:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .viewModeButton.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
 }
 
 .searchBox {
@@ -497,21 +497,21 @@
 .searchInput {
   width: 100%;
   padding: 10px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
 }
 
 .searchInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .tableContainer {
   overflow-x: auto;
   margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
@@ -522,35 +522,35 @@
 }
 
 .schemaTable thead {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .schemaTable th {
   padding: 12px 16px;
   text-align: left;
   font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid #e5e7eb;
+  color: var(--ink);
+  border-bottom: 2px solid var(--line);
   white-space: nowrap;
 }
 
 .schemaTable tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
   transition: background-color 0.2s;
 }
 
 .schemaTable tbody tr:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .schemaTable td {
   padding: 12px 16px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .fieldNameCell {
   font-weight: 500;
-  color: #111827;
+  color: var(--ink);
 }
 
 .fieldName {
@@ -559,7 +559,7 @@
 
 .fieldAlias {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-left: 8px;
   font-weight: 400;
 }
@@ -576,31 +576,31 @@
 }
 
 .levelBadge.basicLevel {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .levelBadge.basicLevel:hover {
-  background: #bfdbfe;
+  background: var(--brand-200);
 }
 
 .levelBadge.advancedLevel {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .levelBadge.advancedLevel:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 .requiredBadge.required {
-  background: #d1fae5;
-  color: #059669;
+  background: var(--green-soft);
+  color: var(--green-hover);
 }
 
 .requiredBadge.optional {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--surface-2);
+  color: var(--ink-faint);
 }
 
 .defaultValueCell {
@@ -636,33 +636,33 @@
 }
 
 .editButton {
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .editButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .deleteButton {
-  background: #ef4444;
-  color: white;
+  background: var(--red);
+  color: #fff;
 }
 
 .deleteButton:hover {
-  background: #dc2626;
+  background: var(--red-hover);
 }
 
 .emptyState {
   text-align: center;
   padding: 48px 16px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-style: italic;
 }
 
 .jsonEditorContainer {
   margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   min-height: 500px;
@@ -679,7 +679,7 @@
   justify-content: flex-end;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
 }
 
 .saveButton,
@@ -694,12 +694,12 @@
 }
 
 .saveButton {
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .saveButton:hover {
-  background: #059669;
+  background: var(--green-hover);
 }
 
 /* 字段编辑器模态框 */
@@ -732,27 +732,27 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .fieldEditorHeader h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .closeButton {
   background: none;
   border: none;
   font-size: 20px;
-  color: #6b7280;
+  color: var(--ink-2);
   cursor: pointer;
   padding: 4px;
 }
 
 .closeButton:hover {
-  color: #111827;
+  color: var(--ink);
 }
 
 .fieldEditorContent {
@@ -773,7 +773,7 @@
   margin: 0 0 16px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -786,7 +786,7 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   margin-bottom: 6px;
 }
 
@@ -795,7 +795,7 @@
 .fieldTextarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   transition: all 0.2s;
@@ -805,8 +805,8 @@
 .fieldSelect:focus,
 .fieldTextarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .fieldTextarea {
@@ -818,7 +818,7 @@
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .fieldCheckboxGroup {
@@ -832,7 +832,7 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -846,8 +846,8 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
 }
 
 /* 其他样式 */
@@ -868,30 +868,30 @@
 }
 
 .checking {
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 12px;
 }
 
 .available {
-  color: #10b981;
+  color: var(--green);
   font-size: 12px;
 }
 
 .exists {
-  color: #ef4444;
+  color: var(--red);
   font-size: 12px;
 }
 
 .orDivider {
   text-align: center;
-  color: #6b7280;
+  color: var(--ink-2);
   margin: 16px 0;
   font-size: 14px;
 }
 
 .jsonEditorWrapper {
   margin-bottom: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   min-height: 300px;
@@ -906,8 +906,8 @@
 .importButton {
   width: 100%;
   padding: 12px 24px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 16px;
@@ -917,10 +917,15 @@
 }
 
 .importButton:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .importButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

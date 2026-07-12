@@ -286,7 +286,7 @@ export default function PublishVersionDialog({
               <input
                 style={{
                   ...inputStyle,
-                  borderColor: versionError ? '#f14c4c' : '#454545',
+                  borderColor: versionError ? 'var(--red)' : '#454545',
                 }}
                 value={version}
                 onChange={(e) => {
@@ -296,7 +296,7 @@ export default function PublishVersionDialog({
                 placeholder="v1.2.0"
                 autoFocus
               />
-              {versionError && <div style={{ color: '#f14c4c', fontSize: 12, marginTop: 2 }}>{versionError}</div>}
+              {versionError && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 2 }}>{versionError}</div>}
             </div>
             <div>
               <label style={labelStyle}>发布说明 (可选)</label>
@@ -309,7 +309,7 @@ export default function PublishVersionDialog({
               />
             </div>
             {submitError && (
-              <div style={{ marginTop: 8, color: '#f14c4c', fontSize: 12 }}>{submitError}</div>
+              <div style={{ marginTop: 8, color: 'var(--red)', fontSize: 12 }}>{submitError}</div>
             )}
           </div>
         </div>

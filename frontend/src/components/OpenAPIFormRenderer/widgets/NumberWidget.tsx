@@ -147,7 +147,7 @@ const NumberWidget: React.FC<WidgetProps> = ({
           <span>
             {help}
             {hasManifestContext && hasOtherNodes && !isModuleReference && (
-              <span style={{ color: '#1890ff', marginLeft: 8, fontSize: 11 }}>
+              <span style={{ color: 'var(--brand)', marginLeft: 8, fontSize: 11 }}>
                 {useTextInput ? '输入 / 可引用其他 Module 的输出' : '点击切换按钮可输入引用'}
               </span>
             )}
@@ -170,7 +170,7 @@ const NumberWidget: React.FC<WidgetProps> = ({
             readOnly={readOnly}
             style={isModuleReference ? { 
               fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-              color: '#1890ff',
+              color: 'var(--brand)',
             } : undefined}
             suffix={showToggleButton ? (
               <Tooltip title="切换为数字输入">

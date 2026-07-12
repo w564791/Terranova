@@ -24,7 +24,7 @@ interface Props {
 
 function severityIcon(sev: monaco.MarkerSeverity): { icon: string; color: string; label: string } {
   if (sev === monaco.MarkerSeverity.Error) {
-    return { icon: 'codicon-error', color: '#f14c4c', label: 'Error' }
+    return { icon: 'codicon-error', color: 'var(--red)', label: 'Error' }
   }
   if (sev === monaco.MarkerSeverity.Warning) {
     return { icon: 'codicon-warning', color: '#cca700', label: 'Warning' }
@@ -54,7 +54,7 @@ export default function ProblemsPanel({ problems, onOpenAt }: Props) {
       <div className={styles.header}>
         <span>问题</span>
         <span className={styles.problemsSummary}>
-          <i className="codicon codicon-error" style={{ color: '#f14c4c' }} /> {errors}
+          <i className="codicon codicon-error" style={{ color: 'var(--red)' }} /> {errors}
           <i className="codicon codicon-warning" style={{ color: '#cca700', marginLeft: 8 }} /> {warnings}
         </span>
       </div>

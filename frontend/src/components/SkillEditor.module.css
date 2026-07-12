@@ -4,15 +4,17 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 8px;
   width: 90%;
   max-width: 900px;
@@ -28,29 +30,29 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fafafa;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 
 .header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
 }
 
 .closeBtn {
   background: none;
   border: none;
   font-size: 24px;
-  color: #999;
+  color: var(--ink-3);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 
 .closeBtn:hover {
-  color: #333;
+  color: var(--ink);
 }
 
 .form {
@@ -60,9 +62,9 @@
 }
 
 .error {
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  border: 1px solid var(--red-line);
+  color: var(--red);
   padding: 10px 12px;
   border-radius: 4px;
   margin-bottom: 16px;
@@ -83,7 +85,7 @@
 .field label {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   margin-bottom: 6px;
 }
 
@@ -91,7 +93,7 @@
 .field select,
 .field textarea {
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -101,14 +103,14 @@
 .field select:focus,
 .field textarea:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.1);
 }
 
 .field input:disabled,
 .field select:disabled {
-  background: #f5f5f5;
-  color: #999;
+  background: var(--surface-2);
+  color: var(--ink-3);
   cursor: not-allowed;
 }
 
@@ -122,7 +124,7 @@
 
 .hint {
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
@@ -132,7 +134,7 @@
   gap: 12px;
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line);
 }
 
 .cancelBtn,
@@ -146,29 +148,29 @@
 
 .cancelBtn {
   background: white;
-  border: 1px solid #d9d9d9;
-  color: #666;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
 }
 
 .cancelBtn:hover {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .saveBtn {
-  background: #1890ff;
-  border: 1px solid #1890ff;
-  color: white;
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  color: #fff;
 }
 
 .saveBtn:hover {
-  background: #40a9ff;
-  border-color: #40a9ff;
+  background: var(--brand-400);
+  border-color: var(--brand-400);
 }
 
 .saveBtn:disabled {
-  background: #d9d9d9;
-  border-color: #d9d9d9;
+  background: var(--line-2);
+  border-color: var(--line-2);
   cursor: not-allowed;
 }
 
@@ -178,16 +180,16 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   min-height: 42px;
   align-items: center;
-  background: #fff;
+  background: var(--surface);
 }
 
 .tagContainer:focus-within {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.1);
 }
 
 .tag {
@@ -195,11 +197,11 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: #f0f5ff;
-  border: 1px solid #adc6ff;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 4px;
   font-size: 13px;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .tag button {
@@ -208,7 +210,7 @@
   padding: 0;
   margin: 0;
   font-size: 14px;
-  color: #1890ff;
+  color: var(--brand);
   cursor: pointer;
   line-height: 1;
   opacity: 0.7;
@@ -216,7 +218,7 @@
 
 .tag button:hover {
   opacity: 1;
-  color: #ff4d4f;
+  color: var(--red);
 }
 
 .tagInput {

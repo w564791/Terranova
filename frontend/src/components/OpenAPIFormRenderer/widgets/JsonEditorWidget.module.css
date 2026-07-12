@@ -1,10 +1,10 @@
 /* V3 JSON Editor Widget */
 
 .v3Container {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
-  background: #1e293b;
+  background: var(--ink);
   font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   font-size: 13px;
   line-height: 1.6;
@@ -12,16 +12,16 @@
 }
 
 .v3Container:focus-within {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+  border-color: var(--brand-300);
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.08);
 }
 
 .v3Container.hasError {
-  border-color: #fca5a5;
+  border-color: var(--red-line);
 }
 
 .v3Container.hasError:focus-within {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 0 3px rgba(200, 48, 47, 0.1);
 }
 
 .v3Toolbar {
@@ -29,7 +29,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  background: #334155;
+  background: var(--ink);
   gap: 8px;
 }
 
@@ -53,29 +53,29 @@
 }
 
 .v3StatusDot.valid {
-  background: #22c55e;
+  background: var(--green);
 }
 
 .v3StatusDot.invalid {
-  background: #ef4444;
+  background: var(--red);
 }
 
 .v3StatusDot.empty {
-  background: #64748b;
+  background: var(--ink-2);
 }
 
 .v3StatusText {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--ink-faint);
   white-space: nowrap;
 }
 
 .v3ToolBtn {
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid #475569;
+  border: 1px solid var(--ink-2);
   background: transparent;
-  color: #94a3b8;
+  color: var(--ink-faint);
   font-size: 11px;
   cursor: pointer;
   transition: all 0.15s;
@@ -84,8 +84,8 @@
 }
 
 .v3ToolBtn:hover {
-  background: #475569;
-  color: #e2e8f0;
+  background: var(--ink-2);
+  color: var(--line);
 }
 
 .v3ToolBtn:disabled {
@@ -94,9 +94,9 @@
 }
 
 .v3ToolBtn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 /* Editor body */
@@ -109,14 +109,14 @@
 .v3LineNumbers {
   padding: 10px 0;
   text-align: right;
-  color: #475569;
+  color: var(--ink-2);
   font-size: 12px;
   line-height: 1.6;
   user-select: none;
   min-width: 36px;
   padding-right: 8px;
   padding-left: 8px;
-  border-right: 1px solid #334155;
+  border-right: 1px solid var(--ink);
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -141,7 +141,7 @@
   margin: 0;
   padding: 10px 12px;
   white-space: pre;
-  color: #e2e8f0;
+  color: var(--line);
   box-sizing: border-box;
   min-height: 120px;
 }
@@ -156,7 +156,7 @@
   padding: 10px 12px;
   background: transparent;
   color: transparent;
-  caret-color: #e2e8f0;
+  caret-color: var(--line);
   border: none;
   outline: none;
   resize: none;
@@ -171,22 +171,22 @@
 }
 
 .v3Textarea::selection {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(28, 110, 140, 0.35);
   color: transparent;
 }
 
 .v3Textarea::placeholder {
-  color: #475569;
+  color: var(--ink-2);
 }
 
 /* Error bar */
 .v3ErrorBar {
   padding: 6px 12px;
-  background: #7f1d1d;
-  color: #fca5a5;
+  background: var(--red-active);
+  color: var(--red-line);
   font-size: 11px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  border-top: 1px solid #991b1b;
+  border-top: 1px solid var(--red-active);
   display: flex;
   align-items: flex-start;
   gap: 6px;
@@ -204,37 +204,37 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 4px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #2563eb;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
+  color: var(--brand-ink);
   font-size: 12px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* JSON syntax colors */
 .v3HighlightPre :global(.json-key) {
-  color: #93c5fd;
+  color: var(--brand-300);
 }
 
 .v3HighlightPre :global(.json-string) {
-  color: #86efac;
+  color: var(--green-line);
 }
 
 .v3HighlightPre :global(.json-number) {
-  color: #fdba74;
+  color: var(--amber-line);
 }
 
 .v3HighlightPre :global(.json-bool) {
-  color: #fca5a5;
+  color: var(--red-line);
 }
 
 .v3HighlightPre :global(.json-null) {
-  color: #94a3b8;
+  color: var(--ink-faint);
   font-style: italic;
 }
 
 .v3HighlightPre :global(.json-bracket) {
-  color: #e2e8f0;
+  color: var(--line);
 }
 
 .v3HighlightPre :global(.json-brace) {
@@ -242,9 +242,9 @@
 }
 
 .v3HighlightPre :global(.json-comma) {
-  color: #94a3b8;
+  color: var(--ink-faint);
 }
 
 .v3HighlightPre :global(.json-colon) {
-  color: #94a3b8;
+  color: var(--ink-faint);
 }

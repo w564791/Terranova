@@ -25,7 +25,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         alignItems: 'center', 
         height: '100vh',
         fontSize: '16px',
-        color: '#666'
+        color: 'var(--ink-2)'
       }}>
         加载用户信息...
       </div>

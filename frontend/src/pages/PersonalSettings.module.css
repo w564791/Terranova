@@ -14,14 +14,14 @@
 .header h1 {
   font-size: 28px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0;
 }
 
 .backButton {
   padding: 8px 16px;
-  background-color: #f5f5f5;
-  border: 1px solid #d9d9d9;
+  background-color: var(--surface-2);
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -30,13 +30,13 @@
 
 .backButton:hover {
   background-color: #e6e6e6;
-  border-color: #bfbfbf;
+  border-color: var(--ink-faint);
 }
 
 .tabs {
   display: flex;
   gap: 10px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid var(--surface-2);
   margin-bottom: 30px;
 }
 
@@ -47,18 +47,18 @@
   border-bottom: 2px solid transparent;
   cursor: pointer;
   font-size: 16px;
-  color: #666;
+  color: var(--ink-2);
   transition: all 0.3s;
   margin-bottom: -2px;
 }
 
 .tab:hover {
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .activeTab {
-  color: #1890ff;
-  border-bottom-color: #1890ff;
+  color: var(--brand);
+  border-bottom-color: var(--brand);
   font-weight: 500;
 }
 
@@ -72,7 +72,7 @@
 .section h2 {
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 20px 0;
 }
 
@@ -88,7 +88,7 @@
 }
 
 .description {
-  color: #666;
+  color: var(--ink-2);
   margin-bottom: 20px;
   line-height: 1.6;
 }
@@ -105,14 +105,14 @@
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
 }
 
 .input,
 .select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: all 0.3s;
@@ -121,21 +121,21 @@
 .input:focus,
 .select:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.1);
 }
 
 .hint {
   display: block;
   margin-top: 4px;
-  color: #999;
+  color: var(--ink-3);
   font-size: 12px;
 }
 
 .submitButton {
   padding: 10px 24px;
-  background-color: #1890ff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -145,18 +145,18 @@
 }
 
 .submitButton:hover:not(:disabled) {
-  background-color: #40a9ff;
+  background-color: var(--brand-400);
 }
 
 .submitButton:disabled {
-  background-color: #d9d9d9;
+  background-color: var(--line-2);
   cursor: not-allowed;
 }
 
 .createButton {
   padding: 8px 16px;
-  background-color: #52c41a;
-  color: white;
+  background-color: var(--green);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -165,35 +165,35 @@
 }
 
 .createButton:hover:not(:disabled) {
-  background-color: #73d13d;
+  background-color: var(--green-hover);
 }
 
 .createButton:disabled {
-  background-color: #d9d9d9;
+  background-color: var(--line-2);
   cursor: not-allowed;
 }
 
 .successMessage {
   padding: 12px 16px;
-  background-color: #f6ffed;
-  border: 1px solid #b7eb8f;
+  background-color: var(--green-soft);
+  border: 1px solid var(--green-line);
   border-radius: 4px;
-  color: #52c41a;
+  color: var(--green);
   margin-bottom: 16px;
 }
 
 .errorMessage {
   padding: 12px 16px;
-  background-color: #fff2f0;
-  border: 1px solid #ffccc7;
+  background-color: var(--red-soft);
+  border: 1px solid var(--red-line);
   border-radius: 4px;
-  color: #ff4d4f;
+  color: var(--red);
   margin-bottom: 16px;
 }
 
 .tokenCreated {
-  background-color: #e6f7ff;
-  border: 1px solid #91d5ff;
+  background-color: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
@@ -201,11 +201,11 @@
 
 .tokenCreated h3 {
   margin: 0 0 12px 0;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .warning {
-  color: #fa8c16;
+  color: var(--amber);
   font-weight: 500;
   margin: 12px 0;
 }
@@ -225,13 +225,13 @@
   font-family: 'Courier New', monospace;
   font-size: 13px;
   word-break: break-all;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .copyButton {
   padding: 6px 12px;
-  background-color: #1890ff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -240,13 +240,13 @@
 }
 
 .copyButton:hover {
-  background-color: #40a9ff;
+  background-color: var(--brand-400);
 }
 
 .closeButton {
   padding: 8px 16px;
-  background-color: #1890ff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -254,12 +254,12 @@
 }
 
 .closeButton:hover {
-  background-color: #40a9ff;
+  background-color: var(--brand-400);
 }
 
 .createTokenForm {
-  background-color: #f5f5f5;
-  border: 1px solid #d9d9d9;
+  background-color: var(--surface-2);
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -268,7 +268,7 @@
 .createTokenForm h3 {
   margin: 0 0 20px 0;
   font-size: 18px;
-  color: #1a1a1a;
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -281,9 +281,9 @@
 
 .cancelButton {
   padding: 8px 16px;
-  background-color: white;
-  color: #666;
-  border: 1px solid #d9d9d9;
+  background-color: #fff;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -291,8 +291,8 @@
 }
 
 .cancelButton:hover {
-  color: #1890ff;
-  border-color: #1890ff;
+  color: var(--brand);
+  border-color: var(--brand);
 }
 
 .tokenList {
@@ -302,7 +302,7 @@
 .emptyState {
   text-align: center;
   padding: 60px 40px;
-  background-color: #fafafa;
+  background-color: var(--bg);
   border-radius: 8px;
   margin-top: 20px;
 }
@@ -314,21 +314,21 @@
 
 .emptyText {
   font-size: 16px;
-  color: #666;
+  color: var(--ink-2);
   margin-bottom: 8px;
   font-weight: 500;
 }
 
 .emptyHint {
   font-size: 14px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .errorState {
   text-align: center;
   padding: 60px 40px;
-  background-color: #fff2f0;
-  border: 1px solid #ffccc7;
+  background-color: var(--red-soft);
+  border: 1px solid var(--red-line);
   border-radius: 8px;
   margin-top: 20px;
 }
@@ -340,15 +340,15 @@
 
 .errorText {
   font-size: 16px;
-  color: #ff4d4f;
+  color: var(--red);
   margin-bottom: 20px;
   font-weight: 500;
 }
 
 .retryButton {
   padding: 8px 24px;
-  background-color: #1890ff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -357,7 +357,7 @@
 }
 
 .retryButton:hover {
-  background-color: #40a9ff;
+  background-color: var(--brand-400);
 }
 
 .table {
@@ -370,26 +370,26 @@
 .table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .table th {
-  background-color: #fafafa;
+  background-color: var(--bg);
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
 }
 
 .table tr:hover {
-  background-color: #fafafa;
+  background-color: var(--bg);
 }
 
 .tokenId {
   font-family: 'Courier New', monospace;
   font-size: 12px;
-  background-color: #f5f5f5;
+  background-color: var(--surface-2);
   padding: 2px 6px;
   border-radius: 3px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .status {
@@ -400,21 +400,21 @@
 }
 
 .status.active {
-  background-color: #f6ffed;
-  color: #52c41a;
-  border: 1px solid #b7eb8f;
+  background-color: var(--green-soft);
+  color: var(--green);
+  border: 1px solid var(--green-line);
 }
 
 .status.revoked {
-  background-color: #fff1f0;
-  color: #ff4d4f;
-  border: 1px solid #ffccc7;
+  background-color: var(--red-soft);
+  color: var(--red);
+  border: 1px solid var(--red-line);
 }
 
 .revokeButton {
   padding: 4px 12px;
-  background-color: #ff4d4f;
-  color: white;
+  background-color: var(--red);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -423,7 +423,7 @@
 }
 
 .revokeButton:hover {
-  background-color: #ff7875;
+  background-color: var(--red-line);
 }
 
 .confirmActions {
@@ -434,8 +434,8 @@
 
 .confirmButton {
   padding: 4px 12px;
-  background-color: #ff4d4f;
-  color: white;
+  background-color: var(--red);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -446,14 +446,14 @@
 }
 
 .confirmButton:hover {
-  background-color: #ff7875;
+  background-color: var(--red-line);
 }
 
 .cancelSmallButton {
   padding: 4px 12px;
-  background-color: white;
-  color: #666;
-  border: 1px solid #d9d9d9;
+  background-color: #fff;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -462,15 +462,15 @@
 }
 
 .cancelSmallButton:hover {
-  color: #1890ff;
-  border-color: #1890ff;
+  color: var(--brand);
+  border-color: var(--brand);
 }
 
 /* MFA Styles */
 .loadingState {
   text-align: center;
   padding: 40px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .mfaContent {
@@ -478,8 +478,8 @@
 }
 
 .mfaStatusCard {
-  background: #f9f9f9;
-  border: 1px solid #e8e8e8;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
@@ -500,21 +500,21 @@
 }
 
 .mfaStatusBadge.mfaEnabled {
-  background-color: #f6ffed;
-  color: #52c41a;
-  border: 1px solid #b7eb8f;
+  background-color: var(--green-soft);
+  color: var(--green);
+  border: 1px solid var(--green-line);
 }
 
 .mfaStatusBadge.mfaDisabled {
-  background-color: #f5f5f5;
-  color: #999;
-  border: 1px solid #d9d9d9;
+  background-color: var(--surface-2);
+  color: var(--ink-3);
+  border: 1px solid var(--line-2);
 }
 
 .mfaStatusTime {
   margin: 0;
   font-size: 13px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .mfaInfo {
@@ -522,7 +522,7 @@
   gap: 40px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line);
 }
 
 .mfaInfoItem {
@@ -533,22 +533,22 @@
 
 .mfaInfoLabel {
   font-size: 13px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .mfaInfoValue {
   font-size: 15px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
 }
 
 .mfaWarning {
   margin-top: 16px;
   padding: 12px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
   border-radius: 4px;
-  color: #d48806;
+  color: var(--amber-hover);
   font-size: 14px;
 }
 
@@ -558,8 +558,8 @@
 
 .mfaEnableButton {
   padding: 12px 24px;
-  background-color: #52c41a;
-  color: white;
+  background-color: var(--green);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -569,13 +569,13 @@
 }
 
 .mfaEnableButton:hover {
-  background-color: #73d13d;
+  background-color: var(--green-hover);
 }
 
 .mfaManageButton {
   padding: 12px 24px;
-  background-color: #1890ff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -585,11 +585,11 @@
 }
 
 .mfaManageButton:hover {
-  background-color: #40a9ff;
+  background-color: var(--brand-400);
 }
 
 .mfaTips {
-  background: #f6f8fa;
+  background: var(--bg);
   border-radius: 8px;
   padding: 16px 20px;
 }
@@ -597,7 +597,7 @@
 .mfaTips h4 {
   margin: 0 0 12px 0;
   font-size: 14px;
-  color: #333;
+  color: var(--ink);
 }
 
 .mfaTips ul {
@@ -607,6 +607,11 @@
 
 .mfaTips li {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
   margin-bottom: 4px;
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

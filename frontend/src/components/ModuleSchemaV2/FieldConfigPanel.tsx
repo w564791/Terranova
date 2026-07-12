@@ -87,7 +87,7 @@ const FieldConfigPanel: React.FC<FieldConfigPanelProps> = ({ schema, onFieldUpda
         <div className={styles.fieldInfo}>
           <div className={styles.fieldName}>
             {field.uiConfig.label || field.name}
-            {isRequired && <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>}
+            {isRequired && <span style={{ color: 'var(--red)', marginLeft: 4 }}>*</span>}
           </div>
           <div className={styles.fieldType}>
             {field.name} · {field.property.type}

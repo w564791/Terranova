@@ -1,6 +1,34 @@
 import React, { useState, useMemo } from 'react';
 import styles from './PlanCompleteView.module.css';
 import api from '../services/api';
+import { softBadgeColors } from '../utils/contrast';
+import { colors } from '../styles/tokens';
+
+/** Lifecycle trigger event → soft badge with auto contrast */
+const triggerEventStyle = (event: string): React.CSSProperties => {
+  const base =
+    event === 'AfterCreate'
+      ? colors.green
+      : event === 'AfterUpdate'
+        ? colors.brand
+        : event === 'BeforeDestroy'
+          ? colors.red
+          : colors.amber;
+  return softBadgeColors(base);
+};
+
+const formatTriggerEvent = (event: string) => {
+  switch (event) {
+    case 'AfterCreate':
+      return 'After Create';
+    case 'AfterUpdate':
+      return 'After Update';
+    case 'BeforeDestroy':
+      return 'Before Destroy';
+    default:
+      return event;
+  }
+};
 
 interface ResourceChange {
   id: number;
@@ -835,14 +863,6 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                       </div>
                       {triggeredActions.map((action, idx) => {
                         const triggerEvent = action.lifecycle_action_trigger?.action_trigger_event || 'Unknown';
-                        const formatTriggerEvent = (event: string) => {
-                          switch (event) {
-                            case 'AfterCreate': return 'After Create';
-                            case 'AfterUpdate': return 'After Update';
-                            case 'BeforeDestroy': return 'Before Destroy';
-                            default: return event;
-                          }
-                        };
                         return (
                           <div key={idx} className={styles.triggeredActionItem}>
                             <span className={styles.triggeredActionArrow}>→</span>
@@ -858,7 +878,12 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                               </svg>
                             </button>
                             <span className={styles.triggeredActionType}>{action.type}</span>
-                            <span className={styles.triggeredActionEvent}>{formatTriggerEvent(triggerEvent)}</span>
+                            <span
+                              className={styles.triggeredActionEvent}
+                              style={triggerEventStyle(triggerEvent)}
+                            >
+                              {formatTriggerEvent(triggerEvent)}
+                            </span>
                           </div>
                         );
                       })}
@@ -891,17 +916,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                 const isExpanded = expandedActionIndices.has(index);
                 const triggerEvent = action.lifecycle_action_trigger?.action_trigger_event || 'Unknown';
                 const triggerResource = action.lifecycle_action_trigger?.triggering_resource_address || '';
-                
-                // 格式化触发事件名称
-                const formatTriggerEvent = (event: string) => {
-                  switch (event) {
-                    case 'AfterCreate': return 'After Create';
-                    case 'AfterUpdate': return 'After Update';
-                    case 'BeforeDestroy': return 'Before Destroy';
-                    default: return event;
-                  }
-                };
-                
+
                 return (
                   <div key={index} className={styles.actionInvocationItem}>
                     <div 
@@ -931,7 +946,12 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                       </div>
                       <div className={styles.actionInvocationRight}>
                         <span className={styles.actionInvocationTypeTag}>{action.type}</span>
-                        <span className={styles.actionInvocationTriggerBadge}>{formatTriggerEvent(triggerEvent)}</span>
+                        <span
+                          className={styles.actionInvocationTriggerBadge}
+                          style={triggerEventStyle(triggerEvent)}
+                        >
+                          {formatTriggerEvent(triggerEvent)}
+                        </span>
                       </div>
                     </div>
                     

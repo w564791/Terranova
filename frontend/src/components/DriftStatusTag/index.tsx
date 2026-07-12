@@ -20,29 +20,29 @@ const statusConfig: Record<DriftStatus, {
   description: string;
 }> = {
   synced: {
-    color: '#52c41a',
-    bgColor: '#f6ffed',
+    color: 'var(--green)',
+    bgColor: 'var(--green-soft)',
     icon: <CheckCircleOutlined />,
     text: '已同步',
     description: '资源状态与配置一致',
   },
   drifted: {
-    color: '#faad14',
-    bgColor: '#fffbe6',
+    color: 'var(--amber)',
+    bgColor: 'var(--amber-soft)',
     icon: <ExclamationCircleOutlined />,
     text: '有漂移',
     description: '资源实际状态与配置不一致',
   },
   unapplied: {
-    color: '#8c8c8c',
-    bgColor: '#fafafa',
+    color: 'var(--ink-3)',
+    bgColor: 'var(--bg)',
     icon: <ClockCircleOutlined />,
     text: '未应用',
     description: '资源配置已修改但尚未应用',
   },
   unknown: {
-    color: '#d9d9d9',
-    bgColor: '#fafafa',
+    color: 'var(--line-2)',
+    bgColor: 'var(--bg)',
     icon: <QuestionCircleOutlined />,
     text: '未知',
     description: '尚未进行 Drift 检测',
@@ -64,7 +64,7 @@ const DriftStatusTag: React.FC<DriftStatusTagProps> = ({
         <div style={{ marginTop: 4 }}>漂移子资源数: {driftedCount}</div>
       )}
       {lastCheckAt && (
-        <div style={{ marginTop: 4, fontSize: 12, color: '#999' }}>
+        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--ink-3)' }}>
           上次检测: {new Date(lastCheckAt).toLocaleString()}
         </div>
       )}

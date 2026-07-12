@@ -183,7 +183,7 @@ const SortableFieldItem: React.FC<SortableFieldItemProps> = ({
             padding: '0 8px',
             display: 'flex',
             alignItems: 'center',
-            color: 'var(--color-gray-400)',
+            color: 'var(--ink-faint)',
           }}
         >
           <HolderOutlined />
@@ -193,12 +193,12 @@ const SortableFieldItem: React.FC<SortableFieldItemProps> = ({
       <div className={styles.fieldInfo} style={{ flex: 1 }}>
         <div className={styles.fieldName}>
           {field.uiConfig.label || field.name}
-          {isRequired && <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>}
+          {isRequired && <span style={{ color: 'var(--red)', marginLeft: 4 }}>*</span>}
         </div>
         <div className={styles.fieldType}>
           <code>{field.name}</code> · {field.property.type}
           {field.property.description && (
-            <span style={{ marginLeft: 8, color: 'var(--color-gray-400)' }}>
+            <span style={{ marginLeft: 8, color: 'var(--ink-faint)' }}>
               {field.property.description.substring(0, 50)}
               {field.property.description.length > 50 ? '...' : ''}
             </span>
@@ -221,7 +221,7 @@ const SortableFieldItem: React.FC<SortableFieldItemProps> = ({
                 type="text"
                 size="small"
                 onClick={onToggleRequired}
-                style={{ color: isRequired ? '#ff4d4f' : undefined }}
+                style={{ color: isRequired ? 'var(--red)' : undefined }}
               >
                 {isRequired ? '必填' : '可选'}
               </Button>
@@ -569,7 +569,7 @@ const SchemaVisualEditor: React.FC<SchemaVisualEditorProps> = ({
           >
             添加字段
           </Button>
-          <span style={{ color: 'var(--color-gray-500)', fontSize: 13 }}>
+          <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>
             💡 拖拽字段可调整顺序
           </span>
         </div>

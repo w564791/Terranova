@@ -4,8 +4,8 @@
   align-items: center;
   padding: 0 32px;
   height: 68px;
-  background: var(--color-white);
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -16,7 +16,7 @@
   font-family: var(--font-heading);
   font-size: 22px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -32,27 +32,27 @@
 }
 
 .userMenu:hover {
-  background-color: var(--color-gray-100);
+  background-color: var(--surface-2);
 }
 
 .avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   font-size: 15px;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.3);
 }
 
 .username {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .dropdown {
@@ -61,7 +61,7 @@
   right: 0;
   margin-top: 8px;
   background: white;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-width: 160px;
@@ -76,12 +76,12 @@
   background: none;
   cursor: pointer;
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   transition: background-color 0.2s;
 }
 
 .dropdownItem:hover {
-  background-color: var(--color-gray-50);
+  background-color: var(--bg);
 }
 
 .dropdownItem:first-child {

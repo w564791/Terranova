@@ -6,11 +6,11 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -24,8 +24,10 @@
 }
 
 .dialog {
-  background: var(--color-white);
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   width: 90%;
   max-width: 500px;
   box-shadow: var(--shadow-xl);
@@ -49,13 +51,13 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -63,7 +65,7 @@
   background: none;
   border: none;
   font-size: 28px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   cursor: pointer;
   line-height: 1;
   padding: 0;
@@ -77,8 +79,8 @@
 }
 
 .closeBtn:hover:not(:disabled) {
-  background: var(--color-gray-100);
-  color: var(--color-gray-600);
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .closeBtn:disabled {
@@ -93,7 +95,7 @@
 
 .description {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin: 0 0 var(--spacing-md) 0;
   line-height: 1.5;
 }
@@ -107,39 +109,39 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   margin-bottom: var(--spacing-xs);
 }
 
 .input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   transition: all 0.2s;
   box-sizing: border-box;
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .input:disabled {
-  background: var(--color-gray-50);
+  background: var(--bg);
   cursor: not-allowed;
 }
 
 .input::placeholder {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
 }
 
 .hint {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   margin: var(--spacing-xs) 0 0 0;
   line-height: 1.4;
 }
@@ -156,21 +158,21 @@
   align-items: flex-start;
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
-  border: 2px solid var(--color-gray-200);
+  border: 2px solid var(--line);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .option:hover {
-  border-color: var(--color-blue-300);
-  background: var(--color-blue-50);
+  border-color: var(--brand-300);
+  background: var(--brand-soft);
 }
 
 .optionSelected {
-  border-color: var(--color-blue-500);
-  background: var(--color-blue-50);
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .option input[type="radio"] {
@@ -190,13 +192,13 @@
 .optionTitle {
   font-size: 15px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: 4px;
 }
 
 .optionDesc {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   line-height: 1.4;
 }
 
@@ -206,14 +208,14 @@
   justify-content: flex-end;
   gap: var(--spacing-sm);
   padding: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .btnCancel {
   padding: 10px 20px;
-  background: var(--color-white);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-weight: 500;
   font-size: 14px;
@@ -222,8 +224,8 @@
 }
 
 .btnCancel:hover:not(:disabled) {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .btnCancel:disabled {
@@ -233,8 +235,8 @@
 
 .btnSubmit {
   padding: 10px 24px;
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -244,7 +246,7 @@
 }
 
 .btnSubmit:hover:not(:disabled) {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 .btnSubmit:disabled {
@@ -268,4 +270,9 @@
   .title {
     font-size: 18px;
   }
+}
+
+.btnSubmit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

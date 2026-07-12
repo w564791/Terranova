@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { statusColor, type StatusType } from '../styles/tokens';
 
 interface NotificationProps {
   message: string;
@@ -27,36 +28,17 @@ const SimpleNotification: React.FC<NotificationProps> = ({ message, type, onClos
     }
   };
 
-  const getBackgroundColor = () => {
-    switch (type) {
-      case 'success': return '#22c55e';
-      case 'error': return '#ef4444';
-      case 'warning': return '#f59e0b';
-      case 'info': return '#3b82f6';
-      default: return '#3b82f6';
-    }
-  };
-
   return (
     <div
+      className={`tn-notice tn-notice--${type}`}
       style={{
         position: 'fixed',
-        bottom: '20px',
-        left: '20px',
-        minWidth: '300px',
-        maxWidth: '400px',
-        padding: '16px',
-        borderRadius: '8px',
-        backgroundColor: getBackgroundColor(),
-        color: 'white',
-        fontFamily: 'var(--font-primary)',
-        fontSize: 'var(--font-size-sm)',
-        fontWeight: 'var(--font-weight-normal)',
-        lineHeight: 'var(--line-height-normal)',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
+        bottom: 20,
+        left: 20,
         zIndex: 9999,
+        backgroundColor: statusColor(type as StatusType),
+        cursor: 'pointer',
+        transition: 'transform 0.3s ease',
         transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
       }}
       onMouseEnter={() => setIsHovered(true)}

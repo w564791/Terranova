@@ -18,12 +18,12 @@
   margin: 0 0 8px 0;
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .description {
   margin: 0;
-  color: #666;
+  color: var(--ink-2);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -48,14 +48,14 @@
 }
 
 .refreshButton {
-  background: #fff;
-  border: 1px solid #d9d9d9;
-  color: #333;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
 }
 
 .refreshButton:hover:not(:disabled) {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .refreshButton:disabled {
@@ -64,18 +64,18 @@
 }
 
 .createButton {
-  background: #1890ff;
+  background: var(--brand);
   border: none;
-  color: #fff;
+  color: var(--surface);
 }
 
 .createButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .content {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
@@ -84,7 +84,7 @@
   justify-content: center;
   align-items: center;
   padding: 48px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .empty {
@@ -96,7 +96,7 @@
 }
 
 .emptyIcon {
-  color: #bfbfbf;
+  color: var(--ink-faint);
   margin-bottom: 16px;
 }
 
@@ -104,12 +104,12 @@
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
 }
 
 .empty p {
   margin: 0 0 24px 0;
-  color: #666;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
@@ -126,20 +126,20 @@
 .table td {
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .table th {
-  background: #fafafa;
+  background: var(--bg);
   font-weight: 600;
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .table tbody tr:hover {
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .notificationName {
@@ -147,17 +147,17 @@
   align-items: center;
   gap: 8px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
 }
 
 .notificationName svg {
-  color: #1890ff;
+  color: var(--brand);
   flex-shrink: 0;
 }
 
 .notificationMeta {
   font-size: 12px;
-  color: #888;
+  color: var(--ink-3);
   margin-top: 4px;
   margin-left: 24px;
 }
@@ -166,8 +166,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
@@ -178,7 +178,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #666;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
@@ -189,8 +189,8 @@
 .badgeBlue {
   display: inline-flex;
   padding: 4px 8px;
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -199,8 +199,8 @@
 .badgeGreen {
   display: inline-flex;
   padding: 4px 8px;
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -209,8 +209,8 @@
 .badgeSuccess {
   display: inline-flex;
   padding: 4px 8px;
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -219,8 +219,8 @@
 .badgeDefault {
   display: inline-flex;
   padding: 4px 8px;
-  background: #f5f5f5;
-  color: #8c8c8c;
+  background: var(--surface-2);
+  color: var(--ink-3);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -229,8 +229,8 @@
 .badgeGold {
   display: inline-flex;
   padding: 4px 8px;
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -240,7 +240,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #52c41a;
+  color: var(--green);
   font-size: 13px;
 }
 
@@ -248,7 +248,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #8c8c8c;
+  color: var(--ink-3);
   font-size: 13px;
 }
 
@@ -267,15 +267,15 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
-  color: #666;
+  color: var(--ink-2);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .actionButton:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #d9d9d9;
-  color: #1890ff;
+  background: var(--surface-2);
+  border-color: var(--line-2);
+  color: var(--brand);
 }
 
 .actionButton:disabled {
@@ -284,9 +284,9 @@
 }
 
 .actionButton.deleteButton:hover:not(:disabled) {
-  color: #ff4d4f;
-  border-color: #ffccc7;
-  background: #fff2f0;
+  color: var(--red);
+  border-color: var(--red-line);
+  background: var(--red-soft);
 }
 
 .spinner {
@@ -294,7 +294,7 @@
   width: 14px;
   height: 14px;
   border: 2px solid #f3f3f3;
-  border-top: 2px solid #1890ff;
+  border-top: 2px solid var(--brand);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -319,14 +319,14 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
-  background: #fff7e6;
-  border: 1px solid #ffd591;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
   border-radius: 6px;
   margin: 16px 0;
 }
 
 .deleteWarning svg {
-  color: #fa8c16;
+  color: var(--amber);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -337,7 +337,7 @@
 }
 
 .deleteNote {
-  color: #8c8c8c;
+  color: var(--ink-3);
   font-size: 13px;
   font-style: italic;
 }

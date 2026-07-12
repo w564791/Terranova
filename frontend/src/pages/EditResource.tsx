@@ -1474,17 +1474,17 @@ const EditResource: React.FC = () => {
               {otherEditors.map((editor, index) => (
                 <div key={index} style={{
                   padding: '12px',
-                  background: '#f9fafb',
+                  background: 'var(--bg)',
                   borderRadius: '8px',
                   marginBottom: '8px'
                 }}>
                   <div style={{ fontWeight: 500, marginBottom: '4px' }}>
                     {editor.user_name} {editor.is_same_user && '(您)'}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
                     会话ID: {editor.session_id.substring(0, 8)}...
                   </div>
-                  <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--ink-2)' }}>
                     最后活动: {editor.time_since_heartbeat}秒前
                   </div>
                 </div>
@@ -1494,7 +1494,7 @@ const EditResource: React.FC = () => {
               onClick={() => setShowEditorsDialog(false)}
               style={{
                 padding: '10px 20px',
-                background: '#3b82f6',
+                background: 'var(--brand)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -1723,8 +1723,8 @@ const EditResource: React.FC = () => {
               <span className={styles.resourceSeparator}>·</span>
               <span style={{ 
                 padding: '4px 8px', 
-                background: 'var(--color-blue-100)', 
-                color: 'var(--color-blue-700)',
+                background: 'var(--brand-soft)', 
+                color: 'var(--brand-700)',
                 borderRadius: '4px',
                 fontSize: '12px',
                 fontWeight: 500
@@ -1744,13 +1744,13 @@ const EditResource: React.FC = () => {
             <div className={styles.dynamicFormContainer}>
               <div className={styles.formDescription} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '14px', color: '#333', fontWeight: 500 }}>
+                  <span style={{ fontSize: '14px', color: 'var(--ink)', fontWeight: 500 }}>
                     基于Module Schema自动生成的配置表单
                   </span>
                   {rawSchema?.schema_version === 'v2' && rawSchema?.openapi_schema && (
                     <span style={{ 
                       padding: '2px 8px', 
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%)',
                       color: 'white',
                       borderRadius: '4px',
                       fontSize: '11px',
@@ -1772,15 +1772,15 @@ const EditResource: React.FC = () => {
                   {/* Module 版本信息 — 锁定显示（不可切换） */}
                   {moduleVersions.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>TF Module:</span>
+                      <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>TF Module:</span>
                       <span
                         style={{
                           padding: '4px 10px',
-                          border: '1px solid #e2e8f0',
+                          border: '1px solid var(--line)',
                           borderRadius: '6px',
                           fontSize: '13px',
-                          color: resourceVersionFound ? '#334155' : '#dc2626',
-                          background: resourceVersionFound ? '#f8fafc' : '#fef2f2',
+                          color: resourceVersionFound ? 'var(--ink)' : 'var(--red-hover)',
+                          background: resourceVersionFound ? 'var(--bg)' : 'var(--red-soft)',
                           fontWeight: 500,
                           fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
                         }}
@@ -1791,7 +1791,7 @@ const EditResource: React.FC = () => {
                         }
                       </span>
                       {!resourceVersionFound && (
-                        <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 500 }}>
+                        <span style={{ fontSize: '12px', color: 'var(--red-hover)', fontWeight: 500 }}>
                           ⚠ 资源版本与模块版本不匹配，请使用 HCL 视图编辑
                         </span>
                       )}
@@ -1841,10 +1841,10 @@ const EditResource: React.FC = () => {
               {formRenderError && viewMode === 'json' && (
                 <div style={{
                   padding: '12px 16px',
-                  background: '#fff3cd',
-                  border: '1px solid #ffc107',
+                  background: 'var(--amber-soft)',
+                  border: '1px solid var(--amber)',
                   borderRadius: '6px',
-                  color: '#856404',
+                  color: 'var(--amber-hover)',
                   marginBottom: '16px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1858,13 +1858,13 @@ const EditResource: React.FC = () => {
               {!resourceVersionFound && (
                 <div style={{
                   padding: '12px 16px',
-                  background: '#fef2f2',
-                  border: '1px solid #fca5a5',
+                  background: 'var(--red-soft)',
+                  border: '1px solid var(--red-line)',
                   borderRadius: '6px',
-                  color: '#991b1b',
+                  color: 'var(--red-active)',
                   marginBottom: '16px',
                 }}>
-                  ⚠ 资源使用的版本 <strong>{resourceOriginalVersion || 'unknown'}</strong> 在当前模块版本列表中不存在，无法渲染表单。请使用 HCL 视图查看和编辑配置。如需升级版本，请前往 <a href={`/modules/${matchedModuleId}/schemas`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>模块管理</a> 页面操作。
+                  ⚠ 资源使用的版本 <strong>{resourceOriginalVersion || 'unknown'}</strong> 在当前模块版本列表中不存在，无法渲染表单。请使用 HCL 视图查看和编辑配置。如需升级版本，请前往 <a href={`/modules/${matchedModuleId}/schemas`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand)' }}>模块管理</a> 页面操作。
                 </div>
               )}
 
@@ -2037,7 +2037,7 @@ const EditResource: React.FC = () => {
             <div className={styles.dialogBody}>
               <p>在 HCL 编辑模式下检测到以下字段不在 Schema 定义中：</p>
               <div style={{
-                background: '#f8f9fa',
+                background: 'var(--bg)',
                 padding: '12px',
                 borderRadius: '6px',
                 margin: '12px 0',

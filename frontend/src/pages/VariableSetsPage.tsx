@@ -104,20 +104,20 @@ const VariableSetsPage: React.FC = () => {
   };
 
   const scopeBadge = (s: string) => s === 'global'
-    ? <span className={styles.statusBadge} style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #93C5FD' }}>Global</span>
-    : <span className={styles.statusBadge} style={{ backgroundColor: '#F0FDF4', color: '#16A34A', border: '1px solid #86EFAC' }}>Specific</span>;
+    ? <span className={styles.statusBadge} style={{ backgroundColor: 'var(--brand-soft)', color: 'var(--brand-ink)', border: '1px solid var(--brand-300)' }}>Global</span>
+    : <span className={styles.statusBadge} style={{ backgroundColor: 'var(--green-soft)', color: 'var(--green-hover)', border: '1px solid var(--green-line)' }}>Specific</span>;
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
-  const btnDel: React.CSSProperties = { padding: '5px 12px', border: '1px solid var(--color-red-200)', background: 'var(--color-white)', color: 'var(--color-red-500)', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' };
-  const sectionTitle: React.CSSProperties = { fontSize: '18px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' };
-  const subText: React.CSSProperties = { fontSize: '13px', color: '#6b7280', lineHeight: '1.5' };
-  const fieldLabel: React.CSSProperties = { fontSize: '15px', fontWeight: 600, color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' };
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' as const };
-  const cardBox: React.CSSProperties = { border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', marginTop: '12px' };
+  const btnDel: React.CSSProperties = { padding: '5px 12px', border: '1px solid var(--color-red-200)', background: 'var(--surface)', color: 'var(--red)', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' };
+  const sectionTitle: React.CSSProperties = { fontSize: '18px', fontWeight: 700, color: 'var(--ink)', margin: '0 0 12px 0' };
+  const subText: React.CSSProperties = { fontSize: '13px', color: 'var(--ink-2)', lineHeight: '1.5' };
+  const fieldLabel: React.CSSProperties = { fontSize: '15px', fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid var(--line-2)', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' as const };
+  const cardBox: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '8px', padding: '20px', marginTop: '12px' };
 
   return (
-    <div className={styles.container} style={{ margin: '12px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+    <div className={styles.container} style={{ margin: '12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
       <div className={styles.header}>
         <h1 className={styles.title}>Variable Sets</h1>
         <p className={styles.description}>Variable sets let you reuse the same variables across multiple workspaces.</p>
@@ -130,11 +130,11 @@ const VariableSetsPage: React.FC = () => {
 
       {/* ====== Create Form ====== */}
       {showForm && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '32px', marginBottom: '24px' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', padding: '32px', marginBottom: '24px' }}>
 
           {/* Name */}
           <div style={{ marginBottom: '24px' }}>
-            <div style={fieldLabel}>Name <span style={{ fontSize: '11px', padding: '2px 8px', background: '#f3f4f6', color: '#6b7280', borderRadius: '4px', fontWeight: 500 }}>Required</span></div>
+            <div style={fieldLabel}>Name <span style={{ fontSize: '11px', padding: '2px 8px', background: 'var(--surface-2)', color: 'var(--ink-2)', borderRadius: '4px', fontWeight: 500 }}>Required</span></div>
             <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="" />
           </div>
 
@@ -151,21 +151,21 @@ const VariableSetsPage: React.FC = () => {
             <label style={{ display: 'flex', gap: '12px', cursor: 'pointer', marginBottom: '16px' }}>
               <input type="radio" name="scope" checked={scope === 'global'} onChange={() => setScope('global')} style={{ marginTop: '3px' }} />
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 500, color: '#1a1a1a' }}>Apply to all projects and workspaces</div>
+                <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--ink)' }}>Apply to all projects and workspaces</div>
                 <div style={subText}>All current and future workspaces in this organization will access this variable set.</div>
               </div>
             </label>
 
             <label style={{ display: 'flex', gap: '12px', cursor: 'pointer' }}>
               <input type="radio" name="scope" checked={scope === 'specific'} onChange={() => setScope('specific')} style={{ marginTop: '3px' }} />
-              <div style={{ fontSize: '15px', fontWeight: 500, color: '#1a1a1a' }}>Apply to specific projects and workspaces</div>
+              <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--ink)' }}>Apply to specific projects and workspaces</div>
             </label>
 
             {scope === 'specific' && (
               <div style={cardBox}>
                 {/* Apply to projects */}
                 <div style={{ marginBottom: '20px' }}>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a', marginBottom: '4px' }}>Apply to projects</div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)', marginBottom: '4px' }}>Apply to projects</div>
                   <div style={{ ...subText, marginBottom: '8px' }}>All current and future workspaces in the selected projects will access this variable set.</div>
                   <select
                     style={inputStyle}
@@ -185,9 +185,9 @@ const VariableSetsPage: React.FC = () => {
                       {selectedProjects.map(pid => {
                         const p = projects.find(x => x.id === pid);
                         return (
-                          <span key={pid} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#f3f4f6', borderRadius: '4px', fontSize: '13px' }}>
+                          <span key={pid} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'var(--surface-2)', borderRadius: '4px', fontSize: '13px' }}>
                             {p?.display_name || p?.name || `#${pid}`}
-                            <span style={{ cursor: 'pointer', color: '#9ca3af', fontWeight: 700 }} onClick={() => setSelectedProjects(selectedProjects.filter(x => x !== pid))}>x</span>
+                            <span style={{ cursor: 'pointer', color: 'var(--ink-faint)', fontWeight: 700 }} onClick={() => setSelectedProjects(selectedProjects.filter(x => x !== pid))}>x</span>
                           </span>
                         );
                       })}
@@ -197,7 +197,7 @@ const VariableSetsPage: React.FC = () => {
 
                 {/* Apply to workspaces */}
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a1a', marginBottom: '4px' }}>Apply to workspaces</div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--ink)', marginBottom: '4px' }}>Apply to workspaces</div>
                   <div style={{ ...subText, marginBottom: '8px' }}>Only the selected workspaces will access this variable set.</div>
                   <select
                     style={inputStyle}
@@ -217,9 +217,9 @@ const VariableSetsPage: React.FC = () => {
                       {selectedWorkspaces.map(wid => {
                         const w = workspaces.find(x => x.workspace_id === wid);
                         return (
-                          <span key={wid} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#f3f4f6', borderRadius: '4px', fontSize: '13px' }}>
+                          <span key={wid} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'var(--surface-2)', borderRadius: '4px', fontSize: '13px' }}>
                             {w?.name || wid}
-                            <span style={{ cursor: 'pointer', color: '#9ca3af', fontWeight: 700 }} onClick={() => setSelectedWorkspaces(selectedWorkspaces.filter(x => x !== wid))}>x</span>
+                            <span style={{ cursor: 'pointer', color: 'var(--ink-faint)', fontWeight: 700 }} onClick={() => setSelectedWorkspaces(selectedWorkspaces.filter(x => x !== wid))}>x</span>
                           </span>
                         );
                       })}
@@ -239,31 +239,31 @@ const VariableSetsPage: React.FC = () => {
 
             {/* Pending vars table */}
             {pendingVars.length > 0 && (
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px' }}>
+              <div style={{ border: '1px solid var(--line)', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: '#f9fafb' }}>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Key</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Value</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Category</th>
+                    <tr style={{ background: 'var(--bg)' }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Key</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Value</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Category</th>
                       <th style={{ width: '40px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendingVars.map((v, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid #e5e7eb' }}>
+                      <tr key={i} style={{ borderTop: '1px solid var(--line)' }}>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{ fontWeight: 500, fontSize: '14px' }}>{v.key}</span>
-                          {v.sensitive && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: '#FEF3C7', color: '#92400E', borderRadius: '4px', fontWeight: 600 }}>SENSITIVE</span>}
+                          {v.sensitive && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: 'var(--amber-soft)', color: 'var(--amber-hover)', borderRadius: '4px', fontWeight: 600 }}>SENSITIVE</span>}
                         </td>
-                        <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '14px' }}>
-                          {v.sensitive ? '-- sensitive value --' : (v.value || <span style={{ color: '#d1d5db' }}>(empty)</span>)}
+                        <td style={{ padding: '12px 16px', color: 'var(--ink-2)', fontSize: '14px' }}>
+                          {v.sensitive ? '-- sensitive value --' : (v.value || <span style={{ color: 'var(--line-2)' }}>(empty)</span>)}
                         </td>
-                        <td style={{ padding: '12px 16px', fontSize: '14px', color: '#374151' }}>
+                        <td style={{ padding: '12px 16px', fontSize: '14px', color: 'var(--ink)' }}>
                           {v.variable_type === 'terraform' ? 'Terraform' : 'Environment'}
                         </td>
                         <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                          <span style={{ cursor: 'pointer', color: '#9ca3af', fontSize: '16px' }} onClick={() => setPendingVars(pendingVars.filter((_, j) => j !== i))}>x</span>
+                          <span style={{ cursor: 'pointer', color: 'var(--ink-faint)', fontSize: '16px' }} onClick={() => setPendingVars(pendingVars.filter((_, j) => j !== i))}>x</span>
                         </td>
                       </tr>
                     ))}
@@ -275,7 +275,7 @@ const VariableSetsPage: React.FC = () => {
             {/* Inline add variable */}
             {showVarInput ? (
               <div style={{ ...cardBox, marginTop: '0' }}>
-                <div style={{ fontSize: '15px', fontWeight: 600, color: '#1a1a1a', marginBottom: '16px' }}>Add new variable</div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '16px' }}>Add new variable</div>
 
                 {/* Type radio */}
                 <div style={{ marginBottom: '20px' }}>
@@ -298,11 +298,11 @@ const VariableSetsPage: React.FC = () => {
                 {/* Key + Value + HCL + Sensitive on one row */}
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '16px' }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Key</label>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Key</label>
                     <input style={inputStyle} value={varForm.key} onChange={e => setVarForm({ ...varForm, key: e.target.value })} placeholder="key" />
                   </div>
                   <div style={{ flex: 1.5 }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Value</label>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Value</label>
                     <input style={inputStyle} type={varForm.sensitive ? 'password' : 'text'} value={varForm.value} onChange={e => setVarForm({ ...varForm, value: e.target.value })} placeholder="value" />
                   </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', paddingBottom: '10px' }}>
@@ -315,19 +315,19 @@ const VariableSetsPage: React.FC = () => {
 
                 {/* Description */}
                 <div style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '4px', display: 'block' }}>Description (Optional)</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Description (Optional)</label>
                   <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const }} value={varForm.description} onChange={e => setVarForm({ ...varForm, description: e.target.value })} placeholder="description (optional)" />
                 </div>
 
                 {/* Buttons */}
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button style={{ padding: '8px 18px', border: 'none', background: '#3b82f6', color: '#fff', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} onClick={addVar}>Add variable</button>
-                  <button style={{ padding: '8px 18px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }} onClick={() => setShowVarInput(false)}>Cancel</button>
+                  <button style={{ padding: '8px 18px', border: 'none', background: 'var(--brand)', color: 'var(--surface)', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} onClick={addVar}>Add variable</button>
+                  <button style={{ padding: '8px 18px', border: '1px solid var(--line-2)', background: 'var(--surface)', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }} onClick={() => setShowVarInput(false)}>Cancel</button>
                 </div>
               </div>
             ) : (
               <button
-                style={{ padding: '10px 20px', border: '1px solid #d1d5db', background: '#fff', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+                style={{ padding: '10px 20px', border: '1px solid var(--line-2)', background: 'var(--surface)', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', color: 'var(--ink)' }}
                 onClick={() => setShowVarInput(true)}
               >
                 + Add variable
@@ -338,14 +338,14 @@ const VariableSetsPage: React.FC = () => {
           {/* Submit */}
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
-              style={{ padding: '12px 24px', border: 'none', background: '#3b82f6', color: '#fff', borderRadius: '6px', fontSize: '15px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}
+              style={{ padding: '12px 24px', border: 'none', background: 'var(--brand)', color: 'var(--surface)', borderRadius: '6px', fontSize: '15px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1 }}
               onClick={handleSubmit}
               disabled={submitting}
             >
               {submitting ? 'Creating...' : 'Create variable set'}
             </button>
             <button
-              style={{ padding: '12px 24px', border: '1px solid #d1d5db', background: '#fff', color: '#374151', borderRadius: '6px', fontSize: '15px', fontWeight: 500, cursor: 'pointer' }}
+              style={{ padding: '12px 24px', border: '1px solid var(--line-2)', background: 'var(--surface)', color: 'var(--ink)', borderRadius: '6px', fontSize: '15px', fontWeight: 500, cursor: 'pointer' }}
               onClick={handleCancel}
             >
               Cancel
@@ -355,7 +355,7 @@ const VariableSetsPage: React.FC = () => {
       )}
 
       {/* ====== List ====== */}
-      <div className={styles.versionsList} style={{ border: '1px solid #e5e7eb' }}>
+      <div className={styles.versionsList} style={{ border: '1px solid var(--line)' }}>
         {loading ? (
           <div className={styles.loading}>Loading...</div>
         ) : varsets.length === 0 && !showForm ? (
@@ -369,11 +369,11 @@ const VariableSetsPage: React.FC = () => {
             <tbody>
               {varsets.map(vs => (
                 <tr key={vs.varset_id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/variable-sets/${vs.varset_id}`)}>
-                  <td><span style={{ fontWeight: 500, color: 'var(--color-blue-600)' }}>{vs.name}</span></td>
+                  <td><span style={{ fontWeight: 500, color: 'var(--brand-ink)' }}>{vs.name}</span></td>
                   <td>{scopeBadge(vs.scope)}</td>
                   <td>{vs.variable_count ?? 0}</td>
                   <td>{vs.scope === 'global' ? 'All' : (vs.assignment_count ?? 0)}</td>
-                  <td><span style={{ color: '#9ca3af', fontSize: '13px' }}>{fmtDate(vs.created_at)}</span></td>
+                  <td><span style={{ color: 'var(--ink-faint)', fontSize: '13px' }}>{fmtDate(vs.created_at)}</span></td>
                   <td><button style={btnDel} onClick={e => { e.stopPropagation(); setDeleteConfirm(vs); }}>Delete</button></td>
                 </tr>
               ))}
@@ -383,7 +383,7 @@ const VariableSetsPage: React.FC = () => {
       </div>
 
       <ConfirmDialog isOpen={!!deleteConfirm} title={`Delete "${deleteConfirm?.name}"`} confirmText="Confirm" cancelText="Cancel" type="danger" onConfirm={confirmDelete} onCancel={() => setDeleteConfirm(null)}>
-        <p style={{ margin: 0, color: '#374151', fontSize: '14px' }}>This will permanently remove <strong>{deleteConfirm?.name}</strong> and all its variables and assignments.</p>
+        <p style={{ margin: 0, color: 'var(--ink)', fontSize: '14px' }}>This will permanently remove <strong>{deleteConfirm?.name}</strong> and all its variables and assignments.</p>
       </ConfirmDialog>
     </div>
   );

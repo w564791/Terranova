@@ -4,11 +4,11 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -22,7 +22,9 @@
 }
 
 .dialog {
-  background: white;
+  background: var(--surface);
+  overflow: hidden;
+  border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   max-width: 500px;
@@ -45,14 +47,14 @@
 
 .header {
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .content {
@@ -65,8 +67,8 @@
   display: flex;
   gap: 12px;
   padding: 16px;
-  background: #fef3c7;
-  border: 1px solid #fbbf24;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber);
   border-radius: 8px;
   margin-bottom: 20px;
 }
@@ -82,21 +84,21 @@
 
 .warningText strong {
   display: block;
-  color: #92400e;
+  color: var(--amber-hover);
   margin-bottom: 4px;
   font-size: 14px;
 }
 
 .warningText p {
   margin: 0;
-  color: #78350f;
+  color: var(--amber-hover);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .infoBox {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
@@ -110,18 +112,18 @@
 }
 
 .infoRow:not(:last-child) {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .infoLabel {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-weight: 500;
 }
 
 .infoValue {
   font-size: 13px;
-  color: #111827;
+  color: var(--ink);
   text-align: right;
   max-width: 60%;
   word-break: break-word;
@@ -130,7 +132,7 @@
 .description {
   margin: 0;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
   line-height: 1.6;
 }
 
@@ -138,7 +140,7 @@
   display: flex;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   justify-content: flex-end;
 }
 
@@ -155,34 +157,36 @@
 }
 
 .btnPrimary {
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .btnPrimary:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px var(--ring-brand);
 }
 
 .btnSecondary {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
 }
 
 .btnSecondary:hover {
-  background: #e5e7eb;
+  background: var(--surface-3);
+  border-color: var(--ink-faint);
 }
 
 .btnDanger {
-  background: #ef4444;
-  color: white;
+  background: var(--red);
+  color: #fff;
 }
 
 .btnDanger:hover {
-  background: #dc2626;
+  background: var(--red-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px var(--ring-red);
 }
 
 /* 响应式 */
@@ -219,4 +223,14 @@
     max-width: 100%;
     text-align: left;
   }
+}
+
+.btnPrimary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+.btnDanger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-red);
 }

@@ -11,7 +11,7 @@
   justify-content: center;
   align-items: center;
   height: 400px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 16px;
 }
 
@@ -32,12 +32,12 @@
 .headerLeft h1 {
   font-size: 28px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
 .count {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-size: 14px;
 }
 
@@ -52,14 +52,14 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-md);
-  background: var(--color-blue-50);
-  border: 1px solid var(--color-blue-200);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-md);
 }
 
 .actionBar span {
-  color: var(--color-blue-700);
+  color: var(--brand-700);
   font-weight: 500;
 }
 
@@ -70,8 +70,8 @@
 
 /* 资源列表 */
 .resourceList {
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -81,11 +81,11 @@
   grid-template-columns: 40px 2fr 1fr 1.5fr 1fr 200px;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  background: var(--color-gray-50);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
   font-weight: 600;
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .resourceItem {
@@ -93,13 +93,13 @@
   grid-template-columns: 40px 2fr 1fr 1.5fr 1fr 200px;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--surface-2);
   align-items: center;
   transition: background-color 0.2s;
 }
 
 .resourceItem:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .resourceItem:last-child {
@@ -114,18 +114,18 @@
 
 .resourceId {
   font-weight: 500;
-  color: var(--color-gray-900);
+  color: var(--ink);
   font-family: var(--font-mono);
   font-size: 14px;
 }
 
 .description {
   font-size: 13px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .resourceType {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 14px;
 }
 
@@ -137,22 +137,22 @@
 
 .versionNumber {
   font-weight: 600;
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-size: 14px;
 }
 
 .versionSummary {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .noVersion {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
 }
 
 .timestamp {
   font-size: 13px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .actions {
@@ -168,7 +168,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--spacing-xl) 0;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .empty p {
@@ -179,8 +179,8 @@
 /* 按钮样式 */
 .btnPrimary {
   padding: 10px 20px;
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -189,14 +189,14 @@
 }
 
 .btnPrimary:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 .btnSecondary {
   padding: 10px 20px;
-  background: var(--color-white);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
@@ -204,14 +204,14 @@
 }
 
 .btnSecondary:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-400);
+  background: var(--bg);
+  border-color: var(--ink-faint);
 }
 
 .btnDeploy {
   padding: 8px 16px;
-  background: var(--color-green-500);
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -220,28 +220,28 @@
 }
 
 .btnDeploy:hover {
-  background: var(--color-green-600);
+  background: var(--green-hover);
 }
 
 .btnCancel {
   padding: 8px 16px;
-  background: var(--color-white);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btnCancel:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .btnAction {
   padding: 6px 12px;
-  background: var(--color-white);
-  color: var(--color-blue-600);
-  border: 1px solid var(--color-blue-200);
+  background: var(--surface);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-200);
   border-radius: var(--radius-sm);
   font-size: 13px;
   cursor: pointer;
@@ -249,14 +249,14 @@
 }
 
 .btnAction:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-300);
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
 }
 
 .btnDanger {
   padding: 6px 12px;
-  background: var(--color-white);
-  color: var(--color-red-600);
+  background: var(--surface);
+  color: var(--red-hover);
   border: 1px solid var(--color-red-200);
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -265,7 +265,7 @@
 }
 
 .btnDanger:hover {
-  background: var(--color-red-50);
+  background: var(--red-soft);
   border-color: var(--color-red-300);
 }
 
@@ -276,15 +276,15 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .dialog {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   width: 90%;
   max-width: 700px;
@@ -298,21 +298,21 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .dialogHeader h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .closeBtn {
   background: none;
   border: none;
   font-size: 28px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   cursor: pointer;
   line-height: 1;
   padding: 0;
@@ -326,8 +326,8 @@
 }
 
 .closeBtn:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-600);
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .dialogContent {
@@ -344,7 +344,7 @@
   display: block;
   margin-bottom: var(--spacing-xs);
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
   font-size: 14px;
 }
 
@@ -352,7 +352,7 @@
 .formGroup textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
   transition: all 0.2s;
@@ -361,8 +361,8 @@
 .formGroup input:focus,
 .formGroup textarea:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .codeEditor {
@@ -377,13 +377,13 @@
   justify-content: flex-end;
   gap: var(--spacing-sm);
   padding: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .btnSubmit {
   padding: 10px 24px;
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -392,7 +392,7 @@
 }
 
 .btnSubmit:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 /* 响应式设计 */
@@ -425,4 +425,19 @@
   .headerRight button {
     flex: 1;
   }
+}
+
+.btnPrimary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+.btnSubmit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+.btnDanger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-red);
 }

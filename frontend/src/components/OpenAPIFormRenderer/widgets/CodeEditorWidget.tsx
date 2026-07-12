@@ -140,7 +140,7 @@ const CodeEditorWidget: React.FC<WidgetProps> = ({
             <Button
               type="text"
               size="small"
-              icon={copied ? <CheckOutlined style={{ color: '#52c41a' }} /> : <CopyOutlined />}
+              icon={copied ? <CheckOutlined style={{ color: 'var(--green)' }} /> : <CopyOutlined />}
               onClick={handleCopy}
               disabled={!value}
             />

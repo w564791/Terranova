@@ -9,7 +9,7 @@
   justify-content: center;
   align-items: center;
   min-height: 200px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .header {
@@ -23,26 +23,26 @@
   padding: 8px 0;
   background: none;
   border: none;
-  color: #1890ff;
+  color: var(--brand);
   font-size: 14px;
   cursor: pointer;
   margin-bottom: 16px;
 }
 
 .backButton:hover {
-  color: #40a9ff;
+  color: var(--brand-400);
 }
 
 .header h1 {
   margin: 0 0 8px 0;
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .subtitle {
   margin: 0;
-  color: #666;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
@@ -53,8 +53,8 @@
 }
 
 .section {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 24px;
 }
@@ -63,9 +63,9 @@
   margin: 0 0 20px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .formGroup {
@@ -80,7 +80,7 @@
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   font-size: 14px;
 }
 
@@ -92,7 +92,7 @@
 .formGroup textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -103,13 +103,13 @@
 .formGroup select:focus,
 .formGroup textarea:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.1);
 }
 
 .formGroup input:disabled,
 .formGroup select:disabled {
-  background-color: #f5f5f5;
+  background-color: var(--surface-2);
   cursor: not-allowed;
 }
 
@@ -122,7 +122,7 @@
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: #888;
+  color: var(--ink-3);
 }
 
 .formRow {
@@ -154,7 +154,7 @@
 
 .checkboxLabel span {
   font-size: 14px;
-  color: #333;
+  color: var(--ink);
 }
 
 .checkboxGroup {
@@ -162,13 +162,13 @@
   flex-direction: column;
   gap: 12px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 6px;
 }
 
 .eventDesc {
   font-size: 12px;
-  color: #888;
+  color: var(--ink-3);
   margin-left: auto;
 }
 
@@ -177,15 +177,15 @@
   align-items: center;
   gap: 16px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 6px;
   margin-top: 16px;
 }
 
 .testButton {
   padding: 8px 16px;
-  background: #fff;
-  border: 1px solid #d9d9d9;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   cursor: pointer;
@@ -193,8 +193,8 @@
 }
 
 .testButton:hover:not(:disabled) {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .testButton:disabled {
@@ -203,12 +203,12 @@
 }
 
 .testSuccess {
-  color: #52c41a;
+  color: var(--green);
   font-size: 14px;
 }
 
 .testError {
-  color: #ff4d4f;
+  color: var(--red);
   font-size: 14px;
 }
 
@@ -217,13 +217,13 @@
   justify-content: flex-end;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--surface-2);
 }
 
 .cancelButton {
   padding: 10px 20px;
-  background: #fff;
-  border: 1px solid #d9d9d9;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   cursor: pointer;
@@ -231,8 +231,8 @@
 }
 
 .cancelButton:hover:not(:disabled) {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .cancelButton:disabled {
@@ -242,17 +242,17 @@
 
 .saveTestButton {
   padding: 10px 20px;
-  background: #fff;
-  border: 1px solid #1890ff;
+  background: var(--surface);
+  border: 1px solid var(--brand);
   border-radius: 6px;
   font-size: 14px;
-  color: #1890ff;
+  color: var(--brand);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .saveTestButton:hover:not(:disabled) {
-  background: #e6f7ff;
+  background: var(--brand-soft);
 }
 
 .saveTestButton:disabled {
@@ -262,20 +262,25 @@
 
 .submitButton {
   padding: 10px 20px;
-  background: #1890ff;
+  background: var(--brand);
   border: none;
   border-radius: 6px;
   font-size: 14px;
-  color: #fff;
+  color: var(--surface);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .submitButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

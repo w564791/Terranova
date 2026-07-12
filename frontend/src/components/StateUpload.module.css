@@ -1,6 +1,6 @@
 .container {
   padding: 24px;
-  background: #fff;
+  background: var(--surface);
   border-radius: 8px;
   margin-bottom: 24px;
 }
@@ -30,7 +30,7 @@
   margin: 0;
   padding: 16px;
   background: #fff2e8;
-  border: 2px solid #ff4d4f;
+  border: 2px solid var(--red);
   border-radius: 4px;
 }
 

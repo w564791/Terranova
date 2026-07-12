@@ -51,9 +51,9 @@ const TakeoverConfirmDialog: React.FC<TakeoverConfirmDialogProps> = ({
 
           {isSameUser ? (
             // 同一用户：简化提示，直接确认即可
-            <div className={styles.warningBox} style={{ background: '#dbeafe', borderColor: '#3b82f6' }}>
+            <div className={styles.warningBox} style={{ background: 'var(--brand-soft)', borderColor: 'var(--brand)' }}>
               <span className={styles.warningIcon}>ℹ️</span>
-              <p className={styles.warningText} style={{ color: '#1e40af' }}>
+              <p className={styles.warningText} style={{ color: 'var(--brand-700)' }}>
                 确认后将关闭另一个窗口的编辑会话，在此窗口继续编辑。
               </p>
             </div>
@@ -69,7 +69,7 @@ const TakeoverConfirmDialog: React.FC<TakeoverConfirmDialogProps> = ({
                 </p>
               </div>
 
-              <div style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '8px' }}>
+              <div style={{ marginTop: '16px', padding: '12px', background: 'var(--amber-soft)', borderRadius: '8px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
@@ -77,7 +77,7 @@ const TakeoverConfirmDialog: React.FC<TakeoverConfirmDialogProps> = ({
                     onChange={(e) => setForceTakeover(e.target.checked)}
                     style={{ marginRight: '8px', width: '16px', height: '16px', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '14px', color: '#92400e' }}>
+                  <span style={{ fontSize: '14px', color: 'var(--amber-hover)' }}>
                     <strong>强制接管</strong> - 立即踢掉对方，无需等待确认
                   </span>
                 </label>

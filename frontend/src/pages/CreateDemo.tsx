@@ -376,10 +376,10 @@ const CreateDemo: React.FC = () => {
           </p>
           
           {/* Demo 基本信息 */}
-          <div style={{ marginBottom: '24px', padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
+          <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg)', borderRadius: '8px' }}>
             <div className={styles.formGroup} style={{ marginBottom: '16px' }}>
               <label className={styles.label}>
-                Demo 名称 <span style={{ color: 'var(--color-red-500)' }}>*</span>
+                Demo 名称 <span style={{ color: 'var(--red)' }}>*</span>
               </label>
               <input
                 type="text"
@@ -431,7 +431,7 @@ const CreateDemo: React.FC = () => {
                     <span style={{ 
                       marginLeft: '8px', 
                       padding: '2px 8px', 
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%)',
                       color: 'white',
                       borderRadius: '4px',
                       fontSize: '12px',
@@ -492,10 +492,10 @@ const CreateDemo: React.FC = () => {
             {formRenderError && viewMode === 'json' && (
               <div style={{
                 padding: '12px 16px',
-                background: '#fff3cd',
-                border: '1px solid #ffc107',
+                background: 'var(--amber-soft)',
+                border: '1px solid var(--amber)',
                 borderRadius: '6px',
-                color: '#856404',
+                color: 'var(--amber-hover)',
                 marginBottom: '16px',
                 display: 'flex',
                 justifyContent: 'space-between',

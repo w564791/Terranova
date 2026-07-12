@@ -14,7 +14,7 @@
 
 .card {
   background: white;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
   transition: box-shadow 0.2s;
@@ -23,7 +23,7 @@
 
 .cardLabel {
   font-size: 13px;
-  color: #6c757d;
+  color: var(--ink-2);
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -33,19 +33,19 @@
 .cardValue {
   font-size: 36px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
   line-height: 1.2;
 }
 
 .cardHint {
   font-size: 12px;
-  color: #868e96;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
 .coverageBar {
   height: 8px;
-  background: #e9ecef;
+  background: var(--line);
   border-radius: 4px;
   margin-top: 12px;
   overflow: hidden;
@@ -65,15 +65,15 @@
   text-align: left;
   padding: 8px 12px;
   font-size: 12px;
-  color: #6c757d;
-  border-bottom: 1px solid #e9ecef;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
   font-weight: 500;
 }
 .syncTable td {
   padding: 8px 12px;
   font-size: 13px;
-  color: #212529;
-  border-bottom: 1px solid #f1f3f5;
+  color: var(--ink);
+  border-bottom: 1px solid var(--surface-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -94,7 +94,7 @@
 
 .queueNote {
   font-size: 11px;
-  color: #adb5bd;
+  color: var(--ink-faint);
   padding-bottom: 6px;
   font-style: italic;
 }
@@ -104,8 +104,8 @@
   justify-content: space-between;
   padding: 4px 0 2px;
   font-size: 11px;
-  color: #adb5bd;
-  border-bottom: 1px solid #f1f3f5;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--surface-2);
   margin-bottom: 2px;
 }
 .queueHeaderLabel { flex: 1; }
@@ -117,19 +117,19 @@
   align-items: center;
   padding: 5px 0;
   font-size: 13px;
-  border-bottom: 1px solid #f8f9fa;
+  border-bottom: 1px solid var(--bg);
 }
 .queueRow:last-of-type { border-bottom: none; }
-.queueLabel { color: #6c757d; flex: 1; }
+.queueLabel { color: var(--ink-2); flex: 1; }
 .queueCounts {
   display: flex;
   align-items: center;
   gap: 2px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.queueSep { color: #dee2e6; font-weight: 400; }
+.queueSep { color: var(--line-2); font-weight: 400; }
 
 .typeBarRow {
   display: flex;
@@ -139,7 +139,7 @@
 }
 .typeBarLabel {
   font-size: 12px;
-  color: #495057;
+  color: var(--ink-2);
   width: 130px;
   text-align: right;
   flex-shrink: 0;
@@ -150,7 +150,7 @@
 .typeBarTrack {
   flex: 1;
   height: 18px;
-  background: #f1f3f5;
+  background: var(--surface-2);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -160,7 +160,7 @@
 }
 .typeBarCount {
   font-size: 11px;
-  color: #868e96;
+  color: var(--ink-3);
   width: 32px;
   flex-shrink: 0;
 }
@@ -168,11 +168,11 @@
 .typeBarFooter {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #f1f3f5;
+  border-top: 1px solid var(--surface-2);
 }
 .typeBarFooterText {
   font-size: 12px;
-  color: #868e96;
+  color: var(--ink-3);
   margin-bottom: 6px;
   padding-left: 138px;
 }
@@ -184,7 +184,7 @@
 }
 .sourceBarLabel {
   font-size: 12px;
-  color: #868e96;
+  color: var(--ink-3);
   width: 130px;
   text-align: right;
   flex-shrink: 0;
@@ -193,7 +193,7 @@
   display: flex;
   flex: 1;
   height: 10px;
-  background: #f1f3f5;
+  background: var(--surface-2);
   border-radius: 5px;
   overflow: hidden;
 }
@@ -208,7 +208,7 @@
   display: flex;
   gap: 16px;
   font-size: 11px;
-  color: #868e96;
+  color: var(--ink-3);
   padding-left: 138px;
 }
 .legendDot {
@@ -227,7 +227,7 @@
 }
 
 .emptyHint {
-  color: #adb5bd;
+  color: var(--ink-faint);
   font-size: 13px;
   text-align: center;
   padding: 24px 0;
@@ -254,30 +254,30 @@
 
 .periodButton {
   padding: 2px 10px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
   font-size: 12px;
-  color: #666;
+  color: var(--ink-2);
   transition: all 0.2s;
 }
 
 .periodButton:hover {
-  border-color: #1677ff;
-  color: #1677ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .periodButtonActive {
-  background: #1677ff;
-  border-color: #1677ff;
-  color: #fff;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--surface);
 }
 
 .periodButtonActive:hover {
-  background: #4096ff;
-  border-color: #4096ff;
-  color: #fff;
+  background: var(--brand-400);
+  border-color: var(--brand-400);
+  color: var(--surface);
 }
 
 .searchMetricsRow {
@@ -290,20 +290,20 @@
   flex: 1;
   text-align: center;
   padding: 12px 8px;
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 6px;
 }
 
 .searchMetricValue {
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   line-height: 1.2;
 }
 
 .searchMetricLabel {
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
@@ -330,7 +330,7 @@
 .searchSubTitle {
   font-size: 13px;
   font-weight: 500;
-  color: #666;
+  color: var(--ink-2);
   margin-bottom: 8px;
 }
 
@@ -343,7 +343,7 @@
 
 .methodBarLabel {
   font-size: 12px;
-  color: #666;
+  color: var(--ink-2);
   width: 56px;
   text-align: right;
 }
@@ -351,7 +351,7 @@
 .methodBarTrack {
   flex: 1;
   height: 8px;
-  background: #f0f0f0;
+  background: var(--surface-2);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -364,7 +364,7 @@
 
 .methodBarCount {
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   width: 36px;
   text-align: right;
 }
@@ -378,7 +378,7 @@
 }
 
 .zeroResultQuery {
-  color: #ff4d4f;
+  color: var(--red);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -387,7 +387,7 @@
 }
 
 .zeroResultCount {
-  color: #999;
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 

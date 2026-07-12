@@ -13,7 +13,7 @@
 
 .headerIcon {
   font-size: 32px;
-  color: #3b82f6;
+  color: var(--brand);
   margin-top: 4px;
 }
 
@@ -33,7 +33,7 @@
 .providerForm {
   margin-top: 16px;
   padding: 24px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
+  background: var(--bg);
+  border: 1px solid var(--surface-2);
   border-radius: 8px;
 }

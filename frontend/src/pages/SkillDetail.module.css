@@ -16,7 +16,7 @@
 .backLink {
   background: none;
   border: none;
-  color: #3b82f6;
+  color: var(--brand);
   cursor: pointer;
   font-size: 14px;
   padding: 0;
@@ -24,16 +24,16 @@
 }
 
 .backLink:hover {
-  color: #2563eb;
+  color: var(--brand-ink);
   text-decoration: underline;
 }
 
 .breadcrumbSep {
-  color: #d1d5db;
+  color: var(--line-2);
 }
 
 .breadcrumbCurrent {
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* 消息提示 */
@@ -48,15 +48,15 @@
 }
 
 .message.success {
-  background-color: #d1fae5;
-  color: #065f46;
-  border: 1px solid #10b981;
+  background-color: var(--green-soft);
+  color: var(--green-active);
+  border: 1px solid var(--green);
 }
 
 .message.error {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #ef4444;
+  background-color: var(--red-soft);
+  color: var(--red-active);
+  border: 1px solid var(--red);
 }
 
 .messageClose {
@@ -77,7 +77,7 @@
 /* 头部 */
 .header {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 20px;
@@ -103,24 +103,24 @@
 .title {
   font-size: 22px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   margin: 0;
 }
 
 .titleInput {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
-  border: 1px solid #3b82f6;
+  color: var(--ink);
+  border: 1px solid var(--brand);
   border-radius: 4px;
   padding: 4px 10px;
   outline: none;
-  background: #f0f7ff;
+  background: var(--brand-soft);
   min-width: 300px;
 }
 
 .titleInput:focus {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .layerBadge {
@@ -132,26 +132,26 @@
 }
 
 .layer_foundation {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .layer_domain {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .layer_task {
-  background: #d1fae5;
-  color: #047857;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .inactiveBadge {
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 4px;
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--surface-2);
+  color: var(--ink-faint);
   font-weight: 500;
 }
 
@@ -159,8 +159,8 @@
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 3px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .metaRow {
@@ -171,28 +171,28 @@
 
 .metaItem {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
 .metaLabel {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .inlineInput {
   font-size: 13px;
-  border: 1px solid #3b82f6;
+  border: 1px solid var(--brand);
   border-radius: 3px;
   padding: 2px 6px;
   outline: none;
-  background: #f0f7ff;
+  background: var(--brand-soft);
   width: 80px;
 }
 
 .inlineInput:focus {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 /* 操作按钮 */
@@ -219,88 +219,88 @@
 }
 
 .editBtn {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .editBtn:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .toggleBtnDeactivate {
-  background: #fff;
-  border-color: #f59e0b;
-  color: #d97706;
+  background: var(--surface);
+  border-color: var(--amber);
+  color: var(--amber-hover);
 }
 
 .toggleBtnDeactivate:hover {
-  background: #fffbeb;
+  background: var(--amber-soft);
 }
 
 .toggleBtnActivate {
-  background: #fff;
-  border-color: #10b981;
-  color: #059669;
+  background: var(--surface);
+  border-color: var(--green);
+  color: var(--green-hover);
 }
 
 .toggleBtnActivate:hover {
-  background: #ecfdf5;
+  background: var(--green-soft);
 }
 
 .deleteBtn {
-  background: #fff;
-  border-color: #ef4444;
-  color: #dc2626;
+  background: var(--surface);
+  border-color: var(--red);
+  color: var(--red-hover);
 }
 
 .deleteBtn:hover {
-  background: #fef2f2;
+  background: var(--red-soft);
 }
 
 .cancelBtn {
-  background: #fff;
-  border-color: #d1d5db;
-  color: #6b7280;
+  background: var(--surface);
+  border-color: var(--line-2);
+  color: var(--ink-2);
 }
 
 .cancelBtn:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .saveBtn {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .saveBtn:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--brand-ink);
+  border-color: var(--brand-ink);
 }
 
 .saveBtn:disabled {
-  background: #d1d5db;
-  border-color: #d1d5db;
+  background: var(--line-2);
+  border-color: var(--line-2);
   cursor: not-allowed;
 }
 
 .backBtn {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .backBtn:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 /* 区块 */
 .section {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px 24px;
   margin-bottom: 16px;
@@ -309,19 +309,19 @@
 .sectionTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   margin: 0 0 12px 0;
 }
 
 .description {
   font-size: 14px;
-  color: #4b5563;
+  color: var(--ink-2);
   margin: 0;
   line-height: 1.6;
 }
 
 .emptyText {
-  color: #d1d5db;
+  color: var(--line-2);
   font-style: italic;
 }
 
@@ -334,7 +334,7 @@
 .descInput {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -343,13 +343,13 @@
 
 .descInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .hint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 /* 标签 */
@@ -362,11 +362,11 @@
 .tagReadonly {
   display: inline-block;
   padding: 4px 10px;
-  background: #f0f5ff;
-  border: 1px solid #adc6ff;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 4px;
   font-size: 13px;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .tagContainer {
@@ -374,16 +374,16 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   min-height: 42px;
   align-items: center;
-  background: #fff;
+  background: var(--surface);
 }
 
 .tagContainer:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .tag {
@@ -391,11 +391,11 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: #f0f5ff;
-  border: 1px solid #adc6ff;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 4px;
   font-size: 13px;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .tag button {
@@ -404,7 +404,7 @@
   padding: 0;
   margin: 0;
   font-size: 14px;
-  color: #1890ff;
+  color: var(--brand);
   cursor: pointer;
   line-height: 1;
   opacity: 0.7;
@@ -412,7 +412,7 @@
 
 .tag button:hover {
   opacity: 1;
-  color: #ff4d4f;
+  color: var(--red);
 }
 
 .tagInput {
@@ -434,7 +434,7 @@
 .contentEditor {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
@@ -447,16 +447,16 @@
 
 .contentEditor:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .contentView {
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 6px;
   padding: 16px 20px;
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   line-height: 1.7;
 }
 
@@ -470,20 +470,20 @@
   margin-top: 1.2em;
   margin-bottom: 0.6em;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   line-height: 1.4;
 }
 
 .contentView h1 {
   font-size: 1.5em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .contentView h2 {
   font-size: 1.3em;
   padding-bottom: 0.2em;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .contentView h3 {
@@ -509,7 +509,7 @@
 }
 
 .contentView code {
-  background: #e5e7eb;
+  background: var(--line);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -518,8 +518,8 @@
 }
 
 .contentView pre {
-  background: #1f2937;
-  color: #e5e7eb;
+  background: var(--ink);
+  color: var(--line);
   padding: 14px 18px;
   border-radius: 6px;
   overflow-x: auto;
@@ -535,11 +535,11 @@
 }
 
 .contentView blockquote {
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--brand);
   margin: 0.8em 0;
   padding: 0.4em 1em;
-  background: #eff6ff;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .contentView table {
@@ -550,29 +550,29 @@
 
 .contentView th,
 .contentView td {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   padding: 8px 12px;
   text-align: left;
   font-size: 13px;
 }
 
 .contentView th {
-  background: #f3f4f6;
+  background: var(--surface-2);
   font-weight: 600;
 }
 
 .contentView tr:nth-child(even) {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .contentView hr {
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   margin: 1.2em 0;
 }
 
 .contentView a {
-  color: #3b82f6;
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -582,14 +582,14 @@
 
 .contentView strong {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
 }
 
 /* 加载和错误状态 */
 .loading {
   text-align: center;
   padding: 60px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 16px;
 }
 
@@ -597,12 +597,12 @@
   text-align: center;
   padding: 60px;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
 .errorPage p {
-  color: #991b1b;
+  color: var(--red-active);
   margin-bottom: 20px;
   font-size: 16px;
 }

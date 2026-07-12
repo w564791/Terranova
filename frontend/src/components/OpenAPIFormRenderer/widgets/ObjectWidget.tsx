@@ -227,8 +227,8 @@ const ObjectWidget: React.FC<WidgetProps> = ({
         name={name}
         help={help}
       >
-        <Card size="small" style={{ backgroundColor: '#fafafa' }}>
-          <span style={{ color: '#8c8c8c' }}>无可配置属性</span>
+        <Card size="small" style={{ backgroundColor: 'var(--bg)' }}>
+          <span style={{ color: 'var(--ink-3)' }}>无可配置属性</span>
         </Card>
       </Form.Item>
     );
@@ -247,14 +247,14 @@ const ObjectWidget: React.FC<WidgetProps> = ({
     >
       <Card 
         size="small" 
-        style={{ backgroundColor: '#fafafa' }}
+        style={{ backgroundColor: 'var(--bg)' }}
         title={
           <Space>
             <SettingOutlined />
             <span style={{ fontSize: 13, fontWeight: 'normal' }}>
               {basicFields.length} 个基础属性
               {advancedFields.length > 0 && (
-                <span style={{ color: '#8c8c8c', marginLeft: 8 }}>
+                <span style={{ color: 'var(--ink-3)', marginLeft: 8 }}>
                   + {advancedFields.length} 个高级属性
                 </span>
               )}
@@ -286,7 +286,7 @@ const ObjectWidget: React.FC<WidgetProps> = ({
           >
             <Panel 
               header={
-                <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                   高级配置 ({advancedFields.length})
                 </span>
               } 
@@ -299,7 +299,7 @@ const ObjectWidget: React.FC<WidgetProps> = ({
         )}
         
         {hasManifestContext && (
-          <div style={{ color: '#1890ff', fontSize: 11, marginTop: 8 }}>
+          <div style={{ color: 'var(--brand)', fontSize: 11, marginTop: 8 }}>
             在文本字段输入 / 可引用其他 Module 的输出
           </div>
         )}

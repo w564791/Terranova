@@ -11,7 +11,7 @@ const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
   <span>
     {title}{' '}
     <Tooltip title={tip}>
-      <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: 12, cursor: 'help' }} />
+      <QuestionCircleOutlined style={{ color: 'var(--ink-3)', fontSize: 12, cursor: 'help' }} />
     </Tooltip>
   </span>
 );
@@ -101,11 +101,11 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
       title: <ColTitle title="Layer 1" tip="Schema 校验通过率" />,
       key: 'l1_pass_rate',
       render: (_: unknown, r: VersionStats) => {
-        if (r.l1_pass_rate == null) return <span style={{ color: '#bbb' }}>-</span>;
+        if (r.l1_pass_rate == null) return <span style={{ color: 'var(--ink-faint)' }}>-</span>;
         const rate = r.l1_pass_rate;
-        let color = '#52c41a';
-        if (rate < 50) color = '#ff4d4f';
-        else if (rate < 80) color = '#faad14';
+        let color = 'var(--green)';
+        if (rate < 50) color = 'var(--red)';
+        else if (rate < 80) color = 'var(--amber)';
         return <span style={{ color, fontWeight: 600 }}>{rate.toFixed(1)}%</span>;
       },
     },
@@ -113,9 +113,9 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
       title: <ColTitle title="Layer 2" tip="规则一致性 LLM 评估均分（0-100）。>=70 良好，50-69 有问题，<50 严重违规" />,
       key: 'l2',
       render: (_: unknown, r: VersionStats) => {
-        if (r.l2_avg_score == null) return <span style={{ color: '#bbb' }}>-</span>;
+        if (r.l2_avg_score == null) return <span style={{ color: 'var(--ink-faint)' }}>-</span>;
         const score = r.l2_avg_score;
-        const color = score >= 70 ? '#52c41a' : score >= 50 ? '#faad14' : '#ff4d4f';
+        const color = score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)';
         return <span style={{ color, fontWeight: 600 }}>{score.toFixed(0)}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></span>;
       },
     },
@@ -123,9 +123,9 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
       title: <ColTitle title="Layer 3" tip="语义质量 LLM 评估均分（0-100）。>=70 良好，50-69 有问题，<50 质量差" />,
       key: 'l3',
       render: (_: unknown, r: VersionStats) => {
-        if (r.l3_avg_score == null) return <span style={{ color: '#bbb' }}>-</span>;
+        if (r.l3_avg_score == null) return <span style={{ color: 'var(--ink-faint)' }}>-</span>;
         const score = r.l3_avg_score;
-        const color = score >= 70 ? '#52c41a' : score >= 50 ? '#faad14' : '#ff4d4f';
+        const color = score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)';
         return <span style={{ color, fontWeight: 600 }}>{score.toFixed(0)}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></span>;
       },
     },
@@ -169,7 +169,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
       dataIndex: 'score',
       key: 'score',
       render: (val: number) => (
-        <span style={{ color: val === 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>{val}</span>
+        <span style={{ color: val === 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{val}</span>
       ),
     },
     {
@@ -236,7 +236,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
             <div className={styles.statCard}>
               <div className={styles.statLabel}>Schema 通过率</div>
               <div className={styles.statValue} style={{
-                color: detail.pass_rate >= 80 ? '#52c41a' : detail.pass_rate >= 50 ? '#faad14' : '#ff4d4f'
+                color: detail.pass_rate >= 80 ? 'var(--green)' : detail.pass_rate >= 50 ? 'var(--amber)' : 'var(--red)'
               }}>
                 {detail.pass_rate.toFixed(1)}%
               </div>
@@ -244,13 +244,13 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
             </div>
             <div className={styles.statCard}>
               <div className={styles.statLabel}>总调用次数</div>
-              <div className={styles.statValue} style={{ color: '#262626' }}>{detail.total}</div>
+              <div className={styles.statValue} style={{ color: 'var(--ink)' }}>{detail.total}</div>
               <div className={styles.statSub}>近 {days} 天</div>
             </div>
             <div className={styles.statCard}>
               <div className={styles.statLabel}>平均耗时</div>
               <div className={styles.statValue} style={{
-                color: detail.avg_latency_ms > 10000 ? '#ff4d4f' : detail.avg_latency_ms > 5000 ? '#faad14' : '#262626',
+                color: detail.avg_latency_ms > 10000 ? 'var(--red)' : detail.avg_latency_ms > 5000 ? 'var(--amber)' : 'var(--ink)',
                 fontSize: detail.avg_latency_ms > 1000 ? 24 : 28,
               }}>
                 {detail.avg_latency_ms > 1000
@@ -271,7 +271,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
                   if (!current?.avg_latency_ms) return null;
                   const ms = current.avg_latency_ms;
                   const text = ms > 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
-                  return <span style={{ marginLeft: 8, color: '#8c8c8c' }}>⏱ {text}</span>;
+                  return <span style={{ marginLeft: 8, color: 'var(--ink-3)' }}>⏱ {text}</span>;
                 })()}
               </div>
             </div>
@@ -313,7 +313,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               </div>
               {(() => {
                 const items = violationLayer === 'rule' ? ruleViolations : semanticViolations;
-                const color = violationLayer === 'rule' ? '#ff4d4f' : '#fa8c16';
+                const color = violationLayer === 'rule' ? 'var(--red)' : 'var(--amber)';
                 const max = items.length > 0 ? Math.max(...items.map(v => v.count)) : 1;
                 if (items.length === 0) return <div className={styles.emptyState}>无违规记录</div>;
                 return items.map((v, i) => (
@@ -340,7 +340,7 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
               {(() => {
                 const fm = detail.feedback_matrix;
                 const cell = (v: number) => (
-                  <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', textAlign: 'center', color: v > 0 ? '#262626' : '#bbb' }}>
+                  <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--surface-2)', textAlign: 'center', color: v > 0 ? 'var(--ink)' : 'var(--ink-faint)' }}>
                     {v > 0 ? v : '-'}
                   </td>
                 );
@@ -355,22 +355,22 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
                     <div>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
-                          <tr style={{ background: '#fafafa' }}>
-                            <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #e8e8e8' }}></th>
-                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>好评 (4-5)</th>
-                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>差评 (1-2)</th>
-                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #e8e8e8' }}>无反馈</th>
+                          <tr style={{ background: 'var(--bg)' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--line)' }}></th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid var(--line)' }}>好评 (4-5)</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid var(--line)' }}>差评 (1-2)</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid var(--line)' }}>无反馈</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}><Tag color="green">评估 pass</Tag></td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--surface-2)' }}><Tag color="green">评估 pass</Tag></td>
                             {cell(fm?.pass_positive ?? 0)}
                             {cell(fm?.pass_negative ?? 0)}
                             {cell(fm?.pass_no_feedback ?? 0)}
                           </tr>
                           <tr>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}><Tag color="orange">评估 warn</Tag></td>
+                            <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--surface-2)' }}><Tag color="orange">评估 warn</Tag></td>
                             {cell(fm?.warn_positive ?? 0)}
                             {cell(fm?.warn_negative ?? 0)}
                             {cell(fm?.warn_no_feedback ?? 0)}
@@ -385,29 +385,29 @@ const SkillDetailTab: React.FC<Props> = ({ days }) => {
                       </table>
                     </div>
                     <div style={{ padding: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 12 }}>盲区检测</div>
-                      <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 12 }}>盲区检测</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
                         {totalWithFeedback > 0 ? (
                           <>
                             <div>共 <b>{totalWithFeedback}</b> 条有用户评分的记录：</div>
                             {fm!.pass_negative > 0 && (
-                              <div style={{ color: '#ff4d4f', fontWeight: 500 }}>
+                              <div style={{ color: 'var(--red)', fontWeight: 500 }}>
                                 ⚠ AI 评估通过但用户给了差评：<b>{fm!.pass_negative}</b> 条
-                                <span style={{ color: '#8c8c8c', fontWeight: 400 }}>（占 {((fm!.pass_negative / totalWithFeedback) * 100).toFixed(0)}%，说明评估标准可能遗漏了用户关注的问题）</span>
+                                <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>（占 {((fm!.pass_negative / totalWithFeedback) * 100).toFixed(0)}%，说明评估标准可能遗漏了用户关注的问题）</span>
                               </div>
                             )}
                             {fm!.fail_positive > 0 && (
-                              <div style={{ color: '#fa8c16', fontWeight: 500 }}>
+                              <div style={{ color: 'var(--amber)', fontWeight: 500 }}>
                                 ⚠ AI 评估失败但用户给了好评：<b>{fm!.fail_positive}</b> 条
-                                <span style={{ color: '#8c8c8c', fontWeight: 400 }}>（说明评估标准可能过于严格）</span>
+                                <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>（说明评估标准可能过于严格）</span>
                               </div>
                             )}
                             {fm!.pass_negative === 0 && fm!.fail_positive === 0 && (
-                              <div style={{ color: '#52c41a' }}>✓ 评估结果与用户反馈一致，暂无盲区</div>
+                              <div style={{ color: 'var(--green)' }}>✓ 评估结果与用户反馈一致，暂无盲区</div>
                             )}
                           </>
                         ) : (
-                          <div style={{ color: '#8c8c8c' }}>暂无用户评分数据，无法检测盲区</div>
+                          <div style={{ color: 'var(--ink-3)' }}>暂无用户评分数据，无法检测盲区</div>
                         )}
                       </div>
                     </div>

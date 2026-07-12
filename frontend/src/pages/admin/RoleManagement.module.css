@@ -17,13 +17,13 @@
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .description {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   margin: 0;
 }
 
@@ -35,15 +35,15 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
-  background: #52c41a;
-  color: white;
+  background: var(--green);
+  color: #fff;
   white-space: nowrap;
 }
 
 .createButton:hover {
-  background: #73d13d;
+  background: var(--green-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(82, 196, 26, 0.3);
+  box-shadow: 0 4px 12px rgba(26, 138, 74, 0.3);
 }
 
 /* 内容区域 */
@@ -58,7 +58,7 @@
 .rolesList {
   background: white;
   border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -67,22 +67,22 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e8e8e8;
-  background: #fafafa;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 
 .rolesTitle {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0;
 }
 
 .rolesCount {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   padding: 4px 12px;
-  background: #f0f0f0;
+  background: var(--surface-2);
   border-radius: 12px;
 }
 
@@ -97,7 +97,7 @@
 
 .roleCard {
   padding: 16px;
-  background: #fafafa;
+  background: var(--bg);
   border: 2px solid transparent;
   border-radius: 8px;
   cursor: pointer;
@@ -105,14 +105,14 @@
 }
 
 .roleCard:hover {
-  background: #f0f7ff;
-  border-color: #d6e4ff;
+  background: var(--brand-soft);
+  border-color: var(--brand-soft);
 }
 
 .roleCard.selected {
-  background: #e6f7ff;
-  border-color: #1890ff;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.15);
 }
 
 .roleCardHeader {
@@ -125,7 +125,7 @@
 .roleCardTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -141,7 +141,7 @@
   width: 28px;
   height: 28px;
   border: none;
-  background: #e6f7ff;
+  background: var(--brand-soft);
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
@@ -153,28 +153,28 @@
 }
 
 .cloneButton:hover {
-  background: #1890ff;
+  background: var(--brand);
   transform: scale(1.1);
 }
 
 .roleCard.cloning {
-  border-color: #52c41a;
-  background: #f6ffed;
+  border-color: var(--green);
+  background: var(--green-soft);
 }
 
 .systemBadge {
   font-size: 10px;
   font-weight: 500;
   padding: 2px 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  color: #fff;
   border-radius: 10px;
   letter-spacing: 0.5px;
 }
 
 .policyCount {
   font-size: 12px;
-  color: #666;
+  color: var(--ink-2);
   padding: 2px 8px;
   background: white;
   border-radius: 10px;
@@ -182,7 +182,7 @@
 
 .roleCardDesc {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
   line-height: 1.5;
 }
 
@@ -190,7 +190,7 @@
 .roleDetail {
   background: white;
   border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -212,25 +212,25 @@
 .emptyText {
   font-size: 18px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   margin-bottom: 8px;
 }
 
 .emptyHint {
   font-size: 14px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .detailHeader {
   padding: 24px;
-  border-bottom: 2px solid #e8e8e8;
-  background: #fafafa;
+  border-bottom: 2px solid var(--line);
+  background: var(--bg);
 }
 
 .detailTitle {
   font-size: 22px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
   display: flex;
   align-items: center;
@@ -239,7 +239,7 @@
 
 .detailDesc {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   margin: 0;
   line-height: 1.6;
 }
@@ -252,7 +252,7 @@
 .policiesTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 20px 0;
 }
 
@@ -261,46 +261,46 @@
   justify-content: center;
   padding: 24px 0;
   margin-top: 16px;
-  border-top: 1px dashed #d9d9d9;
+  border-top: 1px dashed var(--line-2);
 }
 
 .addPolicyButton {
   padding: 10px 32px;
-  border: 2px dashed #1890ff;
+  border: 2px dashed var(--brand);
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
   background: white;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .addPolicyButton:hover {
-  background: #e6f7ff;
-  border-color: #40a9ff;
+  background: var(--brand-soft);
+  border-color: var(--brand-400);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.2);
 }
 
 .addPolicyButtonCenter {
   padding: 12px 40px;
-  border: 2px dashed #1890ff;
+  border: 2px dashed var(--brand);
   border-radius: 8px;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
   background: white;
-  color: #1890ff;
+  color: var(--brand);
   margin-top: 20px;
 }
 
 .addPolicyButtonCenter:hover {
-  background: #e6f7ff;
-  border-color: #40a9ff;
+  background: var(--brand-soft);
+  border-color: var(--brand-400);
   transform: scale(1.05);
-  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(28, 110, 140, 0.3);
 }
 
 .policiesGrid {
@@ -312,8 +312,8 @@
 }
 
 .policyGroup {
-  background: #fafafa;
-  border: 1px solid #e8e8e8;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 16px;
 }
@@ -324,13 +324,13 @@
   gap: 12px;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line);
 }
 
 .resourceType {
   font-size: 14px;
   font-weight: 600;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .policyItems {
@@ -350,12 +350,12 @@
 }
 
 .policyItem:hover {
-  background: #f0f7ff;
+  background: var(--brand-soft);
 }
 
 .policyName {
   font-size: 13px;
-  color: #333;
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -369,8 +369,8 @@
   width: 24px;
   height: 24px;
   border: none;
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
   border-radius: 4px;
   font-size: 18px;
   line-height: 1;
@@ -382,19 +382,19 @@
 }
 
 .removePolicyButton:hover {
-  background: #ff4d4f;
-  color: white;
+  background: var(--red);
+  color: #fff;
   transform: scale(1.1);
 }
 
 .levelSelect {
   padding: 6px 10px;
-  border: 1px solid #1890ff;
+  border: 1px solid var(--brand);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
   cursor: pointer;
 }
 
@@ -410,23 +410,23 @@
 }
 
 .saveButton {
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .saveButton:hover {
-  background: #52c41a;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .cancelButton {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .cancelButton:hover {
-  background: #d9d9d9;
-  color: #333;
+  background: var(--line-2);
+  color: var(--ink);
 }
 
 /* 徽章样式 */
@@ -439,18 +439,18 @@
 }
 
 .scopeBadge.organization {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .scopeBadge.project {
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .scopeBadge.workspace {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 .levelBadge {
@@ -461,23 +461,23 @@
 }
 
 .levelBadge.none {
-  background: #f5f5f5;
-  color: #999;
+  background: var(--surface-2);
+  color: var(--ink-3);
 }
 
 .levelBadge.read {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .levelBadge.write {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 .levelBadge.admin {
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 /* 空状态 */
@@ -491,7 +491,7 @@
 }
 
 .noPoliciesText {
-  color: #999;
+  color: var(--ink-3);
   font-size: 15px;
 }
 
@@ -499,7 +499,7 @@
   padding: 40px 20px;
   text-align: center;
   font-size: 16px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 /* 创建角色表单 */
@@ -552,13 +552,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 24px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line);
 }
 
 .modalTitle {
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -566,18 +566,18 @@
   width: 32px;
   height: 32px;
   border: none;
-  background: #f5f5f5;
+  background: var(--surface-2);
   border-radius: 4px;
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
   transition: all 0.2s;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .closeButton:hover {
-  background: #e8e8e8;
-  color: #333;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .createForm {
@@ -592,12 +592,12 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   margin-bottom: 8px;
 }
 
 .required {
-  color: #ff4d4f;
+  color: var(--red);
   margin-left: 4px;
 }
 
@@ -605,7 +605,7 @@
 .textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: all 0.3s;
@@ -614,14 +614,14 @@
 
 .input:hover,
 .textarea:hover {
-  border-color: #40a9ff;
+  border-color: var(--brand-400);
 }
 
 .input:focus,
 .textarea:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.2);
 }
 
 .textarea {
@@ -632,7 +632,7 @@
 .hint {
   display: block;
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
@@ -642,7 +642,7 @@
   gap: 12px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line);
 }
 
 .button {
@@ -657,29 +657,29 @@
 }
 
 .button.primary {
-  background: #52c41a;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .button.primary:hover:not(:disabled) {
-  background: #73d13d;
+  background: var(--green-hover);
 }
 
 .button.primary:disabled {
-  background: #d9d9d9;
+  background: var(--line-2);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .button.secondary {
   background: white;
-  color: #333;
-  border: 1px solid #d9d9d9;
+  color: var(--ink);
+  border: 1px solid var(--line-2);
 }
 
 .button.secondary:hover:not(:disabled) {
-  border-color: #52c41a;
-  color: #52c41a;
+  border-color: var(--green);
+  color: var(--green);
 }
 
 .button.secondary:disabled {
@@ -691,8 +691,8 @@
 .inlineForm {
   margin-top: 24px;
   padding: 24px;
-  background: #f0f7ff;
-  border: 2px solid #1890ff;
+  background: var(--brand-soft);
+  border: 2px solid var(--brand);
   border-radius: 8px;
   animation: slideDown 0.3s;
 }
@@ -713,7 +713,7 @@
 .inlineFormTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #1890ff;
+  color: var(--brand);
   margin: 0 0 20px 0;
 }
 
@@ -733,15 +733,15 @@
   justify-content: flex-end;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #d6e4ff;
+  border-top: 1px solid var(--brand-soft);
 }
 
 /* 内联克隆表单 */
 .cloneFormInline {
   margin: 0 16px 12px 16px;
   padding: 20px;
-  background: #f6ffed;
-  border: 2px solid #52c41a;
+  background: var(--green-soft);
+  border: 2px solid var(--green);
   border-radius: 8px;
   animation: slideDown 0.3s;
 }
@@ -749,7 +749,7 @@
 .cloneFormTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #52c41a;
+  color: var(--green);
   margin: 0 0 16px 0;
 }
 
@@ -764,7 +764,7 @@
   justify-content: flex-end;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #d9f7be;
+  border-top: 1px solid var(--green-soft);
 }
 
 /* 响应式设计 */

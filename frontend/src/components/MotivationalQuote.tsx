@@ -51,7 +51,7 @@ const getQuoteByTime = () => {
     return {
       icon: '🌞',
       text: '保持节奏，稳步前行',
-      background: 'linear-gradient(135deg, #56ccf2 0%, #2f80ed 100%)'
+      background: 'linear-gradient(135deg, var(--brand-300) 0%, var(--brand) 100%)'
     };
   }
 
@@ -59,14 +59,14 @@ const getQuoteByTime = () => {
     return {
       icon: '🌇',
       text: '辛苦了，今天也在进步',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%)'
     };
   }
 
   return {
     icon: '🌙',
     text: '夜深了，注意休息',
-    background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%)'
+    background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-ink) 50%, var(--brand-ink) 100%)'
   };
 };
 

@@ -109,8 +109,8 @@ const btnSecondaryStyle: React.CSSProperties = {
 const btnDangerStyle: React.CSSProperties = {
   ...btnBaseStyle,
   background: '#5a1d1d',
-  color: '#f14c4c',
-  borderColor: '#f14c4c',
+  color: 'var(--red)',
+  borderColor: 'var(--red)',
 }
 
 const footerStyle: React.CSSProperties = {
@@ -136,8 +136,8 @@ const tagStyle: React.CSSProperties = {
 
 const tagRequiredStyle: React.CSSProperties = {
   ...tagStyle,
-  borderColor: '#f14c4c',
-  color: '#f14c4c',
+  borderColor: 'var(--red)',
+  color: 'var(--red)',
 }
 
 const tagBlueStyle: React.CSSProperties = {
@@ -222,7 +222,7 @@ const uninstallConfirmStyle: React.CSSProperties = {
   background: 'rgba(241,76,76,0.1)',
   border: '1px solid rgba(241,76,76,0.3)',
   borderRadius: 4,
-  color: '#f14c4c',
+  color: 'var(--red)',
   fontSize: 12,
   marginBottom: 12,
 }
@@ -574,7 +574,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
             <div style={varBoxStyle}>
               <div style={varLabelStyle}>
                 该版本声明的输入变量{' '}
-                <span style={{ color: '#f14c4c' }}>(red = 必填)</span>
+                <span style={{ color: 'var(--red)' }}>(red = 必填)</span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap' }}>
                 {selectedVersionVars.map((v) => (
@@ -588,7 +588,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
                     }
                   >
                     {v.name}
-                    {v.sensitive && <span style={{ color: '#fa8c16', marginLeft: 4 }}>·敏感</span>}
+                    {v.sensitive && <span style={{ color: 'var(--amber)', marginLeft: 4 }}>·敏感</span>}
                   </span>
                 ))}
               </div>

@@ -287,7 +287,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
         label: (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <Spin size="small" />
-            <span style={{ marginLeft: 8, color: '#8c8c8c' }}>搜索中...</span>
+            <span style={{ marginLeft: 8, color: 'var(--ink-3)' }}>搜索中...</span>
           </div>
         ),
         disabled: true,
@@ -298,7 +298,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
       return [{
         value: '__empty__',
         label: (
-          <div style={{ textAlign: 'center', padding: '8px 0', color: '#8c8c8c' }}>
+          <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--ink-3)' }}>
             未找到匹配的 CMDB 资源，可直接使用输入的值
           </div>
         ),
@@ -319,10 +319,10 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
               <span style={{ fontWeight: 500 }}>{displayName}</span>
               <Tag color="cyan" style={{ fontSize: 10 }}>{result.resource_type}</Tag>
             </div>
-            <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
               <span>{valueFieldLabel}: </span>
               <code style={{ 
-                background: '#f5f5f5', 
+                background: 'var(--surface-2)', 
                 padding: '1px 4px', 
                 borderRadius: 2,
                 fontFamily: 'Monaco, Menlo, monospace',
@@ -332,7 +332,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
               </code>
             </div>
             {result.workspace_name && (
-              <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 2 }}>
                 Workspace: {result.workspace_name}
               </div>
             )}
@@ -354,7 +354,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{displayName}</span>
             <Tag color="cyan" style={{ fontSize: 10 }}>{result.resource_type}</Tag>
-            <span style={{ fontSize: 11, color: '#8c8c8c' }}>({cmdbValue})</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>({cmdbValue})</span>
           </div>
         ),
       };
@@ -369,7 +369,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
         <span>
           {baseHelp}
           {baseHelp && ' '}
-          <span style={{ color: '#1890ff', fontSize: 11 }}>
+          <span style={{ color: 'var(--brand)', fontSize: 11 }}>
             输入 / 可引用其他资源的输出
           </span>
         </span>
@@ -427,14 +427,14 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
               loading ? (
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
                   <Spin size="small" />
-                  <span style={{ marginLeft: 8, color: '#8c8c8c' }}>搜索中...</span>
+                  <span style={{ marginLeft: 8, color: 'var(--ink-3)' }}>搜索中...</span>
                 </div>
               ) : searchValue.length >= 2 && searchResults.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '8px 0', color: '#8c8c8c' }}>
+                <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--ink-3)' }}>
                   未找到匹配的 CMDB 资源，可直接输入值后按回车添加
                 </div>
               ) : searchValue.length < 2 ? (
-                <div style={{ textAlign: 'center', padding: '8px 0', color: '#8c8c8c' }}>
+                <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--ink-3)' }}>
                   输入至少 2 个字符搜索 CMDB 资源
                 </div>
               ) : null
@@ -506,7 +506,7 @@ const CMDBSelectWidget: React.FC<CMDBSelectWidgetProps> = ({
 const style = document.createElement('style');
 style.textContent = `
   .cmdb-search-item:hover {
-    background-color: #f5f5f5;
+    background-color: var(--surface-2);
   }
 `;
 if (!document.querySelector('style[data-cmdb-widget]')) {

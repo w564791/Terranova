@@ -17,13 +17,13 @@
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .description {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   margin: 0;
 }
 
@@ -47,7 +47,7 @@
 .scopeTypeSelect,
 .scopeIdInput {
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: all 0.3s;
@@ -64,14 +64,14 @@
 
 .scopeTypeSelect:hover,
 .scopeIdInput:hover {
-  border-color: #40a9ff;
+  border-color: var(--brand-400);
 }
 
 .scopeTypeSelect:focus,
 .scopeIdInput:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.2);
 }
 
 .actionButtons {
@@ -87,15 +87,15 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   white-space: nowrap;
 }
 
 .addButton:hover:not(:disabled) {
-  background: #40a9ff;
+  background: var(--brand-400);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.3);
 }
 
 .addButton:active:not(:disabled) {
@@ -103,24 +103,24 @@
 }
 
 .addButton:disabled {
-  background: #d9d9d9;
+  background: var(--line-2);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .presetButton {
-  background: #52c41a;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .presetButton:hover {
-  background: #73d13d;
+  background: var(--green-hover);
 }
 
 /* 授权表单容器 */
 .grantFormContainer {
-  background: #f5f5f5;
-  border: 1px solid #d9d9d9;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -145,13 +145,13 @@
 .grantFormTitle {
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .grantFormHint {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   margin: 0;
 }
 
@@ -177,18 +177,18 @@
 .label {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
 }
 
 .required {
-  color: #ff4d4f;
+  color: var(--red);
   margin-left: 4px;
 }
 
 .input,
 .textarea {
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   transition: all 0.3s;
@@ -196,33 +196,33 @@
 
 .input:hover,
 .textarea:hover {
-  border-color: #40a9ff;
+  border-color: var(--brand-400);
 }
 
 .input:focus,
 .textarea:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.2);
 }
 
 .input.error {
-  border-color: #ff4d4f;
+  border-color: var(--red);
 }
 
 .input.error:focus {
-  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+  box-shadow: 0 0 0 2px rgba(200, 48, 47, 0.2);
 }
 
 .errorText {
   font-size: 12px;
-  color: #ff4d4f;
+  color: var(--red);
   margin-top: 4px;
 }
 
 .hint {
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
@@ -230,7 +230,7 @@
 .permissionsSection {
   margin-top: 24px;
   padding-top: 24px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line);
 }
 
 .permissionsSectionHeader {
@@ -242,7 +242,7 @@
 
 .selectedCount {
   font-size: 14px;
-  color: #1890ff;
+  color: var(--brand);
   font-weight: 500;
 }
 
@@ -253,13 +253,13 @@
   max-height: 500px;
   overflow-y: auto;
   padding: 16px;
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 6px;
 }
 
 .permissionGroup {
   background: white;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 16px;
 }
@@ -267,10 +267,10 @@
 .permissionGroupTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #1890ff;
+  color: var(--brand);
   margin: 0 0 12px 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line);
 }
 
 .permissionItems {
@@ -284,13 +284,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .permissionItem:hover {
-  background: #f0f0f0;
+  background: var(--surface-2);
 }
 
 .permissionInfo {
@@ -303,12 +303,12 @@
 .permissionName {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
 }
 
 .permissionDesc {
   font-size: 12px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .permissionLevels {
@@ -321,7 +321,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -329,13 +329,13 @@
 }
 
 .levelCheckbox:hover {
-  border-color: #1890ff;
-  background: #f0f7ff;
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .levelCheckbox.checked {
-  border-color: #1890ff;
-  background: #e6f7ff;
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .levelCheckbox input[type='checkbox'] {
@@ -346,12 +346,12 @@
 .levelLabel {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   user-select: none;
 }
 
 .levelCheckbox.checked .levelLabel {
-  color: #1890ff;
+  color: var(--brand);
 }
 
 /* 表单按钮 */
@@ -361,7 +361,7 @@
   gap: 12px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line);
 }
 
 .button {
@@ -375,29 +375,29 @@
 }
 
 .button.primary {
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .button.primary:hover:not(:disabled) {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .button.primary:disabled {
-  background: #d9d9d9;
+  background: var(--line-2);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .button.secondary {
   background: white;
-  color: #333;
-  border: 1px solid #d9d9d9;
+  color: var(--ink);
+  border: 1px solid var(--line-2);
 }
 
 .button.secondary:hover:not(:disabled) {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .button.secondary:disabled {
@@ -416,7 +416,7 @@
 .userCard {
   background: white;
   border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   overflow: hidden;
   transition: all 0.2s;
 }
@@ -437,7 +437,7 @@
 }
 
 .userHeader:hover {
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .userInfo {
@@ -450,8 +450,8 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -469,7 +469,7 @@
 .userName {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -479,15 +479,15 @@
   font-size: 11px;
   font-weight: 500;
   padding: 2px 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  color: #fff;
   border-radius: 10px;
   letter-spacing: 0.5px;
 }
 
 .userEmail {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .userStats {
@@ -498,19 +498,19 @@
 
 .roleCount {
   font-size: 14px;
-  color: #667eea;
+  color: var(--brand);
   padding: 4px 12px;
-  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-  border: 1px solid #667eea40;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  border: 1px solid var(--brand);
   border-radius: 12px;
   font-weight: 500;
 }
 
 .permissionCount {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   padding: 4px 12px;
-  background: #f0f0f0;
+  background: var(--surface-2);
   border-radius: 12px;
 }
 
@@ -522,27 +522,27 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .batchRevokeButton:hover {
-  background: #ff4d4f;
-  color: white;
+  background: var(--red);
+  color: #fff;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+  box-shadow: 0 2px 8px rgba(200, 48, 47, 0.3);
 }
 
 .expandIcon {
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   transition: transform 0.2s;
 }
 
 /* 权限详情 */
 .permissionsDetail {
   padding: 0 24px 24px 24px;
-  background: #fafafa;
+  background: var(--bg);
   animation: slideDown 0.3s ease-out;
 }
 
@@ -560,7 +560,7 @@
 .noPermissions {
   padding: 40px 20px;
   text-align: center;
-  color: #999;
+  color: var(--ink-3);
   font-size: 14px;
 }
 
@@ -568,13 +568,13 @@
 .rolesSection {
   margin-bottom: 24px;
   padding-bottom: 24px;
-  border-bottom: 2px solid #e8e8e8;
+  border-bottom: 2px solid var(--line);
 }
 
 .sectionTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 16px 0;
 }
 
@@ -589,17 +589,17 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-  border: 1px solid #667eea40;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  border: 1px solid var(--brand);
   border-radius: 6px;
   transition: all 0.2s;
 }
 
 .roleItem:hover {
-  background: linear-gradient(135deg, #667eea25 0%, #764ba225 100%);
-  border-color: #667eea60;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  border-color: var(--brand);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.15);
 }
 
 .roleInfo {
@@ -618,12 +618,12 @@
 .roleName {
   font-size: 15px;
   font-weight: 600;
-  color: #667eea;
+  color: var(--brand);
 }
 
 .roleScope {
   font-size: 12px;
-  color: #666;
+  color: var(--ink-2);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -631,7 +631,7 @@
 
 .roleTime {
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .revokeRoleButton {
@@ -642,20 +642,20 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .revokeRoleButton:hover {
-  background: #ff4d4f;
-  color: white;
+  background: var(--red);
+  color: #fff;
 }
 
 /* 权限列表 */
 .permissionsList {
   background: white;
   border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -665,7 +665,7 @@
 }
 
 .permissionsTable thead {
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .permissionsTable th {
@@ -673,15 +673,15 @@
   text-align: left;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
-  border-bottom: 1px solid #e8e8e8;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
 }
 
 .permissionsTable td {
   padding: 12px 16px;
   font-size: 14px;
-  color: #333;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--ink);
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .permissionsTable tbody tr {
@@ -689,13 +689,13 @@
 }
 
 .permissionsTable tbody tr:hover {
-  background: #f0f7ff;
+  background: var(--brand-soft);
 }
 
 .scopeIdCell {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 /* 作用域类型徽章 */
@@ -708,18 +708,18 @@
 }
 
 .scopeBadge.organization {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .scopeBadge.project {
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .scopeBadge.workspace {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 .principalCell {
@@ -736,29 +736,29 @@
 }
 
 .principalBadge.user {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .principalBadge.team {
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .principalBadge.application {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 .principalId {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .principalName {
   font-size: 14px;
-  color: #333;
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -774,27 +774,27 @@
 }
 
 .levelBadge.none {
-  background: #f5f5f5;
-  color: #999;
+  background: var(--surface-2);
+  color: var(--ink-3);
 }
 
 .levelBadge.read {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .levelBadge.write {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: var(--amber-soft);
+  color: var(--amber);
 }
 
 .levelBadge.admin {
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .dateCell {
-  color: #666;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
@@ -803,7 +803,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .actionButton {
@@ -817,45 +817,45 @@
 }
 
 .actionButton.revoke {
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .actionButton.revoke:hover {
-  background: #ff4d4f;
-  color: white;
+  background: var(--red);
+  color: #fff;
 }
 
 .actionButton.edit {
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
   margin-right: 8px;
 }
 
 .actionButton.edit:hover {
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .actionButton.save {
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
   margin-right: 8px;
 }
 
 .actionButton.save:hover {
-  background: #52c41a;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .actionButton.cancel {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .actionButton.cancel:hover {
-  background: #d9d9d9;
-  color: #333;
+  background: var(--line-2);
+  color: var(--ink);
 }
 
 .editActions {
@@ -865,20 +865,20 @@
 
 .levelSelect {
   padding: 4px 8px;
-  border: 1px solid #1890ff;
+  border: 1px solid var(--brand);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  background: #e6f7ff;
-  color: #1890ff;
+  background: var(--brand-soft);
+  color: var(--brand);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .levelSelect:focus {
   outline: none;
-  border-color: #40a9ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  border-color: var(--brand-400);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.2);
 }
 
 /* 空状态 */
@@ -889,20 +889,20 @@
 
 .emptyText {
   font-size: 16px;
-  color: #333;
+  color: var(--ink);
   margin-bottom: 8px;
 }
 
 .emptyHint {
   font-size: 14px;
-  color: #999;
+  color: var(--ink-3);
 }
 
 .loading {
   padding: 60px 20px;
   text-align: center;
   font-size: 16px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 /* 响应式设计 */

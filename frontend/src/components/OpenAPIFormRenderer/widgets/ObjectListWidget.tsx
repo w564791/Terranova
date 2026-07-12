@@ -455,7 +455,7 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
               <Panel 
                 key={groupId}
                 header={
-                  <span style={{ fontSize: 12, color: '#595959' }}>
+                  <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>
                     {getGroupDisplayName(groupId)} ({fields.length})
                   </span>
                 }
@@ -475,7 +475,7 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
         <Collapse
           key={itemKey}
           defaultActiveKey={[]}
-          style={{ marginBottom: 8, backgroundColor: '#fff', borderRadius: 8 }}
+          style={{ marginBottom: 8, backgroundColor: 'var(--surface)', borderRadius: 8 }}
           items={[{
             key: itemKey,
             label: (
@@ -483,9 +483,9 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
                 <Space>
                   <span style={{ fontSize: 13, fontWeight: 500 }}>#{index + 1}</span>
                   {itemSummary && (
-                    <span style={{ fontSize: 12, color: '#1890ff' }}>{itemSummary}</span>
+                    <span style={{ fontSize: 12, color: 'var(--brand)' }}>{itemSummary}</span>
                   )}
-                  <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
                     {totalFields} 个属性
                   </span>
                 </Space>
@@ -516,14 +516,14 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
       <Card
         key={itemKey}
         size="small"
-        style={{ marginBottom: 8, backgroundColor: '#fff' }}
+        style={{ marginBottom: 8, backgroundColor: 'var(--surface)' }}
         title={
           <Space>
             <span style={{ fontSize: 13 }}>#{index + 1}</span>
             {itemSummary && (
-              <span style={{ fontSize: 12, color: '#1890ff' }}>{itemSummary}</span>
+              <span style={{ fontSize: 12, color: 'var(--brand)' }}>{itemSummary}</span>
             )}
-            <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
               {totalFields} 个属性
               {groupedFields.length > 1 && ` · ${groupedFields.length} 个分组`}
             </span>
@@ -581,7 +581,7 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
     >
       <Card 
         size="small" 
-        style={{ backgroundColor: '#fafafa' }}
+        style={{ backgroundColor: 'var(--bg)' }}
         title={
           <Space>
             <SettingOutlined />
@@ -606,7 +606,7 @@ const ObjectListWidget: React.FC<WidgetProps> = ({
         )}
         
         {hasManifestContext && (
-          <div style={{ color: '#1890ff', fontSize: 11, marginTop: 8 }}>
+          <div style={{ color: 'var(--brand)', fontSize: 11, marginTop: 8 }}>
             在文本字段输入 / 可引用其他 Module 的输出
           </div>
         )}

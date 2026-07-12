@@ -8,12 +8,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   padding: 20px;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 8px;
   width: 100%;
   max-width: 700px;
@@ -27,21 +29,21 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--line);
 }
 
 .header h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .closeButton {
   background: none;
   border: none;
   font-size: 28px;
-  color: #6c757d;
+  color: var(--ink-2);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -54,8 +56,8 @@
 }
 
 .closeButton:hover {
-  background-color: #f8f9fa;
-  color: #495057;
+  background-color: var(--bg);
+  color: var(--ink-2);
 }
 
 .form {
@@ -64,7 +66,7 @@
 
 .error {
   padding: 12px;
-  background-color: #f8d7da;
+  background-color: var(--red-soft);
   border: 1px solid #f5c2c7;
   border-radius: 4px;
   color: #842029;
@@ -80,19 +82,19 @@
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #495057;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
 .required {
-  color: #dc3545;
+  color: var(--red);
 }
 
 .formGroup input[type='text'],
 .formGroup textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   font-family: inherit;
@@ -102,7 +104,7 @@
 .formGroup input[type='text']:focus,
 .formGroup textarea:focus {
   outline: none;
-  border-color: #007bff;
+  border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
@@ -120,18 +122,18 @@
 
 .formatButton {
   padding: 4px 12px;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background-color: var(--bg);
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 12px;
-  color: #495057;
+  color: var(--ink-2);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .formatButton:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
+  background-color: var(--line);
+  border-color: var(--ink-faint);
 }
 
 .codeEditor {
@@ -139,22 +141,22 @@
     monospace;
   font-size: 13px;
   line-height: 1.5;
-  background-color: #f8f9fa;
-  border: 1px solid #ced4da;
+  background-color: var(--bg);
+  border: 1px solid var(--line-2);
   padding: 12px;
 }
 
 .codeEditor:focus {
-  background-color: white;
+  background-color: #fff;
 }
 
 .jsonError {
   margin-top: 8px;
   padding: 8px 12px;
-  background-color: #fff3cd;
-  border: 1px solid #ffc107;
+  background-color: var(--amber-soft);
+  border: 1px solid var(--amber);
   border-radius: 4px;
-  color: #856404;
+  color: var(--amber-hover);
   font-size: 13px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro',
     monospace;
@@ -163,7 +165,7 @@
 .hint {
   display: block;
   margin-top: 6px;
-  color: #6c757d;
+  color: var(--ink-2);
   font-size: 12px;
 }
 
@@ -173,7 +175,7 @@
   gap: 12px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--line);
 }
 
 .cancelButton,
@@ -188,23 +190,23 @@
 }
 
 .cancelButton {
-  background-color: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  background-color: var(--bg);
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
 }
 
 .cancelButton:hover:not(:disabled) {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
+  background-color: var(--line);
+  border-color: var(--ink-faint);
 }
 
 .submitButton {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
 }
 
 .submitButton:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--brand-ink);
 }
 
 .cancelButton:disabled,
@@ -241,4 +243,9 @@
   .submitButton {
     width: 100%;
   }
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

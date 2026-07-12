@@ -186,12 +186,14 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     return (
       <ConfirmDialog
         isOpen={isOpen}
-        onClose={handleClose}
+        onCancel={handleClose}
         onConfirm={() => {}}
         title="创建Workspace"
         confirmText="创建"
         cancelText="取消"
         confirmDisabled={true}
+        size="lg"
+        showClose
       >
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
@@ -204,12 +206,15 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   return (
     <ConfirmDialog
       isOpen={isOpen}
-      onClose={handleClose}
+      onCancel={handleClose}
       onConfirm={handleConfirm}
       title="创建Workspace"
       confirmText={isSubmitting ? '创建中...' : '创建'}
       cancelText="取消"
       confirmDisabled={isSubmitting}
+      loading={isSubmitting}
+      size="lg"
+      showClose
     >
       <form className={styles.form} onSubmit={(e) => e.preventDefault()}>
         {/* 基础信息 */}

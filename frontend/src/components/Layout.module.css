@@ -1,7 +1,7 @@
 .layout {
   display: flex;
   min-height: 100vh;
-  background: var(--color-gray-50);
+  background: var(--bg);
   position: relative;
 }
 
@@ -12,21 +12,21 @@
   top: 16px;
   left: 16px;
   z-index: 1001;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
   border: none;
-  color: white;
+  color: #fff;
   width: 44px;
   height: 44px;
   border-radius: 12px;
   font-size: 20px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.4);
   transition: all 0.3s ease;
 }
 
 .mobileMenuButton:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+  box-shadow: 0 6px 16px rgba(28, 110, 140, 0.5);
 }
 
 .mobileMenuButton:active {
@@ -57,7 +57,7 @@
 
 .sidebar {
   width: 260px;
-  background: linear-gradient(180deg, #1a1a1a 0%, #1e1e1e 100%);
+  background: linear-gradient(180deg, var(--ink) 0%, #1e1e1e 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
@@ -83,7 +83,7 @@
   font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--surface);
   line-height: var(--line-height-tight);
   margin: 0;
   white-space: nowrap;
@@ -92,9 +92,9 @@
 }
 
 .apiButton {
-  background: #000000;
+  background: var(--ink);
   border: none;
-  color: #FFFFFF;
+  color: var(--surface);
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
@@ -110,7 +110,7 @@
 }
 
 .apiButton:hover {
-  background: #1a1a1a;
+  background: var(--ink);
   transform: scale(1.05);
 }
 
@@ -121,7 +121,7 @@
 .collapseButton {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #BFBFBF;
+  color: var(--ink-faint);
   cursor: pointer;
   padding: 6px 8px;
   border-radius: 6px;
@@ -134,7 +134,7 @@
 .collapseButton:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
-  color: #FFFFFF;
+  color: var(--surface);
   transform: scale(1.05);
 }
 
@@ -171,13 +171,13 @@
 
 .navItem:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #FFFFFF;
+  color: var(--surface);
   transform: translateX(2px);
 }
 
 .navItem.active {
-  background: rgba(22, 119, 255, 0.15);
-  color: #4A9EFF;
+  background: rgba(28, 110, 140, 0.15);
+  color: var(--brand-400);
   font-weight: 600;
 }
 
@@ -189,7 +189,7 @@
   transform: translateY(-50%);
   width: 3px;
   height: 60%;
-  background: #1677FF;
+  background: var(--brand);
   border-radius: 0 2px 2px 0;
 }
 
@@ -250,8 +250,8 @@
 }
 
 .subMenuItem.active {
-  background: rgba(22, 119, 255, 0.12);
-  color: #4A9EFF;
+  background: rgba(28, 110, 140, 0.12);
+  color: var(--brand-400);
   font-weight: 600;
 }
 
@@ -285,7 +285,7 @@
 
 .backLink:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #FFFFFF;
+  color: var(--surface);
 }
 
 .main {
@@ -295,8 +295,8 @@
 }
 
 .header {
-  background: var(--color-white);
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
   padding: 0 32px;
   display: flex;
   align-items: center;
@@ -309,7 +309,7 @@
   font-family: var(--font-heading);
   font-size: 22px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   line-height: var(--line-height-tight);
   margin: 0;
   letter-spacing: -0.3px;
@@ -329,22 +329,22 @@
 }
 
 .userMenu:hover {
-  background: #f8f9fa;
-  border-color: #e9ecef;
+  background: var(--bg);
+  border-color: var(--line);
 }
 
 .avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-white);
+  color: var(--surface);
   font-size: 15px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.3);
 }
 
 .userInfo {
@@ -365,8 +365,8 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  background: var(--color-white);
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   min-width: 180px;
@@ -384,7 +384,7 @@
   font-family: var(--font-primary);
   font-size: 14px;
   font-weight: 500;
-  color: #495057;
+  color: var(--ink-2);
   line-height: var(--line-height-normal);
   transition: all 0.2s ease;
   display: flex;
@@ -393,12 +393,12 @@
 }
 
 .dropdownItem:hover {
-  background: #f8f9fa;
-  color: #212529;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 .dropdownItem:not(:last-child) {
-  border-bottom: 1px solid #f1f3f5;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .dropdownIcon {
@@ -410,7 +410,7 @@
   flex: 1;
   padding: 0;
   overflow-y: auto;
-  background: #f8f9fa;
+  background: var(--bg);
 }
 
 .contentInner {

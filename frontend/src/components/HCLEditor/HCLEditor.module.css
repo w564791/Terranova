@@ -50,8 +50,8 @@
 }
 
 .copyBtn.copied {
-  color: #86efac;
-  border-color: #86efac;
+  color: var(--green-line);
+  border-color: var(--green-line);
 }
 
 /* Scroll area for both view and edit modes */
@@ -99,7 +99,7 @@
 }
 
 .editTextarea::selection {
-  background: rgba(59, 130, 246, 0.3);
+  background: rgba(28, 110, 140, 0.3);
 }
 
 .editTextarea::placeholder {
@@ -109,9 +109,9 @@
 .error {
   padding: 10px 16px;
   background: #7f1d1d;
-  color: #fca5a5;
+  color: var(--red-line);
   font-size: 12px;
-  border-top: 1px solid #991b1b;
+  border-top: 1px solid var(--red-active);
 }
 
 .hint {
@@ -134,18 +134,18 @@
 }
 
 .extraFieldsIcon {
-  color: #fbbf24;
+  color: var(--amber);
   font-size: 14px;
   flex-shrink: 0;
 }
 
 .extraFieldsText {
-  color: #fde68a;
+  color: var(--amber-line);
   flex: 1;
 }
 
 .extraFieldsText strong {
-  color: #fef3c7;
+  color: var(--amber-soft);
   font-weight: 600;
 }
 
@@ -162,12 +162,12 @@
 }
 
 .extraBtnKeep {
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .extraBtnKeep:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .extraBtnDiscard {
@@ -185,11 +185,11 @@
 }
 
 .highlightPre :global(.hcl-string) {
-  color: #86efac;
+  color: var(--green-line);
 }
 
 .highlightPre :global(.hcl-bool) {
-  color: #fca5a5;
+  color: var(--red-line);
 }
 
 .highlightPre :global(.hcl-number) {
@@ -197,7 +197,7 @@
 }
 
 .highlightPre :global(.hcl-attr) {
-  color: #93c5fd;
+  color: var(--brand-300);
 }
 
 .highlightPre :global(.hcl-eq) {

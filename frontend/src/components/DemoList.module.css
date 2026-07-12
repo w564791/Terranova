@@ -13,13 +13,13 @@
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .createButton {
   padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -29,25 +29,25 @@
 }
 
 .createButton:hover {
-  background-color: #0056b3;
+  background-color: var(--brand-ink);
 }
 
 .loading,
 .error {
   text-align: center;
   padding: 40px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .error {
-  color: #dc3545;
+  color: var(--red);
 }
 
 .error button {
   margin-top: 16px;
   padding: 8px 16px;
-  background-color: #007bff;
-  color: white;
+  background-color: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -56,14 +56,14 @@
 .empty {
   text-align: center;
   padding: 60px 20px;
-  background-color: #f8f9fa;
+  background-color: var(--bg);
   border-radius: 8px;
-  border: 2px dashed #dee2e6;
+  border: 2px dashed var(--line-2);
 }
 
 .empty p {
   margin-bottom: 20px;
-  color: #6c757d;
+  color: var(--ink-2);
   font-size: 16px;
 }
 
@@ -74,7 +74,7 @@
 
 .demoCard {
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
   transition: box-shadow 0.2s, border-color 0.2s;
@@ -82,7 +82,7 @@
 
 .demoCard:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-color: #007bff;
+  border-color: var(--brand);
 }
 
 .demoCardTop {
@@ -96,7 +96,7 @@
 .demoName {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
   flex: 1;
   min-width: 0;
@@ -112,21 +112,21 @@
 
 .version {
   padding: 4px 10px;
-  background-color: #e7f3ff;
-  color: #007bff;
+  background-color: var(--brand-soft);
+  color: var(--brand);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
 }
 
 .date {
-  color: #6c757d;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
 .description {
   margin: 0 0 12px 0;
-  color: #495057;
+  color: var(--ink-2);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -134,11 +134,11 @@
 .usageNotes {
   margin: 12px 0;
   padding: 12px;
-  background-color: #fff3cd;
-  border-left: 3px solid #ffc107;
+  background-color: var(--amber-soft);
+  border-left: 3px solid var(--amber);
   border-radius: 4px;
   font-size: 13px;
-  color: #856404;
+  color: var(--amber-hover);
 }
 
 .usageNotes strong {
@@ -151,14 +151,14 @@
   gap: 8px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--line);
 }
 
 .actionButton {
   padding: 8px 16px;
-  background-color: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  background-color: var(--bg);
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
@@ -167,19 +167,19 @@
 }
 
 .actionButton:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
+  background-color: var(--line);
+  border-color: var(--ink-faint);
 }
 
 .deleteButton {
   margin-left: auto;
-  color: #dc3545;
-  border-color: #dc3545;
+  color: var(--red);
+  border-color: var(--red);
 }
 
 .deleteButton:hover {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--red);
+  color: #fff;
 }
 
 /* Responsive */

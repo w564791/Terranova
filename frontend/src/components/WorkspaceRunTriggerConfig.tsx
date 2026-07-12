@@ -265,7 +265,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
           </Button>
         }
       >
-        <p style={{ color: '#666', marginBottom: 16 }}>
+        <p style={{ color: 'var(--ink-2)', marginBottom: 16 }}>
           Configure which workspaces are allowed to trigger this workspace.
           When a source workspace's apply completes successfully, it will automatically start a Plan+Apply task in this workspace.
         </p>
@@ -292,7 +292,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
 
         {/* 内联添加表单 */}
         {showAddForm && (
-          <Card size="small" style={{ marginBottom: 16, background: '#fafafa' }}>
+          <Card size="small" style={{ marginBottom: 16, background: 'var(--bg)' }}>
             <h4 style={{ marginBottom: 16 }}>Allow Workspace to Trigger</h4>
             
             <div style={{ marginBottom: 16 }}>
@@ -311,7 +311,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
                   label: ws.name,
                 }))}
               />
-              <p style={{ marginTop: 6, fontSize: 12, color: '#999' }}>
+              <p style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)' }}>
                 Select the workspace that will be allowed to trigger this workspace.
               </p>
             </div>

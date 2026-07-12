@@ -608,7 +608,7 @@ const GrantPermission: React.FC = () => {
         </button>
       </div>
       {urlPrincipalType === 'TEAM' && (
-        <div className={styles.hint} style={{ marginTop: '8px', color: '#0066cc', fontSize: '14px', background: '#e7f3ff', padding: '12px', borderRadius: '4px' }}>
+        <div className={styles.hint} style={{ marginTop: '8px', color: 'var(--brand)', fontSize: '14px', background: 'var(--brand-soft)', padding: '12px', borderRadius: '4px' }}>
           💡 提示：{grantType === 'permission' ? '为团队授予权限后，团队的所有成员将自动继承这些权限。' : '为团队分配角色后，团队的所有成员将自动继承角色包含的权限。'}
         </div>
       )}
@@ -947,11 +947,11 @@ const GrantPermission: React.FC = () => {
               flex: 1, 
               marginRight: '16px', 
               padding: '12px 16px', 
-              background: '#f8d7da', 
-              border: '1px solid #dc3545', 
+              background: 'var(--red-soft)', 
+              border: '1px solid var(--red)', 
               borderRadius: '6px',
               fontSize: '14px',
-              color: '#721c24'
+              color: 'var(--red-active)'
             }}>
                <strong>授权结果：</strong>{conflictWarning}
             </div>

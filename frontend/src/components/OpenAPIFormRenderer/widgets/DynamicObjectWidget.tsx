@@ -509,19 +509,19 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
       <Card
         key={key}
         size="small"
-        style={{ marginBottom: 8, backgroundColor: '#fff' }}
+        style={{ marginBottom: 8, backgroundColor: 'var(--surface)' }}
         title={
           <Space>
-            <KeyOutlined style={{ color: isExistingKey ? '#52c41a' : '#1890ff' }} />
+            <KeyOutlined style={{ color: isExistingKey ? 'var(--green)' : 'var(--brand)' }} />
             {/* 所有 key 都显示为只读文本，因为 key 是平台自动生成的索引 */}
             <Tooltip title={isExistingKey ? '存量数据的索引' : '新建项目的索引（自动生成）'}>
               <span style={{ 
                 fontFamily: 'monospace', 
                 padding: '4px 8px',
-                backgroundColor: isExistingKey ? '#f6ffed' : '#e6f7ff',
+                backgroundColor: isExistingKey ? 'var(--green-soft)' : 'var(--brand-soft)',
                 borderRadius: 4,
-                border: `1px solid ${isExistingKey ? '#b7eb8f' : '#91d5ff'}`,
-                color: isExistingKey ? '#52c41a' : '#1890ff'
+                border: `1px solid ${isExistingKey ? 'var(--green-line)' : 'var(--brand-200)'}`,
+                color: isExistingKey ? 'var(--green)' : 'var(--brand)'
               }}>
                 {key}
               </span>
@@ -601,14 +601,14 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
       help={
         <span>
           {help}
-          <span style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 11 }}>
+          <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 11 }}>
             Key 格式：8-15位小写字母和中横线
           </span>
         </span>
       }
       style={{ marginBottom: 16 }}
     >
-      <Card size="small" style={{ backgroundColor: '#fafafa' }}>
+      <Card size="small" style={{ backgroundColor: 'var(--bg)' }}>
         {keys.length === 0 ? (
           <Empty 
             description="暂无数据" 
@@ -636,8 +636,8 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
                   borderRadius: '4px 4px 0 0',
                 }}
               >
-                <DownOutlined style={{ transform: 'rotate(180deg)', color: '#1890ff', fontSize: 12 }} />
-                <span style={{ marginLeft: 4, color: '#1890ff', fontSize: 11 }}>点击滚动到顶部</span>
+                <DownOutlined style={{ transform: 'rotate(180deg)', color: 'var(--brand)', fontSize: 12 }} />
+                <span style={{ marginLeft: 4, color: 'var(--brand)', fontSize: 11 }}>点击滚动到顶部</span>
               </div>
             )}
             
@@ -651,7 +651,7 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
                 paddingBottom: canScrollDown ? 8 : 0,
                 // 自定义滚动条样式
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#1890ff #f0f0f0',
+                scrollbarColor: 'var(--brand) var(--surface-2)',
               }}
             >
               {keys.map((key, index) => renderItem(key, index))}
@@ -676,8 +676,8 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
                   borderRadius: '0 0 4px 4px',
                 }}
               >
-                <DownOutlined style={{ color: '#1890ff', fontSize: 12 }} />
-                <span style={{ marginLeft: 4, color: '#1890ff', fontSize: 11 }}>点击滚动查看更多</span>
+                <DownOutlined style={{ color: 'var(--brand)', fontSize: 12 }} />
+                <span style={{ marginLeft: 4, color: 'var(--brand)', fontSize: 11 }}>点击滚动查看更多</span>
               </div>
             )}
           </div>
@@ -695,7 +695,7 @@ const DynamicObjectWidget: React.FC<WidgetProps> = ({
         )}
         
         {hasManifestContext && (
-          <div style={{ color: '#1890ff', fontSize: 11, marginTop: 8 }}>
+          <div style={{ color: 'var(--brand)', fontSize: 11, marginTop: 8 }}>
             在文本字段输入 / 可引用其他 Module 的输出
           </div>
         )}

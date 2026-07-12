@@ -75,14 +75,14 @@ const SmartLogViewer: React.FC<Props> = ({ taskId, viewMode = 'plan', onStageCha
         justifyContent: 'center', 
         height: '400px',
         gap: '16px',
-        color: 'var(--color-red-600)'
+        color: 'var(--red-hover)'
       }}>
         <span>❌ 加载失败: {error}</span>
         <button 
           onClick={fetchTaskStatus}
           style={{
             padding: '8px 24px',
-            background: 'var(--color-blue-500)',
+            background: 'var(--brand)',
             color: 'white',
             border: 'none',
             borderRadius: 'var(--radius-md)',

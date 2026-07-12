@@ -8,18 +8,18 @@
 /* Security notice */
 .securityNotice {
   padding: 10px 14px;
-  background: #FFF7ED;
-  border: 1px solid #FDBA74;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
   border-radius: 6px;
   font-size: 13px;
-  color: #9A3412;
+  color: var(--amber-hover);
   line-height: 1.5;
 }
 
 .loading {
   text-align: center;
   padding: 40px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 16px;
 }
 
@@ -38,27 +38,27 @@
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
-  border: 2px solid var(--color-gray-200);
+  border: 2px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .modeOption:hover {
-  border-color: var(--color-gray-300);
-  background: var(--color-gray-50);
+  border-color: var(--line-2);
+  background: var(--bg);
 }
 
 .modeOption.active {
-  border-color: var(--color-blue-500);
-  background: var(--color-blue-50);
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .modeRadio {
   margin-top: 2px;
   cursor: pointer;
-  accent-color: var(--color-blue-600);
+  accent-color: var(--brand-ink);
 }
 
 .modeContent {
@@ -70,12 +70,12 @@
 .modeTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .modeDescription {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   line-height: 1.4;
 }
 
@@ -97,7 +97,7 @@
 .templateGroupTitle {
   font-size: 12px;
   font-weight: 700;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 4px 0;
@@ -110,11 +110,11 @@
 }
 
 .templateCard {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .templateCard:hover {
@@ -122,7 +122,7 @@
 }
 
 .templateCard.selected {
-  border-color: var(--color-blue-400);
+  border-color: var(--brand-400);
   background: #f8faff;
 }
 
@@ -144,7 +144,7 @@
 .templateCheckbox input[type="checkbox"] {
   margin-top: 3px;
   cursor: pointer;
-  accent-color: var(--color-blue-600);
+  accent-color: var(--brand-ink);
   width: 16px;
   height: 16px;
 }
@@ -158,7 +158,7 @@
 .templateName {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -167,21 +167,21 @@
 .defaultBadge {
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-blue-700);
-  background: var(--color-blue-100);
+  color: var(--brand-700);
+  background: var(--brand-soft);
   padding: 1px 8px;
   border-radius: 4px;
 }
 
 .templateMeta {
   font-size: 13px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-family: var(--font-mono);
 }
 
 .templateDescription {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   line-height: 1.4;
 }
 
@@ -196,7 +196,7 @@
 .aliasLabel {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   white-space: nowrap;
 }
 
@@ -205,31 +205,31 @@
   padding: 4px 8px;
   font-size: 12px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 4px;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .aliasInput:focus {
   outline: none;
-  border-color: var(--color-blue-400);
+  border-color: var(--brand-400);
 }
 
 .expandButton {
   background: none;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 4px 12px;
   font-size: 12px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
 }
 
 .expandButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-300);
+  background: var(--bg);
+  border-color: var(--line-2);
 }
 
 /* ==============================
@@ -238,7 +238,7 @@
 .overrideSection {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--color-gray-100);
+  border-top: 1px solid var(--surface-2);
 }
 
 .overrideSectionHeader {
@@ -251,12 +251,12 @@
 .overrideSectionTitle {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .overrideHint {
   font-size: 12px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
 }
 
 .overrideField {
@@ -268,7 +268,7 @@
 
 .overrideLabel {
   font-size: 13px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   min-width: 140px;
   font-family: var(--font-mono);
   display: flex;
@@ -278,54 +278,54 @@
 
 .overrideLabel.overridden {
   font-weight: 600;
-  color: var(--color-blue-700);
+  color: var(--brand-700);
 }
 
 .overriddenIndicator {
   font-size: 11px;
   font-weight: 400;
-  color: var(--color-blue-500);
+  color: var(--brand);
   font-family: inherit;
 }
 
 .overrideInput {
   flex: 1;
   padding: 6px 10px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 13px;
   font-family: var(--font-mono);
-  color: var(--color-gray-900);
+  color: var(--ink);
   transition: all 0.2s;
 }
 
 .overrideInput:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .overriddenInput {
-  border-color: var(--color-blue-300);
-  background: var(--color-blue-50);
+  border-color: var(--brand-300);
+  background: var(--brand-soft);
 }
 
 .resetButton {
   background: none;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
 }
 
 .resetButton:hover {
-  background: var(--color-gray-50);
-  border-color: var(--color-gray-300);
-  color: var(--color-gray-700);
+  background: var(--bg);
+  border-color: var(--line-2);
+  color: var(--ink);
 }
 
 /* ==============================
@@ -347,12 +347,12 @@
 .customTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-800);
+  color: var(--ink);
 }
 
 .customHint {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   line-height: 1.4;
 }
 
@@ -363,10 +363,10 @@
   font-size: 13px;
   line-height: 1.5;
   padding: 12px;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: 8px;
-  color: var(--color-gray-900);
-  background: var(--color-white);
+  color: var(--ink);
+  background: var(--surface);
   resize: vertical;
   transition: all 0.2s;
   tab-size: 2;
@@ -374,8 +374,8 @@
 
 .jsonEditor:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .jsonEditorError {
@@ -383,13 +383,13 @@
 }
 
 .jsonEditorError:focus {
-  border-color: var(--color-red-500);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(200, 48, 47, 0.1);
 }
 
 .jsonErrorMessage {
   font-size: 12px;
-  color: var(--color-red-600);
+  color: var(--red-hover);
   padding: 4px 0;
 }
 
@@ -399,12 +399,12 @@
 .infoBox {
   display: flex;
   gap: 12px;
-  background: var(--color-blue-50);
-  border: 1px solid var(--color-blue-200);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 8px;
   padding: 16px;
   font-size: 14px;
-  color: var(--color-blue-800);
+  color: var(--brand-700);
   line-height: 1.5;
 }
 
@@ -416,8 +416,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--color-blue-200);
-  color: var(--color-blue-700);
+  background: var(--brand-200);
+  color: var(--brand-700);
   font-size: 14px;
   font-weight: 700;
 }
@@ -429,13 +429,13 @@
 }
 
 .infoContent strong {
-  color: var(--color-blue-900);
+  color: var(--brand-700);
 }
 
 .infoContent p {
   margin: 0;
   font-size: 13px;
-  color: var(--color-blue-700);
+  color: var(--brand-700);
 }
 
 /* ==============================
@@ -446,13 +446,13 @@
   align-items: center;
   gap: 16px;
   padding-top: 20px;
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .saveButton {
-  background: var(--color-blue-600);
-  border: 1px solid var(--color-blue-600);
-  color: var(--color-white);
+  background: var(--brand-ink);
+  border: 1px solid var(--brand-ink);
+  color: var(--surface);
   padding: 10px 24px;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -462,8 +462,8 @@
 }
 
 .saveButton:hover:not(:disabled) {
-  background: var(--color-blue-700);
-  border-color: var(--color-blue-700);
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 .saveButton:disabled {
@@ -490,9 +490,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--color-white);
-  border: 1px dashed var(--color-blue-400);
-  color: var(--color-blue-600);
+  background: var(--surface);
+  border: 1px dashed var(--brand-400);
+  color: var(--brand-ink);
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
@@ -502,8 +502,8 @@
 }
 
 .addProviderButton:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-500);
+  background: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 .addProviderDropdown {
@@ -514,8 +514,8 @@
   min-width: 280px;
   max-height: 360px;
   overflow-y: auto;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
   padding: 6px;
@@ -528,7 +528,7 @@
 .addProviderDropdownGroupTitle {
   font-size: 11px;
   font-weight: 700;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 6px 10px;
@@ -546,24 +546,24 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
-  color: var(--color-gray-800);
+  color: var(--ink);
   transition: background 0.15s;
 }
 
 .addProviderDropdownItem:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .addProviderDropdownItemMeta {
   font-size: 11px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   font-family: var(--font-mono);
 }
 
 .addProviderEmpty {
   padding: 10px;
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 /* ==============================
@@ -576,10 +576,10 @@
 }
 
 .instanceCard {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px 16px;
-  background: var(--color-white);
+  background: var(--surface);
   transition: box-shadow 0.15s;
 }
 
@@ -597,7 +597,7 @@
 .instanceTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -608,8 +608,8 @@
 .typeBadge {
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-gray-700);
-  background: var(--color-gray-100);
+  color: var(--ink);
+  background: var(--surface-2);
   padding: 2px 8px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -618,20 +618,20 @@
 
 .removeInstanceButton {
   background: none;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s;
 }
 
 .removeInstanceButton:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #b91c1c;
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  color: var(--red-active);
 }
 
 /* ==============================

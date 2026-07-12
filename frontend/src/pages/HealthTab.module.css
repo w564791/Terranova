@@ -8,14 +8,14 @@
 .loading {
   text-align: center;
   padding: 40px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
 /* Section */
 .section {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -27,13 +27,13 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -52,7 +52,7 @@
 
 .driftConfigToggle {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   cursor: pointer;
   width: 20px;
   height: 20px;
@@ -64,8 +64,8 @@
 }
 
 .driftConfigToggle:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 /* Check Button Group */
@@ -81,15 +81,15 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .lastCheckTime {
-  color: #374151;
+  color: var(--ink);
 }
 
 .lastCheckStatus {
@@ -98,20 +98,20 @@
 }
 
 .statusSuccess {
-  color: #10b981;
+  color: var(--green);
 }
 
 .statusFailed {
-  color: #ef4444;
+  color: var(--red);
 }
 
 .statusSkipped {
-  color: #f59e0b;
+  color: var(--amber);
 }
 
 .statusRunning,
 .statusPending {
-  color: #3b82f6;
+  color: var(--brand);
 }
 
 .checkingStatus {
@@ -119,11 +119,11 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 6px;
   font-size: 14px;
-  color: #0369a1;
+  color: var(--brand-ink);
 }
 
 .spinnerIcon {
@@ -131,7 +131,7 @@
   width: 16px;
   height: 16px;
   animation: spin 1s linear infinite;
-  color: #0369a1;
+  color: var(--brand-ink);
 }
 
 @keyframes spin {
@@ -145,8 +145,8 @@
 
 .triggerCheckButton {
   padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -156,19 +156,19 @@
 }
 
 .triggerCheckButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .triggerCheckButton:disabled {
-  background: #9ca3af;
+  background: var(--ink-faint);
   cursor: not-allowed;
 }
 
 .cancelCheckButton {
   padding: 8px 16px;
-  background: #fff;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: var(--surface);
+  color: var(--red-hover);
+  border: 1px solid var(--red-line);
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
@@ -177,19 +177,19 @@
 }
 
 .cancelCheckButton:hover {
-  background: #fef2f2;
-  border-color: #f87171;
+  background: var(--red-soft);
+  border-color: var(--red-line);
 }
 
 .driftLastCheck {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* Drift 状态条 */
 .driftStatusBar {
   height: 12px;
-  background: #e5e7eb;
+  background: var(--line);
   border-radius: 6px;
   overflow: hidden;
   display: flex;
@@ -197,19 +197,19 @@
 }
 
 .driftStatusBarDrift {
-  background: #f59e0b;
+  background: var(--amber);
   height: 100%;
   transition: width 0.3s;
 }
 
 .driftStatusBarSynced {
-  background: #10b981;
+  background: var(--green);
   height: 100%;
   transition: width 0.3s;
 }
 
 .driftStatusBarUnapplied {
-  background: #6b7280;
+  background: var(--ink-2);
   height: 100%;
   transition: width 0.3s;
 }
@@ -238,12 +238,12 @@
 .driftStatValue {
   font-size: 24px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--ink);
 }
 
 .driftStatLabel {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* Summary Box */
@@ -254,13 +254,13 @@
   padding: 12px 16px;
   background: #fefce8;
   border-radius: 6px;
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--amber);
   margin-left: auto;
 }
 
 .summaryText {
   font-size: 13px;
-  color: #78350f;
+  color: var(--amber-hover);
   line-height: 1.5;
 }
 
@@ -293,12 +293,12 @@
 
 /* Resource Card */
 .resourceCard {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
   transition: all 0.2s;
-  border-left: 3px solid #e5e7eb;
+  border-left: 3px solid var(--line);
 }
 
 .resourceCard:hover {
@@ -306,15 +306,15 @@
 }
 
 .resourceCardDrifted {
-  border-left-color: #f59e0b;
+  border-left-color: var(--amber);
 }
 
 .resourceCardUnapplied {
-  border-left-color: #6b7280;
+  border-left-color: var(--ink-2);
 }
 
 .resourceCardSynced {
-  border-left-color: #10b981;
+  border-left-color: var(--green);
 }
 
 /* Resource Header */
@@ -323,14 +323,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
   transition: background 0.2s;
   gap: 12px;
 }
 
 .resourceHeader:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .resourceHeaderLeft {
@@ -351,7 +351,7 @@
 /* Expand Icon */
 .expandIcon {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   flex-shrink: 0;
   width: 12px;
 }
@@ -359,27 +359,27 @@
 /* Resource Icon */
 .resourceIcon {
   font-size: 16px;
-  color: #6b7280;
+  color: var(--ink-2);
   flex-shrink: 0;
 }
 
 .resourceIconDrifted {
-  color: #f59e0b;
+  color: var(--amber);
 }
 
 .resourceIconUnapplied {
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .resourceIconSynced {
-  color: #10b981;
+  color: var(--green);
 }
 
 /* Resource Name */
 .resourceName {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -388,8 +388,8 @@
 /* Children Count */
 .childrenCount {
   font-size: 12px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--ink-2);
+  background: var(--surface-2);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -402,8 +402,8 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 /* Unapplied Badge */
@@ -414,8 +414,8 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 /* Synced Badge */
@@ -426,15 +426,15 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 /* Resource Body */
 .resourceBody {
   padding: 12px 16px;
-  background: #fafafa;
-  border-top: 1px solid #e5e7eb;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
 }
 
 /* Children List */
@@ -446,26 +446,26 @@
 
 /* Child Card */
 .childCard {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  background: #fff;
+  background: var(--surface);
 }
 
 .childCard.actionCreate {
-  border-left: 3px solid #16a34a;
+  border-left: 3px solid var(--green-hover);
 }
 
 .childCard.actionUpdate {
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--brand-ink);
 }
 
 .childCard.actionDelete {
-  border-left: 3px solid #dc2626;
+  border-left: 3px solid var(--red-hover);
 }
 
 .childCard.actionUnapplied {
-  border-left: 3px solid #6b7280;
+  border-left: 3px solid var(--ink-2);
 }
 
 /* Child Header */
@@ -474,8 +474,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 
 /* Action Icons */
@@ -491,26 +491,26 @@
 }
 
 .actionIcon.actionCreate {
-  color: #16a34a;
+  color: var(--green-hover);
 }
 
 .actionIcon.actionUpdate {
-  color: #2563eb;
+  color: var(--brand-ink);
 }
 
 .actionIcon.actionDelete {
-  color: #dc2626;
+  color: var(--red-hover);
 }
 
 .actionIcon.actionUnapplied {
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* Child Address */
 .childAddress {
   font-size: 13px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--ink);
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -530,23 +530,23 @@
 }
 
 .actionBadge.actionCreate {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .actionBadge.actionUpdate {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .actionBadge.actionDelete {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .actionBadge.actionUnapplied {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 /* Changes Table */
@@ -564,13 +564,13 @@
   padding: 4px 8px;
   font-size: 13px;
   border-radius: 4px;
-  background: #fff;
-  border: 1px solid #f3f4f6;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
 }
 
 .changeRow:hover {
-  background: #f9fafb;
-  border-color: #e5e7eb;
+  background: var(--bg);
+  border-color: var(--line);
 }
 
 /* Change Icons */
@@ -583,21 +583,21 @@
 }
 
 .iconAdd {
-  color: #16a34a;
+  color: var(--green-hover);
 }
 
 .iconRemove {
-  color: #dc2626;
+  color: var(--red-hover);
 }
 
 .iconModify {
-  color: #2563eb;
+  color: var(--brand-ink);
 }
 
 /* Change Key */
 .changeKey {
   font-weight: 500;
-  color: #6b7280;
+  color: var(--ink-2);
   min-width: 120px;
   flex-shrink: 0;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
@@ -611,23 +611,23 @@
 .valueAfter {
   display: inline-block;
   padding: 2px 8px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 3px;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 12px;
-  color: #374151;
+  color: var(--ink);
   word-break: break-all;
   line-height: 1.4;
 }
 
 .valueCreate {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .valueDelete {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 /* Value Comparison */
@@ -639,7 +639,7 @@
 }
 
 .arrow {
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-weight: 500;
   flex-shrink: 0;
   font-size: 12px;
@@ -652,7 +652,7 @@
   gap: 16px;
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--surface-2);
 }
 
 .legendItem {
@@ -671,20 +671,20 @@
 .legendLabel {
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
 }
 
 .legendDesc {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 /* AI Summary Placeholder */
 .aiSummaryPlaceholder {
   margin-top: 20px;
   padding: 16px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
+  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--brand-100) 100%);
+  border: 1px solid var(--brand-200);
   border-radius: 8px;
 }
 
@@ -702,7 +702,7 @@
 .aiTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #0369a1;
+  color: var(--brand-ink);
 }
 
 .aiSummaryContent {
@@ -714,7 +714,7 @@
 
 .aiPlaceholderText {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ink-2);
   font-style: italic;
 }
 

@@ -213,12 +213,12 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
   const applyStatus = getApplyStatus();
 
   const statusConfig: Record<string, { icon: string; color: string; bgColor: string }> = {
-    pending: { icon: '○', color: '#6b7280', bgColor: '#f3f4f6' },
-    running: { icon: '◐', color: '#3b82f6', bgColor: '#dbeafe' },
-    passed: { icon: '✓', color: '#10b981', bgColor: '#d1fae5' },
-    failed: { icon: '✗', color: '#ef4444', bgColor: '#fee2e2' },
-    cancelled: { icon: '⊘', color: '#6b7280', bgColor: '#f3f4f6' },
-    skipped: { icon: '⊘', color: '#6b7280', bgColor: '#f3f4f6' },
+    pending: { icon: '○', color: 'var(--ink-2)', bgColor: 'var(--surface-2)' },
+    running: { icon: '◐', color: 'var(--brand)', bgColor: 'var(--brand-soft)' },
+    passed: { icon: '✓', color: 'var(--green)', bgColor: 'var(--green-soft)' },
+    failed: { icon: '✗', color: 'var(--red)', bgColor: 'var(--red-soft)' },
+    cancelled: { icon: '⊘', color: 'var(--ink-2)', bgColor: 'var(--surface-2)' },
+    skipped: { icon: '⊘', color: 'var(--ink-2)', bgColor: 'var(--surface-2)' },
   };
 
   return (
@@ -502,7 +502,7 @@ const TaskTimeline: React.FC<Props> = ({ task, workspaceId, workspace, onStageCh
             <div className={styles.cardTitle}>
               <span
                 className={styles.statusIcon}
-                style={{ color: '#ef4444', backgroundColor: '#fee2e2' }}
+                style={{ color: 'var(--red)', backgroundColor: 'var(--red-soft)' }}
               >
                 ✗
               </span>

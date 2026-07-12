@@ -163,7 +163,7 @@ const SchemaEditor: React.FC<SchemaEditorProps> = ({
       <div className={styles.schemaEditorHeader}>
         <h3 className={styles.schemaEditorTitle}>
           Schema 编辑器
-          {isDirty && <span style={{ color: '#faad14', marginLeft: 8 }}>*</span>}
+          {isDirty && <span style={{ color: 'var(--amber)', marginLeft: 8 }}>*</span>}
         </h3>
         <Space>
           {schema && (

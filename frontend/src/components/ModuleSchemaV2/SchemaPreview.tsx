@@ -121,10 +121,10 @@ const SchemaPreview: React.FC<SchemaPreviewProps> = ({ schema, parseResult }) =>
 
           {parseResult?.warnings && parseResult.warnings.length > 0 && (
             <>
-              <h4 style={{ marginTop: 24, color: '#faad14' }}>警告</h4>
+              <h4 style={{ marginTop: 24, color: 'var(--amber)' }}>警告</h4>
               <ul>
                 {parseResult.warnings.map((warning, index) => (
-                  <li key={index} style={{ color: '#faad14' }}>{warning}</li>
+                  <li key={index} style={{ color: 'var(--amber)' }}>{warning}</li>
                 ))}
               </ul>
             </>
@@ -153,7 +153,7 @@ const SchemaPreview: React.FC<SchemaPreviewProps> = ({ schema, parseResult }) =>
                   <td>
                     <code>{field.name}</code>
                     {field.uiConfig.label && (
-                      <span style={{ color: '#8c8c8c', marginLeft: 8 }}>
+                      <span style={{ color: 'var(--ink-3)', marginLeft: 8 }}>
                         ({field.uiConfig.label})
                       </span>
                     )}
@@ -200,7 +200,7 @@ const SchemaPreview: React.FC<SchemaPreviewProps> = ({ schema, parseResult }) =>
                     <td>
                       <code>{output.name}</code>
                       {output.alias && (
-                        <span style={{ color: '#8c8c8c', marginLeft: 8 }}>
+                        <span style={{ color: 'var(--ink-3)', marginLeft: 8 }}>
                           ({output.alias})
                         </span>
                       )}
@@ -212,7 +212,7 @@ const SchemaPreview: React.FC<SchemaPreviewProps> = ({ schema, parseResult }) =>
                     <td>
                       {output.sensitive && <Tag color="orange">Sensitive</Tag>}
                       {output.valueExpression && (
-                        <code style={{ fontSize: '12px', color: '#666' }}>
+                        <code style={{ fontSize: '12px', color: 'var(--ink-2)' }}>
                           {output.valueExpression}
                         </code>
                       )}

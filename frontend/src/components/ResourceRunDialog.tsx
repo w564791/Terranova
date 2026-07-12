@@ -226,23 +226,23 @@ const ResourceRunDialog: React.FC<ResourceRunDialogProps> = ({
           {/* 显示将要设置的变量信息 */}
           <div style={{
             padding: '12px 16px',
-            background: '#f0f9ff',
-            border: '1px solid #bae6fd',
+            background: 'var(--brand-soft)',
+            border: '1px solid var(--brand-200)',
             borderRadius: '8px',
             marginBottom: '20px'
           }}>
-            <div style={{ fontSize: '13px', color: '#0369a1', marginBottom: '4px', fontWeight: 500 }}>
+            <div style={{ fontSize: '13px', color: 'var(--brand-ink)', marginBottom: '4px', fontWeight: 500 }}>
               运行参数
             </div>
-            <div style={{ fontSize: '13px', color: '#075985' }}>
+            <div style={{ fontSize: '13px', color: 'var(--brand-ink)' }}>
               将自动设置环境变量: <code style={{ 
-                background: '#e0f2fe', 
+                background: 'var(--brand-100)', 
                 padding: '2px 6px', 
                 borderRadius: '4px',
                 fontFamily: 'monospace'
               }}>TF_CLI_ARGS=--target=module.{resourceName}</code>
             </div>
-            <div style={{ fontSize: '12px', color: '#0c4a6e', marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--brand-700)', marginTop: '4px' }}>
               此运行将只针对资源 <strong>{resourceName}</strong> 执行
             </div>
           </div>

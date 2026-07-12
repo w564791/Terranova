@@ -394,11 +394,11 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
   const getSharingModeIcon = () => {
     switch (sharingMode) {
       case 'all':
-        return <UnlockOutlined style={{ color: '#52c41a' }} />;
+        return <UnlockOutlined style={{ color: 'var(--green)' }} />;
       case 'specific':
-        return <LinkOutlined style={{ color: '#1890ff' }} />;
+        return <LinkOutlined style={{ color: 'var(--brand)' }} />;
       default:
-        return <LockOutlined style={{ color: '#ff4d4f' }} />;
+        return <LockOutlined style={{ color: 'var(--red)' }} />;
     }
   };
 
@@ -622,7 +622,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
                 <div className={styles.formItem}>
                   <label className={styles.formLabel}>Data Name *</label>
                   <Input
-                    addonBefore={<span style={{ color: '#1890ff' }}>{getSelectedSourceWorkspaceName()}-</span>}
+                    addonBefore={<span style={{ color: 'var(--brand)' }}>{getSelectedSourceWorkspaceName()}-</span>}
                     placeholder="e.g., outputs, data"
                     value={dataName}
                     onChange={(e) => setDataName(e.target.value)}
@@ -699,7 +699,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
                     <div className={styles.formItem}>
                       <label className={styles.formLabel}>Data Name *</label>
                       <Input
-                        addonBefore={<span style={{ color: '#1890ff' }}>{item.source_workspace_name || ''}-</span>}
+                        addonBefore={<span style={{ color: 'var(--brand)' }}>{item.source_workspace_name || ''}-</span>}
                         placeholder="e.g., outputs, data"
                         value={editDataName}
                         onChange={(e) => setEditDataName(e.target.value)}

@@ -297,7 +297,7 @@ function TaskOutputLog({
       ? `状态: ${taskStatus}`
       : '获取日志中...'
   } else if (isTerminal) {
-    statusColor = taskStatus === 'success' ? '#4ec9b0' : '#f14c4c'
+    statusColor = taskStatus === 'success' ? '#4ec9b0' : 'var(--red)'
     statusBg = taskStatus === 'success' ? 'rgba(78,201,176,0.12)' : 'rgba(241,76,76,0.12)'
     statusIcon = taskStatus === 'success' ? 'codicon-check' : 'codicon-error'
     statusText = `任务${taskStatus === 'success' ? '完成' : '失败'}`
@@ -344,7 +344,7 @@ function TaskOutputLog({
               style={{
                 color:
                   line.type === 'error'
-                    ? '#f14c4c'
+                    ? 'var(--red)'
                     : line.type === 'stage_marker'
                       ? '#4ec9b0'
                       : '#d4d4d4',

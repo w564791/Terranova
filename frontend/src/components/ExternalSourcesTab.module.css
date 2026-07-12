@@ -16,7 +16,7 @@
   width: 24px;
   height: 24px;
   border: 3px solid var(--border-color);
-  border-top-color: var(--color-blue-500);
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -42,8 +42,8 @@
 
 .createButton {
   padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -54,8 +54,8 @@
 }
 
 .createButton:hover {
-  background: #2563eb;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  background: var(--brand-ink);
+  box-shadow: 0 2px 6px rgba(28, 110, 140, 0.3);
   transform: translateY(-1px);
 }
 
@@ -115,12 +115,12 @@
 
 .enabledBadge.enabled {
   background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  color: var(--green);
 }
 
 .enabledBadge.disabled {
   background: rgba(156, 163, 175, 0.1);
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .sourceActions {
@@ -131,19 +131,19 @@
 .actionButton {
   padding: 6px 12px;
   background: white;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--line-2);
   border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .actionButton:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #3b82f6;
-  color: #3b82f6;
+  background: var(--bg);
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .actionButton:disabled {
@@ -152,14 +152,14 @@
 }
 
 .actionButton.deleteButton {
-  color: #ef4444;
-  border-color: #fecaca;
+  color: var(--red);
+  border-color: var(--red-line);
 }
 
 .actionButton.deleteButton:hover:not(:disabled) {
-  background: #fef2f2;
-  border-color: #ef4444;
-  color: #dc2626;
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red-hover);
 }
 
 /* 数据源详情 */
@@ -228,8 +228,8 @@
 }
 
 .toggleButton:hover {
-  border-color: var(--color-blue-500);
-  color: var(--color-blue-500);
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 /* 状态徽章 */
@@ -244,17 +244,17 @@
 
 .statusSuccess {
   background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  color: var(--green);
 }
 
 .statusFailed {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: rgba(200, 48, 47, 0.1);
+  color: var(--red);
 }
 
 .statusRunning {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: var(--ring-brand);
+  color: var(--brand);
 }
 
 /* 表单容器 */
@@ -327,7 +327,7 @@
   width: 100%;
   padding: 10px 12px;
   background: var(--bg-primary);
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   color: var(--text-primary);
@@ -338,14 +338,14 @@
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .input:hover,
 .select:hover,
 .textarea:hover {
-  border-color: #9ca3af;
+  border-color: var(--ink-faint);
 }
 
 .textarea {
@@ -374,7 +374,7 @@
   flex: 1;
   padding: 10px 12px;
   background: var(--bg-primary);
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   color: var(--text-primary);
@@ -383,12 +383,12 @@
 
 .headerKeyInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .headerKeyInput:hover {
-  border-color: #9ca3af;
+  border-color: var(--ink-faint);
 }
 
 .headerValueWrapper {
@@ -400,7 +400,7 @@
   width: 100%;
   padding: 10px 12px;
   background: var(--bg-primary);
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   color: var(--text-primary);
@@ -409,12 +409,12 @@
 
 .headerValueInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .headerValueInput:hover {
-  border-color: #9ca3af;
+  border-color: var(--ink-faint);
 }
 
 .hasValueIndicator {
@@ -423,7 +423,7 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 11px;
-  color: #22c55e;
+  color: var(--green);
   background: rgba(34, 197, 94, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
@@ -445,9 +445,9 @@
 }
 
 .removeHeaderButton:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
-  color: #ef4444;
+  background: rgba(200, 48, 47, 0.1);
+  border-color: var(--red);
+  color: var(--red);
 }
 
 .addHeaderButton {
@@ -462,8 +462,8 @@
 }
 
 .addHeaderButton:hover {
-  border-color: var(--color-blue-500);
-  color: var(--color-blue-500);
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .headerHint {
@@ -471,7 +471,7 @@
   color: var(--text-secondary);
   margin-top: 8px;
   padding: 8px 12px;
-  background: rgba(59, 130, 246, 0.05);
+  background: rgba(28, 110, 140, 0.05);
   border-radius: 6px;
 }
 
@@ -500,7 +500,7 @@
 .fieldInput {
   padding: 8px 12px;
   background: var(--bg-primary);
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--line-2);
   border-radius: 6px;
   font-size: 13px;
   color: var(--text-primary);
@@ -509,12 +509,12 @@
 
 .fieldInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .fieldInput:hover {
-  border-color: #9ca3af;
+  border-color: var(--ink-faint);
 }
 
 /* 表单操作 */
@@ -542,20 +542,20 @@
 
 .saveButton {
   padding: 10px 24px;
-  background: #3b82f6;
+  background: var(--brand);
   border: none;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: white;
+  color: #fff;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .saveButton:hover:not(:disabled) {
-  background: #2563eb;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  background: var(--brand-ink);
+  box-shadow: 0 2px 6px rgba(28, 110, 140, 0.3);
   transform: translateY(-1px);
 }
 
@@ -572,15 +572,17 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 12px;
   width: 90%;
   max-width: 900px;
@@ -588,7 +590,7 @@
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
 }
 
 .modalHeader {
@@ -653,28 +655,28 @@
 
 .logsTable th {
   font-weight: 600;
-  color: #6b7280;
-  background: #f9fafb;
+  color: var(--ink-2);
+  background: var(--bg);
 }
 
 .logsTable td {
-  color: #374151;
+  color: var(--ink);
 }
 
 .logsTable tbody tr:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .countAdded {
-  color: #22c55e;
+  color: var(--green);
 }
 
 .countUpdated {
-  color: #3b82f6;
+  color: var(--brand);
 }
 
 .countDeleted {
-  color: #ef4444;
+  color: var(--red);
 }
 
 .errorMessage {
@@ -682,5 +684,5 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #ef4444;
+  color: var(--red);
 }

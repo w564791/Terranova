@@ -15,15 +15,17 @@
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .syncMessage {
   font-size: 13px;
-  color: #059669;
-  background: #d1fae5;
+  color: var(--green-active);
+  background: var(--green-soft);
   padding: 6px 12px;
-  border-radius: 4px;
+  border-radius: 5px;
+  border: 1px solid var(--green-line);
   animation: fadeIn 0.3s ease-in-out;
 }
 
@@ -35,31 +37,117 @@
 .title {
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--ink);
   margin: 0;
 }
 
-.syncButton {
-  display: flex;
+/* Cache: N keywords — success badge */
+.cacheBadge {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #4f46e5;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  background: var(--green-soft);
+  color: var(--green-active);
+  border: 1px solid var(--green-line);
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
-.syncButton:hover {
-  background: #4338ca;
+/* Warming progress — brand badge */
+.warmingBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-line);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Shared header button base */
+.headerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--font-sans, inherit);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.headerBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.headerBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+/* Warmup — outline brand */
+.warmupButton {
+  composes: headerBtn;
+  background: transparent;
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-line);
+}
+
+.warmupButton:hover:not(:disabled) {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+/* Force Warmup — outline red（危险次操作，非实心） */
+.forceWarmupButton {
+  composes: headerBtn;
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red-line);
+}
+
+.forceWarmupButton:hover:not(:disabled) {
+  background: var(--red-soft);
+  border-color: var(--red);
+}
+
+.forceWarmupButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-red);
+}
+
+/* Sync All — solid brand 主操作 */
+.syncButton {
+  composes: headerBtn;
+  background: var(--brand);
+  color: #fff;
+  border: 1px solid transparent;
+}
+
+.syncButton:hover:not(:disabled) {
+  background: var(--brand-ink);
 }
 
 .syncButton:disabled {
-  background: #9ca3af;
+  opacity: 0.45;
   cursor: not-allowed;
+  background: var(--brand);
 }
 
 /* 统计卡片 */
@@ -79,7 +167,7 @@
 
 .statLabel {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-bottom: 8px;
 }
 
@@ -117,7 +205,7 @@
   min-width: 200px;
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -125,13 +213,13 @@
 
 .searchInput:focus {
   outline: none;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px rgba(19, 82, 105, 0.1);
 }
 
 .filterSelect {
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   background: white;
@@ -140,8 +228,8 @@
 
 .searchButton {
   padding: 12px 24px;
-  background: #4f46e5;
-  color: white;
+  background: var(--brand-ink);
+  color: #fff;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -151,11 +239,11 @@
 }
 
 .searchButton:hover {
-  background: #4338ca;
+  background: var(--brand-700);
 }
 
 .searchButton:disabled {
-  background: #9ca3af;
+  background: var(--ink-faint);
   cursor: not-allowed;
 }
 
@@ -172,8 +260,8 @@
   margin-bottom: 16px;
   padding: 14px 16px;
   border-radius: 10px;
-  border: 1px solid #c7d2fe;
-  background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%);
+  border: 1px solid var(--brand-200);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--bg) 100%);
 }
 
 .aiSummaryHeader {
@@ -191,13 +279,13 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #4338ca;
-  background: rgba(79, 70, 229, 0.12);
+  color: var(--brand-700);
+  background: rgba(19, 82, 105, 0.12);
 }
 
 .aiSummaryStatus {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .aiSummaryLoading {
@@ -205,15 +293,15 @@
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--ink-2);
   padding: 4px 0;
 }
 
 .aiSummaryError {
   font-size: 13px;
-  color: #b45309;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  color: var(--amber-hover);
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
   border-radius: 6px;
   padding: 8px 10px;
 }
@@ -228,7 +316,7 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.55;
-  color: #1f2937;
+  color: var(--ink);
 }
 
 .aiSummaryHighlights {
@@ -236,7 +324,7 @@
   padding-left: 18px;
   font-size: 13px;
   line-height: 1.55;
-  color: #374151;
+  color: var(--ink);
 }
 
 .aiSummaryHighlights li {
@@ -255,9 +343,9 @@
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
-  color: #4338ca;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--brand-700);
+  background: rgba(28, 110, 140, 0.1);
+  border: 1px solid rgba(28, 110, 140, 0.2);
 }
 
 .aiSummarySuggestions {
@@ -269,13 +357,13 @@
 
 .aiSummarySuggestionsLabel {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .aiSummarySuggestionBtn {
-  border: 1px solid #c7d2fe;
+  border: 1px solid var(--brand-200);
   background: white;
-  color: #4338ca;
+  color: var(--brand-700);
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 12px;
@@ -284,12 +372,12 @@
 }
 
 .aiSummarySuggestionBtn:hover {
-  background: #eef2ff;
-  border-color: #a5b4fc;
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
 }
 
 .aiFilteredHint {
-  color: #7c3aed;
+  color: var(--brand);
   font-weight: 500;
 }
 
@@ -307,22 +395,22 @@
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
-  color: #6b7280;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
 }
 
 .aiProgressStepActive {
-  color: #4338ca;
-  background: #eef2ff;
-  border-color: #c7d2fe;
+  color: var(--brand-700);
+  background: var(--brand-soft);
+  border-color: var(--brand-200);
   font-weight: 500;
 }
 
 .aiProgressStepDone {
-  color: #047857;
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  color: var(--green-active);
+  background: var(--green-soft);
+  border-color: var(--green-line);
 }
 
 .aiProgressDot {
@@ -346,8 +434,8 @@
   margin-bottom: 10px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(79, 70, 229, 0.06);
-  border: 1px solid rgba(79, 70, 229, 0.15);
+  background: rgba(19, 82, 105, 0.06);
+  border: 1px solid rgba(19, 82, 105, 0.15);
 }
 
 .aiResultsGateText {
@@ -355,13 +443,13 @@
   flex: 1 1 220px;
   font-size: 13px;
   line-height: 1.5;
-  color: #374151;
+  color: var(--ink);
 }
 
 .aiSkipButton {
-  border: 1px solid #a5b4fc;
+  border: 1px solid var(--brand-300);
   background: white;
-  color: #4338ca;
+  color: var(--brand-700);
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 13px;
@@ -372,8 +460,8 @@
 }
 
 .aiSkipButton:hover {
-  background: #eef2ff;
-  border-color: #818cf8;
+  background: var(--brand-soft);
+  border-color: var(--brand-400);
 }
 
 .resultsGatePlaceholder {
@@ -383,11 +471,11 @@
   justify-content: center;
   gap: 12px;
   padding: 40px 20px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--line-2);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .resultsGatePlaceholder p {
@@ -408,13 +496,13 @@
 
 .aiScreeningText {
   font-size: 12px;
-  color: #5b21b6;
+  color: var(--brand-700);
 }
 
 .aiScreeningToggle {
-  border: 1px solid #c4b5fd;
+  border: 1px solid var(--brand-200);
   background: white;
-  color: #6d28d9;
+  color: var(--brand-ink);
   border-radius: 999px;
   padding: 4px 12px;
   font-size: 12px;
@@ -423,14 +511,14 @@
 }
 
 .aiScreeningToggle:hover {
-  background: #f5f3ff;
-  border-color: #a78bfa;
+  background: var(--brand-soft);
+  border-color: var(--brand-300);
 }
 
 .resultItemDropped {
   opacity: 0.72;
   border-style: dashed;
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .droppedBadge {
@@ -441,7 +529,7 @@
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
-  color: #7c3aed;
+  color: var(--brand);
   background: rgba(124, 58, 237, 0.1);
   border: 1px solid rgba(124, 58, 237, 0.2);
   white-space: nowrap;
@@ -465,7 +553,7 @@
 
 .resultsCount {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .resultsList {
@@ -475,19 +563,19 @@
 }
 
 .resultItem {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .resultItem:hover {
-  border-color: #4f46e5;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+  border-color: var(--brand-ink);
+  box-shadow: 0 2px 8px rgba(19, 82, 105, 0.1);
 }
 
 .resultItemClickable {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
@@ -495,29 +583,29 @@
 }
 
 .resultItemClickable:hover {
-  border-color: #4f46e5;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
-  background: #f9fafb;
+  border-color: var(--brand-ink);
+  box-shadow: 0 2px 8px rgba(19, 82, 105, 0.1);
+  background: var(--bg);
 }
 
 .resultItemExpanded {
-  border-color: #4f46e5;
-  box-shadow: 0 2px 12px rgba(79, 70, 229, 0.15);
+  border-color: var(--brand-ink);
+  box-shadow: 0 2px 12px rgba(19, 82, 105, 0.15);
 }
 
 .expandHint {
   margin-left: auto;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .expandToggle {
   margin-left: auto;
   padding: 4px 8px;
   background: transparent;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 11px;
   cursor: pointer;
   line-height: 1;
@@ -525,15 +613,15 @@
 }
 
 .expandToggle:hover {
-  background: #f3f4f6;
-  color: #374151;
-  border-color: #d1d5db;
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--line-2);
 }
 
 .resultDetailPanel {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   animation: slideDown 0.2s ease-out;
 }
 
@@ -552,7 +640,7 @@
 
 .resultDetailLoading {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
   padding: 8px 0;
 }
 
@@ -563,7 +651,7 @@
 .resultDetailTitle {
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -581,13 +669,13 @@
 }
 
 .resultDetailKey {
-  color: #6b7280;
+  color: var(--ink-2);
   padding: 3px 0;
   word-break: break-all;
 }
 
 .resultDetailValue {
-  color: #111827;
+  color: var(--ink);
   padding: 3px 0;
   word-break: break-all;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
@@ -595,7 +683,7 @@
 
 .resultDetailSummary {
   font-size: 12px;
-  color: #374151;
+  color: var(--ink);
   line-height: 1.5;
 }
 
@@ -611,11 +699,11 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: #4b5563;
+  color: var(--ink-2);
 }
 
 .resourceTypeIcon {
@@ -624,8 +712,8 @@
 
 .workspaceBadge {
   padding: 4px 10px;
-  background: #e0e7ff;
-  color: #4338ca;
+  background: var(--brand-100);
+  color: var(--brand-700);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -647,18 +735,18 @@
 
 .cloudId {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .cloudName {
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
 }
 
 .cloudArn {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-family: 'Monaco', 'Menlo', monospace;
   word-break: break-all;
   cursor: help;
@@ -666,8 +754,8 @@
 
 .externalBadge {
   padding: 4px 10px;
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -675,8 +763,8 @@
 
 .deletedBadge {
   padding: 4px 10px;
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--red-soft);
+  color: var(--red-active);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -688,7 +776,7 @@
   gap: 16px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .accountInfo {
@@ -709,19 +797,19 @@
   gap: 8px;
   margin-bottom: 8px;
   padding: 6px 10px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 4px;
   font-size: 12px;
 }
 
 .arnLabel {
-  color: #6b7280;
+  color: var(--ink-2);
   font-weight: 500;
   flex-shrink: 0;
 }
 
 .arnValue {
-  color: #374151;
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', monospace;
   word-break: break-all;
   line-height: 1.4;
@@ -729,7 +817,7 @@
 
 .terraformAddress {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-family: 'Monaco', 'Menlo', monospace;
   word-break: break-all;
 }
@@ -739,8 +827,8 @@
   padding: 6px 10px;
   font-size: 12px;
   line-height: 1.5;
-  color: #6b7280;
-  background: #f8fafc;
+  color: var(--ink-2);
+  background: var(--bg);
   border-radius: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -754,8 +842,8 @@
 }
 
 .resourceSummaryPreview:hover {
-  color: #4b5563;
-  background: #f1f5f9;
+  color: var(--ink-2);
+  background: var(--surface-2);
 }
 
 .resourceSummaryPreview.expanded {
@@ -777,8 +865,8 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--surface-2);
+  color: var(--ink);
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -788,7 +876,7 @@
 }
 
 .jumpButton:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 /* 资源树 */
@@ -816,14 +904,14 @@
 
 .workspaceSelect {
   padding: 8px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
   min-width: 200px;
 }
 
 .treeContainer {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
   max-height: 600px;
@@ -849,7 +937,7 @@
 }
 
 .treeNodeHeader:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .expandIcon {
@@ -859,7 +947,7 @@
   align-items: center;
   justify-content: center;
   font-size: 9px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   flex-shrink: 0;
 }
 
@@ -872,13 +960,13 @@
 }
 
 .moduleIcon {
-  color: #b45309;
-  background: #fef3c7;
+  color: var(--amber-hover);
+  background: var(--amber-soft);
 }
 
 .resourceIcon {
-  color: #047857;
-  background: #d1fae5;
+  color: var(--green-active);
+  background: var(--green-soft);
 }
 
 .nodeName {
@@ -888,13 +976,13 @@
 
 .nodeCount {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   margin-left: auto;
 }
 
 .nodeCloudId {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
@@ -907,8 +995,8 @@
 }
 
 .nodeCloudId.copyable:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .copiedToast {
@@ -916,8 +1004,8 @@
   top: -24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 10px;
@@ -934,7 +1022,7 @@
 
 .treeChildren {
   margin-left: 24px;
-  border-left: 1px dashed #e5e7eb;
+  border-left: 1px dashed var(--line);
   padding-left: 8px;
 }
 
@@ -942,7 +1030,7 @@
 .emptyState {
   text-align: center;
   padding: 48px 24px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .emptyIcon {
@@ -966,8 +1054,8 @@
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #4f46e5;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand-ink);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -983,7 +1071,7 @@
   display: flex;
   gap: 4px;
   margin-bottom: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .tab {
@@ -993,18 +1081,18 @@
   border-bottom: 2px solid transparent;
   font-size: 14px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--ink-2);
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
 }
 
 .tab:hover {
-  color: #4f46e5;
+  color: var(--brand-ink);
 }
 
 .tabActive {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: var(--brand-ink);
+  border-bottom-color: var(--brand-ink);
 }
 
 /* 资源类型统计 */
@@ -1020,20 +1108,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 6px;
 }
 
 .typeStatName {
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .typeStatCount {
   font-size: 14px;
   font-weight: 600;
-  color: #4f46e5;
+  color: var(--brand-ink);
 }
 
 /* Workspace资源树列表 */
@@ -1044,7 +1132,7 @@
 }
 
 .workspaceTreeContainer {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1054,13 +1142,13 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: #f9fafb;
+  background: var(--bg);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .workspaceTreeHeader:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .workspaceIcon {
@@ -1069,8 +1157,8 @@
   padding: 2px 6px;
   border-radius: 3px;
   font-family: 'Monaco', 'Menlo', monospace;
-  color: #1e40af;
-  background: #dbeafe;
+  color: var(--brand-700);
+  background: var(--brand-soft);
 }
 
 .workspaceName {
@@ -1081,14 +1169,14 @@
 
 .workspaceId {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .resourceCountBadge {
   padding: 4px 10px;
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
@@ -1097,8 +1185,8 @@
 
 .lastSyncedBadge {
   padding: 4px 10px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
   border-radius: 12px;
   font-size: 11px;
   cursor: help;
@@ -1121,8 +1209,8 @@
 
 .syncWorkspaceButton {
   padding: 6px 10px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -1130,7 +1218,7 @@
 }
 
 .syncWorkspaceButton:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 .syncWorkspaceButton:disabled {
@@ -1140,18 +1228,18 @@
 
 .rebuildWorkspaceButton {
   padding: 6px 10px;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
-  color: #b45309;
+  color: var(--amber-hover);
   transition: background 0.2s, border-color 0.2s;
 }
 
 .rebuildWorkspaceButton:hover {
-  background: #fde68a;
-  border-color: #f59e0b;
+  background: var(--amber-line);
+  border-color: var(--amber);
 }
 
 .rebuildWorkspaceButton:disabled {
@@ -1161,24 +1249,24 @@
 
 .expandCollapseButton {
   padding: 4px 8px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--ink-2);
   transition: background 0.2s, color 0.2s;
 }
 
 .expandCollapseButton:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .viewWorkspaceButton {
   padding: 6px 12px;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--surface-2);
+  color: var(--ink);
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -1187,25 +1275,25 @@
 }
 
 .viewWorkspaceButton:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 .workspaceTreeContent {
   padding: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   background: white;
 }
 
 .treeLoading {
   text-align: center;
   padding: 24px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .treeEmpty {
   text-align: center;
   padding: 24px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-size: 14px;
 }
 
@@ -1213,8 +1301,8 @@
   display: inline-block;
   margin-left: 8px;
   padding: 4px 12px;
-  background: #4f46e5;
-  color: white;
+  background: var(--brand-ink);
+  color: #fff;
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -1222,11 +1310,11 @@
 }
 
 .syncInlineButton:hover {
-  background: #4338ca;
+  background: var(--brand-700);
 }
 
 .syncInlineButton:disabled {
-  background: #9ca3af;
+  background: var(--ink-faint);
   cursor: not-allowed;
 }
 
@@ -1234,7 +1322,7 @@
 .resourceDetails {
   margin-left: 48px;
   padding: 8px 12px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 4px;
   margin-top: 4px;
   margin-bottom: 4px;
@@ -1248,12 +1336,12 @@
 }
 
 .detailLabel {
-  color: #6b7280;
+  color: var(--ink-2);
   min-width: 80px;
 }
 
 .detailValue {
-  color: #374151;
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', monospace;
   word-break: break-all;
 }
@@ -1268,12 +1356,12 @@
 }
 
 .detailValue.copyable:hover {
-  background: #e5e7eb;
-  color: #1f2937;
+  background: var(--line);
+  color: var(--ink);
 }
 
 .detailValue.copyable:active {
-  background: #d1d5db;
+  background: var(--line-2);
 }
 
 /* 树形区域头部 */
@@ -1286,7 +1374,7 @@
 
 .workspaceCount {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* 搜索自动完成 */
@@ -1314,7 +1402,7 @@
   left: 0;
   right: 0;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-top: none;
   border-radius: 0 0 8px 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -1330,7 +1418,7 @@
   padding: 10px 16px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .suggestionItem:last-child {
@@ -1339,7 +1427,7 @@
 
 .suggestionItem:hover,
 .suggestionItemActive {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .suggestionType {
@@ -1357,22 +1445,22 @@
 }
 
 .suggestionTypeId {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .suggestionTypeName {
-  background: #d1fae5;
-  color: #047857;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .suggestionTypeDescription {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .suggestionTypeArn {
-  background: #fce7f3;
+  background: var(--red-soft);
   color: #be185d;
 }
 
@@ -1399,15 +1487,15 @@
 
 .suggestionResourceType {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .suggestionExternalBadge {
   font-size: 10px;
   padding: 1px 6px;
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
   border-radius: 3px;
   font-weight: 500;
 }
@@ -1415,14 +1503,14 @@
 .suggestionsLoading {
   padding: 16px;
   text-align: center;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
 .suggestionsEmpty {
   padding: 16px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--ink-faint);
   font-size: 13px;
 }
 

@@ -13,8 +13,8 @@
   justify-content: space-between;
   animation: slideInLeft 0.3s ease-out;
   border-left: 4px solid;
-  background: #FFFFFF;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--surface);
+  font-family: var(--font-sans);
 }
 
 @keyframes slideInLeft {
@@ -45,7 +45,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: white;
+  color: #fff;
   margin-top: 2px;
 }
 
@@ -53,7 +53,7 @@
   font-size: 14px;
   line-height: 1.5;
   flex: 1;
-  color: #374151;
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -71,7 +71,7 @@
   opacity: 0.5;
   transition: opacity 0.2s ease;
   margin-left: 12px;
-  color: #6B7280;
+  color: var(--ink-2);
   flex-shrink: 0;
 }
 
@@ -79,38 +79,38 @@
   opacity: 0.8;
 }
 
-/* Success notification */
+/* Success */
 .success {
-  border-left-color: #10B981;
+  border-left-color: var(--green);
 }
 
 .success .icon {
-  background: #10B981;
+  background: var(--green);
 }
 
-/* Error notification */
+/* Error */
 .error {
-  border-left-color: #EF4444;
+  border-left-color: var(--red);
 }
 
 .error .icon {
-  background: #EF4444;
+  background: var(--red);
 }
 
-/* Warning notification */
+/* Warning — amber 仅 badge/banner/toast 边，不做按钮 */
 .warning {
-  border-left-color: #F59E0B;
+  border-left-color: var(--amber);
 }
 
 .warning .icon {
-  background: #F59E0B;
+  background: var(--amber);
 }
 
-/* Info notification */
+/* Info — brand 主色 */
 .info {
-  border-left-color: #3B82F6;
+  border-left-color: var(--brand);
 }
 
 .info .icon {
-  background: #3B82F6;
+  background: var(--brand);
 }

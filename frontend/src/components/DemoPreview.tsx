@@ -87,22 +87,22 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
           <div style={{ 
             marginBottom: '20px', 
             padding: '16px', 
-            background: '#f8f9fa', 
+            background: 'var(--bg)', 
             borderRadius: '6px',
-            border: '1px solid #e9ecef'
+            border: '1px solid var(--line)'
           }}>
             {demo.description && (
               <div style={{ marginBottom: '12px' }}>
-                <strong style={{ color: '#495057', fontSize: '14px' }}>描述：</strong>
-                <span style={{ color: '#6c757d', fontSize: '14px', marginLeft: '8px' }}>
+                <strong style={{ color: 'var(--ink-2)', fontSize: '14px' }}>描述：</strong>
+                <span style={{ color: 'var(--ink-2)', fontSize: '14px', marginLeft: '8px' }}>
                   {demo.description}
                 </span>
               </div>
             )}
             {demo.usage_notes && (
               <div>
-                <strong style={{ color: '#495057', fontSize: '14px' }}>使用说明：</strong>
-                <span style={{ color: '#6c757d', fontSize: '14px', marginLeft: '8px' }}>
+                <strong style={{ color: 'var(--ink-2)', fontSize: '14px' }}>使用说明：</strong>
+                <span style={{ color: 'var(--ink-2)', fontSize: '14px', marginLeft: '8px' }}>
                   {demo.usage_notes}
                 </span>
               </div>
@@ -110,16 +110,16 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
           </div>
           
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--ink-2)' }}>
               加载 Schema 中...
             </div>
           ) : !schema ? (
             <div style={{ 
               textAlign: 'center', 
               padding: '40px', 
-              background: '#fff3cd',
+              background: 'var(--amber-soft)',
               borderRadius: '6px',
-              color: '#856404'
+              color: 'var(--amber-hover)'
             }}>
               <p>该模块暂无 Schema 定义</p>
               <p style={{ fontSize: '14px', marginTop: '8px' }}>
@@ -142,9 +142,9 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
                     onClick={() => setDataViewMode('form')}
                     style={{
                       padding: '6px 12px',
-                      background: dataViewMode === 'form' ? '#007bff' : '#f8f9fa',
-                      color: dataViewMode === 'form' ? 'white' : '#495057',
-                      border: '1px solid ' + (dataViewMode === 'form' ? '#007bff' : '#dee2e6'),
+                      background: dataViewMode === 'form' ? 'var(--brand)' : 'var(--bg)',
+                      color: dataViewMode === 'form' ? 'white' : 'var(--ink-2)',
+                      border: '1px solid ' + (dataViewMode === 'form' ? 'var(--brand)' : 'var(--line-2)'),
                       borderRadius: '4px',
                       fontSize: '13px',
                       cursor: 'pointer',
@@ -157,9 +157,9 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
                     onClick={() => setDataViewMode('json')}
                     style={{
                       padding: '6px 12px',
-                      background: dataViewMode === 'json' ? '#3b82f6' : '#f8f9fa',
-                      color: dataViewMode === 'json' ? 'white' : '#495057',
-                      border: '1px solid ' + (dataViewMode === 'json' ? '#3b82f6' : '#dee2e6'),
+                      background: dataViewMode === 'json' ? 'var(--brand)' : 'var(--bg)',
+                      color: dataViewMode === 'json' ? 'white' : 'var(--ink-2)',
+                      border: '1px solid ' + (dataViewMode === 'json' ? 'var(--brand)' : 'var(--line-2)'),
                       borderRadius: '6px',
                       fontSize: '13px',
                       cursor: 'pointer',
@@ -179,8 +179,8 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
                   />
                 ) : (
                   <div style={{
-                    background: '#f8f9fa',
-                    border: '1px solid #dee2e6',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--line-2)',
                     borderRadius: '6px',
                     padding: '16px',
                     maxHeight: '500px',
@@ -227,9 +227,9 @@ const DemoPreview: React.FC<DemoPreviewProps> = ({ demo, moduleId, onClose }) =>
                 <div style={{ 
                   textAlign: 'center', 
                   padding: '40px', 
-                  background: '#fff3cd',
+                  background: 'var(--amber-soft)',
                   borderRadius: '6px',
-                  color: '#856404'
+                  color: 'var(--amber-hover)'
                 }}>
                   <p>Schema 加载失败，无法显示表单视图</p>
                   <p style={{ fontSize: '14px', marginTop: '8px' }}>

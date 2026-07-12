@@ -518,7 +518,7 @@ const ManifestManagement: React.FC = () => {
         cancelText="取消"
         destroyOnClose
       >
-        <p style={{ color: '#999', marginBottom: 16 }}>
+        <p style={{ color: 'var(--ink-3)', marginBottom: 16 }}>
           创建后会自动跳转到 VS Code Web 编辑器,你可以在那里写 .tf 文件、发布版本、部署到 workspace。
         </p>
         <Form form={createForm} layout="vertical" preserve={false}>

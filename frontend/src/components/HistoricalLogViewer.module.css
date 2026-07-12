@@ -40,15 +40,15 @@
 }
 
 .tabs button.active {
-  background: var(--color-blue-500);
-  border-color: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 .downloadBtn {
   padding: 8px 16px;
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -61,7 +61,7 @@
 }
 
 .downloadBtn:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
@@ -97,7 +97,7 @@
   width: 40px;
   height: 40px;
   border: 4px solid var(--color-gray-200);
-  border-top-color: var(--color-blue-500);
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -115,13 +115,13 @@
   justify-content: center;
   height: 400px;
   gap: 16px;
-  color: var(--color-red-600);
+  color: var(--red-hover);
 }
 
 .retryBtn {
   padding: 8px 24px;
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -131,7 +131,7 @@
 }
 
 .retryBtn:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }

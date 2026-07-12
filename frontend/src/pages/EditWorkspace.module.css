@@ -12,29 +12,29 @@
 }
 
 .backButton {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
   border: none;
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   transition: all 0.2s ease;
 }
 
 .backButton:hover {
-  background: var(--color-gray-200);
+  background: var(--line);
 }
 
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
 .formContainer {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   padding: var(--spacing-xl);
   box-shadow: var(--shadow-md);
@@ -55,12 +55,12 @@
 .label {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .select, .textarea {
   padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   font-size: 14px;
   transition: all 0.2s ease;
@@ -68,8 +68,8 @@
 
 .select:focus, .textarea:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .textarea {
@@ -86,8 +86,8 @@
 }
 
 .cancelButton {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
   border: none;
   padding: var(--spacing-sm) var(--spacing-lg);
   border-radius: var(--radius-md);
@@ -97,12 +97,12 @@
 }
 
 .cancelButton:hover {
-  background: var(--color-gray-200);
+  background: var(--line);
 }
 
 .submitButton {
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: var(--spacing-sm) var(--spacing-lg);
   border-radius: var(--radius-md);
@@ -112,7 +112,7 @@
 }
 
 .submitButton:hover:not(:disabled) {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 .submitButton:disabled {
@@ -126,5 +126,10 @@
   align-items: center;
   height: 200px;
   font-size: 16px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

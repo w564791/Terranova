@@ -28,16 +28,16 @@
 }
 
 .remoteDataItem {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--surface-2);
   border-radius: 6px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--bg);
   transition: all 0.2s;
 }
 
 .remoteDataItem:hover {
-  border-color: #d9d9d9;
-  background: #fff;
+  border-color: var(--line-2);
+  background: var(--surface);
 }
 
 .itemHeader {
@@ -65,7 +65,7 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px;
-  background: #f5f5f5;
+  background: var(--surface-2);
   border-radius: 4px;
 }
 
@@ -77,28 +77,28 @@
 
 :global(.dark) .remoteDataItem:hover {
   border-color: #434343;
-  background: #262626;
+  background: var(--ink);
 }
 
 :global(.dark) .outputsList {
-  background: #262626;
+  background: var(--ink);
 }
 
 .usageSection {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed #e8e8e8;
+  border-top: 1px dashed var(--line);
 }
 
 .codeBlock {
-  background: #f5f5f5;
-  border: 1px solid #e8e8e8;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 8px 12px;
   margin: 4px 0 0 0;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
-  color: #1890ff;
+  color: var(--brand);
   overflow-x: auto;
 }
 
@@ -109,7 +109,7 @@
 :global(.dark) .codeBlock {
   background: #1f1f1f;
   border-color: #303030;
-  color: #40a9ff;
+  color: var(--brand-400);
 }
 
 /* Outputs usage list */
@@ -124,20 +124,20 @@
   display: flex;
   align-items: center;
   padding: 6px 10px;
-  background: #f5f5f5;
-  border: 1px solid #e8e8e8;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .outputUsageItem:hover {
-  background: #fafafa;
-  border-color: #d9d9d9;
+  background: var(--bg);
+  border-color: var(--line-2);
 }
 
 .copyButton {
   margin-left: auto;
-  color: #1890ff;
+  color: var(--brand);
   opacity: 0.6;
   transition: opacity 0.2s;
 }
@@ -149,7 +149,7 @@
 .outputCode {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
-  color: #1890ff;
+  color: var(--brand);
   flex: 1;
 }
 
@@ -159,12 +159,12 @@
 }
 
 :global(.dark) .outputUsageItem:hover {
-  background: #111d2c;
-  border-color: #153450;
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 :global(.dark) .outputCode {
-  color: #40a9ff;
+  color: var(--brand-400);
 }
 
 /* Output usage wrapper for expand/collapse */
@@ -178,13 +178,13 @@
 }
 
 .clickable:hover {
-  background: #e6f7ff;
-  border-color: #91d5ff;
+  background: var(--brand-soft);
+  border-color: var(--brand-200);
 }
 
 .expandIcon {
   font-size: 10px;
-  color: #8c8c8c;
+  color: var(--ink-3);
   margin-right: 8px;
   width: 12px;
   display: inline-flex;
@@ -199,14 +199,14 @@
 }
 
 .outputValue {
-  background: #f5f5f5;
-  border: 1px solid #e8e8e8;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 8px 12px;
   margin: 0;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 11px;
-  color: #595959;
+  color: var(--ink-2);
   overflow-x: auto;
   max-height: 200px;
   overflow-y: auto;
@@ -215,8 +215,8 @@
 }
 
 :global(.dark) .clickable:hover {
-  background: #111d2c;
-  border-color: #153450;
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 :global(.dark) .outputValueContainer .outputValue {
@@ -241,7 +241,7 @@
 .formLabel {
   font-size: 13px;
   font-weight: 500;
-  color: #262626;
+  color: var(--ink);
 }
 
 .formActions {
@@ -250,11 +250,11 @@
   gap: 8px;
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--surface-2);
 }
 
 :global(.dark) .formLabel {
-  color: #d9d9d9;
+  color: var(--line-2);
 }
 
 :global(.dark) .formActions {

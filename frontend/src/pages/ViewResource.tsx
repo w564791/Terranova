@@ -845,7 +845,7 @@ const ViewResource: React.FC = () => {
                         onClick={() => navigate(`/modules/${matchedModule.id}`)}
                         style={{
                           padding: '2px 10px',
-                          background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                          background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-700) 100%)',
                           color: 'white',
                           borderRadius: '4px',
                           fontSize: '12px',
@@ -858,7 +858,7 @@ const ViewResource: React.FC = () => {
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.4)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(28, 110, 140, 0.4)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = 'translateY(0)';
@@ -887,7 +887,7 @@ const ViewResource: React.FC = () => {
                     }}>
                       <span style={{
                         padding: '2px 8px',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%)',
                         color: 'white',
                         borderRadius: '4px',
                         fontSize: '12px',
@@ -907,20 +907,20 @@ const ViewResource: React.FC = () => {
                               gap: '4px',
                               padding: '2px 8px',
                               borderRadius: '4px',
-                              border: '1px solid #e2e8f0',
+                              border: '1px solid var(--line)',
                               background: 'white',
-                              color: '#64748b',
+                              color: 'var(--ink-2)',
                               fontSize: '12px',
                               cursor: 'pointer',
                               transition: 'all 0.15s',
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = '#94a3b8';
-                              e.currentTarget.style.color = '#334155';
+                              e.currentTarget.style.borderColor = 'var(--ink-faint)';
+                              e.currentTarget.style.color = 'var(--ink)';
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = '#e2e8f0';
-                              e.currentTarget.style.color = '#64748b';
+                              e.currentTarget.style.borderColor = 'var(--line)';
+                              e.currentTarget.style.color = 'var(--ink-2)';
                             }}
                             title="切换模块版本"
                           >
@@ -944,7 +944,7 @@ const ViewResource: React.FC = () => {
                                 left: 0,
                                 marginTop: '4px',
                                 background: 'white',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid var(--line)',
                                 borderRadius: '8px',
                                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                                 zIndex: 100,
@@ -978,11 +978,11 @@ const ViewResource: React.FC = () => {
                                           alignItems: 'center',
                                           justifyContent: 'space-between',
                                           gap: '8px',
-                                          background: isCurrent ? '#f1f5f9' : 'transparent',
+                                          background: isCurrent ? 'var(--surface-2)' : 'transparent',
                                           transition: 'background 0.1s',
                                         }}
                                         onMouseEnter={(e) => {
-                                          if (!isCurrent) e.currentTarget.style.background = '#f8fafc';
+                                          if (!isCurrent) e.currentTarget.style.background = 'var(--bg)';
                                         }}
                                         onMouseLeave={(e) => {
                                           if (!isCurrent) e.currentTarget.style.background = 'transparent';
@@ -991,7 +991,7 @@ const ViewResource: React.FC = () => {
                                         <span style={{
                                           fontSize: '13px',
                                           fontWeight: isCurrent ? 600 : 400,
-                                          color: isCurrent ? '#334155' : '#475569',
+                                          color: isCurrent ? 'var(--ink)' : 'var(--ink-2)',
                                           fontFamily: "'JetBrains Mono', monospace",
                                         }}>
                                           {v.version}
@@ -1002,7 +1002,7 @@ const ViewResource: React.FC = () => {
                                               fontSize: '10px',
                                               padding: '1px 6px',
                                               borderRadius: '3px',
-                                              background: '#667eea',
+                                              background: 'var(--brand)',
                                               color: 'white',
                                               fontWeight: 600,
                                             }}>当前</span>
@@ -1012,8 +1012,8 @@ const ViewResource: React.FC = () => {
                                               fontSize: '10px',
                                               padding: '1px 6px',
                                               borderRadius: '3px',
-                                              background: '#dcfce7',
-                                              color: '#166534',
+                                              background: 'var(--green-soft)',
+                                              color: 'var(--green-active)',
                                               fontWeight: 600,
                                             }}>最新</span>
                                           )}
@@ -1033,24 +1033,24 @@ const ViewResource: React.FC = () => {
                           onClick={() => handleVersionSwitch(latestModuleVersionId, latestModuleVersion)}
                           style={{
                             fontSize: '12px',
-                            color: '#3b82f6',
+                            color: 'var(--brand)',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px',
                             padding: '2px 8px',
                             borderRadius: '4px',
-                            background: '#eff6ff',
-                            border: '1px solid #bfdbfe',
+                            background: 'var(--brand-soft)',
+                            border: '1px solid var(--brand-200)',
                             transition: 'all 0.15s',
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#dbeafe';
-                            e.currentTarget.style.borderColor = '#93c5fd';
+                            e.currentTarget.style.background = 'var(--brand-soft)';
+                            e.currentTarget.style.borderColor = 'var(--brand-300)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#eff6ff';
-                            e.currentTarget.style.borderColor = '#bfdbfe';
+                            e.currentTarget.style.background = 'var(--brand-soft)';
+                            e.currentTarget.style.borderColor = 'var(--brand-200)';
                           }}
                           title={`点击升级到 ${latestModuleVersion}`}
                         >
@@ -1066,7 +1066,7 @@ const ViewResource: React.FC = () => {
                       {!resourceVersionFound && !latestModuleVersion && (
                         <span style={{
                           fontSize: '11px',
-                          color: '#dc2626',
+                          color: 'var(--red-hover)',
                           fontWeight: 500,
                         }}>
                           (版本不存在)
@@ -1134,7 +1134,7 @@ const ViewResource: React.FC = () => {
                         onChange={(e) => handleVersionChange(parseInt(e.target.value))}
                         style={{
                           padding: '10px 12px',
-                          border: '1px solid var(--color-gray-300)',
+                          border: '1px solid var(--line-2)',
                           borderRadius: '6px',
                           fontSize: '14px',
                           background: 'white',
@@ -1173,10 +1173,10 @@ const ViewResource: React.FC = () => {
                   {formRenderError && dataViewMode === 'json' && (
                     <div style={{
                       padding: '12px 16px',
-                      background: '#fff3cd',
-                      border: '1px solid #ffc107',
+                      background: 'var(--amber-soft)',
+                      border: '1px solid var(--amber)',
                       borderRadius: '6px',
-                      color: '#856404',
+                      color: 'var(--amber-hover)',
                       marginBottom: '16px'
                     }}>
                        表单渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图
@@ -1187,15 +1187,15 @@ const ViewResource: React.FC = () => {
                   {!resourceVersionFound && (
                     <div style={{
                       padding: '12px 16px',
-                      background: '#fef2f2',
-                      border: '1px solid #fca5a5',
+                      background: 'var(--red-soft)',
+                      border: '1px solid var(--red-line)',
                       borderRadius: '6px',
-                      color: '#991b1b',
+                      color: 'var(--red-active)',
                       marginBottom: '16px',
                     }}>
                       ⚠ 资源使用的模块版本 <strong>{resourceModuleVersion || 'unknown'}</strong> 在当前模块版本列表中不存在，无法渲染表单。
                       {latestModuleVersion && (
-                        <> 最新版本为 <strong>{latestModuleVersion}</strong>，<a href={`/modules/${matchedModule?.id}/schemas`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>点击前往升级</a>。</>
+                        <> 最新版本为 <strong>{latestModuleVersion}</strong>，<a href={`/modules/${matchedModule?.id}/schemas`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand)' }}>点击前往升级</a>。</>
                       )}
                     </div>
                   )}
@@ -1250,8 +1250,8 @@ const ViewResource: React.FC = () => {
                         />
                       ) : (
                         <div style={{
-                          background: '#f8f9fa',
-                          border: '1px solid #dee2e6',
+                          background: 'var(--bg)',
+                          border: '1px solid var(--line-2)',
                           borderRadius: '6px',
                           padding: '16px',
                           maxHeight: '600px',
@@ -1307,7 +1307,7 @@ const ViewResource: React.FC = () => {
                 marginBottom: '20px', 
                 alignItems: 'center',
                 padding: '16px',
-                background: 'var(--color-gray-50)',
+                background: 'var(--bg)',
                 borderRadius: '8px'
               }}>
                 <div style={{ flex: 1 }}>
@@ -1316,7 +1316,7 @@ const ViewResource: React.FC = () => {
                     fontWeight: 500, 
                     marginBottom: '8px', 
                     display: 'block',
-                    color: 'var(--color-gray-700)'
+                    color: 'var(--ink)'
                   }}>
                     From (旧版本):
                   </label>
@@ -1336,7 +1336,7 @@ const ViewResource: React.FC = () => {
                     }}
                     style={{
                       padding: '10px 12px',
-                      border: '1px solid var(--color-gray-300)',
+                      border: '1px solid var(--line-2)',
                       borderRadius: '6px',
                       fontSize: '14px',
                       background: 'white',
@@ -1356,7 +1356,7 @@ const ViewResource: React.FC = () => {
                 
                 <div style={{ 
                   fontSize: '24px', 
-                  color: 'var(--color-gray-400)',
+                  color: 'var(--ink-faint)',
                   marginTop: '24px'
                 }}>
                   →
@@ -1368,7 +1368,7 @@ const ViewResource: React.FC = () => {
                     fontWeight: 500, 
                     marginBottom: '8px', 
                     display: 'block',
-                    color: 'var(--color-gray-700)'
+                    color: 'var(--ink)'
                   }}>
                     To (新版本):
                   </label>
@@ -1388,7 +1388,7 @@ const ViewResource: React.FC = () => {
                     }}
                     style={{
                       padding: '10px 12px',
-                      border: '1px solid var(--color-gray-300)',
+                      border: '1px solid var(--line-2)',
                       borderRadius: '6px',
                       fontSize: '14px',
                       background: 'white',
@@ -1408,7 +1408,7 @@ const ViewResource: React.FC = () => {
               </div>
 
               {diffFields.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--color-gray-200)', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'var(--line)', borderRadius: '8px', overflow: 'hidden' }}>
                   {diffFields.map((field, index) => (
                     <div key={field.field} style={{ background: 'white' }}>
                       <div
@@ -1427,14 +1427,14 @@ const ViewResource: React.FC = () => {
                             width: '4px', 
                             height: '20px', 
                             borderRadius: '2px',
-                            background: field.type === 'added' ? 'var(--color-green-500)' :
-                                       field.type === 'removed' ? 'var(--color-red-500)' :
-                                       field.type === 'modified' ? 'var(--color-yellow-500)' : 'var(--color-gray-300)',
+                            background: field.type === 'added' ? 'var(--green)' :
+                                       field.type === 'removed' ? 'var(--red)' :
+                                       field.type === 'modified' ? 'var(--color-yellow-500)' : 'var(--line-2)',
                             flexShrink: 0
                           }} />
                           
                           {field.type === 'unchanged' && (
-                            <span style={{ color: 'var(--color-gray-400)', width: '16px', flexShrink: 0 }}>
+                            <span style={{ color: 'var(--ink-faint)', width: '16px', flexShrink: 0 }}>
                               {field.expanded ? '▼' : '▶'}
                             </span>
                           )}
@@ -1442,22 +1442,22 @@ const ViewResource: React.FC = () => {
                             <span style={{ color: 'var(--color-yellow-600)', width: '16px', flexShrink: 0 }}>~</span>
                           )}
                           {field.type === 'added' && (
-                            <span style={{ color: 'var(--color-green-600)', width: '16px', flexShrink: 0 }}>+</span>
+                            <span style={{ color: 'var(--green-hover)', width: '16px', flexShrink: 0 }}>+</span>
                           )}
                           {field.type === 'removed' && (
-                            <span style={{ color: 'var(--color-red-600)', width: '16px', flexShrink: 0 }}>-</span>
+                            <span style={{ color: 'var(--red-hover)', width: '16px', flexShrink: 0 }}>-</span>
                           )}
                           
                           <span style={{ 
                             fontFamily: 'monospace', 
                             fontWeight: 500,
-                            color: field.field.includes('.') ? 'var(--color-gray-600)' : 'var(--color-gray-900)'
+                            color: field.field.includes('.') ? 'var(--ink-2)' : 'var(--ink)'
                           }}>
                             {field.field}:
                           </span>
                           
                           {field.type === 'unchanged' && !field.expanded && (
-                            <span style={{ fontSize: '13px', color: 'var(--color-gray-500)' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--ink-3)' }}>
                               ··· 1 unchanged attribute hidden
                             </span>
                           )}
@@ -1468,10 +1468,10 @@ const ViewResource: React.FC = () => {
                             borderRadius: '4px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: field.type === 'added' ? 'var(--color-green-100)' :
-                                       field.type === 'removed' ? 'var(--color-red-100)' : 'var(--color-yellow-100)',
-                            color: field.type === 'added' ? 'var(--color-green-700)' :
-                                   field.type === 'removed' ? 'var(--color-red-700)' : 'var(--color-yellow-700)',
+                            background: field.type === 'added' ? 'var(--green-soft)' :
+                                       field.type === 'removed' ? 'var(--red-soft)' : 'var(--color-yellow-100)',
+                            color: field.type === 'added' ? 'var(--green-active)' :
+                                   field.type === 'removed' ? 'var(--red-active)' : 'var(--color-yellow-700)',
                             flexShrink: 0
                           }}>
                             {field.type}
@@ -1482,17 +1482,17 @@ const ViewResource: React.FC = () => {
                         <div style={{ padding: '0 16px 12px 48px' }}>
                           {field.type === 'removed' && (
                             <div>
-                              <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                 删除的值：
                               </div>
                               <pre style={{
                                 margin: 0,
                                 padding: '12px',
-                                background: 'var(--color-red-50)',
+                                background: 'var(--red-soft)',
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
-                                color: 'var(--color-red-700)',
+                                color: 'var(--red-active)',
                                 border: '1px solid var(--color-red-200)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
@@ -1503,17 +1503,17 @@ const ViewResource: React.FC = () => {
                           )}
                           {field.type === 'added' && (
                             <div>
-                              <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                 新增的值：
                               </div>
                               <pre style={{
                                 margin: 0,
                                 padding: '12px',
-                                background: 'var(--color-green-50)',
+                                background: 'var(--green-soft)',
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
-                                color: 'var(--color-green-700)',
+                                color: 'var(--green-active)',
                                 border: '1px solid var(--color-green-200)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
@@ -1526,7 +1526,7 @@ const ViewResource: React.FC = () => {
                             // typejsonstring 字段：逐行对比
                             <div style={{
                               borderRadius: '6px',
-                              border: '1px solid var(--color-gray-200)',
+                              border: '1px solid var(--line)',
                               overflow: 'hidden',
                               fontFamily: 'monospace',
                               fontSize: '13px',
@@ -1539,8 +1539,8 @@ const ViewResource: React.FC = () => {
                                 <div key={lineIdx} style={{
                                   display: 'flex',
                                   padding: 0,
-                                  background: line.type === 'added' ? 'var(--color-green-50)' :
-                                              line.type === 'removed' ? 'var(--color-red-50)' : 'white'
+                                  background: line.type === 'added' ? 'var(--green-soft)' :
+                                              line.type === 'removed' ? 'var(--red-soft)' : 'white'
                                 }}>
                                   <span style={{
                                     display: 'inline-block',
@@ -1550,11 +1550,11 @@ const ViewResource: React.FC = () => {
                                     fontWeight: 'bold',
                                     userSelect: 'none',
                                     flexShrink: 0,
-                                    color: line.type === 'added' ? 'var(--color-green-600)' :
-                                           line.type === 'removed' ? 'var(--color-red-600)' : 'var(--color-gray-400)',
-                                    background: line.type === 'added' ? 'var(--color-green-100)' :
-                                               line.type === 'removed' ? 'var(--color-red-100)' : 'var(--color-gray-50)',
-                                    borderRight: '1px solid var(--color-gray-200)'
+                                    color: line.type === 'added' ? 'var(--green-hover)' :
+                                           line.type === 'removed' ? 'var(--red-hover)' : 'var(--ink-faint)',
+                                    background: line.type === 'added' ? 'var(--green-soft)' :
+                                               line.type === 'removed' ? 'var(--red-soft)' : 'var(--bg)',
+                                    borderRight: '1px solid var(--line)'
                                   }}>
                                     {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
                                   </span>
@@ -1563,8 +1563,8 @@ const ViewResource: React.FC = () => {
                                     flex: 1,
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-word',
-                                    color: line.type === 'added' ? 'var(--color-green-700)' :
-                                           line.type === 'removed' ? 'var(--color-red-700)' : 'var(--color-gray-700)'
+                                    color: line.type === 'added' ? 'var(--green-active)' :
+                                           line.type === 'removed' ? 'var(--red-active)' : 'var(--ink)'
                                   }}>
                                     {line.content}
                                   </span>
@@ -1574,17 +1574,17 @@ const ViewResource: React.FC = () => {
                           ) : field.type === 'modified' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                               <div>
-                                <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                   旧版本：
                                 </div>
                                 <pre style={{
                                   margin: 0,
                                   padding: '12px',
-                                  background: 'var(--color-red-50)',
+                                  background: 'var(--red-soft)',
                                   borderRadius: '6px',
                                   fontSize: '13px',
                                   fontFamily: 'monospace',
-                                  color: 'var(--color-red-700)',
+                                  color: 'var(--red-active)',
                                   border: '1px solid var(--color-red-200)',
                                   whiteSpace: 'pre-wrap',
                                   wordBreak: 'break-word'
@@ -1593,17 +1593,17 @@ const ViewResource: React.FC = () => {
                                 </pre>
                               </div>
                               <div>
-                                <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                                <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                   新版本：
                                 </div>
                                 <pre style={{
                                   margin: 0,
                                   padding: '12px',
-                                  background: 'var(--color-green-50)',
+                                  background: 'var(--green-soft)',
                                   borderRadius: '6px',
                                   fontSize: '13px',
                                   fontFamily: 'monospace',
-                                  color: 'var(--color-green-700)',
+                                  color: 'var(--green-active)',
                                   border: '1px solid var(--color-green-200)',
                                   whiteSpace: 'pre-wrap',
                                   wordBreak: 'break-word'
@@ -1615,18 +1615,18 @@ const ViewResource: React.FC = () => {
                           )}
                           {field.type === 'unchanged' && field.expanded && (
                             <div>
-                              <div style={{ fontSize: '12px', color: 'var(--color-gray-600)', marginBottom: '4px', fontWeight: 500 }}>
+                              <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginBottom: '4px', fontWeight: 500 }}>
                                 值：
                               </div>
                               <pre style={{
                                 margin: 0,
                                 padding: '12px',
-                                background: 'var(--color-gray-50)',
+                                background: 'var(--bg)',
                                 borderRadius: '6px',
                                 fontSize: '13px',
                                 fontFamily: 'monospace',
-                                color: 'var(--color-gray-700)',
-                                border: '1px solid var(--color-gray-200)',
+                                color: 'var(--ink)',
+                                border: '1px solid var(--line)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word'
                               }}>

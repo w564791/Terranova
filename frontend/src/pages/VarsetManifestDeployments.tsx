@@ -58,34 +58,34 @@ const VarsetManifestDeployments: React.FC<Props> = ({ varsetId }) => {
       style={{
         marginTop: 24,
         paddingTop: 20,
-        borderTop: '1px solid #e5e7eb',
+        borderTop: '1px solid var(--line)',
       }}
     >
       <h3
         style={{
           fontSize: 16,
           fontWeight: 600,
-          color: '#111827',
+          color: 'var(--ink)',
           margin: '0 0 4px 0',
         }}
       >
         关联的 Manifest Deployment
       </h3>
-      <p style={{ color: '#6b7280', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ color: 'var(--ink-2)', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
         修改此变量集后,以下正在使用它的 manifest 部署在下次 plan/apply 时会获取新值。
       </p>
 
-      {loading && <div style={{ color: '#6b7280', fontSize: 13 }}>加载中...</div>}
-      {error && <div style={{ color: '#dc2626', fontSize: 13 }}>加载失败: {error}</div>}
+      {loading && <div style={{ color: 'var(--ink-2)', fontSize: 13 }}>加载中...</div>}
+      {error && <div style={{ color: 'var(--red-hover)', fontSize: 13 }}>加载失败: {error}</div>}
       {!loading && !error && items.length === 0 && (
-        <div style={{ color: '#6b7280', fontSize: 13, padding: '8px 0' }}>
+        <div style={{ color: 'var(--ink-2)', fontSize: 13, padding: '8px 0' }}>
           暂无 manifest deployment 引用此变量集。
         </div>
       )}
       {!loading && !error && items.length > 0 && (
         <div
           style={{
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--line)',
             borderRadius: 6,
             overflow: 'hidden',
           }}
@@ -95,11 +95,11 @@ const VarsetManifestDeployments: React.FC<Props> = ({ varsetId }) => {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr 1fr 80px 1fr',
               padding: '8px 12px',
-              background: '#f9fafb',
+              background: 'var(--bg)',
               fontSize: 12,
               fontWeight: 600,
-              color: '#374151',
-              borderBottom: '1px solid #e5e7eb',
+              color: 'var(--ink)',
+              borderBottom: '1px solid var(--line)',
             }}
           >
             <div>Manifest</div>
@@ -116,10 +116,10 @@ const VarsetManifestDeployments: React.FC<Props> = ({ varsetId }) => {
                 gridTemplateColumns: '1fr 1fr 1fr 80px 1fr',
                 padding: '8px 12px',
                 fontSize: 13,
-                color: '#374151',
-                borderBottom: '1px solid #f3f4f6',
+                color: 'var(--ink)',
+                borderBottom: '1px solid var(--surface-2)',
                 cursor: 'pointer',
-                background: '#fff',
+                background: 'var(--surface)',
               }}
               onClick={() => {
                 // 跳到 manifest 编辑器(不带 org_id 的话编辑器会从 localStorage 取)
@@ -129,14 +129,14 @@ const VarsetManifestDeployments: React.FC<Props> = ({ varsetId }) => {
               <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
                 {it.manifest_id}
               </div>
-              <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280' }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--ink-2)' }}>
                 {it.deployment_id}
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
                 {it.workspace_id}
               </div>
               <div style={{ textAlign: 'right' }}>{it.priority}</div>
-              <div style={{ color: '#6b7280', fontSize: 12 }}>
+              <div style={{ color: 'var(--ink-2)', fontSize: 12 }}>
                 {it.deployed_at ? new Date(it.deployed_at).toLocaleString() : '-'}
               </div>
             </div>

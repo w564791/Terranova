@@ -112,23 +112,23 @@ const FeedbackBanner: React.FC = () => {
       maxWidth: 340,
     }}>
       <div style={{
-        background: '#fff',
+        background: 'var(--surface)',
         borderRadius: 8,
         boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
         padding: '14px 16px',
-        border: '1px solid #e8e8e8',
+        border: '1px solid var(--line)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
             {capabilityLabels[item.capability] || item.capability} 质量如何？
           </span>
           <span
             onClick={() => dismiss(item.id)}
-            style={{ cursor: 'pointer', color: '#8c8c8c', fontSize: 16, lineHeight: 1 }}
+            style={{ cursor: 'pointer', color: 'var(--ink-3)', fontSize: 16, lineHeight: 1 }}
             title="跳过"
           >×</span>
         </div>
-        <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 10 }}>
           {item.created_at} · {item.user_action === 'accepted' ? '已应用' : '已终止'}
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>

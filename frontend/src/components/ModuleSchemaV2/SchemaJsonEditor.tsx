@@ -161,8 +161,8 @@ const SchemaJsonEditor: React.FC<SchemaJsonEditorProps> = ({
         <span>
           {jsonText.split('\n').length} 行 · {jsonText.length} 字符
         </span>
-        {isDirty && <span style={{ color: '#faad14' }}>· 未保存</span>}
-        {!error && <span style={{ color: '#52c41a' }}>· JSON 有效</span>}
+        {isDirty && <span style={{ color: 'var(--amber)' }}>· 未保存</span>}
+        {!error && <span style={{ color: 'var(--green)' }}>· JSON 有效</span>}
       </div>
     </div>
   );

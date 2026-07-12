@@ -2,9 +2,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
-  background: var(--color-white);
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -13,24 +13,24 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm);
-  background: var(--color-gray-50);
-  border-bottom: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 
 .toolButton {
   padding: 4px 12px;
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   font-size: 12px;
-  color: var(--color-gray-700);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .toolButton:hover:not(:disabled) {
-  background: var(--color-gray-100);
-  border-color: var(--color-gray-400);
+  background: var(--surface-2);
+  border-color: var(--ink-faint);
 }
 
 .toolButton:disabled {
@@ -41,8 +41,8 @@
 .infoIndicator {
   margin-left: auto;
   padding: 4px 8px;
-  background: var(--color-blue-100);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  color: var(--brand-700);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
@@ -51,8 +51,8 @@
 .errorIndicator {
   margin-left: auto;
   padding: 4px 8px;
-  background: var(--color-red-100);
-  color: var(--color-red-700);
+  background: var(--red-soft);
+  color: var(--red-active);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
@@ -61,15 +61,15 @@
 .editorContainer {
   display: flex;
   position: relative;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .lineNumbers {
   display: flex;
   flex-direction: column;
   padding: var(--spacing-sm) 0;
-  background: var(--color-gray-50);
-  border-right: 1px solid var(--color-gray-200);
+  background: var(--bg);
+  border-right: 1px solid var(--line);
   min-width: 40px;
   user-select: none;
 }
@@ -80,12 +80,12 @@
   font-family: 'JetBrains Mono', 'Courier New', monospace;
   font-size: 13px;
   line-height: 20px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .lineNumber.errorLine {
-  background: var(--color-red-100);
-  color: var(--color-red-700);
+  background: var(--red-soft);
+  color: var(--red-active);
   font-weight: bold;
   position: relative;
 }
@@ -94,7 +94,7 @@
   content: '→';
   position: absolute;
   right: -8px;
-  color: var(--color-red-500);
+  color: var(--red);
 }
 
 .editorWrapper {
@@ -113,7 +113,7 @@
   line-height: 20px;
   resize: none;
   background: transparent;
-  color: #111827 !important;
+  color: var(--ink) !important;
   outline: none;
   tab-size: 2;
   white-space: pre;
@@ -121,19 +121,19 @@
   overflow-x: auto;
   overflow-y: hidden;
   box-sizing: border-box;
-  -webkit-text-fill-color: #111827 !important;
+  -webkit-text-fill-color: var(--ink) !important;
   /* 禁用高亮层时直接显示文本颜色 */
   position: relative;
   z-index: 2;
 }
 
 .editor:focus {
-  color: #111827 !important;
-  -webkit-text-fill-color: #111827 !important;
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink) !important;
 }
 
 .editor::placeholder {
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
 }
 
 /* 高亮层 - 需要与 editor 完全同步 */
@@ -151,13 +151,13 @@
   overflow-wrap: normal;
   overflow: hidden;
   pointer-events: none;
-  color: var(--color-gray-900);
+  color: var(--ink);
   z-index: 1;
 }
 
 /* JSON语法高亮颜色 */
 .highlightLayer :global(.json-key) {
-  color: #0969da;
+  color: var(--brand);
   font-weight: 500;
 }
 
@@ -166,11 +166,11 @@
 }
 
 .highlightLayer :global(.json-number) {
-  color: #0550ae;
+  color: var(--brand-ink);
 }
 
 .highlightLayer :global(.json-boolean) {
-  color: #cf222e;
+  color: var(--red);
   font-weight: 500;
 }
 
@@ -184,9 +184,9 @@
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm);
-  background: var(--color-red-50);
+  background: var(--red-soft);
   border-top: 1px solid var(--color-red-200);
-  color: var(--color-red-700);
+  color: var(--red-active);
   font-size: 13px;
 }
 
@@ -213,27 +213,27 @@
 /* 深色模式支持（预留） */
 @media (prefers-color-scheme: dark) {
   .jsonEditor {
-    background: var(--color-gray-900);
-    border-color: var(--color-gray-700);
+    background: var(--ink);
+    border-color: var(--ink);
   }
   
   .toolbar {
-    background: var(--color-gray-800);
-    border-color: var(--color-gray-700);
+    background: var(--ink);
+    border-color: var(--ink);
   }
   
   .toolButton {
-    background: var(--color-gray-700);
-    color: var(--color-gray-200);
-    border-color: var(--color-gray-600);
+    background: var(--ink);
+    color: var(--line);
+    border-color: var(--ink-2);
   }
   
   .lineNumbers {
-    background: var(--color-gray-800);
-    border-color: var(--color-gray-700);
+    background: var(--ink);
+    border-color: var(--ink);
   }
   
   .editor {
-    color: var(--color-gray-100);
+    color: var(--surface-2);
   }
 }

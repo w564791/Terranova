@@ -182,12 +182,12 @@ const KeyValueEditor: React.FC<KeyValueEditorProps> = ({
                 width: 200,
                 ...(isReference(pair.value) ? {
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  color: '#1890ff',
+                  color: 'var(--brand)',
                 } : {}),
               }}
               suffix={isReference(pair.value) ? (
                 <Tooltip title="模块引用">
-                  <LinkOutlined style={{ color: '#1890ff' }} />
+                  <LinkOutlined style={{ color: 'var(--brand)' }} />
                 </Tooltip>
               ) : undefined}
             />
@@ -212,7 +212,7 @@ const KeyValueEditor: React.FC<KeyValueEditorProps> = ({
           </Button>
         )}
         {hasManifestContext && hasOtherNodes && (
-          <div style={{ color: '#1890ff', fontSize: 11 }}>
+          <div style={{ color: 'var(--brand)', fontSize: 11 }}>
             在值字段输入 / 可引用其他 Module 的输出
           </div>
         )}

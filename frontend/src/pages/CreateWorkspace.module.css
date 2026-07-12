@@ -1,7 +1,7 @@
 /* Container */
 .container {
   min-height: 100vh;
-  background: var(--color-gray-50, #f9fafb);
+  background: var(--color-gray-50, var(--bg));
 }
 
 /* Loading */
@@ -17,8 +17,8 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--color-gray-200, #e5e7eb);
-  border-top-color: var(--color-blue-500, #3b82f6);
+  border: 3px solid var(--color-gray-200, var(--line));
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -31,14 +31,14 @@
 
 .loading p {
   margin: 0;
-  color: var(--color-gray-600, #6b7280);
+  color: var(--color-gray-600, var(--ink-2));
   font-size: 14px;
 }
 
 /* Header */
 .header {
-  background: var(--color-white, #ffffff);
-  border-bottom: 1px solid var(--color-gray-200, #e5e7eb);
+  background: var(--color-white, var(--surface));
+  border-bottom: 1px solid var(--color-gray-200, var(--line));
   padding: 16px 32px;
 }
 
@@ -52,7 +52,7 @@
 .breadcrumbLink {
   background: none;
   border: none;
-  color: var(--color-blue-600, #2563eb);
+  color: var(--brand-ink);
   cursor: pointer;
   padding: 0;
   font-size: 14px;
@@ -61,16 +61,16 @@
 }
 
 .breadcrumbLink:hover {
-  color: var(--color-blue-700, #1d4ed8);
+  color: var(--brand-700);
   text-decoration: underline;
 }
 
 .breadcrumbSeparator {
-  color: var(--color-gray-400, #9ca3af);
+  color: var(--color-gray-400, var(--ink-faint));
 }
 
 .breadcrumbCurrent {
-  color: var(--color-gray-700, #374151);
+  color: var(--color-gray-700, var(--ink));
 }
 
 /* Content */
@@ -87,7 +87,7 @@
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: var(--color-gray-900, #111827);
+  color: var(--color-gray-900, var(--ink));
   margin: 0 0 12px 0;
   font-family: var(--font-heading, 'Poppins', sans-serif);
 }
@@ -95,7 +95,7 @@
 .subtitle {
   font-size: 15px;
   line-height: 1.6;
-  color: var(--color-gray-600, #6b7280);
+  color: var(--color-gray-600, var(--ink-2));
   margin: 0;
   max-width: 700px;
 }
@@ -108,8 +108,8 @@
 }
 
 .formSection {
-  background: var(--color-white, #ffffff);
-  border: 1px solid var(--color-gray-200, #e5e7eb);
+  background: var(--color-white, var(--surface));
+  border: 1px solid var(--color-gray-200, var(--line));
   border-radius: var(--radius-lg, 12px);
   padding: 32px;
 }
@@ -117,10 +117,10 @@
 .sectionTitle {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-900, #111827);
+  color: var(--color-gray-900, var(--ink));
   margin: 0 0 24px 0;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-gray-200, #e5e7eb);
+  border-bottom: 1px solid var(--color-gray-200, var(--line));
 }
 
 /* Form Fields */
@@ -138,19 +138,19 @@
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-gray-700, #374151);
+  color: var(--color-gray-700, var(--ink));
   margin-bottom: 8px;
 }
 
 .required {
-  color: var(--color-red-500, #ef4444);
+  color: var(--color-red-500, var(--red));
   font-weight: 600;
 }
 
 .optional {
   font-size: 13px;
   font-weight: 400;
-  color: var(--color-gray-500, #6b7280);
+  color: var(--color-gray-500, var(--ink-2));
   margin-left: 4px;
 }
 
@@ -161,10 +161,10 @@
   width: 100%;
   padding: 10px 12px;
   font-size: 14px;
-  border: 1px solid var(--color-gray-300, #d1d5db);
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: var(--radius-md, 8px);
-  background: var(--color-white, #ffffff);
-  color: var(--color-gray-900, #111827);
+  background: var(--color-white, var(--surface));
+  color: var(--color-gray-900, var(--ink));
   transition: all 0.2s;
   font-family: inherit;
 }
@@ -173,25 +173,25 @@
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--color-blue-500, #3b82f6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .input:disabled,
 .select:disabled,
 .textarea:disabled {
-  background: var(--color-gray-50, #f9fafb);
-  color: var(--color-gray-500, #6b7280);
+  background: var(--color-gray-50, var(--bg));
+  color: var(--color-gray-500, var(--ink-2));
   cursor: not-allowed;
 }
 
 .inputError {
-  border-color: var(--color-red-500, #ef4444);
+  border-color: var(--color-red-500, var(--red));
 }
 
 .inputError:focus {
-  border-color: var(--color-red-500, #ef4444);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  border-color: var(--color-red-500, var(--red));
+  box-shadow: 0 0 0 3px rgba(200, 48, 47, 0.1);
 }
 
 .textarea {
@@ -202,7 +202,7 @@
 /* Error and Hint */
 .error {
   font-size: 13px;
-  color: var(--color-red-600, #dc2626);
+  color: var(--color-red-600, var(--red-hover));
   margin-top: 6px;
   display: flex;
   align-items: flex-start;
@@ -218,7 +218,7 @@
 .hint {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--color-gray-500, #6b7280);
+  color: var(--color-gray-500, var(--ink-2));
   margin-top: 6px;
 }
 
@@ -240,37 +240,37 @@
   flex: 1;
   padding: 8px 12px;
   font-size: 14px;
-  border: 1px solid var(--color-gray-300, #d1d5db);
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: var(--radius-md, 8px);
-  background: var(--color-white, #ffffff);
-  color: var(--color-gray-900, #111827);
+  background: var(--color-white, var(--surface));
+  color: var(--color-gray-900, var(--ink));
   transition: all 0.2s;
 }
 
 .tagInput:focus {
   outline: none;
-  border-color: var(--color-blue-500, #3b82f6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .tagInput:disabled {
-  background: var(--color-gray-50, #f9fafb);
-  color: var(--color-gray-500, #6b7280);
+  background: var(--color-gray-50, var(--bg));
+  color: var(--color-gray-500, var(--ink-2));
   cursor: not-allowed;
 }
 
 .tagSeparator {
-  color: var(--color-gray-400, #9ca3af);
+  color: var(--color-gray-400, var(--ink-faint));
   font-weight: 500;
   user-select: none;
 }
 
 .removeTagButton {
   padding: 6px 10px;
-  background: var(--color-white, #ffffff);
-  border: 1px solid var(--color-gray-300, #d1d5db);
+  background: var(--color-white, var(--surface));
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: var(--radius-md, 8px);
-  color: var(--color-gray-600, #6b7280);
+  color: var(--color-gray-600, var(--ink-2));
   cursor: pointer;
   transition: all 0.2s;
   font-size: 14px;
@@ -278,9 +278,9 @@
 }
 
 .removeTagButton:hover:not(:disabled) {
-  background: var(--color-red-50, #fef2f2);
-  border-color: var(--color-red-300, #fca5a5);
-  color: var(--color-red-600, #dc2626);
+  background: var(--color-red-50, var(--red-soft));
+  border-color: var(--color-red-300, var(--red-line));
+  color: var(--color-red-600, var(--red-hover));
 }
 
 .removeTagButton:disabled {
@@ -293,17 +293,17 @@
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  background: var(--color-white, #ffffff);
-  border: 1px solid var(--color-gray-300, #d1d5db);
+  background: var(--color-white, var(--surface));
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: var(--radius-md, 8px);
-  color: var(--color-gray-700, #374151);
+  color: var(--color-gray-700, var(--ink));
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .addTagButton:hover:not(:disabled) {
-  background: var(--color-gray-50, #f9fafb);
-  border-color: var(--color-gray-400, #9ca3af);
+  background: var(--color-gray-50, var(--bg));
+  border-color: var(--color-gray-400, var(--ink-faint));
 }
 
 .addTagButton:disabled {
@@ -331,24 +331,24 @@
 }
 
 .cancelButton {
-  background: var(--color-white, #ffffff);
-  color: var(--color-gray-700, #374151);
-  border: 1px solid var(--color-gray-300, #d1d5db);
+  background: var(--color-white, var(--surface));
+  color: var(--color-gray-700, var(--ink));
+  border: 1px solid var(--color-gray-300, var(--line-2));
 }
 
 .cancelButton:hover:not(:disabled) {
-  background: var(--color-gray-50, #f9fafb);
-  border-color: var(--color-gray-400, #9ca3af);
+  background: var(--color-gray-50, var(--bg));
+  border-color: var(--color-gray-400, var(--ink-faint));
 }
 
 .submitButton {
-  background: var(--color-blue-600, #2563eb);
-  color: var(--color-white, #ffffff);
+  background: var(--brand-ink);
+  color: var(--color-white, var(--surface));
   min-width: 160px;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: var(--color-blue-700, #1d4ed8);
+  background: var(--brand-700);
 }
 
 .cancelButton:disabled,
@@ -395,4 +395,9 @@
   .removeTagButton {
     margin-left: auto;
   }
+}
+
+.submitButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

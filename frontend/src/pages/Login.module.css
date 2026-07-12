@@ -12,7 +12,7 @@
   flex-direction: column;
   justify-content: center;
   padding: 60px;
-  color: white;
+  color: #fff;
 }
 
 .brandTitle {
@@ -20,12 +20,12 @@
   font-weight: 300;
   line-height: 1.3;
   margin: 0 0 24px 0;
-  color: #ffffff;
+  color: var(--surface);
   letter-spacing: -0.5px;
 }
 
 .brandHighlight {
-  color: #60a5fa;
+  color: var(--brand-400);
   font-weight: 400;
 }
 
@@ -43,7 +43,7 @@
   flex-direction: column;
   justify-content: center;
   padding: 48px;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   margin: auto 0;
@@ -57,13 +57,13 @@
 .formTitle {
   font-size: 24px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .formSubtitle {
   font-size: 14px;
-  color: #64748b;
+  color: var(--ink-2);
   margin: 0;
 }
 
@@ -82,45 +82,45 @@
 .label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
 }
 
 .input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
   line-height: 1.5;
   transition: all 0.2s ease;
-  background: #ffffff;
-  color: #1e293b;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .input::placeholder {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .inputError {
-  border-color: #ef4444 !important;
+  border-color: var(--red) !important;
 }
 
 .errorText {
-  color: #ef4444;
+  color: var(--red);
   font-size: 12px;
 }
 
 .button {
   width: 100%;
   padding: 12px 24px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -131,7 +131,7 @@
 }
 
 .button:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .button:disabled {
@@ -140,11 +140,11 @@
 }
 
 .errorMessage {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--red-soft);
+  border: 1px solid var(--red-line);
   border-radius: 8px;
   padding: 12px;
-  color: #dc2626;
+  color: var(--red-hover);
   font-size: 14px;
 }
 
@@ -155,7 +155,7 @@
 
 .forgotPasswordLink {
   font-size: 13px;
-  color: #3b82f6;
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -175,10 +175,10 @@
   justify-content: center;
   gap: 10px;
   padding: 11px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--surface);
+  color: var(--ink);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -187,8 +187,8 @@
 }
 
 .ssoButton:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--bg);
+  border-color: var(--line-2);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
@@ -212,20 +212,20 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 .dividerText {
   padding: 0 12px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   white-space: nowrap;
 }
 
 .disableLocalLoginHint {
   text-align: center;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   margin: 16px 0 0;
 }
 

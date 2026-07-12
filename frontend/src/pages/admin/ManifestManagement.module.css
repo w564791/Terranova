@@ -1,10 +1,10 @@
 .container {
   padding: 20px;
   max-width: 100%;
-  background: #f8fafc;
+  background: var(--bg);
   min-height: calc(100vh - 68px - 24px);
   margin: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
@@ -48,7 +48,7 @@
 .filterBar {
   display: flex;
   gap: 4px;
-  background: var(--color-gray-100);
+  background: var(--surface-2);
   padding: 4px;
   border-radius: 8px;
 }
@@ -57,7 +57,7 @@
   padding: 8px 16px;
   border: none;
   background: transparent;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -70,12 +70,12 @@
 
 .filterButton:hover {
   background: var(--color-gray-200, #E8EAED);
-  color: var(--color-gray-800, #1F2937);
+  color: var(--color-gray-800, var(--ink));
 }
 
 .filterActive {
   background: white;
-  color: var(--color-blue-600, #2563EB);
+  color: var(--brand-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -88,8 +88,8 @@
 }
 
 .filterActive .filterCount {
-  background: var(--color-blue-100, #DBEAFE);
-  color: var(--color-blue-600, #2563EB);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 .searchBar {
@@ -100,14 +100,14 @@
 .listSection {
   background: white;
   border-radius: 12px;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
 .loading {
   padding: 48px;
   text-align: center;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 /* 空状态 */
@@ -119,13 +119,13 @@
 .emptyText {
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-700, #3C4043);
+  color: var(--color-gray-700, var(--ink));
   margin: 0 0 8px 0;
 }
 
 .emptyHint {
   font-size: 14px;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
   margin: 0 0 24px 0;
 }
 
@@ -139,7 +139,7 @@
   display: flex;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--color-gray-100, #F1F3F4);
+  border-bottom: 1px solid var(--color-gray-100, var(--surface-2));
   text-decoration: none;
   color: inherit;
   transition: background 0.15s;
@@ -147,7 +147,7 @@
 }
 
 .manifestItem:hover {
-  background: var(--color-gray-50, #F8F9FA);
+  background: var(--color-gray-50, var(--bg));
 }
 
 .manifestItem:last-child {
@@ -165,15 +165,15 @@
 }
 
 .indicator-success {
-  background: var(--color-green-500, #10B981);
+  background: var(--color-green-500, var(--green));
 }
 
 .indicator-pending {
-  background: #F59E0B;
+  background: var(--amber);
 }
 
 .indicator-neutral {
-  background: var(--color-gray-300, #DADCE0);
+  background: var(--color-gray-300, var(--line-2));
 }
 
 /* 主内容区 */
@@ -196,8 +196,8 @@
 }
 
 .deploymentBadge {
-  background: var(--color-blue-100, #DBEAFE);
-  color: var(--color-blue-600, #2563EB);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 11px;
@@ -209,7 +209,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .manifestId {
@@ -218,7 +218,7 @@
 }
 
 .metaSeparator {
-  color: var(--color-gray-300, #DADCE0);
+  color: var(--color-gray-300, var(--line-2));
 }
 
 .manifestVersion {
@@ -226,7 +226,7 @@
 }
 
 .manifestDescription {
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -250,23 +250,23 @@
 }
 
 .statusBadge-success {
-  background: var(--color-green-100, #D1FAE5);
-  color: var(--color-green-700, #047857);
+  background: var(--color-green-100, var(--green-soft));
+  color: var(--color-green-700, var(--green-active));
 }
 
 .statusBadge-pending {
-  background: #FEF3C7;
-  color: #92400E;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .statusBadge-neutral {
-  background: var(--color-gray-100, #F1F3F4);
-  color: var(--color-gray-600, #5F6368);
+  background: var(--color-gray-100, var(--surface-2));
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .manifestTime {
   font-size: 12px;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 /* 操作按钮 */
@@ -275,12 +275,12 @@
 }
 
 .moreButton {
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .moreButton:hover {
-  color: var(--color-gray-700, #3C4043);
-  background: var(--color-gray-100, #F1F3F4);
+  color: var(--color-gray-700, var(--ink));
+  background: var(--color-gray-100, var(--surface-2));
 }
 
 /* 分页 */
@@ -289,8 +289,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-top: 1px solid var(--color-gray-100, #F1F3F4);
-  background: var(--color-gray-50, #F8F9FA);
+  border-top: 1px solid var(--color-gray-100, var(--surface-2));
+  background: var(--color-gray-50, var(--bg));
 }
 
 .paginationLeft {
@@ -301,7 +301,7 @@
 
 .paginationInfo {
   font-size: 13px;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .pageSizeSelector {
@@ -312,12 +312,12 @@
 
 .pageSizeLabel {
   font-size: 13px;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 .pageSizeSelect {
   padding: 4px 8px;
-  border: 1px solid var(--color-gray-300, #DADCE0);
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: 4px;
   font-size: 13px;
   background: white;
@@ -331,18 +331,18 @@
 
 .paginationButton {
   padding: 6px 12px;
-  border: 1px solid var(--color-gray-300, #DADCE0);
+  border: 1px solid var(--color-gray-300, var(--line-2));
   border-radius: 6px;
   background: white;
   font-size: 13px;
-  color: var(--color-gray-700, #3C4043);
+  color: var(--color-gray-700, var(--ink));
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .paginationButton:hover:not(:disabled) {
-  background: var(--color-gray-50, #F8F9FA);
-  border-color: var(--color-gray-300, #DADCE0);
+  background: var(--color-gray-50, var(--bg));
+  border-color: var(--color-gray-300, var(--line-2));
 }
 
 .paginationButton:disabled {
@@ -352,7 +352,7 @@
 
 .paginationPages {
   font-size: 13px;
-  color: var(--color-gray-600, #5F6368);
+  color: var(--color-gray-600, var(--ink-2));
 }
 
 /* 响应式 */

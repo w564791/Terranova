@@ -13,13 +13,13 @@
 .title {
   font-size: 32px;
   font-weight: var(--font-weight-bold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: var(--spacing-sm);
 }
 
 .description {
   font-size: var(--font-size-base);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   line-height: 1.6;
 }
 
@@ -49,7 +49,7 @@
 .moduleCard:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-lg);
-  border-color: var(--color-blue-500);
+  border-color: var(--brand);
 }
 
 .cardIcon {
@@ -64,31 +64,31 @@
 .cardTitle {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: var(--spacing-xs);
 }
 
 .cardDescription {
   font-size: var(--font-size-sm);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   line-height: 1.5;
   margin-bottom: var(--spacing-sm);
 }
 
 .cardStats {
   font-size: var(--font-size-xs);
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-weight: var(--font-weight-medium);
 }
 
 .cardArrow {
   font-size: 24px;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   transition: all 0.3s ease;
 }
 
 .moduleCard:hover .cardArrow {
-  color: var(--color-blue-500);
+  color: var(--brand);
   transform: translateX(4px);
 }
 
@@ -100,7 +100,7 @@
 .sectionTitle {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: var(--spacing-lg);
 }
 
@@ -117,19 +117,19 @@
   gap: var(--spacing-sm);
   padding: var(--spacing-lg);
   background: white;
-  border: 2px solid var(--color-gray-200);
+  border: 2px solid var(--line);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--color-gray-700);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .actionButton:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-500);
-  color: var(--color-blue-600);
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-ink);
   transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
@@ -144,7 +144,7 @@
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: var(--spacing-md);
   padding: var(--spacing-xl);
-  background: var(--color-gray-50);
+  background: var(--bg);
   border-radius: var(--radius-lg);
 }
 
@@ -155,7 +155,7 @@
 
 .infoLabel {
   font-size: var(--font-size-xs);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: var(--spacing-xs);
@@ -164,7 +164,7 @@
 .infoValue {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 /* 响应式设计 */

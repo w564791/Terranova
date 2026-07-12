@@ -4,26 +4,26 @@
  */
 
 .v3Wrapper {
-  --v3-gray-50: #f8fafc;
-  --v3-gray-100: #f1f5f9;
-  --v3-gray-200: #e2e8f0;
-  --v3-gray-300: #cbd5e1;
-  --v3-gray-400: #9ca3af;
-  --v3-gray-500: #6b7280;
-  --v3-gray-600: #4b5563;
-  --v3-gray-700: #374151;
-  --v3-gray-800: #1f2937;
-  --v3-gray-900: #111827;
+  --v3-gray-50: var(--bg);
+  --v3-gray-100: var(--surface-2);
+  --v3-gray-200: var(--line);
+  --v3-gray-300: var(--line-2);
+  --v3-gray-400: var(--ink-faint);
+  --v3-gray-500: var(--ink-2);
+  --v3-gray-600: var(--ink-2);
+  --v3-gray-700: var(--ink);
+  --v3-gray-800: var(--ink);
+  --v3-gray-900: var(--ink);
 
-  --v3-blue-50: #eff6ff;
-  --v3-blue-100: #dbeafe;
-  --v3-blue-200: #bfdbfe;
-  --v3-blue-300: #93c5fd;
-  --v3-blue-500: #3b82f6;
-  --v3-blue-600: #2563eb;
+  --v3-blue-50: var(--brand-soft);
+  --v3-blue-100: var(--brand-soft);
+  --v3-blue-200: var(--brand-200);
+  --v3-blue-300: var(--brand-300);
+  --v3-blue-500: var(--brand);
+  --v3-blue-600: var(--brand-ink);
 
-  --v3-green-500: #22c55e;
-  --v3-red-500: #ef4444;
+  --v3-green-500: var(--green);
+  --v3-red-500: var(--red);
 
   --v3-radius-sm: 6px;
   --v3-radius-input: 10px;
@@ -62,8 +62,8 @@
 .v3Wrapper :global(.ant-input-number-focused),
 .v3Wrapper :global(.ant-select-focused .ant-select-selector),
 .v3Wrapper :global(.ant-picker-focused) {
-  border-color: var(--v3-blue-300) !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08) !important;
+  border-color: var(--brand-300) !important;
+  box-shadow: 0 0 0 3px rgba(28, 110, 140, 0.08) !important;
 }
 
 /* ===== Form.Item 间距 ===== */
@@ -140,18 +140,18 @@
 }
 
 .v3Wrapper :global(.ant-tabs-ink-bar) {
-  background: var(--v3-blue-500) !important;
+  background: var(--brand) !important;
   height: 3px !important;
   border-radius: 2px;
 }
 
 /* ===== Switch 开关 ===== */
 .v3Wrapper :global(.ant-switch-checked) {
-  background-color: var(--v3-blue-500) !important;
+  background-color: var(--brand) !important;
 }
 
 .v3Wrapper :global(.ant-switch-checked:hover:not(.ant-switch-disabled)) {
-  background-color: var(--v3-blue-600) !important;
+  background-color: var(--brand-ink) !important;
 }
 
 /* ===== Tag 标签 ===== */

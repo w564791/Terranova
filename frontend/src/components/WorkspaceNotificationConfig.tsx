@@ -365,14 +365,14 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
         </Button>
       }
     >
-      <p style={{ color: '#666', marginBottom: 16 }}>
+      <p style={{ color: 'var(--ink-2)', marginBottom: 16 }}>
         Configure notifications for this workspace. Notifications will be sent when workspace events occur.
       </p>
 
       {/* Global Notifications Section */}
       {globalNotifications.length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <h4 style={{ marginBottom: 12, color: '#1890ff' }}>
+          <h4 style={{ marginBottom: 12, color: 'var(--brand)' }}>
             🌐 Global Notifications (Auto-applied to all workspaces)
           </h4>
           <Table

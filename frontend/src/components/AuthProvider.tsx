@@ -75,7 +75,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         alignItems: 'center', 
         height: '100vh',
         fontSize: '16px',
-        color: '#666'
+        color: 'var(--ink-2)'
       }}>
         检查系统状态...
       </div>
@@ -91,7 +91,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         alignItems: 'center', 
         height: '100vh',
         fontSize: '16px',
-        color: '#666'
+        color: 'var(--ink-2)'
       }}>
         验证登录状态...
       </div>

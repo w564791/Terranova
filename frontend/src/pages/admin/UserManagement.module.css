@@ -15,13 +15,13 @@
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .createButton {
   padding: 10px 20px;
-  background: #52c41a;
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -31,7 +31,7 @@
 }
 
 .createButton:hover {
-  background: #73d13d;
+  background: var(--green-hover);
 }
 
 .statsBar {
@@ -52,13 +52,13 @@
 .statValue {
   font-size: 32px;
   font-weight: 700;
-  color: #1890ff;
+  color: var(--brand);
   margin-bottom: 8px;
 }
 
 .statLabel {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .filters {
@@ -82,12 +82,12 @@
 .filterGroup label {
   font-size: 14px;
   font-weight: 500;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .select {
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   min-width: 150px;
@@ -104,15 +104,15 @@
 .searchInput {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
 }
 
 .searchButton {
   padding: 8px 20px;
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -123,13 +123,13 @@
 }
 
 .searchButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .loading {
   text-align: center;
   padding: 40px;
-  color: #666;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
@@ -138,7 +138,7 @@
   padding: 60px 20px;
   background: white;
   border-radius: 8px;
-  color: #999;
+  color: var(--ink-3);
   font-size: 14px;
 }
 
@@ -156,7 +156,7 @@
 }
 
 .table thead {
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .table th {
@@ -164,30 +164,30 @@
   text-align: left;
   font-size: 14px;
   font-weight: 600;
-  color: #666;
-  border-bottom: 2px solid #f0f0f0;
+  color: var(--ink-2);
+  border-bottom: 2px solid var(--surface-2);
   white-space: nowrap;
 }
 
 .table td {
   padding: 12px 16px;
   font-size: 14px;
-  color: #333;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--ink);
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .table tbody tr:hover {
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .usernameCell {
   font-weight: 500;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .roleSelect {
   padding: 6px 10px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
@@ -195,13 +195,13 @@
 }
 
 .roleSelect:hover {
-  border-color: #40a9ff;
+  border-color: var(--brand-400);
 }
 
 .statusActive {
   padding: 4px 12px;
-  background: #f6ffed;
-  color: #52c41a;
+  background: var(--green-soft);
+  color: var(--green);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
@@ -210,8 +210,8 @@
 
 .statusInactive {
   padding: 4px 12px;
-  background: #fff1f0;
-  color: #ff4d4f;
+  background: var(--red-soft);
+  color: var(--red);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
@@ -225,7 +225,7 @@
 
 .actions button {
   padding: 6px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -235,37 +235,37 @@
 
 .activateButton {
   background: white;
-  color: #52c41a;
-  border-color: #52c41a;
+  color: var(--green);
+  border-color: var(--green);
 }
 
 .activateButton:hover {
-  background: #f6ffed;
+  background: var(--green-soft);
 }
 
 .deactivateButton {
   background: white;
-  color: #ff4d4f;
-  border-color: #ff4d4f;
+  color: var(--red);
+  border-color: var(--red);
 }
 
 .deactivateButton:hover {
-  background: #fff1f0;
+  background: var(--red-soft);
 }
 
 .deleteButton {
   background: white;
-  color: #ff4d4f;
-  border-color: #ff4d4f;
+  color: var(--red);
+  border-color: var(--red);
 }
 
 .deleteButton:hover {
-  background: #fff1f0;
+  background: var(--red-soft);
 }
 
 .info {
-  background: #e6f7ff;
-  border: 1px solid #91d5ff;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-200);
   border-radius: 8px;
   padding: 20px;
   margin-top: 24px;
@@ -274,7 +274,7 @@
 .info h3 {
   margin: 0 0 12px 0;
   font-size: 16px;
-  color: #1890ff;
+  color: var(--brand);
 }
 
 .info ul {
@@ -285,7 +285,7 @@
 .info li {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #333;
+  color: var(--ink);
   line-height: 1.6;
 }
 
@@ -294,7 +294,7 @@
 }
 
 .info strong {
-  color: #1890ff;
+  color: var(--brand);
 }
 
 /* Modal styles */
@@ -312,7 +312,9 @@
 }
 
 .modalContent {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 8px;
   padding: 24px;
   width: 90%;
@@ -324,7 +326,7 @@
   margin: 0 0 20px 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
 }
 
 .formGroup {
@@ -336,14 +338,14 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
 }
 
 .formGroup input,
 .formGroup select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   font-size: 14px;
   box-sizing: border-box;
@@ -352,8 +354,8 @@
 .formGroup input:focus,
 .formGroup select:focus {
   outline: none;
-  border-color: #40a9ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand-400);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.1);
 }
 
 .modalActions {
@@ -365,8 +367,8 @@
 
 .confirmButton {
   padding: 10px 20px;
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -376,14 +378,14 @@
 }
 
 .confirmButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .cancelButton {
   padding: 10px 20px;
   background: white;
-  color: #666;
-  border: 1px solid #d9d9d9;
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -392,6 +394,6 @@
 }
 
 .cancelButton:hover {
-  color: #1890ff;
-  border-color: #1890ff;
+  color: var(--brand);
+  border-color: var(--brand);
 }

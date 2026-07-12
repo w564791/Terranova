@@ -192,13 +192,13 @@ const SSOCallback: React.FC = () => {
           boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
         }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>&#x26A0;</div>
-          <h2 style={{ color: '#1e293b', margin: '0 0 12px 0' }}>SSO 登录失败</h2>
-          <p style={{ color: '#64748b', margin: '0 0 24px 0', fontSize: 14 }}>{error}</p>
+          <h2 style={{ color: 'var(--ink)', margin: '0 0 12px 0' }}>SSO 登录失败</h2>
+          <p style={{ color: 'var(--ink-2)', margin: '0 0 24px 0', fontSize: 14 }}>{error}</p>
           <button
             onClick={() => navigate('/login', { replace: true })}
             style={{
               padding: '12px 24px',
-              background: '#3b82f6',
+              background: 'var(--brand)',
               color: 'white',
               border: 'none',
               borderRadius: 8,

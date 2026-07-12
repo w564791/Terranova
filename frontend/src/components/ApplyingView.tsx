@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import styles from './ApplyingView.module.css';
+import { softBadgeColors } from '../utils/contrast';
+import { colors } from '../styles/tokens';
 
 interface ResourceChange {
   id: number;
@@ -235,6 +237,19 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
     }
   };
 
+  /** soft badge + WCAG contrast for lifecycle trigger events */
+  const triggerEventStyle = (event: string): React.CSSProperties => {
+    const base =
+      event === 'AfterCreate'
+        ? colors.green
+        : event === 'AfterUpdate'
+          ? colors.brand
+          : event === 'BeforeDestroy'
+            ? colors.red
+            : colors.amber;
+    return softBadgeColors(base);
+  };
+
   return (
     <div className={styles.applyingView}>
       {/* 复制成功提示 */}
@@ -379,7 +394,12 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
                               </svg>
                             </button>
                             <span className={styles.triggeredActionType}>{action.type}</span>
-                            <span className={styles.triggeredActionEvent}>{formatTriggerEvent(triggerEvent)}</span>
+                            <span
+                              className={styles.triggeredActionEvent}
+                              style={triggerEventStyle(triggerEvent)}
+                            >
+                              {formatTriggerEvent(triggerEvent)}
+                            </span>
                           </div>
                         );
                       })}
@@ -442,7 +462,12 @@ const ApplyingView: React.FC<Props> = ({ resources, outputChanges = [], actionIn
                       </div>
                       <div className={styles.actionInvocationRight}>
                         <span className={styles.actionInvocationTypeTag}>{action.type}</span>
-                        <span className={styles.actionInvocationTriggerBadge}>{formatTriggerEvent(triggerEvent)}</span>
+                        <span
+                          className={styles.actionInvocationTriggerBadge}
+                          style={triggerEventStyle(triggerEvent)}
+                        >
+                          {formatTriggerEvent(triggerEvent)}
+                        </span>
                       </div>
                     </div>
                     

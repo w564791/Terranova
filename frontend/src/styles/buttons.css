@@ -1,0 +1,411 @@
+/*
+ * Button system — 与 demo/button.html 对齐
+ *
+ * 用法:
+ *   <button class="btn solid brand">保存</button>
+ *   <button class="btn outline red">删除</button>
+ *   <button class="btn ghost brand">刷新</button>
+ *   <button class="btn sm solid brand">小尺寸</button>
+ *   <button class="btn solid brand is-loading">保存中</button>
+ *
+ * 矩阵: 4 色(neutral/brand/green/red) × 3 档(solid/outline/ghost) × 4 尺寸(xs/sm/md/lg)
+ * 兼容: .btn.primary / .btn.brand 均映射到 solid brand
+ */
+
+/* --- base = neutral outline --- */
+.btn {
+  --btn-h: 30px;
+  --btn-px: 13px;
+  --btn-fs: 12.5px;
+  font-family: var(--font-sans);
+  font-size: var(--btn-fs);
+  font-weight: 500;
+  height: var(--btn-h);
+  padding: 0 var(--btn-px);
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.5;
+  white-space: nowrap;
+  flex: none;
+  -webkit-user-select: none;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.btn:hover {
+  background: var(--surface-2);
+  border-color: var(--ink-faint);
+}
+
+.btn:active {
+  background: var(--surface-3);
+  transform: translateY(0.5px);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+.btn:disabled,
+.btn[disabled],
+.btn.is-loading {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover,
+.btn[disabled]:hover {
+  background: var(--surface);
+  border-color: var(--line-2);
+}
+
+.btn .ic {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.btn .ic svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- icon-only --- */
+.btn.icon {
+  width: var(--btn-h);
+  padding: 0;
+  gap: 0;
+}
+
+.btn.icon .ic {
+  width: 15px;
+  height: 15px;
+}
+
+/* --- sizes --- */
+.btn.xs {
+  --btn-h: 22px;
+  --btn-px: 8px;
+  --btn-fs: 11px;
+  border-radius: 5px;
+}
+
+.btn.sm {
+  --btn-h: 28px;
+  --btn-px: 10px;
+  --btn-fs: 12px;
+}
+
+.btn.lg {
+  --btn-h: 38px;
+  --btn-px: 18px;
+  --btn-fs: 14px;
+  border-radius: 7px;
+}
+
+/* --- solid --- */
+.btn.solid {
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn.solid.brand,
+.btn.solid.primary,
+.btn.primary,
+.btn.brand {
+  background: var(--brand);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn.solid.brand:hover,
+.btn.solid.primary:hover,
+.btn.primary:hover,
+.btn.brand:hover {
+  background: var(--brand-ink);
+}
+
+.btn.solid.brand:active,
+.btn.solid.primary:active,
+.btn.primary:active,
+.btn.brand:active {
+  background: var(--brand-700);
+}
+
+.btn.solid.brand:focus-visible,
+.btn.solid.primary:focus-visible,
+.btn.primary:focus-visible,
+.btn.brand:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+.btn.solid.green {
+  background: var(--green);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn.solid.green:hover {
+  background: var(--green-hover);
+  color: #fff;
+}
+
+.btn.solid.green:active {
+  background: var(--green-active);
+  color: #fff;
+}
+
+.btn.solid.green:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-green);
+}
+
+.btn.solid.red {
+  background: var(--red);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn.solid.red:hover {
+  background: var(--red-hover);
+  color: #fff;
+}
+
+.btn.solid.red:active {
+  background: var(--red-active);
+  color: #fff;
+}
+
+.btn.solid.red:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-red);
+}
+
+/* --- outline --- */
+.btn.outline.brand {
+  color: var(--brand-ink);
+  border-color: var(--brand-line);
+  background: transparent;
+}
+
+.btn.outline.brand:hover {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.btn.outline.brand:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-brand);
+}
+
+.btn.outline.green {
+  color: var(--green);
+  border-color: var(--green-line);
+  background: transparent;
+}
+
+.btn.outline.green:hover {
+  background: var(--green-soft);
+  border-color: var(--green);
+}
+
+.btn.outline.green:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-green);
+}
+
+.btn.outline.red {
+  color: var(--red);
+  border-color: var(--red-line);
+  background: transparent;
+}
+
+.btn.outline.red:hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn.outline.red:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-red);
+}
+
+/* 兼容旧 class：.btn.red = outline red（且不覆盖 solid） */
+.btn.red:not(.solid) {
+  color: var(--red);
+  border-color: var(--red-line);
+  background: transparent;
+}
+
+.btn.red:not(.solid):hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn.red:not(.solid):focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-red);
+}
+
+/* --- ghost --- */
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.btn.ghost:hover {
+  background: var(--surface-2);
+}
+
+.btn.ghost.brand {
+  color: var(--brand-ink);
+}
+
+.btn.ghost.brand:hover {
+  background: var(--brand-soft);
+}
+
+.btn.ghost.green {
+  color: var(--green);
+}
+
+.btn.ghost.green:hover {
+  background: var(--green-soft);
+}
+
+.btn.ghost.red {
+  color: var(--red);
+}
+
+.btn.ghost.red:hover {
+  background: var(--red-soft);
+}
+
+.btn.ghost:disabled:hover,
+.btn.ghost[disabled]:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* --- loading --- */
+.btn.is-loading {
+  pointer-events: none;
+  position: relative;
+}
+
+.btn.is-loading::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.85;
+  animation: btn-spin 0.7s linear infinite;
+  margin-right: 2px;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.btn.solid.is-loading::before,
+.btn.primary.is-loading::before,
+.btn.brand.is-loading::before {
+  border-color: rgba(255, 255, 255, 0.55);
+  border-top-color: transparent;
+}
+
+/* --- count badge --- */
+.btn .cnt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  min-width: 15px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  background: rgba(0, 0, 0, 0.1);
+  color: inherit;
+}
+
+.btn.solid .cnt,
+.btn.primary .cnt,
+.btn.brand .cnt {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.btn.ghost.brand .cnt,
+.btn.outline.brand .cnt {
+  background: var(--brand-soft);
+}
+
+/* --- group / toolbar --- */
+.btn-group {
+  display: inline-flex;
+  border-radius: 7px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+
+.btn-group .btn {
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--line-2);
+  background: var(--surface);
+}
+
+.btn-group .btn:last-child {
+  border-right: none;
+}
+
+.btn-group .btn:hover {
+  background: var(--surface-2);
+}
+
+.btn-group .btn.active {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+
+.btn-group .btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-brand);
+  position: relative;
+  z-index: 1;
+}
+
+.toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.toolbar .btn {
+  border: 1px solid transparent;
+}
+
+.toolbar .sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line-2);
+  margin: 0 3px;
+}
+
+.btn.block {
+  width: 100%;
+}

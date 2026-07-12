@@ -7,7 +7,7 @@
 .loading {
   text-align: center;
   padding: 48px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .header {
@@ -17,13 +17,13 @@
 .title {
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .editButton {
   padding: 8px 20px;
-  background: #1890ff;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -34,19 +34,19 @@
 }
 
 .editButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .description {
-  color: #666;
+  color: var(--ink-2);
   margin: 0;
   font-size: 14px;
 }
 
 .content {
-  background: #fff;
+  background: var(--surface);
   border-radius: 8px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--line);
   padding: 24px;
 }
 
@@ -61,10 +61,10 @@
 .sectionTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 16px 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid var(--line);
 }
 
 .modeSwitch {
@@ -79,7 +79,7 @@
   gap: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: #333;
+  color: var(--ink);
 }
 
 .radioLabel input[type="radio"] {
@@ -101,14 +101,14 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--ink);
   margin-bottom: 6px;
 }
 
 .input {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -117,29 +117,29 @@
 
 .input:focus {
   outline: none;
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.1);
 }
 
 .select {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
 }
 
 .select:focus {
   outline: none;
-  border-color: #1890ff;
+  border-color: var(--brand);
 }
 
 .hint {
   display: block;
   font-size: 12px;
-  color: #999;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
@@ -151,16 +151,16 @@
   display: inline-block;
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 14px;
-  color: #333;
-  background: #f5f5f5;
+  color: var(--ink);
+  background: var(--surface-2);
   padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--line);
   margin-top: 6px;
 }
 
 .preview {
-  background: #f5f5f5;
+  background: var(--surface-2);
   padding: 12px 16px;
   border-radius: 6px;
   display: flex;
@@ -170,20 +170,20 @@
 
 .previewLabel {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
 }
 
 .previewUrl {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 14px;
-  color: #1890ff;
-  background: #e6f7ff;
+  color: var(--brand);
+  background: var(--brand-soft);
   padding: 4px 8px;
   border-radius: 4px;
 }
 
 .summary {
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 6px;
   padding: 16px;
 }
@@ -202,18 +202,18 @@
 
 .summaryLabel {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   min-width: 140px;
 }
 
 .summaryItem code {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #333;
-  background: #fff;
+  color: var(--ink);
+  background: var(--surface);
   padding: 4px 8px;
   border-radius: 4px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--line);
   word-break: break-all;
 }
 
@@ -225,7 +225,7 @@
 
 .saveButton {
   padding: 10px 24px;
-  background: #1890ff;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -236,19 +236,19 @@
 }
 
 .saveButton:hover:not(:disabled) {
-  background: #40a9ff;
+  background: var(--brand-400);
 }
 
 .saveButton:disabled {
-  background: #d9d9d9;
+  background: var(--line-2);
   cursor: not-allowed;
 }
 
 .resetButton {
   padding: 10px 24px;
-  background: #fff;
-  color: #666;
-  border: 1px solid #d9d9d9;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   cursor: pointer;
@@ -256,18 +256,18 @@
 }
 
 .resetButton:hover:not(:disabled) {
-  color: #1890ff;
-  border-color: #1890ff;
+  color: var(--brand);
+  border-color: var(--brand);
 }
 
 .resetButton:disabled {
-  color: #d9d9d9;
+  color: var(--line-2);
   cursor: not-allowed;
 }
 
 .notice {
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
   border-radius: 6px;
   padding: 12px 16px;
   font-size: 14px;
@@ -275,7 +275,7 @@
 }
 
 .notice strong {
-  color: #d48806;
+  color: var(--amber-hover);
 }
 
 @media (max-width: 600px) {

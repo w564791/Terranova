@@ -7,7 +7,7 @@
 .loading {
   text-align: center;
   padding: var(--spacing-xl);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .empty {
@@ -16,18 +16,18 @@
 }
 
 .empty h2 {
-  color: var(--color-gray-700);
+  color: var(--ink);
   margin-bottom: var(--spacing-md);
 }
 
 .empty p {
-  color: var(--color-gray-500);
+  color: var(--ink-3);
   margin-bottom: var(--spacing-xl);
 }
 
 .createButton {
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: var(--spacing-md) var(--spacing-xl);
   border-radius: var(--radius-md);
@@ -37,7 +37,7 @@
 }
 
 .createButton:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 .header {
@@ -46,13 +46,13 @@
   align-items: center;
   margin-bottom: var(--spacing-xl);
   padding-bottom: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .title {
   font-size: 28px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -64,7 +64,7 @@
 
 .version {
   font-size: 14px;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .status {
@@ -76,18 +76,18 @@
 }
 
 .status.active {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .status.draft {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .aiTag {
-  background: var(--color-blue-100);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  color: var(--brand-700);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-md);
   font-size: 12px;
@@ -107,7 +107,7 @@
 .backButton {
   background: none;
   border: none;
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   font-size: 14px;
   cursor: pointer;
   padding: var(--spacing-sm) var(--spacing-md);
@@ -116,12 +116,12 @@
 }
 
 .backButton:hover {
-  background: var(--color-gray-100);
-  color: var(--color-gray-900);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .sidebar {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--spacing-xl);
@@ -132,7 +132,7 @@
   margin: 0 0 var(--spacing-lg) 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .schemaList {
@@ -143,20 +143,20 @@
 
 .schemaItem {
   padding: var(--spacing-md);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .schemaItem:hover {
-  border-color: var(--color-blue-300);
-  background: var(--color-blue-50);
+  border-color: var(--brand-300);
+  background: var(--brand-soft);
 }
 
 .schemaItem.active {
-  border-color: var(--color-blue-500);
-  background: var(--color-blue-50);
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .schemaItemHeader {
@@ -168,7 +168,7 @@
 
 .schemaVersion {
   font-weight: 500;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .schemaStatus {
@@ -180,13 +180,13 @@
 }
 
 .schemaStatus.active {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .schemaStatus.draft {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .schemaItemMeta {
@@ -201,11 +201,11 @@
 
 .schemaDate {
   font-size: 12px;
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .main {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--spacing-xl);
@@ -215,11 +215,11 @@
   margin: 0 0 var(--spacing-sm) 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: var(--ink);
 }
 
 .formDescription {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin: 0 0 var(--spacing-xl) 0;
 }
 
@@ -229,13 +229,13 @@
   gap: var(--spacing-md);
   margin-top: var(--spacing-xl);
   padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 .previewButton {
-  background: var(--color-white);
-  color: var(--color-blue-600);
-  border: 1px solid var(--color-blue-300);
+  background: var(--surface);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-300);
   padding: var(--spacing-md) var(--spacing-xl);
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -244,14 +244,14 @@
 }
 
 .previewButton:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-400);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  border-color: var(--brand-400);
+  color: var(--brand-700);
 }
 
 .generateButton {
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: var(--spacing-md) var(--spacing-xl);
   border-radius: var(--radius-md);
@@ -261,7 +261,7 @@
 }
 
 .generateButton:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 /* 新增样式 */
@@ -278,9 +278,9 @@
 }
 
 .importButton {
-  background: var(--color-white);
-  color: var(--color-blue-600);
-  border: 1px solid var(--color-blue-300);
+  background: var(--surface);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-300);
   padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -290,9 +290,9 @@
 }
 
 .importButton:hover {
-  background: var(--color-blue-50);
-  border-color: var(--color-blue-400);
-  color: var(--color-blue-700);
+  background: var(--brand-soft);
+  border-color: var(--brand-400);
+  color: var(--brand-700);
 }
 
 .emptyActions {
@@ -303,8 +303,8 @@
 }
 
 .editButton {
-  background: var(--color-green-500);
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
   padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--radius-md);
@@ -315,7 +315,7 @@
 }
 
 .editButton:hover {
-  background: var(--color-green-600);
+  background: var(--green-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
@@ -324,15 +324,15 @@
   font-size: 11px;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-  background: var(--color-gray-100);
-  color: var(--color-gray-600);
+  background: var(--surface-2);
+  color: var(--ink-2);
   font-weight: 500;
 }
 
 /* Tab 样式 */
 .tabs {
   display: flex;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--line);
   margin-bottom: 24px;
 }
 
@@ -343,19 +343,19 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--ink-2);
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   transition: all 0.2s;
 }
 
 .tab:hover {
-  color: #3b82f6;
+  color: var(--brand);
 }
 
 .tab.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: var(--brand);
+  border-bottom-color: var(--brand);
 }
 
 .tabContent {
@@ -374,30 +374,30 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg);
   border-radius: 8px;
 }
 
 .toolButton {
   padding: 8px 16px;
   background: white;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .toolButton:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: var(--surface-2);
+  border-color: var(--ink-faint);
 }
 
 .toolHint {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-left: auto;
 }
 
@@ -405,36 +405,36 @@
   width: 100%;
   min-height: 500px;
   padding: 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
   resize: vertical;
-  background: #ffffff;
-  color: #1f2937;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .jsonEditor:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .jsonError {
   padding: 12px 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--red-soft);
+  border: 1px solid var(--red-line);
   border-radius: 6px;
-  color: #dc2626;
+  color: var(--red-hover);
   font-size: 13px;
   line-height: 1.5;
 }
 
 /* V2 Schema 标签样式 */
 .v2Tag {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  color: #fff;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-md);
   font-size: 12px;
@@ -443,8 +443,8 @@
 }
 
 .v2Badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  color: #fff;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: 10px;
@@ -453,15 +453,15 @@
 }
 
 .v2Hint {
-  color: #667eea;
+  color: var(--brand);
   font-size: 12px;
   font-weight: 500;
 }
 
 /* 编辑 Schema 按钮 */
 .editSchemaButton {
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
   padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--radius-md);
@@ -472,9 +472,9 @@
 }
 
 .editSchemaButton:hover {
-  background: #059669;
+  background: var(--green-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(26, 138, 74, 0.3);
 }
 
 .importButton:disabled,
@@ -496,20 +496,20 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .versionHeader h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .diffButton {
   padding: 8px 16px;
-  background: #8b5cf6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -519,7 +519,7 @@
 }
 
 .diffButton:hover:not(:disabled) {
-  background: #7c3aed;
+  background: var(--brand);
 }
 
 .diffButton:disabled {
@@ -530,7 +530,7 @@
 .emptyVersions {
   text-align: center;
   padding: 48px 24px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
@@ -545,20 +545,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 8px;
   transition: all 0.2s;
 }
 
 .versionItem:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  background: var(--surface-2);
+  border-color: var(--line-2);
 }
 
 .versionItem.active {
-  background: #eff6ff;
-  border-color: #3b82f6;
+  background: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 .versionInfo {
@@ -576,14 +576,14 @@
 .versionNumber {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
 }
 
 .activeTag {
   padding: 2px 8px;
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
@@ -595,12 +595,12 @@
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .sourceType {
   padding: 2px 6px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   border-radius: 4px;
   font-size: 11px;
 }
@@ -622,31 +622,31 @@
 }
 
 .switchButton {
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
 }
 
 .switchButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .activateButton {
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
 }
 
 .activateButton:hover {
-  background: #059669;
+  background: var(--green-hover);
 }
 
 .compareButton {
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
 }
 
 .compareButton:hover {
-  background: #e5e7eb;
+  background: var(--line);
 }
 
 /* 弹窗样式 */
@@ -656,16 +656,18 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   padding: 20px;
 }
 
 .modal {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
   border-radius: 12px;
   width: 100%;
   max-width: 800px;
@@ -679,11 +681,11 @@
   margin: 0 0 16px 0;
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .previewCode {
-  background: #f5f5f5;
+  background: var(--surface-2);
   padding: 16px;
   border-radius: 8px;
   overflow: auto;
@@ -700,8 +702,8 @@
 
 .closeButton {
   padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -710,7 +712,7 @@
 }
 
 .closeButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 /* 版本对比弹窗 */
@@ -731,15 +733,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 
 .diffModalHeader h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .diffVersionSelector {
@@ -750,7 +752,7 @@
 
 .versionSelect {
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
@@ -761,27 +763,27 @@
 
 .versionSelect:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .diffArrow {
   font-size: 18px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .closeModalButton {
   background: none;
   border: none;
   font-size: 24px;
-  color: #6b7280;
+  color: var(--ink-2);
   cursor: pointer;
   padding: 4px;
   line-height: 1;
 }
 
 .closeModalButton:hover {
-  color: #111827;
+  color: var(--ink);
 }
 
 .diffContent {
@@ -801,20 +803,20 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .outputsHeader h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .outputsCount {
   font-size: 14px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--ink-2);
+  background: var(--surface-2);
   padding: 4px 12px;
   border-radius: 12px;
 }
@@ -822,10 +824,10 @@
 .emptyOutputs {
   text-align: center;
   padding: 48px 24px;
-  color: #6b7280;
-  background: #f9fafb;
+  color: var(--ink-2);
+  background: var(--bg);
   border-radius: 8px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--line-2);
 }
 
 .emptyOutputs p {
@@ -842,42 +844,42 @@
 .outputsTable td {
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .outputsTable th {
-  background: #f9fafb;
+  background: var(--bg);
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .outputsTable tr:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .outputName {
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 13px;
-  background: #f3f4f6;
+  background: var(--surface-2);
   padding: 2px 8px;
   border-radius: 4px;
-  color: #1f2937;
+  color: var(--ink);
 }
 
 .outputAlias {
   margin-left: 8px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
 .outputType {
   display: inline-block;
   padding: 2px 8px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  color: var(--brand-700);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -886,8 +888,8 @@
 .sensitiveTag {
   display: inline-block;
   padding: 2px 8px;
-  background: #fef3c7;
-  color: #d97706;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
@@ -898,8 +900,8 @@
 .valueExpression {
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 11px;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--ink-2);
+  background: var(--surface-2);
   padding: 2px 6px;
   border-radius: 3px;
   max-width: 200px;
@@ -911,7 +913,7 @@
 
 /* ========== V3 UI Theme Overrides ========== */
 :global(:root[data-ui-version="v3"]) .container {
-  background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%);
+  background: linear-gradient(to bottom, var(--bg) 0%, var(--surface) 100%);
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
@@ -929,14 +931,14 @@
 :global(:root[data-ui-version="v3"]) .title {
   font-size: 24px;
   font-weight: 600;
-  background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
+  background: linear-gradient(135deg, var(--ink) 0%, var(--ink-2) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 :global(:root[data-ui-version="v3"]) .tabs {
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  background: linear-gradient(to right, var(--bg), var(--surface-2));
   border-radius: 10px;
   padding: 4px;
   margin-bottom: 24px;
@@ -952,16 +954,16 @@
 :global(:root[data-ui-version="v3"]) .tab.active {
   background: white;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  color: #1e293b;
+  color: var(--ink);
 }
 
 :global(:root[data-ui-version="v3"]) .tab:not(.active) {
-  color: #64748b;
+  color: var(--ink-2);
 }
 
 :global(:root[data-ui-version="v3"]) .tab:not(.active):hover {
   background: rgba(255,255,255,0.5);
-  color: #334155;
+  color: var(--ink);
 }
 
 :global(:root[data-ui-version="v3"]) .formContainer {
@@ -981,7 +983,7 @@
 }
 
 :global(:root[data-ui-version="v3"]) .jsonToolbar {
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  background: linear-gradient(to right, var(--bg), var(--surface-2));
   padding: 12px 16px;
   border-radius: 10px;
   margin-bottom: 16px;
@@ -989,36 +991,36 @@
 
 :global(:root[data-ui-version="v3"]) .toolButton {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: var(--ink-2);
   transition: all 0.2s;
 }
 
 :global(:root[data-ui-version="v3"]) .toolButton:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--bg);
+  border-color: var(--line-2);
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 :global(:root[data-ui-version="v3"]) .jsonEditor {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 20px;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
   font-size: 13px;
   line-height: 1.6;
-  color: #334155;
+  color: var(--ink);
 }
 
 :global(:root[data-ui-version="v3"]) .jsonEditor:focus {
   background: white;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 :global(:root[data-ui-version="v3"]) .outputsList {
@@ -1030,7 +1032,7 @@
 }
 
 :global(:root[data-ui-version="v3"]) .outputsHeader {
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  background: linear-gradient(to right, var(--bg), var(--surface-2));
   padding: 16px 20px;
   border-radius: 10px;
   margin-bottom: 20px;
@@ -1043,32 +1045,32 @@
 }
 
 :global(:root[data-ui-version="v3"]) .outputsTable thead {
-  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  background: linear-gradient(to bottom, var(--bg), var(--surface-2));
 }
 
 :global(:root[data-ui-version="v3"]) .outputsTable th {
   padding: 14px 16px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ink-2);
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--line);
 }
 
 :global(:root[data-ui-version="v3"]) .outputsTable td {
   padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  border-bottom: 1px solid var(--surface-2);
+  color: var(--ink);
 }
 
 :global(:root[data-ui-version="v3"]) .outputsTable tr:hover {
-  background: #f8fafc;
+  background: var(--bg);
 }
 
 :global(:root[data-ui-version="v3"]) .outputName {
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
-  color: #1e40af;
+  background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));
+  color: var(--brand-700);
   padding: 4px 10px;
   border-radius: 6px;
   font-family: 'SF Mono', Monaco, monospace;
@@ -1077,8 +1079,8 @@
 }
 
 :global(:root[data-ui-version="v3"]) .outputType {
-  background: #f0fdf4;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 12px;
@@ -1094,7 +1096,7 @@
 }
 
 :global(:root[data-ui-version="v3"]) .versionHeader {
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  background: linear-gradient(to right, var(--bg), var(--surface-2));
   padding: 16px 20px;
   border-radius: 10px;
   margin-bottom: 20px;
@@ -1102,7 +1104,7 @@
 
 :global(:root[data-ui-version="v3"]) .versionItem {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 16px 20px;
   margin-bottom: 12px;
@@ -1110,80 +1112,80 @@
 }
 
 :global(:root[data-ui-version="v3"]) .versionItem:hover {
-  border-color: #cbd5e1;
+  border-color: var(--line-2);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   transform: translateY(-1px);
 }
 
 :global(:root[data-ui-version="v3"]) .versionItem.active {
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.15);
+  background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));
+  border-color: var(--brand);
+  box-shadow: 0 2px 8px var(--ring-brand);
 }
 
 :global(:root[data-ui-version="v3"]) .versionNumber {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ink);
 }
 
 :global(:root[data-ui-version="v3"]) .versionMeta {
-  color: #64748b;
+  color: var(--ink-2);
   font-size: 13px;
 }
 
 :global(:root[data-ui-version="v3"]) .switchButton,
 :global(:root[data-ui-version="v3"]) .compareButton {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: var(--ink-2);
   transition: all 0.2s;
 }
 
 :global(:root[data-ui-version="v3"]) .switchButton:hover,
 :global(:root[data-ui-version="v3"]) .compareButton:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--bg);
+  border-color: var(--line-2);
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 :global(:root[data-ui-version="v3"]) .importButton,
 :global(:root[data-ui-version="v3"]) .editSchemaButton {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
+  background: linear-gradient(135deg, var(--brand), var(--brand-ink));
+  color: #fff;
   border: none;
   border-radius: 8px;
   padding: 10px 20px;
   font-weight: 600;
   font-size: 14px;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+  box-shadow: 0 2px 8px rgba(28, 110, 140, 0.3);
   transition: all 0.2s;
 }
 
 :global(:root[data-ui-version="v3"]) .importButton:hover,
 :global(:root[data-ui-version="v3"]) .editSchemaButton:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+  background: linear-gradient(135deg, var(--brand-ink), var(--brand-700));
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.4);
   transform: translateY(-1px);
 }
 
 :global(:root[data-ui-version="v3"]) .backButton {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 16px;
   font-weight: 500;
-  color: #475569;
+  color: var(--ink-2);
   transition: all 0.2s;
 }
 
 :global(:root[data-ui-version="v3"]) .backButton:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--bg);
+  border-color: var(--line-2);
 }
 
 :global(:root[data-ui-version="v3"]) .modal {
@@ -1199,25 +1201,25 @@
 }
 
 :global(:root[data-ui-version="v3"]) .diffModalHeader {
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  background: linear-gradient(to right, var(--bg), var(--surface-2));
   padding: 20px 24px;
   border-radius: 16px 16px 0 0;
 }
 
 :global(:root[data-ui-version="v3"]) .status.active {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-  color: #065f46;
+  background: linear-gradient(135deg, var(--green-soft), var(--green-line));
+  color: var(--green-active);
 }
 
 :global(:root[data-ui-version="v3"]) .status.draft {
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  color: #92400e;
+  background: linear-gradient(135deg, var(--amber-soft), var(--amber-line));
+  color: var(--amber-hover);
 }
 
 :global(:root[data-ui-version="v3"]) .v2Tag,
 :global(:root[data-ui-version="v3"]) .aiTag {
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
-  color: #1e40af;
+  background: linear-gradient(135deg, var(--brand-soft), var(--brand-soft));
+  color: var(--brand-700);
   padding: 4px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -1225,8 +1227,8 @@
 }
 
 :global(:root[data-ui-version="v3"]) .activeTag {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
+  background: linear-gradient(135deg, var(--brand), var(--brand-ink));
+  color: #fff;
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 11px;

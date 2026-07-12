@@ -666,7 +666,7 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId, isMani
                             
                             <div className={styles.configRow}>
                               <label>Value Expression:</label>
-                              <Text code style={{ flex: 1, padding: '4px 8px', background: '#f5f5f5', borderRadius: '4px' }}>
+                              <Text code style={{ flex: 1, padding: '4px 8px', background: 'var(--surface-2)', borderRadius: '4px' }}>
                                 {output.output_value || '(auto-generated after selecting resource and output name)'}
                               </Text>
                             </div>

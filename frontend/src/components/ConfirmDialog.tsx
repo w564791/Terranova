@@ -1,7 +1,13 @@
+/**
+ * ConfirmDialog — 统一警示/确认弹窗
+ * 基于 Dialog shell + 设计系统按钮（圆角矩形卡片）
+ */
 import React from 'react';
-import styles from './ConfirmDialog.module.css';
+import { Dialog, type DialogTone } from './ui/Dialog';
 
-interface Props {
+export type ConfirmType = 'info' | 'warning' | 'danger';
+
+export interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
   message?: string;
@@ -9,13 +15,17 @@ interface Props {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
-  type?: 'info' | 'warning' | 'danger';
+  /** @deprecated use onCancel — kept for CreateWorkspaceDialog compatibility */
+  onClose?: () => void;
+  type?: ConfirmType;
   loading?: boolean;
   confirmDisabled?: boolean;
   children?: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  showClose?: boolean;
 }
 
-const ConfirmDialog: React.FC<Props> = ({
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
   title,
   message,
@@ -23,42 +33,62 @@ const ConfirmDialog: React.FC<Props> = ({
   cancelText = '取消',
   onConfirm,
   onCancel,
+  onClose,
   type = 'info',
   loading = false,
   confirmDisabled = false,
-  children
+  children,
+  size = 'md',
+  showClose = false,
 }) => {
-  if (!isOpen) return null;
+  const handleDismiss = () => {
+    if (loading) return;
+    onCancel();
+    onClose?.();
+  };
+
+  const tone: DialogTone =
+    type === 'danger' ? 'danger' : type === 'warning' ? 'warning' : 'info';
+
+  // danger → solid red；其余 → solid brand（显式 color 防止被旧 .btn.red 覆盖）
+  const confirmBtnClass =
+    type === 'danger' ? 'btn solid red' : 'btn solid brand';
 
   return (
-    <div className={styles.overlay} onClick={onCancel}>
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-        <div className={`${styles.header} ${type !== 'info' ? styles[type] : ''}`}>
-          <h3 className={`${styles.title} ${type !== 'info' ? styles[type] : ''}`}>{title}</h3>
-        </div>
-        
-        <div className={styles.body}>
-          {message && <p className={styles.message}>{message}</p>}
-          {children}
-        </div>
-        
-        <div className={styles.footer}>
+    <Dialog
+      open={isOpen}
+      onClose={handleDismiss}
+      title={title}
+      tone={tone}
+      size={size}
+      showClose={showClose}
+      closeOnOverlay={!loading}
+      closeOnEsc={!loading}
+      footer={
+        <>
           <button
-            onClick={onCancel}
-            className={styles.btnCancel}
+            type="button"
+            className="btn"
+            onClick={handleDismiss}
+            disabled={loading}
           >
             {cancelText}
           </button>
           <button
+            type="button"
+            className={`${confirmBtnClass}${loading ? ' is-loading' : ''}`}
+            style={{ color: '#fff' }}
             onClick={onConfirm}
-            className={`${styles.btnConfirm} ${styles[type]}`}
             disabled={loading || confirmDisabled}
           >
             {loading ? '处理中...' : confirmText}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {message && <p className="tn-dialog__message">{message}</p>}
+      {children}
+    </Dialog>
   );
 };
 

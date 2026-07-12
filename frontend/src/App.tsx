@@ -1,7 +1,10 @@
 import type { FC } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
+import { ConfigProvider } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import { store } from './store';
+import { antdTheme } from './styles/antd-theme';
 import { ToastProvider } from './contexts/ToastContext';
 import FeedbackBanner from './components/FeedbackBanner';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -82,6 +85,7 @@ const App: FC = () => {
   
   try {
     return (
+      <ConfigProvider locale={zhCN} theme={antdTheme}>
       <Provider store={store}>
         <ToastProvider>
           <NotificationProvider>
@@ -226,6 +230,7 @@ const App: FC = () => {
           </NotificationProvider>
         </ToastProvider>
       </Provider>
+      </ConfigProvider>
     );
   } catch (error) {
     console.error('App render error:', error);

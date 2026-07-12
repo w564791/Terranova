@@ -6,37 +6,47 @@
 
 .mainButton {
   padding: 10px 20px;
-  background: var(--color-blue-600);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px 0 0 6px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.12s, box-shadow 0.12s;
   white-space: nowrap;
 }
 
 .mainButton:hover:not(.disabled) {
-  background: var(--color-blue-700);
+  background: var(--brand-ink);
+}
+
+.mainButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .dropdownButton {
   padding: 10px 12px;
-  background: var(--color-blue-600);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 0 6px 6px 0;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.12s, box-shadow 0.12s;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .dropdownButton:hover:not(.disabled) {
-  background: var(--color-blue-700);
+  background: var(--brand-ink);
+}
+
+.dropdownButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .dropdownIcon {
@@ -53,7 +63,7 @@
   bottom: calc(100% + 4px);
   right: 0;
   background: white;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
@@ -65,7 +75,7 @@
   border: none;
   text-align: left;
   font-size: 14px;
-  color: var(--color-gray-900);
+  color: var(--ink);
   cursor: pointer;
   transition: background-color 0.15s ease;
   display: block;
@@ -73,11 +83,11 @@
 }
 
 .menuItem:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .menuItem:active {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
 }
 
 .menuIcon {

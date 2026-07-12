@@ -784,7 +784,7 @@ const AIConfigForm = () => {
                       checked={formData.api_key === '__CLEAR__'}
                       onChange={(e) => setFormData({ ...formData, api_key: e.target.checked ? '__CLEAR__' : '' })}
                     />
-                    <span style={{ fontSize: '12px', color: '#ff4d4f' }}>清空已保存的 API Key（保存后使用系统环境变量兜底）</span>
+                    <span style={{ fontSize: '12px', color: 'var(--red)' }}>清空已保存的 API Key（保存后使用系统环境变量兜底）</span>
                   </label>
                 )}
               </div>
@@ -898,7 +898,7 @@ const AIConfigForm = () => {
                         disabled={loadingOpenaiModels}
                         style={{
                           padding: '8px 16px',
-                          backgroundColor: '#1890ff',
+                          backgroundColor: 'var(--brand)',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
@@ -978,13 +978,13 @@ const AIConfigForm = () => {
             <div
               className={styles.formGroup}
               style={{
-                border: '1px solid #722ed1',
+                border: '1px solid var(--brand)',
                 borderRadius: '8px',
                 padding: '16px',
-                backgroundColor: '#f9f0ff',
+                backgroundColor: 'var(--brand-soft)',
               }}
             >
-              <label className={styles.label} style={{ color: '#531dab' }}>
+              <label className={styles.label} style={{ color: 'var(--brand-ink)' }}>
                 Grok Reasoning Effort（专属）
               </label>
               <div className={styles.hint} style={{ marginBottom: '12px' }}>
@@ -1004,10 +1004,10 @@ const AIConfigForm = () => {
                         borderRadius: '6px',
                         border:
                           formData.grok_reasoning_effort === level
-                            ? '2px solid #722ed1'
-                            : '1px solid #d9d9d9',
+                            ? '2px solid var(--brand)'
+                            : '1px solid var(--line-2)',
                         backgroundColor:
-                          formData.grok_reasoning_effort === level ? '#efdbff' : '#fff',
+                          formData.grok_reasoning_effort === level ? 'var(--brand-100)' : 'var(--surface)',
                         cursor: 'pointer',
                       }}
                     >
@@ -1021,7 +1021,7 @@ const AIConfigForm = () => {
                       />
                       <span style={{ fontWeight: 500 }}>
                         {level === 'low' ? '低' : level === 'medium' ? '中' : '高'}
-                        <span style={{ marginLeft: 8, color: '#666', fontWeight: 400, fontSize: 13 }}>
+                        <span style={{ marginLeft: 8, color: 'var(--ink-2)', fontWeight: 400, fontSize: 13 }}>
                           {GROK_REASONING_EFFORT_LABELS[level]}
                         </span>
                       </span>
@@ -1118,13 +1118,13 @@ const AIConfigForm = () => {
           {/* Vector 搜索配置（仅 embedding 能力显示） */}
           {(formData.capabilities.includes('*') || formData.capabilities.includes(CAPABILITIES.EMBEDDING)) && (
             <div style={{ 
-              border: '1px solid #1890ff', 
+              border: '1px solid var(--brand)', 
               borderRadius: '8px', 
               padding: '16px', 
               marginBottom: '20px',
-              backgroundColor: '#f0f7ff' 
+              backgroundColor: 'var(--brand-soft)' 
             }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#1890ff' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--brand)' }}>
                 Vector 搜索配置（Embedding 专用）
               </h3>
               
@@ -1198,14 +1198,14 @@ const AIConfigForm = () => {
                   {formData.service_type === 'bedrock' && 
                    !formData.model_id.includes('titan-embed-text-v2') && 
                    !formData.model_id.includes('cohere.embed') && (
-                    <span style={{ color: '#ff4d4f', marginLeft: '8px' }}>
+                    <span style={{ color: 'var(--red)', marginLeft: '8px' }}>
                        当前模型不支持批量，请选择 Titan V2 或 Cohere Embed
                     </span>
                   )}
                   {(formData.service_type === 'openai' || 
                     formData.model_id.includes('titan-embed-text-v2') ||
                     formData.model_id.includes('cohere.embed')) && (
-                    <span style={{ color: '#52c41a', marginLeft: '8px' }}>
+                    <span style={{ color: 'var(--green)', marginLeft: '8px' }}>
                       ✓ 当前模型支持批量
                     </span>
                   )}
@@ -1215,11 +1215,11 @@ const AIConfigForm = () => {
                   <div style={{ 
                     marginTop: '8px', 
                     padding: '8px 12px', 
-                    backgroundColor: '#fffbe6', 
-                    border: '1px solid #ffe58f',
+                    backgroundColor: 'var(--amber-soft)', 
+                    border: '1px solid var(--amber-line)',
                     borderRadius: '4px',
                     fontSize: '12px',
-                    color: '#ad6800'
+                    color: 'var(--amber-hover)'
                   }}>
                     <strong>维度说明：</strong>
                     {formData.model_id.includes('cohere.embed-v4') && ' Cohere Embed v4 输出 1536 维度'}
@@ -1230,7 +1230,7 @@ const AIConfigForm = () => {
                     {formData.model_id.includes('text-embedding-3-small') && ' OpenAI small 输出 1536 维度'}
                     {formData.model_id.includes('text-embedding-3-large') && ' OpenAI large 输出 3072 维度'}
                     <br />
-                    <span style={{ color: '#1890ff' }}>
+                    <span style={{ color: 'var(--brand)' }}>
                       当前数据库支持 1536 维度。推荐使用 Cohere Embed v4 或 OpenAI text-embedding-3-small。
                     </span>
                   </div>
@@ -1270,13 +1270,13 @@ const AIConfigForm = () => {
             formData.capabilities.includes(CAPABILITIES.MANIFEST_RESOURCE_GENERATION) ||
             formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) && (
             <div style={{ 
-              border: '1px solid #722ed1', 
+              border: '1px solid var(--brand)', 
               borderRadius: '8px', 
               padding: '16px', 
               marginBottom: '20px',
-              backgroundColor: '#f9f0ff' 
+              backgroundColor: 'var(--brand-soft)' 
             }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#722ed1' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--brand)' }}>
                 🧠 Skill 模式配置
                 {formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) && 
                  !formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) && 
@@ -1304,7 +1304,7 @@ const AIConfigForm = () => {
                 <div className={styles.hint}>
                   启用后，AI 将使用分层 Skill 系统组装 Prompt，而不是使用固定的 capability_prompts。
                   <br />
-                  <span style={{ color: '#722ed1' }}>
+                  <span style={{ color: 'var(--brand)' }}>
                     ✨ Skill 模式支持：基础层（通用知识）+ 领域层（专业知识）+ 任务层（工作流程）
                     {formData.capabilities.includes(CAPABILITIES.FORM_GENERATION) && ' + Module Skill（自动生成）'}
                   </span>
@@ -1334,7 +1334,7 @@ const AIConfigForm = () => {
                     <div className={styles.hint} style={{ marginLeft: '24px', marginTop: '4px' }}>
                       启用后，由 AI 根据需求/内容自动选择最相关的 Domain Skills（而非使用下方固定配置），
                       减少不必要的 Skill 加载，提升生成/检查质量。
-                      <span style={{ color: '#faad14', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                      <span style={{ color: 'var(--amber)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
                          实验性功能。启用后下方 Domain 层 Skill 改由 AI 自动选择。
                       </span>
                     </div>
@@ -1353,16 +1353,16 @@ const AIConfigForm = () => {
                 {formData.mode === 'skill' && (
                   <div style={{ marginTop: '16px' }}>
                     {loadingSkills ? (
-                      <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                      <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-3)' }}>
                         加载 Skill 列表中...
                       </div>
                     ) : availableSkills.length === 0 ? (
                       <div style={{ 
                         padding: '16px', 
-                        backgroundColor: '#fffbe6', 
-                        border: '1px solid #ffe58f',
+                        backgroundColor: 'var(--amber-soft)', 
+                        border: '1px solid var(--amber-line)',
                         borderRadius: '4px',
-                        color: '#ad6800'
+                        color: 'var(--amber-hover)'
                       }}>
                         <strong> 未找到可用的 Skill</strong>
                         <br />
@@ -1375,13 +1375,13 @@ const AIConfigForm = () => {
                           <div style={{ 
                             fontWeight: 600, 
                             marginBottom: '8px', 
-                            color: '#722ed1',
+                            color: 'var(--brand)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px'
                           }}>
                             <span style={{ 
-                              backgroundColor: '#722ed1', 
+                              backgroundColor: 'var(--brand)', 
                               color: 'white', 
                               padding: '2px 8px', 
                               borderRadius: '4px',
@@ -1401,11 +1401,11 @@ const AIConfigForm = () => {
                                   gap: '6px',
                                   padding: '6px 12px',
                                   backgroundColor: skillComposition.foundation_skills.includes(skill.name) 
-                                    ? '#f9f0ff' 
-                                    : '#fafafa',
+                                    ? 'var(--brand-soft)' 
+                                    : 'var(--bg)',
                                   border: skillComposition.foundation_skills.includes(skill.name)
-                                    ? '1px solid #722ed1'
-                                    : '1px solid #d9d9d9',
+                                    ? '1px solid var(--brand)'
+                                    : '1px solid var(--line-2)',
                                   borderRadius: '4px',
                                   cursor: 'pointer',
                                   fontSize: '13px',
@@ -1417,11 +1417,11 @@ const AIConfigForm = () => {
                                   onChange={() => toggleSkillSelection(skill.name, 'foundation')}
                                 />
                                 <span>{skill.display_name}</span>
-                                <span style={{ color: '#999', fontSize: '11px' }}>({skill.name})</span>
+                                <span style={{ color: 'var(--ink-3)', fontSize: '11px' }}>({skill.name})</span>
                               </label>
                             ))}
                             {getSkillsByLayer('foundation').length === 0 && (
-                              <span style={{ color: '#999', fontSize: '12px' }}>暂无 Foundation 层 Skill</span>
+                              <span style={{ color: 'var(--ink-3)', fontSize: '12px' }}>暂无 Foundation 层 Skill</span>
                             )}
                           </div>
                         </div>
@@ -1435,13 +1435,13 @@ const AIConfigForm = () => {
                           <div style={{
                             fontWeight: 600,
                             marginBottom: '8px',
-                            color: formData.use_optimized ? '#999' : '#1890ff',
+                            color: formData.use_optimized ? 'var(--ink-3)' : 'var(--brand)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px'
                           }}>
                             <span style={{
-                              backgroundColor: formData.use_optimized ? '#999' : '#1890ff',
+                              backgroundColor: formData.use_optimized ? 'var(--ink-3)' : 'var(--brand)',
                               color: 'white',
                               padding: '2px 8px',
                               borderRadius: '4px',
@@ -1453,7 +1453,7 @@ const AIConfigForm = () => {
                             {formData.use_optimized && (
                               <span style={{ 
                                 fontSize: '12px', 
-                                color: '#ff4d4f', 
+                                color: 'var(--red)', 
                                 fontWeight: 'normal',
                                 marginLeft: '8px'
                               }}>
@@ -1466,11 +1466,11 @@ const AIConfigForm = () => {
                           <div style={{ 
                             marginBottom: '12px', 
                             padding: '12px', 
-                            backgroundColor: '#f0f7ff', 
+                            backgroundColor: 'var(--brand-soft)', 
                             borderRadius: '6px',
-                            border: '1px solid #91d5ff'
+                            border: '1px solid var(--brand-200)'
                           }}>
-                            <div style={{ fontWeight: 500, marginBottom: '8px', fontSize: '13px', color: '#1890ff' }}>
+                            <div style={{ fontWeight: 500, marginBottom: '8px', fontSize: '13px', color: 'var(--brand)' }}>
                               加载模式
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1482,8 +1482,8 @@ const AIConfigForm = () => {
                                     alignItems: 'flex-start',
                                     gap: '8px',
                                     padding: '8px 12px',
-                                    backgroundColor: skillComposition.domain_skill_mode === mode ? '#e6f7ff' : '#fff',
-                                    border: skillComposition.domain_skill_mode === mode ? '1px solid #1890ff' : '1px solid #d9d9d9',
+                                    backgroundColor: skillComposition.domain_skill_mode === mode ? 'var(--brand-soft)' : 'var(--surface)',
+                                    border: skillComposition.domain_skill_mode === mode ? '1px solid var(--brand)' : '1px solid var(--line-2)',
                                     borderRadius: '4px',
                                     cursor: 'pointer',
                                   }}
@@ -1502,7 +1502,7 @@ const AIConfigForm = () => {
                                     <div style={{ fontWeight: 500, fontSize: '13px' }}>
                                       {DOMAIN_SKILL_MODE_LABELS[mode]}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--ink-2)', marginTop: '2px' }}>
                                       {DOMAIN_SKILL_MODE_DESCRIPTIONS[mode]}
                                     </div>
                                   </div>
@@ -1513,11 +1513,11 @@ const AIConfigForm = () => {
                               <div style={{ 
                                 marginTop: '10px', 
                                 padding: '8px', 
-                                backgroundColor: '#fffbe6', 
-                                border: '1px solid #ffe58f',
+                                backgroundColor: 'var(--amber-soft)', 
+                                border: '1px solid var(--amber-line)',
                                 borderRadius: '4px',
                                 fontSize: '12px',
-                                color: '#ad6800'
+                                color: 'var(--amber-hover)'
                               }}>
                                 💡 自动发现模式会解析 Task Skill 内容中的 <code>@require-domain</code> 声明
                               </div>
@@ -1527,7 +1527,7 @@ const AIConfigForm = () => {
                           {/* 固定选择的 Domain Skills（仅 fixed 和 hybrid 模式显示） */}
                           {(skillComposition.domain_skill_mode === 'fixed' || skillComposition.domain_skill_mode === 'hybrid') && (
                             <>
-                              <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: '#666' }}>
+                              <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: 'var(--ink-2)' }}>
                                 {skillComposition.domain_skill_mode === 'fixed' ? '选择 Domain Skills（可多选）' : '固定选择的 Domain Skills（可多选，自动发现的会补充加载）'}
                               </div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -1540,11 +1540,11 @@ const AIConfigForm = () => {
                                       gap: '6px',
                                       padding: '6px 12px',
                                       backgroundColor: skillComposition.domain_skills.includes(skill.name) 
-                                        ? '#e6f7ff' 
-                                        : '#fafafa',
+                                        ? 'var(--brand-soft)' 
+                                        : 'var(--bg)',
                                       border: skillComposition.domain_skills.includes(skill.name)
-                                        ? '1px solid #1890ff'
-                                        : '1px solid #d9d9d9',
+                                        ? '1px solid var(--brand)'
+                                        : '1px solid var(--line-2)',
                                       borderRadius: '4px',
                                       cursor: 'pointer',
                                       fontSize: '13px',
@@ -1556,11 +1556,11 @@ const AIConfigForm = () => {
                                       onChange={() => toggleSkillSelection(skill.name, 'domain')}
                                     />
                                     <span>{skill.display_name}</span>
-                                    <span style={{ color: '#999', fontSize: '11px' }}>({skill.name})</span>
+                                    <span style={{ color: 'var(--ink-3)', fontSize: '11px' }}>({skill.name})</span>
                                   </label>
                                 ))}
                                 {getSkillsByLayer('domain').length === 0 && (
-                                  <span style={{ color: '#999', fontSize: '12px' }}>暂无 Domain 层 Skill</span>
+                                  <span style={{ color: 'var(--ink-3)', fontSize: '12px' }}>暂无 Domain 层 Skill</span>
                                 )}
                               </div>
                             </>
@@ -1570,11 +1570,11 @@ const AIConfigForm = () => {
                           {skillComposition.domain_skill_mode === 'auto' && (
                             <div style={{ 
                               padding: '12px', 
-                              backgroundColor: '#f6ffed', 
-                              border: '1px solid #b7eb8f',
+                              backgroundColor: 'var(--green-soft)', 
+                              border: '1px solid var(--green-line)',
                               borderRadius: '4px',
                               fontSize: '12px',
-                              color: '#389e0d'
+                              color: 'var(--green-active)'
                             }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span>✓ 自动发现模式已启用，Domain Skills 将自动匹配</span>
@@ -1585,7 +1585,7 @@ const AIConfigForm = () => {
                                   style={{
                                     padding: '4px 12px',
                                     fontSize: '12px',
-                                    backgroundColor: skillComposition.task_skill ? '#52c41a' : '#ccc',
+                                    backgroundColor: skillComposition.task_skill ? 'var(--green)' : 'var(--line-2)',
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: '4px',
@@ -1601,65 +1601,65 @@ const AIConfigForm = () => {
                                 <div style={{ 
                                   marginTop: '12px', 
                                   padding: '12px', 
-                                  backgroundColor: '#fff',
-                                  border: '1px solid #d9f7be',
+                                  backgroundColor: 'var(--surface)',
+                                  border: '1px solid var(--green-soft)',
                                   borderRadius: '4px'
                                 }}>
-                                  <div style={{ fontWeight: 500, marginBottom: '8px', color: '#237804' }}>
+                                  <div style={{ fontWeight: 500, marginBottom: '8px', color: 'var(--green-active)' }}>
                                     📋 预览结果（保存后生效）
                                   </div>
                                   <div style={{ marginBottom: '8px' }}>
-                                    <span style={{ color: '#666' }}>Task Skill:</span>{' '}
+                                    <span style={{ color: 'var(--ink-2)' }}>Task Skill:</span>{' '}
                                     <span style={{ fontWeight: 500 }}>{discoveryPreview.task_skill}</span>
                                   </div>
                                   <div style={{ marginBottom: '8px' }}>
-                                    <span style={{ color: '#666' }}>domain_tags:</span>{' '}
+                                    <span style={{ color: 'var(--ink-2)' }}>domain_tags:</span>{' '}
                                     {discoveryPreview.domain_tags.length > 0 ? (
                                       discoveryPreview.domain_tags.map(tag => (
                                         <span key={tag} style={{
                                           display: 'inline-block',
                                           padding: '2px 8px',
                                           margin: '2px 4px 2px 0',
-                                          backgroundColor: '#e6f7ff',
-                                          border: '1px solid #91d5ff',
+                                          backgroundColor: 'var(--brand-soft)',
+                                          border: '1px solid var(--brand-200)',
                                           borderRadius: '4px',
                                           fontSize: '11px',
-                                          color: '#1890ff'
+                                          color: 'var(--brand)'
                                         }}>
                                           {tag}
                                         </span>
                                       ))
                                     ) : (
-                                      <span style={{ color: '#ff4d4f' }}>（未定义，请在 Task Skill 中添加 domain_tags）</span>
+                                      <span style={{ color: 'var(--red)' }}>（未定义，请在 Task Skill 中添加 domain_tags）</span>
                                     )}
                                   </div>
                                   <div>
-                                    <span style={{ color: '#666' }}>将自动发现的 Domain Skills ({discoveryPreview.discovered_count}):</span>
+                                    <span style={{ color: 'var(--ink-2)' }}>将自动发现的 Domain Skills ({discoveryPreview.discovered_count}):</span>
                                     {discoveryPreview.discovered_skills.length > 0 ? (
                                       <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                         {discoveryPreview.discovered_skills.map(skill => (
                                           <div key={skill.name} style={{
                                             padding: '6px 10px',
-                                            backgroundColor: '#f0f5ff',
-                                            border: '1px solid #adc6ff',
+                                            backgroundColor: 'var(--brand-soft)',
+                                            border: '1px solid var(--brand-200)',
                                             borderRadius: '4px',
                                           }}>
                                             <div style={{ fontWeight: 500, fontSize: '12px' }}>{skill.display_name}</div>
-                                            <div style={{ fontSize: '11px', color: '#666' }}>{skill.name}</div>
-                                            <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>
+                                            <div style={{ fontSize: '11px', color: 'var(--ink-2)' }}>{skill.name}</div>
+                                            <div style={{ fontSize: '10px', color: 'var(--ink-3)', marginTop: '2px' }}>
                                               tags: {skill.tags?.join(', ') || '无'}
                                             </div>
                                           </div>
                                         ))}
                                       </div>
                                     ) : (
-                                      <div style={{ marginTop: '8px', color: '#ff4d4f' }}>
+                                      <div style={{ marginTop: '8px', color: 'var(--red)' }}>
                                          未找到匹配的 Domain Skills，请检查 Task Skill 的 domain_tags 配置
                                       </div>
                                     )}
                                   </div>
                                   {discoveryPreview.message && (
-                                    <div style={{ marginTop: '8px', color: '#faad14', fontSize: '11px' }}>
+                                    <div style={{ marginTop: '8px', color: 'var(--amber)', fontSize: '11px' }}>
                                       💡 {discoveryPreview.message}
                                     </div>
                                   )}
@@ -1674,13 +1674,13 @@ const AIConfigForm = () => {
                           <div style={{ 
                             fontWeight: 600, 
                             marginBottom: '8px', 
-                            color: '#52c41a',
+                            color: 'var(--green)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px'
                           }}>
                             <span style={{ 
-                              backgroundColor: '#52c41a', 
+                              backgroundColor: 'var(--green)', 
                               color: 'white', 
                               padding: '2px 8px', 
                               borderRadius: '4px',
@@ -1700,11 +1700,11 @@ const AIConfigForm = () => {
                                   gap: '6px',
                                   padding: '6px 12px',
                                   backgroundColor: skillComposition.task_skill === skill.name 
-                                    ? '#f6ffed' 
-                                    : '#fafafa',
+                                    ? 'var(--green-soft)' 
+                                    : 'var(--bg)',
                                   border: skillComposition.task_skill === skill.name
-                                    ? '1px solid #52c41a'
-                                    : '1px solid #d9d9d9',
+                                    ? '1px solid var(--green)'
+                                    : '1px solid var(--line-2)',
                                   borderRadius: '4px',
                                   cursor: 'pointer',
                                   fontSize: '13px',
@@ -1717,11 +1717,11 @@ const AIConfigForm = () => {
                                   onChange={() => toggleSkillSelection(skill.name, 'task')}
                                 />
                                 <span>{skill.display_name}</span>
-                                <span style={{ color: '#999', fontSize: '11px' }}>({skill.name})</span>
+                                <span style={{ color: 'var(--ink-3)', fontSize: '11px' }}>({skill.name})</span>
                               </label>
                             ))}
                             {getSkillsByLayer('task').length === 0 && (
-                              <span style={{ color: '#999', fontSize: '12px' }}>暂无 Task 层 Skill</span>
+                              <span style={{ color: 'var(--ink-3)', fontSize: '12px' }}>暂无 Task 层 Skill</span>
                             )}
                           </div>
                         </div>
@@ -1749,7 +1749,7 @@ const AIConfigForm = () => {
                               />
                               <span style={{ fontWeight: 500 }}>自动加载 Module Skill</span>
                             </label>
-                            <div style={{ marginLeft: '24px', fontSize: '12px', color: '#666' }}>
+                            <div style={{ marginLeft: '24px', fontSize: '12px', color: 'var(--ink-2)' }}>
                               启用后，系统会自动加载当前 Module 生成的专属 Skill（如果存在）
                             </div>
                           </div>
@@ -1761,11 +1761,11 @@ const AIConfigForm = () => {
                           <div style={{ 
                             marginBottom: '12px', 
                             padding: '8px 12px',
-                            backgroundColor: '#fff7e6',
-                            border: '1px solid #ffd591',
+                            backgroundColor: 'var(--amber-soft)',
+                            border: '1px solid var(--amber-line)',
                             borderRadius: '4px',
                             fontSize: '12px',
-                            color: '#ad6800'
+                            color: 'var(--amber-hover)'
                           }}>
                             💡 Module Skill 生成场景不需要"自动加载 Module Skill"，因为它是用来生成 Module Skill 的。
                           </div>
@@ -1775,32 +1775,32 @@ const AIConfigForm = () => {
                         <div style={{ 
                           marginTop: '16px',
                           padding: '12px', 
-                          backgroundColor: '#fff', 
-                          border: '1px solid #d3adf7',
+                          backgroundColor: 'var(--surface)', 
+                          border: '1px solid var(--brand-200)',
                           borderRadius: '4px',
                           fontSize: '12px',
                         }}>
-                          <strong style={{ color: '#531dab' }}>📋 当前 Skill 组合配置：</strong>
+                          <strong style={{ color: 'var(--brand-ink)' }}>📋 当前 Skill 组合配置：</strong>
                           <div style={{ marginTop: '8px', lineHeight: '1.8' }}>
                             <div>
-                              <span style={{ color: '#722ed1' }}>Foundation:</span>{' '}
+                              <span style={{ color: 'var(--brand)' }}>Foundation:</span>{' '}
                               {skillComposition.foundation_skills.length > 0 
                                 ? skillComposition.foundation_skills.join(', ')
-                                : <span style={{ color: '#999' }}>（未选择，将使用默认）</span>
+                                : <span style={{ color: 'var(--ink-3)' }}>（未选择，将使用默认）</span>
                               }
                             </div>
                             <div>
-                              <span style={{ color: '#1890ff' }}>Domain:</span>{' '}
+                              <span style={{ color: 'var(--brand)' }}>Domain:</span>{' '}
                               {skillComposition.domain_skills.length > 0 
                                 ? skillComposition.domain_skills.join(', ')
-                                : <span style={{ color: '#999' }}>（未选择，将使用默认）</span>
+                                : <span style={{ color: 'var(--ink-3)' }}>（未选择，将使用默认）</span>
                               }
                             </div>
                             <div>
-                              <span style={{ color: '#52c41a' }}>Task:</span>{' '}
+                              <span style={{ color: 'var(--green)' }}>Task:</span>{' '}
                               {skillComposition.task_skill 
                                 ? skillComposition.task_skill
-                                : <span style={{ color: '#999' }}>（未选择，将使用默认）</span>
+                                : <span style={{ color: 'var(--ink-3)' }}>（未选择，将使用默认）</span>
                               }
                             </div>
                             {/* form_generation / manifest 场景显示 Module Skill 加载状态 */}
@@ -1810,7 +1810,7 @@ const AIConfigForm = () => {
                               formData.capabilities.includes(CAPABILITIES.MANIFEST_CHECK)) &&
                              !formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) && (
                               <div>
-                                <span style={{ color: '#faad14' }}>Module Skill:</span>{' '}
+                                <span style={{ color: 'var(--amber)' }}>Module Skill:</span>{' '}
                                 {skillComposition.auto_load_module_skill 
                                   ? '自动加载' 
                                   : '不加载'
@@ -1818,7 +1818,7 @@ const AIConfigForm = () => {
                               </div>
                             )}
                           </div>
-                          <div style={{ marginTop: '8px', color: '#999', fontSize: '11px' }}>
+                          <div style={{ marginTop: '8px', color: 'var(--ink-3)', fontSize: '11px' }}>
                             提示：如果未选择任何 Skill，系统将使用对应能力的默认 Skill 组合
                             {formData.capabilities.includes(CAPABILITIES.MODULE_SKILL_GENERATION) && (
                               <span style={{ display: 'block', marginTop: '4px', color: '#eb2f96' }}>
@@ -1855,8 +1855,8 @@ const AIConfigForm = () => {
                   style={{
                     padding: '4px 12px',
                     fontSize: '12px',
-                    backgroundColor: showAddCapability ? '#f0f0f0' : '#1890ff',
-                    color: showAddCapability ? '#333' : 'white',
+                    backgroundColor: showAddCapability ? 'var(--surface-2)' : 'var(--brand)',
+                    color: showAddCapability ? 'var(--ink)' : 'white',
                     border: 'none',
                     borderRadius: '4px',
                     cursor: 'pointer',
@@ -1865,7 +1865,7 @@ const AIConfigForm = () => {
                   {showAddCapability ? '收起' : '+ 新增场景'}
                 </button>
               ) : (
-                <span style={{ fontSize: '12px', color: '#999' }}>
+                <span style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
                   默认配置（capabilities=*）无需新增场景；请创建「非默认」专用配置
                 </span>
               )}
@@ -1876,9 +1876,9 @@ const AIConfigForm = () => {
                 style={{
                   marginBottom: '16px',
                   padding: '12px',
-                  border: '1px dashed #1890ff',
+                  border: '1px dashed var(--brand)',
                   borderRadius: '8px',
-                  backgroundColor: '#f0f7ff',
+                  backgroundColor: 'var(--brand-soft)',
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
@@ -1886,7 +1886,7 @@ const AIConfigForm = () => {
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-end' }}>
                   <div style={{ flex: '1 1 180px' }}>
-                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--ink-2)', display: 'block', marginBottom: '4px' }}>
                       场景标识（key）*
                     </label>
                     <input
@@ -1902,7 +1902,7 @@ const AIConfigForm = () => {
                     />
                   </div>
                   <div style={{ flex: '1 1 180px' }}>
-                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--ink-2)', display: 'block', marginBottom: '4px' }}>
                       显示名称（可选）
                     </label>
                     <input
@@ -1957,7 +1957,7 @@ const AIConfigForm = () => {
                     style={{
                       padding: '8px 16px',
                       fontSize: '13px',
-                      backgroundColor: '#52c41a',
+                      backgroundColor: 'var(--green)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
@@ -1969,7 +1969,7 @@ const AIConfigForm = () => {
                   </button>
                 </div>
                 {addCapabilityError && (
-                  <div style={{ marginTop: '8px', color: '#ff4d4f', fontSize: '12px' }}>
+                  <div style={{ marginTop: '8px', color: 'var(--red)', fontSize: '12px' }}>
                     {addCapabilityError}
                   </div>
                 )}
@@ -2002,10 +2002,10 @@ const AIConfigForm = () => {
                 
                 return (
                   <div key={value} style={{ 
-                    border: isChecked ? '1px solid #1890ff' : '1px solid #e8e8e8',
+                    border: isChecked ? '1px solid var(--brand)' : '1px solid var(--line)',
                     borderRadius: '8px',
                     padding: '12px',
-                    backgroundColor: isChecked ? '#f0f7ff' : '#fafafa',
+                    backgroundColor: isChecked ? 'var(--brand-soft)' : 'var(--bg)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <label className={styles.checkboxLabel} style={{ flex: 1 }}>
@@ -2057,15 +2057,15 @@ const AIConfigForm = () => {
                                 fontSize: '11px',
                                 padding: '1px 6px',
                                 borderRadius: '3px',
-                                backgroundColor: '#fff7e6',
-                                color: '#d46b08',
-                                border: '1px solid #ffd591',
+                                backgroundColor: 'var(--amber-soft)',
+                                color: 'var(--amber-hover)',
+                                border: '1px solid var(--amber-line)',
                               }}
                             >
                               自定义
                             </span>
                           )}
-                          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#999', fontWeight: 400 }}>
+                          <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--ink-3)', fontWeight: 400 }}>
                             {value}
                           </span>
                         </span>
@@ -2077,7 +2077,7 @@ const AIConfigForm = () => {
                           style={{
                             padding: '4px 12px',
                             fontSize: '12px',
-                            backgroundColor: customPrompt ? '#52c41a' : '#1890ff',
+                            backgroundColor: customPrompt ? 'var(--green)' : 'var(--brand)',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
@@ -2098,9 +2098,9 @@ const AIConfigForm = () => {
                     
                     {/* Prompt 编辑器 */}
                     {isChecked && isExpanded && (
-                      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #d9d9d9' }}>
+                      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--line-2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: 500, color: '#666' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink-2)' }}>
                             自定义 Prompt（留空使用默认）
                           </span>
                           <div style={{ display: 'flex', gap: '8px' }}>
@@ -2115,7 +2115,7 @@ const AIConfigForm = () => {
                                 style={{
                                   padding: '2px 8px',
                                   fontSize: '11px',
-                                  backgroundColor: '#ff4d4f',
+                                  backgroundColor: 'var(--red)',
                                   color: 'white',
                                   border: 'none',
                                   borderRadius: '3px',
@@ -2140,7 +2140,7 @@ const AIConfigForm = () => {
                                 style={{
                                   padding: '2px 8px',
                                   fontSize: '11px',
-                                  backgroundColor: '#faad14',
+                                  backgroundColor: 'var(--amber)',
                                   color: 'white',
                                   border: 'none',
                                   borderRadius: '3px',
@@ -2170,13 +2170,13 @@ const AIConfigForm = () => {
                             padding: '10px',
                             fontSize: '13px',
                             fontFamily: 'Monaco, Consolas, monospace',
-                            border: '1px solid #d9d9d9',
+                            border: '1px solid var(--line-2)',
                             borderRadius: '4px',
                             resize: 'vertical',
                             lineHeight: '1.5',
                           }}
                         />
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+                        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--ink-3)' }}>
                           提示：可使用变量占位符，如 {'{task_type}'}, {'{error_message}'}, {'{terraform_version}'} 等
                         </div>
                       </div>
@@ -2200,7 +2200,7 @@ const AIConfigForm = () => {
                 className={styles.submitButton}
                 disabled={saving || (formData.capabilities.length === 0)}
                 style={formData.capabilities.length === 0 ? { 
-                  backgroundColor: '#ccc', 
+                  backgroundColor: 'var(--line-2)', 
                   cursor: 'not-allowed',
                   opacity: 0.6
                 } : {}}
@@ -2223,7 +2223,7 @@ const AIConfigForm = () => {
                 disabled={saving}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: '#dc3545',
+                  backgroundColor: 'var(--red)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -2249,7 +2249,7 @@ const AIConfigForm = () => {
             <div className={styles.conflictWarning} style={{ marginTop: '16px' }}>
               <strong> 警告：</strong>检测到其他 AI 配置已启用。
               <br />
-              如需继续启用此配置，请在 <strong style={{ color: '#ff6b6b' }}>{remainingSeconds}</strong> 秒内再次点击「{isEditMode ? '更新配置' : '创建配置'}」按钮确认。
+              如需继续启用此配置，请在 <strong style={{ color: 'var(--red)' }}>{remainingSeconds}</strong> 秒内再次点击「{isEditMode ? '更新配置' : '创建配置'}」按钮确认。
               <br />
               <span style={{ fontSize: '0.9em', opacity: 0.9 }}>
                 确认后将自动禁用其他配置。超时后需要重新触发警告。

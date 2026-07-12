@@ -1,50 +1,50 @@
 /* Run Task Results - TFE Style Timeline Cards */
 
 .stageCard {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   margin: 0 20px 12px 20px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   border-left-width: 4px;
   border-left-style: solid;
-  border-left-color: #6b7280;
+  border-left-color: var(--ink-2);
 }
 
 /* Status-based left border colors */
 .stageCard.cardpassed {
-  border-left-color: #10b981;
+  border-left-color: var(--green);
 }
 
 .stageCard.cardrunning {
-  border-left-color: #3b82f6;
+  border-left-color: var(--brand);
 }
 
 .stageCard.cardfailed {
-  border-left-color: #ef4444;
+  border-left-color: var(--red);
 }
 
 .stageCard.cardpending {
-  border-left-color: #6b7280;
+  border-left-color: var(--ink-2);
 }
 
 .stageCard.cardwarning {
-  border-left-color: #f59e0b;
+  border-left-color: var(--amber);
 }
 
 .stageHeader {
   display: flex;
   align-items: center;
   padding: 16px 20px;
-  background: #fafafa;
+  background: var(--bg);
   gap: 12px;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .stageHeader:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .stageIcon {
@@ -56,7 +56,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #f3f4f6;
+  background: var(--surface-2);
   flex-shrink: 0;
 }
 
@@ -71,12 +71,12 @@
 .stageTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ink);
 }
 
 .stageTime {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .stageSummary {
@@ -87,16 +87,16 @@
 }
 
 .summaryPassed {
-  color: #10b981;
+  color: var(--green);
 }
 
 .summaryFailed {
-  color: #ef4444;
+  color: var(--red);
 }
 
 .expandIcon {
   font-size: 14px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   flex-shrink: 0;
   width: 20px;
   text-align: center;
@@ -104,11 +104,11 @@
 
 /* Results List */
 .resultsList {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
 }
 
 .resultItem {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .resultItem:last-child {
@@ -125,12 +125,12 @@
 }
 
 .resultHeader:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .resultExpandIcon {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   width: 16px;
   flex-shrink: 0;
 }
@@ -144,7 +144,7 @@
 .resultName {
   flex: 1;
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   font-weight: 500;
   min-width: 0;
   overflow: hidden;
@@ -161,8 +161,8 @@
 .mandatoryBadge {
   font-size: 11px;
   padding: 2px 8px;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
   border-radius: 4px;
   font-weight: 500;
   flex-shrink: 0;
@@ -171,8 +171,8 @@
 .globalBadge {
   font-size: 11px;
   padding: 2px 8px;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--brand-100);
+  color: var(--brand-700);
   border-radius: 4px;
   font-weight: 500;
   flex-shrink: 0;
@@ -181,20 +181,20 @@
 /* Result Details */
 .resultDetails {
   padding: 12px 20px 16px 46px;
-  background: #f9fafb;
-  border-top: 1px solid #f3f4f6;
+  background: var(--bg);
+  border-top: 1px solid var(--surface-2);
 }
 
 .resultMessage {
   font-size: 14px;
-  color: #4b5563;
+  color: var(--ink-2);
   margin: 0 0 12px 0;
   line-height: 1.5;
 }
 
 .resultLink {
   font-size: 13px;
-  color: #3b82f6;
+  color: var(--brand);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -213,15 +213,15 @@
 .outcomesTitle {
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--ink);
   margin: 0 0 12px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .outcomeItem {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 12px;
   margin-bottom: 8px;
@@ -241,15 +241,15 @@
 .outcomeId {
   font-size: 12px;
   font-family: monospace;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--ink-2);
+  background: var(--surface-2);
   padding: 2px 6px;
   border-radius: 3px;
 }
 
 .outcomeDesc {
   font-size: 14px;
-  color: #111827;
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -259,8 +259,8 @@
 
 .outcomeBody pre {
   font-size: 13px;
-  color: #374151;
-  background: #f9fafb;
+  color: var(--ink);
+  background: var(--bg);
   padding: 12px;
   border-radius: 4px;
   margin: 0;
@@ -286,26 +286,26 @@
 }
 
 .taginfo {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .tagerror {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .tagwarning {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .tagnone {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .tagsuccess {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--green-soft);
+  color: var(--green-active);
 }

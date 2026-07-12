@@ -115,7 +115,7 @@ const scrollToPlaceholderField = (fieldName: string) => {
     fieldElement.focus();
     // 添加高亮效果
     fieldElement.style.boxShadow = '0 0 0 3px rgba(207, 34, 46, 0.4)';
-    fieldElement.style.backgroundColor = '#fff2f0';
+    fieldElement.style.backgroundColor = 'var(--red-soft)';
     setTimeout(() => {
       fieldElement.style.boxShadow = '';
       fieldElement.style.backgroundColor = '';
@@ -131,7 +131,7 @@ const scrollToPlaceholderField = (fieldName: string) => {
     if (input) {
       (input as HTMLElement).focus();
       (input as HTMLElement).style.boxShadow = '0 0 0 3px rgba(207, 34, 46, 0.4)';
-      (input as HTMLElement).style.backgroundColor = '#fff2f0';
+      (input as HTMLElement).style.backgroundColor = 'var(--red-soft)';
       setTimeout(() => {
         (input as HTMLElement).style.boxShadow = '';
         (input as HTMLElement).style.backgroundColor = '';
@@ -159,7 +159,7 @@ const scrollToPlaceholderField = (fieldName: string) => {
       input.scrollIntoView({ behavior: 'smooth', block: 'center' });
       (input as HTMLElement).focus();
       (input as HTMLElement).style.boxShadow = '0 0 0 3px rgba(207, 34, 46, 0.4)';
-      (input as HTMLElement).style.backgroundColor = '#fff2f0';
+      (input as HTMLElement).style.backgroundColor = 'var(--red-soft)';
       setTimeout(() => {
         (input as HTMLElement).style.boxShadow = '';
         (input as HTMLElement).style.backgroundColor = '';
@@ -1058,7 +1058,7 @@ const AddResources: React.FC = () => {
                 {/* 资源名称输入框 - 放在表单容器内以保持对齐 */}
                 <div className={styles.resourceNameSection}>
                   <label className={styles.label}>
-                    资源名称 <span style={{ color: 'var(--color-red-500)' }}>*</span>
+                    资源名称 <span style={{ color: 'var(--red)' }}>*</span>
                   </label>
                   <input
                     type="text"
@@ -1086,27 +1086,27 @@ const AddResources: React.FC = () => {
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       {loadingVersions ? (
-                        <span style={{ fontSize: '13px', color: '#94a3b8' }}>加载中...</span>
+                        <span style={{ fontSize: '13px', color: 'var(--ink-faint)' }}>加载中...</span>
                       ) : (
                         <>
                           <span style={{
                             padding: '8px 12px',
-                            border: '1px solid #e2e8f0',
+                            border: '1px solid var(--line)',
                             borderRadius: '6px',
                             fontSize: '14px',
-                            color: '#334155',
-                            background: '#f8fafc',
+                            color: 'var(--ink)',
+                            background: 'var(--bg)',
                             minWidth: '120px',
                             display: 'inline-block'
                           }}>
                             {moduleVersions.find(v => v.id === selectedVersionId)?.version || '-'}
                             {moduleVersions.find(v => v.id === selectedVersionId)?.is_default && (
-                              <span style={{ marginLeft: '8px', color: '#64748b', fontSize: '12px' }}>(默认)</span>
+                              <span style={{ marginLeft: '8px', color: 'var(--ink-2)', fontSize: '12px' }}>(默认)</span>
                             )}
                           </span>
                           <span style={{ 
                             fontSize: '13px', 
-                            color: '#10b981',
+                            color: 'var(--green)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px'
@@ -1117,20 +1117,20 @@ const AddResources: React.FC = () => {
                       )}
                     </div>
                     <div className={styles.hint}>
-                      默认使用 Module 的默认版本。如需使用其他版本，请在 URL 中添加 <code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>?version=x.x.x</code> 参数
+                      默认使用 Module 的默认版本。如需使用其他版本，请在 URL 中添加 <code style={{ background: 'var(--surface-2)', padding: '2px 6px', borderRadius: '4px' }}>?version=x.x.x</code> 参数
                     </div>
                   </div>
                 )}
                 
                 <div className={styles.formDescription} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '14px', color: '#333', fontWeight: 500 }}>
+                    <span style={{ fontSize: '14px', color: 'var(--ink)', fontWeight: 500 }}>
                       基于Module Schema自动生成的配置表单
                     </span>
                     {isV2Schema(currentSchema) && (
                       <span style={{ 
                         padding: '2px 8px', 
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%)',
                         color: 'white',
                         borderRadius: '4px',
                         fontSize: '11px',
@@ -1204,10 +1204,10 @@ const AddResources: React.FC = () => {
                 {formRenderError && configViewMode === 'json' && (
                   <div style={{
                     padding: '12px 16px',
-                    background: '#fff3cd',
-                    border: '1px solid #ffc107',
+                    background: 'var(--amber-soft)',
+                    border: '1px solid var(--amber)',
                     borderRadius: '6px',
-                    color: '#856404',
+                    color: 'var(--amber-hover)',
                     marginBottom: '16px',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1321,10 +1321,10 @@ const AddResources: React.FC = () => {
                 {previewRenderError && viewMode === 'json' && (
                   <div style={{
                     padding: '12px 16px',
-                    background: '#fff3cd',
-                    border: '1px solid #ffc107',
+                    background: 'var(--amber-soft)',
+                    border: '1px solid var(--amber)',
                     borderRadius: '6px',
-                    color: '#856404',
+                    color: 'var(--amber-hover)',
                     marginBottom: '16px'
                   }}>
                      表单预览渲染失败，已自动切换到{isV3 ? 'HCL' : 'JSON'}视图
@@ -1379,8 +1379,8 @@ const AddResources: React.FC = () => {
                           </ErrorBoundary>
                         ) : (
                           <div style={{
-                            background: '#f8f9fa',
-                            border: '1px solid #dee2e6',
+                            background: 'var(--bg)',
+                            border: '1px solid var(--line-2)',
                             borderRadius: '6px',
                             padding: '16px',
                             maxHeight: '600px',

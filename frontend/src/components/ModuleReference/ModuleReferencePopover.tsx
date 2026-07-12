@@ -301,7 +301,7 @@ const ModuleReferencePopover: React.FC<ModuleReferencePopoverProps> = ({
                 {source.type === 'module' ? (
                   <AppstoreOutlined className={styles.moduleIcon} />
                 ) : (
-                  <CloudOutlined className={styles.moduleIcon} style={{ color: '#10b981' }} />
+                  <CloudOutlined className={styles.moduleIcon} style={{ color: 'var(--green)' }} />
                 )}
                 <div className={styles.moduleInfo}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -386,7 +386,7 @@ const ModuleReferencePopover: React.FC<ModuleReferencePopoverProps> = ({
         {loading ? (
           <div style={{ textAlign: 'center', padding: 20 }}>
             <Spin size="small" />
-            <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>加载 Outputs...</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>加载 Outputs...</div>
           </div>
         ) : filteredOutputs.length === 0 ? (
           <Empty 
@@ -406,7 +406,7 @@ const ModuleReferencePopover: React.FC<ModuleReferencePopoverProps> = ({
                 <div className={styles.outputItem}>
                   <ApiOutlined 
                     className={styles.outputIcon} 
-                    style={{ color: selectedSource.type === 'module' ? '#52c41a' : '#10b981' }}
+                    style={{ color: selectedSource.type === 'module' ? 'var(--green)' : 'var(--green)' }}
                   />
                   <div className={styles.outputInfo}>
                     <div className={styles.outputNameRow}>

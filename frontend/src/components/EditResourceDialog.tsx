@@ -273,9 +273,9 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
                     onClick={() => setViewMode('form')}
                     style={{
                       padding: '6px 12px',
-                      background: viewMode === 'form' ? '#3b82f6' : '#f8f9fa',
-                      color: viewMode === 'form' ? 'white' : '#495057',
-                      border: '1px solid ' + (viewMode === 'form' ? '#3b82f6' : '#dee2e6'),
+                      background: viewMode === 'form' ? 'var(--brand)' : 'var(--bg)',
+                      color: viewMode === 'form' ? 'white' : 'var(--ink-2)',
+                      border: '1px solid ' + (viewMode === 'form' ? 'var(--brand)' : 'var(--line-2)'),
                       borderRadius: '6px',
                       fontSize: '13px',
                       cursor: 'pointer',
@@ -288,9 +288,9 @@ const EditResourceDialog: React.FC<EditResourceDialogProps> = ({
                     onClick={() => setViewMode('hcl')}
                     style={{
                       padding: '6px 12px',
-                      background: viewMode === 'hcl' ? '#3b82f6' : '#f8f9fa',
-                      color: viewMode === 'hcl' ? 'white' : '#495057',
-                      border: '1px solid ' + (viewMode === 'hcl' ? '#3b82f6' : '#dee2e6'),
+                      background: viewMode === 'hcl' ? 'var(--brand)' : 'var(--bg)',
+                      color: viewMode === 'hcl' ? 'white' : 'var(--ink-2)',
+                      border: '1px solid ' + (viewMode === 'hcl' ? 'var(--brand)' : 'var(--line-2)'),
                       borderRadius: '6px',
                       fontSize: '13px',
                       cursor: 'pointer',

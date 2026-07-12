@@ -165,7 +165,7 @@ const SkillCreate = () => {
         <div className={styles.fieldGroup} style={{ gap: '16px' }}>
           <div style={{ display: 'flex', gap: '16px' }}>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#333', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)', marginBottom: '6px' }}>
                 名称 (唯一标识) *
               </label>
               <input
@@ -177,7 +177,7 @@ const SkillCreate = () => {
               />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#333', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)', marginBottom: '6px' }}>
                 显示名称 *
               </label>
               <input
@@ -191,7 +191,7 @@ const SkillCreate = () => {
           </div>
           <div style={{ display: 'flex', gap: '16px' }}>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#333', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)', marginBottom: '6px' }}>
                 层级
               </label>
               <select
@@ -205,7 +205,7 @@ const SkillCreate = () => {
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#333', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)', marginBottom: '6px' }}>
                 版本
               </label>
               <input
@@ -217,7 +217,7 @@ const SkillCreate = () => {
               />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#333', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)', marginBottom: '6px' }}>
                 优先级
               </label>
               <input

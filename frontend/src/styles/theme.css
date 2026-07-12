@@ -1,0 +1,184 @@
+/*
+ * Terranova Design Tokens
+ * Source of truth: demo/button.html (E · 深青 #1c6e8c)
+ *
+ * 约定:
+ * 1) brand 深青是唯一主色 —— 主操作与品牌动作都用它
+ * 2) 语义色独立: green / red / amber（amber 仅 badge/banner，不做按钮）
+ * 3) blue 仅留给 link 文字 / 输入聚焦环 / 进度条 fill（按钮不用）
+ * 4) 后续组件请优先使用本文件 token，避免硬编码 hex
+ */
+
+:root {
+  /* ========== Surfaces & ink ========== */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f3f4f6;
+  --surface-3: #eceef1;
+  --line: #e3e6ea;
+  --line-2: #d4d8de;
+  --ink: #1c1f24;
+  --ink-2: #5c6470;
+  --ink-3: #8a929e;
+  --ink-faint: #aeb4bd;
+
+  /* ========== Brand scale (anchor = 500) ========== */
+  --brand-100: #e2f0f5;
+  --brand-200: #c6e0e8;
+  --brand-300: #8fc1d0;
+  --brand-400: #4e97ab;
+  --brand-500: #1c6e8c;
+  --brand-600: #135269;
+  --brand-700: #0d4152;
+
+  --brand: var(--brand-500);
+  --brand-ink: var(--brand-600);   /* hover text / solid hover */
+  --brand-soft: var(--brand-100);  /* soft background */
+  --brand-line: var(--brand-300);  /* outline border */
+
+  /* ========== Semantic (independent of brand) ========== */
+  --green: #1a8a4a;
+  --green-hover: #157a42;
+  --green-active: #116b39;
+  --green-soft: #e8f6ee;
+  --green-line: #bfe3cd;
+
+  --red: #c8302f;
+  --red-hover: #b3282a;
+  --red-active: #9f2326;
+  --red-soft: #fbecec;
+  --red-line: #e6b3b3;
+
+  --amber: #9a6700;
+  --amber-hover: #825700;
+  --amber-soft: #fdf3e0;
+  --amber-line: #f0d78c;
+
+  /* Blue: non-button only (links / focus ring / progress) */
+  --blue: #3858e9;
+  --blue-soft: #eef1fe;
+  --blue-line: #c5cef8;
+
+  /* ========== Focus rings (same-hue alpha) ========== */
+  --ring-brand: rgba(28, 110, 140, 0.26);
+  --ring-green: rgba(26, 138, 74, 0.26);
+  --ring-red: rgba(200, 48, 47, 0.26);
+  --ring-amber: rgba(154, 103, 0, 0.28);
+  --ring-blue: rgba(56, 88, 233, 0.26);
+
+  /* ========== Typography ========== */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --radius: 7px;
+
+  /* ========== Semantic status aliases (toast / banner / badge) ========== */
+  --status-success: var(--green);
+  --status-success-soft: var(--green-soft);
+  --status-success-ink: var(--green-active);
+
+  --status-danger: var(--red);
+  --status-danger-soft: var(--red-soft);
+  --status-danger-ink: var(--red-active);
+
+  --status-warning: var(--amber);
+  --status-warning-soft: var(--amber-soft);
+  --status-warning-ink: var(--amber-hover);
+
+  --status-info: var(--brand);
+  --status-info-soft: var(--brand-soft);
+  --status-info-ink: var(--brand-ink);
+
+  /* ========== Primary action aliases ========== */
+  --color-primary: var(--brand);
+  --color-primary-hover: var(--brand-ink);
+  --color-primary-active: var(--brand-700);
+  --color-primary-soft: var(--brand-soft);
+  --color-primary-line: var(--brand-line);
+  --color-primary-dark: var(--brand-ink);
+
+  /* ========== Legacy gray scale → surface/ink ========== */
+  --color-white: var(--surface);
+  --color-gray-50: var(--bg);
+  --color-gray-100: var(--surface-2);
+  --color-gray-200: var(--line);
+  --color-gray-300: var(--line-2);
+  --color-gray-400: var(--ink-faint);
+  --color-gray-500: var(--ink-3);
+  --color-gray-600: var(--ink-2);
+  --color-gray-700: #3c424c;
+  --color-gray-800: #2a2f38;
+  --color-gray-900: var(--ink);
+
+  /*
+   * Legacy blue scale → brand scale
+   * 项目里大量 var(--color-blue-*) 被当作主操作色使用；
+   * 映射到 brand 后按钮/Tab/强调会自动切到深青。
+   * 纯 link 场景请改用 var(--blue)。
+   */
+  --color-blue-50: var(--brand-100);
+  --color-blue-100: var(--brand-100);
+  --color-blue-200: var(--brand-200);
+  --color-blue-300: var(--brand-300);
+  --color-blue-400: var(--brand-400);
+  --color-blue-500: var(--brand-500);
+  --color-blue-600: var(--brand-600);
+  --color-blue-700: var(--brand-700);
+  --color-blue-800: var(--brand-700);
+  --color-blue-900: #0a3442;
+
+  /* Legacy green / red → semantic */
+  --color-green-50: var(--green-soft);
+  --color-green-100: var(--green-soft);
+  --color-green-200: var(--green-line);
+  --color-green-300: #81c995;
+  --color-green-400: #5bb974;
+  --color-green-500: var(--green);
+  --color-green-600: var(--green-hover);
+  --color-green-700: var(--green-active);
+  --color-green-800: #0b4f2a;
+  --color-green-900: #094c3b;
+
+  --color-red-50: var(--red-soft);
+  --color-red-100: var(--red-soft);
+  --color-red-200: var(--red-line);
+  --color-red-300: #e89191;
+  --color-red-400: #d85c5b;
+  --color-red-500: var(--red);
+  --color-red-600: var(--red-hover);
+  --color-red-700: var(--red-active);
+  --color-red-800: #8a1e20;
+  --color-red-900: #751a1c;
+
+  /* Amber (warning) — 新增完整阶，兼容旧 hardcode 黄 */
+  --color-amber-50: var(--amber-soft);
+  --color-amber-100: var(--amber-soft);
+  --color-amber-500: var(--amber);
+  --color-amber-600: var(--amber-hover);
+  --color-amber-700: #6b4700;
+
+  /* Spacing / radius / shadow (keep existing contract) */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+
+  --font-family-primary: var(--font-sans);
+  --font-family-heading: var(--font-sans);
+  --font-family-mono: var(--font-mono);
+  --font-primary: var(--font-sans);
+  --font-size-base: 14px;
+  --font-weight-normal: 400;
+  --line-height-normal: 1.5;
+}

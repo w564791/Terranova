@@ -19,10 +19,10 @@
 }
 
 .pasteArea {
-  border: 1px dashed var(--color-gray-300);
+  border: 1px dashed var(--line-2);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .codeTextArea {
@@ -52,19 +52,19 @@
 
 .guideSection h4 {
   margin-bottom: var(--spacing-md);
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
   font-weight: var(--font-weight-semibold);
 }
 
 .guideCode {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
   padding: var(--spacing-md);
   border-radius: var(--radius-md);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
   overflow-x: auto;
   white-space: pre;
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
 }
 
 .annotationTable {
@@ -75,23 +75,23 @@
 
 .annotationTable th,
 .annotationTable td {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   padding: var(--spacing-sm) var(--spacing-md);
   text-align: left;
 }
 
 .annotationTable th {
-  background: var(--color-gray-50);
+  background: var(--bg);
   font-weight: var(--font-weight-medium);
-  color: var(--color-gray-700);
+  color: var(--ink);
 }
 
 .annotationTable code {
-  background: var(--color-gray-100);
+  background: var(--surface-2);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: 12px;
-  color: var(--color-gray-800);
+  color: var(--ink);
 }
 
 /* 字段配置面板 */
@@ -102,10 +102,10 @@
 }
 
 .fieldList {
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: var(--color-white);
+  background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
 
@@ -113,8 +113,8 @@
   display: flex;
   align-items: center;
   padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--color-gray-200);
-  background: var(--color-white);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
   transition: background 0.2s;
 }
 
@@ -123,12 +123,12 @@
 }
 
 .fieldItem:hover {
-  background: var(--color-gray-50);
+  background: var(--bg);
 }
 
 .fieldItem.dragging {
   opacity: 0.5;
-  background: var(--color-blue-50);
+  background: var(--brand-soft);
   box-shadow: var(--shadow-lg);
 }
 
@@ -138,12 +138,12 @@
   padding: 0 8px;
   display: flex;
   align-items: center;
-  color: var(--color-gray-400);
+  color: var(--ink-faint);
   transition: color 0.2s;
 }
 
 .dragHandle:hover {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 .dragHandle:active {
@@ -151,8 +151,8 @@
 }
 
 .fieldItem.selected {
-  background: #eff6ff;
-  border-left: 3px solid var(--color-blue-500);
+  background: var(--brand-soft);
+  border-left: 3px solid var(--brand);
 }
 
 .fieldInfo {
@@ -162,13 +162,13 @@
 
 .fieldName {
   font-weight: var(--font-weight-medium);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin-bottom: 4px;
 }
 
 .fieldType {
   font-size: var(--font-size-sm);
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .fieldBadges {
@@ -183,10 +183,10 @@
 
 /* 字段编辑表单 */
 .fieldEditForm {
-  background: var(--color-gray-50);
+  background: var(--bg);
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
   margin-top: var(--spacing-md);
 }
 
@@ -201,9 +201,9 @@
   display: flex;
   gap: var(--spacing-xl);
   padding: var(--spacing-lg);
-  background: var(--color-gray-50);
+  background: var(--bg);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-gray-200);
+  border: 1px solid var(--line);
 }
 
 .statItem {
@@ -213,12 +213,12 @@
 .statValue {
   font-size: 24px;
   font-weight: var(--font-weight-semibold);
-  color: var(--color-blue-600);
+  color: var(--brand-ink);
 }
 
 .statLabel {
   font-size: var(--font-size-sm);
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 .previewTabs {
@@ -227,7 +227,7 @@
 
 .jsonPreview {
   background: #1e1e1e;
-  color: #d4d4d4;
+  color: var(--line-2);
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -255,7 +255,7 @@
   display: flex;
   justify-content: space-between;
   padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 /* 分组标签 */
@@ -267,15 +267,15 @@
 }
 
 .groupTag.basic {
-  background: #eff6ff;
-  color: var(--color-blue-600);
-  border: 1px solid #bfdbfe;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-200);
 }
 
 .groupTag.advanced {
-  background: #fff7ed;
+  background: var(--amber-soft);
   color: #c2410c;
-  border: 1px solid #fed7aa;
+  border: 1px solid var(--amber-line);
 }
 
 /* Widget 选择器 */
@@ -290,22 +290,22 @@
   flex-direction: column;
   align-items: center;
   padding: var(--spacing-md);
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--color-white);
+  background: var(--surface);
 }
 
 .widgetOption:hover {
-  border-color: var(--color-blue-500);
-  background: #eff6ff;
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .widgetOption.selected {
-  border-color: var(--color-blue-500);
-  background: #eff6ff;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .widgetIcon {
@@ -315,12 +315,12 @@
 
 .widgetLabel {
   font-size: var(--font-size-sm);
-  color: var(--color-gray-600);
+  color: var(--ink-2);
 }
 
 /* 卡片样式 - 与项目风格一致 */
 .card {
-  background: var(--color-white);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--spacing-xl);
@@ -329,19 +329,19 @@
 .cardTitle {
   font-size: 18px;
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0 0 var(--spacing-lg) 0;
 }
 
 .cardDescription {
-  color: var(--color-gray-600);
+  color: var(--ink-2);
   margin: 0 0 var(--spacing-lg) 0;
 }
 
 /* 按钮样式 - 与项目风格一致 */
 .primaryButton {
-  background: var(--color-blue-500);
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   padding: var(--spacing-sm) var(--spacing-lg);
   border-radius: var(--radius-md);
@@ -351,19 +351,19 @@
 }
 
 .primaryButton:hover {
-  background: var(--color-blue-600);
+  background: var(--brand-ink);
 }
 
 .primaryButton:disabled {
-  background: var(--color-gray-300);
-  color: var(--color-gray-500);
+  background: var(--line-2);
+  color: var(--ink-3);
   cursor: not-allowed;
 }
 
 .secondaryButton {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
-  border: 1px solid var(--color-gray-300);
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
   padding: var(--spacing-sm) var(--spacing-lg);
   border-radius: var(--radius-md);
   font-weight: var(--font-weight-medium);
@@ -372,7 +372,7 @@
 }
 
 .secondaryButton:hover {
-  background: var(--color-gray-200);
+  background: var(--line);
 }
 
 /* 响应式 */
@@ -434,7 +434,7 @@
   display: flex;
   justify-content: space-between;
   padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -446,22 +446,22 @@
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
   line-height: 1.5;
-  border: 1px solid var(--color-gray-300);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   background: #1e1e1e;
-  color: #d4d4d4;
+  color: var(--line-2);
   resize: vertical;
 }
 
 .jsonTextarea:focus {
   outline: none;
-  border-color: var(--color-blue-500);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--ring-brand);
 }
 
 .jsonTextarea:read-only {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .jsonEditorStatus {
@@ -469,7 +469,7 @@
   gap: var(--spacing-md);
   padding: var(--spacing-xs) 0;
   font-size: var(--font-size-sm);
-  color: var(--color-gray-500);
+  color: var(--ink-3);
 }
 
 /* Schema 编辑器主组件 */
@@ -484,13 +484,13 @@
   justify-content: space-between;
   align-items: center;
   padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid var(--line);
 }
 
 .schemaEditorTitle {
   font-size: 18px;
   font-weight: var(--font-weight-semibold);
-  color: var(--color-gray-900);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -502,7 +502,7 @@
   display: flex;
   gap: var(--spacing-sm);
   padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-gray-200);
+  border-top: 1px solid var(--line);
 }
 
 /* 小屏手机优化 */
@@ -530,4 +530,9 @@
   .widgetSelector {
     grid-template-columns: 1fr;
   }
+}
+
+.primaryButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

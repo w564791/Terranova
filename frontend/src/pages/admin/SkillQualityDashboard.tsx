@@ -21,7 +21,7 @@ const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
   <span>
     {title}{' '}
     <Tooltip title={tip}>
-      <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: 12, cursor: 'help' }} />
+      <QuestionCircleOutlined style={{ color: 'var(--ink-3)', fontSize: 12, cursor: 'help' }} />
     </Tooltip>
   </span>
 );
@@ -56,7 +56,7 @@ function buildViolations(failures: RecentFailure[] | undefined): ViolationEntry[
     .map(([label, { count, type }]) => ({
       label,
       count,
-      color: type === 'missing' ? '#ff4d4f' : '#fa8c16',
+      color: type === 'missing' ? 'var(--red)' : 'var(--amber)',
     }));
 }
 
@@ -118,22 +118,22 @@ const SkillQualityDashboard: React.FC = () => {
       title: <ColTitle title="Pass" tip="Schema 校验通过的次数（输出结构合规）" />,
       dataIndex: 'pass',
       key: 'pass',
-      render: (val: number) => <span style={{ color: '#52c41a' }}>{val}</span>,
+      render: (val: number) => <span style={{ color: 'var(--green)' }}>{val}</span>,
     },
     {
       title: <ColTitle title="Fail" tip="Schema 校验失败的次数（缺少必填字段、枚举值非法或 JSON 格式错误）" />,
       dataIndex: 'fail',
       key: 'fail',
-      render: (val: number) => <span style={{ color: val > 0 ? '#ff4d4f' : undefined }}>{val}</span>,
+      render: (val: number) => <span style={{ color: val > 0 ? 'var(--red)' : undefined }}>{val}</span>,
     },
     {
       title: <ColTitle title="均分" tip="评估平均分（0-100），Schema 校验 pass=100, fail=0" />,
       dataIndex: 'avg_score',
       key: 'avg_score',
       render: (val: number) => {
-        let color = '#52c41a';
-        if (val < 50) color = '#ff4d4f';
-        else if (val < 80) color = '#faad14';
+        let color = 'var(--green)';
+        if (val < 50) color = 'var(--red)';
+        else if (val < 80) color = 'var(--amber)';
         return <span style={{ color, fontWeight: 600 }}>{val.toFixed(1)}</span>;
       },
     },
@@ -142,9 +142,9 @@ const SkillQualityDashboard: React.FC = () => {
       dataIndex: 'pass_rate',
       key: 'pass_rate',
       render: (val: number) => {
-        let color = '#52c41a';
-        if (val < 50) color = '#ff4d4f';
-        else if (val < 80) color = '#faad14';
+        let color = 'var(--green)';
+        if (val < 50) color = 'var(--red)';
+        else if (val < 80) color = 'var(--amber)';
         return <span style={{ color, fontWeight: 600 }}>{val.toFixed(1)}%</span>;
       },
     },
@@ -154,8 +154,8 @@ const SkillQualityDashboard: React.FC = () => {
       key: 'avg_latency_ms',
       render: (val: number) => {
         if (!val) return '-';
-        if (val > 10000) return <span style={{ color: '#ff4d4f' }}>{(val / 1000).toFixed(1)}s</span>;
-        if (val > 5000) return <span style={{ color: '#faad14' }}>{(val / 1000).toFixed(1)}s</span>;
+        if (val > 10000) return <span style={{ color: 'var(--red)' }}>{(val / 1000).toFixed(1)}s</span>;
+        if (val > 5000) return <span style={{ color: 'var(--amber)' }}>{(val / 1000).toFixed(1)}s</span>;
         return `${Math.round(val)}ms`;
       },
     },
@@ -198,7 +198,7 @@ const SkillQualityDashboard: React.FC = () => {
       title: <ColTitle title="评分" tip="Schema 校验评分：pass=100, fail=0" />,
       dataIndex: 'score',
       key: 'score',
-      render: (val: number) => <span style={{ color: val === 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>{val}</span>,
+      render: (val: number) => <span style={{ color: val === 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{val}</span>,
     },
     {
       title: <ColTitle title="问题" tip="Schema 校验发现的具体问题：缺失的必填字段或枚举值非法" />,
@@ -245,8 +245,8 @@ const SkillQualityDashboard: React.FC = () => {
   const passDeg = totalAssessed > 0 ? ((data?.total_pass ?? 0) / totalAssessed) * 360 : 0;
   const failDeg = totalAssessed > 0 ? ((data?.total_fail ?? 0) / totalAssessed) * 360 : 0;
   const donutGradient = totalAssessed > 0
-    ? `conic-gradient(#52c41a 0deg ${passDeg}deg, #ff4d4f ${passDeg}deg ${passDeg + failDeg}deg, #fa8c16 ${passDeg + failDeg}deg 360deg)`
-    : '#f0f0f0';
+    ? `conic-gradient(var(--green) 0deg ${passDeg}deg, var(--red) ${passDeg}deg ${passDeg + failDeg}deg, var(--amber) ${passDeg + failDeg}deg 360deg)`
+    : 'var(--surface-2)';
 
   // Bar chart scaling
   const trendData = data?.daily_trend || [];
@@ -299,7 +299,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="Schema 通过率" tip="Layer 1 纯代码校验的通过率，检查输出 JSON 结构是否符合预期（必填字段、枚举值）" />
           </div>
-          <div className={styles.statValue} style={{ color: data.pass_rate >= 80 ? '#52c41a' : data.pass_rate >= 50 ? '#faad14' : '#ff4d4f' }}>
+          <div className={styles.statValue} style={{ color: data.pass_rate >= 80 ? 'var(--green)' : data.pass_rate >= 50 ? 'var(--amber)' : 'var(--red)' }}>
             {data.pass_rate.toFixed(1)}%
           </div>
           <div className={styles.statSub}>Pass {data.total_pass} / Total {totalAssessed}</div>
@@ -309,7 +309,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="评估覆盖率" tip="已完成评估的记录占总记录的百分比，100% 表示所有 Skill 调用都已评估" />
           </div>
-          <div className={styles.statValue} style={{ color: '#1677ff' }}>
+          <div className={styles.statValue} style={{ color: 'var(--brand)' }}>
             {coverage.toFixed(1)}%
           </div>
           <div className={styles.statSub}>{data.assessed_logs} / {data.total_logs} 条记录</div>
@@ -319,7 +319,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="活跃 Skill 数" tip="该时间范围内有调用记录的不同 Capability 数量" />
           </div>
-          <div className={styles.statValue} style={{ color: '#262626' }}>
+          <div className={styles.statValue} style={{ color: 'var(--ink)' }}>
             {data.active_skills}
           </div>
           <div className={styles.statSub}>Capability 类型</div>
@@ -329,7 +329,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="高风险 Skill" tip="Schema 校验 fail 率超过 20% 的 Capability 数量" />
           </div>
-          <div className={styles.statValue} style={{ color: (data.high_risk_skills?.length || 0) > 0 ? '#ff4d4f' : '#52c41a' }}>
+          <div className={styles.statValue} style={{ color: (data.high_risk_skills?.length || 0) > 0 ? 'var(--red)' : 'var(--green)' }}>
             {data.high_risk_skills ? data.high_risk_skills.length : 0}
           </div>
           {data.high_risk_skills && data.high_risk_skills.length > 0 && (
@@ -341,7 +341,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="总评估数" tip="该时间范围内完成的 Schema 校验总次数" />
           </div>
-          <div className={styles.statValue} style={{ color: '#262626' }}>
+          <div className={styles.statValue} style={{ color: 'var(--ink)' }}>
             {totalAssessed}
           </div>
           <div className={styles.statSub}>Pass {data.total_pass} / Fail {data.total_fail} / Warn {data.total_warn}</div>
@@ -354,7 +354,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="用户采纳率" tip="用户直接应用 AI 配置的比例：accepted / (accepted+modified+aborted)" />
           </div>
-          <div className={styles.statValue} style={{ color: data.accept_rate != null ? '#52c41a' : '#bbb' }}>
+          <div className={styles.statValue} style={{ color: data.accept_rate != null ? 'var(--green)' : 'var(--ink-faint)' }}>
             {data.accept_rate != null ? `${data.accept_rate.toFixed(1)}%` : '-'}
           </div>
           <div className={styles.statSub}>{data.accept_rate != null ? '有 user_action 数据' : '暂无 user_action 数据'}</div>
@@ -366,8 +366,8 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statValue} style={{
             color: data.modify_rate != null ? (
               // 复用 modify_rate 字段暂时展示放弃率（后端已有 aborted 数据）
-              '#fa8c16'
-            ) : '#bbb'
+              'var(--amber)'
+            ) : 'var(--ink-faint)'
           }}>
             {data.accept_rate != null ? `${(100 - data.accept_rate).toFixed(1)}%` : '-'}
           </div>
@@ -377,7 +377,7 @@ const SkillQualityDashboard: React.FC = () => {
           <div className={styles.statLabel}>
             <ColTitle title="差评率" tip="用户评分 <= 2 的比例（1-5 分制）" />
           </div>
-          <div className={styles.statValue} style={{ color: data.negative_feedback != null ? (data.negative_feedback > 20 ? '#ff4d4f' : '#52c41a') : '#bbb' }}>
+          <div className={styles.statValue} style={{ color: data.negative_feedback != null ? (data.negative_feedback > 20 ? 'var(--red)' : 'var(--green)') : 'var(--ink-faint)' }}>
             {data.negative_feedback != null ? `${data.negative_feedback.toFixed(1)}%` : '-'}
           </div>
           <div className={styles.statSub}>{data.negative_feedback != null ? '有 feedback 数据' : '暂无评分数据'}</div>
@@ -403,15 +403,15 @@ const SkillQualityDashboard: React.FC = () => {
             </div>
             <div className={styles.legend}>
               <div className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ background: '#52c41a' }} />
+                <span className={styles.legendDot} style={{ background: 'var(--green)' }} />
                 Pass <span className={styles.legendValue}>{data.total_pass}</span>
               </div>
               <div className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ background: '#ff4d4f' }} />
+                <span className={styles.legendDot} style={{ background: 'var(--red)' }} />
                 Fail <span className={styles.legendValue}>{data.total_fail}</span>
               </div>
               <div className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ background: '#fa8c16' }} />
+                <span className={styles.legendDot} style={{ background: 'var(--amber)' }} />
                 Warn <span className={styles.legendValue}>{data.total_warn}</span>
               </div>
             </div>
@@ -445,7 +445,7 @@ const SkillQualityDashboard: React.FC = () => {
               )}
             </>
           ) : (
-            <div className={styles.emptyState} style={{ padding: '32px 0', color: '#52c41a' }}>
+            <div className={styles.emptyState} style={{ padding: '32px 0', color: 'var(--green)' }}>
               暂无告警
             </div>
           )}
@@ -484,9 +484,9 @@ const SkillQualityDashboard: React.FC = () => {
                   return (
                     <Tooltip key={d.date} title={`${d.date}: Pass ${d.pass}, Fail ${d.fail}, Warn ${d.warn}, Total ${total}`}>
                       <div className={styles.barGroup}>
-                        <div className={styles.bar} style={{ height: warnH, background: '#fa8c16' }} />
-                        <div className={styles.bar} style={{ height: failH, background: '#ff4d4f' }} />
-                        <div className={styles.bar} style={{ height: passH, background: '#52c41a' }} />
+                        <div className={styles.bar} style={{ height: warnH, background: 'var(--amber)' }} />
+                        <div className={styles.bar} style={{ height: failH, background: 'var(--red)' }} />
+                        <div className={styles.bar} style={{ height: passH, background: 'var(--green)' }} />
                       </div>
                     </Tooltip>
                   );
@@ -499,13 +499,13 @@ const SkillQualityDashboard: React.FC = () => {
               </div>
               <div className={styles.barLegend}>
                 <span className={styles.barLegendItem}>
-                  <span className={styles.barLegendDot} style={{ background: '#52c41a' }} /> Pass
+                  <span className={styles.barLegendDot} style={{ background: 'var(--green)' }} /> Pass
                 </span>
                 <span className={styles.barLegendItem}>
-                  <span className={styles.barLegendDot} style={{ background: '#ff4d4f' }} /> Fail
+                  <span className={styles.barLegendDot} style={{ background: 'var(--red)' }} /> Fail
                 </span>
                 <span className={styles.barLegendItem}>
-                  <span className={styles.barLegendDot} style={{ background: '#fa8c16' }} /> Warn
+                  <span className={styles.barLegendDot} style={{ background: 'var(--amber)' }} /> Warn
                 </span>
               </div>
             </>

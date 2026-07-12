@@ -8,6 +8,8 @@ interface CommentInputProps {
   submitLabel?: string;
   isSubmitting?: boolean;
   maxLength?: number;
+  /** brand = 主操作确认；danger = 取消任务等危险确认 */
+  submitTone?: 'brand' | 'danger';
 }
 
 const CommentInput: React.FC<CommentInputProps> = ({
@@ -17,6 +19,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
   submitLabel = 'Submit',
   isSubmitting = false,
   maxLength = 500,
+  submitTone = 'brand',
 }) => {
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
@@ -74,7 +77,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
         </button>
         <button
           type="button"
-          className={styles.submitButton}
+          className={`${styles.submitButton}${submitTone === 'danger' ? ` ${styles.submitDanger}` : ''}`}
           onClick={handleSubmit}
           disabled={isSubmitting}
         >

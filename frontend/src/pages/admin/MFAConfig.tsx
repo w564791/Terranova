@@ -99,14 +99,14 @@ const MFAConfigPage: React.FC = () => {
               <Statistic
                 title="已启用MFA"
                 value={statistics.mfa_enabled_users}
-                valueStyle={{ color: '#52c41a' }}
+                valueStyle={{ color: 'var(--green)' }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="未启用MFA"
                 value={statistics.mfa_pending_users}
-                valueStyle={{ color: statistics.mfa_pending_users > 0 ? '#faad14' : '#52c41a' }}
+                valueStyle={{ color: statistics.mfa_pending_users > 0 ? 'var(--amber)' : 'var(--green)' }}
               />
             </Col>
             <Col span={6}>
@@ -115,7 +115,7 @@ const MFAConfigPage: React.FC = () => {
                 <Progress
                   percent={mfaPercentage}
                   status={mfaPercentage >= 80 ? 'success' : mfaPercentage >= 50 ? 'normal' : 'exception'}
-                  strokeColor={mfaPercentage >= 80 ? '#52c41a' : mfaPercentage >= 50 ? '#1890ff' : '#ff4d4f'}
+                  strokeColor={mfaPercentage >= 80 ? 'var(--green)' : mfaPercentage >= 50 ? 'var(--brand)' : 'var(--red)'}
                 />
               </div>
             </Col>

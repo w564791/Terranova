@@ -52,40 +52,40 @@
 
 /* Colors */
 .gray {
-  background-color: #f5f5f5;
-  color: #666;
-  border: 1px solid #e0e0e0;
+  background-color: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
 }
 
 .blue {
-  background-color: #e3f2fd;
-  color: #1976d2;
-  border: 1px solid #90caf9;
+  background-color: var(--brand-soft);
+  color: var(--brand-ink);
+  border: 1px solid var(--brand-300);
   animation: pulse 2s ease-in-out infinite;
 }
 
 .green {
-  background-color: #e8f5e9;
-  color: #388e3c;
-  border: 1px solid #81c784;
+  background-color: var(--green-soft);
+  color: var(--green);
+  border: 1px solid var(--green-line);
 }
 
 .orange {
-  background-color: #fff3e0;
-  color: #f57c00;
-  border: 1px solid #ffb74d;
+  background-color: var(--amber-soft);
+  color: var(--amber);
+  border: 1px solid var(--amber-line);
 }
 
 .success {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #66bb6a;
+  background-color: var(--green-soft);
+  color: var(--green-active);
+  border: 1px solid var(--green-line);
 }
 
 .error {
-  background-color: #ffebee;
-  color: #c62828;
-  border: 1px solid #ef5350;
+  background-color: var(--red-soft);
+  color: var(--red-active);
+  border: 1px solid var(--red);
 }
 
 /* Animations */

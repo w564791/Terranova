@@ -432,15 +432,15 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
             {/* 统计数字 */}
             <div className={styles.driftStatusStats}>
               <div className={styles.driftStatItem}>
-                <span className={styles.driftStatValue} style={{ color: '#F59E0B' }}>{driftedCount}</span>
+                <span className={styles.driftStatValue} style={{ color: 'var(--amber)' }}>{driftedCount}</span>
                 <span className={styles.driftStatLabel}>Drifted</span>
               </div>
               <div className={styles.driftStatItem}>
-                <span className={styles.driftStatValue} style={{ color: '#10B981' }}>{syncedCount}</span>
+                <span className={styles.driftStatValue} style={{ color: 'var(--green)' }}>{syncedCount}</span>
                 <span className={styles.driftStatLabel}>Synced</span>
               </div>
               <div className={styles.driftStatItem}>
-                <span className={styles.driftStatValue} style={{ color: '#6B7280' }}>{unappliedCount}</span>
+                <span className={styles.driftStatValue} style={{ color: 'var(--ink-2)' }}>{unappliedCount}</span>
                 <span className={styles.driftStatLabel}>Unapplied</span>
               </div>
               <div className={styles.driftStatItem}>
@@ -471,17 +471,17 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
           {/* Status Legend */}
           <div className={styles.statusLegend}>
             <div className={styles.legendItem}>
-              <span className={styles.legendDot} style={{ backgroundColor: '#10B981' }}></span>
+              <span className={styles.legendDot} style={{ backgroundColor: 'var(--green)' }}></span>
               <span className={styles.legendLabel}>Synced</span>
               <span className={styles.legendDesc}>Resource state matches code</span>
             </div>
             <div className={styles.legendItem}>
-              <span className={styles.legendDot} style={{ backgroundColor: '#6B7280' }}></span>
+              <span className={styles.legendDot} style={{ backgroundColor: 'var(--ink-2)' }}></span>
               <span className={styles.legendLabel}>Unapplied</span>
               <span className={styles.legendDesc}>New resource pending creation</span>
             </div>
             <div className={styles.legendItem}>
-              <span className={styles.legendDot} style={{ backgroundColor: '#F59E0B' }}></span>
+              <span className={styles.legendDot} style={{ backgroundColor: 'var(--amber)' }}></span>
               <span className={styles.legendLabel}>Drifted</span>
               <span className={styles.legendDesc}>Cloud state differs from code, needs attention</span>
             </div>

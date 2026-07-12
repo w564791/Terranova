@@ -3,10 +3,10 @@
   height: calc(100vh - 68px - 24px);
   display: flex;
   flex-direction: column;
-  background: #f8fafc;
+  background: var(--bg);
   overflow: hidden;
   margin: 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-2);
   border-radius: 8px;
   box-shadow: 
     0 1px 3px rgba(0, 0, 0, 0.08),
@@ -26,8 +26,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #d1d5db;
-  background: #fff;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface);
   border-radius: 8px 8px 0 0;
   box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.03);
 }
@@ -36,7 +36,7 @@
   font-family: var(--font-heading);
   font-size: 24px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -46,7 +46,7 @@
 }
 
 .newButton {
-  background: #3b82f6;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -61,11 +61,11 @@
 }
 
 .newButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .newButtonActive {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 0 2px rgba(28, 110, 140, 0.3);
 }
 
 .dropdownArrow {
@@ -85,8 +85,8 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 140px;
@@ -102,13 +102,13 @@
   background: none;
   border: none;
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .dropdownItem:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 /* 主布局 */
@@ -122,10 +122,10 @@
 /* 左侧 Projects 侧边栏 */
 .projectsSidebar {
   width: 220px;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--surface);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -141,7 +141,7 @@
 .projectsTitle {
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ink-2);
   letter-spacing: 0.5px;
 }
 
@@ -150,12 +150,12 @@
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: #6b7280;
+  color: var(--ink-2);
   font-size: 14px;
 }
 
 .projectSearchBtn:hover {
-  color: #374151;
+  color: var(--ink);
 }
 
 .projectsList {
@@ -175,27 +175,27 @@
 }
 
 .projectItem:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .projectItemActive {
-  background: #eff6ff;
-  border-left-color: #3b82f6;
+  background: var(--brand-soft);
+  border-left-color: var(--brand);
 }
 
 .projectItemActive .projectName {
-  color: #1d4ed8;
+  color: var(--brand-700);
   font-weight: 500;
 }
 
 .projectIcon {
   font-size: 14px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .projectName {
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,7 +208,7 @@
   height: 45px;
   min-height: 45px;
   align-items: center;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
   flex-shrink: 0;
 }
 
@@ -216,17 +216,17 @@
   background: none;
   border: none;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   cursor: pointer;
   padding: 4px 8px;
 }
 
 .paginationBtn:hover:not(:disabled) {
-  color: #3b82f6;
+  color: var(--brand);
 }
 
 .paginationBtn:disabled {
-  color: #d1d5db;
+  color: var(--line-2);
   cursor: not-allowed;
 }
 
@@ -246,8 +246,8 @@
   align-items: center;
   padding: 0 20px;
   height: 45px;
-  border-bottom: 1px solid #d1d5db;
-  background: #fff;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface);
   box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.03);
 }
 
@@ -257,7 +257,7 @@
   gap: 8px;
   font-size: 16px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--ink);
 }
 
 .collapseBtn {
@@ -267,23 +267,23 @@
   width: 24px;
   height: 24px;
   background: none;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   cursor: pointer;
   padding: 0;
   transition: all 0.15s;
 }
 
 .collapseBtn:hover {
-  background: #f3f4f6;
-  color: #6b7280;
-  border-color: #9ca3af;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-color: var(--ink-faint);
 }
 
 .inProject {
   font-weight: 400;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .searchBox {
@@ -293,7 +293,7 @@
 .searchInput {
   width: 240px;
   padding: 8px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
   transition: all 0.2s;
@@ -301,12 +301,12 @@
 
 .searchInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .searchInput::placeholder {
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 /* 筛选栏 */
@@ -316,8 +316,8 @@
   align-items: center;
   padding: 0 20px;
   height: 50px;
-  border-bottom: 1px solid #d1d5db;
-  background: #fff;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface);
   box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.03);
 }
 
@@ -331,44 +331,44 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .statusAttention svg {
-  stroke: #f59e0b;
+  stroke: var(--amber);
 }
 
 .statusError svg {
-  stroke: #ef4444;
+  stroke: var(--red);
 }
 
 .statusRunning svg {
-  stroke: #3b82f6;
+  stroke: var(--brand);
 }
 
 .statusSuccess svg {
-  stroke: #22c55e;
+  stroke: var(--green);
 }
 
 .dropdownIcon {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ink-faint);
 }
 
 .statusBtn:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .statusBtnActive {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-700);
 }
 
 .statusIcon {
@@ -390,31 +390,31 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .filterBtn:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .filterBtnActive {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-700);
 }
 
 .filterDropdown {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 200px;
@@ -426,7 +426,7 @@
 .filterDropdownEmpty {
   padding: 12px 16px;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   text-align: center;
 }
 
@@ -436,19 +436,19 @@
   gap: 8px;
   padding: 10px 16px;
   font-size: 13px;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .filterDropdownItem:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .filterDropdownItem input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #3b82f6;
+  accent-color: var(--brand);
   cursor: pointer;
 }
 
@@ -464,12 +464,12 @@
   background: none;
   border: none;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   cursor: pointer;
 }
 
 .clearBtn:hover {
-  color: #ef4444;
+  color: var(--red);
 }
 
 /* 工作空间表格 */
@@ -487,11 +487,11 @@
   padding: 0 20px;
   height: 40px;
   align-items: center;
-  background: #f9fafb;
-  border-bottom: 1px solid #d1d5db;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-2);
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.04);
@@ -500,14 +500,14 @@
 .tableBody {
   flex: 1;
   overflow-y: auto;
-  background: #fff;
+  background: var(--surface);
 }
 
 .tableRow {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
   text-decoration: none;
   color: inherit;
   transition: background 0.15s;
@@ -515,7 +515,7 @@
 }
 
 .tableRow:hover {
-  background: #f9fafb;
+  background: var(--bg);
 }
 
 .colName {
@@ -527,12 +527,12 @@
 .workspaceName {
   font-size: 14px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--ink);
 }
 
 .workspaceDesc {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -555,50 +555,50 @@
 
 .status-applied,
 .status-success {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--green-soft);
+  color: var(--green-active);
 }
 
 .status-failed {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--red-soft);
+  color: var(--red-active);
 }
 
 .status-running {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--brand-soft);
+  color: var(--brand-700);
 }
 
 .status-requires_approval,
 .status-plan_completed,
 .status-apply_pending {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .status-decision_required {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .status-planned_and_finished {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--brand-100);
+  color: var(--brand-ink);
 }
 
 .status-pending {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .status-waiting {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--amber-soft);
+  color: var(--amber-hover);
 }
 
 .status-cancelled {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--surface-2);
+  color: var(--ink-2);
 }
 
 .colMode {
@@ -608,14 +608,14 @@
 
 .modeBadge {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .colTime {
   display: flex;
   align-items: center;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* 表格分页 */
@@ -626,15 +626,15 @@
   padding: 0 20px;
   height: 45px;
   min-height: 45px;
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
   flex-shrink: 0;
   border-radius: 0 0 8px 8px;
 }
 
 .paginationInfo {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .paginationControls {
@@ -646,10 +646,10 @@
 .paginationArrow {
   width: 32px;
   height: 32px;
-  background: #3b82f6;
+  background: var(--brand);
   border: none;
   border-radius: 6px;
-  color: #fff;
+  color: var(--surface);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -658,27 +658,27 @@
 }
 
 .paginationArrow svg {
-  stroke: #fff;
+  stroke: var(--surface);
 }
 
 .paginationArrow:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .paginationArrow:disabled {
-  background: #d1d5db;
-  color: #fff;
+  background: var(--line-2);
+  color: var(--surface);
   cursor: not-allowed;
 }
 
 .paginationArrow:disabled svg {
-  stroke: #fff;
+  stroke: var(--surface);
   opacity: 0.8;
 }
 
 .pageInfo {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ink-2);
   min-width: 50px;
   text-align: center;
 }
@@ -690,7 +690,7 @@
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 /* 加载和错误状态 */
@@ -700,7 +700,7 @@
   align-items: center;
   height: 200px;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .error {
@@ -718,13 +718,13 @@
 
 .errorMessage {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin: 0;
 }
 
 .retryButton {
   padding: 8px 16px;
-  background: #3b82f6;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -733,7 +733,7 @@
 }
 
 .retryButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 /* 对话框 */
@@ -743,15 +743,15 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 31, 36, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
 }
 
 .dialogContent {
-  background: #fff;
+  background: var(--surface);
   border-radius: 8px;
   width: 100%;
   max-width: 480px;
@@ -763,13 +763,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
 }
 
 .dialogTitle {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -777,14 +777,14 @@
   background: none;
   border: none;
   font-size: 24px;
-  color: #9ca3af;
+  color: var(--ink-faint);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 
 .dialogClose:hover {
-  color: #6b7280;
+  color: var(--ink-2);
 }
 
 .dialogBody {
@@ -796,7 +796,7 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--line);
 }
 
 .formGroup {
@@ -811,18 +811,18 @@
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ink);
   margin-bottom: 6px;
 }
 
 .required {
-  color: #ef4444;
+  color: var(--red);
 }
 
 .formInput {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
   transition: all 0.2s;
@@ -830,14 +830,14 @@
 
 .formInput:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .formTextarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
   resize: vertical;
@@ -846,48 +846,48 @@
 
 .formTextarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }
 
 .formHint {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ink-2);
   margin-top: 4px;
 }
 
 .cancelButton {
   padding: 8px 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 14px;
-  color: #374151;
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .cancelButton:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .primaryButton {
   padding: 8px 16px;
-  background: #3b82f6;
+  background: var(--brand);
   border: none;
   border-radius: 6px;
   font-size: 14px;
-  color: #fff;
+  color: var(--surface);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .primaryButton:hover {
-  background: #2563eb;
+  background: var(--brand-ink);
 }
 
 .primaryButton:disabled {
-  background: #d1d5db;
+  background: var(--line-2);
   cursor: not-allowed;
 }
 
@@ -906,10 +906,15 @@
     width: 100%;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--line);
   }
 
   .projectsList {
     max-height: 200px;
   }
+}
+
+.primaryButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-brand);
 }

@@ -1,10 +1,10 @@
 .container {
   padding: 20px;
   max-width: 100%;
-  background: #f8fafc;
+  background: var(--bg);
   min-height: calc(100vh - 68px - 24px);
   margin: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
@@ -15,7 +15,7 @@
   align-items: center;
   min-height: 400px;
   font-size: 16px;
-  color: #6c757d;
+  color: var(--ink-2);
 }
 
 /* Section Styles */
@@ -30,25 +30,25 @@
 .sectionTitle {
   font-size: 28px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
   margin: 0 0 8px 0;
 }
 
 .sectionSubtitle {
   font-size: 14px;
-  color: #6c757d;
+  color: var(--ink-2);
   margin: 0;
 }
 
 .sectionSubtitle strong {
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
 }
 
 .subsectionTitle {
   font-size: 20px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
   margin: 0 0 20px 0;
 }
 
@@ -62,7 +62,7 @@
 
 .statCard {
   background: white;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
   transition: box-shadow 0.2s;
@@ -74,7 +74,7 @@
 
 .statLabel {
   font-size: 13px;
-  color: #6c757d;
+  color: var(--ink-2);
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -88,8 +88,8 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #e9ecef;
-  color: #6c757d;
+  background: var(--line);
+  color: var(--ink-2);
   font-size: 12px;
   cursor: help;
   font-style: normal;
@@ -98,14 +98,14 @@
 .statValue {
   font-size: 36px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
   line-height: 1.2;
   margin-bottom: 4px;
 }
 
 .statHint {
   font-size: 12px;
-  color: #868e96;
+  color: var(--ink-3);
   margin-top: 4px;
 }
 
@@ -122,21 +122,21 @@
 
 .complianceLabel {
   font-size: 13px;
-  color: #6c757d;
+  color: var(--ink-2);
   margin-bottom: 12px;
 }
 
 .complianceValue {
   font-size: 48px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ink);
   line-height: 1;
   margin-bottom: 8px;
 }
 
 .complianceHint {
   font-size: 13px;
-  color: #868e96;
+  color: var(--ink-3);
 }
 
 /* Responsive Design */

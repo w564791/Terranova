@@ -431,7 +431,7 @@ const SchemaManagement: React.FC = () => {
         {outputs.length === 0 ? (
           <div className={styles.emptyOutputs}>
             <p>此模块暂无定义 Outputs</p>
-            <p style={{ fontSize: '12px', color: '#999' }}>
+            <p style={{ fontSize: '12px', color: 'var(--ink-3)' }}>
               提示：使用 tf2openapi 工具解析 outputs.tf 文件可以生成 Outputs 定义
             </p>
           </div>

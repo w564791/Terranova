@@ -288,17 +288,17 @@ const TextWidget: React.FC<WidgetProps> = ({
           <span>
             {help}
             {validationHints.length > 0 && (
-              <span style={{ color: '#8c8c8c', display: 'block', fontSize: 12, marginTop: 4 }}>
+              <span style={{ color: 'var(--ink-3)', display: 'block', fontSize: 12, marginTop: 4 }}>
                 验证规则: {validationHints.join('; ')}
               </span>
             )}
             {hasReferenceContext && !isModuleReference && (
-              <span style={{ color: '#1890ff', marginLeft: 8, fontSize: 11 }}>
+              <span style={{ color: 'var(--brand)', marginLeft: 8, fontSize: 11 }}>
                 输入 / 可引用其他 {hasManifestContext ? 'Module' : '资源'} 的输出
               </span>
             )}
             {hasPlaceholder && (
-              <span style={{ color: '#cf222e', display: 'block', fontSize: 12, marginTop: 4 }}>
+              <span style={{ color: 'var(--red)', display: 'block', fontSize: 12, marginTop: 4 }}>
                  请替换占位符为实际值，否则无法提交
               </span>
             )}
@@ -322,14 +322,14 @@ const TextWidget: React.FC<WidgetProps> = ({
             hasPlaceholder 
               ? { 
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  color: '#cf222e',
-                  backgroundColor: '#fff2f0',
-                  borderColor: '#cf222e',
+                  color: 'var(--red)',
+                  backgroundColor: 'var(--red-soft)',
+                  borderColor: 'var(--red)',
                 }
               : isModuleReference 
                 ? { 
                     fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                    color: '#1890ff',
+                    color: 'var(--brand)',
                   } 
                 : undefined
           }

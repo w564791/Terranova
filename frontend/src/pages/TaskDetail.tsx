@@ -743,6 +743,11 @@ const TaskDetail: React.FC = () => {
                   placeholder={getCommentPlaceholder()}
                   submitLabel={getCommentSubmitLabel()}
                   isSubmitting={submittingAction}
+                  submitTone={
+                    commentAction === 'cancel' || commentAction === 'cancel_previous'
+                      ? 'danger'
+                      : 'brand'
+                  }
                 />
               </div>
             </div>

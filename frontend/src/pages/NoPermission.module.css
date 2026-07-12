@@ -3,7 +3,7 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
   padding: 20px;
 }
 
@@ -34,26 +34,26 @@
 .title {
   font-size: 32px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--ink);
   margin: 0 0 16px 0;
 }
 
 .message {
   font-size: 18px;
-  color: #666;
+  color: var(--ink-2);
   margin: 0 0 12px 0;
   line-height: 1.6;
 }
 
 .hint {
   font-size: 16px;
-  color: #999;
+  color: var(--ink-3);
   margin: 0 0 32px 0;
 }
 
 .userInfo {
-  background: #f0f7ff;
-  border: 2px solid #1890ff;
+  background: var(--brand-soft);
+  border: 2px solid var(--brand);
   border-radius: 12px;
   padding: 24px;
   margin: 32px 0;
@@ -61,7 +61,7 @@
 
 .userInfoLabel {
   font-size: 14px;
-  color: #666;
+  color: var(--ink-2);
   margin-bottom: 8px;
   font-weight: 500;
 }
@@ -77,18 +77,18 @@
 .username {
   font-size: 24px;
   font-weight: 700;
-  color: #1890ff;
+  color: var(--brand);
   font-family: 'Monaco', 'Menlo', monospace;
   background: white;
   padding: 12px 24px;
   border-radius: 8px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--line-2);
 }
 
 .copyButton {
   padding: 10px 20px;
-  background: #1890ff;
-  color: white;
+  background: var(--brand);
+  color: #fff;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -101,9 +101,9 @@
 }
 
 .copyButton:hover {
-  background: #40a9ff;
+  background: var(--brand-400);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.4);
 }
 
 .copyButton:active {
@@ -112,12 +112,12 @@
 
 .userInfoHint {
   font-size: 13px;
-  color: #666;
+  color: var(--ink-2);
   font-style: italic;
 }
 
 .info {
-  background: #f8f9fa;
+  background: var(--bg);
   border-radius: 12px;
   padding: 24px;
   text-align: left;
@@ -126,7 +126,7 @@
 .info h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--ink);
   margin: 0 0 16px 0;
 }
 
@@ -138,7 +138,7 @@
 
 .info li {
   padding: 8px 0;
-  color: #666;
+  color: var(--ink-2);
   font-size: 15px;
   position: relative;
   padding-left: 24px;
@@ -148,7 +148,7 @@
   content: '✓';
   position: absolute;
   left: 0;
-  color: #667eea;
+  color: var(--brand);
   font-weight: bold;
 }
 

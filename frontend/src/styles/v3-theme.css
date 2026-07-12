@@ -1,34 +1,35 @@
 /*
  * UI v3 主题变量
  * 通过 :root[data-ui-version="v3"] 作用域隔离，不影响 v2
+ * 色板与全局 theme.css 对齐（brand 深青）
  */
 :root[data-ui-version="v3"] {
-  /* 中性色 — Tailwind Slate */
-  --v3-gray-50: #f8fafc;
-  --v3-gray-100: #f1f5f9;
-  --v3-gray-200: #e2e8f0;
-  --v3-gray-300: #cbd5e1;
-  --v3-gray-400: #9ca3af;
-  --v3-gray-500: #6b7280;
-  --v3-gray-600: #4b5563;
-  --v3-gray-700: #374151;
-  --v3-gray-800: #1f2937;
-  --v3-gray-900: #111827;
+  /* 中性色 — 与 surface/ink 对齐 */
+  --v3-gray-50: var(--bg, #f7f8fa);
+  --v3-gray-100: var(--surface-2, #f3f4f6);
+  --v3-gray-200: var(--line, #e3e6ea);
+  --v3-gray-300: var(--line-2, #d4d8de);
+  --v3-gray-400: var(--ink-faint, #aeb4bd);
+  --v3-gray-500: var(--ink-3, #8a929e);
+  --v3-gray-600: var(--ink-2, #5c6470);
+  --v3-gray-700: #3c424c;
+  --v3-gray-800: #2a2f38;
+  --v3-gray-900: var(--ink, #1c1f24);
 
-  /* 交互色 */
-  --v3-blue-50: #eff6ff;
-  --v3-blue-100: #dbeafe;
-  --v3-blue-200: #bfdbfe;
-  --v3-blue-300: #93c5fd;
-  --v3-blue-400: #60a5fa;
-  --v3-blue-500: #3b82f6;
-  --v3-blue-600: #2563eb;
-  --v3-blue-700: #1d4ed8;
+  /* 交互色 → brand 深青 */
+  --v3-blue-50: var(--brand-100, #e2f0f5);
+  --v3-blue-100: var(--brand-100, #e2f0f5);
+  --v3-blue-200: var(--brand-200, #c6e0e8);
+  --v3-blue-300: var(--brand-300, #8fc1d0);
+  --v3-blue-400: var(--brand-400, #4e97ab);
+  --v3-blue-500: var(--brand, #1c6e8c);
+  --v3-blue-600: var(--brand-ink, #135269);
+  --v3-blue-700: var(--brand-700, #0d4152);
 
-  --v3-green-500: #22c55e;
-  --v3-green-600: #16a34a;
-  --v3-red-400: #f87171;
-  --v3-red-500: #ef4444;
+  --v3-green-500: var(--green, #1a8a4a);
+  --v3-green-600: var(--green-hover, #157a42);
+  --v3-red-400: #d85c5b;
+  --v3-red-500: var(--red, #c8302f);
 
   /* 圆角 */
   --v3-radius-sm: 6px;
@@ -46,5 +47,5 @@
   --v3-shadow-section: 0 1px 3px rgba(0, 0, 0, 0.04);
 
   /* 字体 */
-  --v3-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --v3-font-mono: var(--font-mono, 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace);
 }

@@ -18,7 +18,7 @@ const ColTitle: React.FC<{ title: string; tip: string }> = ({ title, tip }) => (
   <span>
     {title}{' '}
     <Tooltip title={tip}>
-      <QuestionCircleOutlined style={{ color: '#8c8c8c', fontSize: 12, cursor: 'help' }} />
+      <QuestionCircleOutlined style={{ color: 'var(--ink-3)', fontSize: 12, cursor: 'help' }} />
     </Tooltip>
   </span>
 );
@@ -108,7 +108,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
     {
       title: <ColTitle title="通过率" tip="L1 文本规则检测的通过率" />,
       dataIndex: 'pass_rate', key: 'pass_rate',
-      render: (v: number) => <span style={{ color: v >= 80 ? '#52c41a' : v >= 50 ? '#faad14' : '#ff4d4f' }}>{v.toFixed(1)}%</span>,
+      render: (v: number) => <span style={{ color: v >= 80 ? 'var(--green)' : v >= 50 ? 'var(--amber)' : 'var(--red)' }}>{v.toFixed(1)}%</span>,
       sorter: (a, b) => a.pass_rate - b.pass_rate,
     },
     {
@@ -137,7 +137,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
           <div className={styles.statLabel}>
             <ColTitle title="摘要覆盖率" tip="有 AI 摘要的资源占全部 managed 资源的比例" />
           </div>
-          <div className={styles.statValue} style={{ color: summary_coverage.coverage_pct >= 80 ? '#52c41a' : '#faad14' }}>
+          <div className={styles.statValue} style={{ color: summary_coverage.coverage_pct >= 80 ? 'var(--green)' : 'var(--amber)' }}>
             {summary_coverage.coverage_pct.toFixed(1)}%
           </div>
           <div className={styles.statSub}>{summary_coverage.with_summary} / {summary_coverage.total_resources}</div>
@@ -147,7 +147,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
           <div className={styles.statLabel}>
             <ColTitle title="L1 通过率" tip="文本规则检测（格式/安全标注/幻觉初筛）的通过率" />
           </div>
-          <div className={styles.statValue} style={{ color: assessment.l1_pass_rate >= 80 ? '#52c41a' : assessment.l1_pass_rate >= 50 ? '#faad14' : '#ff4d4f' }}>
+          <div className={styles.statValue} style={{ color: assessment.l1_pass_rate >= 80 ? 'var(--green)' : assessment.l1_pass_rate >= 50 ? 'var(--amber)' : 'var(--red)' }}>
             {assessment.l1_pass_rate.toFixed(1)}%
           </div>
           <div className={styles.statSub}>Pass {assessment.l1_pass} / Fail {assessment.l1_fail} / Warn {assessment.l1_warn}</div>
@@ -157,7 +157,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
           <div className={styles.statLabel}>
             <ColTitle title="L2 均分" tip="LLM Prompt 遵从度评估的平均分（抽样）" />
           </div>
-          <div className={styles.statValue} style={{ color: assessment.l2_avg_score >= 80 ? '#52c41a' : '#faad14' }}>
+          <div className={styles.statValue} style={{ color: assessment.l2_avg_score >= 80 ? 'var(--green)' : 'var(--amber)' }}>
             {assessment.l2_avg_score > 0 ? assessment.l2_avg_score.toFixed(1) : '-'}
           </div>
           <div className={styles.statSub}>Prompt 遵从度</div>
@@ -167,7 +167,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
           <div className={styles.statLabel}>
             <ColTitle title="L3 均分" tip="LLM 内容质量评估的平均分（抽样）" />
           </div>
-          <div className={styles.statValue} style={{ color: assessment.l3_avg_score >= 80 ? '#52c41a' : '#faad14' }}>
+          <div className={styles.statValue} style={{ color: assessment.l3_avg_score >= 80 ? 'var(--green)' : 'var(--amber)' }}>
             {assessment.l3_avg_score > 0 ? assessment.l3_avg_score.toFixed(1) : '-'}
           </div>
           <div className={styles.statSub}>内容质量</div>
@@ -177,7 +177,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
           <div className={styles.statLabel}>
             <ColTitle title="安全标注命中率" tip="应标注安全信息（公网暴露/删除保护/无备份）的命中比例" />
           </div>
-          <div className={styles.statValue} style={{ color: security_tag_stats.hit_rate >= 90 ? '#52c41a' : '#ff4d4f' }}>
+          <div className={styles.statValue} style={{ color: security_tag_stats.hit_rate >= 90 ? 'var(--green)' : 'var(--red)' }}>
             {security_tag_stats.hit_rate.toFixed(1)}%
           </div>
           <div className={styles.statSub}>{security_tag_stats.total_hit} / {security_tag_stats.total_expected}</div>
@@ -200,9 +200,9 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
                   return (
                     <Tooltip key={d.date} title={`${d.date}: Pass ${d.pass}, Fail ${d.fail}, Warn ${d.warn}`}>
                       <div className={styles.barGroup}>
-                        <div className={styles.bar} style={{ height: warnH, background: '#fa8c16' }} />
-                        <div className={styles.bar} style={{ height: failH, background: '#ff4d4f' }} />
-                        <div className={styles.bar} style={{ height: passH, background: '#52c41a' }} />
+                        <div className={styles.bar} style={{ height: warnH, background: 'var(--amber)' }} />
+                        <div className={styles.bar} style={{ height: failH, background: 'var(--red)' }} />
+                        <div className={styles.bar} style={{ height: passH, background: 'var(--green)' }} />
                       </div>
                     </Tooltip>
                   );
@@ -229,36 +229,36 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
             <>
               {(issue_distribution.format_violations || []).map((v) => (
                 <div key={v.type} className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer(v.type, formatLabel(v.type))}>
-                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>{formatLabel(v.type)}</span>
+                  <span className={styles.hbarLabel} style={{ color: 'var(--brand)' }}>{formatLabel(v.type)}</span>
                   <div className={styles.hbarTrack}>
-                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, v.count * 10)}%`, background: '#ff4d4f' }} />
+                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, v.count * 10)}%`, background: 'var(--red)' }} />
                   </div>
                   <span className={styles.hbarCount}>{v.count}</span>
                 </div>
               ))}
               {issue_distribution.hallucination_suspects > 0 && (
                 <div className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer('hallucination', '疑似幻觉')}>
-                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>疑似幻觉</span>
+                  <span className={styles.hbarLabel} style={{ color: 'var(--brand)' }}>疑似幻觉</span>
                   <div className={styles.hbarTrack}>
-                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, issue_distribution.hallucination_suspects * 10)}%`, background: '#fa8c16' }} />
+                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, issue_distribution.hallucination_suspects * 10)}%`, background: 'var(--amber)' }} />
                   </div>
                   <span className={styles.hbarCount}>{issue_distribution.hallucination_suspects}</span>
                 </div>
               )}
               {issue_distribution.security_tag_misses > 0 && (
                 <div className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer('security_miss', '安全标注缺失')}>
-                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>安全标注缺失</span>
+                  <span className={styles.hbarLabel} style={{ color: 'var(--brand)' }}>安全标注缺失</span>
                   <div className={styles.hbarTrack}>
-                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, issue_distribution.security_tag_misses * 10)}%`, background: '#ff4d4f' }} />
+                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, issue_distribution.security_tag_misses * 10)}%`, background: 'var(--red)' }} />
                   </div>
                   <span className={styles.hbarCount}>{issue_distribution.security_tag_misses}</span>
                 </div>
               )}
               {(security_tag_stats.misses_by_rule || []).map((m) => (
                 <div key={m.rule} className={styles.hbarRow} style={{ cursor: 'pointer' }} onClick={() => openIssueDrawer(`security_miss:${m.rule}`, `缺失: ${m.rule}`)}>
-                  <span className={styles.hbarLabel} style={{ color: '#1677ff' }}>缺失: {m.rule}</span>
+                  <span className={styles.hbarLabel} style={{ color: 'var(--brand)' }}>缺失: {m.rule}</span>
                   <div className={styles.hbarTrack}>
-                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, m.miss_count * 10)}%`, background: '#cf1322' }} />
+                    <div className={styles.hbarFill} style={{ width: `${Math.min(100, m.miss_count * 10)}%`, background: 'var(--red-active)' }} />
                   </div>
                   <span className={styles.hbarCount}>{m.miss_count}</span>
                 </div>
@@ -331,7 +331,7 @@ const SummaryQualityTab: React.FC<Props> = ({ days }) => {
                   render: (_: unknown, r: IssueResource) => (
                     <div>
                       <div style={{ fontWeight: 500 }}>{r.resource_name || `#${r.resource_id}`}</div>
-                      <div style={{ fontSize: 11, color: '#8c8c8c' }}>{r.resource_type}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{r.resource_type}</div>
                     </div>
                   ),
                 },
