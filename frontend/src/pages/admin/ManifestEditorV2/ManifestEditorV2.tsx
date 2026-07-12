@@ -3509,7 +3509,17 @@ export default function ManifestEditorV2() {
         }}
         onSkipCheck={() => setPublishCheckSummary({ done: false, skipped: true, issues: [] })}
         onClose={() => setPublishOpen(false)}
-        onPublished={() => {
+        onPublished={(v, meta) => {
+          // 发布成功提示放在父组件(对话框 portal 已关,antd message 更稳定)
+          const ver = v.version || '新版本'
+          if (meta?.autoUpdateCount && meta.autoUpdateCount > 0) {
+            message.success(
+              `已发布 ${ver}。已为 ${meta.autoUpdateCount} 个 workspace 发起更新与 Plan+Apply，请到任务页查看进度。`,
+              6,
+            )
+          } else {
+            message.success(`已发布版本 ${ver}`, 4)
+          }
           // 发布成功后始终刷新版本(顶栏徽标依赖 versions);历史视图下再刷未提交更改
           loadVersions()
           if (activeView === 'history') {

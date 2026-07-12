@@ -271,13 +271,44 @@ export async function getDeploymentVarsets(
   ctx: ManifestEditorContext,
   deploymentId: string,
 ): Promise<string[]> {
+  const ctx2 = await getDeploymentUpgradeContext(ctx, deploymentId)
+  return ctx2.varsetIds
+}
+
+/** upgrade 时需要保留的既有 varset / overrides 上下文 */
+export interface DeploymentUpgradeContext {
+  varsetIds: string[]
+  varsets: DeploymentVarsetEntry[]
+  variable_overrides?: Record<string, string>
+}
+
+// 取 deployment 的 varset + variable_overrides,供 upgrade / 发布后自动更新复用。
+export async function getDeploymentUpgradeContext(
+  ctx: ManifestEditorContext,
+  deploymentId: string,
+): Promise<DeploymentUpgradeContext> {
   const data = (await api.get(`${basePath(ctx)}/v2/deployments/${deploymentId}`)) as {
+    deployment?: { variable_overrides?: Record<string, unknown> | null }
     varsets?: { varset_id: string; priority: number }[]
   }
-  return (data.varsets ?? [])
+  const sorted = (data.varsets ?? [])
     .slice()
     .sort((a, b) => a.priority - b.priority)
-    .map((v) => v.varset_id)
+  const varsetIds = sorted.map((v) => v.varset_id)
+  const varsets: DeploymentVarsetEntry[] = sorted.map((v, i) => ({
+    varset_id: v.varset_id,
+    priority: v.priority ?? i,
+  }))
+  let variable_overrides: Record<string, string> | undefined
+  const raw = data.deployment?.variable_overrides
+  if (raw && typeof raw === 'object') {
+    variable_overrides = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (v != null) variable_overrides[k] = String(v)
+    }
+    if (Object.keys(variable_overrides).length === 0) variable_overrides = undefined
+  }
+  return { varsetIds, varsets, variable_overrides }
 }
 
 export interface InstallDeploymentRequest {
