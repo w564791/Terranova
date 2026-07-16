@@ -704,71 +704,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除 Module 关联的 Skill",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Module Skill"
-                ],
-                "summary": "删除 Module Skill",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Module ID",
-                        "name": "module_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
             }
         },
         "/api/v1/admin/modules/{module_id}/skill/generate": {
@@ -3307,51 +3242,17 @@ const docTemplate = `{
         },
         "/api/v1/agents/control": {
             "get": {
-                "security": [
-                    {
-                        "PoolTokenAuth": []
-                    }
-                ],
-                "description": "Establish a WebSocket connection for Agent Command \u0026 Control. This is a WebSocket upgrade endpoint, not a regular HTTP endpoint. The agent sends heartbeats and receives task assignments via this channel.",
+                "description": "Main API returns 410 Gone. Connect WebSocket to port 8091: ws://host:8091/api/v1/agents/control?agent_id=...",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Agent C\u0026C"
                 ],
-                "summary": "Agent C\u0026C WebSocket connection",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Agent ID",
-                        "name": "agent_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
+                "summary": "Agent C\u0026C endpoint moved (main API)",
                 "responses": {
-                    "101": {
-                        "description": "WebSocket upgrade successful",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "410": {
+                        "description": "WebSocket endpoint has moved to port 8091",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -3959,82 +3860,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/agents/tasks/{task_id}/state": {
-            "post": {
-                "security": [
-                    {
-                        "PoolTokenAuth": []
-                    }
-                ],
-                "description": "Save a new state version for the task and extract resource IDs from state",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Agent Task"
-                ],
-                "summary": "Save task state",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Task ID",
-                        "name": "task_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "State data with content, checksum, and size",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/agents/tasks/{task_id}/status": {
             "put": {
                 "security": [
@@ -4364,6 +4189,77 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/workspaces/{workspace_id}/manifest-provider-schema": {
+            "put": {
+                "security": [
+                    {
+                        "PoolTokenAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agent Workspace"
+                ],
+                "summary": "Upsert manifest provider schema",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/workspaces/{workspace_id}/manifest-provider-schema/meta": {
+            "get": {
+                "security": [
+                    {
+                        "PoolTokenAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agent Workspace"
+                ],
+                "summary": "Get manifest provider schema meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -4940,132 +4836,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/agents/{agent_id}/cc-status": {
-            "get": {
-                "security": [
-                    {
-                        "PoolTokenAuth": []
-                    }
-                ],
-                "description": "Get current C\u0026C connection status of an agent. This endpoint is deprecated - C\u0026C is now handled by the standalone WebSocket server.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Agent C\u0026C"
-                ],
-                "summary": "Get agent C\u0026C status (deprecated)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Agent ID",
-                        "name": "agent_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/agents/{agent_id}/ping": {
-            "post": {
-                "security": [
-                    {
-                        "PoolTokenAuth": []
-                    }
-                ],
-                "description": "Update agent heartbeat and status (currently disabled)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Agent"
-                ],
-                "summary": "Agent heartbeat",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Agent ID",
-                        "name": "agent_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Ping request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.AgentPingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.AgentPingResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/ai/analyze-error": {
             "post": {
                 "security": [
@@ -5133,6 +4903,100 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Analysis failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/cmdb/search-summary": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Interpret hybrid search results for the user in natural language",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Embedding"
+                ],
+                "summary": "CMDB search result AI summary",
+                "parameters": [
+                    {
+                        "description": "Search summary request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.SearchSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/cmdb/search-summary-sse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stream progress events while generating CMDB search interpretation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Embedding"
+                ],
+                "summary": "CMDB search result AI summary (SSE progress)",
+                "parameters": [
+                    {
+                        "description": "Search summary request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.SearchSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -5441,6 +5305,357 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/services.ProgressEvent"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/manifest/check-sse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stream AI draft check progress via Server-Sent Events",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Manifest AI"
+                ],
+                "summary": "Check manifest draft (SSE)",
+                "parameters": [
+                    {
+                        "description": "Check request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.CheckDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE event stream",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/manifest/generate-resource-sse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stream AI generation/repair progress for manifest HCL via Server-Sent Events",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Manifest AI"
+                ],
+                "summary": "Generate or fix manifest resource (SSE)",
+                "parameters": [
+                    {
+                        "description": "Generation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GenerateResourceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE event stream",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/manifest/sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List AI chat sessions for a manifest owned by the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest AI"
+                ],
+                "summary": "List manifest AI sessions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "manifest_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new AI chat session for a manifest",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest AI"
+                ],
+                "summary": "Create manifest AI session",
+                "parameters": [
+                    {
+                        "description": "Session payload (manifest_id required; org_id, title optional)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/manifest/sessions/{sid}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete an AI session owned by the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest AI"
+                ],
+                "summary": "Delete manifest AI session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "sid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/manifest/sessions/{sid}/messages": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get messages for an AI session owned by the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest AI"
+                ],
+                "summary": "Get manifest AI session messages",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "sid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -6033,58 +6248,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/auth/register": {
-            "post": {
-                "description": "Register a new user account. Note: this endpoint is currently commented out in the router.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "User registration (currently disabled)",
-                "parameters": [
-                    {
-                        "description": "Registration info",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.RegisterRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "User created successfully",
-                        "schema": {
-                            "$ref": "#/definitions/gin.H"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request parameters",
-                        "schema": {
-                            "$ref": "#/definitions/gin.H"
-                        }
-                    },
-                    "409": {
-                        "description": "Username or email already exists",
-                        "schema": {
-                            "$ref": "#/definitions/gin.H"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/gin.H"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/auth/sso/identities": {
             "get": {
                 "security": [
@@ -6269,7 +6432,66 @@ const docTemplate = `{
         },
         "/api/v1/auth/sso/{provider}/callback": {
             "get": {
-                "description": "Process the OAuth callback from the SSO provider. Returns JWT token on success, or MFA challenge if required.",
+                "description": "Process the OAuth callback from the SSO provider (GET and POST). Returns JWT token on success, or MFA challenge if required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSO"
+                ],
+                "summary": "Handle SSO callback",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "SSO provider key",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth authorization code",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth state parameter",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login successful with JWT token, or MFA required",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing code/state or SSO error",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "401": {
+                        "description": "SSO authentication failed",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Process the OAuth callback from the SSO provider (GET and POST). Returns JWT token on success, or MFA challenge if required.",
                 "produces": [
                     "application/json"
                 ],
@@ -7727,6 +7949,58 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/global/settings/ai-config/inference-profiles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get available Bedrock inference profiles for a given AWS region (includes global and regional profiles)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Config"
+                ],
+                "summary": "Get available inference profiles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "AWS Region",
+                        "name": "region",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Inference profile list",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Missing region parameter",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Fetch failed",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -11257,6 +11531,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/iam/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Health/status endpoint for the IAM subsystem",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "IAM"
+                ],
+                "summary": "Get IAM system status",
+                "responses": {
+                    "200": {
+                        "description": "IAM system status",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/iam/teams": {
             "get": {
                 "security": [
@@ -12615,6 +12915,161 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/manifest-editor/modules": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lightweight module list for manifest editor IntelliSense",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Editor"
+                ],
+                "summary": "List modules for editor",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query (name, source, description)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Max results",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/manifest-editor/modules/{module_id}/demos": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List demos of a module's default version for editor IntelliSense",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Editor"
+                ],
+                "summary": "List module demos for editor",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Module ID",
+                        "name": "module_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/manifest-editor/modules/{module_id}/inputs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Extract module input variables from active OpenAPI schema for editor completion",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Editor"
+                ],
+                "summary": "List module inputs for editor",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Module ID",
+                        "name": "module_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/modules": {
             "get": {
                 "security": [
@@ -12922,7 +13377,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "更新模块的配置信息",
+                "description": "Update module configuration (supports both PUT and PATCH)",
                 "consumes": [
                     "application/json"
                 ],
@@ -12932,17 +13387,17 @@ const docTemplate = `{
                 "tags": [
                     "Module"
                 ],
-                "summary": "更新模块信息",
+                "summary": "Update module",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "模块ID",
+                        "description": "Module ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "更新信息",
+                        "description": "Update fields",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -12953,28 +13408,28 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "更新成功",
+                        "description": "Update successful",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "请求参数无效",
+                        "description": "Invalid request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "404": {
-                        "description": "模块不存在",
+                        "description": "Module not found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "500": {
-                        "description": "更新失败",
+                        "description": "Update failed",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -13025,6 +13480,72 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "删除失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update module configuration (supports both PUT and PATCH)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Module"
+                ],
+                "summary": "Update module",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Module ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update fields",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Update successful",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Module not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Update failed",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -15062,16 +15583,20 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "List manifests under an organization with optional status filter and pagination",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Get Manifest list",
+                "summary": "List manifests",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "Organization ID",
                         "name": "org_id",
                         "in": "path",
@@ -15093,7 +15618,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Status filter",
+                        "description": "Filter by status (draft, published, archived)",
                         "name": "status",
                         "in": "query"
                     }
@@ -15102,7 +15627,22 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.ManifestListResponse"
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -15113,6 +15653,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Create a new manifest in draft status under the organization",
                 "consumes": [
                     "application/json"
                 ],
@@ -15122,18 +15663,18 @@ const docTemplate = `{
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Create Manifest",
+                "summary": "Create manifest",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "Organization ID",
                         "name": "org_id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Create request",
-                        "name": "body",
+                        "description": "Manifest create payload",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -15145,7 +15686,8 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Manifest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
@@ -15161,120 +15703,9 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/import": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Import HCL",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
                     },
-                    {
-                        "description": "HCL content",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.Manifest"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/import-json": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Import Manifest from JSON",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Manifest JSON content",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.Manifest"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -15290,13 +15721,17 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Get manifest details including latest version and deployment count",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Get Manifest details",
+                "summary": "Get manifest",
                 "parameters": [
                     {
                         "type": "string",
@@ -15317,11 +15752,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Manifest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -15335,6 +15778,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Update manifest name, description, or status",
                 "consumes": [
                     "application/json"
                 ],
@@ -15344,7 +15788,7 @@ const docTemplate = `{
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Update Manifest",
+                "summary": "Update manifest",
                 "parameters": [
                     {
                         "type": "string",
@@ -15361,8 +15805,8 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update request",
-                        "name": "body",
+                        "description": "Manifest update payload",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -15374,7 +15818,15 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Manifest"
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
@@ -15390,6 +15842,13 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
                     }
                 }
             },
@@ -15399,13 +15858,17 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Delete a manifest (blocked if active deployments exist)",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Delete Manifest",
+                "summary": "Delete manifest",
                 "parameters": [
                     {
                         "type": "string",
@@ -15439,72 +15902,35 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/{id}/deployments": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Get deployment list",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
                     },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ManifestDeploymentListResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     }
                 }
-            },
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/draft/_export": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
+                "description": "Export the current user's draft files as a ZIP archive",
                 "consumes": [
                     "application/json"
                 ],
                 "produces": [
-                    "application/json"
+                    "application/zip"
                 ],
                 "tags": [
-                    "Manifest"
+                    "Manifest Files"
                 ],
-                "summary": "Create deployment",
+                "summary": "Export draft ZIP",
                 "parameters": [
                     {
                         "type": "string",
@@ -15519,40 +15945,17 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Create request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.CreateManifestDeploymentRequest"
-                        }
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "200": {
+                        "description": "ZIP archive",
                         "schema": {
-                            "$ref": "#/definitions/models.ManifestDeployment"
+                            "type": "file"
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -15561,333 +15964,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Get deployment details",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Deployment ID",
-                        "name": "deployment_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ManifestDeployment"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Update deployment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Deployment ID",
-                        "name": "deployment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Update request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.UpdateManifestDeploymentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ManifestDeployment"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Delete deployment (supports soft delete and hard delete/uninstall)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Deployment ID",
-                        "name": "deployment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Whether to uninstall (hard delete resources)",
-                        "name": "uninstall",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Force uninstall (ignore drift warnings, only effective when uninstall=true)",
-                        "name": "force",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ManifestDeployment"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}/resources": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Get deployment resources",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Deployment ID",
-                        "name": "deployment_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "object"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}/uninstall": {
+        "/api/v1/organizations/{org_id}/manifests/{id}/draft/_reset_from": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Uninstall deployment (recommend using DELETE API with uninstall=true parameter)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Deployment ID",
-                        "name": "deployment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Force uninstall (ignore drift warnings)",
-                        "name": "force",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/{id}/draft": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
+                "description": "Overwrite the current user's draft with files from a published version",
                 "consumes": [
                     "application/json"
                 ],
@@ -15895,65 +15979,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Manifest"
+                    "Manifest Files"
                 ],
-                "summary": "Save draft",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Save request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.SaveManifestVersionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ManifestVersion"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/organizations/{org_id}/manifests/{id}/export": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Export HCL",
+                "summary": "Reset draft from version",
                 "parameters": [
                     {
                         "type": "string",
@@ -15971,20 +15999,36 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Version ID (default latest version)",
+                        "description": "Published version ID to reset from",
                         "name": "version_id",
-                        "in": "query"
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "HCL content",
+                        "description": "OK",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -16000,13 +16044,17 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Export published version or current user draft as a ZIP of files",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/zip"
                 ],
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Export Manifest as ZIP",
+                "summary": "Export manifest ZIP",
                 "parameters": [
                     {
                         "type": "string",
@@ -16024,16 +16072,233 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Version ID (default latest version)",
+                        "description": "Version ID to export (defaults to latest published, else draft)",
                         "name": "version_id",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "ZIP file",
+                        "description": "ZIP archive",
                         "schema": {
                             "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List current user draft file tree, or a published version when version is set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "List manifest files",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID (omit or draft for current user draft)",
+                        "name": "version",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/files/_delete_dir": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete all draft files under a directory prefix for the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "Delete draft directory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Delete dir payload (dir)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/files/_move": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Rename or move a single file in the current user's draft",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "Move or rename draft file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Move payload (from, to)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
@@ -16046,12 +16311,337 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/organizations/{org_id}/manifests/{id}/versions": {
+        "/api/v1/organizations/{org_id}/manifests/{id}/files/_move_dir": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Move all draft files under a directory prefix for the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "Move draft directory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Move dir payload (from, to)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/files/{path}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
+                ],
+                "description": "Read a single file from draft or published version; binary content is base64-encoded",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "Read manifest file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File path within the manifest",
+                        "name": "path",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID (omit or draft for current user draft)",
+                        "name": "version",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create or update a file in the current user's draft (text content or base64 binary)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "Write manifest draft file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File path within the manifest",
+                        "name": "path",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "File payload (content or content_b64)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a single file from the current user's draft",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Files"
+                ],
+                "summary": "Delete manifest draft file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File path within the manifest",
+                        "name": "path",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/provider-schemas": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Return cached provider resource/data type catalog for the editor (empty when uncached)",
+                "consumes": [
+                    "application/json"
                 ],
                 "produces": [
                     "application/json"
@@ -16059,7 +16649,72 @@ const docTemplate = `{
                 "tags": [
                     "Manifest"
                 ],
-                "summary": "Get version list",
+                "summary": "Get provider type schemas",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Terraform workdir subpath",
+                        "name": "subpath",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List all deployments for a manifest",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "List manifest deployments",
                 "parameters": [
                     {
                         "type": "string",
@@ -16080,24 +16735,28 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.ManifestVersionListResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     }
                 }
-            },
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
+                "description": "Install a published version onto an empty workspace",
                 "consumes": [
                     "application/json"
                 ],
@@ -16105,9 +16764,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Manifest"
+                    "Manifest Deployments"
                 ],
-                "summary": "Publish version",
+                "summary": "Install manifest deployment",
                 "parameters": [
                     {
                         "type": "string",
@@ -16124,12 +16783,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Publish request",
-                        "name": "body",
+                        "description": "Install payload",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.PublishManifestVersionRequest"
+                            "$ref": "#/definitions/models.InstallDeploymentRequest"
                         }
                     }
                 ],
@@ -16137,7 +16796,161 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.ManifestVersion"
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get deployment detail including linked variable sets",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "Get manifest deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deployment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/uninstall": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "Uninstall manifest deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deployment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
@@ -16153,24 +16966,404 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
                     }
                 }
             }
         },
-        "/api/v1/organizations/{org_id}/manifests/{id}/versions/{version_id}": {
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/upgrade": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Switch deployment version and varsets; reconcile workspace resources",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "Upgrade manifest deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deployment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Upgrade payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UpgradeDeploymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/variable-preview": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Preview non-sensitive merged variable values for install/upgrade dialogs",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "Preview deployment variables",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "deployment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Varsets and variable_overrides for preview",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/draft/diff": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
+                "description": "File-level content diff of current user draft against a version (defaults to latest published)",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Manifest"
+                    "Manifest Versions"
                 ],
-                "summary": "Get version details",
+                "summary": "Diff draft against version",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Base version ID (defaults to latest published)",
+                        "name": "against",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/versions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List published versions for a manifest (SemVer descending)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Versions"
+                ],
+                "summary": "List manifest versions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Versions"
+                ],
+                "summary": "Publish manifest version",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Publish payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PublishVersionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a published version detail by version ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Versions"
+                ],
+                "summary": "Get manifest version",
                 "parameters": [
                     {
                         "type": "string",
@@ -16198,11 +17391,209 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.ManifestVersion"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/diff": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "File-level content diff of target version against another version",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Versions"
+                ],
+                "summary": "Diff two versions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Target version ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Base version ID to compare against",
+                        "name": "against",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/files/_export": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Export all files of a published version as a ZIP archive",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/zip"
+                ],
+                "tags": [
+                    "Manifest Versions"
+                ],
+                "summary": "Export version ZIP",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ZIP archive",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/workdirs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List directories that directly contain .tf files for install workdir selection",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Versions"
+                ],
+                "summary": "List version workdirs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -16310,6 +17701,88 @@ const docTemplate = `{
             }
         },
         "/api/v1/run-task-results/{result_id}/callback": {
+            "post": {
+                "description": "Receive callback from external run task service (supports both PATCH and POST)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Run Task Callback"
+                ],
+                "summary": "Handle run task callback",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Result ID",
+                        "name": "result_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Callback data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RunTaskCallbackPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
             "patch": {
                 "description": "Receive callback from external run task service (supports both PATCH and POST)",
                 "consumes": [
@@ -17256,6 +18729,337 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/terraform/state/{workspace_id}": {
+            "get": {
+                "description": "Retrieve the latest Terraform state JSON for a workspace. Auth: HTTP Basic Auth where the password is a State Token JWT (username ignored). Supports cross-workspace GET when the requester workspace is allowed to read shared outputs.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terraform State Backend"
+                ],
+                "summary": "Get Terraform state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Basic auth with State Token JWT as password",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Terraform state JSON",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required or invalid token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Cross-workspace access denied",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "State not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Upload Terraform state for a workspace. Auth: HTTP Basic Auth where the password is a State Token JWT. When holding a lock, Terraform passes the lock ID via the ID query parameter.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terraform State Backend"
+                ],
+                "summary": "Update Terraform state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Lock ID held by Terraform",
+                        "name": "ID",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Basic auth with State Token JWT as password",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Terraform state JSON",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "State saved",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid body",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required or invalid token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Lock ID mismatch",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to save state",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "State deletion via the HTTP backend is not supported. Manage state versions through the UI/API. Auth: HTTP Basic Auth where the password is a State Token JWT.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terraform State Backend"
+                ],
+                "summary": "Delete Terraform state (not supported)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Basic auth with State Token JWT as password",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "401": {
+                        "description": "Authentication required or invalid token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "405": {
+                        "description": "Method not allowed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/terraform/state/{workspace_id}/lock": {
+            "post": {
+                "description": "Acquire a workspace lock for exclusive state access. Auth: HTTP Basic Auth where the password is a State Token JWT. On conflict returns the existing lock info.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terraform State Backend"
+                ],
+                "summary": "Lock Terraform state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Basic auth with State Token JWT as password",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Terraform lock info (must include ID when provided by Terraform)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lock acquired",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid lock info",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required or invalid token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Already locked (returns current lock info)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Lock failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/terraform/state/{workspace_id}/unlock": {
+            "post": {
+                "description": "Release a workspace lock. Auth: HTTP Basic Auth where the password is a State Token JWT. When a lock ID is provided in the body, only that lock is released.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terraform State Backend"
+                ],
+                "summary": "Unlock Terraform state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Basic auth with State Token JWT as password",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Terraform lock info with ID to unlock",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lock released",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required or invalid token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Lock ID mismatch (returns current lock info)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Unlock failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/terraform/streams/stats": {
             "get": {
                 "security": [
@@ -17788,6 +19592,960 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get list of variable sets, optionally filtered by scope",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "List variable sets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by scope",
+                        "name": "scope",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Create variable set",
+                "parameters": [
+                    {
+                        "description": "Create request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a variable set by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Get variable set",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a variable set's name and description",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Update variable set",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a variable set by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Delete variable set",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}/assignments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get assignment list for a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "List variable set assignments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assign a variable set to a project or workspace",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Create variable set assignment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Create assignment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}/assignments/{assignment_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove an assignment from a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Delete variable set assignment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Assignment ID",
+                        "name": "assignment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}/manifest-deployments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List active manifest deployments that reference a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "List deployments using variable set",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}/scope": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a variable set's scope",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Update variable set scope",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update scope request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}/variables": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get variables in a variable set, optionally filtered by type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "List variable set variables",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by variable type",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new variable in a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Create variable set variable",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Create request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/variable-sets/{varset_id}/variables/{var_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a single variable from a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Get variable set variable",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Variable ID",
+                        "name": "var_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update a variable in a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Update variable set variable",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Variable ID",
+                        "name": "var_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a variable from a variable set",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Variable Set"
+                ],
+                "summary": "Delete variable set variable",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Variable set ID",
+                        "name": "varset_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Variable ID",
+                        "name": "var_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -18625,6 +21383,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/workspaces/{id}/effective-variables": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get merged variables from variable sets and workspace-level variables for display",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Variable"
+                ],
+                "summary": "Get effective workspace variables",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Resolved effective variables",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to resolve effective variables",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{id}/embedding-status": {
             "get": {
                 "security": [
@@ -18771,6 +21571,105 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/lock": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lock a workspace for exclusive access. Body requires reason.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Lock workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lock request with reason string",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Workspace locked successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Lock failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/manifest-summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lightweight active-manifest summary for workspace resource page/banner",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Get workspace manifest summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -19370,6 +22269,58 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "保存失败",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/outputs/combined": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get outputs configuration merged with current state values and related resources",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Output"
+                ],
+                "summary": "Get combined workspace outputs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Combined outputs, resources, and state metadata",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid workspace ID",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Workspace not found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -22981,12 +25932,7 @@ const docTemplate = `{
         },
         "/api/v1/workspaces/{id}/state-outputs/full": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "从当前State中获取完整Outputs信息，包含sensitive数据的值。仅供API调用使用。",
+                "description": "从当前 State 获取完整 Outputs（含 sensitive）。公开路由：不走 JWT，需 Authorization Bearer 短时 remote-data token（Terraform http data source）。主 JWT 工作区接口请用 GET .../state-outputs。",
                 "consumes": [
                     "application/json"
                 ],
@@ -22996,13 +25942,20 @@ const docTemplate = `{
                 "tags": [
                     "Workspace Output"
                 ],
-                "summary": "获取完整State Outputs（API）",
+                "summary": "获取完整State Outputs（远程数据临时 Token）",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "工作空间ID",
                         "name": "id",
                         "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Bearer {remote_data_temporary_token}",
+                        "name": "Authorization",
+                        "in": "header",
                         "required": true
                     }
                 ],
@@ -23015,6 +25968,20 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "无效的工作空间ID",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "缺少或无效的临时 Token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Token 与 workspace 不匹配",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -24191,6 +27158,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/workspaces/{id}/tasks/{task_id}/apply-summary/stop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Force-stop a stuck running apply summary for a task",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Summary"
+                ],
+                "summary": "Stop apply summary generation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task ID",
+                        "name": "task_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Analysis stopped",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or cannot stop",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{id}/tasks/{task_id}/cancel": {
             "post": {
                 "security": [
@@ -24809,6 +27825,62 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/workspaces/{id}/tasks/{task_id}/parse-plan": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Manually trigger plan JSON parsing and store resource changes for a task (admin/debug)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Task"
+                ],
+                "summary": "Manually parse plan changes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task ID",
+                        "name": "task_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Plan parsed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid task ID",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Parse failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/workspaces/{id}/tasks/{task_id}/plan-summary": {
             "get": {
                 "security": [
@@ -24871,6 +27943,88 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Summary not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/bypass": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Allow a system admin to bypass an incomplete AI analysis block on plan summary",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Summary"
+                ],
+                "summary": "Bypass incomplete AI plan summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task ID",
+                        "name": "task_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Bypass payload with bypass_reason",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated plan summary",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (system admin only)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Summary not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Already bypassed",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -25002,6 +28156,55 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/stop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Force-stop a stuck running plan summary for a task",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI Summary"
+                ],
+                "summary": "Stop plan summary generation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Task ID",
+                        "name": "task_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Analysis stopped",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or cannot stop",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -25157,7 +28360,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retry saving a failed state file from backup",
+                "description": "Retry saving a failed state file. With HTTP state backend, checks if state already exists in DB first.",
                 "consumes": [
                     "application/json"
                 ],
@@ -25428,6 +28631,166 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/unlock": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Unlock a workspace after exclusive operations complete",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Unlock workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Workspace unlocked successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Unlock failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/variable-snapshots": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a variable snapshot for a workspace",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Variable"
+                ],
+                "summary": "Create variable snapshot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/workspaces/{id}/variable-snapshots/{vsnap_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a variable snapshot from a workspace",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Variable"
+                ],
+                "summary": "Delete variable snapshot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Variable snapshot ID",
+                        "name": "vsnap_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -25839,83 +29202,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "版本不存在",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/workspaces/{workspace_id}/manifest-deployment": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest"
-                ],
-                "summary": "Get Workspace's Manifest deployment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ManifestDeployment"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/workspaces/{workspace_id}/tasks/{task_id}/run-task-results": {
-            "get": {
-                "description": "Get all run task results for a workspace task",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Run Task Results"
-                ],
-                "summary": "Get run task results",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Task ID",
-                        "name": "task_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -26409,6 +29695,77 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.CheckDraftRequest": {
+            "type": "object",
+            "required": [
+                "files"
+            ],
+            "properties": {
+                "context_ids": {
+                    "type": "object",
+                    "properties": {
+                        "organization_id": {
+                            "type": "string"
+                        },
+                        "workspace_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "files": {
+                    "description": "当前文件 + 跨文件关联文件",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/controllers.CheckFile"
+                    }
+                },
+                "history": {
+                    "description": "会话历史(上下文对话)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controllers.ConversationTurn"
+                    }
+                },
+                "session_id": {
+                    "description": "非空则把本次检查落入该会话",
+                    "type": "string"
+                },
+                "user_instruction": {
+                    "description": "用户自定义检查意见（如\"重点检查安全组\"）",
+                    "type": "string",
+                    "maxLength": 2000
+                }
+            }
+        },
+        "controllers.CheckFile": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "start_line": {
+                    "description": "content 在文件中的起始行(整文件=1,选区=选区起始行)",
+                    "type": "integer"
+                }
+            }
+        },
+        "controllers.ConversationTurn": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "该轮的文本内容",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "\"user\" | \"assistant\"",
+                    "type": "string"
+                }
+            }
+        },
         "controllers.GenerateConfigRequest": {
             "type": "object",
             "required": [
@@ -26496,6 +29853,52 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.GenerateResourceRequest": {
+            "type": "object",
+            "required": [
+                "description"
+            ],
+            "properties": {
+                "context": {
+                    "description": "当前上下文来源元信息",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/controllers.ManifestAIContext"
+                        }
+                    ]
+                },
+                "context_ids": {
+                    "type": "object",
+                    "properties": {
+                        "organization_id": {
+                            "type": "string"
+                        },
+                        "workspace_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "current_content": {
+                    "description": "当前选区或文件内容（修复时提供）",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 2000
+                },
+                "history": {
+                    "description": "会话历史(上下文对话)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controllers.ConversationTurn"
+                    }
+                },
+                "session_id": {
+                    "description": "非空则把本次交互落入该会话(向后兼容:空则不持久化)",
+                    "type": "string"
+                }
+            }
+        },
         "controllers.IssueCount": {
             "type": "object",
             "properties": {
@@ -26551,6 +29954,25 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.ManifestAIContext": {
+            "type": "object",
+            "properties": {
+                "end_line": {
+                    "type": "integer"
+                },
+                "file_path": {
+                    "description": "manifest 内路径",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "\"file\" | \"selection\"",
+                    "type": "string"
+                },
+                "start_line": {
+                    "type": "integer"
+                }
+            }
+        },
         "controllers.PreviewAssembledPromptRequest": {
             "type": "object",
             "required": [
@@ -26595,6 +30017,23 @@ const docTemplate = `{
                 },
                 "rule": {
                     "type": "string"
+                }
+            }
+        },
+        "controllers.SearchSummaryRequest": {
+            "type": "object",
+            "required": [
+                "query"
+            ],
+            "properties": {
+                "query": {
+                    "type": "string"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.SearchSummaryInputResource"
+                    }
                 }
             }
         },
@@ -27554,26 +30993,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password",
-                "username"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 6
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.ResetPasswordRequest": {
             "type": "object",
             "required": [
@@ -27879,6 +31298,10 @@ const docTemplate = `{
                     "description": "OpenAI Compatible API 基础 URL",
                     "type": "string"
                 },
+                "cache_enabled": {
+                    "description": "Prompt Caching 配置（仅 Bedrock）",
+                    "type": "boolean"
+                },
                 "capabilities": {
                     "description": "支持的能力场景，[\"*\"]表示默认配置，[]表示未配置",
                     "type": "array",
@@ -27911,6 +31334,10 @@ const docTemplate = `{
                 "enabled": {
                     "description": "true=全局兜底配置(最低优先级), false=按 capabilities 精确匹配的专用配置(优先级更高)",
                     "type": "boolean"
+                },
+                "grok_reasoning_effort": {
+                    "description": "Grok 专属 reasoning effort（仅 service_type=grok）：low / medium / high",
+                    "type": "string"
                 },
                 "id": {
                     "type": "integer"
@@ -27952,7 +31379,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "thinking_enabled": {
-                    "description": "Extended Thinking 配置",
+                    "description": "Extended Thinking 配置（Bedrock Claude / Qwen 等）",
                     "type": "boolean"
                 },
                 "top_k": {
@@ -28038,47 +31465,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "version": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.AgentPingRequest": {
-            "type": "object",
-            "required": [
-                "status"
-            ],
-            "properties": {
-                "cpu_usage": {
-                    "description": "CPU使用率 0-100",
-                    "type": "number"
-                },
-                "memory_usage": {
-                    "description": "内存使用率 0-100",
-                    "type": "number"
-                },
-                "running_tasks": {
-                    "description": "当前运行的任务",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.RunningTask"
-                    }
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "idle",
-                        "busy"
-                    ]
-                }
-            }
-        },
-        "models.AgentPingResponse": {
-            "type": "object",
-            "properties": {
-                "last_ping_at": {
-                    "type": "string"
-                },
-                "message": {
                     "type": "string"
                 }
             }
@@ -28310,35 +31696,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateManifestDeploymentRequest": {
-            "type": "object",
-            "required": [
-                "version_id",
-                "workspace_id"
-            ],
-            "properties": {
-                "auto_apply": {
-                    "description": "是否自动 Apply",
-                    "type": "boolean"
-                },
-                "plan_only": {
-                    "description": "仅 Plan",
-                    "type": "boolean"
-                },
-                "variable_overrides": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "version_id": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "models.CreateManifestRequest": {
             "type": "object",
             "required": [
@@ -28346,7 +31703,8 @@ const docTemplate = `{
             ],
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 1024
                 },
                 "name": {
                     "type": "string",
@@ -28448,9 +31806,6 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
-                "alias": {
-                    "type": "string"
-                },
                 "config": {
                     "type": "object",
                     "additionalProperties": true
@@ -28776,6 +32131,20 @@ const docTemplate = `{
                 }
             }
         },
+        "models.DeploymentVarsetEntry": {
+            "type": "object",
+            "required": [
+                "varset_id"
+            ],
+            "properties": {
+                "priority": {
+                    "type": "integer"
+                },
+                "varset_id": {
+                    "type": "string"
+                }
+            }
+        },
         "models.DiffStats": {
             "type": "object",
             "properties": {
@@ -29098,6 +32467,38 @@ const docTemplate = `{
                 }
             }
         },
+        "models.InstallDeploymentRequest": {
+            "type": "object",
+            "required": [
+                "version_id",
+                "workspace_id"
+            ],
+            "properties": {
+                "variable_overrides": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "varsets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DeploymentVarsetEntry"
+                    }
+                },
+                "version_id": {
+                    "type": "string"
+                },
+                "workdir": {
+                    "description": "Workdir 可选:terraform 执行子目录(归一化后存入 workspaces.manifest_subpath)。\n省略(nil)= 沿用 workspace 记录里已有的 ManifestSubpath(向后兼容);\n非 nil(含空串)= 以本次值为准(空串 =\u003e 根目录)。",
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "description": "ws-xxx 语义化ID",
+                    "type": "string"
+                }
+            }
+        },
         "models.JSONB": {
             "type": "object",
             "additionalProperties": true
@@ -29172,313 +32573,6 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "models.Manifest": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建者",
-                    "type": "string"
-                },
-                "created_by_name": {
-                    "type": "string"
-                },
-                "deployment_count": {
-                    "type": "integer"
-                },
-                "deployments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ManifestDeployment"
-                    }
-                },
-                "description": {
-                    "description": "描述",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "格式: mf-{ulid}",
-                    "type": "string"
-                },
-                "latest_version": {
-                    "description": "非数据库字段",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.ManifestVersion"
-                        }
-                    ]
-                },
-                "name": {
-                    "description": "名称",
-                    "type": "string"
-                },
-                "organization_id": {
-                    "description": "所属组织",
-                    "type": "integer"
-                },
-                "status": {
-                    "description": "draft, published, archived",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
-                "versions": {
-                    "description": "关联",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ManifestVersion"
-                    }
-                }
-            }
-        },
-        "models.ManifestDeployment": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "deployed_at": {
-                    "description": "部署时间",
-                    "type": "string"
-                },
-                "deployed_by": {
-                    "description": "部署者",
-                    "type": "string"
-                },
-                "deployed_by_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "description": "格式: mfd-{ulid}",
-                    "type": "string"
-                },
-                "last_task_id": {
-                    "description": "最后一次部署的任务 ID",
-                    "type": "integer"
-                },
-                "manifest_id": {
-                    "description": "所属 Manifest",
-                    "type": "string"
-                },
-                "resources": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ManifestDeploymentResource"
-                    }
-                },
-                "status": {
-                    "description": "pending, deploying, deployed, failed",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
-                "variable_overrides": {
-                    "description": "变量覆盖",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "version": {
-                    "description": "关联",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.ManifestVersion"
-                        }
-                    ]
-                },
-                "version_id": {
-                    "description": "部署的版本",
-                    "type": "string"
-                },
-                "version_name": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "description": "目标 Workspace",
-                    "type": "integer"
-                },
-                "workspace_name": {
-                    "description": "非数据库字段",
-                    "type": "string"
-                },
-                "workspace_semantic_id": {
-                    "description": "ws-xxx 格式",
-                    "type": "string"
-                }
-            }
-        },
-        "models.ManifestDeploymentListResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ManifestDeployment"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "total_pages": {
-                    "type": "integer"
-                }
-            }
-        },
-        "models.ManifestDeploymentResource": {
-            "type": "object",
-            "properties": {
-                "config_hash": {
-                    "description": "部署时的配置 hash，用于漂移检测",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "deployment_id": {
-                    "description": "所属部署",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "格式: mdr-{ulid}",
-                    "type": "string"
-                },
-                "node_id": {
-                    "description": "Manifest 中的节点 ID",
-                    "type": "string"
-                },
-                "resource_id": {
-                    "description": "workspace_resources.resource_id (语义 ID)",
-                    "type": "string"
-                }
-            }
-        },
-        "models.ManifestListResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Manifest"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "total_pages": {
-                    "type": "integer"
-                }
-            }
-        },
-        "models.ManifestVersion": {
-            "type": "object",
-            "properties": {
-                "canvas_data": {
-                    "description": "画布数据",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建者",
-                    "type": "string"
-                },
-                "created_by_name": {
-                    "description": "非数据库字段",
-                    "type": "string"
-                },
-                "edges": {
-                    "description": "连接关系",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "hcl_content": {
-                    "description": "生成的 HCL",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "格式: mfv-{ulid}",
-                    "type": "string"
-                },
-                "is_draft": {
-                    "description": "是否为草稿",
-                    "type": "boolean"
-                },
-                "manifest_id": {
-                    "description": "所属 Manifest",
-                    "type": "string"
-                },
-                "nodes": {
-                    "description": "节点配置",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "variables": {
-                    "description": "可配置变量",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "version": {
-                    "description": "版本号，如 v1.0.0, draft",
-                    "type": "string"
-                }
-            }
-        },
-        "models.ManifestVersionListResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ManifestVersion"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "total_pages": {
-                    "type": "integer"
                 }
             }
         },
@@ -30186,9 +33280,6 @@ const docTemplate = `{
         "models.ProviderTemplate": {
             "type": "object",
             "properties": {
-                "alias": {
-                    "type": "string"
-                },
                 "config": {
                     "$ref": "#/definitions/models.JSONB"
                 },
@@ -30244,16 +33335,18 @@ const docTemplate = `{
                 }
             }
         },
-        "models.PublishManifestVersionRequest": {
+        "models.PublishVersionRequest": {
             "type": "object",
             "required": [
                 "version"
             ],
             "properties": {
+                "changelog": {
+                    "type": "string"
+                },
                 "version": {
-                    "description": "如 v1.0.0",
-                    "type": "string",
-                    "maxLength": 50
+                    "description": "vMAJOR.MINOR.PATCH",
+                    "type": "string"
                 }
             }
         },
@@ -30391,7 +33484,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "summary_assessment_status": {
-                    "description": "摘要评估状态：空 | pending | assessed",
+                    "description": "摘要评估状态：空 | pending | partial | assessed",
                     "type": "string"
                 },
                 "summary_hash": {
@@ -30803,57 +33896,6 @@ const docTemplate = `{
                 "RunTaskStagePreApply",
                 "RunTaskStagePostApply"
             ]
-        },
-        "models.RunningTask": {
-            "type": "object",
-            "properties": {
-                "started_at": {
-                    "type": "string"
-                },
-                "task_id": {
-                    "type": "integer"
-                },
-                "task_type": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.SaveManifestVersionRequest": {
-            "type": "object",
-            "required": [
-                "canvas_data",
-                "edges",
-                "nodes"
-            ],
-            "properties": {
-                "canvas_data": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "edges": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "variables": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                }
-            }
         },
         "models.Schema": {
             "type": "object",
@@ -31667,31 +34709,12 @@ const docTemplate = `{
                 }
             }
         },
-        "models.UpdateManifestDeploymentRequest": {
-            "type": "object",
-            "properties": {
-                "auto_apply": {
-                    "type": "boolean"
-                },
-                "plan_only": {
-                    "type": "boolean"
-                },
-                "variable_overrides": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "version_id": {
-                    "type": "string"
-                }
-            }
-        },
         "models.UpdateManifestRequest": {
             "type": "object",
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 1024
                 },
                 "name": {
                     "type": "string"
@@ -31757,9 +34780,6 @@ const docTemplate = `{
         "models.UpdateProviderTemplateRequest": {
             "type": "object",
             "properties": {
-                "alias": {
-                    "type": "string"
-                },
                 "config": {
                     "type": "object",
                     "additionalProperties": true
@@ -31958,6 +34978,29 @@ const docTemplate = `{
                 }
             }
         },
+        "models.UpgradeDeploymentRequest": {
+            "type": "object",
+            "required": [
+                "target_version_id"
+            ],
+            "properties": {
+                "target_version_id": {
+                    "type": "string"
+                },
+                "variable_overrides": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "varsets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DeploymentVarsetEntry"
+                    }
+                }
+            }
+        },
         "models.User": {
             "type": "object",
             "properties": {
@@ -32143,10 +35186,6 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "is_locked": {
-                    "description": "锁定状态",
-                    "type": "boolean"
-                },
                 "k8s_config_id": {
                     "description": "K8s配置ID",
                     "type": "integer"
@@ -32171,17 +35210,27 @@ const docTemplate = `{
                     "description": "最后一次Plan执行时间",
                     "type": "string"
                 },
-                "lock_reason": {
+                "lock_id": {
+                    "description": "锁定状态（统一锁：UI 手动锁和 Terraform 运行时锁共用）",
                     "type": "string"
                 },
-                "locked_at": {
-                    "type": "string"
-                },
-                "locked_by": {
-                    "type": "string"
+                "lock_info": {
+                    "$ref": "#/definitions/models.JSONB"
                 },
                 "log_config": {
                     "$ref": "#/definitions/models.JSONB"
+                },
+                "manifest_active_tag": {
+                    "description": "当前激活的 vX.Y.Z",
+                    "type": "string"
+                },
+                "manifest_deployment_id": {
+                    "description": "Manifest 软链接(workspace 装了 manifest 时三列同生同死;一致性 CHECK 见 migration)",
+                    "type": "string"
+                },
+                "manifest_subpath": {
+                    "description": "terraform 执行子目录,空 = manifest 根",
+                    "type": "string"
                 },
                 "max_retries": {
                     "type": "integer"
@@ -32216,16 +35265,8 @@ const docTemplate = `{
                     "description": "Provider配置变更跟踪（用于优化 terraform init -upgrade）",
                     "type": "string"
                 },
-                "provider_overrides": {
-                    "description": "按provider类型的字段覆盖",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.JSONB"
-                        }
-                    ]
-                },
-                "provider_template_ids": {
-                    "description": "Provider模板引用",
+                "provider_instances": {
+                    "description": "Provider实例数组: [{template_id, alias, overrides}]\n同一模板可被多次实例化，每个实例独立设置 alias 和 overrides",
                     "allOf": [
                         {
                             "$ref": "#/definitions/models.JSONB"
@@ -32716,6 +35757,14 @@ const docTemplate = `{
                     "description": "执行节点标识",
                     "type": "string"
                 },
+                "external_files": {
+                    "description": "Manifest Run 临时文件: manifest 编辑器 [Run] 按钮触发 plan-only 时,\n把当前用户私有草稿全量上传到这里,executor 走 Run 分支(完全忽略\nworkspace.ManifestDeploymentID)用 ExternalFiles 跑 plan。任务跑完即抛,\n不污染 manifest_files / workspace 任何持久状态。\n数据格式: [{\"path\": \"main.tf\", \"content_b64\": \"...\"}]",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.JSONB"
+                        }
+                    ]
+                },
                 "id": {
                     "description": "基础字段",
                     "type": "integer"
@@ -32791,6 +35840,10 @@ const docTemplate = `{
                     "description": "Plan+Apply流程字段",
                     "type": "string"
                 },
+                "snapshot_manifest_version_id": {
+                    "description": "Manifest版本ID快照（manifest-managed workspace 用，供 code diff 回溯）",
+                    "type": "string"
+                },
                 "snapshot_provider_config": {
                     "description": "Provider配置快照",
                     "allOf": [
@@ -32801,14 +35854,6 @@ const docTemplate = `{
                 },
                 "snapshot_resource_versions": {
                     "description": "Plan+Apply快照字段（新版本，用于修复竞态条件bug）",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.JSONB"
-                        }
-                    ]
-                },
-                "snapshot_variables": {
-                    "description": "变量快照",
                     "allOf": [
                         {
                             "$ref": "#/definitions/models.JSONB"
@@ -32842,6 +35887,18 @@ const docTemplate = `{
                 "updated_at": {
                     "type": "string"
                 },
+                "variable_overrides": {
+                    "description": "Manifest deployment 变量应急覆盖快照: 任务创建时把当时 active deployment 的\nvariable_overrides(扁平 key=string,最高优先级)固化到任务行;执行时 overlay 到\n解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——\noverrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。\n数据格式: {\"key\": \"value\"}",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.JSONB"
+                        }
+                    ]
+                },
+                "variable_snapshot_id": {
+                    "description": "变量快照ID（关联variable_snapshots表）",
+                    "type": "string"
+                },
                 "workspace": {
                     "description": "关联",
                     "allOf": [
@@ -32862,6 +35919,18 @@ const docTemplate = `{
                 "action": {
                     "description": "变更信息",
                     "type": "string"
+                },
+                "after_unknown": {
+                    "description": "标记哪些字段为 known after apply",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.JSONB"
+                        }
+                    ]
+                },
+                "applied_code_version": {
+                    "description": "Apply 时的代码版本号（resource_code_versions.version）",
+                    "type": "integer"
                 },
                 "apply_completed_at": {
                     "type": "string"
@@ -33456,6 +36525,9 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -33471,6 +36543,56 @@ const docTemplate = `{
                 },
                 "task_type": {
                     "description": "添加task_type字段",
+                    "type": "string"
+                }
+            }
+        },
+        "services.ManifestFix": {
+            "type": "object",
+            "properties": {
+                "end_line": {
+                    "description": "结束行（1-based，含）",
+                    "type": "integer"
+                },
+                "file": {
+                    "description": "目标文件路径",
+                    "type": "string"
+                },
+                "new_text": {
+                    "description": "替换后的文本",
+                    "type": "string"
+                },
+                "start_line": {
+                    "description": "起始行（1-based，含）",
+                    "type": "integer"
+                }
+            }
+        },
+        "services.ManifestIssue": {
+            "type": "object",
+            "properties": {
+                "file": {
+                    "description": "文件路径（打包内容来源）",
+                    "type": "string"
+                },
+                "fix": {
+                    "description": "可修复项才有：结构化修复",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.ManifestFix"
+                        }
+                    ]
+                },
+                "level": {
+                    "description": "严重级别: error | warning | info",
+                    "type": "string"
+                },
+                "line": {
+                    "description": "行号（从 1 开始，0 表示无法定位）",
+                    "type": "integer"
+                },
+                "message": {
+                    "description": "问题描述",
                     "type": "string"
                 }
             }
@@ -33573,9 +36695,28 @@ const docTemplate = `{
                     "description": "错误时的数据",
                     "type": "string"
                 },
+                "hcl": {
+                    "description": "Manifest AI 完成时的数据",
+                    "type": "string"
+                },
+                "issues": {
+                    "description": "manifest check 结果（问题列表）",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ManifestIssue"
+                    }
+                },
                 "message": {
                     "description": "详细消息（可选）",
                     "type": "string"
+                },
+                "search_summary": {
+                    "description": "CMDB 搜索结果 AI 解读完成时的数据",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.SearchSummaryResult"
+                        }
+                    ]
                 },
                 "step": {
                     "description": "当前步骤（从 1 开始）",
@@ -33596,6 +36737,13 @@ const docTemplate = `{
                 "usage_log_id": {
                     "description": "Skill 使用日志 ID（用于前端行为上报）",
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "生成结果的 schema 校验警告",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -33653,6 +36801,123 @@ const docTemplate = `{
                 }
             }
         },
+        "services.SearchSummaryDropped": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.SearchSummaryGroup": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.SearchSummaryHighlight": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.SearchSummaryInputResource": {
+            "type": "object",
+            "properties": {
+                "cloud_account_name": {
+                    "type": "string"
+                },
+                "cloud_region": {
+                    "type": "string"
+                },
+                "cloud_resource_id": {
+                    "type": "string"
+                },
+                "cloud_resource_name": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "external_source_name": {
+                    "type": "string"
+                },
+                "index": {
+                    "description": "0-based，与请求数组顺序一致，供 AI 筛查引用",
+                    "type": "integer"
+                },
+                "is_resource_deleted": {
+                    "type": "boolean"
+                },
+                "resource_name": {
+                    "type": "string"
+                },
+                "resource_summary": {
+                    "type": "string"
+                },
+                "resource_type": {
+                    "type": "string"
+                },
+                "similarity": {
+                    "type": "number"
+                },
+                "source_type": {
+                    "type": "string"
+                },
+                "workspace_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.SearchSummaryResult": {
+            "type": "object",
+            "properties": {
+                "dropped": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.SearchSummaryDropped"
+                    }
+                },
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.SearchSummaryGroup"
+                    }
+                },
+                "highlights": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.SearchSummaryHighlight"
+                    }
+                },
+                "overview": {
+                    "type": "string"
+                },
+                "screened_count": {
+                    "description": "实际送入 AI 筛查的条数",
+                    "type": "integer"
+                },
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "services.SetDefaultVersionRequest": {
             "type": "object",
             "required": [
@@ -33703,9 +36968,6 @@ const docTemplate = `{
                     "description": "基本信息",
                     "type": "integer"
                 },
-                "is_locked": {
-                    "type": "boolean"
-                },
                 "last_apply_at": {
                     "type": "string"
                 },
@@ -33723,11 +36985,11 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "lock_reason": {
+                "lock_id": {
                     "type": "string"
                 },
-                "locked_by": {
-                    "type": "string"
+                "lock_info": {
+                    "$ref": "#/definitions/models.JSONB"
                 },
                 "locked_by_username": {
                     "description": "锁定者用户名",
@@ -33826,6 +37088,7 @@ const docTemplate = `{
                 "AI_ANALYSIS",
                 "SYSTEM_SETTINGS",
                 "RUN_TASKS",
+                "VARIABLE_SETS",
                 "PROJECT_SETTINGS",
                 "PROJECT_TEAM_MANAGEMENT",
                 "PROJECT_WORKSPACES",
@@ -33862,6 +37125,7 @@ const docTemplate = `{
                 "ResourceTypeAIAnalysis",
                 "ResourceTypeSystemSettings",
                 "ResourceTypeRunTasks",
+                "ResourceTypeVariableSets",
                 "ResourceTypeProjectSettings",
                 "ResourceTypeProjectTeams",
                 "ResourceTypeProjectWorkspaces",

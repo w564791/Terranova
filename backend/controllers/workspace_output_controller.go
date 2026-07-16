@@ -30,6 +30,17 @@ func generateOutputID() string {
 }
 
 // GetOutputsCombined returns outputs config merged with state values and resource list
+// @Summary Get combined workspace outputs
+// @Description Get outputs configuration merged with current state values and related resources
+// @Tags Workspace Output
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{} "Combined outputs, resources, and state metadata"
+// @Failure 400 {object} map[string]interface{} "Invalid workspace ID"
+// @Failure 404 {object} map[string]interface{} "Workspace not found"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/outputs/combined [get]
 func (c *WorkspaceOutputController) GetOutputsCombined(ctx *gin.Context) {
 	workspaceIDParam := ctx.Param("id")
 	if workspaceIDParam == "" {
@@ -555,18 +566,20 @@ func (c *WorkspaceOutputController) GetStateOutputs(ctx *gin.Context) {
 }
 
 // GetStateOutputsFull 获取当前State中的完整Outputs信息（API使用，包含sensitive数据）
-// @Summary 获取完整State Outputs（API）
-// @Description 从当前State中获取完整Outputs信息，包含sensitive数据的值。仅供API调用使用。
+// @Summary 获取完整State Outputs（远程数据临时 Token）
+// @Description 从当前 State 获取完整 Outputs（含 sensitive）。公开路由：不走 JWT，需 Authorization Bearer 短时 remote-data token（Terraform http data source）。主 JWT 工作区接口请用 GET .../state-outputs。
 // @Tags Workspace Output
 // @Accept json
 // @Produce json
 // @Param id path string true "工作空间ID"
+// @Param Authorization header string true "Bearer {remote_data_temporary_token}"
 // @Success 200 {object} models.StateOutputInfo "成功返回完整State Outputs"
 // @Failure 400 {object} map[string]interface{} "无效的工作空间ID"
+// @Failure 401 {object} map[string]interface{} "缺少或无效的临时 Token"
+// @Failure 403 {object} map[string]interface{} "Token 与 workspace 不匹配"
 // @Failure 404 {object} map[string]interface{} "State不存在"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
 // @Router /api/v1/workspaces/{id}/state-outputs/full [get]
-// @Security BearerAuth
 func (c *WorkspaceOutputController) GetStateOutputsFull(ctx *gin.Context) {
 	c.getStateOutputsInternal(ctx, true)
 }

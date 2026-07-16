@@ -52,6 +52,17 @@ type DemoSummary struct {
 }
 
 // ListModules GET /manifest-editor/modules?q=&limit=20
+// @Summary List modules for editor
+// @Description Lightweight module list for manifest editor IntelliSense
+// @Tags Manifest Editor
+// @Accept json
+// @Produce json
+// @Param q query string false "Search query (name, source, description)"
+// @Param limit query int false "Max results" default(20)
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/manifest-editor/modules [get]
+// @Security BearerAuth
 func (h *ManifestEditorHandler) ListModules(c *gin.Context) {
 	q := c.Query("q")
 	limitStr := c.DefaultQuery("limit", "20")
@@ -109,6 +120,17 @@ func (h *ManifestEditorHandler) ListModules(c *gin.Context) {
 }
 
 // ListDemos GET /manifest-editor/modules/:module_id/demos
+// @Summary List module demos for editor
+// @Description List demos of a module's default version for editor IntelliSense
+// @Tags Manifest Editor
+// @Accept json
+// @Produce json
+// @Param module_id path int true "Module ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/manifest-editor/modules/{module_id}/demos [get]
+// @Security BearerAuth
 func (h *ManifestEditorHandler) ListDemos(c *gin.Context) {
 	idStr := c.Param("module_id")
 	moduleID, err := strconv.ParseUint(idStr, 10, 64)
@@ -179,6 +201,17 @@ type ModuleInputField struct {
 // 从 module 活跃 schema 的 OpenAPI 定义提取输入变量（name / type / type_label / required / …），
 // 供编辑器在 module 块内做属性补全（Tier3）。不做 x-iac-platform 条件过滤。
 // 数据源: components.schemas.ModuleInput.properties + required。
+// @Summary List module inputs for editor
+// @Description Extract module input variables from active OpenAPI schema for editor completion
+// @Tags Manifest Editor
+// @Accept json
+// @Produce json
+// @Param module_id path int true "Module ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/manifest-editor/modules/{module_id}/inputs [get]
+// @Security BearerAuth
 func (h *ManifestEditorHandler) ListModuleInputs(c *gin.Context) {
 	idStr := c.Param("module_id")
 	moduleID, err := strconv.ParseUint(idStr, 10, 64)

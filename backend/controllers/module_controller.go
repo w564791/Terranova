@@ -228,18 +228,19 @@ func (mc *ModuleController) CreateModule(c *gin.Context) {
 }
 
 // UpdateModule 更新模块
-// @Summary 更新模块信息
-// @Description 更新模块的配置信息
+// @Summary Update module
+// @Description Update module configuration (supports both PUT and PATCH)
 // @Tags Module
 // @Accept json
 // @Produce json
-// @Param id path int true "模块ID"
-// @Param request body object true "更新信息"
-// @Success 200 {object} map[string]interface{} "更新成功"
-// @Failure 400 {object} map[string]interface{} "请求参数无效"
-// @Failure 404 {object} map[string]interface{} "模块不存在"
-// @Failure 500 {object} map[string]interface{} "更新失败"
+// @Param id path int true "Module ID"
+// @Param request body object true "Update fields"
+// @Success 200 {object} map[string]interface{} "Update successful"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 404 {object} map[string]interface{} "Module not found"
+// @Failure 500 {object} map[string]interface{} "Update failed"
 // @Router /api/v1/modules/{id} [put]
+// @Router /api/v1/modules/{id} [patch]
 // @Security BearerAuth
 func (mc *ModuleController) UpdateModule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)

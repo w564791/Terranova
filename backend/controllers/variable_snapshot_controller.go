@@ -23,6 +23,17 @@ func NewVariableSnapshotController(db *gorm.DB) *VariableSnapshotController {
 }
 
 // CreateSnapshot POST /workspaces/:id/variable-snapshots
+// @Summary Create variable snapshot
+// @Description Create a variable snapshot for a workspace
+// @Tags Workspace Variable
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Success 201 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/variable-snapshots [post]
 func (c *VariableSnapshotController) CreateSnapshot(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	var userID *string
@@ -47,6 +58,19 @@ func (c *VariableSnapshotController) CreateSnapshot(ctx *gin.Context) {
 }
 
 // DeleteSnapshot DELETE /workspaces/:id/variable-snapshots/:vsnap_id
+// @Summary Delete variable snapshot
+// @Description Delete a variable snapshot from a workspace
+// @Tags Workspace Variable
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param vsnap_id path string true "Variable snapshot ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/variable-snapshots/{vsnap_id} [delete]
 func (c *VariableSnapshotController) DeleteSnapshot(ctx *gin.Context) {
 	vsnapID := ctx.Param("vsnap_id")
 	if vsnapID == "" {

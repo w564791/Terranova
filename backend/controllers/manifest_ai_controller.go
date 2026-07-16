@@ -142,7 +142,18 @@ func checkedFileContexts(files []CheckFile) []map[string]interface{} {
 }
 
 // GenerateResourceSSE 生成/修复 manifest 资源（SSE 实时进度）
+// @Summary Generate or fix manifest resource (SSE)
+// @Description Stream AI generation/repair progress for manifest HCL via Server-Sent Events
+// @Tags Manifest AI
+// @Accept json
+// @Produce text/event-stream
+// @Param request body GenerateResourceRequest true "Generation request"
+// @Success 200 {object} map[string]interface{} "SSE event stream"
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/ai/manifest/generate-resource-sse [post]
+// @Security BearerAuth
 func (c *ManifestAIController) GenerateResourceSSE(ctx *gin.Context) {
 	flusher, ok := c.prepareSSE(ctx)
 	if !ok {
@@ -223,7 +234,18 @@ func (c *ManifestAIController) GenerateResourceSSE(ctx *gin.Context) {
 }
 
 // CheckDraftSSE 检查 manifest 草稿（SSE 实时进度）
+// @Summary Check manifest draft (SSE)
+// @Description Stream AI draft check progress via Server-Sent Events
+// @Tags Manifest AI
+// @Accept json
+// @Produce text/event-stream
+// @Param request body CheckDraftRequest true "Check request"
+// @Success 200 {object} map[string]interface{} "SSE event stream"
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/ai/manifest/check-sse [post]
+// @Security BearerAuth
 func (c *ManifestAIController) CheckDraftSSE(ctx *gin.Context) {
 	flusher, ok := c.prepareSSE(ctx)
 	if !ok {
@@ -365,6 +387,19 @@ func (c *ManifestAIController) userID(ctx *gin.Context) (string, bool) {
 }
 
 // ListSessions GET /ai/manifest/sessions?manifest_id=&org_id=
+// @Summary List manifest AI sessions
+// @Description List AI chat sessions for a manifest owned by the current user
+// @Tags Manifest AI
+// @Accept json
+// @Produce json
+// @Param manifest_id query string true "Manifest ID"
+// @Param org_id query string false "Organization ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/ai/manifest/sessions [get]
+// @Security BearerAuth
 func (c *ManifestAIController) ListSessions(ctx *gin.Context) {
 	uid, ok := c.userID(ctx)
 	if !ok {
@@ -384,6 +419,18 @@ func (c *ManifestAIController) ListSessions(ctx *gin.Context) {
 }
 
 // CreateSession POST /ai/manifest/sessions  body: {manifest_id, org_id, title?}
+// @Summary Create manifest AI session
+// @Description Create a new AI chat session for a manifest
+// @Tags Manifest AI
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "Session payload (manifest_id required; org_id, title optional)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/ai/manifest/sessions [post]
+// @Security BearerAuth
 func (c *ManifestAIController) CreateSession(ctx *gin.Context) {
 	uid, ok := c.userID(ctx)
 	if !ok {
@@ -410,6 +457,17 @@ func (c *ManifestAIController) CreateSession(ctx *gin.Context) {
 }
 
 // GetSessionMessages GET /ai/manifest/sessions/:sid/messages
+// @Summary Get manifest AI session messages
+// @Description Get messages for an AI session owned by the current user
+// @Tags Manifest AI
+// @Accept json
+// @Produce json
+// @Param sid path string true "Session ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Router /api/v1/ai/manifest/sessions/{sid}/messages [get]
+// @Security BearerAuth
 func (c *ManifestAIController) GetSessionMessages(ctx *gin.Context) {
 	uid, ok := c.userID(ctx)
 	if !ok {
@@ -424,6 +482,17 @@ func (c *ManifestAIController) GetSessionMessages(ctx *gin.Context) {
 }
 
 // DeleteSession DELETE /ai/manifest/sessions/:sid
+// @Summary Delete manifest AI session
+// @Description Delete an AI session owned by the current user
+// @Tags Manifest AI
+// @Accept json
+// @Produce json
+// @Param sid path string true "Session ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Router /api/v1/ai/manifest/sessions/{sid} [delete]
+// @Security BearerAuth
 func (c *ManifestAIController) DeleteSession(ctx *gin.Context) {
 	uid, ok := c.userID(ctx)
 	if !ok {

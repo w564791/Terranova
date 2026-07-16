@@ -43,6 +43,19 @@ func NewManifestFilesHandler(db *gorm.DB) *ManifestFilesHandler {
 const ManifestMaxFileSize = 1 * 1024 * 1024 // 1 MB
 
 // ListFiles 返回文件树。version 查询参数: 空 = 草稿; <version_id> = 已发布版本只读
+// @Summary List manifest files
+// @Description List current user draft file tree, or a published version when version is set
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version query string false "Version ID (omit or draft for current user draft)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files [get]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) ListFiles(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Query("version")
@@ -89,6 +102,21 @@ func (h *ManifestFilesHandler) ListFiles(c *gin.Context) {
 }
 
 // ReadFile 读单文件内容。binary 文件以 base64 形式返回
+// @Summary Read manifest file
+// @Description Read a single file from draft or published version; binary content is base64-encoded
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param path path string true "File path within the manifest"
+// @Param version query string false "Version ID (omit or draft for current user draft)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files/{path} [get]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) ReadFile(c *gin.Context) {
 	manifestID := c.Param("id")
 	rawPath := c.Param("path")
@@ -134,6 +162,23 @@ func (h *ManifestFilesHandler) ReadFile(c *gin.Context) {
 }
 
 // PutFile 写当前用户草稿
+// @Summary Write manifest draft file
+// @Description Create or update a file in the current user's draft (text content or base64 binary)
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param path path string true "File path within the manifest"
+// @Param request body map[string]interface{} true "File payload (content or content_b64)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 413 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files/{path} [put]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) PutFile(c *gin.Context) {
 	manifestID := c.Param("id")
 	rawPath := c.Param("path")
@@ -221,6 +266,20 @@ func (h *ManifestFilesHandler) PutFile(c *gin.Context) {
 }
 
 // DeleteFile 删当前用户草稿单文件
+// @Summary Delete manifest draft file
+// @Description Delete a single file from the current user's draft
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param path path string true "File path within the manifest"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files/{path} [delete]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) DeleteFile(c *gin.Context) {
 	manifestID := c.Param("id")
 	rawPath := c.Param("path")
@@ -246,6 +305,19 @@ func (h *ManifestFilesHandler) DeleteFile(c *gin.Context) {
 }
 
 // MoveFile 重命名 / 移动
+// @Summary Move or rename draft file
+// @Description Rename or move a single file in the current user's draft
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body map[string]interface{} true "Move payload (from, to)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files/_move [post]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) MoveFile(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -310,6 +382,20 @@ func (h *ManifestFilesHandler) MoveFile(c *gin.Context) {
 
 // DeleteDir 删除目录:删当前用户草稿里 path 以 "<dir>/" 开头的所有文件。
 // 目录在本模型是虚拟的(无目录实体),所以删目录 = 批量删前缀下文件,一次事务。
+// @Summary Delete draft directory
+// @Description Delete all draft files under a directory prefix for the current user
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body map[string]interface{} true "Delete dir payload (dir)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files/_delete_dir [post]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) DeleteDir(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -349,6 +435,20 @@ func (h *ManifestFilesHandler) DeleteDir(c *gin.Context) {
 
 // MoveDir 按前缀批量移动目录:把 from/ 前缀下所有草稿文件 path 改为 to/ 前缀(事务原子)。
 // 用于文件树拖拽移动文件夹。目标前缀下若已存在同名文件则整体失败(报错不覆盖)。
+// @Summary Move draft directory
+// @Description Move all draft files under a directory prefix for the current user
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body map[string]interface{} true "Move dir payload (from, to)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/files/_move_dir [post]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) MoveDir(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -430,6 +530,20 @@ func (h *ManifestFilesHandler) MoveDir(c *gin.Context) {
 }
 
 // ResetDraftFromVersion 用某 published 版本覆盖当前用户草稿
+// @Summary Reset draft from version
+// @Description Overwrite the current user's draft with files from a published version
+// @Tags Manifest Files
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version_id query string true "Published version ID to reset from"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/draft/_reset_from [post]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Query("version_id")
@@ -482,6 +596,17 @@ func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 }
 
 // ExportDraft 导出当前用户草稿为 zip
+// @Summary Export draft ZIP
+// @Description Export the current user's draft files as a ZIP archive
+// @Tags Manifest Files
+// @Accept json
+// @Produce application/zip
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Success 200 {file} binary "ZIP archive"
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/draft/_export [post]
+// @Security BearerAuth
 func (h *ManifestFilesHandler) ExportDraft(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")

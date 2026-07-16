@@ -227,19 +227,8 @@ func (c *ModuleSkillController) UpdateModuleSkill(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, skill)
 }
 
-// DeleteModuleSkill 删除 Module Skill
-// @Summary 删除 Module Skill
-// @Description 删除 Module 关联的 Skill
-// @Tags Module Skill
-// @Accept json
-// @Produce json
-// @Param module_id path int true "Module ID"
-// @Success 200 {object} map[string]string
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/v1/admin/modules/{module_id}/skill [delete]
-// @Security BearerAuth
+// DeleteModuleSkill 删除 Module Skill.
+// NOTE: Not registered in router (no DELETE route for module skill). Not published in Swagger.
 func (c *ModuleSkillController) DeleteModuleSkill(ctx *gin.Context) {
 	moduleIDStr := ctx.Param("module_id")
 	moduleID, err := strconv.ParseUint(moduleIDStr, 10, 32)

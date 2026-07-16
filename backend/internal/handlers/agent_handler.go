@@ -215,22 +215,8 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// PingAgent handles agent heartbeat
-// NOTE: This endpoint is currently disabled (commented out in router).
-// @Summary Agent heartbeat
-// @Description Update agent heartbeat and status (currently disabled)
-// @Tags Agent
-// @Accept json
-// @Produce json
-// @Security PoolTokenAuth
-// @Param agent_id path string true "Agent ID"
-// @Param request body models.AgentPingRequest true "Ping request"
-// @Success 200 {object} models.AgentPingResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/agents/{agent_id}/ping [post]
+// PingAgent handles agent heartbeat.
+// NOTE: Route is currently disabled (commented out in router). Not published in Swagger.
 func (h *AgentHandler) PingAgent(c *gin.Context) {
 	agentID := c.Param("agent_id")
 	if agentID == "" {

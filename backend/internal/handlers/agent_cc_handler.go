@@ -72,18 +72,9 @@ func NewAgentCCHandler(db *gorm.DB) *AgentCCHandler {
 	}
 }
 
-// HandleCCConnection handles C&C WebSocket connection
-// @Summary Agent C&C WebSocket connection
-// @Description Establish a WebSocket connection for Agent Command & Control. This is a WebSocket upgrade endpoint, not a regular HTTP endpoint. The agent sends heartbeats and receives task assignments via this channel.
-// @Tags Agent C&C
-// @Produce json
-// @Security PoolTokenAuth
-// @Param agent_id query string true "Agent ID"
-// @Success 101 {string} string "WebSocket upgrade successful"
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/agents/control [get]
+// HandleCCConnection handles C&C WebSocket connection on the standalone C&C server (port 8091).
+// The main API (8080) registers a 410 Gone stub for the same path; see controllers/swagger_route_docs.go.
+// Not published under main-API Swagger (would mis-document 410 as WS upgrade).
 func (h *AgentCCHandler) HandleCCConnection(c *gin.Context) {
 	agentID := c.Query("agent_id")
 	if agentID == "" {
@@ -642,19 +633,8 @@ func (h *AgentCCHandler) BroadcastToAgent(agentID string, messageType string, pa
 	return h.sendMessage(agentConn, msg)
 }
 
-// GetAgentStatusAPI returns agent status via HTTP API (for debugging)
-// NOTE: This endpoint is currently deprecated and not registered in the router.
-// @Summary Get agent C&C status (deprecated)
-// @Description Get current C&C connection status of an agent. This endpoint is deprecated - C&C is now handled by the standalone WebSocket server.
-// @Tags Agent C&C
-// @Accept json
-// @Produce json
-// @Security PoolTokenAuth
-// @Param agent_id path string true "Agent ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/agents/{agent_id}/cc-status [get]
+// GetAgentStatusAPI returns agent status via HTTP API (for debugging).
+// NOTE: Deprecated and not registered in the router. Not published in Swagger.
 func (h *AgentCCHandler) GetAgentStatusAPI(c *gin.Context) {
 	agentID := c.Param("agent_id")
 	if agentID == "" {

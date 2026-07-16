@@ -39,6 +39,17 @@ func NewManifestDeploymentsV2Handler(db *gorm.DB, perm *middleware.IAMPermission
 }
 
 // ListDeployments 列出某 manifest 的所有 deployment
+// @Summary List manifest deployments
+// @Description List all deployments for a manifest
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments [get]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
 	manifestID := c.Param("id")
 	var rows []models.ManifestDeployment
@@ -51,6 +62,19 @@ func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
 }
 
 // GetDeployment 详情(含 varsets 关联)
+// @Summary Get manifest deployment
+// @Description Get deployment detail including linked variable sets
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param deployment_id path string true "Deployment ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id} [get]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 	var d models.ManifestDeployment
@@ -68,6 +92,21 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 }
 
 // Install 把指定 published version 装到空 workspace
+// @Summary Install manifest deployment
+// @Description Install a published version onto an empty workspace
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body models.InstallDeploymentRequest true "Install payload"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install [post]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -236,6 +275,23 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 }
 
 // Upgrade 切换版本与 varsets,reconcile workspace_resources
+// @Summary Upgrade manifest deployment
+// @Description Switch deployment version and varsets; reconcile workspace resources
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param deployment_id path string true "Deployment ID"
+// @Param request body models.UpgradeDeploymentRequest true "Upgrade payload"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/upgrade [post]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 	manifestID := c.Param("id")
@@ -383,6 +439,21 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 
 // Uninstall 解绑 manifest 与 workspace,清相关 workspace_resources
 // 不动云端;workspace 进入"反向漂移"状态等待用户跑 Plan+Apply 清理
+// @Summary Uninstall manifest deployment
+// @Description Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources)
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param deployment_id path string true "Deployment ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/uninstall [post]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 	manifestID := c.Param("id")
@@ -444,6 +515,21 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 }
 
 // VariablePreview 返回最终合并后的变量值(非敏感)用于 install/upgrade 对话框预览
+// @Summary Preview deployment variables
+// @Description Preview non-sensitive merged variable values for install/upgrade dialogs
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param deployment_id path string true "Deployment ID"
+// @Param request body map[string]interface{} true "Varsets and variable_overrides for preview"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/variable-preview [post]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 
@@ -481,6 +567,15 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 //
 // workspace 视角下,active manifest 软链接已在 workspaces 表;这个端点把
 // deployment 与 manifest 的关键展示字段一次性返回,避免前端做 N 次反查。
+// @Summary Get workspace manifest summary
+// @Description Lightweight active-manifest summary for workspace resource page/banner
+// @Tags Workspace
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/workspaces/{id}/manifest-summary [get]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Context) {
 	// 路由用 :id(与 /workspaces/:id 前缀一致,避免 gin 通配符冲突 panic)
 	workspaceID := c.Param("id")
@@ -551,6 +646,16 @@ func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Contex
 
 // VarsetReverseLookup 列出使用某 varset 的 active deployment
 // GET /variable-sets/:varset_id/manifest-deployments
+// @Summary List deployments using variable set
+// @Description List active manifest deployments that reference a variable set
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/variable-sets/{varset_id}/manifest-deployments [get]
+// @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) VarsetReverseLookup(c *gin.Context) {
 	varsetID := c.Param("varset_id")
 
