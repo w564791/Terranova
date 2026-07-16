@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Component, type ReactNode } from 'react';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { processApiSchema } from '../utils/schemaTypeMapper';
@@ -19,7 +19,6 @@ import { JsonEditor } from '../components/DynamicForm/JsonEditor';
 import HCLEditor from '../components/HCLEditor/HCLEditor';
 import DemoSelector from '../components/DemoSelector';
 import ConfirmDialog from '../components/ConfirmDialog';
-import TopBar from '../components/TopBar';
 import { listVersions, type ModuleVersion } from '../services/moduleVersions';
 import { moduleService, type AIPrompt } from '../services/modules';
 import styles from './AddResources.module.css';
@@ -1466,46 +1465,9 @@ const AddResources: React.FC = () => {
     }
   };
 
-  // 导航菜单项
-  const navItems = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'runs', label: 'Runs' },
-    { id: 'states', label: 'States' },
-    { id: 'resources', label: 'Resources' },
-    { id: 'variables', label: 'Variables' },
-    { id: 'outputs', label: 'Outputs' },
-    { id: 'health', label: 'Health' },
-  ];
-
   return (
-    <div className={styles.workspaceLayout}>
-      {/* 左侧导航栏 */}
-      <aside className={styles.workspaceSidebar}>
-        <div className={styles.workspaceHeader}>
-          <button onClick={() => navigate('/workspaces')} className={styles.sidebarBackButton}>
-            ← Workspaces
-          </button>
-          <h1 className={styles.workspaceTitle}>添加资源</h1>
-        </div>
-
-        {/* 导航菜单 */}
-        <nav className={styles.workspaceNav}>
-          {navItems.map((item) => (
-            <Link
-              key={item.id}
-              to={`/workspaces/${id}?tab=${item.id}`}
-              className={`${styles.navItem} ${item.id === 'resources' ? styles.navItemActive : ''}`}
-            >
-              <span className={styles.navLabel}>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-      </aside>
-
-      {/* 右侧主内容区 */}
-      <main className={styles.workspaceMain}>
-        <TopBar />
-        
+    <div className={styles.workspacePage}>
+      <div className={styles.workspaceMain}>
         <div className={styles.container}>
           <div className={styles.header}>
             <div className={styles.headerLeft}>
@@ -1581,7 +1543,7 @@ const AddResources: React.FC = () => {
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       <ConfirmDialog
         isOpen={showDemoConfirmDialog}

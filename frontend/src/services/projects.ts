@@ -71,11 +71,17 @@ export const createProject = async (data: CreateProjectRequest): Promise<Project
   return response as any;
 };
 
+// 删除项目（默认项目后端会拒绝）
+export const deleteProject = async (projectId: number): Promise<void> => {
+  await api.delete(`/iam/projects/${projectId}`);
+};
+
 export default {
   getProjects,
   getProjectWorkspaces,
   getWorkspaceProject,
   setWorkspaceProject,
   removeWorkspaceFromProject,
-  createProject
+  createProject,
+  deleteProject,
 };

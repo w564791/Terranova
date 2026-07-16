@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
-import { logout } from '../store/slices/authSlice';
-import { authService } from '../services/auth';
-import MotivationalQuote from './MotivationalQuote';
 import NoPermission from '../pages/NoPermission';
-import { useUIVersion } from '../hooks/useUIVersion';
+import TopBar from './TopBar';
 import styles from './Layout.module.css';
 
 const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hasDashboardPermission, setHasDashboardPermission] = useState(false);
@@ -24,13 +19,22 @@ const Layout: React.FC = () => {
   const [hasVariableSetsPermission, setHasVariableSetsPermission] = useState(false);
   const [hasGlobalSettingsPermission, setHasGlobalSettingsPermission] = useState(false);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
-  const { isV3, setVersion } = useUIVersion();
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
 
   React.useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
     }
   }, [isAuthenticated, navigate]);
+
+  // Auto-expand submenu when current route is under it
+  React.useEffect(() => {
+    setExpandedMenus((prev) => {
+      const next = new Set(prev);
+      if (location.pathname.startsWith('/global')) next.add('/global');
+      return Array.from(next);
+    });
+  }, [location.pathname]);
 
   // 检查用户是否有DASHBOARD、WORKSPACES和MODULES权限
   React.useEffect(() => {
@@ -105,20 +109,6 @@ const Layout: React.FC = () => {
     return <div>Loading...</div>;
   }
 
-  const handleLogout = async () => {
-    try {
-      await authService.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      dispatch(logout());
-      navigate('/login');
-    }
-    setShowUserMenu(false);
-  };
-
-  const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
-
   // Filter navigation menu based on user role
   const allNavItems = [
     { path: '/', label: 'Dashboard', icon: '', requireAdmin: false },
@@ -127,6 +117,7 @@ const Layout: React.FC = () => {
     { path: '/workspaces', label: 'Workspaces', icon: '', requireWorkspacesPermission: true },
     { path: '/variable-sets', label: 'Variable Sets', icon: '', requireVariableSetsPermission: true },
     { path: '/cmdb', label: 'CMDB', icon: '' },
+    // Enter IAM context shell (own left nav); do not expand as main-app submenu
     { path: '/iam/organizations', label: 'IAM', icon: '', requireIAMPermission: true },
     {
       path: '/global',
@@ -146,6 +137,20 @@ const Layout: React.FC = () => {
       ]
     },
   ];
+
+  /** Prefix match for nested routes; `/` is exact-only. IAM entry highlights for all /iam/*. */
+  const isNavActive = (itemPath: string) => {
+    if (itemPath === '/') return location.pathname === '/';
+    // Main-app link into IAM context: stay highlighted for any /iam route (user may navigate back via browser)
+    if (itemPath === '/iam/organizations') {
+      return location.pathname.startsWith('/iam');
+    }
+    return location.pathname === itemPath || location.pathname.startsWith(`${itemPath}/`);
+  };
+
+  const isChildActive = (childPath: string) => {
+    return location.pathname === childPath || location.pathname.startsWith(`${childPath}/`);
+  };
 
   // 根据用户权限过滤菜单（system_admin 看到所有菜单）
   const navItems = user?.is_system_admin
@@ -268,7 +273,9 @@ const Layout: React.FC = () => {
                 // 有子菜单的项目使用 button 来展开/折叠
                 <button
                   className={`${styles.navItem} ${
-                    item.children.some(child => location.pathname === child.path) ? styles.active : ''
+                    item.children.some((child) => isChildActive(child.path)) || isNavActive(item.path)
+                      ? styles.active
+                      : ''
                   }`}
                   onClick={() => toggleMenu(item.path)}
                   title={sidebarCollapsed ? item.label : ''}
@@ -287,9 +294,7 @@ const Layout: React.FC = () => {
                 // 没有子菜单的项目使用 Link
                 <Link
                   to={item.path}
-                  className={`${styles.navItem} ${
-                    location.pathname === item.path ? styles.active : ''
-                  }`}
+                  className={`${styles.navItem} ${isNavActive(item.path) ? styles.active : ''}`}
                   title={sidebarCollapsed ? item.label : ''}
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -308,7 +313,7 @@ const Layout: React.FC = () => {
                       key={child.path}
                       to={child.path}
                       className={`${styles.subMenuItem} ${
-                        location.pathname === child.path ? styles.active : ''
+                        isChildActive(child.path) ? styles.active : ''
                       }`}
                       onClick={() => setMobileMenuOpen(false)}
                     >
@@ -324,58 +329,9 @@ const Layout: React.FC = () => {
       </aside>
       
       <main className={styles.main}>
-        <header className={styles.header}>
-          <MotivationalQuote username={user?.username} />
+        {/* 全局唯一顶栏 — 业务页禁止再挂 TopBar */}
+        <TopBar className={styles.layoutTopBar} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button
-              onClick={() => setVersion(isV3 ? 'v2' : 'v3')}
-              style={{
-                padding: '4px 12px',
-                borderRadius: '6px',
-                border: '1px solid',
-                borderColor: isV3 ? 'var(--brand-300)' : 'var(--line)',
-                background: isV3 ? 'var(--brand-soft)' : 'var(--surface)',
-                color: isV3 ? 'var(--brand-ink)' : 'var(--ink-2)',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                lineHeight: '1.4',
-              }}
-              title={isV3 ? '切换到经典 UI (v2)' : '切换到新版 UI (v3)'}
-            >
-              UI {isV3 ? 'v3' : 'v2'}
-            </button>
-            <div className={styles.userMenu} onClick={() => setShowUserMenu(!showUserMenu)}>
-              <div className={styles.avatar}>
-                {user?.username?.charAt(0).toUpperCase()}
-              </div>
-              <span className={styles.username}>{user?.username}</span>
-              
-              {showUserMenu && (
-                <div className={styles.dropdown}>
-                  <button
-                    className={styles.dropdownItem}
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      navigate('/settings');
-                    }}
-                  >
-                    Settings
-                  </button>
-                  <button
-                    className={styles.dropdownItem}
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-        
         <div className={styles.content}>
           <div className={styles.contentInner}>
             <Outlet />

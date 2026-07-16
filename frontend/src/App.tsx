@@ -10,6 +10,8 @@ import FeedbackBanner from './components/FeedbackBanner';
 import { NotificationProvider } from './contexts/NotificationContext';
 import AuthProvider from './components/AuthProvider';
 import Layout from './components/Layout';
+import WorkspaceLayout from './components/WorkspaceLayout';
+import IAMLayout from './components/IAMLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -64,7 +66,6 @@ import NotificationForm from './pages/admin/NotificationForm';
 import PlatformConfig from './pages/admin/PlatformConfig';
 import ManifestManagement from './pages/admin/ManifestManagement';
 import ManifestEditorV2 from './pages/admin/ManifestEditorV2/ManifestEditorV2';
-import IAMLayout from './components/IAMLayout';
 import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
 import CMDB from './pages/CMDB';
@@ -98,50 +99,13 @@ const App: FC = () => {
               <Route path="/login/mfa" element={<MFAVerify />} />
               <Route path="/setup/mfa" element={<MFASetup />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              
-              {/* WorkspaceDetail 独立路由，不使用 Layout */}
-              <Route path="/workspaces/:id" element={
-                <ProtectedRoute>
-                  <WorkspaceDetail />
-                </ProtectedRoute>
-              } />
-              
-              {/* TaskDetail 独立路由 */}
-              <Route path="/workspaces/:workspaceId/tasks/:taskId" element={
-                <ProtectedRoute>
-                  <TaskDetail />
-                </ProtectedRoute>
-              } />
-              
-              {/* StatePreview 独立路由 */}
-              <Route path="/workspaces/:workspaceId/states/:version" element={
-                <ProtectedRoute>
-                  <StatePreview />
-                </ProtectedRoute>
-              } />
-              
-              {/* EditResource 独立路由 - 使用 Workspace 侧边栏 */}
-              <Route path="/workspaces/:id/resources/:resourceId/edit" element={
-                <ProtectedRoute>
-                  <EditResource />
-                </ProtectedRoute>
-              } />
-              
-              {/* AddResources 独立路由 - 使用 Workspace 侧边栏 */}
-              <Route path="/workspaces/:id/add-resources" element={
-                <ProtectedRoute>
-                  <AddResources />
-                </ProtectedRoute>
-              } />
-              
-              {/* ViewResource 独立路由 - 使用 Workspace 侧边栏 */}
-              <Route path="/workspaces/:id/resources/:resourceId" element={
-                <ProtectedRoute>
-                  <ViewResource />
-                </ProtectedRoute>
-              } />
-              
-              {/* 其他页面使用 Layout */}
+
+              {/*
+                导航壳复用（交互按上下文切换菜单内容）：
+                - Layout：主站菜单 + TopBar
+                - WorkspaceLayout / IAMLayout：各自竖向菜单 + ContextShell(TopBar)
+                - ManifestEditor：全屏 IDE
+              */}
               <Route path="/" element={
                 <ProtectedRoute>
                   <Layout />
@@ -193,25 +157,28 @@ const App: FC = () => {
                 <Route path="settings/mfa" element={<MFASetup />} />
                 <Route path="cmdb" element={<CMDB />} />
               </Route>
-              
-              {/* Manifest 编辑器 (vscode-api B2 模式,VS Code Web 工作区) */}
-              <Route path="/admin/manifests-v2/:id/edit" element={
+
+              {/* Workspace 上下文：仅 workspace 竖向菜单 + 共享 TopBar */}
+              <Route element={
                 <ProtectedRoute>
-                  <ManifestEditorV2 />
+                  <WorkspaceLayout />
                 </ProtectedRoute>
-              } />
-              <Route path="/admin/manifests-v2/_sandbox" element={
-                <ProtectedRoute>
-                  <ManifestEditorV2 />
-                </ProtectedRoute>
-              } />
-              
-              {/* IAM子系统 - 使用独立的IAMLayout */}
+              }>
+                <Route path="/workspaces/:id" element={<WorkspaceDetail />} />
+                <Route path="/workspaces/:id/add-resources" element={<AddResources />} />
+                <Route path="/workspaces/:id/resources/:resourceId" element={<ViewResource />} />
+                <Route path="/workspaces/:id/resources/:resourceId/edit" element={<EditResource />} />
+                <Route path="/workspaces/:workspaceId/tasks/:taskId" element={<TaskDetail />} />
+                <Route path="/workspaces/:workspaceId/states/:version" element={<StatePreview />} />
+              </Route>
+
+              {/* IAM 上下文：仅 IAM 竖向菜单 + 同一套 ContextShell/TopBar */}
               <Route path="/iam" element={
                 <ProtectedRoute>
                   <IAMLayout />
                 </ProtectedRoute>
               }>
+                <Route index element={<OrganizationManagement />} />
                 <Route path="organizations" element={<OrganizationManagement />} />
                 <Route path="projects" element={<ProjectManagement />} />
                 <Route path="users" element={<UserManagement />} />
@@ -223,6 +190,17 @@ const App: FC = () => {
                 <Route path="roles" element={<RoleManagement />} />
                 <Route path="audit" element={<AuditLog />} />
               </Route>
+
+              <Route path="/admin/manifests-v2/:id/edit" element={
+                <ProtectedRoute>
+                  <ManifestEditorV2 />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/manifests-v2/_sandbox" element={
+                <ProtectedRoute>
+                  <ManifestEditorV2 />
+                </ProtectedRoute>
+              } />
             </Routes>
             <FeedbackBanner />
             </Router>

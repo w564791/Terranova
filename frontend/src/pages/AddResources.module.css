@@ -1,6 +1,14 @@
 /* 添加资源页面样式 */
 
 /* 新的布局结构 - 左侧边栏 + 右侧内容 */
+.workspacePage {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .workspaceLayout {
   display: flex;
   min-height: 100vh;
@@ -99,13 +107,12 @@
   flex: 1;
 }
 
-/* 右侧主内容区 */
+/* 主内容区（在全局 Layout 内，不再预留侧栏宽度） */
 .workspaceMain {
   flex: 1;
-  margin-left: 260px;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  min-width: 0;
 }
 
 .container {

@@ -9,7 +9,6 @@ import CommentInput from '../components/CommentInput';
 import AIErrorAnalysis from '../components/AIErrorAnalysis';
 import TaskTimeline from '../components/TaskTimeline';
 import SmartLogViewer from '../components/SmartLogViewer';
-import WorkspaceSidebar from '../components/WorkspaceSidebar';
 import { useNotificationContext } from '../contexts/NotificationContext';
 import api from '../services/api';
 import { getTaskStatusLabel } from '../utils/taskStatus';
@@ -58,7 +57,7 @@ const TaskDetail: React.FC = () => {
   const [submittingAction, setSubmittingAction] = useState(false);
   const [commentsKey, setCommentsKey] = useState(0);
   const [commentCount, setCommentCount] = useState(0);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
   const [canCancelTask, setCanCancelTask] = useState(false);
   const [canConfirmApply, setCanConfirmApply] = useState(false);
   const [runTaskResults, setRunTaskResults] = useState<any[]>([]);
@@ -749,36 +748,10 @@ const TaskDetail: React.FC = () => {
   };
 
   return (
-    <div className={styles.taskLayout}>
-      {/* 移动端汉堡菜单按钮 */}
-      <button 
-        className={styles.mobileSidebarButton}
-        onClick={() => setMobileSidebarOpen(true)}
-        aria-label="打开菜单"
-      >
-        ☰
-      </button>
-
-      {/* 移动端遮罩层 */}
-      {mobileSidebarOpen && (
-        <div 
-          className={styles.mobileSidebarOverlay}
-          onClick={() => setMobileSidebarOpen(false)}
-        />
-      )}
-
-      {/* 使用统一的 WorkspaceSidebar 组件 */}
-      <WorkspaceSidebar
-        workspaceId={workspaceId!}
-        workspaceName={workspace?.name || 'Workspace'}
-        activeTab="runs"
-        mobileSidebarOpen={mobileSidebarOpen}
-        onMobileSidebarClose={() => setMobileSidebarOpen(false)}
-      />
-
-      <main className={styles.mainContent}>
+    <div className={styles.taskPage}>
+      <div className={styles.mainContent}>
         {renderMainContent()}
-      </main>
+      </div>
 
       <NewRunDialog
         isOpen={showNewRunDialog}

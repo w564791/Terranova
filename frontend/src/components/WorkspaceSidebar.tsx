@@ -1,23 +1,42 @@
-import React, { useState } from 'react';
+/**
+ * Workspace 上下文左侧导航（竖向）。
+ * 进入 workspace 后替代全局 Layout 侧栏；与 TopBar 一并只在 WorkspaceLayout 中挂载一次。
+ */
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styles from './WorkspaceSidebar.module.css';
 
-type TabType = 'overview' | 'runs' | 'states' | 'resources' | 'variables' | 'outputs' | 'health' | 'settings';
-type SettingsSection = 'general' | 'locking' | 'provider' | 'run-tasks' | 'run-triggers' | 'notifications' | 'destruction';
+export type WorkspaceTabType =
+  | 'overview'
+  | 'runs'
+  | 'states'
+  | 'resources'
+  | 'variables'
+  | 'outputs'
+  | 'health'
+  | 'settings';
 
-interface WorkspaceSidebarProps {
+export type WorkspaceSettingsSection =
+  | 'general'
+  | 'locking'
+  | 'provider'
+  | 'run-tasks'
+  | 'run-triggers'
+  | 'notifications'
+  | 'destruction';
+
+export interface WorkspaceSidebarProps {
   workspaceId: string;
   workspaceName: string;
-  activeTab: TabType;
-  activeSection?: SettingsSection;
-  onTabChange?: (tab: TabType) => void;
-  onSectionChange?: (section: SettingsSection) => void;
+  activeTab: WorkspaceTabType;
+  activeSection?: WorkspaceSettingsSection;
+  onTabChange?: (tab: WorkspaceTabType) => void;
+  onSectionChange?: (section: WorkspaceSettingsSection) => void;
   mobileSidebarOpen?: boolean;
   onMobileSidebarClose?: () => void;
 }
 
-// 导航菜单项
-const navItems = [
+const navItems: { id: WorkspaceTabType; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'runs', label: 'Runs' },
   { id: 'states', label: 'States' },
@@ -27,8 +46,7 @@ const navItems = [
   { id: 'health', label: 'Health' },
 ];
 
-// Settings子菜单项
-const settingsItems = [
+const settingsItems: { id: WorkspaceSettingsSection; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'locking', label: 'Locking' },
   { id: 'provider', label: 'Provider' },
@@ -51,21 +69,24 @@ const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const navigate = useNavigate();
   const [settingsExpanded, setSettingsExpanded] = useState(activeTab === 'settings');
 
-  const handleTabClick = (tab: TabType) => {
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      setSettingsExpanded(true);
+    }
+  }, [activeTab]);
+
+  const handleTabClick = (tab: WorkspaceTabType) => {
     if (onTabChange) {
       onTabChange(tab);
+    } else if (tab === 'settings') {
+      navigate(`/workspaces/${workspaceId}?tab=${tab}&section=${activeSection}`);
     } else {
-      // 默认导航行为
-      if (tab === 'settings') {
-        navigate(`/workspaces/${workspaceId}?tab=${tab}&section=${activeSection}`);
-      } else {
-        navigate(`/workspaces/${workspaceId}?tab=${tab}`);
-      }
+      navigate(`/workspaces/${workspaceId}?tab=${tab}`);
     }
     onMobileSidebarClose?.();
   };
 
-  const handleSectionClick = (section: SettingsSection) => {
+  const handleSectionClick = (section: WorkspaceSettingsSection) => {
     if (onSectionChange) {
       onSectionChange(section);
     } else {
@@ -89,33 +110,33 @@ const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   return (
     <aside className={`${styles.sidebar} ${mobileSidebarOpen ? styles.sidebarMobileOpen : ''}`}>
       <div className={styles.sidebarHeader}>
-        <button onClick={() => navigate('/workspaces')} className={styles.backButton}>
+        <button
+          type="button"
+          onClick={() => navigate('/workspaces')}
+          className={styles.backButton}
+        >
           ← Workspaces
         </button>
-        
         <h1 className={styles.workspaceTitle}>{workspaceName}</h1>
       </div>
 
-      {/* 导航菜单 */}
-      <nav className={styles.nav}>
+      <nav className={styles.nav} aria-label="Workspace">
         {navItems.map((item) => (
           <Link
             key={item.id}
             to={`/workspaces/${workspaceId}?tab=${item.id}`}
-            className={`${styles.navItem} ${
-              activeTab === item.id ? styles.navItemActive : ''
-            }`}
+            className={`${styles.navItem} ${activeTab === item.id ? styles.navItemActive : ''}`}
             onClick={(e) => {
               e.preventDefault();
-              handleTabClick(item.id as TabType);
+              handleTabClick(item.id);
             }}
           >
             <span className={styles.navLabel}>{item.label}</span>
           </Link>
         ))}
-        
-        {/* Settings可展开菜单 */}
+
         <button
+          type="button"
           className={`${styles.navItem} ${styles.navItemExpandable} ${
             activeTab === 'settings' ? styles.navItemActive : ''
           }`}
@@ -126,8 +147,7 @@ const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             ▼
           </span>
         </button>
-        
-        {/* Settings子菜单 */}
+
         {settingsExpanded && (
           <div className={styles.subMenu}>
             {settingsItems.map((item) => (
@@ -135,11 +155,13 @@ const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 key={item.id}
                 to={`/workspaces/${workspaceId}?tab=settings&section=${item.id}`}
                 className={`${styles.subMenuItem} ${
-                  activeTab === 'settings' && activeSection === item.id ? styles.subMenuItemActive : ''
+                  activeTab === 'settings' && activeSection === item.id
+                    ? styles.subMenuItemActive
+                    : ''
                 }`}
                 onClick={(e) => {
                   e.preventDefault();
-                  handleSectionClick(item.id as SettingsSection);
+                  handleSectionClick(item.id);
                 }}
               >
                 <span className={styles.navLabel}>{item.label}</span>

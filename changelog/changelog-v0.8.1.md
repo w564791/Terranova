@@ -1,4 +1,4 @@
-本版本包含四大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）+ **CMDB 搜索结果 AI 解读 + 相关性筛查**（新增 `cmdb_search_summary` capability，搜索召回结果经 AI 生成总览/重点/分组/改写建议，并按查询意图自动剔除低相关项；前端 CMDB 搜索页全面接入 SSE 进度与筛查交互）+ **前端设计系统 v3 — Design Token 统一 + UI 基元组件 + Ant Design 主题集成**（建立 `theme.css` 单一 token 源，语义化 surface/ink/brand/green/red/amber 色阶；新增 Dialog/Button/Feedback CSS 基元；Ant Design 5 `ConfigProvider` 全局主题对齐深青品牌色；~228 文件从硬编码 `--color-*` 迁移至语义 token，旧变量自动 alias 兼容）。
+本版本包含五大交付线：**Manifest 编辑器 Provider 类型补全体系**（terraform init 后自动落库 provider 资源/数据源类型目录，编辑器运行时加载用于 Tier 3 补全；引入 VS Code 扩展框架加载 HashiCorp 官方 TextMate grammar 实现精准语法高亮；补全/跳转/诊断能力全面增强）+ **Grok (xAI) Provider 集成 + Provider 级 Fallback 容灾 + 自定义 Capability 场景**（新增 xAI Grok 官方 API 作为 AI Provider；专用 config 访问失败时自动降级到全局 default，仅切换模型/凭证保留任务 Skill；前端支持新增自定义场景标识）+ **CMDB 搜索结果 AI 解读 + 相关性筛查**（新增 `cmdb_search_summary` capability，搜索召回结果经 AI 生成总览/重点/分组/改写建议，并按查询意图自动剔除低相关项；前端 CMDB 搜索页全面接入 SSE 进度与筛查交互）+ **前端设计系统 v3 — Design Token 统一 + UI 基元组件 + Ant Design 主题集成**（建立 `theme.css` 单一 token 源，语义化 surface/ink/brand/green/red/amber 色阶；新增 Dialog/Button/Feedback CSS 基元；Ant Design 5 `ConfigProvider` 全局主题对齐深青品牌色；~228 文件从硬编码 `--color-*` 迁移至语义 token，旧变量自动 alias 兼容）+ **Workspaces 列表改版与上下文导航壳统一**（列表页 Scheme A 布局；Projects 侧栏折叠/搜索/分页修复；`ContextShell` + `TopBar` 代码复用，Workspace / IAM 进入独立竖向菜单上下文，业务页不再各自实现导航栏）。
 
 ---
 
@@ -592,3 +592,62 @@ v3-theme.css (v3 scope overlay)
 - **Button 矩阵** — 通过组合 class（`.btn .solid .brand`）而非 CSS-in-JS 实现，与 Ant Design Button 互不干扰
 - **Dialog shell** — `createPortal` 到 `document.body`，避免父级 `overflow: hidden` 裁切；统一 `.tn-overlay` + `.tn-dialog` class 便于全局样式覆盖
 - **Feedback 基元** — Toast（左色条卡片）、Notice（填充条）、Banner（inline alert）、Badge（pill）四种形态覆盖所有反馈场景，每种形态含 4 色变体
+
+---
+
+## Highlights（v0.8.1 导航壳 + Workspaces 列表）
+
+### 18. Workspaces 列表页改版（Scheme A）
+
+- **布局减负**：去掉套娃外层卡片与 inset 重阴影；标题/副统计/主操作同一顶栏
+- **Projects 侧栏**：项目首字母块 + `workspace_count` 数量 pill + 常驻 Filter projects 搜索
+- **状态统计卡**：Needs attention / Failed / Running / Healthy 可点筛选
+- **表格行分层**：workspace 首字母 mark、描述、tags、状态 pill、`execution_mode` code、相对时间
+- **Projects 折叠**：恢复侧栏收起/展开按钮（主列表区 `panelToolbar`）
+- **Projects 分页修复**：原先 Previous 恒 disabled、Next 无 onClick；改为客户端分页（每页 8 条），搜索重置页码、总数变化自动 clamp，仅项目数 > 8 时显示分页
+
+### 19. 上下文导航壳统一（代码复用，交互按上下文切换）
+
+**原则：导航栏实现唯一；进入子上下文后菜单内容切换，不把主站菜单硬塞进 Workspace。**
+
+- **新增 `ContextShell`**：固定左栏槽位 + 共享 `TopBar` + `Outlet`；移动端汉堡/遮罩统一由壳管理
+- **`WorkspaceLayout`**：进入 `/workspaces/:id` 及 task/state/resource 子页后，左栏仅为 `WorkspaceSidebar`（竖向 Overview / Runs / States…），顶栏复用 `TopBar`
+- **`IAMLayout` + `IAMSidebar`**：与 Workspace 同交互——进入 `/iam/*` 后左栏仅为 IAM 菜单，`← Back to Main` 回主站；壳与顶栏复用 `ContextShell` / `TopBar`
+- **主站 `Layout`**：`TopBar` 不再内联复制；IAM 入口为单链进入上下文壳（不再在主站侧栏展开 IAM 子菜单）
+- **业务页去壳**：`WorkspaceDetail` / `TaskDetail` / `StatePreview` / `EditResource` / `ViewResource` / `AddResources` 只渲染内容，不再各自挂 TopBar/侧栏
+- **URL 同步**：侧栏导航走 `?tab=` / `?section=`；`WorkspaceDetail` 监听 `location.search` 同步 tab 状态
+
+```
+主站 Layout（Dashboard / Workspaces 列表 / Modules…）+ TopBar
+        │
+        ├─→ WorkspaceLayout（ContextShell + WorkspaceSidebar 竖向）+ TopBar
+        └─→ IAMLayout（ContextShell + IAMSidebar 竖向）+ TopBar
+```
+
+### 20. 其它前端配套
+
+- **`deleteProject` API 封装**（`services/projects.ts`）：对接 `DELETE /iam/projects/:id`，供后续列表删除能力接入
+- **静态对照 demo**：`frontend/ui-demo-workspaces.html`（列表 Scheme A 设计对照，不进运行时路由）
+
+## 修改文件（v0.8.1 导航壳 + Workspaces）
+
+### 前端（新增）
+
+- `frontend/src/components/ContextShell.tsx` / `ContextShell.module.css` — 共享上下文壳
+- `frontend/src/components/WorkspaceLayout.tsx` — Workspace 上下文组装
+- `frontend/src/components/IAMSidebar.tsx` — IAM 竖向菜单
+- `frontend/ui-demo-workspaces.html` — 列表布局静态 demo
+
+### 前端（修改）
+
+- `frontend/src/App.tsx` — Workspace / IAM 独立上下文路由；业务页挂对应壳
+- `frontend/src/components/IAMLayout.tsx` — 改为 ContextShell + IAMSidebar
+- `frontend/src/components/Layout.tsx` / `Layout.module.css` — 复用 TopBar；IAM 入口单链
+- `frontend/src/components/TopBar.tsx` / `TopBar.module.css` — 可复用顶栏（className / UI toggle 样式）
+- `frontend/src/components/WorkspaceSidebar.tsx` / `WorkspaceSidebar.module.css` — 竖向 workspace 菜单
+- `frontend/src/pages/Workspaces.tsx` / `Workspaces.module.css` — Scheme A 列表 + 折叠/分页/搜索
+- `frontend/src/pages/WorkspaceDetail.tsx` / `.module.css` — 去壳，URL 同步 tab
+- `frontend/src/pages/TaskDetail.tsx` / `.module.css` — 去壳
+- `frontend/src/pages/StatePreview.tsx` / `.module.css` — 去壳
+- `frontend/src/pages/EditResource.tsx` / `ViewResource.tsx` / `AddResources.tsx` — 去壳
+- `frontend/src/services/projects.ts` — `deleteProject`

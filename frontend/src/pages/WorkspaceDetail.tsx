@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { parseBackendTime } from '../utils/time';
@@ -16,7 +16,6 @@ import WorkspaceOutputs from '../components/WorkspaceOutputs';
 import ConfirmDialog from '../components/ConfirmDialog';
 import NewRunDialog from '../components/NewRunDialog';
 import DateRangePicker from '../components/DateRangePicker';
-import TopBar from '../components/TopBar';
 import { useTaskAutoRefresh } from '../hooks/useTaskAutoRefresh';
 import { useWorkspaceManifestSummary } from '../hooks/useWorkspaceManifestSummary';
 import { getTaskStatusLabel, getTaskStatusCategory } from '../utils/taskStatus';
@@ -97,17 +96,21 @@ type SettingsSection = 'general' | 'locking' | 'provider' | 'run-tasks' | 'run-t
 const WorkspaceDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
   
-  // 从URL获取当前标签页和section，默认为overview
-  const searchParams = new URLSearchParams(window.location.search);
+  // URL is source of truth (sidebar navigates via query; keep in sync)
+  const searchParams = new URLSearchParams(location.search);
   const tabFromUrl = (searchParams.get('tab') as TabType) || 'overview';
   const sectionFromUrl = (searchParams.get('section') as SettingsSection) || 'general';
   
   const [activeTab, setActiveTab] = useState<TabType>(tabFromUrl);
   const [activeSection, setActiveSection] = useState<SettingsSection>(sectionFromUrl);
-  const [settingsExpanded, setSettingsExpanded] = useState(tabFromUrl === 'settings');
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setActiveTab(tabFromUrl);
+    setActiveSection(sectionFromUrl);
+  }, [tabFromUrl, sectionFromUrl]);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [overview, setOverview] = useState<WorkspaceOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,31 +144,13 @@ const WorkspaceDetail: React.FC = () => {
     }
     
     if (tab === 'settings') {
-      setSettingsExpanded(true);
       navigate(`/workspaces/${id}?tab=${tab}&section=${activeSection}`, { replace: true });
     } else {
-      setSettingsExpanded(false);
       navigate(`/workspaces/${id}?tab=${tab}`, { replace: true });
     }
   };
 
-  // 切换Settings展开/收起
-  const handleSettingsToggle = () => {
-    if (settingsExpanded) {
-      setSettingsExpanded(false);
-      // 如果当前在settings tab，切换到overview
-      if (activeTab === 'settings') {
-        setActiveTab('overview');
-        navigate(`/workspaces/${id}?tab=overview`, { replace: true });
-      }
-    } else {
-      setSettingsExpanded(true);
-      setActiveTab('settings');
-      navigate(`/workspaces/${id}?tab=settings&section=${activeSection}`, { replace: true });
-    }
-  };
-
-  // 切换Settings子菜单
+  // 切换Settings子菜单（WorkspaceSidebar 内部管理展开态）
   const handleSectionChange = (section: SettingsSection) => {
     setActiveSection(section);
     setActiveTab('settings');
@@ -417,183 +402,66 @@ const WorkspaceDetail: React.FC = () => {
     }
   };
 
-  // 导航菜单项
-  const navItems = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'runs', label: 'Runs' },
-    { id: 'states', label: 'States' },
-    { id: 'resources', label: 'Resources' },
-    { id: 'variables', label: 'Variables' },
-    { id: 'outputs', label: 'Outputs' },
-    { id: 'health', label: 'Health' },
-  ];
-
-  // Settings子菜单项
-  const settingsItems = [
-    { id: 'general', label: 'General' },
-    { id: 'locking', label: 'Locking' },
-    { id: 'provider', label: 'Provider' },
-    { id: 'run-tasks', label: 'Run Tasks' },
-    { id: 'run-triggers', label: 'Run Triggers' },
-    { id: 'notifications', label: 'Notifications' },
-    { id: 'destruction', label: 'Destruction and Deletion' },
-  ];
-
-  // 移动端导航处理函数
-  const handleMobileSidebarNavClick = (tab: TabType) => {
-    handleTabChange(tab);
-    setMobileSidebarOpen(false);
-  };
-
-  const handleMobileSidebarSectionClick = (section: SettingsSection) => {
-    handleSectionChange(section);
-    setMobileSidebarOpen(false);
-  };
-
+  // Shell (sidebar + TopBar) is WorkspaceLayout — this page is content only.
+  // Keep URL-driven tab state so sidebar highlight stays in sync.
   return (
-    <div className={styles.workspaceLayout}>
-      {/* 移动端汉堡菜单按钮 */}
-      <button 
-        className={styles.mobileSidebarButton}
-        onClick={() => setMobileSidebarOpen(true)}
-        aria-label="打开菜单"
-      >
-        ☰
-      </button>
-
-      {/* 移动端遮罩层 */}
-      {mobileSidebarOpen && (
-        <div 
-          className={styles.mobileSidebarOverlay}
-          onClick={() => setMobileSidebarOpen(false)}
-        />
+    <div className={styles.workspacePage}>
+      {activeTab !== 'settings' && workspace && (
+        <div className={styles.globalHeader}>
+          <div className={styles.globalHeaderLeft}>
+            <h1 className={styles.globalTitle}>{workspace.name}</h1>
+            <div className={styles.globalMeta}>
+              <span className={styles.metaItem}>ID: {workspace.workspace_id}</span>
+              <span
+                className={styles.metaItem}
+                title={
+                  workspace.lock_info
+                    ? `${workspace.lock_info.who_display || workspace.lock_info.who || 'unknown'} - ${workspace.lock_info.info || workspace.lock_info.operation || ''}`
+                    : ''
+                }
+              >
+                {workspace.lock_id
+                  ? `Locked${workspace.lock_info?.operation === 'ui_lock' ? ' (Manual)' : workspace.lock_info?.operation ? ' (Terraform)' : ''}`
+                  : 'Unlocked'}
+              </span>
+              <span className={styles.metaItem}>
+                Resources {currentStateResourcesCount}
+              </span>
+              <span className={styles.metaItem}>
+                Terraform v{workspace.terraform_version}
+              </span>
+              <span className={styles.metaItem}>
+                Updated {formatRelativeTime(workspace.updated_at)}
+              </span>
+            </div>
+            {workspace.description && (
+              <p className={styles.globalDescription}>{workspace.description}</p>
+            )}
+          </div>
+          <div className={styles.globalHeaderRight}>
+            <button
+              className={`${styles.lockButton} ${(workspace.lock_id || hasActivePlanAndApplyTask) ? styles.locked : ''}`}
+              onClick={handleLockWorkspace}
+              disabled={hasActivePlanAndApplyTask}
+              title={
+                hasActivePlanAndApplyTask
+                  ? 'Workspace is locked by active PLAN_AND_APPLY task'
+                  : ''
+              }
+            >
+              {workspace.lock_id || hasActivePlanAndApplyTask ? 'Locked' : 'Lock'}
+            </button>
+            <button className={styles.newRunButton} onClick={handleNewRun}>
+              + New run
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* 左侧导航栏 - 简洁版 */}
-      <aside className={`${styles.workspaceSidebar} ${mobileSidebarOpen ? styles.sidebarMobileOpen : ''}`}>
-        <div className={styles.workspaceHeader}>
-          <button onClick={() => navigate('/workspaces')} className={styles.backButton}>
-            ← Workspaces
-          </button>
-          
-          <h1 className={styles.workspaceTitle}>{workspace?.name || 'Loading...'}</h1>
-        </div>
+      <div className={styles.workspaceContent}>
+        {renderTabContent()}
+      </div>
 
-        {/* 导航菜单 */}
-        <nav className={styles.workspaceNav}>
-          {navItems.map((item) => (
-            <Link
-              key={item.id}
-              to={`/workspaces/${id}?tab=${item.id}`}
-              className={`${styles.navItem} ${
-                activeTab === item.id ? styles.navItemActive : ''
-              }`}
-              onClick={(e) => {
-                e.preventDefault();
-                handleMobileSidebarNavClick(item.id as TabType);
-              }}
-              onAuxClick={(e) => {
-                // 允许中键点击在新标签页打开
-                if (e.button === 1) {
-                  // 不阻止默认行为，让浏览器处理
-                }
-              }}
-            >
-              <span className={styles.navLabel}>{item.label}</span>
-            </Link>
-          ))}
-          
-          {/* Settings可展开菜单 */}
-          <button
-            className={`${styles.navItem} ${styles.navItemExpandable} ${
-              activeTab === 'settings' ? styles.navItemActive : ''
-            }`}
-            onClick={handleSettingsToggle}
-          >
-            <span className={styles.navLabel}>Settings</span>
-            <span className={`${styles.expandIcon} ${settingsExpanded ? styles.expandIconOpen : ''}`}>
-              ▼
-            </span>
-          </button>
-          
-          {/* Settings子菜单 */}
-          {settingsExpanded && (
-            <div className={styles.subMenu}>
-              {settingsItems.map((item) => (
-                <Link
-                  key={item.id}
-                  to={`/workspaces/${id}?tab=settings&section=${item.id}`}
-                  className={`${styles.subMenuItem} ${
-                    activeTab === 'settings' && activeSection === item.id ? styles.subMenuItemActive : ''
-                  }`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleMobileSidebarSectionClick(item.id as SettingsSection);
-                  }}
-                >
-                  <span className={styles.navLabel}>{item.label}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </nav>
-      </aside>
-
-      {/* 右侧内容区 */}
-      <main className={styles.workspaceMain}>
-        <TopBar />
-        
-        {/* 全局头部 - 显示workspace信息和操作按钮（Settings页面除外） */}
-        {activeTab !== 'settings' && workspace && (
-          <div className={styles.globalHeader}>
-            <div className={styles.globalHeaderLeft}>
-              <h1 className={styles.globalTitle}>{workspace.name}</h1>
-              <div className={styles.globalMeta}>
-                <span className={styles.metaItem}>ID: {workspace.workspace_id}</span>
-                <span className={styles.metaItem} title={workspace.lock_info ? `${workspace.lock_info.who_display || workspace.lock_info.who || 'unknown'} - ${workspace.lock_info.info || workspace.lock_info.Operation || ''}` : ''}>
-                  {workspace.lock_id
-                    ? `Locked${workspace.lock_info?.Operation ? ' (Terraform)' : workspace.lock_info?.operation === 'ui_lock' ? ' (Manual)' : ''}`
-                    : 'Unlocked'}
-                </span>
-                <span className={styles.metaItem}>
-                  Resources {currentStateResourcesCount}
-                </span>
-                <span className={styles.metaItem}>
-                  Terraform v{workspace.terraform_version}
-                </span>
-                <span className={styles.metaItem}>
-                  Updated {formatRelativeTime(workspace.updated_at)}
-                </span>
-              </div>
-              {workspace.description && (
-                <p className={styles.globalDescription}>{workspace.description}</p>
-              )}
-            </div>
-            <div className={styles.globalHeaderRight}>
-              <button 
-                className={`${styles.lockButton} ${(workspace.lock_id || hasActivePlanAndApplyTask) ? styles.locked : ''}`}
-                onClick={handleLockWorkspace}
-                disabled={hasActivePlanAndApplyTask}
-                title={hasActivePlanAndApplyTask ? 'Workspace is locked by active PLAN_AND_APPLY task' : ''}
-              >
-                {workspace.lock_id || hasActivePlanAndApplyTask ? 'Locked' : 'Lock'}
-              </button>
-              <button 
-                className={styles.newRunButton}
-                onClick={handleNewRun}
-              >
-                + New run
-              </button>
-            </div>
-          </div>
-        )}
-        
-        <div className={styles.workspaceContent}>
-          {renderTabContent()}
-        </div>
-      </main>
-
-      {/* Lock对话框 */}
       <ConfirmDialog
         isOpen={showLockDialog}
         title="锁定Workspace"
@@ -618,14 +486,13 @@ const WorkspaceDetail: React.FC = () => {
               padding: '10px 12px',
               border: '1px solid var(--line-2)',
               borderRadius: 'var(--radius-md)',
-              fontSize: '14px'
+              fontSize: '14px',
             }}
             autoFocus
           />
         </div>
       </ConfirmDialog>
 
-      {/* New Run对话框 */}
       <NewRunDialog
         isOpen={showNewRunDialog}
         workspaceId={id!}
@@ -849,7 +716,6 @@ const OverviewTab: React.FC<{
                 <div className={styles.tableHeader}>
                   <div>NAME</div>
                   <div>TYPE</div>
-                  <div>VERSION</div>
                   <div>STATUS</div>
                   <div>CREATED</div>
                 </div>
@@ -871,8 +737,6 @@ const OverviewTab: React.FC<{
                         <div className={styles.resourceMobileMeta}>
                           <span>{resource.resource_type}</span>
                           <span className={styles.resourceMetaSeparator}>•</span>
-                          <span>v{resource.current_version?.version || 1}.0</span>
-                          <span className={styles.resourceMetaSeparator}>•</span>
                           <span className={resource.is_active ? styles.resourceMetaEnabled : styles.resourceMetaDeprecated}>
                             {resource.is_active ? 'Enabled' : 'Deprecated'}
                           </span>
@@ -880,14 +744,6 @@ const OverviewTab: React.FC<{
                       </div>
                       <div className={styles.resourceType}>
                         {resource.resource_type}
-                      </div>
-                      <div className={styles.resourceVersion}>
-                        <span className={styles.versionNumber}>
-                          {resource.current_version?.version || 1}.0
-                        </span>
-                        {resource.current_version?.is_latest && (
-                          <span className={styles.defaultBadge}>DEFAULT</span>
-                        )}
                       </div>
                       <div className={styles.resourceStatus}>
                         <span

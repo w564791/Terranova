@@ -1,0 +1,63 @@
+/* Shared shell for Workspace / IAM context apps */
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg);
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.main {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.mobileMenuButton {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  border: none;
+  color: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(28, 110, 140, 0.4);
+}
+
+.mobileOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+@media (max-width: 768px) {
+  .main {
+    margin-left: 0;
+  }
+
+  .mobileMenuButton {
+    display: block;
+  }
+
+  .mobileOverlay {
+    display: block;
+  }
+}

@@ -1,23 +1,24 @@
-/* 整体布局 - 左侧边栏 + 右侧内容 */
-.taskLayout {
-  display: flex;
-  min-height: 100vh;
-  background: var(--bg);
-  width: 100%;
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-/* 侧边栏样式由 WorkspaceSidebar 组件提供 */
-
-/* 右侧主内容区 */
-.mainContent {
-  flex: 1;
-  margin-left: 260px;
+/* Content under WorkspaceLayout */
+.taskPage {
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  min-width: 0; /* 防止 flex 子元素溢出 */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.taskLayout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   overflow-x: hidden;
 }
 

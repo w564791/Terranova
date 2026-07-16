@@ -10,6 +10,37 @@
   top: 0;
   z-index: 10;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.uiToggle {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+
+.uiToggle:hover {
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+
+.uiToggleActive {
+  border-color: var(--brand-300);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
 }
 
 .headerTitle {

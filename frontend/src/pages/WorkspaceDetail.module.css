@@ -1,4 +1,13 @@
-/* 新的布局结构 - 左侧边栏 + 右侧内容 */
+/* Content under WorkspaceLayout (sidebar + TopBar owned by shell) */
+.workspacePage {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* legacy shell (unused) */
 .workspaceLayout {
   display: flex;
   min-height: 100vh;
@@ -334,10 +343,9 @@
   border-left-color: var(--brand);
 }
 
-/* 右侧主内容区 */
+/* 右侧主内容区 (legacy shell) */
 .workspaceMain {
   flex: 1;
-  margin-left: 260px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -345,8 +353,8 @@
 
 .workspaceContent {
   flex: 1;
+  min-width: 0;
   padding: 20px;
-  overflow-y: auto;
 }
 
 /* 旧的容器样式 - 保留用于加载和错误状态 */
@@ -458,9 +466,11 @@ a.stateRow {
 
 a.resourceRow {
   display: grid;
-  grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
   gap: var(--spacing-md);
   cursor: pointer;
+  justify-items: start;
+  text-align: left;
 }
 
 a.runItem {
@@ -588,7 +598,7 @@ a.stateRow {
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
   gap: var(--spacing-md);
   padding: var(--spacing-md);
   background: var(--bg);
@@ -597,6 +607,8 @@ a.stateRow {
   font-weight: 600;
   color: var(--ink-2);
   text-transform: uppercase;
+  justify-items: start;
+  text-align: left;
 }
 
 .tableBody {
@@ -604,14 +616,16 @@ a.stateRow {
   flex-direction: column;
 }
 
-/* Resource Row Styles */
+/* Resource Row Styles — NAME / TYPE / STATUS / CREATED */
 .resourceRow {
   display: grid;
-  grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
   gap: var(--spacing-md);
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--surface-2);
   align-items: center;
+  justify-items: start;
+  text-align: left;
   transition: background 0.2s;
 }
 
@@ -628,7 +642,9 @@ a.stateRow {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  width: 100%;
   overflow: hidden;
+  text-align: left;
 }
 
 .resourceNameText {
@@ -638,6 +654,7 @@ a.stateRow {
   word-break: break-word;
   overflow-wrap: break-word;
   line-height: 1.4;
+  text-align: left;
 }
 
 .resourceDesc {
@@ -678,12 +695,16 @@ a.stateRow {
 .resourceType {
   font-size: 13px;
   color: var(--ink);
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .resourceVersion {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: none;
 }
 
 .versionNumber {
@@ -705,6 +726,10 @@ a.stateRow {
 .resourceStatus {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  width: 100%;
+  text-align: left;
 }
 
 .statusBadge {
@@ -728,6 +753,10 @@ a.stateRow {
 .resourceCreated {
   font-size: 13px;
   color: var(--ink-2);
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
 }
 
 /* View All Row */
@@ -2779,7 +2808,6 @@ a.stateRow {
 
   /* 隐藏桌面端的其他列 */
   .resourceType,
-  .resourceVersion,
   .resourceCreated {
     display: none !important;
   }

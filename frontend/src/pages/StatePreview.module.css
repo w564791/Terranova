@@ -1,8 +1,17 @@
-/* State Preview Layout */
+/* Content under WorkspaceLayout */
+.statePage {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .stateLayout {
   display: flex;
-  min-height: 100vh;
-  background: var(--bg);
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
 }
 
 /* 左侧导航栏 - 深色主题（与 Layout sidebar 一致） */
@@ -94,11 +103,9 @@
 /* 右侧主内容区 */
 .mainContent {
   flex: 1;
-  margin-left: 260px;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  max-width: calc(100vw - 256px);
+  min-width: 0;
   overflow-x: hidden;
 }
 

@@ -8,7 +8,12 @@ import MotivationalQuote from './MotivationalQuote';
 import { useUIVersion } from '../hooks/useUIVersion';
 import styles from './TopBar.module.css';
 
-const TopBar: React.FC = () => {
+interface TopBarProps {
+  /** Extra class on the header (e.g. Layout mobile hamburger offset) */
+  className?: string;
+}
+
+const TopBar: React.FC<TopBarProps> = ({ className }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
@@ -28,30 +33,30 @@ const TopBar: React.FC = () => {
   };
 
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header}${className ? ` ${className}` : ''}`}>
       <MotivationalQuote username={user?.username} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div className={styles.actions}>
         <button
+          type="button"
+          className={`${styles.uiToggle} ${isV3 ? styles.uiToggleActive : ''}`}
           onClick={() => setVersion(isV3 ? 'v2' : 'v3')}
-          style={{
-            padding: '4px 12px',
-            borderRadius: '6px',
-            border: '1px solid',
-            borderColor: isV3 ? 'var(--brand-300)' : 'var(--line)',
-            background: isV3 ? 'var(--brand-soft)' : 'var(--surface)',
-            color: isV3 ? 'var(--brand-ink)' : 'var(--ink-2)',
-            fontSize: '12px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-            lineHeight: '1.4',
-          }}
           title={isV3 ? '切换到经典 UI (v2)' : '切换到新版 UI (v3)'}
         >
           UI {isV3 ? 'v3' : 'v2'}
         </button>
-        <div className={styles.userMenu} onClick={() => setShowUserMenu(!showUserMenu)}>
+        <div
+          className={styles.userMenu}
+          onClick={() => setShowUserMenu(!showUserMenu)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowUserMenu(!showUserMenu);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
           <div className={styles.avatar}>
             {user?.username?.charAt(0).toUpperCase()}
           </div>
@@ -60,6 +65,7 @@ const TopBar: React.FC = () => {
           {showUserMenu && (
             <div className={styles.dropdown}>
               <button
+                type="button"
                 className={styles.dropdownItem}
                 onClick={() => {
                   setShowUserMenu(false);
@@ -68,10 +74,7 @@ const TopBar: React.FC = () => {
               >
                 Settings
               </button>
-              <button
-                className={styles.dropdownItem}
-                onClick={handleLogout}
-              >
+              <button type="button" className={styles.dropdownItem} onClick={handleLogout}>
                 Logout
               </button>
             </div>

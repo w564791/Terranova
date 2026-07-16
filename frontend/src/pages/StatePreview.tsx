@@ -7,8 +7,7 @@ import { extractErrorMessage } from '../utils/errorHandler';
 import api from '../services/api';
 import { stateAPI } from '../services/state';
 import StateResourceViewer from '../components/StateResourceViewer';
-import WorkspaceSidebar from '../components/WorkspaceSidebar';
-import TopBar from '../components/TopBar';
+
 import type { StateContent } from '../utils/stateParser';
 import styles from './StatePreview.module.css';
 
@@ -408,19 +407,8 @@ const StatePreview: React.FC = () => {
   }
 
   return (
-    <div className={styles.stateLayout}>
-      {/* 左侧导航栏 - 使用共享组件 */}
-      <WorkspaceSidebar
-        workspaceId={workspaceId!}
-        workspaceName={workspace?.name || `Workspace #${workspaceId}`}
-        activeTab="states"
-      />
-
-      {/* 右侧主内容区 */}
-      <main className={styles.mainContent}>
-        <TopBar />
-
-        {/* State预览内容 */}
+    <div className={styles.statePage}>
+      <div className={styles.mainContent}>
         <div className={styles.stateContent}>
           {/* 返回按钮和操作栏 */}
           {/* State信息卡片 */}
@@ -625,7 +613,7 @@ const StatePreview: React.FC = () => {
             )}
           </div>
         </div>
-      </main>
+      </div>
 
       {/* 回滚确认对话框 */}
       <Modal

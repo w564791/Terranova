@@ -33,8 +33,7 @@ import TakeoverRequestDialog from '../components/TakeoverRequestDialog';
 import TakeoverWaitingDialog from '../components/TakeoverWaitingDialog';
 import SplitButton from '../components/SplitButton';
 import ResourceRunDialog from '../components/ResourceRunDialog';
-import TopBar from '../components/TopBar';
-import WorkspaceSidebar from '../components/WorkspaceSidebar';
+
 import { listVersions, getDefaultVersion, type ModuleVersion } from '../services/moduleVersions';
 import { schemaV2Service } from '../services/schemaV2';
 import type { WorkspaceResourceContext, WorkspaceResourceNode, RemoteDataNode } from '../components/OpenAPIFormRenderer/types';
@@ -1426,17 +1425,8 @@ const EditResource: React.FC = () => {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* 左侧 Workspace 导航栏 - 使用共享组件 */}
-      <WorkspaceSidebar
-        workspaceId={id!}
-        workspaceName={resource?.resource_name || 'Loading...'}
-        activeTab="resources"
-      />
-
-      {/* 右侧主内容区 */}
-      <div style={{ marginLeft: '256px', flex: 1, maxWidth: 'calc(100% - 256px)' }}>
-        <TopBar />
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div className={styles.container} style={{ padding: '24px' }}>
           {/* 编辑状态栏 */}
           {!isCloneMode && (

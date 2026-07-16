@@ -294,6 +294,24 @@
   flex-direction: column;
 }
 
+/* TopBar inside Layout: reserve space for mobile hamburger */
+.layoutTopBar {
+  /* base styles come from TopBar.module.css */
+}
+
+@media (max-width: 768px) {
+  .layoutTopBar {
+    padding-left: 70px !important;
+    height: 60px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .layoutTopBar {
+    padding-left: 65px !important;
+  }
+}
+
 .header {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
