@@ -25,6 +25,18 @@ func NewVariableSetController(db *gorm.DB) *VariableSetController {
 }
 
 // Create 创建变量集
+// @Summary Create variable set
+// @Description Create a new variable set
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param request body object true "Create request"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets [post]
 func (c *VariableSetController) Create(ctx *gin.Context) {
 	var req struct {
 		Name        string `json:"name" binding:"required"`
@@ -60,6 +72,17 @@ func (c *VariableSetController) Create(ctx *gin.Context) {
 }
 
 // List 获取变量集列表
+// @Summary List variable sets
+// @Description Get list of variable sets, optionally filtered by scope
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param scope query string false "Filter by scope"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets [get]
 func (c *VariableSetController) List(ctx *gin.Context) {
 	scope := ctx.Query("scope")
 
@@ -124,6 +147,18 @@ func (c *VariableSetController) List(ctx *gin.Context) {
 }
 
 // Get 获取单个变量集
+// @Summary Get variable set
+// @Description Get a variable set by ID
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id} [get]
 func (c *VariableSetController) Get(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
@@ -137,6 +172,20 @@ func (c *VariableSetController) Get(ctx *gin.Context) {
 }
 
 // Update 更新变量集
+// @Summary Update variable set
+// @Description Update a variable set's name and description
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Param request body object true "Update request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id} [put]
 func (c *VariableSetController) Update(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
@@ -168,6 +217,20 @@ func (c *VariableSetController) Update(ctx *gin.Context) {
 }
 
 // UpdateScope 更新变量集 scope
+// @Summary Update variable set scope
+// @Description Update a variable set's scope
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Param request body object true "Update scope request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id}/scope [put]
 func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
@@ -198,6 +261,18 @@ func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 }
 
 // Delete 删除变量集
+// @Summary Delete variable set
+// @Description Delete a variable set by ID
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id} [delete]
 func (c *VariableSetController) Delete(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
@@ -216,6 +291,17 @@ func (c *VariableSetController) Delete(ctx *gin.Context) {
 }
 
 // ListAssignments 获取变量集分配列表
+// @Summary List variable set assignments
+// @Description Get assignment list for a variable set
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id}/assignments [get]
 func (c *VariableSetController) ListAssignments(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
@@ -230,6 +316,20 @@ func (c *VariableSetController) ListAssignments(ctx *gin.Context) {
 }
 
 // CreateAssignment 创建变量集分配
+// @Summary Create variable set assignment
+// @Description Assign a variable set to a project or workspace
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Param request body object true "Create assignment request"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id}/assignments [post]
 func (c *VariableSetController) CreateAssignment(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
@@ -269,6 +369,20 @@ func (c *VariableSetController) CreateAssignment(ctx *gin.Context) {
 }
 
 // DeleteAssignment 删除变量集分配
+// @Summary Delete variable set assignment
+// @Description Remove an assignment from a variable set
+// @Tags Variable Set
+// @Accept json
+// @Produce json
+// @Param varset_id path string true "Variable set ID"
+// @Param assignment_id path string true "Assignment ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /api/v1/variable-sets/{varset_id}/assignments/{assignment_id} [delete]
 func (c *VariableSetController) DeleteAssignment(ctx *gin.Context) {
 	assignmentIDStr := ctx.Param("assignment_id")
 	assignmentID, err := strconv.ParseUint(assignmentIDStr, 10, 32)

@@ -24,6 +24,55 @@ definitions:
       total_assessed:
         type: integer
     type: object
+  controllers.CheckDraftRequest:
+    properties:
+      context_ids:
+        properties:
+          organization_id:
+            type: string
+          workspace_id:
+            type: string
+        type: object
+      files:
+        description: 当前文件 + 跨文件关联文件
+        items:
+          $ref: '#/definitions/controllers.CheckFile'
+        minItems: 1
+        type: array
+      history:
+        description: 会话历史(上下文对话)
+        items:
+          $ref: '#/definitions/controllers.ConversationTurn'
+        type: array
+      session_id:
+        description: 非空则把本次检查落入该会话
+        type: string
+      user_instruction:
+        description: 用户自定义检查意见（如"重点检查安全组"）
+        maxLength: 2000
+        type: string
+    required:
+    - files
+    type: object
+  controllers.CheckFile:
+    properties:
+      content:
+        type: string
+      path:
+        type: string
+      start_line:
+        description: content 在文件中的起始行(整文件=1,选区=选区起始行)
+        type: integer
+    type: object
+  controllers.ConversationTurn:
+    properties:
+      content:
+        description: 该轮的文本内容
+        type: string
+      role:
+        description: '"user" | "assistant"'
+        type: string
+    type: object
   controllers.GenerateConfigRequest:
     properties:
       context_ids:
@@ -85,6 +134,36 @@ definitions:
     - module_id
     - user_description
     type: object
+  controllers.GenerateResourceRequest:
+    properties:
+      context:
+        allOf:
+        - $ref: '#/definitions/controllers.ManifestAIContext'
+        description: 当前上下文来源元信息
+      context_ids:
+        properties:
+          organization_id:
+            type: string
+          workspace_id:
+            type: string
+        type: object
+      current_content:
+        description: 当前选区或文件内容（修复时提供）
+        type: string
+      description:
+        maxLength: 2000
+        type: string
+      history:
+        description: 会话历史(上下文对话)
+        items:
+          $ref: '#/definitions/controllers.ConversationTurn'
+        type: array
+      session_id:
+        description: 非空则把本次交互落入该会话(向后兼容:空则不持久化)
+        type: string
+    required:
+    - description
+    type: object
   controllers.IssueCount:
     properties:
       count:
@@ -121,6 +200,19 @@ definitions:
       verdict:
         type: string
     type: object
+  controllers.ManifestAIContext:
+    properties:
+      end_line:
+        type: integer
+      file_path:
+        description: manifest 内路径
+        type: string
+      kind:
+        description: '"file" | "selection"'
+        type: string
+      start_line:
+        type: integer
+    type: object
   controllers.PreviewAssembledPromptRequest:
     properties:
       capability:
@@ -151,6 +243,17 @@ definitions:
         type: integer
       rule:
         type: string
+    type: object
+  controllers.SearchSummaryRequest:
+    properties:
+      query:
+        type: string
+      results:
+        items:
+          $ref: '#/definitions/services.SearchSummaryInputResource'
+        type: array
+    required:
+    - query
     type: object
   controllers.SecurityTagStatsDTO:
     properties:
@@ -791,20 +894,6 @@ definitions:
       protocol:
         type: string
     type: object
-  handlers.RegisterRequest:
-    properties:
-      email:
-        type: string
-      password:
-        minLength: 6
-        type: string
-      username:
-        type: string
-    required:
-    - email
-    - password
-    - username
-    type: object
   handlers.ResetPasswordRequest:
     properties:
       current_password:
@@ -1008,6 +1097,9 @@ definitions:
       base_url:
         description: OpenAI Compatible API 基础 URL
         type: string
+      cache_enabled:
+        description: Prompt Caching 配置（仅 Bedrock）
+        type: boolean
       capabilities:
         description: 支持的能力场景，["*"]表示默认配置，[]表示未配置
         items:
@@ -1030,6 +1122,10 @@ definitions:
       enabled:
         description: true=全局兜底配置(最低优先级), false=按 capabilities 精确匹配的专用配置(优先级更高)
         type: boolean
+      grok_reasoning_effort:
+        description: Grok 专属 reasoning effort（仅 service_type=grok）：low / medium /
+          high
+        type: string
       id:
         type: integer
       mode:
@@ -1058,7 +1154,7 @@ definitions:
         description: thinking token 预算（最小 1024）
         type: integer
       thinking_enabled:
-        description: Extended Thinking 配置
+        description: Extended Thinking 配置（Bedrock Claude / Qwen 等）
         type: boolean
       top_k:
         description: Vector 搜索配置（仅 embedding 能力使用）
@@ -1116,34 +1212,6 @@ definitions:
       updated_by:
         type: string
       version:
-        type: string
-    type: object
-  models.AgentPingRequest:
-    properties:
-      cpu_usage:
-        description: CPU使用率 0-100
-        type: number
-      memory_usage:
-        description: 内存使用率 0-100
-        type: number
-      running_tasks:
-        description: 当前运行的任务
-        items:
-          $ref: '#/definitions/models.RunningTask'
-        type: array
-      status:
-        enum:
-        - idle
-        - busy
-        type: string
-    required:
-    - status
-    type: object
-  models.AgentPingResponse:
-    properties:
-      last_ping_at:
-        type: string
-      message:
         type: string
     type: object
   models.AgentPool:
@@ -1298,29 +1366,10 @@ definitions:
     - name
     - primary_key_field
     type: object
-  models.CreateManifestDeploymentRequest:
-    properties:
-      auto_apply:
-        description: 是否自动 Apply
-        type: boolean
-      plan_only:
-        description: 仅 Plan
-        type: boolean
-      variable_overrides:
-        items:
-          type: integer
-        type: array
-      version_id:
-        type: string
-      workspace_id:
-        type: integer
-    required:
-    - version_id
-    - workspace_id
-    type: object
   models.CreateManifestRequest:
     properties:
       description:
+        maxLength: 1024
         type: string
       name:
         maxLength: 255
@@ -1390,8 +1439,6 @@ definitions:
     type: object
   models.CreateProviderTemplateRequest:
     properties:
-      alias:
-        type: string
       config:
         additionalProperties: true
         type: object
@@ -1615,6 +1662,15 @@ definitions:
     - run_task_id
     - stage
     type: object
+  models.DeploymentVarsetEntry:
+    properties:
+      priority:
+        type: integer
+      varset_id:
+        type: string
+    required:
+    - varset_id
+    type: object
   models.DiffStats:
     properties:
       added:
@@ -1836,6 +1892,31 @@ definitions:
     required:
     - from_version_id
     type: object
+  models.InstallDeploymentRequest:
+    properties:
+      variable_overrides:
+        additionalProperties:
+          type: string
+        type: object
+      varsets:
+        items:
+          $ref: '#/definitions/models.DeploymentVarsetEntry'
+        type: array
+      version_id:
+        type: string
+      workdir:
+        description: |-
+          Workdir 可选:terraform 执行子目录(归一化后存入 workspaces.manifest_subpath)。
+          省略(nil)= 沿用 workspace 记录里已有的 ManifestSubpath(向后兼容);
+          非 nil(含空串)= 以本次值为准(空串 => 根目录)。
+        type: string
+      workspace_id:
+        description: ws-xxx 语义化ID
+        type: string
+    required:
+    - version_id
+    - workspace_id
+    type: object
   models.JSONB:
     additionalProperties: true
     type: object
@@ -1886,219 +1967,6 @@ definitions:
         additionalProperties:
           type: string
         type: object
-    type: object
-  models.Manifest:
-    properties:
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建者
-        type: string
-      created_by_name:
-        type: string
-      deployment_count:
-        type: integer
-      deployments:
-        items:
-          $ref: '#/definitions/models.ManifestDeployment'
-        type: array
-      description:
-        description: 描述
-        type: string
-      id:
-        description: '格式: mf-{ulid}'
-        type: string
-      latest_version:
-        allOf:
-        - $ref: '#/definitions/models.ManifestVersion'
-        description: 非数据库字段
-      name:
-        description: 名称
-        type: string
-      organization_id:
-        description: 所属组织
-        type: integer
-      status:
-        description: draft, published, archived
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
-      versions:
-        description: 关联
-        items:
-          $ref: '#/definitions/models.ManifestVersion'
-        type: array
-    type: object
-  models.ManifestDeployment:
-    properties:
-      created_at:
-        description: 创建时间
-        type: string
-      deployed_at:
-        description: 部署时间
-        type: string
-      deployed_by:
-        description: 部署者
-        type: string
-      deployed_by_name:
-        type: string
-      id:
-        description: '格式: mfd-{ulid}'
-        type: string
-      last_task_id:
-        description: 最后一次部署的任务 ID
-        type: integer
-      manifest_id:
-        description: 所属 Manifest
-        type: string
-      resources:
-        items:
-          $ref: '#/definitions/models.ManifestDeploymentResource'
-        type: array
-      status:
-        description: pending, deploying, deployed, failed
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
-      variable_overrides:
-        description: 变量覆盖
-        items:
-          type: integer
-        type: array
-      version:
-        allOf:
-        - $ref: '#/definitions/models.ManifestVersion'
-        description: 关联
-      version_id:
-        description: 部署的版本
-        type: string
-      version_name:
-        type: string
-      workspace_id:
-        description: 目标 Workspace
-        type: integer
-      workspace_name:
-        description: 非数据库字段
-        type: string
-      workspace_semantic_id:
-        description: ws-xxx 格式
-        type: string
-    type: object
-  models.ManifestDeploymentListResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/models.ManifestDeployment'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-      total_pages:
-        type: integer
-    type: object
-  models.ManifestDeploymentResource:
-    properties:
-      config_hash:
-        description: 部署时的配置 hash，用于漂移检测
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      deployment_id:
-        description: 所属部署
-        type: string
-      id:
-        description: '格式: mdr-{ulid}'
-        type: string
-      node_id:
-        description: Manifest 中的节点 ID
-        type: string
-      resource_id:
-        description: workspace_resources.resource_id (语义 ID)
-        type: string
-    type: object
-  models.ManifestListResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/models.Manifest'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-      total_pages:
-        type: integer
-    type: object
-  models.ManifestVersion:
-    properties:
-      canvas_data:
-        description: 画布数据
-        items:
-          type: integer
-        type: array
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建者
-        type: string
-      created_by_name:
-        description: 非数据库字段
-        type: string
-      edges:
-        description: 连接关系
-        items:
-          type: integer
-        type: array
-      hcl_content:
-        description: 生成的 HCL
-        type: string
-      id:
-        description: '格式: mfv-{ulid}'
-        type: string
-      is_draft:
-        description: 是否为草稿
-        type: boolean
-      manifest_id:
-        description: 所属 Manifest
-        type: string
-      nodes:
-        description: 节点配置
-        items:
-          type: integer
-        type: array
-      variables:
-        description: 可配置变量
-        items:
-          type: integer
-        type: array
-      version:
-        description: 版本号，如 v1.0.0, draft
-        type: string
-    type: object
-  models.ManifestVersionListResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/models.ManifestVersion'
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-      total_pages:
-        type: integer
     type: object
   models.MetaRulesConfig:
     properties:
@@ -2578,8 +2446,6 @@ definitions:
     type: object
   models.ProviderTemplate:
     properties:
-      alias:
-        type: string
       config:
         $ref: '#/definitions/models.JSONB'
       constraint_op:
@@ -2616,11 +2482,12 @@ definitions:
       total:
         type: integer
     type: object
-  models.PublishManifestVersionRequest:
+  models.PublishVersionRequest:
     properties:
+      changelog:
+        type: string
       version:
-        description: 如 v1.0.0
-        maxLength: 50
+        description: vMAJOR.MINOR.PATCH
         type: string
     required:
     - version
@@ -2720,7 +2587,7 @@ definitions:
       state_version_id:
         type: integer
       summary_assessment_status:
-        description: 摘要评估状态：空 | pending | assessed
+        description: 摘要评估状态：空 | pending | partial | assessed
         type: string
       summary_hash:
         description: attributes 的 MD5 hash，用于变更检测
@@ -3011,40 +2878,6 @@ definitions:
     - RunTaskStagePostPlan
     - RunTaskStagePreApply
     - RunTaskStagePostApply
-  models.RunningTask:
-    properties:
-      started_at:
-        type: string
-      task_id:
-        type: integer
-      task_type:
-        type: string
-      workspace_id:
-        type: string
-    type: object
-  models.SaveManifestVersionRequest:
-    properties:
-      canvas_data:
-        items:
-          type: integer
-        type: array
-      edges:
-        items:
-          type: integer
-        type: array
-      nodes:
-        items:
-          type: integer
-        type: array
-      variables:
-        items:
-          type: integer
-        type: array
-    required:
-    - canvas_data
-    - edges
-    - nodes
-    type: object
   models.Schema:
     properties:
       ai_generated:
@@ -3603,22 +3436,10 @@ definitions:
     required:
     - k8s_config
     type: object
-  models.UpdateManifestDeploymentRequest:
-    properties:
-      auto_apply:
-        type: boolean
-      plan_only:
-        type: boolean
-      variable_overrides:
-        items:
-          type: integer
-        type: array
-      version_id:
-        type: string
-    type: object
   models.UpdateManifestRequest:
     properties:
       description:
+        maxLength: 1024
         type: string
       name:
         type: string
@@ -3666,8 +3487,6 @@ definitions:
     type: object
   models.UpdateProviderTemplateRequest:
     properties:
-      alias:
-        type: string
       config:
         additionalProperties: true
         type: object
@@ -3799,6 +3618,21 @@ definitions:
         - $ref: '#/definitions/models.RunTaskStage'
         description: 执行阶段
     type: object
+  models.UpgradeDeploymentRequest:
+    properties:
+      target_version_id:
+        type: string
+      variable_overrides:
+        additionalProperties:
+          type: string
+        type: object
+      varsets:
+        items:
+          $ref: '#/definitions/models.DeploymentVarsetEntry'
+        type: array
+    required:
+    - target_version_id
+    type: object
   models.User:
     properties:
       created_at:
@@ -3927,9 +3761,6 @@ definitions:
         allOf:
         - $ref: '#/definitions/models.JSONB'
         description: 初始化配置
-      is_locked:
-        description: 锁定状态
-        type: boolean
       k8s_config_id:
         description: K8s配置ID
         type: integer
@@ -3948,14 +3779,22 @@ definitions:
       last_plan_at:
         description: 最后一次Plan执行时间
         type: string
-      lock_reason:
+      lock_id:
+        description: 锁定状态（统一锁：UI 手动锁和 Terraform 运行时锁共用）
         type: string
-      locked_at:
-        type: string
-      locked_by:
-        type: string
+      lock_info:
+        $ref: '#/definitions/models.JSONB'
       log_config:
         $ref: '#/definitions/models.JSONB'
+      manifest_active_tag:
+        description: 当前激活的 vX.Y.Z
+        type: string
+      manifest_deployment_id:
+        description: Manifest 软链接(workspace 装了 manifest 时三列同生同死;一致性 CHECK 见 migration)
+        type: string
+      manifest_subpath:
+        description: terraform 执行子目录,空 = manifest 根
+        type: string
       max_retries:
         type: integer
       name:
@@ -3976,14 +3815,12 @@ definitions:
       provider_config_hash:
         description: Provider配置变更跟踪（用于优化 terraform init -upgrade）
         type: string
-      provider_overrides:
+      provider_instances:
         allOf:
         - $ref: '#/definitions/models.JSONB'
-        description: 按provider类型的字段覆盖
-      provider_template_ids:
-        allOf:
-        - $ref: '#/definitions/models.JSONB'
-        description: Provider模板引用
+        description: |-
+          Provider实例数组: [{template_id, alias, overrides}]
+          同一模板可被多次实例化，每个实例独立设置 alias 和 overrides
       resource_count:
         description: Overview统计字段
         type: integer
@@ -4309,6 +4146,15 @@ definitions:
       execution_node:
         description: 执行节点标识
         type: string
+      external_files:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: |-
+          Manifest Run 临时文件: manifest 编辑器 [Run] 按钮触发 plan-only 时,
+          把当前用户私有草稿全量上传到这里,executor 走 Run 分支(完全忽略
+          workspace.ManifestDeploymentID)用 ExternalFiles 跑 plan。任务跑完即抛,
+          不污染 manifest_files / workspace 任何持久状态。
+          数据格式: [{"path": "main.tf", "content_b64": "..."}]
       id:
         description: 基础字段
         type: integer
@@ -4360,6 +4206,9 @@ definitions:
       snapshot_id:
         description: Plan+Apply流程字段
         type: string
+      snapshot_manifest_version_id:
+        description: Manifest版本ID快照（manifest-managed workspace 用，供 code diff 回溯）
+        type: string
       snapshot_provider_config:
         allOf:
         - $ref: '#/definitions/models.JSONB'
@@ -4368,10 +4217,6 @@ definitions:
         allOf:
         - $ref: '#/definitions/models.JSONB'
         description: Plan+Apply快照字段（新版本，用于修复竞态条件bug）
-      snapshot_variables:
-        allOf:
-        - $ref: '#/definitions/models.JSONB'
-        description: 变量快照
       stage:
         description: 执行阶段
         type: string
@@ -4388,6 +4233,18 @@ definitions:
         description: 任务类型
       updated_at:
         type: string
+      variable_overrides:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: |-
+          Manifest deployment 变量应急覆盖快照: 任务创建时把当时 active deployment 的
+          variable_overrides(扁平 key=string,最高优先级)固化到任务行;执行时 overlay 到
+          解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——
+          overrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。
+          数据格式: {"key": "value"}
+      variable_snapshot_id:
+        description: 变量快照ID（关联variable_snapshots表）
+        type: string
       workspace:
         allOf:
         - $ref: '#/definitions/models.Workspace'
@@ -4401,6 +4258,13 @@ definitions:
       action:
         description: 变更信息
         type: string
+      after_unknown:
+        allOf:
+        - $ref: '#/definitions/models.JSONB'
+        description: 标记哪些字段为 known after apply
+      applied_code_version:
+        description: Apply 时的代码版本号（resource_code_versions.version）
+        type: integer
       apply_completed_at:
         type: string
       apply_error:
@@ -4802,6 +4666,8 @@ definitions:
         type: string
       created_by:
         type: string
+      description:
+        type: string
       id:
         type: integer
       message:
@@ -4813,6 +4679,40 @@ definitions:
         type: string
       task_type:
         description: 添加task_type字段
+        type: string
+    type: object
+  services.ManifestFix:
+    properties:
+      end_line:
+        description: 结束行（1-based，含）
+        type: integer
+      file:
+        description: 目标文件路径
+        type: string
+      new_text:
+        description: 替换后的文本
+        type: string
+      start_line:
+        description: 起始行（1-based，含）
+        type: integer
+    type: object
+  services.ManifestIssue:
+    properties:
+      file:
+        description: 文件路径（打包内容来源）
+        type: string
+      fix:
+        allOf:
+        - $ref: '#/definitions/services.ManifestFix'
+        description: 可修复项才有：结构化修复
+      level:
+        description: '严重级别: error | warning | info'
+        type: string
+      line:
+        description: 行号（从 1 开始，0 表示无法定位）
+        type: integer
+      message:
+        description: 问题描述
         type: string
     type: object
   services.MissingFieldInfo:
@@ -4881,9 +4781,21 @@ definitions:
       error:
         description: 错误时的数据
         type: string
+      hcl:
+        description: Manifest AI 完成时的数据
+        type: string
+      issues:
+        description: manifest check 结果（问题列表）
+        items:
+          $ref: '#/definitions/services.ManifestIssue'
+        type: array
       message:
         description: 详细消息（可选）
         type: string
+      search_summary:
+        allOf:
+        - $ref: '#/definitions/services.SearchSummaryResult'
+        description: CMDB 搜索结果 AI 解读完成时的数据
       step:
         description: 当前步骤（从 1 开始）
         type: integer
@@ -4899,6 +4811,11 @@ definitions:
       usage_log_id:
         description: Skill 使用日志 ID（用于前端行为上报）
         type: string
+      warnings:
+        description: 生成结果的 schema 校验警告
+        items:
+          type: string
+        type: array
     type: object
   services.RecentFailure:
     properties:
@@ -4936,6 +4853,83 @@ definitions:
         description: 资源类型，如 aws_instance
         type: string
     type: object
+  services.SearchSummaryDropped:
+    properties:
+      index:
+        type: integer
+      reason:
+        type: string
+    type: object
+  services.SearchSummaryGroup:
+    properties:
+      count:
+        type: integer
+      label:
+        type: string
+    type: object
+  services.SearchSummaryHighlight:
+    properties:
+      name:
+        type: string
+      reason:
+        type: string
+    type: object
+  services.SearchSummaryInputResource:
+    properties:
+      cloud_account_name:
+        type: string
+      cloud_region:
+        type: string
+      cloud_resource_id:
+        type: string
+      cloud_resource_name:
+        type: string
+      description:
+        type: string
+      external_source_name:
+        type: string
+      index:
+        description: 0-based，与请求数组顺序一致，供 AI 筛查引用
+        type: integer
+      is_resource_deleted:
+        type: boolean
+      resource_name:
+        type: string
+      resource_summary:
+        type: string
+      resource_type:
+        type: string
+      similarity:
+        type: number
+      source_type:
+        type: string
+      workspace_name:
+        type: string
+    type: object
+  services.SearchSummaryResult:
+    properties:
+      dropped:
+        items:
+          $ref: '#/definitions/services.SearchSummaryDropped'
+        type: array
+      groups:
+        items:
+          $ref: '#/definitions/services.SearchSummaryGroup'
+        type: array
+      highlights:
+        items:
+          $ref: '#/definitions/services.SearchSummaryHighlight'
+        type: array
+      overview:
+        type: string
+      screened_count:
+        description: 实际送入 AI 筛查的条数
+        type: integer
+      suggestions:
+        items:
+          type: string
+        type: array
+    type: object
   services.SetDefaultVersionRequest:
     properties:
       version_id:
@@ -4970,8 +4964,6 @@ definitions:
       id:
         description: 基本信息
         type: integer
-      is_locked:
-        type: boolean
       last_apply_at:
         type: string
       last_drift_check:
@@ -4982,10 +4974,10 @@ definitions:
         allOf:
         - $ref: '#/definitions/services.LatestRunInfo'
         description: 最近运行
-      lock_reason:
+      lock_id:
         type: string
-      locked_by:
-        type: string
+      lock_info:
+        $ref: '#/definitions/models.JSONB'
       locked_by_username:
         description: 锁定者用户名
         type: string
@@ -5063,6 +5055,7 @@ definitions:
     - AI_ANALYSIS
     - SYSTEM_SETTINGS
     - RUN_TASKS
+    - VARIABLE_SETS
     - PROJECT_SETTINGS
     - PROJECT_TEAM_MANAGEMENT
     - PROJECT_WORKSPACES
@@ -5099,6 +5092,7 @@ definitions:
     - ResourceTypeAIAnalysis
     - ResourceTypeSystemSettings
     - ResourceTypeRunTasks
+    - ResourceTypeVariableSets
     - ResourceTypeProjectSettings
     - ResourceTypeProjectTeams
     - ResourceTypeProjectWorkspaces
@@ -5730,48 +5724,6 @@ paths:
       tags:
       - Module Version Skill
   /api/v1/admin/modules/{module_id}/skill:
-    delete:
-      consumes:
-      - application/json
-      description: 删除 Module 关联的 Skill
-      parameters:
-      - description: Module ID
-        in: path
-        name: module_id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 删除 Module Skill
-      tags:
-      - Module Skill
     get:
       consumes:
       - application/json
@@ -7616,126 +7568,18 @@ paths:
       summary: Get agent information
       tags:
       - Agent
-  /api/v1/agents/{agent_id}/cc-status:
-    get:
-      consumes:
-      - application/json
-      description: Get current C&C connection status of an agent. This endpoint is
-        deprecated - C&C is now handled by the standalone WebSocket server.
-      parameters:
-      - description: Agent ID
-        in: path
-        name: agent_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - PoolTokenAuth: []
-      summary: Get agent C&C status (deprecated)
-      tags:
-      - Agent C&C
-  /api/v1/agents/{agent_id}/ping:
-    post:
-      consumes:
-      - application/json
-      description: Update agent heartbeat and status (currently disabled)
-      parameters:
-      - description: Agent ID
-        in: path
-        name: agent_id
-        required: true
-        type: string
-      - description: Ping request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.AgentPingRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.AgentPingResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - PoolTokenAuth: []
-      summary: Agent heartbeat
-      tags:
-      - Agent
   /api/v1/agents/control:
     get:
-      description: Establish a WebSocket connection for Agent Command & Control. This
-        is a WebSocket upgrade endpoint, not a regular HTTP endpoint. The agent sends
-        heartbeats and receives task assignments via this channel.
-      parameters:
-      - description: Agent ID
-        in: query
-        name: agent_id
-        required: true
-        type: string
+      description: 'Main API returns 410 Gone. Connect WebSocket to port 8091: ws://host:8091/api/v1/agents/control?agent_id=...'
       produces:
       - application/json
       responses:
-        "101":
-          description: WebSocket upgrade successful
-          schema:
-            type: string
-        "400":
-          description: Bad Request
+        "410":
+          description: WebSocket endpoint has moved to port 8091
           schema:
             additionalProperties: true
             type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - PoolTokenAuth: []
-      summary: Agent C&C WebSocket connection
+      summary: Agent C&C endpoint moved (main API)
       tags:
       - Agent C&C
   /api/v1/agents/pool/secrets:
@@ -8141,58 +7985,6 @@ paths:
       summary: Get plan task
       tags:
       - Agent Task
-  /api/v1/agents/tasks/{task_id}/state:
-    post:
-      consumes:
-      - application/json
-      description: Save a new state version for the task and extract resource IDs
-        from state
-      parameters:
-      - description: Task ID
-        in: path
-        name: task_id
-        required: true
-        type: string
-      - description: State data with content, checksum, and size
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - PoolTokenAuth: []
-      summary: Save task state
-      tags:
-      - Agent Task
   /api/v1/agents/tasks/{task_id}/status:
     put:
       consumes:
@@ -8420,6 +8212,50 @@ paths:
       security:
       - PoolTokenAuth: []
       summary: Lock workspace
+      tags:
+      - Agent Workspace
+  /api/v1/agents/workspaces/{workspace_id}/manifest-provider-schema:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - PoolTokenAuth: []
+      summary: Upsert manifest provider schema
+      tags:
+      - Agent Workspace
+  /api/v1/agents/workspaces/{workspace_id}/manifest-provider-schema/meta:
+    get:
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - PoolTokenAuth: []
+      summary: Get manifest provider schema meta
       tags:
       - Agent Workspace
   /api/v1/agents/workspaces/{workspace_id}/state/max-version:
@@ -8768,6 +8604,66 @@ paths:
       summary: Analyze task error with AI
       tags:
       - AI Analysis
+  /api/v1/ai/cmdb/search-summary:
+    post:
+      consumes:
+      - application/json
+      description: Interpret hybrid search results for the user in natural language
+      parameters:
+      - description: Search summary request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.SearchSummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: CMDB search result AI summary
+      tags:
+      - Embedding
+  /api/v1/ai/cmdb/search-summary-sse:
+    post:
+      consumes:
+      - application/json
+      description: Stream progress events while generating CMDB search interpretation
+      parameters:
+      - description: Search summary request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.SearchSummaryRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: CMDB search result AI summary (SSE progress)
+      tags:
+      - Embedding
   /api/v1/ai/cmdb/vector-search:
     post:
       consumes:
@@ -8968,6 +8864,238 @@ paths:
       summary: Generate config with CMDB + Skill mode via SSE
       tags:
       - AI Form
+  /api/v1/ai/manifest/check-sse:
+    post:
+      consumes:
+      - application/json
+      description: Stream AI draft check progress via Server-Sent Events
+      parameters:
+      - description: Check request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.CheckDraftRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE event stream
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Check manifest draft (SSE)
+      tags:
+      - Manifest AI
+  /api/v1/ai/manifest/generate-resource-sse:
+    post:
+      consumes:
+      - application/json
+      description: Stream AI generation/repair progress for manifest HCL via Server-Sent
+        Events
+      parameters:
+      - description: Generation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.GenerateResourceRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE event stream
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate or fix manifest resource (SSE)
+      tags:
+      - Manifest AI
+  /api/v1/ai/manifest/sessions:
+    get:
+      consumes:
+      - application/json
+      description: List AI chat sessions for a manifest owned by the current user
+      parameters:
+      - description: Manifest ID
+        in: query
+        name: manifest_id
+        required: true
+        type: string
+      - description: Organization ID
+        in: query
+        name: org_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List manifest AI sessions
+      tags:
+      - Manifest AI
+    post:
+      consumes:
+      - application/json
+      description: Create a new AI chat session for a manifest
+      parameters:
+      - description: Session payload (manifest_id required; org_id, title optional)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create manifest AI session
+      tags:
+      - Manifest AI
+  /api/v1/ai/manifest/sessions/{sid}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an AI session owned by the current user
+      parameters:
+      - description: Session ID
+        in: path
+        name: sid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete manifest AI session
+      tags:
+      - Manifest AI
+  /api/v1/ai/manifest/sessions/{sid}/messages:
+    get:
+      consumes:
+      - application/json
+      description: Get messages for an AI session owned by the current user
+      parameters:
+      - description: Session ID
+        in: path
+        name: sid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get manifest AI session messages
+      tags:
+      - Manifest AI
   /api/v1/ai/skill-usage/{id}/action:
     put:
       consumes:
@@ -9354,45 +9482,51 @@ paths:
       summary: Refresh access token
       tags:
       - Auth
-  /api/v1/auth/register:
-    post:
-      consumes:
-      - application/json
-      description: 'Register a new user account. Note: this endpoint is currently
-        commented out in the router.'
+  /api/v1/auth/sso/{provider}/callback:
+    get:
+      description: Process the OAuth callback from the SSO provider (GET and POST).
+        Returns JWT token on success, or MFA challenge if required.
       parameters:
-      - description: Registration info
-        in: body
-        name: request
+      - description: SSO provider key
+        in: path
+        name: provider
         required: true
-        schema:
-          $ref: '#/definitions/handlers.RegisterRequest'
+        type: string
+      - description: OAuth authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: OAuth state parameter
+        in: query
+        name: state
+        required: true
+        type: string
       produces:
       - application/json
       responses:
-        "201":
-          description: User created successfully
+        "200":
+          description: Login successful with JWT token, or MFA required
           schema:
             $ref: '#/definitions/gin.H'
         "400":
-          description: Invalid request parameters
+          description: Missing code/state or SSO error
           schema:
             $ref: '#/definitions/gin.H'
-        "409":
-          description: Username or email already exists
+        "401":
+          description: SSO authentication failed
           schema:
             $ref: '#/definitions/gin.H'
         "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/gin.H'
-      summary: User registration (currently disabled)
+      summary: Handle SSO callback
       tags:
-      - Auth
-  /api/v1/auth/sso/{provider}/callback:
-    get:
-      description: Process the OAuth callback from the SSO provider. Returns JWT token
-        on success, or MFA challenge if required.
+      - SSO
+    post:
+      description: Process the OAuth callback from the SSO provider (GET and POST).
+        Returns JWT token on success, or MFA challenge if required.
       parameters:
       - description: SSO provider key
         in: path
@@ -10457,6 +10591,41 @@ paths:
       summary: 获取Demo版本列表
       tags:
       - Module Demo
+  /api/v1/global/settings/ai-config/inference-profiles:
+    get:
+      consumes:
+      - application/json
+      description: Get available Bedrock inference profiles for a given AWS region
+        (includes global and regional profiles)
+      parameters:
+      - description: AWS Region
+        in: query
+        name: region
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Inference profile list
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Missing region parameter
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Fetch failed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get available inference profiles
+      tags:
+      - AI Config
   /api/v1/global/settings/ai-config/models:
     get:
       consumes:
@@ -12735,6 +12904,22 @@ paths:
       summary: Remove role policy
       tags:
       - IAM-Role
+  /api/v1/iam/status:
+    get:
+      description: Health/status endpoint for the IAM subsystem
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: IAM system status
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get IAM system status
+      tags:
+      - IAM
   /api/v1/iam/teams:
     get:
       description: List all teams belonging to a specific organization
@@ -13624,6 +13809,108 @@ paths:
       summary: Get user statistics
       tags:
       - IAM-User
+  /api/v1/manifest-editor/modules:
+    get:
+      consumes:
+      - application/json
+      description: Lightweight module list for manifest editor IntelliSense
+      parameters:
+      - description: Search query (name, source, description)
+        in: query
+        name: q
+        type: string
+      - default: 20
+        description: Max results
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List modules for editor
+      tags:
+      - Manifest Editor
+  /api/v1/manifest-editor/modules/{module_id}/demos:
+    get:
+      consumes:
+      - application/json
+      description: List demos of a module's default version for editor IntelliSense
+      parameters:
+      - description: Module ID
+        in: path
+        name: module_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List module demos for editor
+      tags:
+      - Manifest Editor
+  /api/v1/manifest-editor/modules/{module_id}/inputs:
+    get:
+      consumes:
+      - application/json
+      description: Extract module input variables from active OpenAPI schema for editor
+        completion
+      parameters:
+      - description: Module ID
+        in: path
+        name: module_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List module inputs for editor
+      tags:
+      - Manifest Editor
   /api/v1/modules:
     get:
       consumes:
@@ -13767,17 +14054,17 @@ paths:
       summary: 获取模块详情
       tags:
       - Module
-    put:
+    patch:
       consumes:
       - application/json
-      description: 更新模块的配置信息
+      description: Update module configuration (supports both PUT and PATCH)
       parameters:
-      - description: 模块ID
+      - description: Module ID
         in: path
         name: id
         required: true
         type: integer
-      - description: 更新信息
+      - description: Update fields
         in: body
         name: request
         required: true
@@ -13787,28 +14074,72 @@ paths:
       - application/json
       responses:
         "200":
-          description: 更新成功
+          description: Update successful
           schema:
             additionalProperties: true
             type: object
         "400":
-          description: 请求参数无效
+          description: Invalid request
           schema:
             additionalProperties: true
             type: object
         "404":
-          description: 模块不存在
+          description: Module not found
           schema:
             additionalProperties: true
             type: object
         "500":
-          description: 更新失败
+          description: Update failed
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: 更新模块信息
+      summary: Update module
+      tags:
+      - Module
+    put:
+      consumes:
+      - application/json
+      description: Update module configuration (supports both PUT and PATCH)
+      parameters:
+      - description: Module ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update fields
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Update successful
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Module not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Update failed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update module
       tags:
       - Module
   /api/v1/modules/{id}/default-version:
@@ -15200,12 +15531,16 @@ paths:
       - Notifications
   /api/v1/organizations/{org_id}/manifests:
     get:
+      consumes:
+      - application/json
+      description: List manifests under an organization with optional status filter
+        and pagination
       parameters:
       - description: Organization ID
         in: path
         name: org_id
         required: true
-        type: string
+        type: integer
       - default: 1
         description: Page number
         in: query
@@ -15216,7 +15551,7 @@ paths:
         in: query
         name: page_size
         type: integer
-      - description: Status filter
+      - description: Filter by status (draft, published, archived)
         in: query
         name: status
         type: string
@@ -15226,24 +15561,36 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.ManifestListResponse'
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Get Manifest list
+      summary: List manifests
       tags:
       - Manifest
     post:
       consumes:
       - application/json
+      description: Create a new manifest in draft status under the organization
       parameters:
       - description: Organization ID
         in: path
         name: org_id
         required: true
-        type: string
-      - description: Create request
+        type: integer
+      - description: Manifest create payload
         in: body
-        name: body
+        name: request
         required: true
         schema:
           $ref: '#/definitions/models.CreateManifestRequest'
@@ -15253,7 +15600,8 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.Manifest'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
@@ -15264,13 +15612,21 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Create Manifest
+      summary: Create manifest
       tags:
       - Manifest
   /api/v1/organizations/{org_id}/manifests/{id}:
     delete:
+      consumes:
+      - application/json
+      description: Delete a manifest (blocked if active deployments exist)
       parameters:
       - description: Organization ID
         in: path
@@ -15297,12 +15653,20 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Delete Manifest
+      summary: Delete manifest
       tags:
       - Manifest
     get:
+      consumes:
+      - application/json
+      description: Get manifest details including latest version and deployment count
       parameters:
       - description: Organization ID
         in: path
@@ -15320,20 +15684,27 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Manifest'
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Get Manifest details
+      summary: Get manifest
       tags:
       - Manifest
     put:
       consumes:
       - application/json
+      description: Update manifest name, description, or status
       parameters:
       - description: Organization ID
         in: path
@@ -15345,9 +15716,9 @@ paths:
         name: id
         required: true
         type: string
-      - description: Update request
+      - description: Manifest update payload
         in: body
-        name: body
+        name: request
         required: true
         schema:
           $ref: '#/definitions/models.UpdateManifestRequest'
@@ -15357,79 +15728,8 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Manifest'
-        "404":
-          description: Not Found
-          schema:
             additionalProperties: true
             type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Update Manifest
-      tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/deployments:
-    get:
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ManifestDeploymentListResponse'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get deployment list
-      tags:
-      - Manifest
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Create request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/models.CreateManifestDeploymentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.ManifestDeployment'
         "400":
           description: Bad Request
           schema:
@@ -15445,226 +15745,21 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      security:
-      - BearerAuth: []
-      summary: Create deployment
-      tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}:
-    delete:
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Deployment ID
-        in: path
-        name: deployment_id
-        required: true
-        type: string
-      - description: Whether to uninstall (hard delete resources)
-        in: query
-        name: uninstall
-        type: boolean
-      - description: Force uninstall (ignore drift warnings, only effective when uninstall=true)
-        in: query
-        name: force
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ManifestDeployment'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "409":
-          description: Conflict
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: Delete deployment (supports soft delete and hard delete/uninstall)
+      summary: Update manifest
       tags:
       - Manifest
-    get:
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Deployment ID
-        in: path
-        name: deployment_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ManifestDeployment'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get deployment details
-      tags:
-      - Manifest
-    put:
-      consumes:
-      - application/json
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Deployment ID
-        in: path
-        name: deployment_id
-        required: true
-        type: string
-      - description: Update request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/models.UpdateManifestDeploymentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ManifestDeployment'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Update deployment
-      tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}/resources:
-    get:
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Deployment ID
-        in: path
-        name: deployment_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              type: object
-            type: array
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get deployment resources
-      tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/deployments/{deployment_id}/uninstall:
+  /api/v1/organizations/{org_id}/manifests/{id}/draft/_export:
     post:
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Deployment ID
-        in: path
-        name: deployment_id
-        required: true
-        type: string
-      - description: Force uninstall (ignore drift warnings)
-        in: query
-        name: force
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Uninstall deployment (recommend using DELETE API with uninstall=true
-        parameter)
-      tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/draft:
-    put:
       consumes:
       - application/json
+      description: Export the current user's draft files as a ZIP archive
       parameters:
       - description: Organization ID
         in: path
@@ -15676,31 +15771,29 @@ paths:
         name: id
         required: true
         type: string
-      - description: Save request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/models.SaveManifestVersionRequest'
       produces:
-      - application/json
+      - application/zip
       responses:
         "200":
-          description: OK
+          description: ZIP archive
           schema:
-            $ref: '#/definitions/models.ManifestVersion'
-        "404":
-          description: Not Found
+            type: file
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: Save draft
+      summary: Export draft ZIP
       tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/export:
-    get:
+      - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/draft/_reset_from:
+    post:
+      consumes:
+      - application/json
+      description: Overwrite the current user's draft with files from a published
+        version
       parameters:
       - description: Organization ID
         in: path
@@ -15712,29 +15805,44 @@ paths:
         name: id
         required: true
         type: string
-      - description: Version ID (default latest version)
+      - description: Published version ID to reset from
         in: query
         name: version_id
+        required: true
         type: string
       produces:
-      - text/plain
+      - application/json
       responses:
         "200":
-          description: HCL content
+          description: OK
           schema:
-            type: string
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Export HCL
+      summary: Reset draft from version
       tags:
-      - Manifest
+      - Manifest Files
   /api/v1/organizations/{org_id}/manifests/{id}/export-zip:
     get:
+      consumes:
+      - application/json
+      description: Export published version or current user draft as a ZIP of files
       parameters:
       - description: Organization ID
         in: path
@@ -15746,7 +15854,7 @@ paths:
         name: id
         required: true
         type: string
-      - description: Version ID (default latest version)
+      - description: Version ID to export (defaults to latest published, else draft)
         in: query
         name: version_id
         type: string
@@ -15754,7 +15862,7 @@ paths:
       - application/zip
       responses:
         "200":
-          description: ZIP file
+          description: ZIP archive
           schema:
             type: file
         "404":
@@ -15762,13 +15870,426 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Export Manifest as ZIP
+      summary: Export manifest ZIP
       tags:
       - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/versions:
+  /api/v1/organizations/{org_id}/manifests/{id}/files:
     get:
+      consumes:
+      - application/json
+      description: List current user draft file tree, or a published version when
+        version is set
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Version ID (omit or draft for current user draft)
+        in: query
+        name: version
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List manifest files
+      tags:
+      - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/files/_delete_dir:
+    post:
+      consumes:
+      - application/json
+      description: Delete all draft files under a directory prefix for the current
+        user
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Delete dir payload (dir)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete draft directory
+      tags:
+      - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/files/_move:
+    post:
+      consumes:
+      - application/json
+      description: Rename or move a single file in the current user's draft
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Move payload (from, to)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Move or rename draft file
+      tags:
+      - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/files/_move_dir:
+    post:
+      consumes:
+      - application/json
+      description: Move all draft files under a directory prefix for the current user
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Move dir payload (from, to)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Move draft directory
+      tags:
+      - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/files/{path}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a single file from the current user's draft
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File path within the manifest
+        in: path
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete manifest draft file
+      tags:
+      - Manifest Files
+    get:
+      consumes:
+      - application/json
+      description: Read a single file from draft or published version; binary content
+        is base64-encoded
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File path within the manifest
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Version ID (omit or draft for current user draft)
+        in: query
+        name: version
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Read manifest file
+      tags:
+      - Manifest Files
+    put:
+      consumes:
+      - application/json
+      description: Create or update a file in the current user's draft (text content
+        or base64 binary)
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File path within the manifest
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: File payload (content or content_b64)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "413":
+          description: Request Entity Too Large
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Write manifest draft file
+      tags:
+      - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/provider-schemas:
+    get:
+      consumes:
+      - application/json
+      description: Return cached provider resource/data type catalog for the editor
+        (empty when uncached)
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Terraform workdir subpath
+        in: query
+        name: subpath
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get provider type schemas
+      tags:
+      - Manifest
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments:
+    get:
+      consumes:
+      - application/json
+      description: List all deployments for a manifest
       parameters:
       - description: Organization ID
         in: path
@@ -15786,20 +16307,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.ManifestVersionListResponse'
-        "404":
-          description: Not Found
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: Get version list
+      summary: List manifest deployments
       tags:
-      - Manifest
-    post:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}:
+    get:
       consumes:
       - application/json
+      description: Get deployment detail including linked variable sets
       parameters:
       - description: Organization ID
         in: path
@@ -15811,19 +16335,69 @@ paths:
         name: id
         required: true
         type: string
-      - description: Publish request
-        in: body
-        name: body
+      - description: Deployment ID
+        in: path
+        name: deployment_id
         required: true
-        schema:
-          $ref: '#/definitions/models.PublishManifestVersionRequest'
+        type: string
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.ManifestVersion'
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get manifest deployment
+      tags:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/uninstall:
+    post:
+      consumes:
+      - application/json
+      description: Unbind manifest from workspace and clear related workspace resources
+        (does not destroy cloud resources)
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deployment ID
+        in: path
+        name: deployment_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
@@ -15834,13 +16408,326 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Publish version
+      summary: Uninstall manifest deployment
       tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/{id}/versions/{version_id}:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/upgrade:
+    post:
+      consumes:
+      - application/json
+      description: Switch deployment version and varsets; reconcile workspace resources
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deployment ID
+        in: path
+        name: deployment_id
+        required: true
+        type: string
+      - description: Upgrade payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpgradeDeploymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upgrade manifest deployment
+      tags:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/variable-preview:
+    post:
+      consumes:
+      - application/json
+      description: Preview non-sensitive merged variable values for install/upgrade
+        dialogs
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deployment ID
+        in: path
+        name: deployment_id
+        required: true
+        type: string
+      - description: Varsets and variable_overrides for preview
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Preview deployment variables
+      tags:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install:
+    post:
+      consumes:
+      - application/json
+      description: Install a published version onto an empty workspace
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Install payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.InstallDeploymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Install manifest deployment
+      tags:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/draft/diff:
     get:
+      consumes:
+      - application/json
+      description: File-level content diff of current user draft against a version
+        (defaults to latest published)
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Base version ID (defaults to latest published)
+        in: query
+        name: against
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Diff draft against version
+      tags:
+      - Manifest Versions
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/versions:
+    get:
+      consumes:
+      - application/json
+      description: List published versions for a manifest (SemVer descending)
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List manifest versions
+      tags:
+      - Manifest Versions
+    post:
+      consumes:
+      - application/json
+      description: Snapshot the current user's draft into a new published version
+        (vX.Y.Z)
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Publish payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PublishVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Publish manifest version
+      tags:
+      - Manifest Versions
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a published version detail by version ID
       parameters:
       - description: Organization ID
         in: path
@@ -15863,93 +16750,150 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.ManifestVersion'
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
             additionalProperties: true
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
       security:
       - BearerAuth: []
-      summary: Get version details
+      summary: Get manifest version
       tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/import:
-    post:
+      - Manifest Versions
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/diff:
+    get:
       consumes:
       - application/json
+      description: File-level content diff of target version against another version
       parameters:
       - description: Organization ID
         in: path
         name: org_id
         required: true
         type: string
-      - description: HCL content
-        in: body
-        name: body
+      - description: Manifest ID
+        in: path
+        name: id
         required: true
-        schema:
-          type: object
+        type: string
+      - description: Target version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      - description: Base version ID to compare against
+        in: query
+        name: against
+        required: true
+        type: string
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.Manifest'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
             additionalProperties: true
             type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties: true
-            type: object
       security:
       - BearerAuth: []
-      summary: Import HCL
+      summary: Diff two versions
       tags:
-      - Manifest
-  /api/v1/organizations/{org_id}/manifests/import-json:
+      - Manifest Versions
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/files/_export:
     post:
       consumes:
       - application/json
+      description: Export all files of a published version as a ZIP archive
       parameters:
       - description: Organization ID
         in: path
         name: org_id
         required: true
         type: string
-      - description: Manifest JSON content
-        in: body
-        name: body
+      - description: Manifest ID
+        in: path
+        name: id
         required: true
-        schema:
-          type: object
+        type: string
+      - description: Version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
       produces:
-      - application/json
+      - application/zip
       responses:
-        "201":
-          description: Created
+        "200":
+          description: ZIP archive
           schema:
-            $ref: '#/definitions/models.Manifest'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "409":
-          description: Conflict
+            type: file
+        "500":
+          description: Internal Server Error
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: Import Manifest from JSON
+      summary: Export version ZIP
       tags:
-      - Manifest
+      - Manifest Versions
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/workdirs:
+    get:
+      consumes:
+      - application/json
+      description: List directories that directly contain .tf files for install workdir
+        selection
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List version workdirs
+      tags:
+      - Manifest Versions
   /api/v1/projects:
     get:
       description: List all projects with their workspace counts
@@ -16014,6 +16958,64 @@ paths:
       - Run Task Results
   /api/v1/run-task-results/{result_id}/callback:
     patch:
+      consumes:
+      - application/json
+      description: Receive callback from external run task service (supports both
+        PATCH and POST)
+      parameters:
+      - description: Result ID
+        in: path
+        name: result_id
+        required: true
+        type: string
+      - description: Callback data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RunTaskCallbackPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "410":
+          description: Gone
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Handle run task callback
+      tags:
+      - Run Task Callback
+    post:
       consumes:
       - application/json
       description: Receive callback from external run task service (supports both
@@ -16642,6 +17644,244 @@ paths:
       summary: WebSocket实时日志流
       tags:
       - Task Log
+  /api/v1/terraform/state/{workspace_id}:
+    delete:
+      description: 'State deletion via the HTTP backend is not supported. Manage state
+        versions through the UI/API. Auth: HTTP Basic Auth where the password is a
+        State Token JWT.'
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Basic auth with State Token JWT as password
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "401":
+          description: Authentication required or invalid token
+          schema:
+            additionalProperties: true
+            type: object
+        "405":
+          description: Method not allowed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete Terraform state (not supported)
+      tags:
+      - Terraform State Backend
+    get:
+      description: 'Retrieve the latest Terraform state JSON for a workspace. Auth:
+        HTTP Basic Auth where the password is a State Token JWT (username ignored).
+        Supports cross-workspace GET when the requester workspace is allowed to read
+        shared outputs.'
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Basic auth with State Token JWT as password
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Terraform state JSON
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required or invalid token
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Cross-workspace access denied
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: State not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Terraform state
+      tags:
+      - Terraform State Backend
+    post:
+      consumes:
+      - application/json
+      description: 'Upload Terraform state for a workspace. Auth: HTTP Basic Auth
+        where the password is a State Token JWT. When holding a lock, Terraform passes
+        the lock ID via the ID query parameter.'
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Lock ID held by Terraform
+        in: query
+        name: ID
+        type: string
+      - description: Basic auth with State Token JWT as password
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Terraform state JSON
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: State saved
+          schema:
+            type: string
+        "400":
+          description: Invalid body
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required or invalid token
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Lock ID mismatch
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to save state
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update Terraform state
+      tags:
+      - Terraform State Backend
+  /api/v1/terraform/state/{workspace_id}/lock:
+    post:
+      consumes:
+      - application/json
+      description: 'Acquire a workspace lock for exclusive state access. Auth: HTTP
+        Basic Auth where the password is a State Token JWT. On conflict returns the
+        existing lock info.'
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Basic auth with State Token JWT as password
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Terraform lock info (must include ID when provided by Terraform)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Lock acquired
+          schema:
+            type: string
+        "400":
+          description: Invalid lock info
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Authentication required or invalid token
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Already locked (returns current lock info)
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Lock failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Lock Terraform state
+      tags:
+      - Terraform State Backend
+  /api/v1/terraform/state/{workspace_id}/unlock:
+    post:
+      consumes:
+      - application/json
+      description: 'Release a workspace lock. Auth: HTTP Basic Auth where the password
+        is a State Token JWT. When a lock ID is provided in the body, only that lock
+        is released.'
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Basic auth with State Token JWT as password
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Terraform lock info with ID to unlock
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Lock released
+          schema:
+            type: string
+        "401":
+          description: Authentication required or invalid token
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Lock ID mismatch (returns current lock info)
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Unlock failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Unlock Terraform state
+      tags:
+      - Terraform State Backend
   /api/v1/terraform/streams/stats:
     get:
       consumes:
@@ -17006,6 +18246,640 @@ paths:
       summary: Revoke user token
       tags:
       - User-Settings
+  /api/v1/variable-sets:
+    get:
+      consumes:
+      - application/json
+      description: Get list of variable sets, optionally filtered by scope
+      parameters:
+      - description: Filter by scope
+        in: query
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List variable sets
+      tags:
+      - Variable Set
+    post:
+      consumes:
+      - application/json
+      description: Create a new variable set
+      parameters:
+      - description: Create request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create variable set
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a variable set by ID
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete variable set
+      tags:
+      - Variable Set
+    get:
+      consumes:
+      - application/json
+      description: Get a variable set by ID
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get variable set
+      tags:
+      - Variable Set
+    put:
+      consumes:
+      - application/json
+      description: Update a variable set's name and description
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update variable set
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}/assignments:
+    get:
+      consumes:
+      - application/json
+      description: Get assignment list for a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List variable set assignments
+      tags:
+      - Variable Set
+    post:
+      consumes:
+      - application/json
+      description: Assign a variable set to a project or workspace
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Create assignment request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create variable set assignment
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}/assignments/{assignment_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove an assignment from a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Assignment ID
+        in: path
+        name: assignment_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete variable set assignment
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}/manifest-deployments:
+    get:
+      consumes:
+      - application/json
+      description: List active manifest deployments that reference a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List deployments using variable set
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}/scope:
+    put:
+      consumes:
+      - application/json
+      description: Update a variable set's scope
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Update scope request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update variable set scope
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}/variables:
+    get:
+      consumes:
+      - application/json
+      description: Get variables in a variable set, optionally filtered by type
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Filter by variable type
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List variable set variables
+      tags:
+      - Variable Set
+    post:
+      consumes:
+      - application/json
+      description: Create a new variable in a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Create request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create variable set variable
+      tags:
+      - Variable Set
+  /api/v1/variable-sets/{varset_id}/variables/{var_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a variable from a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Variable ID
+        in: path
+        name: var_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete variable set variable
+      tags:
+      - Variable Set
+    get:
+      consumes:
+      - application/json
+      description: Get a single variable from a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Variable ID
+        in: path
+        name: var_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get variable set variable
+      tags:
+      - Variable Set
+    put:
+      consumes:
+      - application/json
+      description: Update a variable in a variable set
+      parameters:
+      - description: Variable set ID
+        in: path
+        name: varset_id
+        required: true
+        type: string
+      - description: Variable ID
+        in: path
+        name: var_id
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update variable set variable
+      tags:
+      - Variable Set
   /api/v1/workspaces:
     get:
       consumes:
@@ -17537,6 +19411,34 @@ paths:
       summary: Get drift detection status
       tags:
       - Drift
+  /api/v1/workspaces/{id}/effective-variables:
+    get:
+      description: Get merged variables from variable sets and workspace-level variables
+        for display
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Resolved effective variables
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to resolve effective variables
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get effective workspace variables
+      tags:
+      - Workspace Variable
   /api/v1/workspaces/{id}/embedding-status:
     get:
       description: Get the embedding and CMDB sync status for a specific workspace
@@ -17638,6 +19540,70 @@ paths:
       summary: Sync workspace embedding
       tags:
       - Embedding
+  /api/v1/workspaces/{id}/lock:
+    post:
+      consumes:
+      - application/json
+      description: Lock a workspace for exclusive access. Body requires reason.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Lock request with reason string
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Workspace locked successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Lock failed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lock workspace
+      tags:
+      - Workspace
+  /api/v1/workspaces/{id}/manifest-summary:
+    get:
+      consumes:
+      - application/json
+      description: Lightweight active-manifest summary for workspace resource page/banner
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get workspace manifest summary
+      tags:
+      - Workspace
   /api/v1/workspaces/{id}/notification-logs:
     get:
       description: Get notification delivery logs for a workspace
@@ -18122,6 +20088,41 @@ paths:
       security:
       - BearerAuth: []
       summary: 批量保存Outputs
+      tags:
+      - Workspace Output
+  /api/v1/workspaces/{id}/outputs/combined:
+    get:
+      consumes:
+      - application/json
+      description: Get outputs configuration merged with current state values and
+        related resources
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Combined outputs, resources, and state metadata
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid workspace ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Workspace not found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get combined workspace outputs
       tags:
       - Workspace Output
   /api/v1/workspaces/{id}/outputs/resources:
@@ -20413,11 +22414,18 @@ paths:
     get:
       consumes:
       - application/json
-      description: 从当前State中获取完整Outputs信息，包含sensitive数据的值。仅供API调用使用。
+      description: 从当前 State 获取完整 Outputs（含 sensitive）。公开路由：不走 JWT，需 Authorization
+        Bearer 短时 remote-data token（Terraform http data source）。主 JWT 工作区接口请用 GET
+        .../state-outputs。
       parameters:
       - description: 工作空间ID
         in: path
         name: id
+        required: true
+        type: string
+      - description: Bearer {remote_data_temporary_token}
+        in: header
+        name: Authorization
         required: true
         type: string
       produces:
@@ -20432,6 +22440,16 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "401":
+          description: 缺少或无效的临时 Token
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Token 与 workspace 不匹配
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: State不存在
           schema:
@@ -20442,9 +22460,7 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      security:
-      - BearerAuth: []
-      summary: 获取完整State Outputs（API）
+      summary: 获取完整State Outputs（远程数据临时 Token）
       tags:
       - Workspace Output
   /api/v1/workspaces/{id}/state-versions:
@@ -21163,6 +23179,38 @@ paths:
       summary: Retry apply summary generation
       tags:
       - AI Summary
+  /api/v1/workspaces/{id}/tasks/{task_id}/apply-summary/stop:
+    post:
+      description: Force-stop a stuck running apply summary for a task
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Analysis stopped
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request or cannot stop
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Stop apply summary generation
+      tags:
+      - AI Summary
   /api/v1/workspaces/{id}/tasks/{task_id}/cancel:
     post:
       consumes:
@@ -21575,6 +23623,44 @@ paths:
       summary: Override run tasks
       tags:
       - Workspace Run Task
+  /api/v1/workspaces/{id}/tasks/{task_id}/parse-plan:
+    post:
+      description: Manually trigger plan JSON parsing and store resource changes for
+        a task (admin/debug)
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Plan parsed successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid task ID
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Parse failed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Manually parse plan changes
+      tags:
+      - Workspace Task
   /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary:
     get:
       description: Get the AI-generated plan summary for a specific task
@@ -21620,6 +23706,62 @@ paths:
       security:
       - BearerAuth: []
       summary: Get plan summary
+      tags:
+      - AI Summary
+  /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/bypass:
+    post:
+      consumes:
+      - application/json
+      description: Allow a system admin to bypass an incomplete AI analysis block
+        on plan summary
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      - description: Bypass payload with bypass_reason
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated plan summary
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden (system admin only)
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Summary not found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Already bypassed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Bypass incomplete AI plan summary
       tags:
       - AI Summary
   /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/confirm:
@@ -21707,6 +23849,38 @@ paths:
       security:
       - BearerAuth: []
       summary: Retry plan summary generation
+      tags:
+      - AI Summary
+  /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/stop:
+    post:
+      description: Force-stop a stuck running plan summary for a task
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Analysis stopped
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request or cannot stop
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Stop plan summary generation
       tags:
       - AI Summary
   /api/v1/workspaces/{id}/tasks/{task_id}/resource-changes:
@@ -21806,7 +23980,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Retry saving a failed state file from backup
+      description: Retry saving a failed state file. With HTTP state backend, checks
+        if state already exists in DB first.
       parameters:
       - description: Workspace ID
         in: path
@@ -22039,6 +24214,111 @@ paths:
       summary: Create plan task
       tags:
       - Workspace Task
+  /api/v1/workspaces/{id}/unlock:
+    post:
+      description: Unlock a workspace after exclusive operations complete
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Workspace unlocked successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Unlock failed
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unlock workspace
+      tags:
+      - Workspace
+  /api/v1/workspaces/{id}/variable-snapshots:
+    post:
+      consumes:
+      - application/json
+      description: Create a variable snapshot for a workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create variable snapshot
+      tags:
+      - Workspace Variable
+  /api/v1/workspaces/{id}/variable-snapshots/{vsnap_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a variable snapshot from a workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Variable snapshot ID
+        in: path
+        name: vsnap_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete variable snapshot
+      tags:
+      - Workspace Variable
   /api/v1/workspaces/{id}/variables:
     get:
       consumes:
@@ -22311,56 +24591,6 @@ paths:
       summary: 获取变量指定版本
       tags:
       - Workspace Variable
-  /api/v1/workspaces/{workspace_id}/manifest-deployment:
-    get:
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.ManifestDeployment'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get Workspace's Manifest deployment
-      tags:
-      - Manifest
-  /api/v1/workspaces/{workspace_id}/tasks/{task_id}/run-task-results:
-    get:
-      description: Get all run task results for a workspace task
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace_id
-        required: true
-        type: string
-      - description: Task ID
-        in: path
-        name: task_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get run task results
-      tags:
-      - Run Task Results
   /api/v1/ws/agent-pools/{pool_id}/metrics:
     get:
       description: WebSocket endpoint for real-time agent metrics updates

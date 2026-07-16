@@ -260,18 +260,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// Register handles new user registration
-// @Summary User registration (currently disabled)
-// @Description Register a new user account. Note: this endpoint is currently commented out in the router.
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param request body RegisterRequest true "Registration info"
-// @Success 201 {object} gin.H "User created successfully"
-// @Failure 400 {object} gin.H "Invalid request parameters"
-// @Failure 409 {object} gin.H "Username or email already exists"
-// @Failure 500 {object} gin.H "Internal server error"
-// @Router /api/v1/auth/register [post]
+// Register handles new user registration.
+// NOTE: Route is currently disabled (commented out in router). Not published in Swagger.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

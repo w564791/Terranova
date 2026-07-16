@@ -139,6 +139,16 @@ func (c *AISummaryController) RetryPlanSummary(ctx *gin.Context) {
 }
 
 // StopPlanSummary force-fails a stuck running plan summary
+// @Summary Stop plan summary generation
+// @Description Force-stop a stuck running plan summary for a task
+// @Tags AI Summary
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Analysis stopped"
+// @Failure 400 {object} map[string]interface{} "Invalid request or cannot stop"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/stop [post]
 func (c *AISummaryController) StopPlanSummary(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
@@ -155,6 +165,16 @@ func (c *AISummaryController) StopPlanSummary(ctx *gin.Context) {
 }
 
 // StopApplySummary force-fails a stuck running apply summary
+// @Summary Stop apply summary generation
+// @Description Force-stop a stuck running apply summary for a task
+// @Tags AI Summary
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Success 200 {object} map[string]interface{} "Analysis stopped"
+// @Failure 400 {object} map[string]interface{} "Invalid request or cannot stop"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/apply-summary/stop [post]
 func (c *AISummaryController) StopApplySummary(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
@@ -366,6 +386,21 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 }
 
 // BypassAIIncomplete allows system admin to bypass AI analysis incomplete block
+// @Summary Bypass incomplete AI plan summary
+// @Description Allow a system admin to bypass an incomplete AI analysis block on plan summary
+// @Tags AI Summary
+// @Accept json
+// @Produce json
+// @Param id path string true "Workspace ID"
+// @Param task_id path int true "Task ID"
+// @Param request body object true "Bypass payload with bypass_reason"
+// @Success 200 {object} map[string]interface{} "Updated plan summary"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 403 {object} map[string]interface{} "Forbidden (system admin only)"
+// @Failure 404 {object} map[string]interface{} "Summary not found"
+// @Failure 409 {object} map[string]interface{} "Already bypassed"
+// @Security BearerAuth
+// @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/bypass [post]
 func (c *AISummaryController) BypassAIIncomplete(ctx *gin.Context) {
 	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)

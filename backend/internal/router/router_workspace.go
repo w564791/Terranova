@@ -908,6 +908,9 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 		// Setup workspace-agent authorization routes
 		setupWorkspaceAgentRoutes(workspaces, db, iamMiddleware)
 
+		// Setup workspace-project association routes (frontend: projects.ts)
+		setupWorkspaceProjectRoutes(workspaces, db, iamMiddleware)
+
 		// Setup workspace run task routes
 		setupWorkspaceRunTaskRoutes(workspaces, db, iamMiddleware)
 

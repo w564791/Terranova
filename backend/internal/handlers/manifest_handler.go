@@ -58,6 +58,21 @@ func generateManifestDeploymentID() string { return fmt.Sprintf("mfd-%s", genera
 
 // ========== Manifest CRUD ==========
 
+// ListManifests lists manifests for an organization
+// @Summary List manifests
+// @Description List manifests under an organization with optional status filter and pagination
+// @Tags Manifest
+// @Accept json
+// @Produce json
+// @Param org_id path int true "Organization ID"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
+// @Param status query string false "Filter by status (draft, published, archived)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests [get]
+// @Security BearerAuth
 func (h *ManifestHandler) ListManifests(c *gin.Context) {
 	orgIDStr := c.Param("org_id")
 	orgID, err := strconv.Atoi(orgIDStr)
@@ -126,6 +141,19 @@ func (h *ManifestHandler) ListManifests(c *gin.Context) {
 	})
 }
 
+// GetManifest returns a single manifest by ID
+// @Summary Get manifest
+// @Description Get manifest details including latest version and deployment count
+// @Tags Manifest
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id} [get]
+// @Security BearerAuth
 func (h *ManifestHandler) GetManifest(c *gin.Context) {
 	orgID := c.Param("org_id")
 	id := c.Param("id")
@@ -160,6 +188,20 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 	c.JSON(http.StatusOK, manifest)
 }
 
+// CreateManifest creates a new draft manifest
+// @Summary Create manifest
+// @Description Create a new manifest in draft status under the organization
+// @Tags Manifest
+// @Accept json
+// @Produce json
+// @Param org_id path int true "Organization ID"
+// @Param request body models.CreateManifestRequest true "Manifest create payload"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests [post]
+// @Security BearerAuth
 func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 	orgIDStr := c.Param("org_id")
 	orgID, err := strconv.Atoi(orgIDStr)
@@ -206,6 +248,22 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 	c.JSON(http.StatusCreated, manifest)
 }
 
+// UpdateManifest updates manifest metadata
+// @Summary Update manifest
+// @Description Update manifest name, description, or status
+// @Tags Manifest
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body models.UpdateManifestRequest true "Manifest update payload"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id} [put]
+// @Security BearerAuth
 func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	orgID := c.Param("org_id")
 	id := c.Param("id")
@@ -252,6 +310,20 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	c.JSON(http.StatusOK, manifest)
 }
 
+// DeleteManifest deletes a manifest and its related data
+// @Summary Delete manifest
+// @Description Delete a manifest (blocked if active deployments exist)
+// @Tags Manifest
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Success 204 "No Content"
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id} [delete]
+// @Security BearerAuth
 func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 	orgID := c.Param("org_id")
 	id := c.Param("id")
@@ -307,6 +379,21 @@ func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 //   - 没指定 version_id: 取最新已发布版本
 //   - 指定 version_id: 用该版本的文件
 //   - 都没有: 用 owner_user_id=current 的草稿(version_id IS NULL)
+
+// ExportManifestZip exports manifest files as a ZIP archive
+// @Summary Export manifest ZIP
+// @Description Export published version or current user draft as a ZIP of files
+// @Tags Manifest
+// @Accept json
+// @Produce application/zip
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version_id query string false "Version ID to export (defaults to latest published, else draft)"
+// @Success 200 {file} binary "ZIP archive"
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/export-zip [get]
+// @Security BearerAuth
 func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 	orgID := c.Param("org_id")
 	manifestID := c.Param("id")

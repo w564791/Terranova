@@ -114,7 +114,7 @@ func (h *SSOHandler) Login(c *gin.Context) {
 
 // Callback handles the SSO callback (API mode, returns JSON)
 // @Summary Handle SSO callback
-// @Description Process the OAuth callback from the SSO provider. Returns JWT token on success, or MFA challenge if required.
+// @Description Process the OAuth callback from the SSO provider (GET and POST). Returns JWT token on success, or MFA challenge if required.
 // @Tags SSO
 // @Produce json
 // @Param provider path string true "SSO provider key"
@@ -125,6 +125,7 @@ func (h *SSOHandler) Login(c *gin.Context) {
 // @Failure 401 {object} gin.H "SSO authentication failed"
 // @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/auth/sso/{provider}/callback [get]
+// @Router /api/v1/auth/sso/{provider}/callback [post]
 func (h *SSOHandler) Callback(c *gin.Context) {
 	providerKey := c.Param("provider")
 	code := c.Query("code")

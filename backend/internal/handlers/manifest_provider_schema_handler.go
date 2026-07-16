@@ -23,6 +23,19 @@ func NewManifestProviderSchemaHandler(db *gorm.DB) *ManifestProviderSchemaHandle
 
 // GetProviderSchemas GET .../manifests/:id/provider-schemas?subpath=
 // 返回 types 目录；无缓存时 200 + empty。
+// @Summary Get provider type schemas
+// @Description Return cached provider resource/data type catalog for the editor (empty when uncached)
+// @Tags Manifest
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param subpath query string false "Terraform workdir subpath"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/provider-schemas [get]
+// @Security BearerAuth
 func (h *ManifestProviderSchemaHandler) GetProviderSchemas(c *gin.Context) {
 	manifestID := c.Param("id")
 	if manifestID == "" {

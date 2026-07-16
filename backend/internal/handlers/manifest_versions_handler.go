@@ -39,6 +39,17 @@ func NewManifestVersionsHandler(db *gorm.DB) *ManifestVersionsHandler {
 var semverPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
 // ListVersions 已发布版本列表
+// @Summary List manifest versions
+// @Description List published versions for a manifest (SemVer descending)
+// @Tags Manifest Versions
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions [get]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) ListVersions(c *gin.Context) {
 	manifestID := c.Param("id")
 
@@ -60,6 +71,19 @@ func (h *ManifestVersionsHandler) ListVersions(c *gin.Context) {
 }
 
 // GetVersion 版本详情
+// @Summary Get manifest version
+// @Description Get a published version detail by version ID
+// @Tags Manifest Versions
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version_id path string true "Version ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id} [get]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) GetVersion(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
@@ -78,6 +102,19 @@ func (h *ManifestVersionsHandler) GetVersion(c *gin.Context) {
 
 // ListWorkdirs 列出某版本里所有"直接含 .tf 文件"的目录(去重升序,根用 "")。
 // 供部署 install 时让用户选 terraform 执行子目录(workdir)。
+// @Summary List version workdirs
+// @Description List directories that directly contain .tf files for install workdir selection
+// @Tags Manifest Versions
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version_id path string true "Version ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/workdirs [get]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
@@ -110,6 +147,22 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 }
 
 // PublishVersion 把当前用户草稿快照为新版本
+// @Summary Publish manifest version
+// @Description Snapshot the current user's draft into a new published version (vX.Y.Z)
+// @Tags Manifest Versions
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body models.PublishVersionRequest true "Publish payload"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions [post]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -256,6 +309,18 @@ func extractDraftVariablesJSON(db *gorm.DB, manifestID, userID string) (json.Raw
 }
 
 // ExportVersion 导出某 version 全部文件为 zip
+// @Summary Export version ZIP
+// @Description Export all files of a published version as a ZIP archive
+// @Tags Manifest Versions
+// @Accept json
+// @Produce application/zip
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version_id path string true "Version ID"
+// @Success 200 {file} binary "ZIP archive"
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/files/_export [post]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) ExportVersion(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
@@ -351,6 +416,19 @@ func computeFileDiff(targetFiles, baseFiles []models.ManifestFile) []diffEntry {
 
 // DiffVersions 两个已发布版本的文件级真内容比对(target=:version_id 相对 base=?against)
 // GET /manifests/:id/v2/versions/:version_id/diff?against=<version_id>
+// @Summary Diff two versions
+// @Description File-level content diff of target version against another version
+// @Tags Manifest Versions
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param version_id path string true "Target version ID"
+// @Param against query string true "Base version ID to compare against"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions/{version_id}/diff [get]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) DiffVersions(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
@@ -371,6 +449,17 @@ func (h *ManifestVersionsHandler) DiffVersions(c *gin.Context) {
 
 // DiffDraft 当前用户草稿 vs 某版本(默认最新已发布)的文件级真内容比对(target=草稿 相对 base=版本)
 // GET /manifests/:id/v2/draft/diff?against=<version_id>  (against 省略时取最新已发布版本)
+// @Summary Diff draft against version
+// @Description File-level content diff of current user draft against a version (defaults to latest published)
+// @Tags Manifest Versions
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param against query string false "Base version ID (defaults to latest published)"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/draft/diff [get]
+// @Security BearerAuth
 func (h *ManifestVersionsHandler) DiffDraft(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")

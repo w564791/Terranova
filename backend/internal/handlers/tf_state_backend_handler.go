@@ -28,7 +28,19 @@ func NewTFStateBackendHandler(db *gorm.DB, tokenService *services.StateTokenServ
 	return &TFStateBackendHandler{db: db, tokenService: tokenService}
 }
 
-// GetState GET /api/v1/terraform/state/:workspace_id
+// GetState returns the latest Terraform state for a workspace.
+// @Summary Get Terraform state
+// @Description Retrieve the latest Terraform state JSON for a workspace. Auth: HTTP Basic Auth where the password is a State Token JWT (username ignored). Supports cross-workspace GET when the requester workspace is allowed to read shared outputs.
+// @Tags Terraform State Backend
+// @Produce json
+// @Param workspace_id path string true "Workspace ID"
+// @Param Authorization header string true "Basic auth with State Token JWT as password"
+// @Success 200 {object} map[string]interface{} "Terraform state JSON"
+// @Failure 401 {object} map[string]interface{} "Authentication required or invalid token"
+// @Failure 403 {object} map[string]interface{} "Cross-workspace access denied"
+// @Failure 404 {object} map[string]interface{} "State not found"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/v1/terraform/state/{workspace_id} [get]
 func (h *TFStateBackendHandler) GetState(c *gin.Context) {
 	workspaceID := c.GetString("state_workspace_id")
 
@@ -167,8 +179,23 @@ func (h *TFStateBackendHandler) getCrossWorkspaceState(c *gin.Context, targetWsI
 	c.Data(http.StatusOK, "application/json", stateBytes)
 }
 
-// UpdateState POST /api/v1/terraform/state/:workspace_id
+// UpdateState stores a new Terraform state version for a workspace.
 // Validates lock ID from ?ID= query param, deduplicates by checksum.
+// @Summary Update Terraform state
+// @Description Upload Terraform state for a workspace. Auth: HTTP Basic Auth where the password is a State Token JWT. When holding a lock, Terraform passes the lock ID via the ID query parameter.
+// @Tags Terraform State Backend
+// @Accept json
+// @Produce json
+// @Param workspace_id path string true "Workspace ID"
+// @Param ID query string false "Lock ID held by Terraform"
+// @Param Authorization header string true "Basic auth with State Token JWT as password"
+// @Param body body object true "Terraform state JSON"
+// @Success 200 {string} string "State saved"
+// @Failure 400 {object} map[string]interface{} "Invalid body"
+// @Failure 401 {object} map[string]interface{} "Authentication required or invalid token"
+// @Failure 409 {object} map[string]interface{} "Lock ID mismatch"
+// @Failure 500 {object} map[string]interface{} "Failed to save state"
+// @Router /api/v1/terraform/state/{workspace_id} [post]
 func (h *TFStateBackendHandler) UpdateState(c *gin.Context) {
 	workspaceID := c.GetString("state_workspace_id")
 	taskID, _ := c.Get("state_task_id")
@@ -276,7 +303,21 @@ func (h *TFStateBackendHandler) UpdateState(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// LockState POST /api/v1/terraform/state/:workspace_id/lock
+// LockState acquires the workspace state lock for Terraform HTTP backend.
+// @Summary Lock Terraform state
+// @Description Acquire a workspace lock for exclusive state access. Auth: HTTP Basic Auth where the password is a State Token JWT. On conflict returns the existing lock info.
+// @Tags Terraform State Backend
+// @Accept json
+// @Produce json
+// @Param workspace_id path string true "Workspace ID"
+// @Param Authorization header string true "Basic auth with State Token JWT as password"
+// @Param body body object true "Terraform lock info (must include ID when provided by Terraform)"
+// @Success 200 {string} string "Lock acquired"
+// @Failure 400 {object} map[string]interface{} "Invalid lock info"
+// @Failure 401 {object} map[string]interface{} "Authentication required or invalid token"
+// @Failure 409 {object} map[string]interface{} "Already locked (returns current lock info)"
+// @Failure 500 {object} map[string]interface{} "Lock failed"
+// @Router /api/v1/terraform/state/{workspace_id}/lock [post]
 func (h *TFStateBackendHandler) LockState(c *gin.Context) {
 	workspaceID := c.GetString("state_workspace_id")
 
@@ -322,7 +363,20 @@ func (h *TFStateBackendHandler) LockState(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// UnlockState POST /api/v1/terraform/state/:workspace_id/unlock
+// UnlockState releases the workspace state lock for Terraform HTTP backend.
+// @Summary Unlock Terraform state
+// @Description Release a workspace lock. Auth: HTTP Basic Auth where the password is a State Token JWT. When a lock ID is provided in the body, only that lock is released.
+// @Tags Terraform State Backend
+// @Accept json
+// @Produce json
+// @Param workspace_id path string true "Workspace ID"
+// @Param Authorization header string true "Basic auth with State Token JWT as password"
+// @Param body body object false "Terraform lock info with ID to unlock"
+// @Success 200 {string} string "Lock released"
+// @Failure 401 {object} map[string]interface{} "Authentication required or invalid token"
+// @Failure 409 {object} map[string]interface{} "Lock ID mismatch (returns current lock info)"
+// @Failure 500 {object} map[string]interface{} "Unlock failed"
+// @Router /api/v1/terraform/state/{workspace_id}/unlock [post]
 func (h *TFStateBackendHandler) UnlockState(c *gin.Context) {
 	workspaceID := c.GetString("state_workspace_id")
 
@@ -367,8 +421,17 @@ func (h *TFStateBackendHandler) UnlockState(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// DeleteState DELETE /api/v1/terraform/state/:workspace_id
+// DeleteState is not supported for the HTTP state backend.
 // Not supported - returns 405 Method Not Allowed
+// @Summary Delete Terraform state (not supported)
+// @Description State deletion via the HTTP backend is not supported. Manage state versions through the UI/API. Auth: HTTP Basic Auth where the password is a State Token JWT.
+// @Tags Terraform State Backend
+// @Produce json
+// @Param workspace_id path string true "Workspace ID"
+// @Param Authorization header string true "Basic auth with State Token JWT as password"
+// @Failure 401 {object} map[string]interface{} "Authentication required or invalid token"
+// @Failure 405 {object} map[string]interface{} "Method not allowed"
+// @Router /api/v1/terraform/state/{workspace_id} [delete]
 func (h *TFStateBackendHandler) DeleteState(c *gin.Context) {
 	c.AbortWithStatusJSON(http.StatusMethodNotAllowed, gin.H{
 		"error": "state deletion via HTTP backend is not supported, use the UI to manage state versions",

@@ -44,6 +44,7 @@ func NewRunTaskCallbackHandler(db *gorm.DB, executor *services.RunTaskExecutor) 
 // @Failure 410 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/run-task-results/{result_id}/callback [patch]
+// @Router /api/v1/run-task-results/{result_id}/callback [post]
 func (h *RunTaskCallbackHandler) HandleCallback(c *gin.Context) {
 	resultID := c.Param("result_id")
 	if resultID == "" {
@@ -109,15 +110,9 @@ func (h *RunTaskCallbackHandler) HandleCallback(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "callback processed successfully"})
 }
 
-// GetRunTaskResults gets run task results for a task
-// @Summary Get run task results
-// @Description Get all run task results for a workspace task
-// @Tags Run Task Results
-// @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Param task_id path string true "Task ID"
-// @Success 200 {object} map[string]interface{}
-// @Router /api/v1/workspaces/{workspace_id}/tasks/{task_id}/run-task-results [get]
+// GetRunTaskResults gets run task results for a task.
+// Note: production route is wired via WorkspaceRunTaskHandler.GetTaskRunTaskResults
+// at GET /api/v1/workspaces/{id}/tasks/{task_id}/run-task-results (no duplicate @Router here).
 func (h *RunTaskCallbackHandler) GetRunTaskResults(c *gin.Context) {
 	taskIDStr := c.Param("task_id")
 	if taskIDStr == "" {
