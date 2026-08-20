@@ -1,7 +1,8 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+import { clearAuthOrgId, initializeAuthOrgForUser } from '../../services/api';
 
 interface User {
-  id: number;
+  id: number | string;
   username: string;
   email: string;
   is_system_admin: boolean;
@@ -34,6 +35,7 @@ const authSlice = createSlice({
       state.token = action.payload.token;
       state.isAuthenticated = true;
       localStorage.setItem('token', action.payload.token);
+      initializeAuthOrgForUser(action.payload.user.id);
     },
     loginFailure: (state) => {
       state.loading = false;
@@ -41,12 +43,14 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       localStorage.removeItem('token');
+      clearAuthOrgId();
     },
     logout: (state) => {
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
       localStorage.removeItem('token');
+      clearAuthOrgId();
     },
   },
 });

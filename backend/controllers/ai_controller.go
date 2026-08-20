@@ -15,6 +15,7 @@ import (
 
 // AIController AI 控制器
 type AIController struct {
+	db              *gorm.DB
 	configService   *services.AIConfigService
 	analysisService *services.AIAnalysisService
 }
@@ -22,9 +23,45 @@ type AIController struct {
 // NewAIController 创建 AI 控制器实例
 func NewAIController(db *gorm.DB) *AIController {
 	return &AIController{
+		db:              db,
 		configService:   services.NewAIConfigService(db),
 		analysisService: services.NewAIAnalysisService(db),
 	}
+}
+
+// ensureTaskInAuthenticatedOrg binds a global task ID to the organization
+// resolved by the IAM middleware. AI error analysis reads task output and can
+// invoke CMDB tools, so an organization-level AI permission alone is not a
+// sufficient authorization check for a caller-supplied task ID.
+func (c *AIController) ensureTaskInAuthenticatedOrg(ctx *gin.Context, taskID uint) bool {
+	orgID := authOrgIDFromContext(ctx)
+	if orgID == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "org_id is required",
+		})
+		return false
+	}
+
+	var task models.WorkspaceTask
+	if err := c.db.WithContext(ctx.Request.Context()).Select("workspace_id").First(&task, taskID).Error; err != nil || task.WorkspaceID == "" {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "任务不存在",
+		})
+		return false
+	}
+	taskOrgID, err := taskWorkspaceOrgID(ctx, c.db, task.WorkspaceID)
+	if err != nil || taskOrgID != orgID {
+		// Match the rest of the tenant-bound task surface: do not reveal that a
+		// guessed global ID belongs to another organization.
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "任务不存在",
+		})
+		return false
+	}
+	return true
 }
 
 // ListConfigs 获取 AI 配置列表
@@ -428,6 +465,9 @@ func (c *AIController) AnalyzeError(ctx *gin.Context) {
 		})
 		return
 	}
+	if !c.ensureTaskInAuthenticatedOrg(ctx, req.TaskID) {
+		return
+	}
 
 	// 获取当前用户 ID（从 JWT 或 session 中获取）
 	userID, exists := ctx.Get("user_id")
@@ -528,6 +568,9 @@ func (c *AIController) GetTaskAnalysis(ctx *gin.Context) {
 			"code":    400,
 			"message": "无效的任务 ID",
 		})
+		return
+	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
 		return
 	}
 

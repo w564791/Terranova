@@ -2,20 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
 import { iamService } from '../../services/iam';
-import type { Team, TeamMember, PermissionGrant, PermissionDefinition, Organization, Project, PermissionLevel, ScopeType } from '../../services/iam';
+import type { Team, TeamMember, PermissionGrant, PermissionDefinition, PermissionLevel } from '../../services/iam';
 import { workspaceService } from '../../services/workspaces';
+import { apiFetch } from '../../services/api';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './TeamDetail.module.css';
 
 interface TeamToken {
-  id: number;
-  team_id: number;
+  team_id: string;
   token_name: string;
   is_active: boolean;
   created_at: string;
-  created_by: number;
+  created_by?: string;
   revoked_at?: string;
-  revoked_by?: number;
+  revoked_by?: string;
   last_used_at?: string;
   expires_at?: string;
 }
@@ -24,11 +24,6 @@ interface User {
   id: string;
   username: string;
   email: string;
-}
-
-interface MemberWithUser extends TeamMember {
-  username?: string;
-  email?: string;
 }
 
 const TeamDetail: React.FC = () => {
@@ -61,8 +56,7 @@ const TeamDetail: React.FC = () => {
   const [showTokenForm, setShowTokenForm] = useState(false);
   const [tokenName, setTokenName] = useState('');
   const [tokenNameError, setTokenNameError] = useState('');
-  const [expiresIn, setExpiresIn] = useState<string>('30'); // 默认30天
-  const [customDays, setCustomDays] = useState<number>(30);
+  const [expiresIn, setExpiresIn] = useState<string>('1'); // 默认 24h（Team Token 最长 1 天）
   const [createdToken, setCreatedToken] = useState<string>('');
   
   // 成员添加表单
@@ -163,7 +157,7 @@ const TeamDetail: React.FC = () => {
       setLoadingPermissions(true);
       
       // 使用新的API直接获取团队的所有权限
-      const response = await fetch(`/api/v1/iam/teams/${id}/permissions`, {
+      const response = await apiFetch(`/iam/teams/${id}/permissions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -256,7 +250,7 @@ const TeamDetail: React.FC = () => {
     if (!id) return;
     
     try {
-      const response = await fetch(`/api/v1/iam/teams/${id}/roles`, {
+      const response = await apiFetch(`/iam/teams/${id}/roles`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -297,20 +291,15 @@ const TeamDetail: React.FC = () => {
       return;
     }
 
-    // 计算过期天数
-    let expiresInDays = 0;
-    if (expiresIn === 'custom') {
-      expiresInDays = customDays;
-    } else if (expiresIn !== 'never') {
-      expiresInDays = parseInt(expiresIn);
-    }
+    // Team Token 最长 24h（expiresIn 固定为 1）
+    const expiresInDays = parseInt(expiresIn, 10) || 1;
 
     try {
       const response = await iamService.createTeamToken(id!, tokenName.trim(), expiresInDays);
       setCreatedToken(response.token.token);
       setTokenName('');
       setTokenNameError('');
-      setExpiresIn('30');
+      setExpiresIn('1');
       setShowTokenForm(false);
       await loadTokens();
       showToast('Token创建成功，请立即复制', 'success');
@@ -345,7 +334,7 @@ const TeamDetail: React.FC = () => {
     if (!revokeConfirm.token) return;
 
     try {
-      await iamService.revokeTeamToken(id!, revokeConfirm.token.id);
+      await iamService.revokeTeamToken(id!, revokeConfirm.token.token_name);
       showToast('Token已吊销', 'success');
       setRevokeConfirm({ show: false, token: null });
       await loadTokens();
@@ -440,31 +429,14 @@ const TeamDetail: React.FC = () => {
     setEditingPermission(permission);
   };
 
-  // 保存权限编辑
+  // 保存权限编辑：TEAM Direct Grant 已下线
   const handleSavePermissionEdit = async (newLevel: PermissionLevel) => {
     if (!editingPermission || savingPermission) return;
 
     try {
       setSavingPermission(true);
-      
-      // 先撤销旧权限
-      await iamService.revokePermission(editingPermission.scope_type, editingPermission.id);
-      
-      // 再授予新权限
-      await iamService.grantPermission({
-        scope_type: editingPermission.scope_type,
-        scope_id: editingPermission.scope_id,
-        principal_type: editingPermission.principal_type,
-        principal_id: editingPermission.principal_id,
-        permission_id: editingPermission.permission_id,
-        permission_level: newLevel,
-        expires_at: editingPermission.expires_at,
-        reason: editingPermission.reason,
-      });
-
-      showToast('权限级别更新成功', 'success');
+      showToast('团队请通过「分配角色」调整权限；Direct Grant 已下线。可撤销遗留 grant 后改赋 Role。', 'error');
       setEditingPermission(null);
-      await loadTeamPermissions();
     } catch (error: any) {
       showToast(error.response?.data?.error || '更新失败', 'error');
     } finally {
@@ -481,8 +453,8 @@ const TeamDetail: React.FC = () => {
     if (!revokeRoleConfirm.role) return;
 
     try {
-      const response = await fetch(
-        `/api/v1/iam/teams/${id}/roles/${revokeRoleConfirm.role.id}`,
+      const response = await apiFetch(
+        `/iam/teams/${id}/roles/${revokeRoleConfirm.role.id}`,
         {
           method: 'DELETE',
           headers: {
@@ -740,7 +712,7 @@ const TeamDetail: React.FC = () => {
           </h2>
           <button
             className={styles.addButton}
-            onClick={() => navigate(`/iam/permissions/grant?principal_type=TEAM&principal_id=${id}`)}
+            onClick={() => navigate(`/iam/permissions/grant?principal_type=TEAM&principal_id=${id}&type=role`)}
           >
             + 新增授权
           </button>
@@ -956,25 +928,9 @@ const TeamDetail: React.FC = () => {
                   value={expiresIn}
                   onChange={(e) => setExpiresIn(e.target.value)}
                 >
-                  <option value="1">1天</option>
-                  <option value="7">7天</option>
-                  <option value="14">14天</option>
-                  <option value="30">30天</option>
-                  <option value="90">90天</option>
-                  <option value="180">180天</option>
-                  <option value="never">永不过期</option>
-                  <option value="custom">自定义</option>
+                  <option value="1">24 小时（最长）</option>
                 </select>
-                {expiresIn === 'custom' && (
-                  <input
-                    type="number"
-                    className={styles.input}
-                    value={customDays}
-                    onChange={(e) => setCustomDays(Number(e.target.value))}
-                    placeholder="输入天数"
-                    min="1"
-                  />
-                )}
+                <span className={styles.hint}>Team Token 最长有效期 24 小时，禁止永不过期</span>
               </div>
               <div className={styles.formActions}>
                 <button
@@ -1014,7 +970,7 @@ const TeamDetail: React.FC = () => {
         ) : (
           <div className={styles.tokensList}>
             {tokens.map((token) => (
-              <div key={token.id} className={styles.tokenCard}>
+              <div key={token.token_name} className={styles.tokenCard}>
                 <div className={styles.tokenHeader}>
                   <div className={styles.tokenName}>{token.token_name}</div>
                   {renderTokenStatusBadge(token)}

@@ -43,13 +43,20 @@ func NewServiceFactory(db *gorm.DB) *ServiceFactory {
 	factory.applicationRepo = persistence.NewApplicationRepository(db)
 
 	// 初始化Services
-	factory.permissionChecker = service.NewPermissionChecker(
+	checker := service.NewPermissionChecker(
 		factory.permissionRepo,
 		factory.teamRepo,
 		factory.orgRepo,
 		factory.projectRepo,
 		factory.auditRepo,
 	)
+	// 临时权限按真实邮箱匹配（B-3）
+	// Application principal_id 展开 app_key↔id（选项 A 兼容）
+	if impl, ok := checker.(*service.PermissionCheckerImpl); ok {
+		impl.SetUserEmailLookup(service.NewDBUserEmailLookup(db))
+		impl.SetApplicationPrincipalAliases(service.NewDBApplicationPrincipalAliases(db))
+	}
+	factory.permissionChecker = checker
 
 	factory.permissionService = service.NewPermissionService(
 		factory.permissionRepo,

@@ -39,12 +39,16 @@ func (h *CMDBHandler) SearchResources(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "搜索关键词不能为空"})
 		return
 	}
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 
 	workspaceID := c.Query("workspace_id")
 	resourceType := c.Query("resource_type")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
-	results, err := h.cmdbService.SearchResources(query, workspaceID, resourceType, limit)
+	results, err := h.cmdbService.SearchResourcesInOrganization(orgID, query, workspaceID, resourceType, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -73,8 +77,12 @@ func (h *CMDBHandler) GetWorkspaceResourceTree(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "workspace_id不能为空"})
 		return
 	}
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 
-	tree, err := h.cmdbService.GetWorkspaceResourceTree(workspaceID)
+	tree, err := h.cmdbService.GetWorkspaceResourceTreeInOrganization(orgID, workspaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -103,8 +111,12 @@ func (h *CMDBHandler) GetResourceDetail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "workspace_id和address不能为空"})
 		return
 	}
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 
-	resource, err := h.cmdbService.GetResourceDetail(workspaceID, address)
+	resource, err := h.cmdbService.GetResourceDetailInOrganization(orgID, workspaceID, address)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "资源不存在"})
 		return
@@ -122,7 +134,11 @@ func (h *CMDBHandler) GetResourceDetail(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/overview [get]
 func (h *CMDBHandler) GetCMDBOverview(c *gin.Context) {
-	overview, err := h.cmdbService.GetCMDBOverview()
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	overview, err := h.cmdbService.GetCMDBOverviewInOrganization(orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -141,10 +157,14 @@ func (h *CMDBHandler) GetCMDBOverview(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/sync-history [get]
 func (h *CMDBHandler) GetSyncHistory(c *gin.Context) {
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
 
-	result, err := h.cmdbService.GetSyncHistory(page, size)
+	result, err := h.cmdbService.GetSyncHistoryInOrganization(orgID, page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -183,7 +203,11 @@ func (h *CMDBHandler) GetSearchAnalytics(c *gin.Context) {
 // @Success 200 {object} models.CMDBStats
 // @Router /api/v1/cmdb/stats [get]
 func (h *CMDBHandler) GetCMDBStats(c *gin.Context) {
-	stats, err := h.cmdbService.GetCMDBStats()
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	stats, err := h.cmdbService.GetCMDBStatsInOrganization(orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -208,8 +232,12 @@ func (h *CMDBHandler) SyncWorkspace(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "workspace_id不能为空"})
 		return
 	}
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 
-	if err := h.cmdbService.SyncWorkspaceResources(workspaceID); err != nil {
+	if err := h.cmdbService.SyncWorkspaceResourcesInOrganization(orgID, workspaceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -229,13 +257,17 @@ func (h *CMDBHandler) SyncWorkspace(c *gin.Context) {
 // @Success 202 {object} map[string]interface{}
 // @Router /api/v1/cmdb/sync-all [post]
 func (h *CMDBHandler) SyncAllWorkspaces(c *gin.Context) {
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 	// 异步执行同步，避免阻塞请求
-	go func() {
-		if err := h.cmdbService.SyncAllWorkspaces(); err != nil {
+	go func(authOrgID uint) {
+		if err := h.cmdbService.SyncAllWorkspacesInOrganization(authOrgID); err != nil {
 			// 记录错误日志
 			println("CMDB sync-all failed:", err.Error())
 		}
-	}()
+	}(orgID)
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "全量同步任务已启动，将在后台执行",
@@ -252,7 +284,11 @@ func (h *CMDBHandler) SyncAllWorkspaces(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/resource-types [get]
 func (h *CMDBHandler) GetResourceTypes(c *gin.Context) {
-	stats, err := h.cmdbService.GetCMDBStats()
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	stats, err := h.cmdbService.GetCMDBStatsInOrganization(orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -272,7 +308,11 @@ func (h *CMDBHandler) GetResourceTypes(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/workspace-counts [get]
 func (h *CMDBHandler) GetWorkspaceResourceCounts(c *gin.Context) {
-	counts, err := h.cmdbService.GetWorkspaceResourceCounts()
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	counts, err := h.cmdbService.GetWorkspaceResourceCountsInOrganization(orgID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -294,6 +334,10 @@ func (h *CMDBHandler) GetWorkspaceResourceCounts(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/cmdb/suggestions [get]
 func (h *CMDBHandler) GetSearchSuggestions(c *gin.Context) {
+	orgID, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
 	prefix := c.Query("q")
 	if prefix == "" {
 		c.JSON(http.StatusOK, gin.H{
@@ -304,7 +348,7 @@ func (h *CMDBHandler) GetSearchSuggestions(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	suggestions, err := h.cmdbService.GetSearchSuggestions(prefix, limit)
+	suggestions, err := h.cmdbService.GetSearchSuggestionsInOrganization(orgID, prefix, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

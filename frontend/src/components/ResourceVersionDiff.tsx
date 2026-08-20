@@ -93,8 +93,8 @@ const ResourceVersionDiff: React.FC<Props> = ({
       if (!moduleSource) return;
       
       // 2. 通过 module_source 查找 module_id
-      const modulesRes = await api.get('/modules', { params: { source: moduleSource } });
-      const modules = modulesRes.data?.items || modulesRes.items || [];
+      const modulesRes = await api.get('/modules', { params: { source: moduleSource } }) as any;
+      const modules = modulesRes?.data?.items || modulesRes?.items || [];
       const module = modules.find((m: any) => m.source === moduleSource);
       
       if (!module) return;

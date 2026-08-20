@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -42,16 +43,20 @@ func (h *WorkspaceProjectHandler) GetWorkspaceProject(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	project, err := h.projectRepo.GetProjectByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 如果没有关联项目，返回 default project
+	// 如果没有关联项目，返回鉴权 org 的 default project（不硬编码 org=1）
 	if project == nil {
-		// 获取 org_id=1 的默认项目
-		defaultProject, err := h.projectRepo.GetDefaultProject(c.Request.Context(), 1)
+		defaultProject, err := h.projectRepo.GetDefaultProject(c.Request.Context(), authOrg)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"project": nil,
@@ -60,6 +65,9 @@ func (h *WorkspaceProjectHandler) GetWorkspaceProject(c *gin.Context) {
 			return
 		}
 		project = defaultProject
+	} else if project.OrgID != authOrg {
+		c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -90,21 +98,66 @@ func (h *WorkspaceProjectHandler) SetWorkspaceProject(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	var req SetWorkspaceProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 验证项目是否存在
+	// 验证项目存在且属于鉴权 org
 	project, err := h.projectRepo.GetProjectByID(c.Request.Context(), req.ProjectID)
-	if err != nil {
+	if err != nil || project == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+	if err := ensureProjectBelongsToAuthOrg(project.OrgID, authOrg); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return
 	}
 
-	// 分配工作空间到项目
-	if err := h.projectRepo.AssignWorkspaceToProject(c.Request.Context(), workspaceID, req.ProjectID); err != nil {
+	// Workspace 若已绑定，必须已在同一 org（中间件已拦跨 org；此处防竞态改绑出租户）
+	if err := ensureWorkspaceSemanticInAuthOrg(c.Request.Context(), h.db, workspaceID, authOrg); err != nil {
+		// 允许「尚未绑定」的 workspace 首次绑定到本 org（仅当无任何 project 关系）
+		var cnt int64
+		_ = h.db.WithContext(c.Request.Context()).
+			Table("workspace_project_relations").
+			Where("workspace_id = ?", workspaceID).
+			Count(&cnt)
+		if cnt > 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
+			return
+		}
+		// 无绑定：须确认 workspace 实体存在
+		var exists int64
+		_ = h.db.WithContext(c.Request.Context()).
+			Table("workspaces").
+			Where("workspace_id = ? OR id::text = ?", workspaceID, workspaceID).
+			Count(&exists)
+		if exists == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
+			return
+		}
+	}
+
+	// 事务内重绑 + 一对一
+	err = h.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("workspace_id = ?", workspaceID).
+			Delete(&entity.WorkspaceProjectRelation{}).Error; err != nil {
+			return err
+		}
+		rel := &entity.WorkspaceProjectRelation{
+			WorkspaceID: workspaceID,
+			ProjectID:   req.ProjectID,
+			CreatedAt:   time.Now(),
+		}
+		return tx.Create(rel).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -155,6 +208,22 @@ func (h *WorkspaceProjectHandler) ListProjectWorkspaces(c *gin.Context) {
 	projectID, err := strconv.ParseUint(projectIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project_id"})
+		return
+	}
+
+	// The route's IAM middleware authorizes a permission in auth_org_id; bind the
+	// path resource to that same organization before reading its relationships.
+	// Otherwise a caller with Org A permission can enumerate workspaces of a
+	// guessed project ID in Org B.
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	project, err := h.projectRepo.GetProjectByID(c.Request.Context(), uint(projectID))
+	if err != nil || project == nil || ensureProjectBelongsToAuthOrg(project.OrgID, authOrg) != nil {
+		// Return the same result for a foreign and a missing project to avoid
+		// turning this endpoint into a project-ID oracle.
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return
 	}
 
@@ -214,20 +283,31 @@ func (h *WorkspaceProjectHandler) ListProjectWorkspaces(c *gin.Context) {
 // @Description List all projects with their workspace counts
 // @Tags Project
 // @Produce json
-// @Param org_id query int false "Organization ID (default: 1)"
+// @Param org_id query int false "Organization ID (must match authenticated organization)"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/projects [get]
 // @Security BearerAuth
 func (h *WorkspaceProjectHandler) ListProjectsWithWorkspaceCount(c *gin.Context) {
-	orgIDStr := c.DefaultQuery("org_id", "1")
-	orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
 		return
+	}
+	if orgIDStr := c.Query("org_id"); orgIDStr != "" {
+		orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
+		if err != nil || orgID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if uint(orgID) != authOrg {
+			// Do not let a caller turn this list endpoint into an organization
+			// existence oracle after its IAM grant has been evaluated.
+			c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+			return
+		}
 	}
 
 	// 获取组织的所有项目
-	projects, err := h.projectRepo.ListProjectsByOrg(c.Request.Context(), uint(orgID), nil)
+	projects, err := h.projectRepo.ListProjectsByOrg(c.Request.Context(), authOrg, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -248,19 +328,9 @@ func (h *WorkspaceProjectHandler) ListProjectsWithWorkspaceCount(c *gin.Context)
 		})
 	}
 
-	// 计算未分配项目的工作空间数量（归入 default）
-	var unassignedCount int64
-	h.db.Table("workspaces").
-		Where("workspace_id NOT IN (SELECT workspace_id FROM workspace_project_relations)").
-		Count(&unassignedCount)
-
-	// 将未分配的数量加到 default 项目
-	for i, p := range result {
-		if p.Project.IsDefault {
-			result[i].WorkspaceCount += int(unassignedCount)
-			break
-		}
-	}
+	// An unassigned workspace has no tenant identity.  Counting every such row
+	// under this tenant's default project used to disclose the global total;
+	// leave unbound legacy data out until it is explicitly assigned.
 
 	c.JSON(http.StatusOK, gin.H{
 		"projects": result,

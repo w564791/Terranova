@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"iac-platform/internal/application/service"
+	"iac-platform/internal/domain/entity"
 )
 
 // OrganizationHandler 组织管理Handler
@@ -136,6 +137,47 @@ func (h *OrganizationHandler) ListOrganizations(c *gin.Context) {
 	})
 }
 
+// ListAccessibleOrganizations returns the organizations that may be used as an
+// IAM tenant context for the current session. It deliberately has no org_id
+// prerequisite, because clients need it before they can make an org-scoped
+// request. Non-system users are limited to explicit user_organizations rows;
+// a missing membership is fail-closed rather than falling back to every org.
+func (h *OrganizationHandler) ListAccessibleOrganizations(c *gin.Context) {
+	rawUserID, exists := c.Get("user_id")
+	userID, ok := rawUserID.(string)
+	if !exists || !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	var orgs []*entity.Organization
+	var err error
+	if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
+		// System administrators are platform operators and may choose any org,
+		// including inactive ones when performing recovery or lifecycle work.
+		orgs, err = h.orgService.ListOrganizations(c.Request.Context(), nil)
+	} else {
+		orgs, err = h.orgService.GetUserOrganizations(c.Request.Context(), userID)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Keep the response shape stable for the frontend while deriving the
+	// optional default deterministically from the returned membership/order.
+	var defaultOrgID interface{}
+	if len(orgs) > 0 {
+		defaultOrgID = orgs[0].ID
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"organizations":  orgs,
+		"total":          len(orgs),
+		"default_org_id": defaultOrgID,
+	})
+}
+
 // UpdateOrganizationRequest 更新组织请求
 type UpdateOrganizationRequest struct {
 	DisplayName string                 `json:"display_name"`
@@ -251,6 +293,18 @@ func (h *OrganizationHandler) CreateProject(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	// body.org_id 必须等于鉴权 org（防跨 org 创建）
+	if req.OrgID != authOrg {
+		c.JSON(http.StatusForbidden, gin.H{"error": "org_id must match authenticated organization"})
+		return
+	}
+	// 强制写入鉴权 org
+	req.OrgID = authOrg
+
 	// 创建项目
 	createReq := &service.CreateProjectRequest{
 		OrgID:       req.OrgID,
@@ -289,9 +343,18 @@ func (h *OrganizationHandler) GetProject(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	project, err := h.projectService.GetProject(c.Request.Context(), uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if err := ensureProjectBelongsToAuthOrg(project.OrgID, authOrg); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return
 	}
 
@@ -310,19 +373,24 @@ func (h *OrganizationHandler) GetProject(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/projects [get]
 func (h *OrganizationHandler) ListProjects(c *gin.Context) {
-	orgIDStr := c.Query("org_id")
-	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
 		return
 	}
-
-	orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
-		return
+	// 列表强制鉴权 org；若传 query org_id 必须一致
+	if orgIDStr := c.Query("org_id"); orgIDStr != "" {
+		orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if uint(orgID) != authOrg {
+			c.JSON(http.StatusForbidden, gin.H{"error": "org_id must match authenticated organization"})
+			return
+		}
 	}
 
-	projects, err := h.projectService.ListProjectsByOrg(c.Request.Context(), uint(orgID))
+	projects, err := h.projectService.ListProjectsByOrg(c.Request.Context(), authOrg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -360,6 +428,16 @@ func (h *OrganizationHandler) UpdateProject(c *gin.Context) {
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	project, err := h.projectService.GetProject(c.Request.Context(), uint(id))
+	if err != nil || ensureProjectBelongsToAuthOrg(project.OrgID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return
 	}
 
@@ -402,6 +480,16 @@ func (h *OrganizationHandler) DeleteProject(c *gin.Context) {
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	project, err := h.projectService.GetProject(c.Request.Context(), uint(id))
+	if err != nil || ensureProjectBelongsToAuthOrg(project.OrgID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return
 	}
 

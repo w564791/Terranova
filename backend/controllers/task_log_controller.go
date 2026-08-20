@@ -2,9 +2,11 @@ package controllers
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -12,20 +14,25 @@ import (
 )
 
 // TaskLogController 任务日志控制器
+// 全局 /tasks/:id/logs 路径必须在加载 task 后按 workspace 鉴权（防水平越权 C2）
 type TaskLogController struct {
-	db *gorm.DB
+	db  *gorm.DB
+	iam *middleware.IAMPermissionMiddleware
 }
 
 // NewTaskLogController 创建控制器
-func NewTaskLogController(db *gorm.DB) *TaskLogController {
-	return &TaskLogController{
-		db: db,
-	}
+func NewTaskLogController(db *gorm.DB, iam *middleware.IAMPermissionMiddleware) *TaskLogController {
+	return &TaskLogController{db: db, iam: iam}
+}
+
+// loadTaskWithWorkspaceAccess 加载任务并对所属 workspace 做 READ 校验
+func (c *TaskLogController) loadTaskWithWorkspaceAccess(ctx *gin.Context) (*models.WorkspaceTask, bool) {
+	return loadAndAuthorizeTaskWorkspace(ctx, c.db, c.iam)
 }
 
 // GetTaskLogs 获取历史任务日志
 // @Summary 获取任务日志
-// @Description 获取任务的历史日志，支持JSON和文本格式
+// @Description 获取任务的历史日志（须对任务所属 workspace 有 READ）
 // @Tags Task Log
 // @Accept json
 // @Produce json
@@ -33,36 +40,27 @@ func NewTaskLogController(db *gorm.DB) *TaskLogController {
 // @Param type query string false "日志类型（plan/apply/all）" default(all)
 // @Param format query string false "输出格式（json/text）" default(json)
 // @Success 200 {object} map[string]interface{} "成功返回日志"
+// @Failure 403 {object} map[string]interface{} "无 workspace 权限"
 // @Failure 404 {object} map[string]interface{} "任务不存在"
 // @Router /api/v1/tasks/{task_id}/logs [get]
 // @Security BearerAuth
 func (c *TaskLogController) GetTaskLogs(ctx *gin.Context) {
-	taskID := ctx.Param("task_id")
 	logType := ctx.DefaultQuery("type", "all")
 	format := ctx.DefaultQuery("format", "json")
 
-	var task models.WorkspaceTask
-	if err := c.db.First(&task, taskID).Error; err != nil {
-		ctx.JSON(404, gin.H{"error": "task not found"})
+	task, ok := c.loadTaskWithWorkspaceAccess(ctx)
+	if !ok {
 		return
 	}
-
-	// TODO: 检查权限
-	// userID := ctx.GetUint("user_id")
-	// if !c.checkPermission(userID, task.WorkspaceID) {
-	//     ctx.JSON(403, gin.H{"error": "permission denied"})
-	//     return
-	// }
 
 	if format == "text" {
-		// 返回纯文本格式
-		c.returnTextLogs(ctx, &task, logType)
+		c.returnTextLogs(ctx, task, logType)
 		return
 	}
 
-	// 返回JSON格式
 	response := gin.H{
 		"task_id":      task.ID,
+		"workspace_id": task.WorkspaceID,
 		"task_type":    task.TaskType,
 		"status":       task.Status,
 		"created_at":   task.CreatedAt,
@@ -91,10 +89,9 @@ func (c *TaskLogController) GetTaskLogs(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(200, response)
+	ctx.JSON(http.StatusOK, response)
 }
 
-// returnTextLogs 返回纯文本格式日志
 func (c *TaskLogController) returnTextLogs(
 	ctx *gin.Context,
 	task *models.WorkspaceTask,
@@ -124,73 +121,59 @@ func (c *TaskLogController) returnTextLogs(
 	}
 
 	ctx.Header("Content-Type", "text/plain; charset=utf-8")
-	ctx.String(200, output.String())
+	ctx.String(http.StatusOK, output.String())
 }
 
 // DownloadTaskLogs 下载任务日志
 // @Summary 下载任务日志文件
-// @Description 下载任务日志为文本文件
+// @Description 下载任务日志为文本文件（须对任务所属 workspace 有 READ）
 // @Tags Task Log
 // @Accept json
 // @Produce text/plain
 // @Param task_id path int true "任务ID"
 // @Param type query string false "日志类型（plan/apply/all）" default(all)
 // @Success 200 {file} file "日志文件"
+// @Failure 403 {object} map[string]interface{} "无 workspace 权限"
 // @Failure 404 {object} map[string]interface{} "任务不存在"
 // @Router /api/v1/tasks/{task_id}/logs/download [get]
 // @Security BearerAuth
 func (c *TaskLogController) DownloadTaskLogs(ctx *gin.Context) {
-	taskID := ctx.Param("task_id")
 	logType := ctx.DefaultQuery("type", "all")
 
-	var task models.WorkspaceTask
-	if err := c.db.First(&task, taskID).Error; err != nil {
-		ctx.JSON(404, gin.H{"error": "task not found"})
+	task, ok := c.loadTaskWithWorkspaceAccess(ctx)
+	if !ok {
 		return
 	}
 
-	// TODO: 检查权限
-
 	var output strings.Builder
-
-	// 添加元数据
 	output.WriteString(fmt.Sprintf("Task ID: %d\n", task.ID))
+	output.WriteString(fmt.Sprintf("Workspace: %s\n", task.WorkspaceID))
 	output.WriteString(fmt.Sprintf("Task Type: %s\n", task.TaskType))
 	output.WriteString(fmt.Sprintf("Status: %s\n", task.Status))
 	output.WriteString(fmt.Sprintf("Created: %s\n", task.CreatedAt.Format(time.RFC3339)))
-	if task.CompletedAt != nil {
-		output.WriteString(fmt.Sprintf("Completed: %s\n", task.CompletedAt.Format(time.RFC3339)))
-		output.WriteString(fmt.Sprintf("Duration: %ds\n", task.Duration))
-	}
-	output.WriteString("\n" + strings.Repeat("=", 80) + "\n\n")
+	output.WriteString("\n")
 
-	// 添加日志内容
 	if logType == "plan" || logType == "all" {
 		if task.PlanOutput != "" {
-			output.WriteString("PLAN OUTPUT:\n")
-			output.WriteString(strings.Repeat("-", 80) + "\n")
+			output.WriteString("=== PLAN OUTPUT ===\n")
 			output.WriteString(task.PlanOutput)
 			output.WriteString("\n\n")
 		}
 	}
-
 	if logType == "apply" || logType == "all" {
 		if task.ApplyOutput != "" {
-			output.WriteString("APPLY OUTPUT:\n")
-			output.WriteString(strings.Repeat("-", 80) + "\n")
+			output.WriteString("=== APPLY OUTPUT ===\n")
 			output.WriteString(task.ApplyOutput)
 			output.WriteString("\n\n")
 		}
 	}
-
 	if task.ErrorMessage != "" {
-		output.WriteString("ERROR:\n")
-		output.WriteString(strings.Repeat("-", 80) + "\n")
+		output.WriteString("=== ERROR ===\n")
 		output.WriteString(task.ErrorMessage)
 	}
 
-	filename := fmt.Sprintf("task-%d-logs.txt", task.ID)
-	ctx.Header("Content-Type", "application/octet-stream")
-	ctx.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	ctx.String(200, output.String())
+	filename := fmt.Sprintf("task_%d_logs.txt", task.ID)
+	ctx.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	ctx.Header("Content-Type", "text/plain; charset=utf-8")
+	ctx.String(http.StatusOK, output.String())
 }

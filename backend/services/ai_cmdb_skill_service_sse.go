@@ -15,12 +15,19 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 	userDescription string,
 	workspaceID string,
 	organizationID string,
+	scope CMDBWorkspaceScope,
 	userSelections map[string]interface{},
 	currentConfig map[string]interface{},
 	mode string,
 	resourceInfoMap map[string]interface{},
 	progressCallback ProgressCallback,
 ) (*GenerateConfigWithCMDBResponse, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
+	// Client-supplied resource details are not a source of truth. Selected IDs
+	// are reloaded from the tenant-scoped resource index below.
+	_ = resourceInfoMap
 	totalTimer := NewTimer()
 	totalSteps := 5
 
@@ -87,7 +94,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 	// 检查配置模式
 	if aiConfig.Mode != "skill" {
 		log.Printf("[AICMDBSkillService] AI 配置模式为 '%s'，降级到传统模式", aiConfig.Mode)
-		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, convertedSelections, currentConfig, mode)
+		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, scope, convertedSelections, currentConfig, mode)
 	}
 
 	// 获取 Skill 组合配置
@@ -117,11 +124,14 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 
 	if len(convertedSelections) > 0 {
 		reportProgress(3, "处理选择", "正在处理用户选择的资源...")
-		cmdbData = s.buildCMDBDataFromSelections(convertedSelections)
+		cmdbData, err = s.buildCMDBDataFromSelections(convertedSelections, scope)
+		if err != nil {
+			return nil, err
+		}
 	} else if s.shouldUseCMDB(userDescription) {
 		reportProgress(3, "查询CMDB", "正在查询 CMDB 资源...")
 		cmdbTimer := NewTimer()
-		cmdbResults, err := s.performCMDBQuery(userID, userDescription, convertedSelections)
+		cmdbResults, err := s.performCMDBQuery(userID, userDescription, convertedSelections, scope)
 		RecordAICallDuration("form_generation", "cmdb_query", cmdbTimer.ElapsedMs())
 		if err != nil {
 			log.Printf("[AICMDBSkillService] CMDB 查询失败: %v", err)
@@ -163,7 +173,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillWithProgress(
 	assembleResult, err := s.skillAssembler.AssemblePrompt(composition, moduleID, dynamicContext)
 	RecordSkillAssemblyDuration("form_generation", len(assembleResult.UsedSkillNames), assembleTimer.ElapsedMs())
 	if err != nil {
-		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, convertedSelections, currentConfig, mode)
+		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, scope, convertedSelections, currentConfig, mode)
 	}
 
 	// 步骤 5: AI 生成
@@ -261,12 +271,19 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 	userDescription string,
 	workspaceID string,
 	organizationID string,
+	scope CMDBWorkspaceScope,
 	userSelections map[string]interface{},
 	currentConfig map[string]interface{},
 	mode string,
 	resourceInfoMap map[string]interface{},
 	progressCallback ProgressCallback,
 ) (*GenerateConfigWithCMDBResponse, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
+	// resourceInfoMap comes from the browser and must not bypass the scoped
+	// resource lookup performed for user selections.
+	_ = resourceInfoMap
 	totalTimer := NewTimer()
 	totalSteps := 5
 
@@ -334,7 +351,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 	if aiConfig.Mode != "skill" {
 		log.Printf("[AICMDBSkillService] AI 配置模式为 '%s'，降级到传统模式", aiConfig.Mode)
 		IncAICallCount("form_generation_optimized", "fallback_legacy")
-		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, convertedSelections, currentConfig, mode)
+		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, scope, convertedSelections, currentConfig, mode)
 	}
 
 	// 步骤 2: 意图断言
@@ -365,11 +382,9 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 		reportProgress(3, "处理选择+Skill", "正在处理用户选择的资源并发现 Skill...")
 		parallelTimer := NewTimer()
 
-		// 处理 CMDB 数据
-		if len(resourceInfoMap) > 0 {
-			cmdbData = s.buildCMDBDataFromResourceInfoMap(resourceInfoMap)
-		} else {
-			cmdbData = s.buildCMDBDataFromSelections(convertedSelections)
+		cmdbData, err = s.buildCMDBDataFromSelections(convertedSelections, scope)
+		if err != nil {
+			return nil, err
 		}
 
 		// 同时执行 Skill 自动发现（第二步：配置生成阶段，用户已选择资源）
@@ -403,7 +418,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimizedWithProgress(
 		reportProgress(3, "CMDB查询+Skill选择", "正在执行 CMDB 查询...")
 		parallelTimer := NewTimer()
 		SetActiveParallelTasks(1)
-		parallelResult := s.executeParallel(userID, userDescription)
+		parallelResult := s.executeParallel(userID, userDescription, scope)
 		SetActiveParallelTasks(0)
 		RecordAICallDuration("form_generation_optimized", "parallel_execution", parallelTimer.ElapsedMs())
 

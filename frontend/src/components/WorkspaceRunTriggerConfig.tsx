@@ -20,6 +20,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useToast } from '../contexts/ToastContext';
 import ConfirmDialog from './ConfirmDialog';
+import { apiFetch } from '../services/api';
 
 interface RunTrigger {
   id: number;
@@ -75,7 +76,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
   const fetchTriggers = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-triggers/inbound`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-triggers/inbound`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -95,7 +96,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
   // 获取可以作为触发源的 workspace 列表
   const fetchAvailableSources = async () => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-triggers/available-sources`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-triggers/available-sources`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -120,7 +121,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-triggers/inbound`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-triggers/inbound`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -161,7 +162,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
 
     setDeleting(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-triggers/${deletingTrigger.id}`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-triggers/${deletingTrigger.id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -183,7 +184,7 @@ const WorkspaceRunTriggerConfig: React.FC<Props> = ({ workspaceId, workspaceAuto
 
   const handleToggle = async (id: number, enabled: boolean) => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-triggers/${id}`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-triggers/${id}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ enabled }),

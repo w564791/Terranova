@@ -21,6 +21,7 @@ import {
   BellOutlined,
   SendOutlined,
 } from '@ant-design/icons';
+import { apiFetch } from '../services/api';
 import type { ColumnsType } from 'antd/es/table';
 
 interface NotificationConfig {
@@ -105,7 +106,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
   const fetchWorkspaceNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/notifications`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/notifications`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -127,7 +128,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
 
   const fetchAvailableNotifications = async () => {
     try {
-      const response = await fetch('/api/v1/notifications', {
+      const response = await apiFetch('/notifications', {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -167,7 +168,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/notifications/${id}`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/notifications/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -185,7 +186,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
   const handleTest = async (notificationId: string) => {
     setTesting(notificationId);
     try {
-      const response = await fetch(`/api/v1/notifications/${notificationId}/test`, {
+      const response = await apiFetch(`/notifications/${notificationId}/test`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -213,7 +214,7 @@ const WorkspaceNotificationConfig: React.FC<Props> = ({ workspaceId }) => {
         : `/api/v1/workspaces/${workspaceId}/notifications`;
       const method = editingNotification ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: getAuthHeaders(),
         body: JSON.stringify({

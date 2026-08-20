@@ -1,6 +1,8 @@
 # IaC Platform 权限系统设计方案（优化版）
 
 > 基于 Terraform Enterprise 三层权限模型，结合第一版方案优化
+>
+> **⚠️ 状态（2026-07-16）**：本文为历史方案。裁决语义、Role 主模型、NONE 含义、Team Token、列表鉴权等 **以 [`32-iam-remediation-report.md`](./32-iam-remediation-report.md) 为准**。冲突时废弃本文对应条款。
 
 ---
 

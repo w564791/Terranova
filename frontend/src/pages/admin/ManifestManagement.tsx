@@ -22,7 +22,7 @@ import {
 } from '@ant-design/icons';
 import type { Manifest } from '../../services/manifestApi';
 import { listManifests, deleteManifest, exportManifestZip, createManifest } from '../../services/manifestApi';
-import { iamService } from '../../services/iam';
+import { iamService, setAuthOrgId } from '../../services/iam';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './ManifestManagement.module.css';
@@ -58,10 +58,10 @@ const ManifestManagement: React.FC = () => {
   useEffect(() => {
     const loadOrganizations = async () => {
       try {
-        const response = await iamService.listOrganizations(true);
+        const response = await iamService.bootstrapActiveOrganization();
         setOrganizations(response.organizations || []);
-        if (response.organizations && response.organizations.length > 0) {
-          setSelectedOrgId(response.organizations[0].id);
+        if (response.active_org_id != null) {
+          setSelectedOrgId(response.active_org_id);
         }
       } catch (error) {
         console.error('加载组织列表失败:', error);
@@ -214,7 +214,10 @@ const ManifestManagement: React.FC = () => {
           {organizations.length > 1 && (
             <Select
               value={selectedOrgId}
-              onChange={(value) => setSelectedOrgId(value)}
+              onChange={(value) => {
+                setAuthOrgId(value);
+                setSelectedOrgId(value);
+              }}
               style={{ width: 200 }}
               options={organizations.map(org => ({
                 value: org.id,

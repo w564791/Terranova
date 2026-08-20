@@ -76,16 +76,16 @@ func (AccessLog) TableName() string {
 // TaskTemporaryPermission 临时任务权限
 type TaskTemporaryPermission struct {
 	ID             uint                   `json:"id"`
-	TaskID         uint                   `json:"task_id"`         // 任务ID
-	UserEmail      string                 `json:"user_email"`      // 被授权用户邮箱
-	UserID         *uint                  `json:"user_id"`         // 用户ID（可能为空）
-	PermissionType string                 `json:"permission_type"` // 权限类型（APPLY/CANCEL）
-	GrantedBy      string                 `json:"granted_by"`      // 授权来源
-	GrantedAt      time.Time              `json:"granted_at"`      // 授权时间
-	ExpiresAt      time.Time              `json:"expires_at"`      // 过期时间
-	WebhookPayload map[string]interface{} `json:"webhook_payload"` // Webhook原始数据
-	IsUsed         bool                   `json:"is_used"`         // 是否已使用
-	UsedAt         *time.Time             `json:"used_at"`         // 使用时间
+	TaskID         uint                   `json:"task_id"`                                  // 任务ID
+	UserEmail      string                 `json:"user_email"`                               // 被授权用户邮箱
+	UserID         string                 `json:"user_id" gorm:"column:user_id;type:varchar(20)"` // 语义化 user_id（可空；与 email 双键匹配）
+	PermissionType string                 `json:"permission_type"`                          // 权限类型（APPLY/CANCEL）
+	GrantedBy      string                 `json:"granted_by"`                               // 授权来源
+	GrantedAt      time.Time              `json:"granted_at"`                               // 授权时间
+	ExpiresAt      time.Time              `json:"expires_at"`                               // 过期时间
+	WebhookPayload map[string]interface{} `json:"webhook_payload" gorm:"type:jsonb;serializer:json"`
+	IsUsed         bool                   `json:"is_used"`  // 是否已使用
+	UsedAt         *time.Time             `json:"used_at"` // 使用时间
 }
 
 // TableName 指定表名

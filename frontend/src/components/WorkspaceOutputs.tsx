@@ -4,6 +4,7 @@ import { Card, Button, Input, Select, Switch, message, Empty, Spin, Tag, Tooltip
 import { PlusOutlined, DeleteOutlined, SaveOutlined, ReloadOutlined, CopyOutlined, UndoOutlined, CloudDownloadOutlined } from '@ant-design/icons';
 import styles from './WorkspaceOutputs.module.css';
 import WorkspaceRemoteDataConfig from './WorkspaceRemoteDataConfig';
+import { apiFetch } from '../services/api';
 
 const { Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -111,7 +112,7 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId, isMani
   const fetchOutputsCombined = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs/combined`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/outputs/combined`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -142,8 +143,8 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId, isMani
   const fetchAvailableOutputsForResource = useCallback(async (resourceName: string) => {
     if (availableOutputsCache.has(resourceName)) return;
     try {
-      const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/available-outputs?resource_name=${encodeURIComponent(resourceName)}`,
+      const response = await apiFetch(
+        `/workspaces/${workspaceId}/available-outputs?resource_name=${encodeURIComponent(resourceName)}`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
@@ -353,7 +354,7 @@ const WorkspaceOutputs: React.FC<WorkspaceOutputsProps> = ({ workspaceId, isMani
         .filter(o => o.isDeleted && !o.isNew)
         .map(o => o.output_id);
 
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs/batch`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/outputs/batch`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({

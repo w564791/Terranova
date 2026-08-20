@@ -117,7 +117,6 @@ const Workspaces: React.FC = () => {
     try {
       setCreateProjectLoading(true);
       const data: CreateProjectRequest = {
-        org_id: 1,
         name: newProjectName.trim(),
         display_name: newProjectDisplayName.trim(),
         description: newProjectDescription.trim() || undefined,

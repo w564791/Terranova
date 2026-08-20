@@ -38,6 +38,10 @@ type OrganizationService interface {
 	// ListOrganizations 列出所有组织
 	ListOrganizations(ctx context.Context, isActive *bool) ([]*entity.Organization, error)
 
+	// GetUserOrganizations returns only organizations the user is a member of.
+	// It is used to establish a tenant context before any org-scoped IAM call.
+	GetUserOrganizations(ctx context.Context, userID string) ([]*entity.Organization, error)
+
 	// UpdateOrganization 更新组织信息
 	UpdateOrganization(ctx context.Context, req *UpdateOrganizationRequest) error
 
@@ -102,12 +106,9 @@ func (s *OrganizationServiceImpl) CreateOrganization(
 		UpdatedAt:   time.Now(),
 	}
 
-	if err := s.orgRepo.CreateOrganization(ctx, org); err != nil {
+	if err := s.orgRepo.CreateOrganizationWithBootstrap(ctx, org, defaultOrganizationTeams(req.CreatedBy)); err != nil {
 		return nil, fmt.Errorf("failed to create organization: %w", err)
 	}
-
-	// 4. 创建默认团队（owners, admins）
-	s.createDefaultTeams(ctx, org.ID, req.CreatedBy)
 
 	return org, nil
 }
@@ -122,6 +123,13 @@ func (s *OrganizationServiceImpl) ListOrganizations(ctx context.Context, isActiv
 	return s.orgRepo.ListOrganizations(ctx, isActive)
 }
 
+// GetUserOrganizations returns the active organizations explicitly linked to
+// a user. Callers must not fall back to the global organization list: absence
+// of membership is intentionally fail-closed.
+func (s *OrganizationServiceImpl) GetUserOrganizations(ctx context.Context, userID string) ([]*entity.Organization, error) {
+	return s.orgRepo.GetUserOrganizations(ctx, userID)
+}
+
 // UpdateOrganization 更新组织信息
 func (s *OrganizationServiceImpl) UpdateOrganization(
 	ctx context.Context,
@@ -134,14 +142,17 @@ func (s *OrganizationServiceImpl) UpdateOrganization(
 	}
 
 	// 2. 更新字段
+	wasActive := org.IsActive
 	org.DisplayName = req.DisplayName
 	org.Description = req.Description
 	org.IsActive = req.IsActive
 	org.Settings = req.Settings
 	org.UpdatedAt = time.Now()
 
-	// 3. 保存更新
-	if err := s.orgRepo.UpdateOrganization(ctx, org); err != nil {
+	// Re-enabling a tenant must restore concrete administrator access before
+	// the active state commits. Otherwise the system-admin bypass removal can
+	// leave platform operators unable to manage the newly visible tenant.
+	if err := s.orgRepo.UpdateOrganizationWithBootstrap(ctx, org, !wasActive && org.IsActive); err != nil {
 		return fmt.Errorf("failed to update organization: %w", err)
 	}
 
@@ -201,31 +212,27 @@ func (s *OrganizationServiceImpl) ListOrgUsers(ctx context.Context, orgID uint) 
 	return s.orgRepo.ListOrgUsers(ctx, orgID)
 }
 
-// createDefaultTeams 创建默认团队
-func (s *OrganizationServiceImpl) createDefaultTeams(ctx context.Context, orgID uint, createdBy string) {
-	// 创建owners团队
-	ownersTeam := &entity.Team{
-		OrgID:       orgID,
-		Name:        "owners",
-		DisplayName: "Organization Owners",
-		IsSystem:    true,
-		CreatedBy:   &createdBy,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+// defaultOrganizationTeams returns the system teams created together with an
+// organization. The repository assigns OrgID inside its transaction.
+func defaultOrganizationTeams(createdBy string) []*entity.Team {
+	return []*entity.Team{
+		{
+			Name:        "owners",
+			DisplayName: "Organization Owners",
+			IsSystem:    true,
+			CreatedBy:   &createdBy,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+		{
+			Name:        "admins",
+			DisplayName: "Organization Admins",
+			IsSystem:    true,
+			CreatedBy:   &createdBy,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
 	}
-	_ = s.teamRepo.CreateTeam(ctx, ownersTeam)
-
-	// 创建admins团队
-	adminsTeam := &entity.Team{
-		OrgID:       orgID,
-		Name:        "admins",
-		DisplayName: "Organization Admins",
-		IsSystem:    true,
-		CreatedBy:   &createdBy,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-	_ = s.teamRepo.CreateTeam(ctx, adminsTeam)
 }
 
 // ProjectService 项目管理服务接口

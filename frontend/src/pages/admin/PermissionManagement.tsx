@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
 import { iamService } from '../../services/iam';
-import { workspaceService } from '../../services/workspaces';
+import { apiFetch } from '../../services/api';
 import type {
   PermissionGrant,
   PermissionDefinition,
-  PrincipalType,
   PermissionLevel,
 } from '../../services/iam';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -19,6 +18,7 @@ interface User {
   email: string;
   role: string;
   is_active: boolean;
+  is_system_admin?: boolean;
 }
 
 // 用户角色接口
@@ -47,9 +47,8 @@ const PermissionManagement: React.FC = () => {
   const navigate = useNavigate();
   const [userPermissions, setUserPermissions] = useState<UserPermissions[]>([]);
   const [definitions, setDefinitions] = useState<PermissionDefinition[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingRoles, setLoadingRoles] = useState(false);
   const [editingPermission, setEditingPermission] = useState<PermissionGrant | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<Map<number, Set<number>>>(new Map());
   const [revokeConfirm, setRevokeConfirm] = useState<{
@@ -114,7 +113,7 @@ const PermissionManagement: React.FC = () => {
           
           try {
             // 使用新的API获取用户权限
-            const permResponse = await fetch(`/api/v1/iam/users/${user.id}/permissions`, {
+            const permResponse = await apiFetch(`/iam/users/${user.id}/permissions`, {
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,
               },
@@ -129,7 +128,7 @@ const PermissionManagement: React.FC = () => {
 
           try {
             // 获取用户角色
-            const roleResponse = await fetch(`/api/v1/iam/users/${user.id}/roles`, {
+            const roleResponse = await apiFetch(`/iam/users/${user.id}/roles`, {
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,
               },
@@ -178,9 +177,9 @@ const PermissionManagement: React.FC = () => {
     );
   };
 
-  // 跳转到授权页面
+  // 跳转到授权页面（Role 主路径）
   const handleGrantPermission = () => {
-    navigate('/iam/permissions/grant');
+    navigate('/iam/permissions/grant?type=role');
   };
 
   // 编辑权限
@@ -188,15 +187,19 @@ const PermissionManagement: React.FC = () => {
     setEditingPermission(permission);
   };
 
-  // 保存编辑
+  // 保存编辑：USER/TEAM Direct Grant 写路径已 410；仅 APPLICATION 可 re-grant
   const handleSaveEdit = async (newLevel: PermissionLevel) => {
     if (!editingPermission) return;
 
+    const pt = String(editingPermission.principal_type || '').toUpperCase();
+    if (pt !== 'APPLICATION') {
+      showToast('用户/团队请通过「分配角色」调整权限；Direct Grant 已下线。可撤销遗留 grant 后改赋 Role。', 'error');
+      setEditingPermission(null);
+      return;
+    }
+
     try {
-      // 先撤销旧权限
       await iamService.revokePermission(editingPermission.scope_type, editingPermission.id);
-      
-      // 再授予新权限
       await iamService.grantPermission({
         scope_type: editingPermission.scope_type,
         scope_id: editingPermission.scope_id,
@@ -208,14 +211,12 @@ const PermissionManagement: React.FC = () => {
         reason: editingPermission.reason,
       });
 
-      showToast('权限级别更新成功', 'success');
+      showToast('应用权限级别更新成功', 'success');
       setEditingPermission(null);
-      
-      // 重新加载数据
       const userList = await loadUsers();
       await loadAllUserPermissions(userList);
     } catch (error: any) {
-      showToast(error.response?.data?.error || '更新失败', 'error');
+      showToast(error.response?.data?.error || error.message || '更新失败', 'error');
     }
   };
 
@@ -291,8 +292,8 @@ const PermissionManagement: React.FC = () => {
     if (!revokeRoleConfirm.userRole) return;
 
     try {
-      const response = await fetch(
-        `/api/v1/iam/users/${revokeRoleConfirm.userRole.user_id}/roles/${revokeRoleConfirm.userRole.id}`,
+      const response = await apiFetch(
+        `/iam/users/${revokeRoleConfirm.userRole.user_id}/roles/${revokeRoleConfirm.userRole.id}`,
         {
           method: 'DELETE',
           headers: {
@@ -339,8 +340,6 @@ const PermissionManagement: React.FC = () => {
     const userPerms = userPermissions.find(up => up.user.id === userId);
     if (!userPerms) return;
 
-    const permissionsToRevoke = userPerms.permissions.filter(p => selectedPerms.has(p.id));
-    
     setBatchRevokeConfirm({ 
       show: true, 
       userId,
@@ -522,7 +521,7 @@ const PermissionManagement: React.FC = () => {
                         className={styles.addRoleButton}
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/iam/permissions/grant?user_id=${up.user.id}&type=role`);
+                          navigate(`/iam/permissions/grant?principal_type=USER&principal_id=${up.user.id}&type=role`);
                         }}
                       >
                         + 分配角色
@@ -564,7 +563,7 @@ const PermissionManagement: React.FC = () => {
                       className={styles.addPermissionButton}
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/iam/permissions/grant?user_id=${up.user.id}&type=permission`);
+                        navigate(`/iam/permissions/grant?principal_type=USER&principal_id=${up.user.id}&type=role`);
                       }}
                     >
                       + 添加权限

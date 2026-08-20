@@ -40,9 +40,12 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 
 		// Get pool HCP secrets (for generating credentials.tfrc.json on agent side)
 		agents.GET("/pool/secrets", middleware.PoolTokenAuthMiddleware(db), agentPoolSecretsHandler.GetPoolSecrets)
-		// agents.POST("/:agent_id/ping", middleware.PoolTokenAuthMiddleware(db), agentHandler.PingAgent)
-		agents.GET("/:agent_id", middleware.PoolTokenAuthMiddleware(db), agentHandler.GetAgent)
-		agents.DELETE("/:agent_id", middleware.PoolTokenAuthMiddleware(db), agentHandler.UnregisterAgent)
+		// agents.POST("/:agent_id/ping", middleware.PoolTokenAuthWithAgentCheck(db), agentHandler.PingAgent)
+		// A pool token may only inspect or unregister agents registered by the
+		// same pool. Basic token authentication alone proves the caller owns *a*
+		// pool, not the agent named in the path.
+		agents.GET("/:agent_id", middleware.PoolTokenAuthWithAgentCheck(db), agentHandler.GetAgent)
+		agents.DELETE("/:agent_id", middleware.PoolTokenAuthWithAgentCheck(db), agentHandler.UnregisterAgent)
 
 		// C&C WebSocket endpoint has been moved to a standalone server
 		// Agent should connect to port 8091 instead of 8080
@@ -125,105 +128,61 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 	}
 }
 
-// setupAgentPoolRoutes sets up Agent Pool management routes (需要 JWT 认证)
-func setupAgentPoolRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
+// setupAgentPoolRoutes sets up Agent Pool management routes.
+//
+// Agent pools currently have no org_id and can execute work for more than one
+// organization. Treat them as platform infrastructure until a tenant-owned
+// pool model and migration exist; organization IAM grants must not manage them.
+func setupAgentPoolRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, _ *middleware.IAMPermissionMiddleware) {
 	// Initialize handlers
 	agentPoolHandler := handlers.NewAgentPoolHandler(db)
 	poolAuthHandler := handlers.NewPoolAuthorizationHandler(db)
 
-	// ===== Agent Pool Management Routes (with IAM permissions) =====
-	agentPools := adminProtected.Group("/agent-pools")
+	// ===== Agent Pool Management Routes (platform administrator only) =====
+	agentPools := adminProtected.Group("/agent-pools", middleware.RequireSystemAdmin())
 	{
 		// Create agent pool
-		agentPools.POST("",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.CreateAgentPool,
-		)
+		agentPools.POST("", agentPoolHandler.CreateAgentPool)
 
 		// List agent pools
-		agentPools.GET("",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
-			agentPoolHandler.ListAgentPools,
-		)
+		agentPools.GET("", agentPoolHandler.ListAgentPools)
 
 		// Get agent pool details
-		agentPools.GET("/:pool_id",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
-			agentPoolHandler.GetAgentPool,
-		)
+		agentPools.GET("/:pool_id", agentPoolHandler.GetAgentPool)
 
 		// Update agent pool
-		agentPools.PUT("/:pool_id",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.UpdateAgentPool,
-		)
+		agentPools.PUT("/:pool_id", agentPoolHandler.UpdateAgentPool)
 
 		// Delete agent pool
-		agentPools.DELETE("/:pool_id",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "ADMIN"),
-			agentPoolHandler.DeleteAgentPool,
-		)
+		agentPools.DELETE("/:pool_id", agentPoolHandler.DeleteAgentPool)
 
 		// Pool authorization - Pool side
-		agentPools.POST("/:pool_id/allow-workspaces",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			poolAuthHandler.AllowWorkspaces,
-		)
+		agentPools.POST("/:pool_id/allow-workspaces", poolAuthHandler.AllowWorkspaces)
 
-		agentPools.GET("/:pool_id/allowed-workspaces",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
-			poolAuthHandler.GetAllowedWorkspaces,
-		)
+		agentPools.GET("/:pool_id/allowed-workspaces", poolAuthHandler.GetAllowedWorkspaces)
 
-		agentPools.DELETE("/:pool_id/allowed-workspaces/:workspace_id",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			poolAuthHandler.RevokeWorkspaceAccess,
-		)
+		agentPools.DELETE("/:pool_id/allowed-workspaces/:workspace_id", poolAuthHandler.RevokeWorkspaceAccess)
 
 		// Pool Token Management
-		agentPools.POST("/:pool_id/tokens",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.CreatePoolToken,
-		)
+		agentPools.POST("/:pool_id/tokens", agentPoolHandler.CreatePoolToken)
 
-		agentPools.GET("/:pool_id/tokens",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
-			agentPoolHandler.ListPoolTokens,
-		)
+		agentPools.GET("/:pool_id/tokens", agentPoolHandler.ListPoolTokens)
 
-		agentPools.DELETE("/:pool_id/tokens/:token_name",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.RevokePoolToken,
-		)
+		agentPools.DELETE("/:pool_id/tokens/:token_name", agentPoolHandler.RevokePoolToken)
 
 		// Rotate pool token (for K8s pools)
-		agentPools.POST("/:pool_id/tokens/:token_name/rotate",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.RotatePoolToken,
-		)
+		agentPools.POST("/:pool_id/tokens/:token_name/rotate", agentPoolHandler.RotatePoolToken)
 
 		// Sync deployment config (for K8s pools)
-		agentPools.POST("/:pool_id/sync-deployment",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.SyncDeploymentConfig,
-		)
+		agentPools.POST("/:pool_id/sync-deployment", agentPoolHandler.SyncDeploymentConfig)
 
 		// Activate one-time unfreeze (for K8s pools)
-		agentPools.POST("/:pool_id/one-time-unfreeze",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.ActivateOneTimeUnfreeze,
-		)
+		agentPools.POST("/:pool_id/one-time-unfreeze", agentPoolHandler.ActivateOneTimeUnfreeze)
 
 		// K8s Configuration Management
-		agentPools.PUT("/:pool_id/k8s-config",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "WRITE"),
-			agentPoolHandler.UpdateK8sConfig,
-		)
+		agentPools.PUT("/:pool_id/k8s-config", agentPoolHandler.UpdateK8sConfig)
 
-		agentPools.GET("/:pool_id/k8s-config",
-			iamMiddleware.RequirePermission("AGENT_POOLS", "ORGANIZATION", "READ"),
-			agentPoolHandler.GetK8sConfig,
-		)
+		agentPools.GET("/:pool_id/k8s-config", agentPoolHandler.GetK8sConfig)
 	}
 }
 

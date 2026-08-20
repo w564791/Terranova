@@ -21,6 +21,7 @@ import {
   LinkOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { apiFetch } from '../services/api';
 
 interface RunTask {
   run_task_id: string;
@@ -92,7 +93,7 @@ const WorkspaceRunTaskConfig: React.FC<Props> = ({ workspaceId }) => {
   const fetchWorkspaceRunTasks = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-tasks`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-tasks`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -109,7 +110,7 @@ const WorkspaceRunTaskConfig: React.FC<Props> = ({ workspaceId }) => {
 
   const fetchAvailableRunTasks = async () => {
     try {
-      const response = await fetch('/api/v1/run-tasks', {
+      const response = await apiFetch('/run-tasks', {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -151,7 +152,7 @@ const WorkspaceRunTaskConfig: React.FC<Props> = ({ workspaceId }) => {
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/run-tasks/${id}`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/run-tasks/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -173,7 +174,7 @@ const WorkspaceRunTaskConfig: React.FC<Props> = ({ workspaceId }) => {
         : `/api/v1/workspaces/${workspaceId}/run-tasks`;
       const method = editingTask ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: getAuthHeaders(),
         body: JSON.stringify(values),

@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"iac-platform/internal/domain/entity"
+	"iac-platform/internal/domain/valueobject"
 )
 
 // CloneRoleRequest 克隆角色请求
@@ -77,30 +78,74 @@ func (h *RoleHandler) CloneRole(c *gin.Context) {
 		return
 	}
 
-	// 检查新角色名称是否已存在
+	userIDStr, isSystemAdmin, ok := actorFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":      401,
+			"message":   "User ID not found in context",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 防提权：fail-closed + 使用鉴权 org（C1）
+	if h.guard == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation not configured", "timestamp": time.Now(),
+		})
+		return
+	}
+	orgID := authOrgFromContext(c)
+	if orgID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+	// 角色是租户资源。先验证源角色对当前鉴权组织可见，避免通过 role id
+	// 克隆其他组织的自定义角色及其权限策略。
+	if !h.ensureRoleVisible(c, &sourceRole) {
+		return
+	}
+	// org_id=0 表示平台 Role；历史遗留的非 is_system 平台行也不能由租户
+	// 管理员复制到其组织中。
+	if (sourceRole.IsSystem || sourceRole.OrgID == 0) && !isSystemAdmin {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code": 403, "message": "Platform roles can only be cloned by system admin", "timestamp": time.Now(),
+		})
+		return
+	}
+
+	// role 名称只在同一租户内唯一；系统 Role 与其他租户的同名 Role 不应
+	// 阻塞当前组织创建自己的自定义 Role。
 	var existingRole entity.Role
-	if err := h.db.Where("name = ?", req.Name).First(&existingRole).Error; err == nil {
+	if err := h.db.Where("name = ? AND org_id = ?", req.Name, orgID).First(&existingRole).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"code":      409,
 			"message":   fmt.Sprintf("Role with name '%s' already exists", req.Name),
 			"timestamp": time.Now(),
 		})
 		return
-	}
-
-	userIDInterface, _ := c.Get("user_id")
-	userIDStr, ok := userIDInterface.(string)
-	if !ok {
+	} else if err != gorm.ErrRecordNotFound {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "Failed to get user ID",
-			"timestamp": time.Now(),
+			"code": 500, "message": "Failed to check role name", "error": err.Error(), "timestamp": time.Now(),
+		})
+		return
+	}
+	if err := h.guard.EnsureCanCloneRole(c.Request.Context(), userIDStr, isSystemAdmin, uint(sourceID),
+		valueobject.ScopeTypeOrganization, orgID); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation check failed", "error": err.Error(), "timestamp": time.Now(),
 		})
 		return
 	}
 
 	// 创建新角色
 	newRole := &entity.Role{
+		OrgID:       orgID,
 		Name:        req.Name,
 		DisplayName: req.DisplayName,
 		Description: req.Description,

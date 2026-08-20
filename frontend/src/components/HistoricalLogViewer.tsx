@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import { apiFetch } from '../services/api';
 import styles from './HistoricalLogViewer.module.css';
 
 interface Props {
@@ -21,10 +21,8 @@ const HistoricalLogViewer: React.FC<Props> = ({ taskId }) => {
     setError(null);
     
     try {
-      // 使用fetch直接调用，因为需要text格式
-      const response = await fetch(
-        `http://localhost:8080/api/v1/tasks/${taskId}/logs?type=${logType}&format=text`
-      );
+      // 需要 text 格式，但仍必须走统一 API base URL 和 Bearer token。
+      const response = await apiFetch(`/tasks/${taskId}/logs?type=${logType}&format=text`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch logs');
@@ -39,8 +37,21 @@ const HistoricalLogViewer: React.FC<Props> = ({ taskId }) => {
     }
   };
 
-  const handleDownload = () => {
-    window.open(`http://localhost:8080/api/v1/tasks/${taskId}/logs/download?type=${logType}`, '_blank');
+  const handleDownload = async () => {
+    try {
+      const response = await apiFetch(`/tasks/${taskId}/logs/download?type=${logType}`);
+      if (!response.ok) {
+        throw new Error('Failed to download logs');
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `task-${taskId}-${logType}.log`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || 'Failed to download logs');
+    }
   };
 
   if (loading) {

@@ -47,18 +47,23 @@ func SetupCMDBRoutes(r *gin.RouterGroup, db *gorm.DB) {
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
 			cmdbHandler.GetWorkspaceResourceCounts)
 		cmdb.GET("/search-analytics",
-			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			// Search logs have no organization column. Keep this platform-wide
+			// diagnostic endpoint out of tenant roles until logs are tenant-bound.
+			middleware.RequireSystemAdmin(),
 			cmdbHandler.GetSearchAnalytics)
 		cmdb.GET("/workspaces/:workspace_id/tree",
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			middleware.EnforceWorkspaceOrgBindingForParam(db, "workspace_id"),
 			cmdbHandler.GetWorkspaceResourceTree)
 		cmdb.GET("/workspaces/:workspace_id/resources",
 			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			middleware.EnforceWorkspaceOrgBindingForParam(db, "workspace_id"),
 			cmdbHandler.GetResourceDetail)
 
 		// 同步操作（需要cmdb:ADMIN权限，通常只有admin有此权限）
 		cmdb.POST("/workspaces/:workspace_id/sync",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
+			middleware.EnforceWorkspaceOrgBindingForParam(db, "workspace_id"),
 			cmdbHandler.SyncWorkspace)
 		cmdb.POST("/sync-all",
 			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
@@ -66,7 +71,9 @@ func SetupCMDBRoutes(r *gin.RouterGroup, db *gorm.DB) {
 
 		// ===== 外部数据源管理（需要cmdb:ADMIN权限） =====
 		externalSources := cmdb.Group("/external-sources")
-		externalSources.Use(iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"))
+		// External source records are currently global rather than org-owned.
+		// Do not expose them through an organization-scoped CMDB permission.
+		externalSources.Use(middleware.RequireSystemAdmin())
 		{
 			// 列出所有外部数据源
 			externalSources.GET("", externalSourceHandler.ListExternalSources)

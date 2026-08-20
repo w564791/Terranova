@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
 import NoPermission from '../pages/NoPermission';
 import TopBar from './TopBar';
+import { apiFetch, getAuthOrgId, IAM_ORG_CHANGE_EVENT } from '../services/api';
 import styles from './Layout.module.css';
 
 const Layout: React.FC = () => {
@@ -20,6 +21,17 @@ const Layout: React.FC = () => {
   const [hasGlobalSettingsPermission, setHasGlobalSettingsPermission] = useState(false);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+  const [authOrgId, setAuthOrgId] = useState<number | null>(() => getAuthOrgId());
+
+  React.useEffect(() => {
+    const syncAuthOrgId = () => setAuthOrgId(getAuthOrgId());
+    window.addEventListener(IAM_ORG_CHANGE_EVENT, syncAuthOrgId);
+    window.addEventListener('storage', syncAuthOrgId);
+    return () => {
+      window.removeEventListener(IAM_ORG_CHANGE_EVENT, syncAuthOrgId);
+      window.removeEventListener('storage', syncAuthOrgId);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -41,19 +53,28 @@ const Layout: React.FC = () => {
     const checkPermissions = async () => {
       setPermissionsLoading(true);
       if (user && !user.is_system_admin) {
+        if (authOrgId == null) {
+          setHasDashboardPermission(false);
+          setHasWorkspacesPermission(false);
+          setHasModulesPermission(false);
+          setHasIAMPermission(false);
+          setHasGlobalSettingsPermission(false);
+          setHasVariableSetsPermission(false);
+          setPermissionsLoading(false);
+          return;
+        }
         try {
           // 使用权限检查API，不暴露具体的业务API
-          const checkPermission = async (resourceType: string, scopeType: string = 'ORGANIZATION', scopeId: string = '1') => {
-            const response = await fetch('/api/v1/iam/permissions/check', {
+          const checkPermission = async (resourceType: string, scopeType: string = 'ORGANIZATION') => {
+            const response = await apiFetch('/iam/permissions/check', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
               },
               body: JSON.stringify({
                 resource_type: resourceType,
                 scope_type: scopeType,
-                scope_id: scopeId,
+                scope_id: String(authOrgId),
                 required_level: 'READ'
               })
             });
@@ -66,22 +87,22 @@ const Layout: React.FC = () => {
           };
 
           // 检查各项权限
-          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, globalPerm, varsetPerm] = await Promise.all([
+          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, varsetPerm] = await Promise.all([
             checkPermission('ORGANIZATION'),
             checkPermission('WORKSPACES'),
             checkPermission('MODULES'),
             checkPermission('IAM_PERMISSIONS'),
-            checkPermission('SYSTEM_SETTINGS'),
             checkPermission('VARIABLE_SETS'),
           ]);
 
-          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'Global:', globalPerm, 'VarSets:', varsetPerm);
+          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'VarSets:', varsetPerm);
 
           setHasDashboardPermission(dashPerm);
           setHasWorkspacesPermission(workspacesPerm);
           setHasModulesPermission(modulesPerm);
           setHasIAMPermission(iamPerm);
-          setHasGlobalSettingsPermission(globalPerm);
+          // 平台全局设置不再由组织 IAM grant 决定；仅 system admin 可见和访问。
+          setHasGlobalSettingsPermission(false);
           setHasVariableSetsPermission(varsetPerm);
         } catch (error) {
           setHasDashboardPermission(false);
@@ -103,7 +124,7 @@ const Layout: React.FC = () => {
     };
     
     checkPermissions();
-  }, [user]);
+  }, [user, authOrgId]);
 
   if (!isAuthenticated) {
     return <div>Loading...</div>;

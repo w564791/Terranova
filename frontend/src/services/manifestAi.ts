@@ -8,7 +8,7 @@
  * 这里抽出通用 SSE 解析器 consumeSSE,生成和检查共用。
  */
 
-import api from './api'
+import api, { apiFetch } from './api'
 
 // ========== 通用 SSE 协议类型 ==========
 
@@ -51,8 +51,6 @@ export interface ManifestProgressEvent {
   error?: string
 }
 
-const getToken = (): string | null => localStorage.getItem('token')
-
 /**
  * consumeSSE 通用 SSE 消费器
  *
@@ -65,13 +63,9 @@ async function consumeSSE(
   onProgress: (event: ManifestProgressEvent) => void,
   signal?: AbortSignal,
 ): Promise<ManifestProgressEvent> {
-  const token = getToken()
-  if (!token) throw new Error('未登录')
-
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },

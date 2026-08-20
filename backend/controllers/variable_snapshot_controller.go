@@ -72,15 +72,17 @@ func (c *VariableSnapshotController) CreateSnapshot(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/workspaces/{id}/variable-snapshots/{vsnap_id} [delete]
 func (c *VariableSnapshotController) DeleteSnapshot(ctx *gin.Context) {
+	workspaceID := ctx.Param("id")
 	vsnapID := ctx.Param("vsnap_id")
-	if vsnapID == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "vsnap_id is required"})
+	if workspaceID == "" || vsnapID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "workspace id and vsnap_id are required"})
 		return
 	}
 
-	if err := c.service.DeleteSnapshot(vsnapID); err != nil {
+	if err := c.service.DeleteSnapshot(workspaceID, vsnapID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			// 404 防探测跨 WS 是否存在
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "snapshot not found"})
 		} else {
 			log.Printf("Failed to delete snapshot: %v", err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete snapshot"})

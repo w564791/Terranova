@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../../hooks/useToast';
-import { iamService } from '../../services/iam';
+import { iamService, setAuthOrgId } from '../../services/iam';
 import type {
   Project,
   Organization,
@@ -39,10 +39,10 @@ const ProjectManagement: React.FC = () => {
   // 加载组织列表
   const loadOrganizations = async () => {
     try {
-      const response = await iamService.listOrganizations(true);
+      const response = await iamService.bootstrapActiveOrganization();
       setOrganizations(response.organizations || []);
-      if (response.organizations && response.organizations.length > 0) {
-        setSelectedOrgId(response.organizations[0].id);
+      if (response.active_org_id != null) {
+        setSelectedOrgId(response.active_org_id);
       }
     } catch (error: any) {
       console.error('加载组织列表失败:', error);
@@ -70,6 +70,7 @@ const ProjectManagement: React.FC = () => {
 
   useEffect(() => {
     if (selectedOrgId !== 'all' && selectedOrgId > 0) {
+      setAuthOrgId(selectedOrgId);
       loadProjects(selectedOrgId);
     } else {
       setProjects([]);
@@ -240,12 +241,6 @@ const ProjectManagement: React.FC = () => {
       return <span className={`${styles.statusBadge} ${styles.active}`}>Active</span>;
     }
     return <span className={`${styles.statusBadge} ${styles.inactive}`}>Inactive</span>;
-  };
-
-  // 获取组织名称
-  const getOrgName = (orgId: number) => {
-    const org = organizations.find((o) => o.id === orgId);
-    return org ? org.display_name : `组织 ${orgId}`;
   };
 
   return (

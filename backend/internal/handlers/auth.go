@@ -394,6 +394,9 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// 改密后吊销全部登录会话（强制重新登录）
+	revokeAllLoginSessions(h.db, user.ID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":      200,
 		"message":   "Password updated successfully",
@@ -423,6 +426,18 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// 必须携带 login session（与 JWTAuth 中间件对齐；拒绝无 type/session 的旧 refresh 产物）
+	sessionIDRaw, sessionOK := c.Get("session_id")
+	sessionID, _ := sessionIDRaw.(string)
+	if !sessionOK || sessionID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":      401,
+			"message":   "Invalid token format: missing session. Please login again.",
+			"timestamp": time.Now(),
+		})
+		return
+	}
+
 	// 验证用户仍然有效
 	var user models.User
 	if err := h.db.Where("user_id = ? AND is_active = ?", userID, true).First(&user).Error; err != nil {
@@ -434,8 +449,18 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// 生成新token
-	newToken, err := generateJWT(user.ID, user.Username)
+	// 延长 session 过期时间并签发带 type/session_id 的新 token
+	newExpiry := time.Now().Add(24 * time.Hour)
+	if err := h.db.Table("login_sessions").
+		Where("session_id = ? AND is_active = ?", sessionID, true).
+		Updates(map[string]interface{}{
+			"expires_at":  newExpiry,
+			"last_used_at": time.Now(),
+		}).Error; err != nil {
+		log.Printf("[Auth] Failed to extend session on refresh: %v", err)
+	}
+
+	newToken, err := generateJWTWithSession(user.ID, user.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
@@ -450,7 +475,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		"message": "Token refreshed successfully",
 		"data": gin.H{
 			"token":      newToken,
-			"expires_at": time.Now().Add(24 * time.Hour),
+			"expires_at": newExpiry,
 			"user": gin.H{
 				"id":             user.ID,
 				"username":       user.Username,
@@ -542,16 +567,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	})
 }
 
+// generateJWT 已弃用：缺 type/session_id，JWTAuth 会拒绝。保留仅供测试/兼容探测。
 func generateJWT(userID string, username string) (string, error) {
-	claims := jwt.MapClaims{
-		"user_id":  userID,
-		"username": username,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(),
-		"iat":      time.Now().Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.GetJWTSecret()))
+	return generateJWTWithSession(userID, username, "legacy-no-session")
 }
 
 func generateJWTWithSession(userID string, username, sessionID string) (string, error) {
@@ -566,6 +584,22 @@ func generateJWTWithSession(userID string, username, sessionID string) (string, 
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(config.GetJWTSecret()))
+}
+
+// revokeAllLoginSessions 吊销用户全部登录会话（改密/重置密码后强制重登）
+func revokeAllLoginSessions(db *gorm.DB, userID string) {
+	if db == nil || userID == "" {
+		return
+	}
+	now := time.Now()
+	if err := db.Table("login_sessions").
+		Where("user_id = ? AND is_active = ?", userID, true).
+		Updates(map[string]interface{}{
+			"is_active":  false,
+			"revoked_at": now,
+		}).Error; err != nil {
+		log.Printf("[Auth] Failed to revoke login sessions for %s: %v", userID, err)
+	}
 }
 
 func generateSessionID() (string, error) {

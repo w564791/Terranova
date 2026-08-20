@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
-import { iamService } from '../../services/iam';
+import { iamService, getAuthOrgId, setAuthOrgId } from '../../services/iam';
 import { workspaceService } from '../../services/workspaces';
+import { apiFetch } from '../../services/api';
 import type {
   PermissionDefinition,
   Organization,
@@ -33,13 +34,8 @@ interface User {
   is_active: boolean;
 }
 
-// 工作空间接口
-interface Workspace {
-  id: number;
-  workspace_id: string;
-  name: string;
-  description: string;
-}
+// 工作空间：与 workspaces 服务类型对齐（避免本地窄接口与 API 不兼容）
+type Workspace = import('../../services/workspaces').Workspace;
 
 // 团队接口
 interface Team {
@@ -52,6 +48,7 @@ interface Team {
 interface Application {
   id: number;
   name: string;
+  app_key?: string;
 }
 
 const GrantPermission: React.FC = () => {
@@ -72,14 +69,17 @@ const GrantPermission: React.FC = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [activeOrgId, setActiveOrgId] = useState<number | null>(() => getAuthOrgId());
   
   const [loadingScopes, setLoadingScopes] = useState(false);
   const [loadingPrincipals, setLoadingPrincipals] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // 默认：从团队页面跳转时默认为授予权限，除非URL明确指定type=role
-  const [grantType, setGrantType] = useState<'permission' | 'role'>(
-    urlGrantType === 'role' ? 'role' : 'permission'
-  );
+  // D5：全部主体主路径为 Role（Direct Grant HTTP 已 410）
+  const [grantType, setGrantType] = useState<'permission' | 'role'>(() => {
+    // 遗留 type=permission 链接统一落到 role
+    void urlGrantType;
+    return 'role';
+  });
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<number>>(new Set());
 
   // 判断是否从特定上下文进入（如团队详情页）
@@ -90,7 +90,8 @@ const GrantPermission: React.FC = () => {
     scope_type: 'ORGANIZATION' as ScopeType,
     scope_id: 0 as number | string, // 支持数字 ID 和语义化 ID
     principal_type: (urlPrincipalType || 'USER') as PrincipalType,
-    principal_id: urlPrincipalId || 0,
+    // USER/TEAM 多为 id；APPLICATION 为 app_key 字符串
+    principal_id: (urlPrincipalId || '') as string | number,
     expires_at: '',
     reason: '',
   });
@@ -106,10 +107,15 @@ const GrantPermission: React.FC = () => {
   // 加载组织列表
   const loadOrganizations = async () => {
     try {
-      const response = await iamService.listOrganizations(true);
+      const response = await iamService.bootstrapActiveOrganization();
       setOrganizations(response.organizations || []);
-      if (response.organizations && response.organizations.length > 0) {
-        setGrantFormData((prev) => ({ ...prev, scope_id: response.organizations[0].id }));
+      if (response.active_org_id != null) {
+        setActiveOrgId(response.active_org_id);
+        setGrantFormData((prev) => (
+          prev.scope_type === 'ORGANIZATION' && !prev.scope_id
+            ? { ...prev, scope_id: response.active_org_id! }
+            : prev
+        ));
       }
     } catch (error: any) {
       console.error('加载组织列表失败:', error);
@@ -209,11 +215,7 @@ const GrantPermission: React.FC = () => {
   // 加载角色列表
   const loadRoles = async () => {
     try {
-      const response = await fetch('/api/v1/iam/roles', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
+      const response = await apiFetch('/iam/roles');
       if (response.ok) {
         const data = await response.json();
         setRoles(data.roles || []);
@@ -232,21 +234,21 @@ const GrantPermission: React.FC = () => {
 
   // 当作用域类型改变时，加载相应的作用域列表
   useEffect(() => {
-    if (grantFormData.scope_type === 'PROJECT' && organizations.length > 0) {
-      loadProjects(organizations[0].id);
+    if (grantFormData.scope_type === 'PROJECT' && activeOrgId != null) {
+      loadProjects(activeOrgId);
     } else if (grantFormData.scope_type === 'WORKSPACE') {
       loadWorkspaces();
     }
-  }, [grantFormData.scope_type, organizations]);
+  }, [grantFormData.scope_type, activeOrgId]);
 
   // 当主体类型改变时，加载相应的主体列表
   useEffect(() => {
-    if (grantFormData.principal_type === 'TEAM' && organizations.length > 0) {
-      loadTeams(organizations[0].id);
-    } else if (grantFormData.principal_type === 'APPLICATION' && organizations.length > 0) {
-      loadApplications(organizations[0].id);
+    if (grantFormData.principal_type === 'TEAM' && activeOrgId != null) {
+      loadTeams(activeOrgId);
+    } else if (grantFormData.principal_type === 'APPLICATION' && activeOrgId != null) {
+      loadApplications(activeOrgId);
     }
-  }, [grantFormData.principal_type, organizations]);
+  }, [grantFormData.principal_type, activeOrgId]);
 
   // 切换权限选择
   const togglePermission = (permissionId: string, level: PermissionLevel) => {
@@ -269,7 +271,7 @@ const GrantPermission: React.FC = () => {
       errors.scope_id = '请选择作用域';
     }
 
-    if (!grantFormData.principal_id || grantFormData.principal_id === 0) {
+    if (grantFormData.principal_id === '' || grantFormData.principal_id === 0 || grantFormData.principal_id == null) {
       errors.principal_id = '请选择主体';
     }
 
@@ -498,7 +500,7 @@ const GrantPermission: React.FC = () => {
     });
   };
 
-  // 分配角色（支持用户和团队）
+  // 分配角色（USER / TEAM / APPLICATION）
   const handleAssignRole = async () => {
     if (!grantFormData.principal_id || selectedRoleIds.size === 0) {
       showToast('请选择主体和角色', 'error');
@@ -510,10 +512,13 @@ const GrantPermission: React.FC = () => {
       let successCount = 0;
       let failCount = 0;
 
-      // 根据主体类型选择API端点
-      const apiPath = grantFormData.principal_type === 'TEAM' 
-        ? `/api/v1/iam/teams/${grantFormData.principal_id}/roles`
-        : `/api/v1/iam/users/${grantFormData.principal_id}/roles`;
+      // 根据主体类型选择 API 端点
+      const apiPath =
+        grantFormData.principal_type === 'TEAM'
+          ? `/api/v1/iam/teams/${grantFormData.principal_id}/roles`
+          : grantFormData.principal_type === 'APPLICATION'
+            ? `/api/v1/iam/applications/${grantFormData.principal_id}/roles`
+            : `/api/v1/iam/users/${grantFormData.principal_id}/roles`;
 
       // 为主体分配每个选中的角色
       for (const roleId of selectedRoleIds) {
@@ -532,11 +537,10 @@ const GrantPermission: React.FC = () => {
             requestBody.reason = grantFormData.reason;
           }
           
-          const response = await fetch(apiPath, {
+          const response = await apiFetch(apiPath, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
             },
             body: JSON.stringify(requestBody),
           });
@@ -585,20 +589,14 @@ const GrantPermission: React.FC = () => {
         <div>
           <h1 className={styles.title}>新增授权</h1>
           <p className={styles.description}>
-            为用户、团队或应用授予权限或分配角色。
+            用户 / 团队 / 应用请<strong>分配角色</strong>（Role 主模型）。单条权限 Direct Grant 已下线（API 410）。
+            应用细粒度 workspace 仍可用 <code>workspace_tag_filter</code>。
           </p>
         </div>
       </div>
 
-      {/* 授权类型选择 */}
+      {/* 授权类型：全部主体仅 Role */}
       <div className={styles.typeSelector}>
-        <button
-          type="button"
-          className={`${styles.typeButton} ${grantType === 'permission' ? styles.active : ''}`}
-          onClick={() => setGrantType('permission')}
-        >
-          授予权限
-        </button>
         <button
           type="button"
           className={`${styles.typeButton} ${grantType === 'role' ? styles.active : ''}`}
@@ -607,11 +605,13 @@ const GrantPermission: React.FC = () => {
           分配角色
         </button>
       </div>
-      {urlPrincipalType === 'TEAM' && (
-        <div className={styles.hint} style={{ marginTop: '8px', color: 'var(--brand)', fontSize: '14px', background: 'var(--brand-soft)', padding: '12px', borderRadius: '4px' }}>
-          提示：{grantType === 'permission' ? '为团队授予权限后，团队的所有成员将自动继承这些权限。' : '为团队分配角色后，团队的所有成员将自动继承角色包含的权限。'}
-        </div>
-      )}
+      <div className={styles.hint} style={{ marginTop: '8px', color: 'var(--brand)', fontSize: '14px', background: 'var(--brand-soft)', padding: '12px', borderRadius: '4px' }}>
+        {grantFormData.principal_type === 'APPLICATION'
+          ? '为应用分配角色（principal 存 app_key）。可配合 workspace_tag_filter；调用 /api/v1/app/*。详见 docs/iam/38、39。'
+          : grantFormData.principal_type === 'TEAM'
+          ? '为团队分配角色后，成员继承角色权限。不再支持为团队批量写入单条 permission。'
+          : '为用户分配角色（可多 Role、可指定 scope）。Direct Grant 已退役。'}
+      </div>
 
       {/* 授权表单 */}
       <form onSubmit={grantType === 'permission' ? handleGrantSubmit : (e) => { e.preventDefault(); handleAssignRole(); }} className={styles.grantForm}>
@@ -627,6 +627,7 @@ const GrantPermission: React.FC = () => {
               <select
                 className={styles.input}
                 value={grantFormData.scope_type}
+                disabled={grantFormData.principal_type === 'APPLICATION'}
                 onChange={(e) => {
                   const newScopeType = e.target.value as ScopeType;
                   setGrantFormData({
@@ -637,8 +638,12 @@ const GrantPermission: React.FC = () => {
                 }}
               >
                 <option value="ORGANIZATION">组织</option>
-                <option value="PROJECT">项目</option>
-                <option value="WORKSPACE">工作空间</option>
+                {grantFormData.principal_type !== 'APPLICATION' && (
+                  <>
+                    <option value="PROJECT">项目</option>
+                    <option value="WORKSPACE">工作空间</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -659,6 +664,11 @@ const GrantPermission: React.FC = () => {
                   const value = e.target.value;
                   // 如果是 workspace，保持字符串；否则转换为数字
                   const scopeId = grantFormData.scope_type === 'WORKSPACE' ? value : Number(value);
+                  if (grantFormData.scope_type === 'ORGANIZATION' && Number(value) > 0) {
+                    const orgId = Number(value);
+                    setAuthOrgId(orgId);
+                    setActiveOrgId(orgId);
+                  }
                   setGrantFormData({ ...grantFormData, scope_id: scopeId });
                 }}
                 disabled={loadingScopes}
@@ -725,14 +735,25 @@ const GrantPermission: React.FC = () => {
                     setGrantFormData({
                       ...grantFormData,
                       principal_type: newPrincipalType,
-                      principal_id: 0,
+                      principal_id: '',
+                      scope_type: newPrincipalType === 'APPLICATION' ? 'ORGANIZATION' : grantFormData.scope_type,
+                      scope_id: newPrincipalType === 'APPLICATION'
+                        ? (activeOrgId ?? 0)
+                        : grantFormData.scope_id,
                     });
+                    setGrantType('role');
                   }}
                 >
                   <option value="USER">用户</option>
                   <option value="TEAM">团队</option>
                   <option value="APPLICATION">应用</option>
                 </select>
+              )}
+              {grantFormData.principal_type === 'APPLICATION' && (
+                <small style={{ display: 'block', marginTop: 6, color: '#666', lineHeight: 1.4 }}>
+                  应用 Role 赋值使用 <strong>app_key</strong> 作为 principal。
+                  细粒度 workspace 用 <code>workspace_tag_filter</code>；调用 <code>/api/v1/app/*</code>（docs/iam/38、39）。
+                </small>
               )}
             </div>
 
@@ -743,7 +764,7 @@ const GrantPermission: React.FC = () => {
                   ? '用户'
                   : grantFormData.principal_type === 'TEAM'
                   ? '团队'
-                  : '应用'}
+                  : '应用（app_key）'}
                 <span className={styles.required}>*</span>
               </label>
               {isContextLocked ? (
@@ -755,7 +776,7 @@ const GrantPermission: React.FC = () => {
                       ? users.find(u => u.id === grantFormData.principal_id)?.username || `用户 #${grantFormData.principal_id}`
                       : grantFormData.principal_type === 'TEAM'
                       ? teams.find(t => t.id === grantFormData.principal_id)?.display_name || `团队 #${grantFormData.principal_id}`
-                      : applications.find(a => a.id === grantFormData.principal_id)?.name || `应用 #${grantFormData.principal_id}`
+                      : applications.find(a => a.app_key === grantFormData.principal_id || String(a.id) === String(grantFormData.principal_id))?.name || `应用 ${grantFormData.principal_id}`
                   }
                   disabled
                 />
@@ -793,8 +814,8 @@ const GrantPermission: React.FC = () => {
                     ))}
                   {grantFormData.principal_type === 'APPLICATION' &&
                     applications.map((app) => (
-                      <option key={app.id} value={app.id}>
-                        {app.name}
+                      <option key={app.id} value={app.app_key || String(app.id)}>
+                        {app.name} ({app.app_key || `id:${app.id}`})
                       </option>
                     ))}
                 </select>

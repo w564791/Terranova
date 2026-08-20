@@ -235,6 +235,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		apply_confirmed_at DATETIME,
 		is_background INTEGER DEFAULT 0,
 		state_token_hash TEXT,
+		snapshot_manifest_version_id TEXT,
+		external_files TEXT,
+		variable_overrides TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)

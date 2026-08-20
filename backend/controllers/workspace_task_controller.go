@@ -30,6 +30,41 @@ type WorkspaceTaskController struct {
 	}
 }
 
+// loadTaskInPathWorkspace resolves the workspace named by the route and then
+// loads a task bound to that exact semantic workspace ID.  Route middleware
+// authorizes the workspace path, but task IDs are global, so every nested
+// task endpoint must also make this binding before reading or mutating a task.
+// On failure it writes the HTTP response and callers must return immediately.
+func loadTaskInPathWorkspace(db *gorm.DB, ctx *gin.Context, taskID uint) (*models.Workspace, *models.WorkspaceTask, bool) {
+	workspaceIDParam := ctx.Param("id")
+	if workspaceIDParam == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return nil, nil, false
+	}
+
+	var workspace models.Workspace
+	err := db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
+	if err != nil {
+		if err := db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+			return nil, nil, false
+		}
+	}
+
+	var task models.WorkspaceTask
+	if err := db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).First(&task).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return nil, nil, false
+	}
+	return &workspace, &task, true
+}
+
+// loadTaskInPathWorkspace is kept as a method for existing workspace task
+// handlers. AI sub-resources use the shared helper above as well.
+func (c *WorkspaceTaskController) loadTaskInPathWorkspace(ctx *gin.Context, taskID uint) (*models.Workspace, *models.WorkspaceTask, bool) {
+	return loadTaskInPathWorkspace(c.db, ctx, taskID)
+}
+
 // NewWorkspaceTaskController 创建任务控制器
 func NewWorkspaceTaskController(
 	db *gorm.DB,
@@ -159,11 +194,13 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 	// Variable snapshot: use provided vsnap_id or create new one
 	var vsnapID *string
 	if req.VariableSnapshotID != nil && *req.VariableSnapshotID != "" {
-		// API user provided existing snapshot — validate it exists
+		// 必须属于当前 workspace（防跨 WS 变量/敏感值注入 A-3.2）
 		var count int64
-		c.db.Model(&models.VariableSnapshot{}).Where("vsnap_id = ?", *req.VariableSnapshotID).Count(&count)
+		c.db.Model(&models.VariableSnapshot{}).
+			Where("vsnap_id = ? AND workspace_id = ?", *req.VariableSnapshotID, workspace.WorkspaceID).
+			Count(&count)
 		if count == 0 {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "variable_snapshot_id not found: " + *req.VariableSnapshotID})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "variable_snapshot_id not found in this workspace"})
 			return
 		}
 		vsnapID = req.VariableSnapshotID
@@ -315,52 +352,25 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id} [get]
 // @Security BearerAuth
 func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
-		return
-	}
-
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
-	// 获取workspace (支持语义化ID和数字ID)
-	var workspace models.Workspace
-	err = c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
+	workspace, taskPtr, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID))
+	if !ok {
+		return
 	}
+	task := *taskPtr
 
-	// log.Printf("[DEBUG] GetTask: workspace_id=%s, task_id=%d, using workspace.WorkspaceID=%s",
-	// 	workspaceIDParam, taskID, workspace.WorkspaceID)
-
-	var task models.WorkspaceTask
-
-	// 根据workspace配置决定是否排除plan_json和快照字段
-	if workspace.ShowUnchangedResources {
-		// 返回完整数据（包括plan_json）
-		if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
-			First(&task).Error; err != nil {
-			log.Printf("[ERROR] GetTask query failed: id=%d, workspace_id=%s, error=%v",
-				taskID, workspace.WorkspaceID, err)
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-			return
-		}
-	} else {
-		// 排除plan_json和快照字段以减少响应大小
-		if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
+	// 根据 workspace 配置决定是否排除 plan_json 和快照字段
+	if !workspace.ShowUnchangedResources {
+		var slim models.WorkspaceTask
+		if err := c.db.Where("id = ? AND workspace_id = ?", task.ID, workspace.WorkspaceID).
 			Omit("plan_json", "snapshot_resource_versions", "snapshot_provider_config").
-			First(&task).Error; err != nil {
-			log.Printf("[ERROR] GetTask query failed: id=%d, workspace_id=%s, error=%v",
-				taskID, workspace.WorkspaceID, err)
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-			return
+			First(&slim).Error; err == nil {
+			task = slim
 		}
 	}
 
@@ -711,6 +721,11 @@ func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
 		return
 	}
 
+	// 任务必须属于路径 workspace（防跨 WS 读日志）
+	if _, _, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID)); !ok {
+		return
+	}
+
 	logs, err := c.executor.GetTaskLogs(uint(taskID))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs"})
@@ -740,12 +755,6 @@ func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply [post]
 // @Security BearerAuth
 func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
-		return
-	}
-
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
@@ -761,23 +770,12 @@ func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
 		return
 	}
 
-	// 获取workspace (支持语义化ID和数字ID)
-	var workspace models.Workspace
-	err = c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
-	}
-
-	// 获取任务
-	var task models.WorkspaceTask
-	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
-		First(&task).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	workspace, taskPtr, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID))
+	if !ok {
 		return
 	}
+	task := *taskPtr
+	_ = workspace
 
 	// 验证任务类型
 	if task.TaskType != models.TaskTypePlanAndApply {
@@ -906,34 +904,17 @@ func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/cancel-previous [post]
 // @Security BearerAuth
 func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
-		return
-	}
-
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
-	// 获取workspace (支持语义化ID和数字ID)
-	var workspace models.Workspace
-	err = c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
-	}
-
-	// 获取当前任务
-	var currentTask models.WorkspaceTask
-	if err := c.db.First(&currentTask, taskID).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	workspace, taskPtr, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID))
+	if !ok {
 		return
 	}
+	currentTask := *taskPtr
 
 	// 只允许对pending状态的任务执行此操作
 	if currentTask.Status != models.TaskStatusPending {
@@ -1044,11 +1025,11 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 		return
 	}
 
-	var task models.WorkspaceTask
-	if err := c.db.First(&task, taskID).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	_, taskPtr, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID))
+	if !ok {
 		return
 	}
+	task := *taskPtr
 
 	// 只能取消未完成的任务（不能取消success、applied、failed、cancelled）
 	if task.Status == models.TaskStatusSuccess ||
@@ -1205,34 +1186,17 @@ func timePtr(t time.Time) *time.Time {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/retry-state-save [post]
 // @Security BearerAuth
 func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
-		return
-	}
-
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
-	// 获取workspace (支持语义化ID和数字ID)
-	var workspace models.Workspace
-	err = c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
-	}
-
-	var task models.WorkspaceTask
-	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
-		First(&task).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	workspace, taskPtr, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID))
+	if !ok {
 		return
 	}
+	task := *taskPtr
 
 	// 检查是否是State保存失败的任务
 	if !strings.Contains(task.ErrorMessage, "state save failed") {
@@ -1298,7 +1262,7 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 	}
 
 	// 重新保存到数据库
-	if err := c.executor.SaveStateToDatabase(&workspace, &task, stateData); err != nil {
+	if err := c.executor.SaveStateToDatabase(workspace, &task, stateData); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to save state: %v", err),
 		})
@@ -1335,34 +1299,17 @@ func (c *WorkspaceTaskController) RetryStateSave(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/state-backup [get]
 // @Security BearerAuth
 func (c *WorkspaceTaskController) DownloadStateBackup(ctx *gin.Context) {
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
-		return
-	}
-
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
-	// 获取workspace (支持语义化ID和数字ID)
-	var workspace models.Workspace
-	err = c.db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
-	}
-
-	var task models.WorkspaceTask
-	if err := c.db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).
-		First(&task).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	_, taskPtr, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID))
+	if !ok {
 		return
 	}
+	task := *taskPtr
 
 	// 从错误信息中提取备份路径
 	backupPath := extractBackupPath(task.ErrorMessage)
@@ -1436,10 +1383,8 @@ func (c *WorkspaceTaskController) CreateComment(ctx *gin.Context) {
 		return
 	}
 
-	// 验证任务是否存在（task_id是唯一的，不需要workspace验证）
-	var task models.WorkspaceTask
-	if err := c.db.First(&task, taskID).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	// 任务必须属于路径中的 workspace（防跨 WS IDOR）
+	if _, _, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID)); !ok {
 		return
 	}
 
@@ -1495,10 +1440,8 @@ func (c *WorkspaceTaskController) GetComments(ctx *gin.Context) {
 		return
 	}
 
-	// 验证任务是否存在（task_id是唯一的，不需要workspace验证）
-	var task models.WorkspaceTask
-	if err := c.db.First(&task, taskID).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	// 任务必须属于路径中的 workspace（防跨 WS IDOR）
+	if _, _, ok := c.loadTaskInPathWorkspace(ctx, uint(taskID)); !ok {
 		return
 	}
 

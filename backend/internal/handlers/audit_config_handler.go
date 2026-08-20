@@ -34,6 +34,10 @@ type AuditConfig struct {
 // @Success 200 {object} AuditConfig
 // @Router /api/v1/iam/audit/config [get]
 func (h *AuditConfigHandler) GetAuditConfig(c *gin.Context) {
+	// 全局 system_configs：仅平台超管可读改（防 org 审计 admin 改全站开关）
+	if !requireSystemAdmin(c) {
+		return
+	}
 	var config AuditConfig
 
 	// 从system_configs表读取配置（value是JSONB类型，存储为字符串）
@@ -88,6 +92,9 @@ func (h *AuditConfigHandler) GetAuditConfig(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/config [put]
 func (h *AuditConfigHandler) UpdateAuditConfig(c *gin.Context) {
+	if !requireSystemAdmin(c) {
+		return
+	}
 	var config AuditConfig
 	if err := c.ShouldBindJSON(&config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -57,3 +57,14 @@ func (s ScopeType) GetPriority() int {
 func (s ScopeType) IsMoreSpecificThan(target ScopeType) bool {
 	return s.GetPriority() > target.GetPriority()
 }
+
+// CanHostPolicyFor reports whether a Role policy may be assigned at s for a
+// resource whose native scope is resourceScope. A policy scope describes the
+// scope of the Role assignment, not the physical scope of the resource. For
+// example, a WORKSPACE_EXECUTION policy may be granted to a Role at
+// ORGANIZATION, PROJECT, or WORKSPACE scope; an ORGANIZATION resource may be
+// granted only at ORGANIZATION scope. Allowing the inverse direction would
+// make a narrow object scope govern a broader parent resource.
+func (s ScopeType) CanHostPolicyFor(resourceScope ScopeType) bool {
+	return s.IsValid() && resourceScope.IsValid() && s.GetPriority() <= resourceScope.GetPriority()
+}

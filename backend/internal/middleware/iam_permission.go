@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,15 +18,157 @@ import (
 
 // IAMPermissionMiddleware IAM权限检查中间件
 type IAMPermissionMiddleware struct {
-	permissionChecker service.PermissionChecker
+	permissionChecker   service.PermissionChecker
+	workspaceListAccess service.WorkspaceListAccessResolver
 }
 
 // NewIAMPermissionMiddleware 创建IAM权限中间件
 func NewIAMPermissionMiddleware(db *gorm.DB) *IAMPermissionMiddleware {
 	factory := iam.NewServiceFactory(db)
+	checker := factory.GetPermissionChecker()
 	return &IAMPermissionMiddleware{
-		permissionChecker: factory.GetPermissionChecker(),
+		permissionChecker:   checker,
+		workspaceListAccess: service.NewWorkspaceListAccessService(db, checker),
 	}
+}
+
+// NewIAMPermissionMiddlewareWithChecker 注入自定义 checker（测试 / 自定义 wiring）
+func NewIAMPermissionMiddlewareWithChecker(checker service.PermissionChecker) *IAMPermissionMiddleware {
+	return &IAMPermissionMiddleware{permissionChecker: checker}
+}
+
+// principalFromContext 从 JWT 上下文解析主体（USER / TEAM / APPLICATION）
+// 业务 IAM 不再旁路 system_admin；平台级 API 请使用 RequireSystemAdmin()。
+func principalFromContext(c *gin.Context) (userID string, pt valueobject.PrincipalType, pid string, ok bool) {
+	raw, exists := c.Get("user_id")
+	if !exists {
+		return "", "", "", false
+	}
+	userID, _ = raw.(string)
+	if userID == "" {
+		return "", "", "", false
+	}
+
+	pt = valueobject.PrincipalTypeUser
+	if v, exists := c.Get("principal_type"); exists {
+		if s, ok := v.(string); ok && s != "" {
+			if parsed, err := valueobject.ParsePrincipalType(s); err == nil {
+				pt = parsed
+			}
+		}
+	}
+	if v, exists := c.Get("principal_id"); exists {
+		if s, ok := v.(string); ok && s != "" {
+			pid = s
+		}
+	}
+	if pid == "" {
+		pid = userID
+	}
+	return userID, pt, pid, true
+}
+
+// resolveOrgScopeID 解析组织 scope_id：path :org_id → path :id(组织路由) → query → context auth_org_id
+// 多租户：缺失 org_id 返回 error（400）。
+// 单租户：仅当 IAM_SINGLE_TENANT=1|true 时才默认 org=1（C5）。
+// Application 鉴权（选项 A）会在 AgentAuth 写入 auth_org_id，可作回退（不得跨 org 覆盖 query）。
+func resolveOrgScopeID(c *gin.Context) (uint, error) {
+	scopeID := c.Param("org_id")
+	if scopeID == "" {
+		if strings.Contains(c.FullPath(), "/organizations/") || strings.Contains(c.FullPath(), "/orgs/") {
+			scopeID = c.Param("id")
+		}
+	}
+	if scopeID == "" {
+		scopeID = c.Query("org_id")
+	}
+	if scopeID == "" {
+		// Application principal：使用密钥所属 org
+		if raw, ok := c.Get("auth_org_id"); ok {
+			switch v := raw.(type) {
+			case uint:
+				if v > 0 {
+					return v, nil
+				}
+			case int:
+				if v > 0 {
+					return uint(v), nil
+				}
+			case float64:
+				if v > 0 {
+					return uint(v), nil
+				}
+			}
+		}
+	}
+	if scopeID == "" {
+		if isSingleTenantIAM() {
+			log.Printf("[IAM] org scope missing org_id on %s %s, IAM_SINGLE_TENANT defaulting to 1",
+				c.Request.Method, c.Request.URL.Path)
+			scopeID = "1"
+		} else {
+			return 0, fmt.Errorf("org_id is required")
+		}
+	}
+	var scopeIDUint uint
+	if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
+		return 0, fmt.Errorf("invalid org_id")
+	}
+	// Application：query/path 指定的 org 不得超出 app 所属 org
+	if raw, ok := c.Get("auth_org_id"); ok {
+		var appOrg uint
+		switch v := raw.(type) {
+		case uint:
+			appOrg = v
+		case int:
+			if v > 0 {
+				appOrg = uint(v)
+			}
+		case float64:
+			if v > 0 {
+				appOrg = uint(v)
+			}
+		}
+		if appOrg > 0 && scopeIDUint != appOrg {
+			if pt, exists := c.Get("principal_type"); exists {
+				if s, ok := pt.(string); ok && strings.EqualFold(s, "APPLICATION") {
+					return 0, fmt.Errorf("org_id %d outside application org %d", scopeIDUint, appOrg)
+				}
+			}
+		}
+	}
+	return scopeIDUint, nil
+}
+
+// isSingleTenantIAM 是否启用单租户 org 默认 1（环境变量 IAM_SINGLE_TENANT）
+func isSingleTenantIAM() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("IAM_SINGLE_TENANT")))
+	return v == "1" || v == "true" || v == "yes"
+}
+
+// AuthOrgID returns the organization resolved by an IAM permission middleware.
+// Handlers use this value as the data-access boundary; callers must reject a
+// missing value instead of falling back to an unscoped query.
+func AuthOrgID(c *gin.Context) (uint, bool) {
+	raw, ok := c.Get("auth_org_id")
+	if !ok {
+		return 0, false
+	}
+
+	switch v := raw.(type) {
+	case uint:
+		return v, v > 0
+	case int:
+		if v > 0 {
+			return uint(v), true
+		}
+	case float64:
+		if v > 0 {
+			return uint(v), true
+		}
+	}
+
+	return 0, false
 }
 
 // RequirePermission 要求特定权限的中间件工厂函数
@@ -35,15 +179,8 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 	requiredLevel string,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 0. 系统管理员直接通过（is_system_admin 仅在系统初始化时设置）
-		if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
-			c.Next()
-			return
-		}
-
-		// 1. 获取用户ID
-		userID, exists := c.Get("user_id")
-		if !exists {
+		userID, principalType, principalID, ok := principalFromContext(c)
+		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      401,
 				"message":   "User not authenticated",
@@ -53,11 +190,9 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 			return
 		}
 
-		// 2. 从路径参数或查询参数获取scope_id
 		var scopeIDUint uint
 		var scopeIDStr string
 
-		// 解析scope_type以确定如何获取scope_id
 		st, err := valueobject.ParseScopeType(scopeType)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -69,25 +204,27 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 			return
 		}
 
-		// 根据scope_type决定如何获取scope_id
 		if st == valueobject.ScopeTypeOrganization {
-			// 组织级别权限：优先从查询参数获取org_id
-			// TODO: 多组织架构时需要移除默认值，要求显式传入 org_id
-			scopeID := c.Query("org_id")
-			if scopeID == "" {
-				scopeID = "1" // 当前单组织默认值
+			scopeIDUint, err = resolveOrgScopeID(c)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":      400,
+					"message":   "invalid org_id",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
 			}
-			if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
-				scopeIDUint = 1
-			}
+			// 供 handler 二次绑定（Application / Role assignment 等防跨 org）
+			c.Set("auth_org_id", scopeIDUint)
 		} else {
-			// 工作空间或项目级别权限：从路径参数获取，必须显式指定
 			scopeID := c.Param("id")
 			if scopeID == "" {
 				scopeID = c.Query("scope_id")
 			}
 			if scopeID == "" {
-				log.Printf("[IAM] Missing scope_id for %s %s, user=%v", c.Request.Method, c.Request.URL.Path, userID)
+				log.Printf("[IAM] Missing scope_id for %s %s, principal=%s/%s",
+					c.Request.Method, c.Request.URL.Path, principalType, principalID)
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code":      400,
 					"message":   "scope_id or path parameter :id is required",
@@ -96,16 +233,12 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 				c.Abort()
 				return
 			}
-
-			// 尝试解析为数字，如果失败则保留为字符串（可能是语义化ID）
 			if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
-				// 不是数字，可能是语义化ID（如 ws-xxx）
 				scopeIDStr = scopeID
-				scopeIDUint = 0 // 设为0，让CheckPermission通过ScopeIDStr处理
+				scopeIDUint = 0
 			}
 		}
 
-		// 3. 解析其他参数
 		rt, err := valueobject.ParseResourceType(resourceType)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -128,19 +261,20 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 			return
 		}
 
-		// 4. 检查权限
 		req := &service.CheckPermissionRequest{
-			UserID:        userID.(string),
+			UserID:        userID,
+			PrincipalType: principalType,
+			PrincipalID:   principalID,
 			ResourceType:  rt,
 			ScopeType:     st,
 			ScopeID:       scopeIDUint,
-			ScopeIDStr:    scopeIDStr, // 支持语义化ID
+			ScopeIDStr:    scopeIDStr,
 			RequiredLevel: rl,
 		}
 
 		result, err := m.permissionChecker.CheckPermission(c.Request.Context(), req)
 		if err != nil {
-			log.Printf("[IAM] Permission check failed for user %s: %v", userID, err)
+			log.Printf("[IAM] Permission check failed for principal %s/%s: %v", principalType, principalID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":      500,
 				"message":   "Permission check failed",
@@ -150,9 +284,7 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 			return
 		}
 
-		// 5. 判断是否允许访问
 		if !result.IsAllowed {
-			// 设置错误信息到context，供审计日志使用
 			denyMsg := fmt.Sprintf("Permission denied: %s (required: %s, effective: %s)",
 				result.DenyReason, requiredLevel, result.EffectiveLevel.String())
 			c.Set("error", denyMsg)
@@ -169,29 +301,154 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 			return
 		}
 
-		// 6. 权限检查通过，继续处理请求
 		c.Set("permission_check_result", result)
 		c.Next()
 	}
 }
 
+// RequireWorkspaceListAccess authorizes GET /workspaces without assuming that
+// every authorized principal has an organization-wide WORKSPACES grant. It
+// keeps the organization-level fast path, while scoped Role/direct/team grants
+// are converted to an explicit allow-list that the controller must use in its
+// SQL query. Thus a project/workspace grant can enumerate its descendants but
+// never sibling workspaces.
+//
+// A principal with no list capability in the selected organization receives the
+// same 403 shape as the previous organization-only route. A valid org/project
+// grant receives 200 even when its currently visible workspace set is empty.
+func (m *IAMPermissionMiddleware) RequireWorkspaceListAccess() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, principalType, principalID, ok := principalFromContext(c)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":      401,
+				"message":   "User not authenticated",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		orgID, err := resolveOrgScopeID(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":      400,
+				"message":   "invalid org_id",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+		c.Set("auth_org_id", orgID)
+
+		if m.workspaceListAccess == nil {
+			log.Printf("[IAM] workspace list access resolver is not configured")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":      500,
+				"message":   "Permission check failed",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		access, err := m.workspaceListAccess.ResolveWorkspaceListAccess(c.Request.Context(), service.WorkspaceListAccessRequest{
+			UserID:        userID,
+			PrincipalType: principalType,
+			PrincipalID:   principalID,
+			OrgID:         orgID,
+		})
+		if err != nil {
+			log.Printf("[IAM] workspace list permission check failed for %s/%s in org %d: %v",
+				principalType, principalID, orgID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":      500,
+				"message":   "Permission check failed",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		if access == nil || !access.HasAccess {
+			c.Set("error", "Permission denied: no readable workspaces in organization")
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":      403,
+				"message":   "Permission denied",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		c.Set(service.WorkspaceListAccessContextKey, access)
+		c.Next()
+	}
+}
+
+// CheckWorkspaceOrOrgWorkspacesRead 允许：
+//   - WORKSPACE_MANAGEMENT READ @ workspace，或
+//   - WORKSPACES READ @ organization（鉴权 org）
+//
+// 用于 Application principal 读 workspace 详情等。失败时写 403/401 并返回 false。
+func (m *IAMPermissionMiddleware) CheckWorkspaceOrOrgWorkspacesRead(c *gin.Context, workspaceSemanticID string) bool {
+	userID, principalType, principalID, ok := principalFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401, "message": "User not authenticated", "timestamp": time.Now(),
+		})
+		return false
+	}
+	// 1) workspace 级
+	wsReq := &service.CheckPermissionRequest{
+		UserID:        userID,
+		PrincipalType: principalType,
+		PrincipalID:   principalID,
+		ResourceType:  valueobject.ResourceTypeWorkspaceManagement,
+		ScopeType:     valueobject.ScopeTypeWorkspace,
+		ScopeIDStr:    workspaceSemanticID,
+		RequiredLevel: valueobject.PermissionLevelRead,
+	}
+	if m.permissionChecker != nil {
+		if r, err := m.permissionChecker.CheckPermission(c.Request.Context(), wsReq); err == nil && r != nil && r.IsAllowed {
+			return true
+		}
+	}
+	// 2) org 级 WORKSPACES READ
+	orgID, err := resolveOrgScopeID(c)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code": 403, "message": "Permission denied", "timestamp": time.Now(),
+		})
+		return false
+	}
+	orgReq := &service.CheckPermissionRequest{
+		UserID:        userID,
+		PrincipalType: principalType,
+		PrincipalID:   principalID,
+		ResourceType:  valueobject.ResourceTypeAllWorkspaces,
+		ScopeType:     valueobject.ScopeTypeOrganization,
+		ScopeID:       orgID,
+		RequiredLevel: valueobject.PermissionLevelRead,
+	}
+	if m.permissionChecker != nil {
+		if r, err := m.permissionChecker.CheckPermission(c.Request.Context(), orgReq); err == nil && r != nil && r.IsAllowed {
+			return true
+		}
+	}
+	c.JSON(http.StatusForbidden, gin.H{
+		"code": 403, "message": "Permission denied", "timestamp": time.Now(),
+	})
+	return false
+}
+
 // RequireWorkspacePermission 在 handler 内部对"运行时才知道的 workspace"做权限校验。
-//
-// 用于 manifest 部署类操作(install/upgrade/uninstall):目标 workspace 藏在请求体或
-// deployment 记录里,路由中间件拿不到,只能在 handler 取到 workspaceID 后调用本方法。
-// 校验 WORKSPACE_MANAGEMENT@WORKSPACE 维度(与 router_workspace.go 的 workspace 写操作一致)。
-//
-// 通过返回 true;失败时已写 403/401/500 响应并返回 false,调用方应直接 return。
-// 系统管理员直接放行。
+// 系统管理员不再旁路；需持有对应 Role/grant。
 func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
 	c *gin.Context, workspaceID string, requiredLevel string,
 ) bool {
-	if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
-		return true
-	}
-
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userID, principalType, principalID, ok := principalFromContext(c)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code": 401, "message": "User not authenticated", "timestamp": time.Now(),
 		})
@@ -214,15 +471,18 @@ func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
 	}
 
 	req := &service.CheckPermissionRequest{
-		UserID:        userID.(string),
+		UserID:        userID,
+		PrincipalType: principalType,
+		PrincipalID:   principalID,
 		ResourceType:  rt,
 		ScopeType:     valueobject.ScopeTypeWorkspace,
-		ScopeIDStr:    workspaceID, // workspace 语义化ID (ws-xxx)
+		ScopeIDStr:    workspaceID,
 		RequiredLevel: rl,
 	}
 	result, err := m.permissionChecker.CheckPermission(c.Request.Context(), req)
 	if err != nil {
-		log.Printf("[IAM] Workspace permission check failed for user %s ws %s: %v", userID, workspaceID, err)
+		log.Printf("[IAM] Workspace permission check failed for %s/%s ws %s: %v",
+			principalType, principalID, workspaceID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500, "message": "Permission check failed", "timestamp": time.Now(),
 		})
@@ -247,14 +507,8 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 	permissions []PermissionRequirement,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 0. 系统管理员直接通过（is_system_admin 仅在系统初始化时设置）
-		if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
-			c.Next()
-			return
-		}
-
-		userID, exists := c.Get("user_id")
-		if !exists {
+		userID, principalType, principalID, ok := principalFromContext(c)
+		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      401,
 				"message":   "User not authenticated",
@@ -264,35 +518,56 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 			return
 		}
 
-		// 检查是否有任意一个权限满足
-		// 注意：scope_id的解析需要根据每个权限要求的scope_type分别处理
-		// ORGANIZATION scope使用org_id（默认1），其他scope使用路径参数:id
+		// 预解析 org scope；非法则 400（与 RequirePermission 对齐）
+		var orgScopeID uint
+		var orgScopeErr error
+		needOrg := false
 		for _, perm := range permissions {
-			rt, _ := valueobject.ParseResourceType(perm.ResourceType)
-			st, _ := valueobject.ParseScopeType(perm.ScopeType)
-			rl, _ := valueobject.ParsePermissionLevel(perm.RequiredLevel)
+			if perm.ScopeType == "ORGANIZATION" {
+				needOrg = true
+				break
+			}
+		}
+		if needOrg {
+			orgScopeID, orgScopeErr = resolveOrgScopeID(c)
+			if orgScopeErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":      400,
+					"message":   "invalid org_id",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			// 与 RequirePermission 对齐：供 handler/二次绑定使用
+			c.Set("auth_org_id", orgScopeID)
+		}
+
+		for _, perm := range permissions {
+			rt, err := valueobject.ParseResourceType(perm.ResourceType)
+			if err != nil {
+				continue
+			}
+			st, err := valueobject.ParseScopeType(perm.ScopeType)
+			if err != nil {
+				continue
+			}
+			rl, err := valueobject.ParsePermissionLevel(perm.RequiredLevel)
+			if err != nil {
+				continue
+			}
 
 			var scopeIDUint uint
 			var scopeIDStr string
 
 			if st == valueobject.ScopeTypeOrganization {
-				// 组织级别权限：使用org_id查询参数
-				// TODO: 多组织架构时需要移除默认值
-				scopeID := c.Query("org_id")
-				if scopeID == "" {
-					scopeID = "1"
-				}
-				if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
-					scopeIDUint = 1
-				}
+				scopeIDUint = orgScopeID
 			} else {
-				// 工作空间或项目级别权限：从路径参数获取，必须显式指定
 				scopeID := c.Param("id")
 				if scopeID == "" {
 					scopeID = c.Query("scope_id")
 				}
 				if scopeID == "" {
-					// 跳过此权限检查（RequireAnyPermission 中其他权限可能匹配）
 					continue
 				}
 				if _, err := fmt.Sscanf(scopeID, "%d", &scopeIDUint); err != nil || scopeIDUint == 0 {
@@ -302,7 +577,9 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 			}
 
 			req := &service.CheckPermissionRequest{
-				UserID:        userID.(string),
+				UserID:        userID,
+				PrincipalType: principalType,
+				PrincipalID:   principalID,
 				ResourceType:  rt,
 				ScopeType:     st,
 				ScopeID:       scopeIDUint,
@@ -312,17 +589,13 @@ func (m *IAMPermissionMiddleware) RequireAnyPermission(
 
 			result, err := m.permissionChecker.CheckPermission(c.Request.Context(), req)
 			if err == nil && result.IsAllowed {
-				// 有一个权限满足，允许访问
 				c.Set("permission_check_result", result)
 				c.Next()
 				return
 			}
 		}
 
-		// 所有权限都不满足
-		// 设置错误信息到context，供审计日志使用
 		c.Set("error", "Permission denied: none of the required permissions are granted")
-
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":      403,
 			"message":   "Permission denied: none of the required permissions are granted",
@@ -339,3 +612,79 @@ type PermissionRequirement struct {
 	RequiredLevel string
 }
 
+// EnforceWorkspaceOrgBinding 对带 path :id 的 workspace 路由强制「资源 ∈ 鉴权 org」。
+// 无 :id（列表/创建）时跳过。跨租户返回 404，避免枚举。
+// 应挂在 /workspaces 路由组 JWT 之后；自行 resolve org_id 并写入 auth_org_id。
+func EnforceWorkspaceOrgBinding(db *gorm.DB) gin.HandlerFunc {
+	return EnforceWorkspaceOrgBindingForParam(db, "id")
+}
+
+// EnforceWorkspaceOrgBindingForParam is the same tenant boundary as
+// EnforceWorkspaceOrgBinding, for routes whose workspace path parameter is
+// not named :id (for example CMDB's :workspace_id).
+func EnforceWorkspaceOrgBindingForParam(db *gorm.DB, workspaceParam string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		workspaceID := c.Param(workspaceParam)
+		if workspaceID == "" {
+			c.Next()
+			return
+		}
+		if db == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500, "message": "Workspace authorization is unavailable", "timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		orgID, err := resolveOrgScopeID(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":      400,
+				"message":   "invalid org_id",
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+		c.Set("auth_org_id", orgID)
+
+		// 数字主键或语义化 ID → 语义化 workspace_id
+		semanticID := workspaceID
+		var numID uint
+		if _, err := fmt.Sscanf(workspaceID, "%d", &numID); err == nil && numID > 0 {
+			var sem string
+			if err := db.WithContext(c.Request.Context()).
+				Table("workspaces").Select("workspace_id").
+				Where("id = ?", numID).Scan(&sem).Error; err != nil || sem == "" {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code": 404, "message": "Workspace not found", "timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			semanticID = sem
+		}
+
+		// A workspace must have exactly one project relationship. If corrupted
+		// data contains duplicates, fail closed instead of choosing an arbitrary
+		// tenant with LIMIT 1.
+		var binding struct {
+			RelationCount int64 `gorm:"column:relation_count"`
+			OrgID         uint  `gorm:"column:org_id"`
+		}
+		err = db.WithContext(c.Request.Context()).Raw(`
+SELECT COUNT(*) AS relation_count, MIN(p.org_id) AS org_id
+FROM workspace_project_relations wpr
+JOIN projects p ON p.id = wpr.project_id
+WHERE wpr.workspace_id = ?`, semanticID).Scan(&binding).Error
+		if err != nil || binding.RelationCount != 1 || binding.OrgID == 0 || binding.OrgID != orgID {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code": 404, "message": "Workspace not found", "timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

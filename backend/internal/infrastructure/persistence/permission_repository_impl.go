@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -32,8 +33,23 @@ func (r *PermissionRepositoryImpl) QueryOrgPermissions(
 	var permissions []*entity.OrgPermission
 
 	query := r.db.WithContext(ctx).
+		Model(&entity.OrgPermission{}).
+		Select("org_permissions.*").
 		Preload("Permission").
-		Where("org_id = ? AND principal_type = ?", orgID, principalType)
+		Where("org_permissions.org_id = ? AND org_permissions.principal_type = ?", orgID, principalType)
+
+	// Direct Application grants are valid only when the referenced application
+	// belongs to the organization that owns the grant.  Keep both app_key and
+	// numeric-id matching during the legacy transition, but bind either form to
+	// the same tenant before it can contribute authority.
+	if principalType == valueobject.PrincipalTypeApplication {
+		query = query.Joins(`JOIN applications AS permission_application
+  ON permission_application.org_id = org_permissions.org_id
+ AND (
+      permission_application.app_key = org_permissions.principal_id
+      OR CAST(permission_application.id AS TEXT) = org_permissions.principal_id
+ )`)
+	}
 
 	if len(principalIDs) > 0 {
 		query = query.Where("principal_id IN ?", principalIDs)
@@ -278,10 +294,17 @@ func (r *PermissionRepositoryImpl) ListPermissionsByScope(
 		}
 
 	case valueobject.ScopeTypeWorkspace:
+		// workspace_permissions.workspace_id 存语义化 ID，scopeID 为数字主键
+		var wsSem string
+		if err := r.db.WithContext(ctx).Table("workspaces").
+			Select("workspace_id").Where("id = ?", scopeID).Scan(&wsSem).Error; err != nil || wsSem == "" {
+			// 兼容：调用方已传语义化字符串被错误 parse 为 0 时直接无结果
+			return grants, nil
+		}
 		var wsPerms []*entity.WorkspacePermission
 		if err := r.db.WithContext(ctx).
 			Preload("Permission").
-			Where("workspace_id = ?", scopeID).
+			Where("workspace_id = ?", wsSem).
 			Find(&wsPerms).Error; err != nil {
 			return nil, err
 		}
@@ -335,20 +358,34 @@ func (r *PermissionRepositoryImpl) GetPresetPermissions(
 	return presetPerms, nil
 }
 
-// CheckTemporaryPermission 检查临时权限
+// CheckTemporaryPermission 检查临时权限（user_email OR user_id 双键匹配）
 func (r *PermissionRepositoryImpl) CheckTemporaryPermission(
 	ctx context.Context,
 	taskID uint,
 	userEmail string,
+	userID string,
 	permissionType string,
 ) (*entity.TaskTemporaryPermission, error) {
 	var tempPerm entity.TaskTemporaryPermission
 
-	err := r.db.WithContext(ctx).
-		Where("task_id = ? AND user_email = ? AND permission_type = ? AND expires_at > ? AND is_used = ?",
-			taskID, userEmail, permissionType, gorm.Expr("NOW()"), false).
-		First(&tempPerm).Error
+	q := r.db.WithContext(ctx).Model(&entity.TaskTemporaryPermission{}).
+		Where("task_id = ? AND permission_type = ? AND expires_at > ? AND is_used = ?",
+			taskID, permissionType, gorm.Expr("NOW()"), false)
 
+	// 双键：邮箱（大小写不敏感）或语义化 user_id
+	switch {
+	case userEmail != "" && userID != "":
+		q = q.Where("(LOWER(user_email) = LOWER(?) OR (user_id IS NOT NULL AND user_id <> '' AND user_id = ?))",
+			userEmail, userID)
+	case userEmail != "":
+		q = q.Where("LOWER(user_email) = LOWER(?)", userEmail)
+	case userID != "":
+		q = q.Where("user_id = ?", userID)
+	default:
+		return nil, nil
+	}
+
+	err := q.First(&tempPerm).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -405,6 +442,38 @@ func (r *PermissionRepositoryImpl) QueryUserRoles(
 	return roles, nil
 }
 
+// QueryApplicationRoles 查询 Application 的角色（app_key 列表）
+func (r *PermissionRepositoryImpl) QueryApplicationRoles(
+	ctx context.Context,
+	applicationPrincipalIDs []string,
+	scopeType valueobject.ScopeType,
+	scopeID uint,
+) ([]*entity.UserRole, error) {
+	var roles []*entity.UserRole
+	if len(applicationPrincipalIDs) == 0 {
+		return roles, nil
+	}
+	// 表可能尚未迁移：失败返回空，不阻断求值
+	err := r.db.WithContext(ctx).
+		Table("iam_application_roles").
+		Select("iam_application_roles.id, iam_application_roles.role_id, iam_application_roles.scope_type, iam_application_roles.scope_id, iam_application_roles.assigned_at, iam_application_roles.expires_at, iam_roles.name as role_name, iam_roles.display_name as role_display_name").
+		Joins("JOIN iam_roles ON iam_roles.id = iam_application_roles.role_id").
+		Where("iam_application_roles.application_principal_id IN ? AND iam_application_roles.scope_type = ? AND iam_application_roles.scope_id = ?",
+			applicationPrincipalIDs, string(scopeType), scopeID).
+		Where("iam_roles.is_active = ?", true).
+		Where("iam_application_roles.expires_at IS NULL OR iam_application_roles.expires_at > ?", gorm.Expr("NOW()")).
+		Find(&roles).Error
+	if err != nil {
+		// SQLite/未建表
+		if strings.Contains(strings.ToLower(err.Error()), "no such table") ||
+			strings.Contains(strings.ToLower(err.Error()), "does not exist") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query application roles: %w", err)
+	}
+	return roles, nil
+}
+
 // QueryTeamRoles 查询团队的角色分配
 func (r *PermissionRepositoryImpl) QueryTeamRoles(
 	ctx context.Context,
@@ -458,6 +527,7 @@ func (r *PermissionRepositoryImpl) QueryRolePolicies(
 			policy.PermissionName = permDef.Name
 			policy.PermissionDisplayName = permDef.DisplayName
 			policy.ResourceType = string(permDef.ResourceType)
+			policy.PermissionScopeLevel = string(permDef.ScopeLevel)
 		}
 	}
 

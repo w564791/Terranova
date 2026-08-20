@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
+import { apiFetch } from '../services/api';
 import styles from './TaskTriggerExecutions.module.css';
 
 interface TriggerExecution {
@@ -64,8 +65,8 @@ const TaskTriggerExecutions: React.FC<Props> = ({ workspaceId, taskId, taskStatu
 
   const fetchExecutions = async () => {
     try {
-      const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/tasks/${taskId}/trigger-executions`,
+      const response = await apiFetch(
+        `/workspaces/${workspaceId}/tasks/${taskId}/trigger-executions`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
@@ -79,8 +80,8 @@ const TaskTriggerExecutions: React.FC<Props> = ({ workspaceId, taskId, taskStatu
 
   const fetchTriggers = async () => {
     try {
-      const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/run-triggers`,
+      const response = await apiFetch(
+        `/workspaces/${workspaceId}/run-triggers`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
@@ -112,8 +113,8 @@ const TaskTriggerExecutions: React.FC<Props> = ({ workspaceId, taskId, taskStatu
 
   const handleToggle = async (executionId: number, currentlyDisabled: boolean) => {
     try {
-      const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/tasks/${taskId}/trigger-executions/${executionId}/toggle`,
+      const response = await apiFetch(
+        `/workspaces/${workspaceId}/tasks/${taskId}/trigger-executions/${executionId}/toggle`,
         {
           method: 'POST',
           headers: getAuthHeaders(),

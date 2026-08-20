@@ -65,8 +65,11 @@ type PermissionService interface {
 	// ModifyPermission 修改权限等级
 	ModifyPermission(ctx context.Context, req *ModifyPermissionRequest) error
 
-	// GrantPresetPermissions 授予预设权限集（READ/WRITE/ADMIN）
+	// GrantPresetPermissions 授予预设权限集（READ/WRITE/ADMIN）— 遗留 Direct Grant 路径
 	GrantPresetPermissions(ctx context.Context, req *GrantPresetRequest) error
+
+	// AssignBuiltinRoleToUser 将系统/内置 Role（按 name）赋给用户（D5 主路径）
+	AssignBuiltinRoleToUser(ctx context.Context, userID, roleName string, scopeType valueobject.ScopeType, scopeID uint, assignedBy, reason string) error
 
 	// ListPermissions 列出指定作用域的所有权限分配
 	ListPermissions(ctx context.Context, scopeType valueobject.ScopeType, scopeID uint) ([]*entity.PermissionGrant, error)
@@ -289,7 +292,7 @@ func (s *PermissionServiceImpl) ModifyPermission(
 	return nil
 }
 
-// GrantPresetPermissions 授予预设权限集
+// GrantPresetPermissions 授予预设权限集（遗留 Direct Grant 批量写）
 func (s *PermissionServiceImpl) GrantPresetPermissions(
 	ctx context.Context,
 	req *GrantPresetRequest,
@@ -309,7 +312,9 @@ func (s *PermissionServiceImpl) GrantPresetPermissions(
 		return fmt.Errorf("preset %s not found for scope %s", req.PresetName, req.ScopeType)
 	}
 
-	// 3. 批量授予权限
+	// 3. 批量授予权限：任一项失败则整体失败（调用方可决定是否补偿撤销）
+	var firstErr error
+	granted := 0
 	for _, presetPerm := range presetPerms {
 		grantReq := &GrantPermissionRequest{
 			ScopeType:       req.ScopeType,
@@ -323,12 +328,72 @@ func (s *PermissionServiceImpl) GrantPresetPermissions(
 		}
 
 		if err := s.GrantPermission(ctx, grantReq); err != nil {
-			// 继续授予其他权限，记录错误
 			log.Printf("[Permission] Failed to grant permission %s: %v", presetPerm.PermissionID, err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("preset grant partial failure on %s (granted %d/%d): %w",
+					presetPerm.PermissionID, granted, len(presetPerms), err)
+			}
+			continue
 		}
+		granted++
 	}
 
+	if firstErr != nil {
+		return firstErr
+	}
 	return nil
+}
+
+// AssignBuiltinRoleToUser 按角色名赋 Role（D5）；找不到角色返回错误
+func (s *PermissionServiceImpl) AssignBuiltinRoleToUser(
+	ctx context.Context,
+	userID, roleName string,
+	scopeType valueobject.ScopeType,
+	scopeID uint,
+	assignedBy, reason string,
+) error {
+	if userID == "" || roleName == "" || scopeID == 0 {
+		return fmt.Errorf("user_id, role_name and scope_id are required")
+	}
+	if s.db == nil {
+		return fmt.Errorf("db not configured")
+	}
+	var role entity.Role
+	if err := s.db.WithContext(ctx).
+		Where("name = ? AND is_active = ?", roleName, true).
+		First(&role).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("builtin role %q not found; run patch_workspace_admin_role_ensure.sql", roleName)
+		}
+		return err
+	}
+
+	var existing entity.UserRole
+	err := s.db.WithContext(ctx).
+		Where("user_id = ? AND role_id = ? AND scope_type = ? AND scope_id = ?",
+			userID, role.ID, string(scopeType), scopeID).
+		First(&existing).Error
+	if err == nil {
+		return nil // 已存在
+	}
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	var by *string
+	if assignedBy != "" {
+		by = &assignedBy
+	}
+	ur := &entity.UserRole{
+		UserID:     userID,
+		RoleID:     role.ID,
+		ScopeType:  string(scopeType),
+		ScopeID:    scopeID,
+		AssignedBy: by,
+		AssignedAt: time.Now(),
+		Reason:     reason,
+	}
+	return s.db.WithContext(ctx).Create(ur).Error
 }
 
 // ListPermissions 列出指定作用域的所有权限分配

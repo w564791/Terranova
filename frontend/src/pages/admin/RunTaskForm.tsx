@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import { apiFetch } from '../../services/api';
 import styles from './RunTaskForm.module.css';
 
 interface RunTask {
@@ -73,7 +74,7 @@ const RunTaskForm: React.FC = () => {
     
     try {
       setInitialLoading(true);
-      const response = await fetch(`/api/v1/run-tasks/${runTaskId}`, {
+      const response = await apiFetch(`/run-tasks/${runTaskId}`, {
         headers: getAuthHeaders(),
       });
       
@@ -118,7 +119,7 @@ const RunTaskForm: React.FC = () => {
         ? `${formData.endpoint_url}test` 
         : `${formData.endpoint_url}/test`;
       
-      const response = await fetch('/api/v1/run-tasks/test', {
+      const response = await apiFetch('/run-tasks/test', {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -213,7 +214,7 @@ const RunTaskForm: React.FC = () => {
         : '/api/v1/run-tasks';
       const method = isEdit ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),

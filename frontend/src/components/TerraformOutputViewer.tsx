@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTerraformOutput } from '../hooks/useTerraformOutput';
+import { apiFetch } from '../services/api';
 import ConfirmDialog from './ConfirmDialog';
 import styles from './TerraformOutputViewer.module.css';
 
@@ -41,7 +42,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
       try {
         const pathParts = window.location.pathname.split('/');
         const workspaceId = pathParts[2];
-        const response = await fetch(`http://localhost:8080/api/v1/workspaces/${workspaceId}/tasks/${taskId}`, {
+        const response = await apiFetch(`/workspaces/${workspaceId}/tasks/${taskId}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -185,7 +186,7 @@ const TerraformOutputViewer: React.FC<Props> = ({ taskId, onStageChange, current
             try {
               const pathParts = window.location.pathname.split('/');
               const workspaceId = pathParts[2];
-              await fetch(`http://localhost:8080/api/v1/workspaces/${workspaceId}/tasks/${taskId}/cancel`, {
+              await apiFetch(`/workspaces/${workspaceId}/tasks/${taskId}/cancel`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('token')}`

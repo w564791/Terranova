@@ -12,7 +12,13 @@ type Application struct {
 	AppKey       string                 `json:"app_key"`       // API Key
 	AppSecret    string                 `json:"-"`             // API Secret（加密存储，不返回）
 	Description  string                 `json:"description"`   // 描述
-	CallbackURLs map[string]interface{} `json:"callback_urls"` // 回调URL列表
+	CallbackURLs map[string]interface{} `json:"callback_urls" gorm:"serializer:json"` // 回调URL列表
+	// WorkspaceTagFilter 限制 Application 可访问的 workspace（选项 A）
+	// 空/nil = 组织内全部（仍需 WORKSPACES READ grant）
+	// 非空 = workspace.tags 须满足全部键条件（AND）：
+	//   - "env":"prod" → tags.env 等于 prod
+	//   - "env":["prod","staging"] → tags.env 属于集合
+	WorkspaceTagFilter map[string]interface{} `json:"workspace_tag_filter,omitempty" gorm:"column:workspace_tag_filter;serializer:json"`
 	IsActive     bool                   `json:"is_active"`     // 是否启用
 	CreatedBy    *string                `json:"created_by"`    // 创建人user_id
 	CreatedAt    time.Time              `json:"created_at"`    // 创建时间

@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iac-platform/internal/models"
 	"log"
@@ -22,6 +23,109 @@ type AICMDBService struct {
 	embeddingService      *EmbeddingService
 	embeddingCacheService *EmbeddingCacheService
 	skillAssembler        *SkillAssembler
+}
+
+// CMDBWorkspaceScope is the tenant fence carried through every AI CMDB query.
+// Its fields are intentionally private: controllers must obtain an instance
+// through ResolveCMDBWorkspaceScope after IAM has resolved auth_org_id, rather
+// than constructing a scope from request values.
+type CMDBWorkspaceScope struct {
+	organizationID uint
+	workspaceIDs   []string
+}
+
+var (
+	// ErrInvalidCMDBWorkspaceScope is returned before an AI/CMDB request when
+	// the organization scope is absent, corrupt, or has not been resolved.
+	ErrInvalidCMDBWorkspaceScope = errors.New("invalid CMDB workspace scope")
+	// ErrCMDBResourceNotInScope deliberately does not distinguish an unknown
+	// resource from one owned by another organization.
+	ErrCMDBResourceNotInScope = errors.New("CMDB resource is not available in the current organization")
+)
+
+// OrganizationID returns the IAM-bound organization for audit/context use.
+func (scope CMDBWorkspaceScope) OrganizationID() uint {
+	return scope.organizationID
+}
+
+// WorkspaceIDs returns a defensive copy of the resolved tenant workspace set.
+func (scope CMDBWorkspaceScope) WorkspaceIDs() []string {
+	return append([]string(nil), scope.workspaceIDs...)
+}
+
+func (scope CMDBWorkspaceScope) validate() error {
+	if scope.organizationID == 0 || scope.workspaceIDs == nil {
+		return ErrInvalidCMDBWorkspaceScope
+	}
+	seen := make(map[string]struct{}, len(scope.workspaceIDs))
+	for _, workspaceID := range scope.workspaceIDs {
+		if workspaceID == "" || workspaceID == "__external__" {
+			return ErrInvalidCMDBWorkspaceScope
+		}
+		if _, exists := seen[workspaceID]; exists {
+			return ErrInvalidCMDBWorkspaceScope
+		}
+		seen[workspaceID] = struct{}{}
+	}
+	return nil
+}
+
+// ResolveCMDBWorkspaceScope resolves the only workspace set an AI CMDB request
+// may use. Workspace ownership is derived from workspace_project_relations ->
+// projects.org_id, and a workspace with anything other than one relation is
+// treated as corrupt and rejected. The returned empty (but valid) slice means
+// that the organization has no usable workspaces; it never means global CMDB.
+func ResolveCMDBWorkspaceScope(db *gorm.DB, organizationID uint, requestedWorkspaceID string) (CMDBWorkspaceScope, error) {
+	scope := CMDBWorkspaceScope{
+		organizationID: organizationID,
+		workspaceIDs:   make([]string, 0),
+	}
+	if db == nil || organizationID == 0 {
+		return CMDBWorkspaceScope{}, ErrInvalidCMDBWorkspaceScope
+	}
+
+	if requestedWorkspaceID != "" {
+		var binding struct {
+			RelationCount  int64 `gorm:"column:relation_count"`
+			OrganizationID uint  `gorm:"column:org_id"`
+		}
+		err := db.Table("workspace_project_relations AS wpr").
+			Select("COUNT(*) AS relation_count, MIN(p.org_id) AS org_id").
+			Joins("JOIN workspaces AS w ON w.workspace_id = wpr.workspace_id").
+			Joins("JOIN projects AS p ON p.id = wpr.project_id").
+			Where("wpr.workspace_id = ?", requestedWorkspaceID).
+			Scan(&binding).Error
+		if err != nil || binding.RelationCount != 1 || binding.OrganizationID != organizationID {
+			return CMDBWorkspaceScope{}, ErrInvalidCMDBWorkspaceScope
+		}
+		scope.workspaceIDs = []string{requestedWorkspaceID}
+		return scope, nil
+	}
+
+	type workspaceRow struct {
+		WorkspaceID string `gorm:"column:workspace_id"`
+	}
+	var rows []workspaceRow
+	err := db.Table("workspace_project_relations AS wpr").
+		Select("wpr.workspace_id").
+		Joins("JOIN workspaces AS w ON w.workspace_id = wpr.workspace_id").
+		Joins("JOIN projects AS p ON p.id = wpr.project_id").
+		Group("wpr.workspace_id").
+		Having("COUNT(*) = 1 AND MIN(p.org_id) = ?", organizationID).
+		Order("wpr.workspace_id").
+		Scan(&rows).Error
+	if err != nil {
+		return CMDBWorkspaceScope{}, fmt.Errorf("resolve CMDB workspace scope: %w", err)
+	}
+	for _, row := range rows {
+		if row.WorkspaceID != "" {
+			scope.workspaceIDs = append(scope.workspaceIDs, row.WorkspaceID)
+		}
+	}
+	if err := scope.validate(); err != nil {
+		return CMDBWorkspaceScope{}, err
+	}
+	return scope, nil
 }
 
 // NewAICMDBService 创建 AI + CMDB 集成服务实例
@@ -129,10 +233,14 @@ func (s *AICMDBService) GenerateConfigWithCMDB(
 	userDescription string,
 	workspaceID string,
 	organizationID string,
+	scope CMDBWorkspaceScope,
 	userSelections map[string]string, // 用户选择的资源 ID（用于多选情况）
 	currentConfig map[string]interface{}, // 现有配置，用于修复模式
 	mode string, // 模式：new（新建）或 refine（修复）
 ) (*GenerateConfigWithCMDBResponse, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
 	log.Printf("[AICMDBService] ========== 开始 AI + CMDB 配置生成 ==========")
 	log.Printf("[AICMDBService] 用户 ID: %s", userID)
 	log.Printf("[AICMDBService] Module ID: %d", moduleID)
@@ -168,7 +276,7 @@ func (s *AICMDBService) GenerateConfigWithCMDB(
 
 	// ========== 步骤 3: CMDB 批量查询 ==========
 	log.Printf("[AICMDBService] 步骤 3: 执行 CMDB 批量查询")
-	cmdbResults, err := s.executeCMDBQueries(userID, queryPlan)
+	cmdbResults, err := s.executeCMDBQueries(userID, queryPlan, scope)
 	if err != nil {
 		log.Printf("[AICMDBService] CMDB 查询失败: %v", err)
 		return nil, fmt.Errorf("CMDB 查询失败: %w", err)
@@ -526,18 +634,19 @@ func (s *AICMDBService) validateQueryPlan(plan *CMDBQueryPlan) error {
 
 // ========== 步骤 3: CMDB 批量查询 ==========
 
-// executeCMDBQueries 执行 CMDB 批量查询
-func (s *AICMDBService) executeCMDBQueries(userID string, queryPlan *CMDBQueryPlan) (*CMDBQueryResults, error) {
+// executeCMDBQueries executes a query plan only inside the IAM-resolved tenant
+// scope. It intentionally does not use getAccessibleWorkspaces: that legacy
+// helper has global fallbacks and therefore cannot be a tenant boundary.
+func (s *AICMDBService) executeCMDBQueries(userID string, queryPlan *CMDBQueryPlan, scope CMDBWorkspaceScope) (*CMDBQueryResults, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
 	results := &CMDBQueryResults{
 		Results: make(map[string]*CMDBQueryResult),
 	}
 
-	// 获取用户有权限的 Workspace 列表
-	workspaceIDs, err := s.getAccessibleWorkspaces(userID)
-	if err != nil {
-		return nil, fmt.Errorf("获取用户权限失败: %w", err)
-	}
-	log.Printf("[AICMDBService] 用户 %s 有权限访问 %d 个 Workspace", userID, len(workspaceIDs))
+	workspaceIDs := scope.workspaceIDs
+	log.Printf("[AICMDBService] 用户 %s 在组织 %d 的 CMDB workspace 范围: %d", userID, scope.organizationID, len(workspaceIDs))
 
 	// 记录每种资源类型的计数（用于生成唯一 key）
 	typeCounter := make(map[string]int)
@@ -578,126 +687,6 @@ func (s *AICMDBService) executeCMDBQueries(userID string, queryPlan *CMDBQueryPl
 	}
 
 	return results, nil
-}
-
-// getAccessibleWorkspaces 获取用户有权限访问的 Workspace 列表
-func (s *AICMDBService) getAccessibleWorkspaces(userID string) ([]string, error) {
-	var workspaceIDs []string
-
-	// 0. 首先检查用户是否是超级管理员
-	var user models.User
-	if err := s.db.Where("user_id = ?", userID).First(&user).Error; err == nil {
-		if user.IsSystemAdmin {
-			log.Printf("[AICMDBService] 用户 %s 是超级管理员，返回所有 Workspace", userID)
-			// 超管可以访问所有 Workspace
-			var allWorkspaces []string
-			if err := s.db.Table("workspaces").
-				Select("workspace_id").
-				Pluck("workspace_id", &allWorkspaces).Error; err != nil {
-				log.Printf("[AICMDBService] 查询所有 workspaces 失败: %v", err)
-			} else {
-				return allWorkspaces, nil
-			}
-		}
-	}
-
-	// 1. 查询用户直接拥有的 Workspace 权限（通过 workspace_members 表）
-	var directWorkspaces []string
-	err := s.db.Table("workspace_members").
-		Select("workspace_id").
-		Where("user_id = ?", userID).
-		Pluck("workspace_id", &directWorkspaces).Error
-	if err != nil {
-		log.Printf("[AICMDBService] 查询 workspace_members 失败: %v", err)
-	} else {
-		workspaceIDs = append(workspaceIDs, directWorkspaces...)
-	}
-
-	// 2. 查询用户通过 IAM 角色直接拥有的 Workspace 权限
-	var iamUserWorkspaces []string
-	err = s.db.Table("iam_user_roles").
-		Select("scope_id").
-		Where("user_id = ? AND scope_type = ?", userID, "workspace").
-		Pluck("scope_id", &iamUserWorkspaces).Error
-	if err != nil {
-		log.Printf("[AICMDBService] 查询 iam_user_roles 失败: %v", err)
-	} else {
-		workspaceIDs = append(workspaceIDs, iamUserWorkspaces...)
-	}
-
-	// 3. 查询用户通过团队拥有的 Workspace 权限
-	// 先获取用户所属的团队
-	var teamIDs []string
-	err = s.db.Table("team_members").
-		Select("team_id").
-		Where("user_id = ?", userID).
-		Pluck("team_id", &teamIDs).Error
-	if err != nil {
-		log.Printf("[AICMDBService] 查询 team_members 失败: %v", err)
-	}
-
-	// 然后获取这些团队有权限的 Workspace
-	if len(teamIDs) > 0 {
-		var teamWorkspaces []string
-		err = s.db.Table("iam_team_roles").
-			Select("scope_id").
-			Where("team_id IN ? AND scope_type = ?", teamIDs, "workspace").
-			Pluck("scope_id", &teamWorkspaces).Error
-		if err != nil {
-			log.Printf("[AICMDBService] 查询 iam_team_roles 失败: %v", err)
-		} else {
-			workspaceIDs = append(workspaceIDs, teamWorkspaces...)
-		}
-	}
-
-	// 4. 如果用户是组织管理员，获取组织下所有 Workspace
-	var orgIDs []string
-	err = s.db.Table("user_organizations").
-		Select("org_id").
-		Where("user_id = ?", userID).
-		Pluck("org_id", &orgIDs).Error
-	if err != nil {
-		log.Printf("[AICMDBService] 查询 user_organizations 失败: %v", err)
-	}
-
-	if len(orgIDs) > 0 {
-		var orgWorkspaces []string
-		err = s.db.Table("workspaces").
-			Select("workspace_id").
-			Where("org_id IN ?", orgIDs).
-			Pluck("workspace_id", &orgWorkspaces).Error
-		if err != nil {
-			log.Printf("[AICMDBService] 查询组织 workspaces 失败: %v", err)
-		} else {
-			workspaceIDs = append(workspaceIDs, orgWorkspaces...)
-		}
-	}
-
-	// 5. 如果仍然没有找到任何 Workspace，返回所有 Workspace（降级策略）
-	if len(workspaceIDs) == 0 {
-		log.Printf("[AICMDBService] 用户 %s 没有明确的权限配置，使用降级策略返回所有 Workspace", userID)
-		var allWorkspaces []string
-		if err := s.db.Table("workspaces").
-			Select("workspace_id").
-			Pluck("workspace_id", &allWorkspaces).Error; err != nil {
-			log.Printf("[AICMDBService] 查询所有 workspaces 失败: %v", err)
-		} else {
-			workspaceIDs = allWorkspaces
-		}
-	}
-
-	// 去重
-	uniqueIDs := make(map[string]bool)
-	var result []string
-	for _, id := range workspaceIDs {
-		if id != "" && !uniqueIDs[id] {
-			uniqueIDs[id] = true
-			result = append(result, id)
-		}
-	}
-
-	log.Printf("[AICMDBService] 用户 %s 可访问的 Workspace: %v", userID, result)
-	return result, nil
 }
 
 // resolveDependencies 解析依赖关系，注入依赖查询的结果
@@ -810,6 +799,12 @@ func (s *AICMDBService) executeQuery(query CMDBQuery, filters map[string]string,
 		Query: query,
 		Found: false,
 	}
+	if len(workspaceIDs) == 0 {
+		// An empty tenant scope is not an invitation to query global/external
+		// CMDB records. It simply means this organization has no CMDB data.
+		result.Error = "当前组织没有可查询的工作空间"
+		return result
+	}
 
 	// 1. 先尝试精确匹配（cloud_resource_id 或 cloud_resource_name）
 	if query.Keyword != "" && query.Keyword != "*" {
@@ -824,11 +819,7 @@ func (s *AICMDBService) executeQuery(query CMDBQuery, filters map[string]string,
 				embedding_text, embedding_model, embedding_updated_at`).
 			Where("resource_type = ? AND resource_mode = ?", query.Type, "managed")
 
-		if len(workspaceIDs) > 0 {
-			exactQuery = exactQuery.Where("workspace_id IN ? OR workspace_id = ?", workspaceIDs, "__external__")
-		} else {
-			exactQuery = exactQuery.Where("workspace_id = ?", "__external__")
-		}
+		exactQuery = exactQuery.Where("workspace_id IN ?", workspaceIDs)
 
 		exactQuery.Where("cloud_resource_id = ? OR cloud_resource_name = ?", query.Keyword, query.Keyword).
 			Limit(1).Find(&exactMatch)
@@ -944,6 +935,9 @@ func (s *AICMDBService) hybridSearch(query CMDBQuery, filters map[string]string,
 
 // vectorSearch 向量搜索（批量 Embedding 优化版本）
 func (s *AICMDBService) vectorSearch(query CMDBQuery, filters map[string]string, workspaceIDs []string) ([]CMDBResourceInfo, error) {
+	if len(workspaceIDs) == 0 {
+		return nil, nil
+	}
 	vectorSearchStart := time.Now()
 	log.Printf("[AICMDBService] [向量搜索] ========== 开始向量搜索（批量优化） ==========")
 	log.Printf("[AICMDBService] [向量搜索] 资源类型: %s, 关键词: %s", query.Type, query.Keyword)
@@ -1119,17 +1113,18 @@ func (s *AICMDBService) buildVectorSearchSQL(template string, vectorStr string, 
 	args := []interface{}{vectorStr, resourceType, similarityThreshold}
 	argIndex := 4
 
-	// 添加 workspace 过滤
-	if len(workspaceIDs) > 0 {
+	// The caller provides the strict organization workspace scope. External
+	// source rows have no tenant ownership and must never be mixed in here.
+	if len(workspaceIDs) == 0 {
+		sql += " AND 1 = 0"
+	} else {
 		placeholders := make([]string, len(workspaceIDs))
 		for i := range workspaceIDs {
 			placeholders[i] = fmt.Sprintf("$%d", argIndex)
 			args = append(args, workspaceIDs[i])
 			argIndex++
 		}
-		sql += fmt.Sprintf(" AND (workspace_id IN (%s) OR workspace_id = '__external__')", strings.Join(placeholders, ","))
-	} else {
-		sql += " AND workspace_id = '__external__'"
+		sql += fmt.Sprintf(" AND workspace_id IN (%s)", strings.Join(placeholders, ","))
 	}
 
 	// 添加其他过滤条件
@@ -1162,6 +1157,10 @@ func (s *AICMDBService) keywordSearch(query CMDBQuery, filters map[string]string
 		Query: query,
 		Found: false,
 	}
+	if len(workspaceIDs) == 0 {
+		result.Error = "当前组织没有可查询的工作空间"
+		return result
+	}
 
 	// 构建基础 SQL 查询
 	var sqlBuilder strings.Builder
@@ -1170,22 +1169,14 @@ func (s *AICMDBService) keywordSearch(query CMDBQuery, filters map[string]string
 	sqlBuilder.WriteString("resource_type = ? AND resource_mode = ?")
 	args = append(args, query.Type, "managed")
 
-	// 限制在用户有权限的 Workspace 内，同时包含外部 CMDB 数据
-	// 外部 CMDB 数据的 workspace_id 是 '__external__'，所有用户都可以访问
-	if len(workspaceIDs) > 0 {
-		// 用户有权限的 Workspace + 外部 CMDB 数据
-		placeholders := make([]string, len(workspaceIDs))
-		for i := range workspaceIDs {
-			placeholders[i] = "?"
-			args = append(args, workspaceIDs[i])
-		}
-		sqlBuilder.WriteString(fmt.Sprintf(" AND (workspace_id IN (%s) OR workspace_id = ?)", strings.Join(placeholders, ",")))
-		args = append(args, "__external__")
-	} else {
-		// 用户没有任何 Workspace 权限，只能访问外部 CMDB 数据
-		sqlBuilder.WriteString(" AND workspace_id = ?")
-		args = append(args, "__external__")
+	// Limit to the organization-owned workspace set. Do not append the global
+	// __external__ pseudo-workspace: it has no tenant ownership.
+	placeholders := make([]string, len(workspaceIDs))
+	for i := range workspaceIDs {
+		placeholders[i] = "?"
+		args = append(args, workspaceIDs[i])
 	}
+	sqlBuilder.WriteString(fmt.Sprintf(" AND workspace_id IN (%s)", strings.Join(placeholders, ",")))
 
 	// 应用过滤条件
 	for k, v := range filters {

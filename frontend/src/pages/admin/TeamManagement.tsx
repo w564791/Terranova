@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
-import { iamService } from '../../services/iam';
+import { iamService, setAuthOrgId } from '../../services/iam';
 import type {
   Team,
   TeamMember,
@@ -13,7 +13,6 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './TeamManagement.module.css';
 
 const TeamManagement: React.FC = () => {
-  const navigate = useNavigate();
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,10 +54,10 @@ const TeamManagement: React.FC = () => {
   // 加载组织列表
   const loadOrganizations = async () => {
     try {
-      const response = await iamService.listOrganizations(true);
+      const response = await iamService.bootstrapActiveOrganization();
       setOrganizations(response.organizations || []);
-      if (response.organizations && response.organizations.length > 0) {
-        setSelectedOrgId(response.organizations[0].id);
+      if (response.active_org_id != null) {
+        setSelectedOrgId(response.active_org_id);
       }
     } catch (error: any) {
       console.error('加载组织列表失败:', error);
@@ -81,7 +80,7 @@ const TeamManagement: React.FC = () => {
   };
 
   // 加载团队成员
-  const loadTeamMembers = async (teamId: number) => {
+  const loadTeamMembers = async (teamId: string) => {
     try {
       const response = await iamService.listTeamMembers(teamId);
       setTeamMembers(response.members || []);
@@ -97,6 +96,7 @@ const TeamManagement: React.FC = () => {
 
   useEffect(() => {
     if (selectedOrgId !== 'all' && selectedOrgId > 0) {
+      setAuthOrgId(selectedOrgId);
       loadTeams(selectedOrgId);
     } else {
       setTeams([]);
@@ -119,30 +119,6 @@ const TeamManagement: React.FC = () => {
     });
     setFormErrors({});
     setShowDialog(true);
-  };
-
-  // 打开编辑对话框
-  const handleEdit = (team: Team) => {
-    setEditingTeam(team);
-    setFormData({
-      org_id: team.org_id,
-      name: team.name,
-      display_name: team.display_name,
-      description: team.description || '',
-    });
-    setFormErrors({});
-    setShowDialog(true);
-  };
-
-  // 打开成员管理对话框
-  const handleManageMembers = async (team: Team) => {
-    setSelectedTeam(team);
-    await loadTeamMembers(team.id);
-    setMemberFormData({
-      user_id: 0,
-      role: 'MEMBER',
-    });
-    setShowMemberDialog(true);
   };
 
   // 验证表单
@@ -206,15 +182,6 @@ const TeamManagement: React.FC = () => {
     } catch (error: any) {
       showToast(error.response?.data?.error || '操作失败', 'error');
     }
-  };
-
-  // 删除团队
-  const handleDelete = (team: Team) => {
-    if (team.is_system) {
-      showToast('系统团队不能删除', 'error');
-      return;
-    }
-    setDeleteConfirm({ show: true, team });
   };
 
   const confirmDelete = async () => {

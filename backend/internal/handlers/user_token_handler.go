@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"iac-platform/internal/application/service"
 	"iac-platform/internal/models"
@@ -218,7 +219,16 @@ func (h *UserTokenHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// 改密后吊销全部登录会话，强制重新登录
+	now := time.Now()
+	_ = h.db.Table("login_sessions").
+		Where("user_id = ? AND is_active = ?", user.ID, true).
+		Updates(map[string]interface{}{
+			"is_active":  false,
+			"revoked_at": now,
+		})
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Password changed successfully",
+		"message": "Password changed successfully; please login again",
 	})
 }

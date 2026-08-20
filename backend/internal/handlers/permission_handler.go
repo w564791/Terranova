@@ -3,7 +3,9 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -70,17 +72,7 @@ func (h *PermissionHandler) CheckPermission(c *gin.Context) {
 		return
 	}
 
-	// 系统管理员直接放行，与中间件 bypass 逻辑对齐
-	if isSystemAdmin, _ := c.Get("is_system_admin"); isSystemAdmin == true {
-		c.JSON(http.StatusOK, &service.CheckPermissionResult{
-			IsAllowed:      true,
-			EffectiveLevel: valueobject.PermissionLevelAdmin,
-			Source:         "system_admin",
-		})
-		return
-	}
-
-	// 解析参数
+	// 解析参数（业务权限不再旁路 system_admin，与 IAM 中间件一致）
 	resourceType, err := valueobject.ParseResourceType(req.ResourceType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -99,9 +91,26 @@ func (h *PermissionHandler) CheckPermission(c *gin.Context) {
 		return
 	}
 
-	// 检查权限
+	// 主体：默认 USER；Team Token 等由中间件设置 principal_type/principal_id
+	principalType := valueobject.PrincipalTypeUser
+	principalID := userID.(string)
+	if v, ok := c.Get("principal_type"); ok {
+		if s, ok := v.(string); ok && s != "" {
+			if pt, err := valueobject.ParsePrincipalType(s); err == nil {
+				principalType = pt
+			}
+		}
+	}
+	if v, ok := c.Get("principal_id"); ok {
+		if s, ok := v.(string); ok && s != "" {
+			principalID = s
+		}
+	}
+
 	checkReq := &service.CheckPermissionRequest{
 		UserID:        userID.(string),
+		PrincipalType: principalType,
+		PrincipalID:   principalID,
 		ResourceType:  resourceType,
 		ScopeType:     scopeType,
 		ScopeIDStr:    req.ScopeID, // 使用字符串类型的 scope_id
@@ -127,6 +136,28 @@ type GrantPermissionRequest struct {
 	PermissionLevel string  `json:"permission_level" binding:"required"`
 	ExpiresAt       *string `json:"expires_at,omitempty"`
 	Reason          string  `json:"reason,omitempty"`
+}
+
+// ErrDirectGrantRetired 公共 Direct Grant 写路径已下线（D5）；请改用 Role 赋值。
+// USER/TEAM → POST /iam/users|teams/:id/roles；APPLICATION → POST /iam/applications/:id/roles
+const directGrantRetiredMsg = "Direct Grant is retired; assign a Role instead (POST /iam/users|teams|applications/:id/roles)."
+
+// rejectRetiredDirectGrant 拒绝公共 Direct Grant 写入（USER/TEAM/APPLICATION）。
+// 环境变量 IAM_ALLOW_DIRECT_GRANT=1 可临时恢复（仅应急）。
+// 内部 service（如 workspace 创建 fallback）不经此路径。
+func rejectRetiredDirectGrant(c *gin.Context, principalType valueobject.PrincipalType) bool {
+	if os.Getenv("IAM_ALLOW_DIRECT_GRANT") == "1" || os.Getenv("IAM_ALLOW_DIRECT_GRANT") == "true" {
+		return false
+	}
+	_ = principalType // 全部主体类型均退役
+	c.JSON(http.StatusGone, gin.H{
+		"error":       directGrantRetiredMsg,
+		"code":        410,
+		"deprecated":  true,
+		"alternative": "role_assignment",
+		"timestamp":   time.Now(),
+	})
+	return true
 }
 
 // GrantPermission grants a permission
@@ -157,6 +188,11 @@ func (h *PermissionHandler) GrantPermission(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	// 解析参数
 	scopeType, err := valueobject.ParseScopeType(req.ScopeType)
 	if err != nil {
@@ -164,10 +200,30 @@ func (h *PermissionHandler) GrantPermission(c *gin.Context) {
 		return
 	}
 
+	// 目标 scope 必须落在鉴权 org（防跨 org Direct Grant）
+	if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, scopeType, req.ScopeID, authOrg); err != nil {
+		respondScopeOutsideAuthOrg(c, err)
+		return
+	}
+
 	principalType, err := valueobject.ParsePrincipalType(req.PrincipalType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if rejectRetiredDirectGrant(c, principalType) {
+		return
+	}
+
+	principalID := req.PrincipalID
+	// APPLICATION：统一存 app_key（与 AgentAuth principal_id 对齐，选项 A）
+	if principalType == valueobject.PrincipalTypeApplication {
+		resolved, rerr := resolveApplicationPrincipalID(c.Request.Context(), h.db, principalID)
+		if rerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": rerr.Error()})
+			return
+		}
+		principalID = resolved
 	}
 
 	permissionLevel, err := valueobject.ParsePermissionLevel(req.PermissionLevel)
@@ -181,11 +237,19 @@ func (h *PermissionHandler) GrantPermission(c *gin.Context) {
 		ScopeType:       scopeType,
 		ScopeID:         req.ScopeID,
 		PrincipalType:   principalType,
-		PrincipalID:     req.PrincipalID,
+		PrincipalID:     principalID,
 		PermissionID:    req.PermissionID,
 		PermissionLevel: permissionLevel,
 		GrantedBy:       userID.(string),
 		Reason:          req.Reason,
+	}
+	if req.ExpiresAt != nil && *req.ExpiresAt != "" {
+		expiresAt, err := parseFlexibleTime(*req.ExpiresAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expires_at: " + err.Error()})
+			return
+		}
+		grantReq.ExpiresAt = &expiresAt
 	}
 
 	if err := h.permissionService.GrantPermission(c.Request.Context(), grantReq); err != nil {
@@ -200,6 +264,40 @@ func (h *PermissionHandler) GrantPermission(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Permission granted successfully"})
+}
+
+// parseFlexibleTime 解析 expires_at：
+// - 带时区：RFC3339 / RFC3339Nano
+// - 无时区 datetime-local：按 UTC 解释（避免服务器本地时区偏移）；拒绝已过去时间
+func parseFlexibleTime(s string) (time.Time, error) {
+	layoutsTZ := []string{time.RFC3339, time.RFC3339Nano}
+	for _, layout := range layoutsTZ {
+		if t, err := time.Parse(layout, s); err == nil {
+			if t.Before(time.Now().Add(-time.Minute)) {
+				return time.Time{}, fmt.Errorf("expires_at must be in the future")
+			}
+			return t, nil
+		}
+	}
+	// 无时区：UTC
+	layoutsLocal := []string{
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	var lastErr error
+	for _, layout := range layoutsLocal {
+		t, err := time.ParseInLocation(layout, s, time.UTC)
+		if err == nil {
+			if t.Before(time.Now().UTC().Add(-time.Minute)) {
+				return time.Time{}, fmt.Errorf("expires_at must be in the future")
+			}
+			return t, nil
+		}
+		lastErr = err
+	}
+	return time.Time{}, fmt.Errorf("unsupported time format %q: %w", s, lastErr)
 }
 
 // contains 检查字符串是否包含子串
@@ -270,6 +368,11 @@ func (h *PermissionHandler) BatchGrantPermissions(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	// 解析参数
 	scopeType, err := valueobject.ParseScopeType(req.ScopeType)
 	if err != nil {
@@ -280,6 +383,9 @@ func (h *PermissionHandler) BatchGrantPermissions(c *gin.Context) {
 	principalType, err := valueobject.ParsePrincipalType(req.PrincipalType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if rejectRetiredDirectGrant(c, principalType) {
 		return
 	}
 
@@ -316,6 +422,21 @@ func (h *PermissionHandler) BatchGrantPermissions(c *gin.Context) {
 		return
 	}
 
+	if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, scopeType, scopeID, authOrg); err != nil {
+		respondScopeOutsideAuthOrg(c, err)
+		return
+	}
+
+	principalID := req.PrincipalID
+	if principalType == valueobject.PrincipalTypeApplication {
+		resolved, rerr := resolveApplicationPrincipalID(c.Request.Context(), h.db, principalID)
+		if rerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": rerr.Error()})
+			return
+		}
+		principalID = resolved
+	}
+
 	// 批量授予权限
 	successCount := 0
 	failedCount := 0
@@ -334,11 +455,20 @@ func (h *PermissionHandler) BatchGrantPermissions(c *gin.Context) {
 			ScopeType:       scopeType,
 			ScopeID:         scopeID,
 			PrincipalType:   principalType,
-			PrincipalID:     req.PrincipalID,
+			PrincipalID:     principalID,
 			PermissionID:    item.PermissionID,
 			PermissionLevel: permissionLevel,
 			GrantedBy:       userID.(string),
 			Reason:          req.Reason,
+		}
+		if req.ExpiresAt != nil && *req.ExpiresAt != "" {
+			expiresAt, expErr := parseFlexibleTime(*req.ExpiresAt)
+			if expErr != nil {
+				failedCount++
+				errors = append(errors, "invalid expires_at: "+expErr.Error())
+				continue
+			}
+			grantReq.ExpiresAt = &expiresAt
 		}
 
 		if err := h.permissionService.GrantPermission(c.Request.Context(), grantReq); err != nil {
@@ -468,10 +598,20 @@ func (h *PermissionHandler) GrantPresetPermissions(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	// 解析参数
 	scopeType, err := valueobject.ParseScopeType(req.ScopeType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, scopeType, req.ScopeID, authOrg); err != nil {
+		respondScopeOutsideAuthOrg(c, err)
 		return
 	}
 
@@ -480,13 +620,26 @@ func (h *PermissionHandler) GrantPresetPermissions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if rejectRetiredDirectGrant(c, principalType) {
+		return
+	}
+
+	principalID := req.PrincipalID
+	if principalType == valueobject.PrincipalTypeApplication {
+		resolved, rerr := resolveApplicationPrincipalID(c.Request.Context(), h.db, principalID)
+		if rerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": rerr.Error()})
+			return
+		}
+		principalID = resolved
+	}
 
 	// 授予预设权限
 	grantReq := &service.GrantPresetRequest{
 		ScopeType:     scopeType,
 		ScopeID:       req.ScopeID,
 		PrincipalType: principalType,
-		PrincipalID:   req.PrincipalID,
+		PrincipalID:   principalID,
 		PresetName:    req.PresetName,
 		GrantedBy:     userID.(string),
 		Reason:        req.Reason,
@@ -536,6 +689,16 @@ func (h *PermissionHandler) RevokePermission(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	// 加载 assignment 所属 scope 并校验落在鉴权 org
+	if err := h.ensureAssignmentInAuthOrg(c, scopeType, uint(id), authOrg); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "permission assignment not found"})
+		return
+	}
+
 	// 撤销权限
 	revokeReq := &service.RevokePermissionRequest{
 		ScopeType:    scopeType,
@@ -549,6 +712,33 @@ func (h *PermissionHandler) RevokePermission(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Permission revoked successfully"})
+}
+
+// ensureAssignmentInAuthOrg 按 assignment 反查 scope 并校验 org
+func (h *PermissionHandler) ensureAssignmentInAuthOrg(c *gin.Context, scopeType valueobject.ScopeType, assignmentID, authOrg uint) error {
+	ctx := c.Request.Context()
+	switch scopeType {
+	case valueobject.ScopeTypeOrganization:
+		var orgID uint
+		if err := h.db.WithContext(ctx).Table("org_permissions").Select("org_id").Where("id = ?", assignmentID).Scan(&orgID).Error; err != nil || orgID == 0 {
+			return fmt.Errorf("not found")
+		}
+		return ensureScopeInAuthOrg(ctx, h.db, scopeType, orgID, authOrg)
+	case valueobject.ScopeTypeProject:
+		var projectID uint
+		if err := h.db.WithContext(ctx).Table("project_permissions").Select("project_id").Where("id = ?", assignmentID).Scan(&projectID).Error; err != nil || projectID == 0 {
+			return fmt.Errorf("not found")
+		}
+		return ensureScopeInAuthOrg(ctx, h.db, scopeType, projectID, authOrg)
+	case valueobject.ScopeTypeWorkspace:
+		var wsSem string
+		if err := h.db.WithContext(ctx).Table("workspace_permissions").Select("workspace_id").Where("id = ?", assignmentID).Scan(&wsSem).Error; err != nil || wsSem == "" {
+			return fmt.Errorf("not found")
+		}
+		return ensureWorkspaceSemanticInAuthOrg(ctx, h.db, wsSem, authOrg)
+	default:
+		return fmt.Errorf("unsupported scope")
+	}
 }
 
 // ListPermissions lists permissions for a scope
@@ -573,14 +763,42 @@ func (h *PermissionHandler) ListPermissions(c *gin.Context) {
 		return
 	}
 
-	scopeID, err := strconv.ParseUint(scopeIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scope_id"})
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
 		return
 	}
 
-	// 列出权限
-	permissions, err := h.permissionService.ListPermissions(c.Request.Context(), scopeType, uint(scopeID))
+	// workspace path 支持数字主键或语义化 ID；其它 scope 仅数字
+	var scopeID uint
+	if scopeType == valueobject.ScopeTypeWorkspace {
+		if parsed, err := strconv.ParseUint(scopeIDStr, 10, 32); err == nil {
+			scopeID = uint(parsed)
+		} else {
+			var workspace struct {
+				ID uint `gorm:"column:id"`
+			}
+			if err := h.db.Table("workspaces").Select("id").Where("workspace_id = ?", scopeIDStr).First(&workspace).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
+				return
+			}
+			scopeID = workspace.ID
+		}
+	} else {
+		parsed, err := strconv.ParseUint(scopeIDStr, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scope_id"})
+			return
+		}
+		scopeID = uint(parsed)
+	}
+
+	if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, scopeType, scopeID, authOrg); err != nil {
+		respondScopeOutsideAuthOrg(c, err)
+		return
+	}
+
+	// 列出权限（workspace 在 repository 内将数字主键转为语义化 ID 查询）
+	permissions, err := h.permissionService.ListPermissions(c.Request.Context(), scopeType, scopeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

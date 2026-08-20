@@ -204,3 +204,34 @@ func (r ResourceType) IsProjectLevel() bool {
 func (r ResourceType) IsWorkspaceLevel() bool {
 	return r.GetScopeLevel() == ScopeTypeWorkspace
 }
+
+// IsSatisfiedBy reports whether a grant for granted can satisfy a check for r
+// at the resource-type layer. Permission level and scope ancestry are
+// intentionally evaluated by PermissionChecker.
+//
+// WORKSPACE_MANAGEMENT is the umbrella permission for the ordinary workspace
+// capabilities below. WORKSPACE_STATE_SENSITIVE is deliberately excluded: it
+// protects state content and requires the stricter MANAGEMENT ADMIN fallback
+// used by the corresponding routes, rather than a same-level implicit grant.
+// The relationship is one-way: a fine-grained grant never satisfies a
+// WORKSPACE_MANAGEMENT check.
+func (r ResourceType) IsSatisfiedBy(granted ResourceType) bool {
+	if r == granted {
+		return true
+	}
+
+	if granted != ResourceTypeWorkspaceManagement {
+		return false
+	}
+
+	switch r {
+	case ResourceTypeTaskData,
+		ResourceTypeWorkspaceExec,
+		ResourceTypeWorkspaceState,
+		ResourceTypeWorkspaceVars,
+		ResourceTypeWorkspaceResources:
+		return true
+	default:
+		return false
+	}
+}

@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import type { RootState } from '../store';
 import { loginSuccess, logout } from '../store/slices/authSlice';
 import api from '../services/api';
+import { iamService } from '../services/iam';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ interface AuthProviderProps {
 const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const dispatch = useDispatch();
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [organizationBootstrappedFor, setOrganizationBootstrappedFor] = useState<string | null>(null);
 
   // 首次加载时检查系统初始化状态
   useEffect(() => {
@@ -36,6 +38,34 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const { token, isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+
+  // IAM 的所有组织级请求都依赖 active org。它必须在进入业务页面前经由
+  // 无 org_id 的 bootstrap 端点建立，而不是让每个页面各自选“第一个组织”。
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapOrganization = async () => {
+      if (!token || !user) {
+        if (!cancelled) setOrganizationBootstrappedFor(null);
+        return;
+      }
+
+      try {
+        await iamService.bootstrapActiveOrganization();
+      } catch (error) {
+        // 没有组织成员关系时保留空上下文，由具体页面展示其权限/空状态；
+        // 不把 bootstrap 的网络错误误判为登录失效。
+        console.error('Failed to bootstrap active organization:', error);
+      } finally {
+        if (!cancelled) setOrganizationBootstrappedFor(String(user.id));
+      }
+    };
+
+    void bootstrapOrganization();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user?.id]);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -83,7 +113,11 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }
 
   // 如果有token但还没有用户信息，显示加载状态
-  if (token && !user) {
+  const needsOrganizationBootstrap = Boolean(
+    token && user && organizationBootstrappedFor !== String(user.id),
+  );
+
+  if ((token && !user) || needsOrganizationBootstrap) {
     return (
       <div style={{ 
         display: 'flex', 

@@ -192,6 +192,15 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	// gin 不允许同一前缀下出现不同名通配符(:id vs :workspace_id 会 panic)。
 	r.GET("/workspaces/:id/manifest-summary",
 		middleware.JWTAuth(),
+		iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
+			{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
+			{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+		}),
+		// This route is registered outside setupWorkspaceRoutes, so it does
+		// not inherit that group's tenant fence. Bind the path workspace after
+		// IAM resolves auth_org_id; otherwise an org-level grant could read a
+		// guessed workspace ID from another tenant.
+		middleware.EnforceWorkspaceOrgBinding(db),
 		deploysH.GetWorkspaceManifestSummary,
 	)
 

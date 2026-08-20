@@ -109,6 +109,10 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 		log.Printf("[AISummaryService] Task %d not found: %v", taskID, err)
 		return
 	}
+	if task.WorkspaceID == "" {
+		log.Printf("[AISummaryService] Task %d has no workspace scope, skipping plan summary", taskID)
+		return
+	}
 
 	totalChanges := task.ChangesAdd + task.ChangesChange + task.ChangesDestroy
 	if totalChanges == 0 {
@@ -162,11 +166,12 @@ func (s *AISummaryService) GeneratePlanSummary(taskID uint) {
 	// 创建 Agent Loop
 	caller := s.configService.NewCallerWithFallback(cfg, "summary")
 	loop := NewAIAgentLoop(caller, 10)
-	loop.RegisterTool(NewQueryModuleResourcesTool(s.db))
-	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db))
-	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
-	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
-	loop.RegisterTool(NewQueryResourceCodeDiffTool(s.db))
+	agentScope := NewAIAgentTaskScope(task.WorkspaceID, task.ID)
+	loop.RegisterTool(NewQueryModuleResourcesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryResourceAttributesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryStateResourcesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryResourceCodeDiffTool(s.db, agentScope))
 	loop.SetOutputValidator(planSummaryValidator)
 
 	var processLog strings.Builder
@@ -216,6 +221,10 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 		log.Printf("[AISummaryService] Task %d not found: %v", taskID, err)
 		return
 	}
+	if task.WorkspaceID == "" {
+		log.Printf("[AISummaryService] Task %d has no workspace scope, skipping apply summary", taskID)
+		return
+	}
 
 	var existing models.AIApplySummary
 	if err := s.db.Where("task_id = ?", taskID).First(&existing).Error; err == nil {
@@ -258,11 +267,12 @@ func (s *AISummaryService) GenerateApplySummary(taskID uint) {
 
 	caller := s.configService.NewCallerWithFallback(cfg, "summary")
 	loop := NewAIAgentLoop(caller, 10)
-	loop.RegisterTool(NewQueryModuleResourcesTool(s.db))
-	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db))
-	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
-	loop.RegisterTool(NewQueryStateResourcesTool(s.db))
-	loop.RegisterTool(NewQueryPlanSummaryTool(s.db))
+	agentScope := NewAIAgentTaskScope(task.WorkspaceID, task.ID)
+	loop.RegisterTool(NewQueryModuleResourcesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryCMDBDependenciesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryResourceAttributesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryStateResourcesTool(s.db, agentScope))
+	loop.RegisterTool(NewQueryPlanSummaryTool(s.db, agentScope))
 	loop.SetOutputValidator(applySummaryValidator)
 
 	var processLog strings.Builder
@@ -528,10 +538,10 @@ func (s *AISummaryService) completePlanSummary(summary *models.AIPlanSummary, re
 		AffectedResources interface{} `json:"affected_resources"`
 		RiskLevel         string      `json:"risk_level"` // V2 兼容
 		RiskEvaluation    *struct {
-			RiskLevel                string          `json:"risk_level"`
-			Confidence               string          `json:"confidence"`
+			RiskLevel                 string          `json:"risk_level"`
+			Confidence                string          `json:"confidence"`
 			RequiresHumanConfirmation bool            `json:"requires_human_confirmation"`
-			DecisionHintsRaw         json.RawMessage `json:"decision_hints"`
+			DecisionHintsRaw          json.RawMessage `json:"decision_hints"`
 		} `json:"risk_evaluation"`
 	}
 
@@ -726,10 +736,10 @@ func (s *AISummaryService) parseDecisionHints(summary *models.AIPlanSummary, raw
 
 func (s *AISummaryService) completeApplySummary(summary *models.AIApplySummary, result *AgentLoopResult, startTime time.Time, cfg *models.AIConfig, workspaceID string, taskID uint, userPrompt string) {
 	var aiOutput struct {
-		ExecutionSummary    string      `json:"execution_summary"`
-		ResourceResults     interface{} `json:"resource_results"`
-		ImpactConfirmation  interface{} `json:"impact_confirmation"`
-		AffectedResources   interface{} `json:"affected_resources"`
+		ExecutionSummary   string      `json:"execution_summary"`
+		ResourceResults    interface{} `json:"resource_results"`
+		ImpactConfirmation interface{} `json:"impact_confirmation"`
+		AffectedResources  interface{} `json:"affected_resources"`
 	}
 
 	log.Printf("[AISummaryService] AI raw output for apply task %d (len=%d): %.500s", summary.TaskID, len(result.FinalOutput), result.FinalOutput)
@@ -803,7 +813,7 @@ func (s *AISummaryService) logSummarySkillUsage(cfg *models.AIConfig, capability
 	// 收集使用的 skill IDs
 	var skillIDs []string
 	if result, err := s.skillAssembler.AssemblePrompt(composition, 0, &DynamicContext{
-		UseCMDB: true,
+		UseCMDB:      true,
 		ExtraContext: map[string]interface{}{"stage": capability},
 	}); err == nil {
 		skillIDs = result.UsedSkillIDs

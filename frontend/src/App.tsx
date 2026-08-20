@@ -12,7 +12,7 @@ import AuthProvider from './components/AuthProvider';
 import Layout from './components/Layout';
 import WorkspaceLayout from './components/WorkspaceLayout';
 import IAMLayout from './components/IAMLayout';
-import ProtectedRoute from './components/ProtectedRoute';
+import ProtectedRoute, { SystemAdminRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ResetPassword from './pages/ResetPassword';
@@ -31,7 +31,6 @@ import SkillCreate from './pages/SkillCreate';
 import Workspaces from './pages/Workspaces';
 import WorkspaceDetail from './pages/WorkspaceDetail';
 import CreateWorkspace from './pages/CreateWorkspace';
-import WorkspaceSettings from './pages/WorkspaceSettings';
 import EditWorkspace from './pages/EditWorkspace';
 import WorkspaceResources from './pages/WorkspaceResources';
 import AddResources from './pages/AddResources';
@@ -131,26 +130,28 @@ const App: FC = () => {
                 <Route path="test-form" element={<TestDynamicForm />} />
                 <Route path="modules/:moduleId/schemas" element={<SchemaManagement />} />
                 <Route path="modules/:moduleId/schemas/:schemaId/edit" element={<SchemaEditorPage />} />
-                <Route path="global/settings/terraform-versions" element={<Admin />} />
-                <Route path="global/settings/provider-templates" element={<ProviderTemplatesPage />} />
-                <Route path="global/settings/ai-configs" element={<AIConfigList />} />
-                <Route path="global/settings/ai-configs/create" element={<AIConfigForm />} />
-                <Route path="global/settings/ai-configs/:id/edit" element={<AIConfigForm />} />
-                <Route path="global/settings/skills/create" element={<SkillCreate />} />
-                <Route path="global/settings/skills/:id" element={<SkillDetail />} />
-                <Route path="global/settings/agent-pools" element={<AgentPoolManagement />} />
-                <Route path="global/settings/agent-pools/create" element={<AgentPoolForm />} />
-                <Route path="global/settings/agent-pools/:poolId" element={<AgentPoolDetail />} />
-                <Route path="global/settings/agent-pools/:poolId/edit" element={<AgentPoolForm />} />
-                <Route path="global/settings/run-tasks" element={<RunTaskManagement />} />
-                <Route path="global/settings/run-tasks/create" element={<RunTaskForm />} />
-                <Route path="global/settings/run-tasks/:runTaskId/edit" element={<RunTaskForm />} />
-                <Route path="global/settings/notifications" element={<NotificationManagement />} />
-                <Route path="global/settings/notifications/create" element={<NotificationForm />} />
-                <Route path="global/settings/notifications/:notificationId/edit" element={<NotificationForm />} />
-                <Route path="global/settings/platform-config" element={<PlatformConfig />} />
-                <Route path="global/settings/mfa" element={<MFAConfig />} />
-                <Route path="global/settings/sso" element={<SSOConfig />} />
+                <Route element={<SystemAdminRoute />}>
+                  <Route path="global/settings/terraform-versions" element={<Admin />} />
+                  <Route path="global/settings/provider-templates" element={<ProviderTemplatesPage />} />
+                  <Route path="global/settings/ai-configs" element={<AIConfigList />} />
+                  <Route path="global/settings/ai-configs/create" element={<AIConfigForm />} />
+                  <Route path="global/settings/ai-configs/:id/edit" element={<AIConfigForm />} />
+                  <Route path="global/settings/skills/create" element={<SkillCreate />} />
+                  <Route path="global/settings/skills/:id" element={<SkillDetail />} />
+                  <Route path="global/settings/agent-pools" element={<AgentPoolManagement />} />
+                  <Route path="global/settings/agent-pools/create" element={<AgentPoolForm />} />
+                  <Route path="global/settings/agent-pools/:poolId" element={<AgentPoolDetail />} />
+                  <Route path="global/settings/agent-pools/:poolId/edit" element={<AgentPoolForm />} />
+                  <Route path="global/settings/run-tasks" element={<RunTaskManagement />} />
+                  <Route path="global/settings/run-tasks/create" element={<RunTaskForm />} />
+                  <Route path="global/settings/run-tasks/:runTaskId/edit" element={<RunTaskForm />} />
+                  <Route path="global/settings/notifications" element={<NotificationManagement />} />
+                  <Route path="global/settings/notifications/create" element={<NotificationForm />} />
+                  <Route path="global/settings/notifications/:notificationId/edit" element={<NotificationForm />} />
+                  <Route path="global/settings/platform-config" element={<PlatformConfig />} />
+                  <Route path="global/settings/mfa" element={<MFAConfig />} />
+                  <Route path="global/settings/sso" element={<SSOConfig />} />
+                </Route>
                 <Route path="admin/manifests" element={<ManifestManagement />} />
                 <Route path="api-docs" element={<SwaggerUI />} />
                 <Route path="settings" element={<PersonalSettings />} />
@@ -181,7 +182,9 @@ const App: FC = () => {
                 <Route index element={<OrganizationManagement />} />
                 <Route path="organizations" element={<OrganizationManagement />} />
                 <Route path="projects" element={<ProjectManagement />} />
-                <Route path="users" element={<UserManagement />} />
+                <Route element={<SystemAdminRoute />}>
+                  <Route path="users" element={<UserManagement />} />
+                </Route>
                 <Route path="teams" element={<TeamManagement />} />
                 <Route path="teams/:id" element={<TeamDetail />} />
                 <Route path="applications" element={<ApplicationManagement />} />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import { apiFetch } from '../../services/api';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './RunTaskManagement.module.css';
 
@@ -46,7 +47,7 @@ const RunTaskManagement: React.FC = () => {
   const fetchRunTasks = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/run-tasks', {
+      const response = await apiFetch('/run-tasks', {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -83,7 +84,7 @@ const RunTaskManagement: React.FC = () => {
     
     setDeleting(true);
     try {
-      const response = await fetch(`/api/v1/run-tasks/${deleteConfirm.task.run_task_id}`, {
+      const response = await apiFetch(`/run-tasks/${deleteConfirm.task.run_task_id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -109,7 +110,7 @@ const RunTaskManagement: React.FC = () => {
   const handleTestConnection = async (runTaskId: string) => {
     setTesting(runTaskId);
     try {
-      const response = await fetch(`/api/v1/run-tasks/${runTaskId}/test`, {
+      const response = await apiFetch(`/run-tasks/${runTaskId}/test`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });

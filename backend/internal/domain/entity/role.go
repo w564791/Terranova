@@ -5,9 +5,11 @@ import (
 )
 
 // Role IAM角色
+// OrgID=0 表示平台级（系统预置 Role）；自定义 Role 必须绑定租户 org_id。
 type Role struct {
 	ID          uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name        string    `gorm:"type:varchar(100);not null;uniqueIndex" json:"name"`
+	OrgID       uint      `gorm:"not null;default:0;uniqueIndex:idx_role_org_name" json:"org_id"`
+	Name        string    `gorm:"type:varchar(100);not null;uniqueIndex:idx_role_org_name" json:"name"`
 	DisplayName string    `gorm:"type:varchar(200);not null" json:"display_name"`
 	Description string    `gorm:"type:text" json:"description,omitempty"`
 	IsSystem    bool      `gorm:"not null;default:false" json:"is_system"`

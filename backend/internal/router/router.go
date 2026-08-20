@@ -13,10 +13,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"gorm.io/gorm"
 
 	_ "iac-platform/docs" // swagger docs
@@ -75,7 +75,10 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 
 		// Agent Metrics WebSocket
 		agentMetricsWSHandler := handlers.NewAgentMetricsWSHandler(agentMetricsHub)
-		ws.GET("/agent-pools/:pool_id/metrics", agentMetricsWSHandler.HandleAgentMetricsWS)
+		// Agent pools are platform infrastructure until they gain an org_id.
+		// Their live metrics must not be exposed to an arbitrary authenticated
+		// tenant user.
+		ws.GET("/agent-pools/:pool_id/metrics", middleware.RequireSystemAdmin(), agentMetricsWSHandler.HandleAgentMetricsWS)
 	}
 
 	// 系统初始化路由（无需JWT，未初始化时可用）
@@ -88,7 +91,7 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 
 	// 认证路由（无需JWT，启用限速防暴力破解）
 	loginLimiter := middleware.NewRateLimiter(10, time.Minute) // 10次/分钟
-	mfaLimiter := middleware.NewRateLimiter(5, time.Minute)  // 5次/分钟
+	mfaLimiter := middleware.NewRateLimiter(5, time.Minute)    // 5次/分钟
 	// 定期清理过期条目，防止内存泄漏
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
@@ -121,6 +124,13 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 
 	// Agent API routes (使用 Pool Token 认证，不需要 JWT)
 	setupAgentAPIRoutes(api, db, streamManager, agentMetricsHub, runTaskExecutor, queueManager, stateTokenService)
+
+	// Application principal API（选项 A：X-App-Key/Secret + IAM）
+	// 须在 protected JWT 组之前注册；与 Pool Token Agent 路由分离
+	{
+		appIAM := middleware.NewIAMPermissionMiddleware(db)
+		setupApplicationPrincipalRoutes(api, db, appIAM)
+	}
 
 	// Terraform HTTP State Backend routes (使用 State Token 认证)
 	if stateTokenService != nil {

@@ -32,7 +32,7 @@ const OrganizationManagement: React.FC = () => {
   const loadOrganizations = async () => {
     try {
       setLoading(true);
-      const response = await iamService.listOrganizations();
+      const response = await iamService.bootstrapActiveOrganization();
       console.log('Organizations list response:', response);
       setOrganizations(response?.organizations || []);
     } catch (error: any) {

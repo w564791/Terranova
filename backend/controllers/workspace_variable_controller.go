@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -21,6 +22,30 @@ func NewWorkspaceVariableController(variableService *services.WorkspaceVariableS
 	return &WorkspaceVariableController{
 		variableService: variableService,
 	}
+}
+
+// resolvePathWorkspace 解析路径 :id 为语义化 workspace_id（并兼容数字主键）
+func (vc *WorkspaceVariableController) resolvePathWorkspace(c *gin.Context) (semanticID string, ok bool) {
+	workspaceIDParam := c.Param("id")
+	if workspaceIDParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "无效的workspace ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return "", false
+	}
+	var workspace models.Workspace
+	db := vc.variableService.GetDB()
+	if err := db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+		if err := db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code": 404, "message": "Workspace不存在",
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			return "", false
+		}
+	}
+	return workspace.WorkspaceID, true
 }
 
 // CreateVariable 创建变量
@@ -203,6 +228,16 @@ func (vc *WorkspaceVariableController) ListVariables(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/variables/{var_id} [get]
 // @Security BearerAuth
 func (vc *WorkspaceVariableController) GetVariable(c *gin.Context) {
+	workspaceIDParam := c.Param("id")
+	if workspaceIDParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "无效的workspace ID",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
 	varID, err := strconv.ParseUint(c.Param("var_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -213,7 +248,25 @@ func (vc *WorkspaceVariableController) GetVariable(c *gin.Context) {
 		return
 	}
 
-	variable, err := vc.variableService.GetVariable(uint(varID))
+	// 解析路径 workspace，确保子资源归属该 workspace（防跨 WS IDOR）
+	var workspace models.Workspace
+	db := vc.variableService.GetDB()
+	if err := db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+		if err := db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":      404,
+				"message":   "Workspace不存在",
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			return
+		}
+	}
+
+	variable, err := vc.variableService.GetVariableInWorkspace(workspace.WorkspaceID, uint(varID))
+	if err != nil {
+		// 也尝试数字 workspace 主键（历史数据兼容）
+		variable, err = vc.variableService.GetVariableInWorkspace(fmt.Sprintf("%d", workspace.ID), uint(varID))
+	}
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"code":      404,
@@ -245,6 +298,10 @@ func (vc *WorkspaceVariableController) GetVariable(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/variables/{var_id} [put]
 // @Security BearerAuth
 func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
+	wsSemantic, ok := vc.resolvePathWorkspace(c)
+	if !ok {
+		return
+	}
 	varIDParam := c.Param("var_id")
 
 	var req struct {
@@ -297,17 +354,15 @@ func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 		return
 	}
 
-	// 判断是数字ID还是variable_id，调用相应的Service方法
+	// 判断是数字ID还是variable_id，均绑定路径 workspace
 	var result *services.VariableUpdateResult
 	var err error
-	
+
 	if _, parseErr := strconv.ParseUint(varIDParam, 10, 32); parseErr == nil {
-		// 是数字ID
 		varID, _ := strconv.ParseUint(varIDParam, 10, 32)
-		result, err = vc.variableService.UpdateVariable(uint(varID), req.Version, updates)
+		result, err = vc.variableService.UpdateVariableInWorkspace(wsSemantic, uint(varID), req.Version, updates)
 	} else {
-		// 是variable_id
-		result, err = vc.variableService.UpdateVariableByVariableID(varIDParam, req.Version, updates)
+		result, err = vc.variableService.UpdateVariableByVariableIDInWorkspace(wsSemantic, varIDParam, req.Version, updates)
 	}
 	
 	if err != nil {
@@ -354,18 +409,18 @@ func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/variables/{var_id} [delete]
 // @Security BearerAuth
 func (vc *WorkspaceVariableController) DeleteVariable(c *gin.Context) {
+	wsSemantic, ok := vc.resolvePathWorkspace(c)
+	if !ok {
+		return
+	}
 	varIDParam := c.Param("var_id")
-	
+
 	var err error
-	
-	// 判断是数字ID还是variable_id，调用相应的Service方法
 	if _, parseErr := strconv.ParseUint(varIDParam, 10, 32); parseErr == nil {
-		// 是数字ID
 		varID, _ := strconv.ParseUint(varIDParam, 10, 32)
-		err = vc.variableService.DeleteVariable(uint(varID))
+		err = vc.variableService.DeleteVariableInWorkspace(wsSemantic, uint(varID))
 	} else {
-		// 是variable_id
-		err = vc.variableService.DeleteVariableByVariableID(varIDParam)
+		err = vc.variableService.DeleteVariableByVariableIDInWorkspace(wsSemantic, varIDParam)
 	}
 
 	if err != nil {
@@ -398,15 +453,16 @@ func (vc *WorkspaceVariableController) DeleteVariable(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/variables/{var_id}/versions [get]
 // @Security BearerAuth
 func (vc *WorkspaceVariableController) GetVariableVersions(c *gin.Context) {
+	wsSemantic, ok := vc.resolvePathWorkspace(c)
+	if !ok {
+		return
+	}
 	varIDParam := c.Param("var_id")
-	
+
 	var variableID string
-	
-	// 判断是数字ID还是variable_id
 	if _, err := strconv.ParseUint(varIDParam, 10, 32); err == nil {
-		// 是数字ID，需要先查询获取variable_id
 		varID, _ := strconv.ParseUint(varIDParam, 10, 32)
-		variable, err := vc.variableService.GetVariable(uint(varID))
+		variable, err := vc.variableService.GetVariableInWorkspace(wsSemantic, uint(varID))
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"code":      404,
@@ -417,12 +473,10 @@ func (vc *WorkspaceVariableController) GetVariableVersions(c *gin.Context) {
 		}
 		variableID = variable.VariableID
 	} else {
-		// 是variable_id
 		variableID = varIDParam
 	}
-	
-	// 获取版本历史
-	versions, err := vc.variableService.GetVariableVersions(variableID)
+
+	versions, err := vc.variableService.GetVariableVersionsInWorkspace(wsSemantic, variableID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
@@ -462,9 +516,13 @@ func (vc *WorkspaceVariableController) GetVariableVersions(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/variables/{var_id}/versions/{version} [get]
 // @Security BearerAuth
 func (vc *WorkspaceVariableController) GetVariableVersion(c *gin.Context) {
+	wsSemantic, ok := vc.resolvePathWorkspace(c)
+	if !ok {
+		return
+	}
 	varIDParam := c.Param("var_id")
 	versionParam := c.Param("version")
-	
+
 	version, err := strconv.Atoi(versionParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -474,14 +532,11 @@ func (vc *WorkspaceVariableController) GetVariableVersion(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	var variableID string
-	
-	// 判断是数字ID还是variable_id
 	if _, err := strconv.ParseUint(varIDParam, 10, 32); err == nil {
-		// 是数字ID，需要先查询获取variable_id
 		varID, _ := strconv.ParseUint(varIDParam, 10, 32)
-		variable, err := vc.variableService.GetVariable(uint(varID))
+		variable, err := vc.variableService.GetVariableInWorkspace(wsSemantic, uint(varID))
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{
 				"code":      404,
@@ -492,12 +547,20 @@ func (vc *WorkspaceVariableController) GetVariableVersion(c *gin.Context) {
 		}
 		variableID = variable.VariableID
 	} else {
-		// 是variable_id
+		// 是variable_id：先校验归属路径 workspace
+		if _, err := vc.variableService.GetLatestByVariableIDInWorkspace(wsSemantic, varIDParam); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":      404,
+				"message":   "变量不存在",
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			return
+		}
 		variableID = varIDParam
 	}
-	
-	// 获取指定版本
-	variable, err := vc.variableService.GetVariableVersion(variableID, version)
+
+	// 获取指定版本（双条件：workspace + variable_id + version）
+	variable, err := vc.variableService.GetVariableVersionInWorkspace(wsSemantic, variableID, version)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"code":      404,

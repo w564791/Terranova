@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../../hooks/useToast';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { apiFetch } from '../../services/api';
 import styles from './RoleManagement.module.css';
 
 // 角色接口
@@ -44,7 +45,6 @@ const RoleManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingPolicies, setLoadingPolicies] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showAddPolicyForm, setShowAddPolicyForm] = useState(false);
   const [isAddingPolicy, setIsAddingPolicy] = useState(false);
   const [permissionSearch, setPermissionSearch] = useState('');
   const [editingPolicy, setEditingPolicy] = useState<RolePolicy | null>(null);
@@ -78,7 +78,7 @@ const RoleManagement: React.FC = () => {
   const loadRoles = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/v1/iam/roles', {
+      const response = await apiFetch('/iam/roles', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -102,7 +102,7 @@ const RoleManagement: React.FC = () => {
   const loadRoleDetails = async (roleId: number) => {
     try {
       setLoadingPolicies(true);
-      const response = await fetch(`/api/v1/iam/roles/${roleId}`, {
+      const response = await apiFetch(`/iam/roles/${roleId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -125,7 +125,7 @@ const RoleManagement: React.FC = () => {
   // 加载权限定义列表
   const loadPermissions = async () => {
     try {
-      const response = await fetch('/api/v1/iam/permissions/definitions', {
+      const response = await apiFetch('/iam/permissions/definitions', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -164,7 +164,7 @@ const RoleManagement: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const response = await fetch('/api/v1/iam/roles', {
+      const response = await apiFetch('/iam/roles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +217,7 @@ const RoleManagement: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const response = await fetch(`/api/v1/iam/roles/${cloningRole.id}/clone`, {
+      const response = await apiFetch(`/iam/roles/${cloningRole.id}/clone`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -253,7 +253,7 @@ const RoleManagement: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const response = await fetch(`/api/v1/iam/roles/${selectedRole.id}/policies`, {
+      const response = await apiFetch(`/iam/roles/${selectedRole.id}/policies`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -288,7 +288,7 @@ const RoleManagement: React.FC = () => {
     if (!selectedRole || !removePolicyConfirm.policyId) return;
 
     try {
-      const response = await fetch(`/api/v1/iam/roles/${selectedRole.id}/policies/${removePolicyConfirm.policyId}`, {
+      const response = await apiFetch(`/iam/roles/${selectedRole.id}/policies/${removePolicyConfirm.policyId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -318,7 +318,7 @@ const RoleManagement: React.FC = () => {
 
     try {
       // 先删除旧策略
-      await fetch(`/api/v1/iam/roles/${selectedRole.id}/policies/${editingPolicy.id}`, {
+      await apiFetch(`/iam/roles/${selectedRole.id}/policies/${editingPolicy.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -326,7 +326,7 @@ const RoleManagement: React.FC = () => {
       });
 
       // 再添加新策略
-      const response = await fetch(`/api/v1/iam/roles/${selectedRole.id}/policies`, {
+      const response = await apiFetch(`/iam/roles/${selectedRole.id}/policies`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

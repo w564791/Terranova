@@ -181,10 +181,13 @@ func (s *TeamServiceImpl) AddTeamMember(
 		return err
 	}
 
-	// 2. 验证团队是否存在
-	_, err := s.teamRepo.GetTeamByID(ctx, req.TeamID)
+	// 2. 验证团队是否存在，并取得成员关系应写入的组织。
+	team, err := s.teamRepo.GetTeamByID(ctx, req.TeamID)
 	if err != nil {
 		return fmt.Errorf("team not found: %w", err)
+	}
+	if team == nil || team.OrgID == 0 {
+		return fmt.Errorf("team has no organization")
 	}
 
 	// 3. 检查用户是否已是成员
@@ -196,7 +199,7 @@ func (s *TeamServiceImpl) AddTeamMember(
 		return fmt.Errorf("user is already a team member")
 	}
 
-	// 4. 添加成员
+	// 4. 添加成员并原子确保用户能从 accessible-org 进入该团队所属组织。
 	member := &entity.TeamMember{
 		TeamID:   req.TeamID,
 		UserID:   req.UserID,
@@ -205,7 +208,7 @@ func (s *TeamServiceImpl) AddTeamMember(
 		JoinedBy: &req.AddedBy,
 	}
 
-	if err := s.teamRepo.AddMember(ctx, member); err != nil {
+	if err := s.teamRepo.AddMemberWithOrganizationMembership(ctx, member, team.OrgID); err != nil {
 		return fmt.Errorf("failed to add team member: %w", err)
 	}
 

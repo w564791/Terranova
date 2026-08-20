@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"iac-platform/internal/application/service"
 	"iac-platform/internal/models"
@@ -10,7 +12,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// AgentAuthMiddleware validates application credentials and agent identity
+// AgentAuthMiddleware validates application credentials and agent identity.
+// 同时写入 IAM principal 上下文（APPLICATION），供 RequirePermission 等中间件求值。
+// 注意：Agent 任务/工作区 API 主路径仍使用 Pool Token；本中间件用于 App 密钥鉴权场景。
 func AgentAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	agentService := service.NewAgentService(db)
 
@@ -62,6 +66,20 @@ func AgentAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 		// Store application in context
 		c.Set("application", app)
 		c.Set("application_id", app.ID)
+
+		// IAM principal 链（选项 A）：与 PermissionChecker APPLICATION 路径对齐
+		// principal_id 必须为 app_key（外部稳定标识）；user_id 合成以便 principalFromContext 非空
+		principalID := app.AppKey
+		if principalID == "" {
+			principalID = strconv.FormatUint(uint64(app.ID), 10)
+		}
+		c.Set("principal_type", "APPLICATION")
+		c.Set("principal_id", principalID)
+		c.Set("user_id", "app:"+principalID)
+		c.Set("username", fmt.Sprintf("app:%s", app.Name))
+		if app.OrgID > 0 {
+			c.Set("auth_org_id", app.OrgID)
+		}
 
 		c.Next()
 	}

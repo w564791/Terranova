@@ -4,6 +4,8 @@
  */
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../store';
 import styles from './WorkspaceSidebar.module.css';
 
 export interface IAMSidebarProps {
@@ -38,6 +40,10 @@ const IAMSidebar: React.FC<IAMSidebarProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useSelector((state: RootState) => state.auth);
+  const visibleNavItems = navItems.filter(
+    (item) => item.path !== '/iam/users' || user?.is_system_admin,
+  );
 
   return (
     <aside className={`${styles.sidebar} ${mobileSidebarOpen ? styles.sidebarMobileOpen : ''}`}>
@@ -53,7 +59,7 @@ const IAMSidebar: React.FC<IAMSidebarProps> = ({
       </div>
 
       <nav className={styles.nav} aria-label="IAM">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}

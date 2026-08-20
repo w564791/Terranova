@@ -54,12 +54,13 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 			iamFactory.GetProjectService(),
 		)
 		applicationHandler := handlers.NewApplicationHandler(iamFactory.GetApplicationService())
-		auditHandler := handlers.NewAuditHandler(iamFactory.GetAuditService())
+		auditHandler := handlers.NewAuditHandlerWithDB(iamFactory.GetAuditService(), db)
 		auditConfigHandler := handlers.NewAuditConfigHandler(db)
 		userHandler := handlers.NewUserHandler(service.NewUserService(db))
-		roleHandler := handlers.NewRoleHandler(db)
+		roleHandler := handlers.NewRoleHandler(db, iamFactory.GetPermissionChecker())
 
-		// 权限管理 - 其他权限管理API
+		// Direct Grant 写路径：USER/TEAM → 410（D5）；APPLICATION org 级仍可用
+		// 列表/撤销保留，便于清理历史 direct grant
 		iamGroup.POST("/permissions/grant",
 			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN"),
 			permissionHandler.GrantPermission,
@@ -75,6 +76,7 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 			permissionHandler.GrantPresetPermissions,
 		)
 
+		// 撤销仍允许（清理遗留 direct grant / APPLICATION）
 		iamGroup.DELETE("/permissions/:scope_type/:id",
 			iamMiddleware.RequirePermission("IAM_PERMISSIONS", "ORGANIZATION", "ADMIN"),
 			permissionHandler.RevokePermission,
@@ -138,7 +140,7 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 		)
 
 		// 团队Token管理 - 使用统一JWT密钥
-		teamTokenHandler := handlers.NewTeamTokenHandler(service.NewTeamTokenService(db, ""))
+		teamTokenHandler := handlers.NewTeamTokenHandlerWithDB(service.NewTeamTokenService(db, ""), db)
 
 		iamGroup.POST("/teams/:id/tokens",
 			iamMiddleware.RequirePermission("IAM_TEAMS", "ORGANIZATION", "WRITE"),
@@ -171,14 +173,19 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 			roleHandler.RevokeTeamRole,
 		)
 
-		// 组织管理 - 添加IAM权限检查
+		// 当前用户可见组织：用于会话建立 active-org，上游 JWT 已认证。
+		// 必须在 /organizations/:id 前注册，避免 "accessible" 被当作 ID。
+		iamGroup.GET("/organizations/accessible", orgHandler.ListAccessibleOrganizations)
+
+		// Creating or enumerating organizations is platform-global lifecycle work.
+		// Individual organization resources below remain tenant-scoped.
 		iamGroup.POST("/organizations",
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "ADMIN"),
+			middleware.RequireSystemAdmin(),
 			orgHandler.CreateOrganization,
 		)
 
 		iamGroup.GET("/organizations",
-			iamMiddleware.RequirePermission("IAM_ORGANIZATIONS", "ORGANIZATION", "READ"),
+			middleware.RequireSystemAdmin(),
 			orgHandler.ListOrganizations,
 		)
 
@@ -254,6 +261,20 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 			applicationHandler.RegenerateSecret,
 		)
 
+		// Application 角色分配（D5；principal 存 app_key）
+		iamGroup.POST("/applications/:id/roles",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "ADMIN"),
+			roleHandler.AssignApplicationRole,
+		)
+		iamGroup.GET("/applications/:id/roles",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "READ"),
+			roleHandler.ListApplicationRoles,
+		)
+		iamGroup.DELETE("/applications/:id/roles/:assignment_id",
+			iamMiddleware.RequirePermission("IAM_APPLICATIONS", "ORGANIZATION", "ADMIN"),
+			roleHandler.RevokeApplicationRole,
+		)
+
 		// 审计日志 - 添加IAM权限检查
 		iamGroup.GET("/audit/config",
 			iamMiddleware.RequirePermission("IAM_AUDIT", "ORGANIZATION", "READ"),
@@ -290,19 +311,21 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 			auditHandler.QueryPermissionChangesByPerformer,
 		)
 
-		// 用户管理 - 添加IAM权限检查
+		// User records are global identities, not organization-owned records. Keep
+		// their lifecycle behind the platform-admin boundary; tenant role/team
+		// assignments below remain separately organization-scoped.
 		iamGroup.GET("/users/stats",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			middleware.RequireSystemAdmin(),
 			userHandler.GetUserStats,
 		)
 
 		iamGroup.GET("/users",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			middleware.RequireSystemAdmin(),
 			userHandler.ListUsers,
 		)
 
 		iamGroup.POST("/users",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "WRITE"),
+			middleware.RequireSystemAdmin(),
 			userHandler.CreateUser,
 		)
 
@@ -324,27 +347,27 @@ func setupIAMRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, iamMiddleware 
 
 		// 用户基本操作
 		iamGroup.GET("/users/:id",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "READ"),
+			middleware.RequireSystemAdmin(),
 			userHandler.GetUser,
 		)
 
 		iamGroup.PUT("/users/:id",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "WRITE"),
+			middleware.RequireSystemAdmin(),
 			userHandler.UpdateUser,
 		)
 
 		iamGroup.POST("/users/:id/activate",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			middleware.RequireSystemAdmin(),
 			userHandler.ActivateUser,
 		)
 
 		iamGroup.POST("/users/:id/deactivate",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			middleware.RequireSystemAdmin(),
 			userHandler.DeactivateUser,
 		)
 
 		iamGroup.DELETE("/users/:id",
-			iamMiddleware.RequirePermission("IAM_USERS", "ORGANIZATION", "ADMIN"),
+			middleware.RequireSystemAdmin(),
 			userHandler.DeleteUser,
 		)
 

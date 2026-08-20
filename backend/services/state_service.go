@@ -349,8 +349,9 @@ func (s *StateService) ListStateVersions(workspaceID string, limit, offset int) 
 		return nil, 0, err
 	}
 
-	// 获取列表
-	err := s.db.Where("workspace_id = ?", workspaceID).
+	// 列表禁止加载 content（敏感面；完整内容走 retrieve/download + SENSITIVE）
+	err := s.db.Select("id, workspace_id, version, checksum, size_bytes, task_id, created_by, created_at, description, is_imported, import_source, is_rollback, rollback_from_version").
+		Where("workspace_id = ?", workspaceID).
 		Order("version DESC").
 		Limit(limit).
 		Offset(offset).
@@ -360,12 +361,13 @@ func (s *StateService) ListStateVersions(workspaceID string, limit, offset int) 
 }
 
 // StateVersionWithUsername State 版本（包含用户名）
+// 注意：嵌入的 WorkspaceStateVersion 在列表场景不含 Content
 type StateVersionWithUsername struct {
 	models.WorkspaceStateVersion
 	CreatedByName string `json:"created_by_name"`
 }
 
-// ListStateVersionsWithUsernames 列出 State 版本历史（包含用户名）
+// ListStateVersionsWithUsernames 列出 State 版本历史（包含用户名，不含 content）
 func (s *StateService) ListStateVersionsWithUsernames(workspaceID string, limit, offset int) ([]StateVersionWithUsername, int64, error) {
 	var versions []models.WorkspaceStateVersion
 	var total int64
@@ -377,8 +379,9 @@ func (s *StateService) ListStateVersionsWithUsernames(workspaceID string, limit,
 		return nil, 0, err
 	}
 
-	// 获取列表
-	err := s.db.Where("workspace_id = ?", workspaceID).
+	// 列表禁止加载 content（防 READ 绕过敏感权限）
+	err := s.db.Select("id, workspace_id, version, checksum, size_bytes, task_id, created_by, created_at, description, is_imported, import_source, is_rollback, rollback_from_version").
+		Where("workspace_id = ?", workspaceID).
 		Order("version DESC").
 		Limit(limit).
 		Offset(offset).

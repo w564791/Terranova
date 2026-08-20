@@ -13,6 +13,11 @@ type OrganizationRepository interface {
 	// CreateOrganization 创建组织
 	CreateOrganization(ctx context.Context, org *entity.Organization) error
 
+	// CreateOrganizationWithBootstrap atomically creates an organization, its
+	// default teams, and the explicit tenant access required by active platform
+	// administrators after the IAM bypass has been removed.
+	CreateOrganizationWithBootstrap(ctx context.Context, org *entity.Organization, defaultTeams []*entity.Team) error
+
 	// GetOrganizationByID 根据ID获取组织
 	GetOrganizationByID(ctx context.Context, id uint) (*entity.Organization, error)
 
@@ -24,6 +29,11 @@ type OrganizationRepository interface {
 
 	// UpdateOrganization 更新组织信息
 	UpdateOrganization(ctx context.Context, org *entity.Organization) error
+
+	// UpdateOrganizationWithBootstrap updates an organization and, when it is
+	// being activated, restores explicit administrator access in the same
+	// transaction.
+	UpdateOrganizationWithBootstrap(ctx context.Context, org *entity.Organization, ensureSystemAdminAccess bool) error
 
 	// DeleteOrganization 删除组织
 	DeleteOrganization(ctx context.Context, id uint) error

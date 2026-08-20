@@ -44,39 +44,10 @@ func (mc *ModuleController) GetModules(c *gin.Context) {
 
 	modules, total, err := mc.moduleService.GetModules(page, size, provider, search)
 	if err != nil {
-		// 返回模拟数据
-		mockModules := []models.Module{
-			{
-				ID:          1,
-				Name:        "aws-vpc",
-				Provider:    "AWS",
-				Source:      "terraform-aws-modules/vpc/aws",
-				Version:     "1.0.0",
-				Description: "AWS VPC模块，用于创建虚拟私有云",
-				SyncStatus:  "synced",
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			},
-			{
-				ID:          2,
-				Name:        "azure-vm",
-				Provider:    "Azure",
-				Source:      "Azure/compute/azurerm",
-				Version:     "2.1.0",
-				Description: "Azure虚拟机模块",
-				SyncStatus:  "synced",
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			},
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"code": 200,
-			"data": gin.H{
-				"items": mockModules,
-				"total": 2,
-				"page":  page,
-				"size":  size,
-			},
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "获取模块列表失败",
+			"error":     err.Error(),
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return
@@ -119,28 +90,9 @@ func (mc *ModuleController) GetModule(c *gin.Context) {
 
 	module, err := mc.moduleService.GetModuleByID(uint(id))
 	if err != nil {
-		// 返回模拟数据
-		mockModule := models.Module{
-			ID:          uint(id),
-			Name:        "aws-vpc",
-			Provider:    "AWS",
-			Source:      "terraform-aws-modules/vpc/aws",
-			Version:     "1.0.0",
-			Description: "AWS VPC模块，用于创建虚拟私有云网络环境",
-			SyncStatus:  "synced",
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
-		if id == 2 {
-			mockModule.Name = "azure-vm"
-			mockModule.Provider = "Azure"
-			mockModule.Source = "Azure/compute/azurerm"
-			mockModule.Version = "2.1.0"
-			mockModule.Description = "Azure虚拟机模块，用于创建和管理Azure云虚拟机"
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"code":      200,
-			"data":      mockModule,
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":      404,
+			"message":   "模块不存在",
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"iac-platform/internal/domain/entity"
 	"iac-platform/internal/domain/repository"
@@ -26,6 +27,35 @@ func (r *OrganizationRepositoryImpl) CreateOrganization(ctx context.Context, org
 		return fmt.Errorf("failed to create organization: %w", err)
 	}
 	return nil
+}
+
+// CreateOrganizationWithBootstrap keeps the organization lifecycle atomic.
+// The IAM migration deliberately removed the implicit system-admin bypass, so
+// a newly created tenant must receive concrete administrator role assignments
+// before it becomes visible to the rest of the application.
+func (r *OrganizationRepositoryImpl) CreateOrganizationWithBootstrap(
+	ctx context.Context,
+	org *entity.Organization,
+	defaultTeams []*entity.Team,
+) error {
+	if org == nil {
+		return fmt.Errorf("organization is required")
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(org).Error; err != nil {
+			return fmt.Errorf("create organization: %w", err)
+		}
+		for _, team := range defaultTeams {
+			if team == nil {
+				continue
+			}
+			team.OrgID = org.ID
+			if err := tx.Create(team).Error; err != nil {
+				return fmt.Errorf("create default team %q: %w", team.Name, err)
+			}
+		}
+		return ensureActiveSystemAdministratorAccess(tx, org.ID)
+	})
 }
 
 // GetOrganizationByID 根据ID获取组织
@@ -68,6 +98,89 @@ func (r *OrganizationRepositoryImpl) ListOrganizations(ctx context.Context, isAc
 func (r *OrganizationRepositoryImpl) UpdateOrganization(ctx context.Context, org *entity.Organization) error {
 	if err := r.db.WithContext(ctx).Save(org).Error; err != nil {
 		return fmt.Errorf("failed to update organization: %w", err)
+	}
+	return nil
+}
+
+func (r *OrganizationRepositoryImpl) UpdateOrganizationWithBootstrap(
+	ctx context.Context,
+	org *entity.Organization,
+	ensureSystemAdminAccess bool,
+) error {
+	if org == nil {
+		return fmt.Errorf("organization is required")
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(org).Error; err != nil {
+			return fmt.Errorf("update organization: %w", err)
+		}
+		if !ensureSystemAdminAccess {
+			return nil
+		}
+		return ensureActiveSystemAdministratorAccess(tx, org.ID)
+	})
+}
+
+// ensureActiveSystemAdministratorAccess mirrors the runtime invariant set by
+// the IAM migration: system administrators keep platform-only authority, but
+// need an explicit global-admin Role at each active organization. It is kept
+// here rather than in a handler so create and later activation share exactly
+// the same durable behavior.
+func ensureActiveSystemAdministratorAccess(tx *gorm.DB, orgID uint) error {
+	if orgID == 0 {
+		return fmt.Errorf("organization id is required")
+	}
+
+	var adminRole entity.Role
+	if err := tx.Where("name = ? AND is_system IS TRUE AND org_id = ? AND is_active IS TRUE", "admin", 0).
+		First(&adminRole).Error; err != nil {
+		return fmt.Errorf("canonical platform admin role is not installed: %w", err)
+	}
+
+	var userIDs []string
+	if err := tx.Table("users").
+		Where("is_system_admin IS TRUE AND COALESCE(is_active, true)").
+		Pluck("user_id", &userIDs).Error; err != nil {
+		return fmt.Errorf("list active system administrators: %w", err)
+	}
+
+	now := tx.NowFunc()
+	for _, userID := range userIDs {
+		if userID == "" {
+			continue
+		}
+		membership := &entity.UserOrganization{UserID: userID, OrgID: orgID, JoinedAt: now}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "org_id"}},
+			DoNothing: true,
+		}).Create(membership).Error; err != nil {
+			return fmt.Errorf("ensure organization membership for %q: %w", userID, err)
+		}
+
+		assignedBy := "system:organization"
+		assignment := &entity.UserRole{
+			UserID:     userID,
+			RoleID:     adminRole.ID,
+			ScopeType:  "ORGANIZATION",
+			ScopeID:    orgID,
+			AssignedBy: &assignedBy,
+			AssignedAt: now,
+			ExpiresAt:  nil,
+			Reason:     "IAM organization lifecycle: explicit administrator access",
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{
+				{Name: "user_id"}, {Name: "role_id"}, {Name: "scope_type"}, {Name: "scope_id"},
+			},
+			DoUpdates: clause.Assignments(map[string]interface{}{
+				"assigned_by": assignment.AssignedBy,
+				"assigned_at": assignment.AssignedAt,
+				"expires_at":  nil,
+				"reason":      assignment.Reason,
+			}),
+		}).Create(assignment).Error; err != nil {
+			return fmt.Errorf("ensure administrator role for %q: %w", userID, err)
+		}
 	}
 	return nil
 }
@@ -115,7 +228,8 @@ func (r *OrganizationRepositoryImpl) GetUserOrganizations(ctx context.Context, u
 	var orgs []*entity.Organization
 	if err := r.db.WithContext(ctx).
 		Joins("JOIN user_organizations ON user_organizations.org_id = organizations.id").
-		Where("user_organizations.user_id = ?", userID).
+		Where("user_organizations.user_id = ? AND organizations.is_active = ?", userID, true).
+		Order("user_organizations.joined_at ASC, organizations.id ASC").
 		Find(&orgs).Error; err != nil {
 		return nil, fmt.Errorf("failed to get user organizations: %w", err)
 	}
@@ -302,23 +416,22 @@ func (r *ProjectRepositoryImpl) GetProjectIDByWorkspaceID(ctx context.Context, w
 	return relation.ProjectID, nil
 }
 
-// AssignWorkspaceToProject 将工作空间分配到项目（使用语义化ID）
+// AssignWorkspaceToProject 将工作空间分配到项目（使用语义化ID，事务内 delete+insert）
 func (r *ProjectRepositoryImpl) AssignWorkspaceToProject(ctx context.Context, workspaceID string, projectID uint) error {
-	// 先删除已有的关联
-	r.db.WithContext(ctx).
-		Where("workspace_id = ?", workspaceID).
-		Delete(&entity.WorkspaceProjectRelation{})
-
-	// 创建新关联
-	relation := &entity.WorkspaceProjectRelation{
-		WorkspaceID: workspaceID,
-		ProjectID:   projectID,
-	}
-
-	if err := r.db.WithContext(ctx).Create(relation).Error; err != nil {
-		return fmt.Errorf("failed to assign workspace to project: %w", err)
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("workspace_id = ?", workspaceID).
+			Delete(&entity.WorkspaceProjectRelation{}).Error; err != nil {
+			return fmt.Errorf("failed to clear workspace project relation: %w", err)
+		}
+		relation := &entity.WorkspaceProjectRelation{
+			WorkspaceID: workspaceID,
+			ProjectID:   projectID,
+		}
+		if err := tx.Create(relation).Error; err != nil {
+			return fmt.Errorf("failed to assign workspace to project: %w", err)
+		}
+		return nil
+	})
 }
 
 // RemoveWorkspaceFromProject 从项目移除工作空间（使用语义化ID）

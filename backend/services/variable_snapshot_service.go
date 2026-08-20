@@ -80,9 +80,13 @@ func (s *VariableSnapshotService) CreateSnapshot(workspaceID string, createdBy *
 	return &vsnapID, len(snapshots), nil
 }
 
-// DeleteSnapshot deletes all rows for a given vsnap_id.
-func (s *VariableSnapshotService) DeleteSnapshot(vsnapID string) error {
-	result := s.db.Where("vsnap_id = ?", vsnapID).Delete(&models.VariableSnapshot{})
+// DeleteSnapshot deletes all rows for a given vsnap_id within a workspace (防跨 WS IDOR).
+func (s *VariableSnapshotService) DeleteSnapshot(workspaceID, vsnapID string) error {
+	if workspaceID == "" || vsnapID == "" {
+		return fmt.Errorf("workspace_id and vsnap_id are required")
+	}
+	result := s.db.Where("vsnap_id = ? AND workspace_id = ?", vsnapID, workspaceID).
+		Delete(&models.VariableSnapshot{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete snapshot: %w", result.Error)
 	}
@@ -90,6 +94,15 @@ func (s *VariableSnapshotService) DeleteSnapshot(vsnapID string) error {
 		return fmt.Errorf("snapshot not found: %s", vsnapID)
 	}
 	return nil
+}
+
+// SnapshotBelongsToWorkspace reports whether any row of vsnap_id is under workspace_id.
+func (s *VariableSnapshotService) SnapshotBelongsToWorkspace(workspaceID, vsnapID string) (bool, error) {
+	var count int64
+	err := s.db.Model(&models.VariableSnapshot{}).
+		Where("vsnap_id = ? AND workspace_id = ?", vsnapID, workspaceID).
+		Count(&count).Error
+	return count > 0, err
 }
 
 // LoadFromSnapshot loads full variable data by resolving snapshot references.

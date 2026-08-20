@@ -46,6 +46,13 @@ func GetTaskResourceChangesWithDB(c *gin.Context, db *gorm.DB) {
 		}
 	}
 
+	// 任务必须属于该 workspace
+	var task models.WorkspaceTask
+	if err := db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).First(&task).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
 	// 获取资源变更列表 (使用语义化ID)
 	var changes []models.WorkspaceTaskResourceChange
 	if err := db.Where("workspace_id = ? AND task_id = ?", workspace.WorkspaceID, taskID).
@@ -59,11 +66,10 @@ func GetTaskResourceChangesWithDB(c *gin.Context, db *gorm.DB) {
 	summary := computeSummary(changes)
 
 	// 获取任务的 plan_json 中的 output_changes、action_invocations 和 actions
-	var task models.WorkspaceTask
 	var outputChanges interface{}
 	var actionInvocations interface{}
 	var actions []interface{}
-	if err := db.Where("id = ?", taskID).First(&task).Error; err == nil {
+	if true {
 		if task.PlanJSON != nil {
 			if oc, ok := task.PlanJSON["output_changes"]; ok {
 				// 对 sensitive output 进行脱敏处理
@@ -109,10 +115,29 @@ func GetTaskResourceChangesWithDB(c *gin.Context, db *gorm.DB) {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/resource-changes/{resource_id} [patch]
 // @Security BearerAuth
 func UpdateResourceApplyStatusWithDB(c *gin.Context, db *gorm.DB) {
-
+	workspaceIDParam := c.Param("id")
+	taskID, err := strconv.ParseUint(c.Param("task_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+		return
+	}
+
+	// 校验 task 属于路径 workspace
+	var workspace models.Workspace
+	if err := db.Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+		if err := db.Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+			return
+		}
+	}
+	var task models.WorkspaceTask
+	if err := db.Where("id = ? AND workspace_id = ?", taskID, workspace.WorkspaceID).First(&task).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
 	}
 
@@ -128,9 +153,9 @@ func UpdateResourceApplyStatusWithDB(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	// 获取资源变更记录
+	// 获取资源变更记录（绑定 task_id，防跨任务/跨 WS）
 	var change models.WorkspaceTaskResourceChange
-	if err := db.First(&change, resourceID).Error; err != nil {
+	if err := db.Where("id = ? AND task_id = ?", resourceID, taskID).First(&change).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Resource change not found"})
 		return
 	}

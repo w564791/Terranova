@@ -236,6 +236,47 @@ func PoolTokenAuthWithWorkspaceCheck(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// PoolTokenAuthWithAgentCheck validates a pool token and binds an agent path
+// parameter to that token's pool. Without this check, a valid token for pool A
+// could read or unregister a guessed agent ID belonging to pool B.
+func PoolTokenAuthWithAgentCheck(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !authenticatePoolToken(c, db) {
+			return
+		}
+
+		poolID := c.GetString("pool_id")
+		if poolID == "" {
+			respondWithError(c, http.StatusInternalServerError, "Pool ID not found in context")
+			return
+		}
+
+		agentID := c.Param("agent_id")
+		if agentID == "" {
+			respondWithError(c, http.StatusBadRequest, "Agent ID is required")
+			return
+		}
+
+		var count int64
+		err := db.WithContext(c.Request.Context()).Table("agents").
+			Where("agent_id = ? AND pool_id = ?", agentID, poolID).
+			Count(&count).Error
+		if err != nil {
+			log.Printf("[PoolTokenAuth] Failed to check agent ownership: %v", err)
+			respondWithError(c, http.StatusInternalServerError, "Failed to verify agent ownership")
+			return
+		}
+		if count == 0 {
+			// Do not reveal whether the agent exists in another pool.
+			respondWithError(c, http.StatusNotFound, "Agent not found")
+			return
+		}
+
+		c.Set("authorized_agent_id", agentID)
+		c.Next()
+	}
+}
+
 // Helper functions
 
 // authenticatePoolToken performs the standard Pool Token authentication
@@ -298,11 +339,12 @@ func authenticatePoolToken(c *gin.Context, db *gorm.DB) bool {
 	return true
 }
 
-// checkPoolWorkspaceAccess checks if a pool has access to a workspace
+// checkPoolWorkspaceAccess checks if a pool has active access to a workspace.
+// Revoked allowances (status != active) must not grant access.
 func checkPoolWorkspaceAccess(db *gorm.DB, poolID, workspaceID string) bool {
 	var count int64
 	err := db.Table("pool_allowed_workspaces").
-		Where("pool_id = ? AND workspace_id = ?", poolID, workspaceID).
+		Where("pool_id = ? AND workspace_id = ? AND status = ?", poolID, workspaceID, models.AllowanceStatusActive).
 		Count(&count).Error
 
 	if err != nil {

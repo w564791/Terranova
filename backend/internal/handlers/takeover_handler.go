@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
 
@@ -28,6 +29,32 @@ func NewTakeoverHandler(db *gorm.DB, wsHub *websocket.Hub) *TakeoverHandler {
 	}
 }
 
+// ensureResourceInPathWorkspace 校验 resource 属于路径 workspace（防跨 WS 接管）
+func (h *TakeoverHandler) ensureResourceInPathWorkspace(c *gin.Context, resourceID uint) bool {
+	wsParam := c.Param("id")
+	if wsParam == "" || resourceID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的工作空间或资源ID"})
+		return false
+	}
+	var ws models.Workspace
+	if err := h.db.Where("workspace_id = ?", wsParam).First(&ws).Error; err != nil {
+		if err := h.db.Where("id = ?", wsParam).First(&ws).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "工作空间不存在"})
+			return false
+		}
+	}
+	var res models.WorkspaceResource
+	if err := h.db.Select("id", "workspace_id").Where("id = ?", resourceID).First(&res).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "资源不存在"})
+		return false
+	}
+	if res.WorkspaceID != ws.WorkspaceID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "资源不存在"})
+		return false
+	}
+	return true
+}
+
 // RequestTakeover 请求接管
 // @Summary 请求接管编辑
 // @Description 请求接管其他用户的编辑会话
@@ -46,6 +73,10 @@ func (h *TakeoverHandler) RequestTakeover(c *gin.Context) {
 	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的资源ID"})
+		return
+	}
+
+	if !h.ensureResourceInPathWorkspace(c, uint(resourceID)) {
 		return
 	}
 
@@ -127,6 +158,17 @@ func (h *TakeoverHandler) RespondToTakeover(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "请求不存在"})
 		return
 	}
+	// request 所属 resource 必须属于路径 workspace
+	if !h.ensureResourceInPathWorkspace(c, request.ResourceID) {
+		return
+	}
+	// 若 path 带 resource_id，还须一致
+	if ridStr := c.Param("resource_id"); ridStr != "" {
+		if rid, err := strconv.ParseUint(ridStr, 10, 32); err == nil && uint(rid) != request.ResourceID {
+			c.JSON(http.StatusNotFound, gin.H{"error": "请求不存在"})
+			return
+		}
+	}
 
 	// 响应接管请求
 	if err := h.editingService.RespondToTakeover(req.RequestID, req.Approved); err != nil {
@@ -171,14 +213,31 @@ func (h *TakeoverHandler) GetPendingRequests(c *gin.Context) {
 		return
 	}
 
+	// path resource 必须属于 workspace
+	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的资源ID"})
+		return
+	}
+	if !h.ensureResourceInPathWorkspace(c, uint(resourceID)) {
+		return
+	}
+
 	requests, err := h.editingService.GetPendingRequests(targetSession)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// 仅返回该 resource 的请求
+	filtered := make([]models.TakeoverRequest, 0, len(requests))
+	for _, r := range requests {
+		if r.ResourceID == uint(resourceID) {
+			filtered = append(filtered, r)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"requests": requests,
+		"requests": filtered,
 	})
 }
 
@@ -217,6 +276,15 @@ func (h *TakeoverHandler) GetRequestStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "请求不存在"})
 		return
 	}
+	if !h.ensureResourceInPathWorkspace(c, request.ResourceID) {
+		return
+	}
+	if ridStr := c.Param("resource_id"); ridStr != "" {
+		if rid, err := strconv.ParseUint(ridStr, 10, 32); err == nil && uint(rid) != request.ResourceID {
+			c.JSON(http.StatusNotFound, gin.H{"error": "请求不存在"})
+			return
+		}
+	}
 
 	// 如果状态从pending变为approved（超时自动接管），通知被接管方
 	if originalStatus == "pending" && request.Status == "approved" {
@@ -250,6 +318,10 @@ func (h *TakeoverHandler) ForceTakeover(c *gin.Context) {
 	resourceID, err := strconv.ParseUint(c.Param("resource_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的资源ID"})
+		return
+	}
+
+	if !h.ensureResourceInPathWorkspace(c, uint(resourceID)) {
 		return
 	}
 

@@ -2,50 +2,102 @@
 
 本目录包含 IaC Platform 权限系统的设计文档。
 
+## 当前权威文档（SoT）
+
+### `32-iam-remediation-report.md` ⭐ **现行整改与裁决规范（2026-07-16）**
+
+产品决策与实现整改以本文为准。与历史文档冲突时 **以 32 号文为准**。
+
+锁定决策摘要：
+
+| 决策 | 内容 |
+|------|------|
+| NONE | 不授权 = 拒绝访问 |
+| Workspace 写 | 授到指定 WS 仅改该 WS；授到组织级可全改 |
+| 项目负责人 | 可管成员，但必须显式 Role 授权 |
+| Team Token | 自动化鉴权（约 24h），主体可为用户或应用（对齐 TFE） |
+| 主模型 | **Role 为主**；一用户多 Role；取消日常 Direct Grant 双轨 |
+
 ## 📁 文档列表
 
 ### 1. permission-system-design-FirstDraft.md
 - **来源**：参考 Terraform Enterprise 的权限设计
 - **内容**：基于 Terraform Enterprise 的权限设计参考方案
-- **用途**：作为设计 IaC Platform 权限系统的理论基础和参考模型
+- **用途**：理论基础与参考模型（历史）
 
 ### 2. iac-platform-permission-system-design-v2.md
-- **状态**： **最终设计方案（推荐使用）**
-- **内容**：IaC Platform 权限系统的完整优化版设计方案
-- **特点**：
-  -  **明确权限继承规则**：拒绝优先级 > workspace > project > org
-  -  **权限预设功能**：快速授予 READ/WRITE/ADMIN 权限集
-  -  **统一数据类型**：PostgreSQL SERIAL
-  -  **完善缓存失效策略**：精准失效机制
-  -  **临时权限系统**：基于 Webhook 的任务级临时授权
-  -  **批量操作优化**：批量权限检查
-  -  **完整实施路线图**：7周分阶段计划
-  
+- **状态**：📦 **历史方案（部分废止）**
+- **说明**：三层模型与资源切分仍有参考价值；裁决算法、双轨 Grant、显式拒绝等条款以 `32-iam-remediation-report.md` 为准
+
 ### 3. iac-platform-permission-system-design.md
 - **状态**：📦 **v1版本（历史参考）**
 - **内容**：IaC Platform 权限系统的初始完整设计方案
-- **说明**：v2版本是在此基础上的优化，建议使用v2版本
 
 ### 4. admin-ui-prototype.md
-- **状态**： **UI设计**
-- **内容**：IaC Platform 权限系统的UI设计方案
+- **状态**：UI 设计（历史）
+- **内容**：IaC Platform 权限系统的 UI 设计方案
+
+### 5. 32-iam-remediation-report.md
+- **状态**：✅ **现行 SoT**
+- **内容**：整改报告、裁决语义、Role 主路径、身份与分期实施
+
+### 6. 34-iam-fix-progress-report.md
+- **状态**：⚠️ **历史进度快照（勿作完成证明）**
+- **内容**：修复进度宣称、覆盖率数据；与代码不符处以 `35` 为准
+- **SQL 补丁（不完整）**：仅列 `patch_system_admin_iam_roles.sql`（另见 `patch_admin_role_iam_policies.sql`）
+
+### 7. 35-iam-security-review-report.md
+- **状态**：✅ **Wave A 前/中期代码核实**（历史基线）
+- **内容**：P0/P1 完整清单、已确认有效修复、测试/门禁、双 SQL 上线清单、Wave 修复计划
+- **冲突处理**：与 `34` 冲突时不以 `34` 为准；**当前残留与修复计划以 `36` 为准**
+
+### 8. 36-iam-remaining-issues-and-fix-plan.md
+- **状态**：✅ **二次审查残留核实（Wave C 代码侧关闭基线）**
+- **内容**：相对 35 已关闭项、残留 P0/P1/P2、测试/SQL 说明
+- **冲突处理**：实现状态与 `35` 开篇清单冲突时，以本文件「本轮核实」为准；**下一步做什么以 `37` 为准**
+
+### 9. 37-iam-fix-recommendations.md ⭐ **下一波修复建议 / Backlog（2026-07-17）**
+- **状态**：✅ **修复排期 Backlog**（§0/R2-1 部分摘要可能滞后）
+- **内容**：R0 上线阻断 → R1 安全扫尾 → R2 对齐 32 终态 → R3 测试文档；验收标准与「不要做」清单
+- **冲突处理**：与 35/36 的「未修项」表述冲突时，以代码核实为准；**整体进度与覆盖以 `40` 为准**
+
+### 10. 38-application-principal-integration.md ⭐ **Application 选项 A 集成指南**
+- **状态**：✅ **集成 / 冒烟 SoT**
+- **内容**：App 密钥、Application Role、`workspace_tag_filter`、curl 示例、冒烟表、相关 SQL
+- **冲突处理**：与「Application 未启用」旧表述冲突时以本文 + 代码 `/api/v1/app/*` 为准
+
+### 11. 39-direct-grant-retirement.md ⭐ **Direct Grant 下线**
+- **状态**：✅ **D5 落地说明**
+- **内容**：USER/TEAM/**APPLICATION** HTTP 写 410、应急开关、Role 主路径（含 App Role）、前端入口，以及唯一支持的 `iac-migrate` 发布路径
+
+### 12. 40-iam-remediation-status-report.md ⭐ **进度 + 覆盖报告（2026-07-17）**
+- **状态**：✅ **现行进度 / 测试覆盖 SoT**
+- **内容**：分波进度与代码证据、cover 实测、风险登记、P0–P3 待办与建议门禁
+- **冲突处理**：与 34/36/37 进度宣称冲突时 **以本文 + 代码为准**
 
 ## 📊 文档关系
 
 ```
-permission-system-design-FirstDraft.md (参考文档)
+permission-system-design-FirstDraft.md (参考)
     ↓
-    提供理论基础
+iac-platform-permission-system-design.md (v1)
     ↓
-iac-platform-permission-system-design.md (v1版本)
+iac-platform-permission-system-design-v2.md (v2，部分废止)
     ↓
-    优化改进
+32-iam-remediation-report.md  ★ 现行裁决与整改规范（产品 SoT）
     ↓
-iac-platform-permission-system-design-v2.md (v2最终版本)  推荐使用
+33 / 34 中间 CR 与进度宣称
     ↓
-    提供UI设计基础
+35-iam-security-review-report.md  （Wave A 核实基线）
     ↓
-admin-ui-prototype.md
+36-iam-remaining-issues-and-fix-plan.md  （残留核实 / 已关项）
+    ↓
+37-iam-fix-recommendations.md  ★ 下一波修复建议（执行 Backlog）
+    ↓
+38-application-principal-integration.md  ★ Application 选项 A 集成
+39-direct-grant-retirement.md            ★ D5 Direct Grant 下线
+    ↓
+40-iam-remediation-status-report.md      ★ 进度 + 测试覆盖 SoT（2026-07-17）
 ```
 
 ## 🎯 v2版本的核心优化

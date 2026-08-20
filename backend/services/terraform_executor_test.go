@@ -423,11 +423,7 @@ func TestStatusTransition_PlanOnly_PendingToSuccess(t *testing.T) {
 	assert.Equal(t, models.TaskStatusRunning, task.Status)
 
 	// running → success (simulated plan completion)
-	task.Status = models.TaskStatusSuccess
-	task.Stage = "completed"
-	now := time.Now()
-	task.CompletedAt = &now
-	db.Save(task)
+	saveTaskStatus(t, db, task, models.TaskStatusSuccess, "completed", "")
 
 	var dbTask models.WorkspaceTask
 	db.First(&dbTask, task.ID)
@@ -448,29 +444,25 @@ func TestStatusTransition_PlanAndApply_FullLifecycle(t *testing.T) {
 	assert.Equal(t, "planning", task.Stage)
 
 	// 2. running → apply_pending (plan completes with changes)
+	require.NoError(t, db.Model(&models.WorkspaceTask{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
+		"status": models.TaskStatusApplyPending, "stage": "apply_pending", "plan_task_id": task.ID,
+	}).Error)
 	task.Status = models.TaskStatusApplyPending
 	task.Stage = "apply_pending"
 	task.PlanTaskID = &task.ID
-	db.Save(task)
 
 	var dbTask models.WorkspaceTask
 	db.First(&dbTask, task.ID)
 	assert.Equal(t, models.TaskStatusApplyPending, dbTask.Status)
 
 	// 3. apply_pending → running (user confirms apply via CAS)
-	task.Status = models.TaskStatusApplyPending // reset for CAS
-	db.Model(task).Update("status", models.TaskStatusApplyPending)
 	err = mgr.casTaskStatus(task, "apply")
 	require.NoError(t, err)
 	assert.Equal(t, models.TaskStatusRunning, task.Status)
 	assert.Equal(t, "applying", task.Stage)
 
 	// 4. running → applied (apply completes)
-	task.Status = models.TaskStatusApplied
-	task.Stage = "completed"
-	now := time.Now()
-	task.CompletedAt = &now
-	db.Save(task)
+	saveTaskStatus(t, db, task, models.TaskStatusApplied, "completed", "")
 
 	db.First(&dbTask, task.ID)
 	assert.Equal(t, models.TaskStatusApplied, dbTask.Status)
@@ -488,11 +480,7 @@ func TestStatusTransition_PlanAndApply_NoChanges(t *testing.T) {
 	require.NoError(t, err)
 
 	// running → planned_and_finished (no changes)
-	task.Status = models.TaskStatusPlannedAndFinished
-	task.Stage = "completed"
-	now := time.Now()
-	task.CompletedAt = &now
-	db.Save(task)
+	saveTaskStatus(t, db, task, models.TaskStatusPlannedAndFinished, "completed", "")
 
 	var dbTask models.WorkspaceTask
 	db.First(&dbTask, task.ID)
@@ -511,11 +499,7 @@ func TestStatusTransition_Failed(t *testing.T) {
 	require.NoError(t, err)
 
 	// running → failed
-	task.Status = models.TaskStatusFailed
-	task.ErrorMessage = "terraform plan failed: exit code 1"
-	now := time.Now()
-	task.CompletedAt = &now
-	db.Save(task)
+	saveTaskStatus(t, db, task, models.TaskStatusFailed, "completed", "terraform plan failed: exit code 1")
 
 	var dbTask models.WorkspaceTask
 	db.First(&dbTask, task.ID)
@@ -535,11 +519,7 @@ func TestStatusTransition_Cancelled(t *testing.T) {
 	require.NoError(t, err)
 
 	// running → cancelled
-	task.Status = models.TaskStatusCancelled
-	task.ErrorMessage = "cancelled by user"
-	now := time.Now()
-	task.CompletedAt = &now
-	db.Save(task)
+	saveTaskStatus(t, db, task, models.TaskStatusCancelled, "completed", "cancelled by user")
 
 	var dbTask models.WorkspaceTask
 	db.First(&dbTask, task.ID)
@@ -612,4 +592,25 @@ func TestPlanApply_SnapshotPreservedAcrossPhases(t *testing.T) {
 // formatUint is a helper for building JSON strings in tests.
 func formatUint(id uint) string {
 	return fmt.Sprintf("%d", id)
+}
+
+// saveTaskStatus updates status fields without full Save (avoids JSONB columns missing in SQLite schema).
+func saveTaskStatus(t *testing.T, db *gorm.DB, task *models.WorkspaceTask, status models.TaskStatus, stage string, errMsg string) {
+	t.Helper()
+	task.Status = status
+	task.Stage = stage
+	if errMsg != "" {
+		task.ErrorMessage = errMsg
+	}
+	now := time.Now()
+	task.CompletedAt = &now
+	upd := map[string]interface{}{
+		"status":       status,
+		"stage":        stage,
+		"completed_at": now,
+	}
+	if errMsg != "" {
+		upd["error_message"] = errMsg
+	}
+	require.NoError(t, db.Model(&models.WorkspaceTask{}).Where("id = ?", task.ID).Updates(upd).Error)
 }

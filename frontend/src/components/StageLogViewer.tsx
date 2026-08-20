@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { apiFetch } from '../services/api';
 import styles from './StageLogViewer.module.css';
 
 interface Props {
@@ -223,11 +223,21 @@ const StageLogViewer: React.FC<Props> = ({ taskId, taskType }) => {
     });
   };
 
-  const handleDownload = () => {
-    window.open(
-      `http://localhost:8080/api/v1/tasks/${taskId}/logs/download?type=${taskType}`,
-      '_blank'
-    );
+  const handleDownload = async () => {
+    try {
+      const response = await apiFetch(`/tasks/${taskId}/logs/download?type=${taskType}`);
+      if (!response.ok) {
+        throw new Error('Failed to download logs');
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `task-${taskId}-${taskType}.log`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || 'Failed to download logs');
+    }
   };
 
   if (loading) {

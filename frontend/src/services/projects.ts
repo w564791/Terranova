@@ -1,4 +1,4 @@
-import api from './api';
+import api, { getAuthOrgId } from './api';
 
 // Project 类型定义
 export interface Project {
@@ -16,8 +16,17 @@ export interface Project {
   workspace_count?: number;
 }
 
-// 获取项目列表（带工作空间数量）
-export const getProjects = async (orgId: number = 1): Promise<Project[]> => {
+function requireActiveOrganizationId(): number {
+  const orgId = getAuthOrgId();
+  if (orgId == null) {
+    throw new Error('当前未选择组织');
+  }
+  return orgId;
+}
+
+// 获取当前 active organization 的项目列表（带工作空间数量）
+export const getProjects = async (): Promise<Project[]> => {
+  const orgId = requireActiveOrganizationId();
   const response = await api.get('/projects', {
     params: { org_id: orgId }
   });
@@ -58,7 +67,6 @@ export const removeWorkspaceFromProject = async (workspaceId: string): Promise<v
 
 // 创建项目请求
 export interface CreateProjectRequest {
-  org_id: number;
   name: string;
   display_name: string;
   description?: string;
@@ -66,7 +74,12 @@ export interface CreateProjectRequest {
 
 // 创建项目
 export const createProject = async (data: CreateProjectRequest): Promise<Project> => {
-  const response = await api.post('/iam/projects', data);
+  const orgId = requireActiveOrganizationId();
+  const response = await api.post(
+    '/iam/projects',
+    { ...data, org_id: orgId },
+    { params: { org_id: orgId } },
+  );
   // 注意：api.ts 的响应拦截器已经返回 response.data
   return response as any;
 };

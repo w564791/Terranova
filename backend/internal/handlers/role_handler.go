@@ -1,25 +1,127 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
+	"iac-platform/internal/application/service"
 	"iac-platform/internal/domain/entity"
 	"iac-platform/internal/domain/valueobject"
 )
 
 // RoleHandler IAM角色处理器
 type RoleHandler struct {
-	db *gorm.DB
+	db    *gorm.DB
+	guard *service.RoleAntiEscalationService
 }
 
 // NewRoleHandler 创建角色处理器
-func NewRoleHandler(db *gorm.DB) *RoleHandler {
-	return &RoleHandler{db: db}
+// checker 用于防提权；可为 nil（仅测试旁路，生产必须注入）
+func NewRoleHandler(db *gorm.DB, checker service.PermissionChecker) *RoleHandler {
+	var guard *service.RoleAntiEscalationService
+	if checker != nil {
+		guard = service.NewRoleAntiEscalationService(db, checker)
+	}
+	return &RoleHandler{db: db, guard: guard}
+}
+
+// actorFromContext 读取当前操作者与平台超管标志
+func actorFromContext(c *gin.Context) (userID string, isSystemAdmin bool, ok bool) {
+	raw, exists := c.Get("user_id")
+	if !exists {
+		return "", false, false
+	}
+	userID, _ = raw.(string)
+	if userID == "" {
+		return "", false, false
+	}
+	if v, exists := c.Get("is_system_admin"); exists {
+		isSystemAdmin, _ = v.(bool)
+	}
+	return userID, isSystemAdmin, true
+}
+
+// respondAntiEscalation 将防提权错误映射为 HTTP
+func respondAntiEscalation(c *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, service.ErrRoleNotFound) || errors.Is(err, service.ErrPermissionDefNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": err.Error(), "timestamp": time.Now(),
+		})
+		return true
+	}
+	if errors.Is(err, service.ErrAntiEscalationMisconfigured) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation not configured", "error": err.Error(), "timestamp": time.Now(),
+		})
+		return true
+	}
+	if service.IsPrivilegeEscalationError(err) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":      403,
+			"message":   "Privilege escalation denied",
+			"error":     err.Error(),
+			"timestamp": time.Now(),
+		})
+		return true
+	}
+	return false
+}
+
+func authOrgFromContext(c *gin.Context) uint {
+	if raw, ok := c.Get("auth_org_id"); ok {
+		switch v := raw.(type) {
+		case uint:
+			if v > 0 {
+				return v
+			}
+		case int:
+			if v > 0 {
+				return uint(v)
+			}
+		case float64:
+			if v > 0 {
+				return uint(v)
+			}
+		}
+	}
+	if raw, ok := c.Get("org_id"); ok {
+		switch v := raw.(type) {
+		case uint:
+			if v > 0 {
+				return v
+			}
+		case int:
+			if v > 0 {
+				return uint(v)
+			}
+		case float64:
+			if v > 0 {
+				return uint(v)
+			}
+		}
+	}
+	// 仅单租户默认 org=1；多租户缺省 0，由 guard 侧按 scope 拒绝
+	if middlewareIsSingleTenant() {
+		return 1
+	}
+	return 0
+}
+
+// middlewareIsSingleTenant 与 iam_permission.isSingleTenantIAM 语义对齐（handlers 包内避免循环依赖）
+func middlewareIsSingleTenant() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("IAM_SINGLE_TENANT")))
+	return v == "1" || v == "true" || v == "yes"
 }
 
 // ListRolesResponse 角色列表响应
@@ -82,8 +184,18 @@ type AddRolePolicyRequest struct {
 // @Router /api/v1/iam/roles [get]
 func (h *RoleHandler) ListRoles(c *gin.Context) {
 	isActiveStr := c.Query("is_active")
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
 
-	query := h.db.Model(&entity.Role{})
+	// 只有明确标记为系统的 Role 才可跨租户可见。历史遗留的 custom
+	// org_id=0 行会被迁移隔离，不能因 org_id 的哨兵值而成为平台 Role。
+	query := h.db.Model(&entity.Role{}).
+		Where("is_system = ? OR (is_system = ? AND org_id = ?)", true, false, authOrg)
 
 	if isActiveStr != "" {
 		isActive, _ := strconv.ParseBool(isActiveStr)
@@ -130,6 +242,21 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/roles/{id} [get]
+// ensureRoleVisible 系统 Role 全局可见；自定义 Role 仅所属 org 可见
+func (h *RoleHandler) ensureRoleVisible(c *gin.Context, role *entity.Role) bool {
+	if role.IsSystem {
+		return true
+	}
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 || role.OrgID != authOrg {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": "Role not found", "timestamp": time.Now(),
+		})
+		return false
+	}
+	return true
+}
+
 func (h *RoleHandler) GetRole(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -158,6 +285,9 @@ func (h *RoleHandler) GetRole(c *gin.Context) {
 			"error":     err.Error(),
 			"timestamp": time.Now(),
 		})
+		return
+	}
+	if !h.ensureRoleVisible(c, &role) {
 		return
 	}
 
@@ -234,7 +364,16 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 		return
 	}
 
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+
 	role := &entity.Role{
+		OrgID:       authOrg, // 自定义 Role 租户化
 		Name:        req.Name,
 		DisplayName: req.DisplayName,
 		Description: req.Description,
@@ -311,9 +450,24 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 		})
 		return
 	}
+	if !h.ensureRoleVisible(c, &role) {
+		return
+	}
+
+	// 系统/平台 Role：仅平台超管可改元数据
+	if role.IsSystem || role.OrgID == 0 {
+		if _, isSys, ok := actorFromContext(c); !ok || !isSys {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code": 403, "message": "System roles can only be modified by system admin", "timestamp": time.Now(),
+			})
+			return
+		}
+	}
 
 	// 系统角色不能修改名称
 	if role.IsSystem && req.DisplayName != "" {
+		role.DisplayName = req.DisplayName
+	} else if !role.IsSystem && req.DisplayName != "" {
 		role.DisplayName = req.DisplayName
 	}
 
@@ -383,9 +537,12 @@ func (h *RoleHandler) DeleteRole(c *gin.Context) {
 		})
 		return
 	}
+	if !h.ensureRoleVisible(c, &role) {
+		return
+	}
 
-	// 系统角色不能删除
-	if role.IsSystem {
+	// 系统角色不能删除；平台级自定义（org_id=0 且非 system）亦禁止租户删除
+	if role.IsSystem || role.OrgID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":      403,
 			"message":   "Cannot delete system role",
@@ -456,9 +613,12 @@ func (h *RoleHandler) AssignRole(c *gin.Context) {
 		})
 		return
 	}
+	if !h.ensureRoleVisible(c, &role) {
+		return
+	}
 
 	// 验证作用域类型
-	_, err := valueobject.ParseScopeType(req.ScopeType)
+	scopeType, err := valueobject.ParseScopeType(req.ScopeType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":      400,
@@ -469,8 +629,8 @@ func (h *RoleHandler) AssignRole(c *gin.Context) {
 		return
 	}
 
-	assignedByInterface, exists := c.Get("user_id")
-	if !exists {
+	assignedByStr, isSystemAdmin, ok := actorFromContext(c)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":      401,
 			"message":   "User ID not found in context",
@@ -479,12 +639,29 @@ func (h *RoleHandler) AssignRole(c *gin.Context) {
 		return
 	}
 
-	assignedByStr, ok := assignedByInterface.(string)
-	if !ok {
+	// 防提权：scope ∈ 鉴权 org + policy 闭包 ⊆ actor
+	if h.guard == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "Invalid user ID type",
-			"timestamp": time.Now(),
+			"code": 500, "message": "Anti-escalation not configured", "timestamp": time.Now(),
+		})
+		return
+	}
+	authOrg := authOrgFromContext(c)
+	if err := h.guard.EnsureAssignmentScopeInAuthOrg(c.Request.Context(), scopeType, req.ScopeID, authOrg); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Scope check failed", "error": err.Error(), "timestamp": time.Now(),
+		})
+		return
+	}
+	if err := h.guard.EnsureCanAssignRole(c.Request.Context(), assignedByStr, isSystemAdmin, req.RoleID, scopeType, req.ScopeID); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation check failed", "error": err.Error(), "timestamp": time.Now(),
 		})
 		return
 	}
@@ -524,9 +701,9 @@ func (h *RoleHandler) AssignRole(c *gin.Context) {
 		Reason:     req.Reason,
 	}
 
-	// 解析过期时间
+	// 解析过期时间（兼容 RFC3339 与 datetime-local）
 	if req.ExpiresAt != "" {
-		expiresAt, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		expiresAt, err := parseFlexibleTime(req.ExpiresAt)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":      400,
@@ -539,12 +716,57 @@ func (h *RoleHandler) AssignRole(c *gin.Context) {
 		userRole.ExpiresAt = &expiresAt
 	}
 
-	if err := h.db.Create(userRole).Error; err != nil {
+	// Role 赋予本身即表示目标用户进入当前鉴权组织。成员关系和角色分配必须
+	// 同事务写入，否则用户可能已经拥有权限却无法从 accessible-org 进入该组织。
+	tx := h.db.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Failed to start role assignment transaction", "error": tx.Error.Error(), "timestamp": time.Now(),
+		})
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	var membership entity.UserOrganization
+	membershipErr := tx.Where("user_id = ? AND org_id = ?", userID, authOrg).First(&membership).Error
+	if membershipErr != nil && membershipErr != gorm.ErrRecordNotFound {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Failed to check organization membership", "error": membershipErr.Error(), "timestamp": time.Now(),
+		})
+		return
+	}
+	if membershipErr == gorm.ErrRecordNotFound {
+		membership = entity.UserOrganization{UserID: userID, OrgID: authOrg, JoinedAt: time.Now()}
+		// PostgreSQL/SQLite 均支持无 target 的 ON CONFLICT DO NOTHING；生产库的
+		// (user_id, org_id) 唯一约束保证并发赋权时不会生成重复 membership。
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&membership).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500, "message": "Failed to ensure organization membership", "error": err.Error(), "timestamp": time.Now(),
+			})
+			return
+		}
+	}
+
+	if err := tx.Create(userRole).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to assign role",
 			"error":     err.Error(),
 			"timestamp": time.Now(),
+		})
+		return
+	}
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Failed to commit role assignment", "error": err.Error(), "timestamp": time.Now(),
 		})
 		return
 	}
@@ -588,6 +810,14 @@ func (h *RoleHandler) RevokeRole(c *gin.Context) {
 		return
 	}
 
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+
 	// 验证角色分配存在且属于该用户
 	var userRole entity.UserRole
 	if err := h.db.Where("id = ? AND user_id = ?", assignmentID, userID).First(&userRole).Error; err != nil {
@@ -604,6 +834,21 @@ func (h *RoleHandler) RevokeRole(c *gin.Context) {
 			"message":   "Failed to get role assignment",
 			"error":     err.Error(),
 			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// assignment scope 必须落在鉴权 org
+	st, err := valueobject.ParseScopeType(userRole.ScopeType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "invalid assignment scope", "timestamp": time.Now(),
+		})
+		return
+	}
+	if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, st, userRole.ScopeID, authOrg); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": "Role assignment not found", "timestamp": time.Now(),
 		})
 		return
 	}
@@ -634,6 +879,14 @@ func (h *RoleHandler) RevokeRole(c *gin.Context) {
 func (h *RoleHandler) ListUserRoles(c *gin.Context) {
 	userID := c.Param("id")
 
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+
 	// 先查询用户角色分配
 	var userRoles []*entity.UserRole
 	if err := h.db.Where("user_id = ?", userID).Order("assigned_at DESC").Find(&userRoles).Error; err != nil {
@@ -657,12 +910,20 @@ func (h *RoleHandler) ListUserRoles(c *gin.Context) {
 		}
 	}
 
-	// 过滤掉未激活的角色
+	// 过滤：激活角色 + assignment scope 落在鉴权 org
 	activeUserRoles := make([]*entity.UserRole, 0)
 	for _, userRole := range userRoles {
-		if userRole.RoleName != "" {
-			activeUserRoles = append(activeUserRoles, userRole)
+		if userRole.RoleName == "" {
+			continue
 		}
+		st, err := valueobject.ParseScopeType(userRole.ScopeType)
+		if err != nil {
+			continue
+		}
+		if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, st, userRole.ScopeID, authOrg); err != nil {
+			continue
+		}
+		activeUserRoles = append(activeUserRoles, userRole)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -729,6 +990,9 @@ func (h *RoleHandler) AddRolePolicy(c *gin.Context) {
 		})
 		return
 	}
+	if !h.ensureRoleVisible(c, &role) {
+		return
+	}
 
 	// 验证权限定义存在
 	var permDef entity.PermissionDefinition
@@ -762,14 +1026,54 @@ func (h *RoleHandler) AddRolePolicy(c *gin.Context) {
 		return
 	}
 
-	// 验证作用域类型
-	_, err = valueobject.ParseScopeType(req.ScopeType)
+	// 策略 scope 表示 Role 可在哪个 assignment 层生效。它可位于资源固有
+	// scope 或其父层（例如组织级 Role 具备 workspace execution），但绝不能
+	// 反向把组织资源挂到 project/workspace Role 上。
+	policyScope, err := valueobject.ParseScopeType(req.ScopeType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":      400,
 			"message":   "Invalid scope type",
 			"error":     err.Error(),
 			"timestamp": time.Now(),
+		})
+		return
+	}
+	if !permDef.ScopeLevel.IsValid() || permDef.ResourceType.GetScopeLevel() != permDef.ScopeLevel {
+		c.JSON(http.StatusConflict, gin.H{
+			"code": 409, "message": "Permission definition has invalid scope level", "timestamp": time.Now(),
+		})
+		return
+	}
+	if !policyScope.CanHostPolicyFor(permDef.ScopeLevel) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "Policy scope type must be the permission scope level or an ancestor", "timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 防提权：系统 Role 只读 + 不可写入超出自身有效权限的策略
+	if h.guard == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation not configured", "timestamp": time.Now(),
+		})
+		return
+	}
+	actorID, isSystemAdmin, ok := actorFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401, "message": "User ID not found in context", "timestamp": time.Now(),
+		})
+		return
+	}
+	orgID := authOrgFromContext(c)
+	if err := h.guard.EnsureCanAddRolePolicy(c.Request.Context(), actorID, isSystemAdmin, uint(roleID),
+		req.PermissionID, req.PermissionLevel, policyScope, valueobject.ScopeTypeOrganization, orgID); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation check failed", "error": err.Error(), "timestamp": time.Now(),
 		})
 		return
 	}
@@ -836,6 +1140,59 @@ func (h *RoleHandler) RemoveRolePolicy(c *gin.Context) {
 			"code":      400,
 			"message":   "Invalid policy ID",
 			"timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 系统 Role 策略删除：fail-closed（C1）
+	if h.guard == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation not configured", "timestamp": time.Now(),
+		})
+		return
+	}
+	_, isSystemAdmin, ok := actorFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401, "message": "User ID not found in context", "timestamp": time.Now(),
+		})
+		return
+	}
+
+	// 先按 role 所属租户绑定目标，再处理 policy。不能仅用 policy_id/role_id
+	// 删除，否则拥有任一组织 IAM_ROLES 权限的调用方可删除其他组织的自定义 Role 策略。
+	var role entity.Role
+	if err := h.db.First(&role, uint(roleID)).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code": 404, "message": "Role not found", "timestamp": time.Now(),
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Failed to get role", "error": err.Error(), "timestamp": time.Now(),
+		})
+		return
+	}
+	if !h.ensureRoleVisible(c, &role) {
+		return
+	}
+
+	// org_id=0 是平台 Role（包括历史遗留的非 is_system 行）；其策略只能由
+	// 平台超管维护。is_system 单独判断可防御异常数据中的非零 org_id 系统 Role。
+	if (role.IsSystem || role.OrgID == 0) && !isSystemAdmin {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code": 403, "message": "Platform role policies can only be modified by system admin", "timestamp": time.Now(),
+		})
+		return
+	}
+
+	if err := h.guard.EnsureCanMutateSystemRolePolicies(c.Request.Context(), isSystemAdmin, uint(roleID)); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation check failed", "error": err.Error(), "timestamp": time.Now(),
 		})
 		return
 	}
@@ -922,9 +1279,12 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 		})
 		return
 	}
+	if !h.ensureRoleVisible(c, &role) {
+		return
+	}
 
 	// 验证作用域类型
-	_, err := valueobject.ParseScopeType(req.ScopeType)
+	scopeType, err := valueobject.ParseScopeType(req.ScopeType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":      400,
@@ -935,8 +1295,8 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 		return
 	}
 
-	assignedByInterface, exists := c.Get("user_id")
-	if !exists {
+	assignedByStr, isSystemAdmin, ok := actorFromContext(c)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"code":      401,
 			"message":   "User ID not found in context",
@@ -945,12 +1305,43 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 		return
 	}
 
-	assignedByStr, ok := assignedByInterface.(string)
-	if !ok {
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+	// Team 本身须属于鉴权 org（与 List/Revoke 对齐，防跨租户赋权）——先于 guard，避免漏检
+	teamOrg, err := loadTeamOrgID(c.Request.Context(), h.db, teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(teamOrg, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": "Team not found", "timestamp": time.Now(),
+		})
+		return
+	}
+	// 防提权：与用户赋 Role 相同规则
+	if h.guard == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "Invalid user ID type",
-			"timestamp": time.Now(),
+			"code": 500, "message": "Anti-escalation not configured", "timestamp": time.Now(),
+		})
+		return
+	}
+	if err := h.guard.EnsureAssignmentScopeInAuthOrg(c.Request.Context(), scopeType, req.ScopeID, authOrg); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Scope check failed", "error": err.Error(), "timestamp": time.Now(),
+		})
+		return
+	}
+	if err := h.guard.EnsureCanAssignRole(c.Request.Context(), assignedByStr, isSystemAdmin, req.RoleID, scopeType, req.ScopeID); err != nil {
+		if respondAntiEscalation(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Anti-escalation check failed", "error": err.Error(), "timestamp": time.Now(),
 		})
 		return
 	}
@@ -992,9 +1383,9 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 		"reason":      req.Reason,
 	}
 
-	// 解析过期时间
+	// 解析过期时间（兼容 RFC3339 与 datetime-local）
 	if req.ExpiresAt != "" {
-		expiresAt, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		expiresAt, err := parseFlexibleTime(req.ExpiresAt)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":      400,
@@ -1007,7 +1398,15 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 		teamRole["expires_at"] = expiresAt
 	}
 
-	if err := h.db.Table("iam_team_roles").Create(&teamRole).Error; err != nil {
+	// Existing team members may predate the active-organization bootstrap.
+	// Write the role and any missing user_organizations rows atomically so a
+	// team role never authorizes users who cannot select this organization.
+	if err := h.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Table("iam_team_roles").Create(&teamRole).Error; err != nil {
+			return err
+		}
+		return ensureTeamMembersOrganizationMemberships(c.Request.Context(), tx, teamID, authOrg)
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "Failed to assign role to team",
@@ -1038,8 +1437,24 @@ func (h *RoleHandler) AssignTeamRole(c *gin.Context) {
 func (h *RoleHandler) ListTeamRoles(c *gin.Context) {
 	teamID := c.Param("id")
 
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+	// team 本身须属于鉴权 org
+	teamOrg, err := loadTeamOrgID(c.Request.Context(), h.db, teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(teamOrg, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": "Team not found", "timestamp": time.Now(),
+		})
+		return
+	}
+
 	var teamRoles []map[string]interface{}
-	err := h.db.Table("iam_team_roles").
+	err = h.db.Table("iam_team_roles").
 		Select("iam_team_roles.*, iam_roles.name as role_name, iam_roles.display_name as role_display_name").
 		Joins("JOIN iam_roles ON iam_roles.id = iam_team_roles.role_id").
 		Where("iam_team_roles.team_id = ?", teamID).
@@ -1058,10 +1473,35 @@ func (h *RoleHandler) ListTeamRoles(c *gin.Context) {
 		return
 	}
 
+	// 过滤 assignment scope 落在鉴权 org
+	filtered := make([]map[string]interface{}, 0, len(teamRoles))
+	for _, tr := range teamRoles {
+		stStr, _ := tr["scope_type"].(string)
+		var scopeID uint
+		switch v := tr["scope_id"].(type) {
+		case int64:
+			scopeID = uint(v)
+		case int:
+			scopeID = uint(v)
+		case uint:
+			scopeID = v
+		case float64:
+			scopeID = uint(v)
+		}
+		st, err := valueobject.ParseScopeType(stStr)
+		if err != nil {
+			continue
+		}
+		if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, st, scopeID, authOrg); err != nil {
+			continue
+		}
+		filtered = append(filtered, tr)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":      200,
-		"data":      teamRoles,
-		"total":     len(teamRoles),
+		"data":      filtered,
+		"total":     len(filtered),
 		"timestamp": time.Now(),
 	})
 }
@@ -1093,27 +1533,42 @@ func (h *RoleHandler) RevokeTeamRole(c *gin.Context) {
 		return
 	}
 
-	// 验证角色分配存在且属于该团队
-	var count int64
-	err = h.db.Table("iam_team_roles").
-		Where("id = ? AND team_id = ?", assignmentID, teamID).
-		Count(&count).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":      500,
-			"message":   "Failed to check role assignment",
-			"error":     err.Error(),
-			"timestamp": time.Now(),
+	authOrg := authOrgFromContext(c)
+	if authOrg == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": 400, "message": "auth org not resolved; pass org_id", "timestamp": time.Now(),
+		})
+		return
+	}
+	teamOrg, err := loadTeamOrgID(c.Request.Context(), h.db, teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(teamOrg, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": "Role assignment not found", "timestamp": time.Now(),
 		})
 		return
 	}
 
-	if count == 0 {
+	// 加载 assignment 并校验 scope
+	var row struct {
+		ScopeType string
+		ScopeID   uint
+	}
+	err = h.db.Table("iam_team_roles").
+		Select("scope_type, scope_id").
+		Where("id = ? AND team_id = ?", assignmentID, teamID).
+		Take(&row).Error
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"code":      404,
 			"message":   "Role assignment not found",
 			"timestamp": time.Now(),
+		})
+		return
+	}
+	st, err := valueobject.ParseScopeType(row.ScopeType)
+	if err != nil || ensureScopeInAuthOrg(c.Request.Context(), h.db, st, row.ScopeID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404, "message": "Role assignment not found", "timestamp": time.Now(),
 		})
 		return
 	}

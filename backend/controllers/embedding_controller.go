@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 
@@ -464,6 +465,11 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	if req.Source == "" {
 		req.Source = "manual"
 	}
+	authOrgID, ok := middleware.AuthOrgID(ctx)
+	if !ok {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "auth org not resolved; pass org_id query or use org-scoped path"})
+		return
+	}
 
 	var vectorResults, keywordResults []SearchResult
 	var vectorErr, keywordErr error
@@ -478,7 +484,7 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			vectorResults, vectorErr = c.doVectorSearch(req)
+			vectorResults, vectorErr = c.doVectorSearch(req, authOrgID)
 		}()
 	} else {
 		fallbackReason = "embedding not configured"
@@ -488,7 +494,7 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		keywordResults, keywordErr = c.doKeywordSearch(req)
+		keywordResults, keywordErr = c.doKeywordSearch(req, authOrgID)
 	}()
 
 	wg.Wait()
@@ -582,7 +588,10 @@ func (c *EmbeddingController) VectorSearch(ctx *gin.Context) {
 }
 
 // doVectorSearch 执行向量搜索
-func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchResult, error) {
+func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest, orgID uint) ([]SearchResult, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
 	queryVector, err := c.embeddingService.GenerateEmbedding(req.Query)
 	if err != nil {
 		return nil, fmt.Errorf("生成查询向量失败: %w", err)
@@ -652,6 +661,13 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 			END as is_resource_deleted,
 			1 - (ri.embedding <=> $1::vector) as similarity
 		FROM resource_index ri
+		JOIN (
+			SELECT wpr.workspace_id
+			FROM workspace_project_relations wpr
+			JOIN projects p ON p.id = wpr.project_id
+			GROUP BY wpr.workspace_id
+			HAVING COUNT(*) = 1 AND MIN(p.org_id) = $3
+		) scoped_workspaces ON scoped_workspaces.workspace_id = ri.workspace_id
 		LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id
 		LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id
 		LEFT JOIN workspace_resources wr ON ri.workspace_id = wr.workspace_id
@@ -671,8 +687,8 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 		  AND 1 - (ri.embedding <=> $1::vector) >= $2
 	`
 
-	args := []interface{}{vectorStr, similarityThreshold}
-	argIndex := 3
+	args := []interface{}{vectorStr, similarityThreshold, orgID}
+	argIndex := 4
 
 	if req.ResourceType != "" {
 		sql += fmt.Sprintf(" AND ri.resource_type = $%d", argIndex)
@@ -713,7 +729,7 @@ func (c *EmbeddingController) doVectorSearch(req VectorSearchRequest) ([]SearchR
 }
 
 // doKeywordSearch 执行关键词搜索
-func (c *EmbeddingController) doKeywordSearch(req VectorSearchRequest) ([]SearchResult, error) {
+func (c *EmbeddingController) doKeywordSearch(req VectorSearchRequest, orgID uint) ([]SearchResult, error) {
 	cmdbService := services.NewCMDBService(c.db)
 
 	workspaceID := ""
@@ -721,7 +737,7 @@ func (c *EmbeddingController) doKeywordSearch(req VectorSearchRequest) ([]Search
 		workspaceID = req.WorkspaceIDs[0]
 	}
 
-	resources, err := cmdbService.SearchResources(req.Query, workspaceID, req.ResourceType, req.Limit)
+	resources, err := cmdbService.SearchResourcesInOrganization(orgID, req.Query, workspaceID, req.ResourceType, req.Limit)
 	if err != nil {
 		return nil, err
 	}

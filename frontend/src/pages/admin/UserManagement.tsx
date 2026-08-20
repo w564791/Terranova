@@ -78,7 +78,7 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      await iamService.createUser(createForm);
+      await iamService.createUser({ ...createForm, role: 'user' });
       showSuccess('用户创建成功');
       setShowCreateModal(false);
       setCreateForm({ username: '', email: '', password: '' });

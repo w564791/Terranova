@@ -205,36 +205,44 @@ func (h *SetupHandler) InitAdmin(c *gin.Context) {
 	var adminRole struct {
 		ID int `gorm:"column:id"`
 	}
+	// 业务 API 已取消 system_admin 旁路：admin Role 绑定失败必须阻断 setup
 	if err := tx.Table("iam_roles").Where("name = ? AND is_system = ?", "admin", true).First(&adminRole).Error; err != nil {
-		log.Printf(" [Setup] Admin IAM role not found, skipping role assignment: %v", err)
-		// 不回滚，角色分配是可选的
-	} else {
-		// 查找默认组织 ID 用于角色分配
-		var defaultOrgForRole struct {
-			ID int `gorm:"column:id"`
-		}
-		if err := tx.Table("organizations").Where("name = ?", "default").First(&defaultOrgForRole).Error; err != nil {
-			log.Printf(" [Setup] Default organization not found for role assignment, skipping: %v", err)
-		} else {
-			// 分配角色 - 使用正确的字段名和类型
-			// scope_type 只能是 ORGANIZATION, PROJECT, WORKSPACE
-			// scope_id 是 integer 类型
-			iamUserRole := map[string]interface{}{
-				"user_id":     user.ID,
-				"role_id":     adminRole.ID,
-				"scope_type":  "ORGANIZATION",
-				"scope_id":    defaultOrgForRole.ID,
-				"assigned_by": user.ID,
-				"assigned_at": time.Now(),
-			}
-			if err := tx.Table("iam_user_roles").Create(&iamUserRole).Error; err != nil {
-				log.Printf(" [Setup] Failed to assign admin IAM role: %v", err)
-				// 不回滚，角色分配是可选的
-			} else {
-				log.Printf("[Setup] Admin IAM role assigned to user %s", user.Username)
-			}
-		}
+		tx.Rollback()
+		log.Printf("[Setup] Admin IAM role not found (required): %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "System admin role not seeded; cannot complete setup", "timestamp": time.Now(),
+		})
+		return
 	}
+	var defaultOrgForRole struct {
+		ID int `gorm:"column:id"`
+	}
+	if err := tx.Table("organizations").Where("name = ?", "default").First(&defaultOrgForRole).Error; err != nil {
+		tx.Rollback()
+		log.Printf("[Setup] Default organization not found for role assignment: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Default organization missing; cannot assign admin role", "timestamp": time.Now(),
+		})
+		return
+	}
+	iamUserRole := map[string]interface{}{
+		"user_id":     user.ID,
+		"role_id":     adminRole.ID,
+		"scope_type":  "ORGANIZATION",
+		"scope_id":    defaultOrgForRole.ID,
+		"assigned_by": user.ID,
+		"assigned_at": time.Now(),
+		"reason":      "setup: initial system admin",
+	}
+	if err := tx.Table("iam_user_roles").Create(&iamUserRole).Error; err != nil {
+		tx.Rollback()
+		log.Printf("[Setup] Failed to assign admin IAM role: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 500, "message": "Failed to assign admin IAM role", "timestamp": time.Now(),
+		})
+		return
+	}
+	log.Printf("[Setup] Admin IAM role assigned to user %s", user.Username)
 
 	// 7. 关联到默认组织
 	var defaultOrg struct {

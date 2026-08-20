@@ -10,18 +10,23 @@ import (
 	"iac-platform/internal/domain/valueobject"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // AuditHandler 审计处理器
 type AuditHandler struct {
 	service *service.AuditService
+	db      *gorm.DB
 }
 
 // NewAuditHandler 创建审计处理器实例
 func NewAuditHandler(service *service.AuditService) *AuditHandler {
-	return &AuditHandler{
-		service: service,
-	}
+	return &AuditHandler{service: service}
+}
+
+// NewAuditHandlerWithDB 带 db 的审计处理器（用于 scope→org 绑定）
+func NewAuditHandlerWithDB(svc *service.AuditService, db *gorm.DB) *AuditHandler {
+	return &AuditHandler{service: svc, db: db}
 }
 
 // QueryPermissionHistory 查询权限变更历史
@@ -52,8 +57,30 @@ func (h *AuditHandler) QueryPermissionHistory(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	scopeType := valueobject.ScopeType(scopeTypeStr)
+	// 需要 db 做 scope 归属校验 — AuditHandler 仅有 service；scope org 校验在无 db 时退化为 org 级仅允许 authOrg
+	if scopeType == valueobject.ScopeTypeOrganization {
+		if uint(scopeID) != authOrg {
+			c.JSON(http.StatusForbidden, gin.H{"error": "scope outside authenticated organization"})
+			return
+		}
+	} else if h.db != nil {
+		if err := ensureScopeInAuthOrg(c.Request.Context(), h.db, scopeType, uint(scopeID), authOrg); err != nil {
+			respondScopeOutsideAuthOrg(c, err)
+			return
+		}
+	} else {
+		// 无 db：非 org scope 拒绝（fail-closed）
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "audit org binding not configured"})
+		return
+	}
+
 	req := &service.QueryPermissionHistoryRequest{
-		ScopeType: valueobject.ScopeType(scopeTypeStr),
+		ScopeType: scopeType,
 		ScopeID:   uint(scopeID),
 	}
 
@@ -102,6 +129,10 @@ func (h *AuditHandler) QueryPermissionHistory(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/access-history [get]
 func (h *AuditHandler) QueryAccessHistory(c *gin.Context) {
+	// access_logs 无 org 列：全局读仅平台超管（防 org-A 审计读全站访问记录）
+	if !requireSystemAdmin(c) {
+		return
+	}
 	req := &service.QueryAccessHistoryRequest{}
 
 	if userIDStr := c.Query("user_id"); userIDStr != "" {
@@ -168,6 +199,10 @@ func (h *AuditHandler) QueryAccessHistory(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/denied-access [get]
 func (h *AuditHandler) QueryDeniedAccess(c *gin.Context) {
+	// 全局拒绝记录无 org 过滤：仅平台超管
+	if !requireSystemAdmin(c) {
+		return
+	}
 	req := &service.QueryDeniedAccessRequest{}
 
 	// 解析时间参数并转换为本地时区（因为数据库存储的是本地时间）
@@ -216,6 +251,10 @@ func (h *AuditHandler) QueryDeniedAccess(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/permission-changes-by-principal [get]
 func (h *AuditHandler) QueryPermissionChangesByPrincipal(c *gin.Context) {
+	// 跨 scope 主体查询暂无 org 过滤：仅平台超管
+	if !requireSystemAdmin(c) {
+		return
+	}
 	principalTypeStr := c.Query("principal_type")
 	principalIDStr := c.Query("principal_id")
 
@@ -280,6 +319,10 @@ func (h *AuditHandler) QueryPermissionChangesByPrincipal(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/iam/audit/permission-changes-by-performer [get]
 func (h *AuditHandler) QueryPermissionChangesByPerformer(c *gin.Context) {
+	// 跨 scope 操作人查询暂无 org 过滤：仅平台超管
+	if !requireSystemAdmin(c) {
+		return
+	}
 	performerIDStr := c.Query("performer_id")
 
 	if performerIDStr == "" {

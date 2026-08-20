@@ -138,6 +138,10 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
 				{ResourceType: "AI_ANALYSIS", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
 			}),
+			// Skill definitions are platform-global. Tenant AI administrators can
+			// operate their own AI features but must not inspect the globally
+			// assembled prompts or embedded skill content.
+			middleware.RequireSystemAdmin(),
 			aiCMDBSkillController.PreviewAssembledPrompt,
 		)
 
@@ -210,11 +214,27 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 		ai.POST("/cmdb/search-summary-sse", searchSummaryPerm, embeddingController.SearchSummarySSE)
 	}
 
+	// Full embedding sync has no tenant filter in the worker, so it is a
+	// platform operation rather than an organization-level AI admin operation.
+	if embeddingWorker == nil {
+		embeddingWorker = services.NewEmbeddingWorker(db)
+	}
+	systemEmbedding := api.Group("/admin")
+	systemEmbedding.Use(middleware.JWTAuth())
+	systemEmbedding.Use(middleware.AuditLogger(db))
+	systemEmbedding.Use(middleware.RequireSystemAdmin())
+	systemEmbedding.POST("/embedding/sync-all", controllers.NewEmbeddingController(db, embeddingWorker).SyncAllWorkspaces)
+
 	// Admin 路由 - embedding 管理
 	admin := api.Group("/admin")
 	admin.Use(middleware.JWTAuth())
 	admin.Use(middleware.AuditLogger(db))
 	admin.Use(iamMiddleware.RequirePermission("AI_ANALYSIS", "ORGANIZATION", "ADMIN"))
+	// AI configuration, skills, assessment data and embedding caches are
+	// global tables today, not tenant-owned resources. An organization-scoped
+	// administrator must therefore not be able to read or mutate them for all
+	// other tenants.
+	admin.Use(middleware.RequireSystemAdmin())
 	{
 		if embeddingWorker == nil {
 			embeddingWorker = services.NewEmbeddingWorker(db)
@@ -223,9 +243,6 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 
 		// 获取 worker 状态
 		admin.GET("/embedding/status", embeddingController.GetWorkerStatus)
-
-		// 全量同步所有 Workspace
-		admin.POST("/embedding/sync-all", embeddingController.SyncAllWorkspaces)
 
 		// ========== Skill 管理 API ==========
 		skillController := controllers.NewSkillController(db)
@@ -288,6 +305,9 @@ func setupAIRoutes(api *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.
 	workspaces := api.Group("/workspaces")
 	workspaces.Use(middleware.JWTAuth())
 	workspaces.Use(middleware.AuditLogger(db))
+	// This group is registered separately from setupWorkspaceRoutes, so it must
+	// install the same workspace-to-organization fence explicitly.
+	workspaces.Use(middleware.EnforceWorkspaceOrgBinding(db))
 	{
 		if embeddingWorker == nil {
 			embeddingWorker = services.NewEmbeddingWorker(db)

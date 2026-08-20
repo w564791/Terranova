@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { iamService } from '../../services/iam';
+import { iamService, setAuthOrgId } from '../../services/iam';
 import type { Application, Organization, CreateApplicationRequest, UpdateApplicationRequest } from '../../services/iam';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -29,8 +29,11 @@ const ApplicationManagement: React.FC = () => {
     name: '',
     description: '',
     callback_urls: {},
+    workspace_tag_filter: undefined,
     expires_at: undefined,
   });
+  /** 编辑用 JSON 文本，避免 map 输入难用 */
+  const [tagFilterText, setTagFilterText] = useState('');
 
   useEffect(() => {
     loadOrganizations();
@@ -38,16 +41,17 @@ const ApplicationManagement: React.FC = () => {
 
   useEffect(() => {
     if (selectedOrg > 0) {
+      setAuthOrgId(selectedOrg);
       loadApplications();
     }
   }, [selectedOrg, filterActive]);
 
   const loadOrganizations = async () => {
     try {
-      const data = await iamService.listOrganizations(true);
+      const data = await iamService.bootstrapActiveOrganization();
       setOrganizations(data.organizations);
-      if (data.organizations.length > 0) {
-        setSelectedOrg(data.organizations[0].id);
+      if (data.active_org_id != null) {
+        setSelectedOrg(data.active_org_id);
       }
     } catch (error: any) {
       showError('加载组织列表失败: ' + (error.response?.data?.error || error.message));
@@ -67,6 +71,20 @@ const ApplicationManagement: React.FC = () => {
     }
   };
 
+  const parseTagFilter = (): Record<string, string | string[]> | undefined | 'invalid' => {
+    const t = tagFilterText.trim();
+    if (!t) return undefined;
+    try {
+      const obj = JSON.parse(t);
+      if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
+        return 'invalid';
+      }
+      return obj as Record<string, string | string[]>;
+    } catch {
+      return 'invalid';
+    }
+  };
+
   const handleCreate = () => {
     setEditingApp(null);
     setFormData({
@@ -74,8 +92,10 @@ const ApplicationManagement: React.FC = () => {
       name: '',
       description: '',
       callback_urls: {},
+      workspace_tag_filter: undefined,
       expires_at: undefined,
     });
+    setTagFilterText('');
     setShowModal(true);
   };
 
@@ -86,13 +106,24 @@ const ApplicationManagement: React.FC = () => {
       name: app.name,
       description: app.description,
       callback_urls: app.callback_urls,
+      workspace_tag_filter: app.workspace_tag_filter,
       expires_at: app.expires_at,
     });
+    setTagFilterText(
+      app.workspace_tag_filter && Object.keys(app.workspace_tag_filter).length
+        ? JSON.stringify(app.workspace_tag_filter, null, 2)
+        : '',
+    );
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const filter = parseTagFilter();
+    if (filter === 'invalid') {
+      showError('Workspace Tag 过滤必须是合法 JSON 对象，例如 {"env":"prod"}');
+      return;
+    }
     setLoading(true);
     try {
       if (editingApp) {
@@ -101,11 +132,16 @@ const ApplicationManagement: React.FC = () => {
           description: formData.description,
           callback_urls: formData.callback_urls,
           expires_at: formData.expires_at,
+          workspace_tag_filter: filter,
+          clear_workspace_tag_filter: !filter,
         };
         await iamService.updateApplication(editingApp.id, updateData);
         showSuccess('应用更新成功');
       } else {
-        const result = await iamService.createApplication(formData);
+        const result = await iamService.createApplication({
+          ...formData,
+          workspace_tag_filter: filter,
+        });
         setSecretInfo({
           appKey: result.application.app_key,
           appSecret: result.app_secret,
@@ -261,6 +297,7 @@ const ApplicationManagement: React.FC = () => {
                 <th>应用名称</th>
                 <th>App Key</th>
                 <th>描述</th>
+                <th>WS Tag 过滤</th>
                 <th>状态</th>
                 <th>最后使用</th>
                 <th>创建时间</th>
@@ -282,6 +319,17 @@ const ApplicationManagement: React.FC = () => {
                     </button>
                   </td>
                   <td className={styles.descCell}>{app.description || '-'}</td>
+                  <td className={styles.descCell} title={
+                    app.workspace_tag_filter && Object.keys(app.workspace_tag_filter).length
+                      ? JSON.stringify(app.workspace_tag_filter)
+                      : '不限制 tag'
+                  }>
+                    {app.workspace_tag_filter && Object.keys(app.workspace_tag_filter).length
+                      ? Object.entries(app.workspace_tag_filter)
+                          .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`)
+                          .join(', ')
+                      : <span style={{ color: '#999' }}>全部</span>}
+                  </td>
                   <td>
                     <span className={app.is_active ? styles.statusActive : styles.statusInactive}>
                       {app.is_active ? '启用' : '禁用'}
@@ -354,6 +402,19 @@ const ApplicationManagement: React.FC = () => {
                   value={formData.expires_at ? formData.expires_at.slice(0, 16) : ''}
                   onChange={(e) => setFormData({ ...formData, expires_at: e.target.value ? e.target.value + ':00Z' : undefined })}
                 />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Workspace Tag 过滤（可选）</label>
+                <textarea
+                  value={tagFilterText}
+                  onChange={(e) => setTagFilterText(e.target.value)}
+                  placeholder={'留空=组织内全部 workspace\n示例: {"env":"prod","team":"platform"}\n多值: {"env":["prod","staging"]}'}
+                  rows={4}
+                />
+                <small style={{ color: '#888' }}>
+                  与 workspace.tags 做 AND 匹配；须同时持有组织 WORKSPACES 读权限。空 JSON 或清空=不按 tag 限制。
+                </small>
               </div>
 
               <div className={styles.modalActions}>

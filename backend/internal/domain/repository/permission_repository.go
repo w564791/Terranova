@@ -83,11 +83,12 @@ type PermissionRepository interface {
 		scopeLevel valueobject.ScopeType,
 	) ([]*entity.PresetPermission, error)
 
-	// CheckTemporaryPermission 检查临时权限
+	// CheckTemporaryPermission 检查临时权限（email 与 user_id 任一匹配即可）
 	CheckTemporaryPermission(
 		ctx context.Context,
 		taskID uint,
 		userEmail string,
+		userID string,
 		permissionType string,
 	) (*entity.TaskTemporaryPermission, error)
 
@@ -101,6 +102,14 @@ type PermissionRepository interface {
 	QueryUserRoles(
 		ctx context.Context,
 		userID string,
+		scopeType valueobject.ScopeType,
+		scopeID uint,
+	) ([]*entity.UserRole, error)
+
+	// QueryApplicationRoles 查询 Application（app_key）的角色分配
+	QueryApplicationRoles(
+		ctx context.Context,
+		applicationPrincipalIDs []string,
 		scopeType valueobject.ScopeType,
 		scopeID uint,
 	) ([]*entity.UserRole, error)

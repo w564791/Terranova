@@ -94,11 +94,18 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 	userDescription string,
 	workspaceID string,
 	organizationID string,
+	scope CMDBWorkspaceScope,
 	userSelections map[string]interface{}, // 支持 string 或 []string
 	currentConfig map[string]interface{},
 	mode string,
 	resourceInfoMap map[string]interface{}, // 完整的资源信息（包括 ARN）
 ) (*GenerateConfigWithCMDBResponse, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
+	// resourceInfoMap is intentionally not used as CMDB data. It is client
+	// supplied and all selected resources must be reloaded from the scope.
+	_ = resourceInfoMap
 	totalTimer := NewTimer()
 	log.Printf("[AICMDBSkillService] ========== 开始 Skill 模式配置生成 ==========")
 	log.Printf("[AICMDBSkillService] 用户 ID: %s, Module ID: %d", userID, moduleID)
@@ -119,7 +126,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 	// 2. 检查配置模式
 	if aiConfig.Mode != "skill" {
 		log.Printf("[AICMDBSkillService] AI 配置模式为 '%s'，降级到传统模式", aiConfig.Mode)
-		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, convertedSelections, currentConfig, mode)
+		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, scope, convertedSelections, currentConfig, mode)
 	}
 
 	// 3. 获取 Skill 组合配置
@@ -155,12 +162,15 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 	if len(convertedSelections) > 0 {
 		log.Printf("[AICMDBSkillService] 步骤 2: 使用用户选择的资源（跳过 CMDB 查询）")
 		log.Printf("[AICMDBSkillService] 用户选择: %v", convertedSelections)
-		cmdbData = s.buildCMDBDataFromSelections(convertedSelections)
+		cmdbData, err = s.buildCMDBDataFromSelections(convertedSelections, scope)
+		if err != nil {
+			return nil, err
+		}
 		RecordAICallDuration("form_generation", "user_selection", cmdbTimer.ElapsedMs())
 		log.Printf("[AICMDBSkillService] [耗时] 步骤 2 构建用户选择数据: %.0fms", cmdbTimer.ElapsedMs())
 	} else if s.shouldUseCMDB(userDescription) {
 		log.Printf("[AICMDBSkillService] 步骤 2: CMDB 查询")
-		cmdbResults, err := s.performCMDBQuery(userID, userDescription, convertedSelections)
+		cmdbResults, err := s.performCMDBQuery(userID, userDescription, convertedSelections, scope)
 		RecordAICallDuration("form_generation", "cmdb_query", cmdbTimer.ElapsedMs())
 		log.Printf("[AICMDBSkillService] [耗时] 步骤 2 CMDB 查询: %.0fms", cmdbTimer.ElapsedMs())
 		if err != nil {
@@ -211,7 +221,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkill(
 	log.Printf("[AICMDBSkillService] [耗时] 步骤 3 组装 Skill Prompt: %.0fms", assembleTimer.ElapsedMs())
 	if err != nil {
 		log.Printf("[AICMDBSkillService] Skill 组装失败: %v，降级到传统模式", err)
-		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, convertedSelections, currentConfig, mode)
+		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, scope, convertedSelections, currentConfig, mode)
 	}
 
 	log.Printf("[AICMDBSkillService] 使用了 %d 个 Skills: %v", len(assembleResult.UsedSkillNames), assembleResult.UsedSkillNames)
@@ -555,8 +565,11 @@ func (s *AICMDBSkillService) parseCMDBNeedAssessment(output string) (*CMDBNeedAs
 	return &result, nil
 }
 
-// performCMDBQuery 执行 CMDB 查询
-func (s *AICMDBSkillService) performCMDBQuery(userID string, userDescription string, userSelections map[string]string) (*CMDBQueryResults, error) {
+// performCMDBQuery executes only inside the IAM-resolved workspace scope.
+func (s *AICMDBSkillService) performCMDBQuery(userID string, userDescription string, userSelections map[string]string, scope CMDBWorkspaceScope) (*CMDBQueryResults, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
 	// 使用现有的 CMDB 服务逻辑
 	cmdbService := NewAICMDBService(s.db)
 
@@ -567,7 +580,7 @@ func (s *AICMDBSkillService) performCMDBQuery(userID string, userDescription str
 	}
 
 	// 执行查询
-	results, err := cmdbService.executeCMDBQueries(userID, queryPlan)
+	results, err := cmdbService.executeCMDBQueries(userID, queryPlan, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -586,11 +599,15 @@ func (s *AICMDBSkillService) checkNeedSelection(results *CMDBQueryResults) (bool
 	return cmdbService.checkNeedSelection(results)
 }
 
-// buildCMDBDataFromSelections 从用户选择构建 CMDB 数据字符串
-// 会根据资源 ID 查询完整的资源信息（包括 ARN）
-func (s *AICMDBSkillService) buildCMDBDataFromSelections(selections map[string]string) string {
+// buildCMDBDataFromSelections rebuilds prompt data from database rows inside
+// scope. Raw client IDs/ARNs are never emitted as a fallback: that would allow
+// a cross-organization selection to influence generated configuration.
+func (s *AICMDBSkillService) buildCMDBDataFromSelections(selections map[string]string, scope CMDBWorkspaceScope) (string, error) {
+	if err := scope.validate(); err != nil {
+		return "", err
+	}
 	if len(selections) == 0 {
-		return ""
+		return "", nil
 	}
 
 	var sb strings.Builder
@@ -602,12 +619,14 @@ func (s *AICMDBSkillService) buildCMDBDataFromSelections(selections map[string]s
 			ids := strings.Split(value, ",")
 			var arnList []string
 			for _, id := range ids {
-				// 查询资源的完整信息
-				resource := s.lookupResourceByID(id)
-				if resource != nil && resource.ARN != "" {
+				resource, err := s.lookupResourceByID(strings.TrimSpace(id), scope)
+				if err != nil {
+					return "", err
+				}
+				if resource.ARN != "" {
 					arnList = append(arnList, resource.ARN)
 				} else {
-					arnList = append(arnList, id) // 降级：使用 ID
+					arnList = append(arnList, resource.ID)
 				}
 			}
 			sb.WriteString(fmt.Sprintf("- %s (多个):\n", key))
@@ -615,31 +634,36 @@ func (s *AICMDBSkillService) buildCMDBDataFromSelections(selections map[string]s
 				sb.WriteString(fmt.Sprintf("  - [%d] ARN: %s\n", i+1, arn))
 			}
 		} else {
-			// 查询资源的完整信息
-			resource := s.lookupResourceByID(value)
-			if resource != nil {
-				sb.WriteString(fmt.Sprintf("- %s:\n", key))
-				sb.WriteString(fmt.Sprintf("  - ID: %s\n", resource.ID))
-				sb.WriteString(fmt.Sprintf("  - Name: %s\n", resource.Name))
-				if resource.ARN != "" {
-					sb.WriteString(fmt.Sprintf("  - ARN: %s\n", resource.ARN))
-				}
-			} else {
-				// 降级：只输出 ID
-				sb.WriteString(fmt.Sprintf("- %s: %s\n", key, value))
+			resource, err := s.lookupResourceByID(strings.TrimSpace(value), scope)
+			if err != nil {
+				return "", err
+			}
+			sb.WriteString(fmt.Sprintf("- %s:\n", key))
+			sb.WriteString(fmt.Sprintf("  - ID: %s\n", resource.ID))
+			sb.WriteString(fmt.Sprintf("  - Name: %s\n", resource.Name))
+			if resource.ARN != "" {
+				sb.WriteString(fmt.Sprintf("  - ARN: %s\n", resource.ARN))
 			}
 		}
 	}
 
 	sb.WriteString("\n【重要】请在生成配置时直接使用上述 ARN，不要使用占位符！\n")
 
-	return sb.String()
+	return sb.String(), nil
 }
 
-// lookupResourceByID 根据资源 ID 查询完整的资源信息
-func (s *AICMDBSkillService) lookupResourceByID(resourceID string) *CMDBResourceInfo {
+// lookupResourceByID resolves exactly one resource from the tenant workspace
+// scope. External CMDB records deliberately have no organization ownership and
+// are not eligible for tenant AI configuration requests.
+func (s *AICMDBSkillService) lookupResourceByID(resourceID string, scope CMDBWorkspaceScope) (*CMDBResourceInfo, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
+	if resourceID == "" || len(scope.workspaceIDs) == 0 {
+		return nil, ErrCMDBResourceNotInScope
+	}
 	// 从 resource_index 表查询
-	var resource struct {
+	var resources []struct {
 		CloudResourceID   string `gorm:"column:cloud_resource_id"`
 		CloudResourceName string `gorm:"column:cloud_resource_name"`
 		CloudResourceARN  string `gorm:"column:cloud_resource_arn"`
@@ -648,89 +672,23 @@ func (s *AICMDBSkillService) lookupResourceByID(resourceID string) *CMDBResource
 	}
 
 	err := s.db.Table("resource_index").
-		Where("cloud_resource_id = ?", resourceID).
-		First(&resource).Error
-
+		Where("cloud_resource_id = ? AND workspace_id IN ?", resourceID, scope.workspaceIDs).
+		Limit(2).
+		Find(&resources).Error
 	if err != nil {
-		// 尝试从 cmdb_external_sources 查询
-		var externalResource struct {
-			ResourceID   string `gorm:"column:resource_id"`
-			ResourceName string `gorm:"column:resource_name"`
-			ResourceARN  string `gorm:"column:resource_arn"`
-			ResourceType string `gorm:"column:resource_type"`
-		}
-
-		err = s.db.Table("cmdb_external_sources").
-			Where("resource_id = ?", resourceID).
-			First(&externalResource).Error
-
-		if err != nil {
-			log.Printf("[AICMDBSkillService] 无法找到资源 ID=%s 的完整信息: %v", resourceID, err)
-			return nil
-		}
-
-		return &CMDBResourceInfo{
-			ID:   externalResource.ResourceID,
-			Name: externalResource.ResourceName,
-			ARN:  externalResource.ResourceARN,
-		}
+		return nil, fmt.Errorf("query selected CMDB resource: %w", err)
 	}
+	if len(resources) != 1 {
+		return nil, ErrCMDBResourceNotInScope
+	}
+	resource := resources[0]
 
 	return &CMDBResourceInfo{
 		ID:     resource.CloudResourceID,
 		Name:   resource.CloudResourceName,
 		ARN:    resource.CloudResourceARN,
 		Region: resource.CloudRegion,
-	}
-}
-
-// buildCMDBDataFromResourceInfoMap 从前端传递的完整资源信息构建 CMDB 数据字符串
-// 这个函数直接使用前端传递的资源信息（包括 ARN），不需要再次查询数据库
-func (s *AICMDBSkillService) buildCMDBDataFromResourceInfoMap(resourceInfoMap map[string]interface{}) string {
-	if len(resourceInfoMap) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString("【用户选择的资源 - 请直接使用以下资源信息】\n")
-
-	for key, value := range resourceInfoMap {
-		// 处理单个资源
-		if resourceMap, ok := value.(map[string]interface{}); ok {
-			id, _ := resourceMap["id"].(string)
-			name, _ := resourceMap["name"].(string)
-			arn, _ := resourceMap["arn"].(string)
-
-			sb.WriteString(fmt.Sprintf("- %s:\n", key))
-			sb.WriteString(fmt.Sprintf("  - ID: %s\n", id))
-			sb.WriteString(fmt.Sprintf("  - Name: %s\n", name))
-			if arn != "" {
-				sb.WriteString(fmt.Sprintf("  - ARN: %s\n", arn))
-			}
-		} else if resourceList, ok := value.([]interface{}); ok {
-			// 处理多个资源（数组）
-			sb.WriteString(fmt.Sprintf("- %s (多个):\n", key))
-			for i, item := range resourceList {
-				if resourceMap, ok := item.(map[string]interface{}); ok {
-					id, _ := resourceMap["id"].(string)
-					name, _ := resourceMap["name"].(string)
-					arn, _ := resourceMap["arn"].(string)
-
-					sb.WriteString(fmt.Sprintf("  - [%d] ID: %s, Name: %s", i+1, id, name))
-					if arn != "" {
-						sb.WriteString(fmt.Sprintf(", ARN: %s", arn))
-					}
-					sb.WriteString("\n")
-				}
-			}
-		}
-	}
-
-	sb.WriteString("\n【重要】请在生成配置时直接使用上述 ARN，不要使用占位符！\n")
-
-	log.Printf("[AICMDBSkillService] 从前端资源信息构建 CMDB 数据: %s", sb.String())
-
-	return sb.String()
+	}, nil
 }
 
 // buildCMDBDataString 构建 CMDB 数据字符串
@@ -832,6 +790,7 @@ func (s *AICMDBSkillService) fallbackToLegacyMode(
 	userDescription string,
 	workspaceID string,
 	organizationID string,
+	scope CMDBWorkspaceScope,
 	userSelections map[string]string,
 	currentConfig map[string]interface{},
 	mode string,
@@ -840,6 +799,7 @@ func (s *AICMDBSkillService) fallbackToLegacyMode(
 	cmdbService := NewAICMDBService(s.db)
 	return cmdbService.GenerateConfigWithCMDB(
 		userID, moduleID, userDescription, workspaceID, organizationID,
+		scope,
 		userSelections, currentConfig, mode,
 	)
 }
@@ -1359,7 +1319,11 @@ func (s *AICMDBSkillService) parseCMDBAssessmentWithQueryPlan(output string) (*C
 func (s *AICMDBSkillService) assessAndQueryCMDB(
 	userID string,
 	userDescription string,
+	scope CMDBWorkspaceScope,
 ) (*CMDBQueryResults, bool, []CMDBLookupResult, error) {
+	if err := scope.validate(); err != nil {
+		return nil, false, nil, err
+	}
 	totalTimer := NewTimer()
 
 	// 1. 关键词快速检测
@@ -1405,7 +1369,7 @@ func (s *AICMDBSkillService) assessAndQueryCMDB(
 
 	// 4. 执行 CMDB 查询
 	queryTimer := NewTimer()
-	results, err := cmdbService.executeCMDBQueries(userID, queryPlan)
+	results, err := cmdbService.executeCMDBQueries(userID, queryPlan, scope)
 	queryDuration := queryTimer.ElapsedMs()
 	RecordAICallDuration("form_generation_optimized", "cmdb_query_execution", queryDuration)
 	log.Printf("[AICMDBSkillService] [耗时] CMDB 查询执行: %.0fms", queryDuration)
@@ -1434,7 +1398,10 @@ func (s *AICMDBSkillService) assessAndQueryCMDB(
 
 // executeCMDBQueriesFromPlan 根据查询计划执行 CMDB 查询
 // 使用 AICMDBService 的向量搜索功能，而非简单的关键词搜索
-func (s *AICMDBSkillService) executeCMDBQueriesFromPlan(userID string, queryPlan []CMDBQueryPlanItem) (*CMDBQueryResults, error) {
+func (s *AICMDBSkillService) executeCMDBQueriesFromPlan(userID string, queryPlan []CMDBQueryPlanItem, scope CMDBWorkspaceScope) (*CMDBQueryResults, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
 	if len(queryPlan) == 0 {
 		log.Printf("[AICMDBSkillService] 查询计划为空，跳过 CMDB 查询")
 		return &CMDBQueryResults{Results: make(map[string]*CMDBQueryResult)}, nil
@@ -1473,7 +1440,7 @@ func (s *AICMDBSkillService) executeCMDBQueriesFromPlan(userID string, queryPlan
 
 	// 使用 AICMDBService 执行查询（支持向量搜索）
 	cmdbService := NewAICMDBService(s.db)
-	results, err := cmdbService.executeCMDBQueries(userID, cmdbQueryPlan)
+	results, err := cmdbService.executeCMDBQueries(userID, cmdbQueryPlan, scope)
 	if err != nil {
 		log.Printf("[AICMDBSkillService] CMDB 查询失败: %v", err)
 		return nil, err
@@ -1507,11 +1474,18 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 	userDescription string,
 	workspaceID string,
 	organizationID string,
+	scope CMDBWorkspaceScope,
 	userSelections map[string]interface{},
 	currentConfig map[string]interface{},
 	mode string,
 	resourceInfoMap map[string]interface{}, // 完整的资源信息（包括 ARN）
 ) (*GenerateConfigWithCMDBResponse, error) {
+	if err := scope.validate(); err != nil {
+		return nil, err
+	}
+	// Never use client-provided ARN/name values as CMDB prompt data. The
+	// converted selection IDs below are resolved again inside scope.
+	_ = resourceInfoMap
 	totalTimer := NewTimer()
 	log.Printf("[AICMDBSkillService] ========== 开始优化版 Skill 模式配置生成 ==========")
 	log.Printf("[AICMDBSkillService] 用户 ID: %s, Module ID: %d, 模式: %s", userID, moduleID, mode)
@@ -1533,7 +1507,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 	if aiConfig.Mode != "skill" {
 		log.Printf("[AICMDBSkillService] AI 配置模式为 '%s'，降级到传统模式", aiConfig.Mode)
 		IncAICallCount("form_generation_optimized", "fallback_legacy")
-		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, convertedSelections, currentConfig, mode)
+		return s.fallbackToLegacyMode(userID, moduleID, userDescription, workspaceID, organizationID, scope, convertedSelections, currentConfig, mode)
 	}
 
 	// 3. 意图断言
@@ -1558,13 +1532,9 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 		userSelectionTimer := NewTimer()
 		log.Printf("[AICMDBSkillService] 步骤 2: 使用用户选择的资源（跳过 CMDB 查询和 Skill 选择）")
 		log.Printf("[AICMDBSkillService] 用户选择: %v", convertedSelections)
-		var cmdbData string
-		// 优先使用前端传递的完整资源信息（包括 ARN）
-		if len(resourceInfoMap) > 0 {
-			cmdbData = s.buildCMDBDataFromResourceInfoMap(resourceInfoMap)
-		} else {
-			// 降级：从数据库查询
-			cmdbData = s.buildCMDBDataFromSelections(convertedSelections)
+		cmdbData, err := s.buildCMDBDataFromSelections(convertedSelections, scope)
+		if err != nil {
+			return nil, err
 		}
 		RecordAICallDuration("form_generation_optimized", "user_selection_build", userSelectionTimer.ElapsedMs())
 		log.Printf("[AICMDBSkillService] [耗时] 步骤 2 构建用户选择数据: %.0fms", userSelectionTimer.ElapsedMs())
@@ -1578,7 +1548,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 	parallelTimer := NewTimer()
 	log.Printf("[AICMDBSkillService] 步骤 2: 执行 CMDB 查询")
 	SetActiveParallelTasks(1)
-	parallelResult := s.executeParallel(userID, userDescription)
+	parallelResult := s.executeParallel(userID, userDescription, scope)
 	SetActiveParallelTasks(0)
 	RecordAICallDuration("form_generation_optimized", "parallel_execution", parallelTimer.ElapsedMs())
 	log.Printf("[AICMDBSkillService] [耗时] 步骤 2 CMDB 查询: %.0fms", parallelTimer.ElapsedMs())
@@ -1624,7 +1594,7 @@ func (s *AICMDBSkillService) GenerateConfigWithCMDBSkillOptimized(
 
 // executeParallel 执行 CMDB 查询（带超时）
 // Domain Skill 选择不在此处执行，资源生成阶段的 Domain Skill 选择在 CMDB 查询完成后单独执行（阶段二）
-func (s *AICMDBSkillService) executeParallel(userID string, userDescription string) *ParallelExecutionResult {
+func (s *AICMDBSkillService) executeParallel(userID string, userDescription string, scope CMDBWorkspaceScope) *ParallelExecutionResult {
 	result := &ParallelExecutionResult{}
 
 	cmdbDone := make(chan struct{})
@@ -1633,7 +1603,7 @@ func (s *AICMDBSkillService) executeParallel(userID string, userDescription stri
 	go func() {
 		defer close(cmdbDone)
 		cmdbTimer := NewTimer()
-		cmdbResults, needSelection, lookups, err := s.assessAndQueryCMDB(userID, userDescription)
+		cmdbResults, needSelection, lookups, err := s.assessAndQueryCMDB(userID, userDescription, scope)
 		cmdbDuration := cmdbTimer.ElapsedMs()
 		result.CMDBResults = cmdbResults
 		result.NeedSelection = needSelection

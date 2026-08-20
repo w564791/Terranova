@@ -234,9 +234,10 @@ func (s *AIAnalysisService) AnalyzeErrorByTaskID(taskID uint, userID string) (*A
 	loop := NewAIAgentLoop(caller, 5)
 
 	// 注册错误分析专用工具
+	agentScope := NewAIAgentTaskScope(task.WorkspaceID, task.ID)
 	loop.RegisterTool(NewQueryTaskResourceChangesTool(s.db, taskID))
 	loop.RegisterTool(NewQueryModuleInputsTool(task.PlanJSON))
-	loop.RegisterTool(NewQueryResourceAttributesTool(s.db))
+	loop.RegisterTool(NewQueryResourceAttributesTool(s.db, agentScope))
 
 	// 设置输出验证器
 	loop.SetOutputValidator(errorAnalysisValidator)
@@ -820,4 +821,3 @@ func marshalJSONB(j models.JSONB) string {
 	}
 	return string(data)
 }
-

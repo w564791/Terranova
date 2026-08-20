@@ -383,7 +383,8 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 					frontendCallbackURL, url.QueryEscape("Failed to create MFA token")))
 				return
 			}
-			c.Redirect(http.StatusFound, fmt.Sprintf("%s?mfa_setup_required=true&mfa_token=%s&is_new_user=true",
+			// mfa_token 放 fragment，避免 query 进日志/Referer
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s#mfa_setup_required=true&mfa_token=%s&is_new_user=true",
 				frontendCallbackURL, url.QueryEscape(mfaToken.Token)))
 			return
 		}
@@ -397,7 +398,7 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 				frontendCallbackURL, url.QueryEscape("Failed to create MFA token")))
 			return
 		}
-		c.Redirect(http.StatusFound, fmt.Sprintf("%s?mfa_required=true&mfa_token=%s&is_new_user=%v",
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s#mfa_required=true&mfa_token=%s&is_new_user=%v",
 			frontendCallbackURL, url.QueryEscape(mfaToken.Token), result.IsNewUser))
 		return
 	}
@@ -411,7 +412,7 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 				frontendCallbackURL, url.QueryEscape("Failed to create MFA token")))
 			return
 		}
-		c.Redirect(http.StatusFound, fmt.Sprintf("%s?mfa_setup_required=true&mfa_token=%s&is_new_user=%v",
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s#mfa_setup_required=true&mfa_token=%s&is_new_user=%v",
 			frontendCallbackURL, url.QueryEscape(mfaToken.Token), result.IsNewUser))
 		return
 	}
@@ -448,8 +449,9 @@ func (h *SSOHandler) CallbackRedirect(c *gin.Context) {
 		return
 	}
 
-	// 重定向到前端，携带 token
-	c.Redirect(http.StatusFound, fmt.Sprintf("%s?token=%s&is_new_user=%v",
+	// 重定向到前端：token 放在 URL fragment，避免进入服务端日志 / Referer / 历史 query
+	// 前端需从 location.hash 解析 token（勿再依赖 ?token=）
+	c.Redirect(http.StatusFound, fmt.Sprintf("%s#token=%s&is_new_user=%v",
 		frontendCallbackURL, url.QueryEscape(token), result.IsNewUser))
 }
 

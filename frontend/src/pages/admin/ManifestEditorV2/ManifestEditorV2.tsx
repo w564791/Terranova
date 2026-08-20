@@ -13,6 +13,7 @@ import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
 import { message } from 'antd'
+import { getAuthOrgId } from '../../../services/api'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
 import { registerHclProviders } from './hclProviders'
@@ -137,7 +138,7 @@ async function traverseFileSystemEntry(entry: FileSystemEntry, basePath = ''): P
 function collectFileEntries(items: DataTransferItemList): (FileSystemEntry | File)[] {
   const result: (FileSystemEntry | File)[] = []
   for (const item of Array.from(items)) {
-    const entry = item.webkitGetAsEntry?.() ?? item.getAsEntry?.()
+    const entry = item.webkitGetAsEntry?.() ?? (item as any).getAsEntry?.()
     if (entry) {
       result.push(entry)
     } else {
@@ -200,12 +201,12 @@ export default function ManifestEditorV2() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const manifestId = params.id || 'sandbox'
-  // org_id 多源 fallback: path param > query string ?org= > localStorage > '1'
+  // org_id 多源 fallback: path param > query string ?org= > 当前 IAM active org。
+  // 不再回退到固定 org 1，避免跨租户编辑 manifest。
   const orgId =
     params.org_id ||
     searchParams.get('org') ||
-    localStorage.getItem('current_org_id') ||
-    '1'
+    String(getAuthOrgId() || '')
   const ctx: ManifestEditorContext = useMemo(() => ({ orgId, manifestId }), [orgId, manifestId])
 
   const rootRef = useRef<HTMLDivElement | null>(null) // 根容器(全屏目标)

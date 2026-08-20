@@ -1,4 +1,4 @@
-import api from './api';
+import api, { apiFetch } from './api';
 
 // 生成配置请求
 export interface GenerateFormRequest {
@@ -240,22 +240,12 @@ export interface GenerateConfigWithSSEParams {
   resourceInfoMap?: Record<string, CMDBResourceInfo | CMDBResourceInfo[]>;
 }
 
-// 获取 token（从 localStorage）
-const getToken = (): string | null => {
-  return localStorage.getItem('token');
-};
-
 // 使用 SSE 实时进度的配置生成
 export const generateFormConfigWithSSE = async (
   params: GenerateConfigWithSSEParams,
   onProgress: (event: ProgressEvent) => void,
   signal?: AbortSignal
 ): Promise<GenerateConfigWithCMDBResponse> => {
-  const token = getToken();
-  if (!token) {
-    throw new Error('未登录');
-  }
-
   // 构建请求 body
   const requestBody = {
     module_id: params.moduleId,
@@ -270,10 +260,9 @@ export const generateFormConfigWithSSE = async (
   console.log('[aiForm] SSE request body:', requestBody);
 
   // 发起 POST 请求
-  const response = await fetch('/api/v1/ai/form/generate-with-cmdb-skill-sse', {
+  const response = await apiFetch('/ai/form/generate-with-cmdb-skill-sse', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
     },

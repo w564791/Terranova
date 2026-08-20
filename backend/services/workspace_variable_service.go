@@ -103,13 +103,78 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 	return nil
 }
 
-// GetVariable 获取单个变量
+// GetVariable 获取单个变量（不绑定 workspace，仅内部/兼容用）
 func (s *WorkspaceVariableService) GetVariable(id uint) (*models.WorkspaceVariable, error) {
 	var variable models.WorkspaceVariable
 	if err := s.db.First(&variable, id).Error; err != nil {
 		return nil, fmt.Errorf("变量不存在: %w", err)
 	}
 	return &variable, nil
+}
+
+// GetVariableInWorkspace 按 workspace 语义 ID 绑定获取变量，防止跨 workspace IDOR
+// workspaceID 为 workspaces.workspace_id（语义化）或数字主键字符串均可由调用方解析后传入语义 ID
+func (s *WorkspaceVariableService) GetVariableInWorkspace(workspaceID string, id uint) (*models.WorkspaceVariable, error) {
+	var variable models.WorkspaceVariable
+	// workspace_variables.workspace_id 存语义化 ID 或数字 ID，与列表查询一致用路径 workspace 约束
+	if err := s.db.Where("id = ? AND workspace_id = ?", id, workspaceID).First(&variable).Error; err != nil {
+		return nil, fmt.Errorf("变量不存在: %w", err)
+	}
+	return &variable, nil
+}
+
+// GetLatestByVariableIDInWorkspace 在指定 workspace 内按 variable_id 取最新版本
+func (s *WorkspaceVariableService) GetLatestByVariableIDInWorkspace(workspaceID, variableID string) (*models.WorkspaceVariable, error) {
+	var variable models.WorkspaceVariable
+	err := s.db.Where("workspace_id = ? AND variable_id = ?", workspaceID, variableID).
+		Order("version DESC").
+		First(&variable).Error
+	if err != nil {
+		return nil, fmt.Errorf("变量不存在: %w", err)
+	}
+	return &variable, nil
+}
+
+// UpdateVariableInWorkspace 更新前校验变量归属 workspace
+func (s *WorkspaceVariableService) UpdateVariableInWorkspace(workspaceID string, id uint, expectedVersion int, updates map[string]interface{}) (*VariableUpdateResult, error) {
+	if _, err := s.GetVariableInWorkspace(workspaceID, id); err != nil {
+		return nil, err
+	}
+	return s.UpdateVariable(id, expectedVersion, updates)
+}
+
+// UpdateVariableByVariableIDInWorkspace 按 variable_id 更新并绑定 workspace
+func (s *WorkspaceVariableService) UpdateVariableByVariableIDInWorkspace(workspaceID, variableID string, expectedVersion int, updates map[string]interface{}) (*VariableUpdateResult, error) {
+	v, err := s.GetLatestByVariableIDInWorkspace(workspaceID, variableID)
+	if err != nil {
+		return nil, err
+	}
+	return s.UpdateVariable(v.ID, expectedVersion, updates)
+}
+
+// DeleteVariableInWorkspace 删除前校验归属
+func (s *WorkspaceVariableService) DeleteVariableInWorkspace(workspaceID string, id uint) error {
+	if _, err := s.GetVariableInWorkspace(workspaceID, id); err != nil {
+		return err
+	}
+	return s.DeleteVariable(id)
+}
+
+// DeleteVariableByVariableIDInWorkspace 按 variable_id 删除并绑定 workspace
+func (s *WorkspaceVariableService) DeleteVariableByVariableIDInWorkspace(workspaceID, variableID string) error {
+	v, err := s.GetLatestByVariableIDInWorkspace(workspaceID, variableID)
+	if err != nil {
+		return err
+	}
+	return s.DeleteVariable(v.ID)
+}
+
+// GetVariableVersionsInWorkspace 版本历史绑定 workspace
+func (s *WorkspaceVariableService) GetVariableVersionsInWorkspace(workspaceID, variableID string) ([]*models.WorkspaceVariable, error) {
+	if _, err := s.GetLatestByVariableIDInWorkspace(workspaceID, variableID); err != nil {
+		return nil, err
+	}
+	return s.GetVariableVersions(variableID)
 }
 
 // GetVariableByKey 根据key获取变量
@@ -459,10 +524,20 @@ func (s *WorkspaceVariableService) GetVariableVersions(variableID string) ([]*mo
 	return versions, nil
 }
 
-// GetVariableVersion 获取变量的指定版本
+// GetVariableVersion 获取变量的指定版本（不绑 workspace；业务入口请用 GetVariableVersionInWorkspace）
 func (s *WorkspaceVariableService) GetVariableVersion(variableID string, version int) (*models.WorkspaceVariable, error) {
 	var variable models.WorkspaceVariable
 	if err := s.db.Where("variable_id = ? AND version = ?", variableID, version).
+		First(&variable).Error; err != nil {
+		return nil, fmt.Errorf("变量版本不存在: %w", err)
+	}
+	return &variable, nil
+}
+
+// GetVariableVersionInWorkspace 指定版本且绑定 workspace
+func (s *WorkspaceVariableService) GetVariableVersionInWorkspace(workspaceID, variableID string, version int) (*models.WorkspaceVariable, error) {
+	var variable models.WorkspaceVariable
+	if err := s.db.Where("workspace_id = ? AND variable_id = ? AND version = ?", workspaceID, variableID, version).
 		First(&variable).Error; err != nil {
 		return nil, fmt.Errorf("变量版本不存在: %w", err)
 	}

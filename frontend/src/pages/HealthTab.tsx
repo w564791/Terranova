@@ -3,6 +3,7 @@ import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import DriftConfig from '../components/DriftConfig';
 import * as driftService from '../services/drift';
+import { apiFetch } from '../services/api';
 import styles from './HealthTab.module.css';
 
 interface HealthTabProps {
@@ -116,7 +117,7 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
   // 轮询检查任务状态
   const pollTaskStatus = useCallback(async (taskId: number) => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/tasks/${taskId}`);
+      const response = await apiFetch(`/workspaces/${workspaceId}/tasks/${taskId}`);
       if (!response.ok) {
         throw new Error('Failed to get task status');
       }
@@ -206,7 +207,7 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
     // 如果有 task_id，尝试取消任务
     if (checkingTaskId) {
       try {
-        const response = await fetch(`/api/v1/workspaces/${workspaceId}/tasks/${checkingTaskId}/cancel`, {
+        const response = await apiFetch(`/workspaces/${workspaceId}/tasks/${checkingTaskId}/cancel`, {
           method: 'POST',
         });
         

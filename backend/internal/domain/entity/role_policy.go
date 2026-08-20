@@ -17,6 +17,9 @@ type RolePolicy struct {
 	PermissionName        string `gorm:"-" json:"permission_name,omitempty"`
 	PermissionDisplayName string `gorm:"-" json:"permission_display_name,omitempty"`
 	ResourceType          string `gorm:"-" json:"resource_type,omitempty"`
+	// PermissionScopeLevel 是关联 PermissionDefinition.scope_level 的运行时投影；
+	// 不持久化，用于 PermissionChecker 对历史错误 RolePolicy fail-closed。
+	PermissionScopeLevel string `gorm:"-" json:"-"`
 }
 
 // TableName 指定表名

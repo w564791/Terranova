@@ -58,13 +58,41 @@ func (s *RunTriggerService) CreateRunTrigger(trigger *models.RunTrigger) error {
 }
 
 // UpdateRunTrigger 更新触发器配置
+// UpdateRunTrigger 已废弃：必须使用 UpdateRunTriggerInSource 绑定 source workspace（C4）
 func (s *RunTriggerService) UpdateRunTrigger(id uint, updates map[string]interface{}) error {
-	return s.db.Model(&models.RunTrigger{}).Where("id = ?", id).Updates(updates).Error
+	return fmt.Errorf("UpdateRunTrigger without source_workspace is disabled; use UpdateRunTriggerInSource")
 }
 
-// DeleteRunTrigger 删除触发器配置
+// UpdateRunTriggerInSource 仅更新属于 source_workspace_id 的触发器（防跨 WS IDOR）
+func (s *RunTriggerService) UpdateRunTriggerInSource(id uint, sourceWorkspaceID string, updates map[string]interface{}) error {
+	result := s.db.Model(&models.RunTrigger{}).
+		Where("id = ? AND source_workspace_id = ?", id, sourceWorkspaceID).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// DeleteRunTrigger 已废弃：必须使用 DeleteRunTriggerInSource 绑定 source workspace（C4）
 func (s *RunTriggerService) DeleteRunTrigger(id uint) error {
-	return s.db.Delete(&models.RunTrigger{}, id).Error
+	return fmt.Errorf("DeleteRunTrigger without source_workspace is disabled; use DeleteRunTriggerInSource")
+}
+
+// DeleteRunTriggerInSource 仅删除属于 source_workspace_id 的触发器
+func (s *RunTriggerService) DeleteRunTriggerInSource(id uint, sourceWorkspaceID string) error {
+	result := s.db.Where("id = ? AND source_workspace_id = ?", id, sourceWorkspaceID).
+		Delete(&models.RunTrigger{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // GetRunTrigger 获取单个触发器

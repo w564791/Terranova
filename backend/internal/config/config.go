@@ -18,12 +18,12 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host       string
-	Port       string
-	Name       string
-	User       string
-	Password   string
-	SSLMode    string
+	Host        string
+	Port        string
+	Name        string
+	User        string
+	Password    string
+	SSLMode     string
 	SSLRootCert string
 }
 
@@ -45,15 +45,7 @@ func Load() *Config {
 			Port: getEnv("SERVER_PORT", "8080"),
 			Env:  getEnv("ENV", "development"),
 		},
-		Database: DatabaseConfig{
-			Host:        getEnv("DB_HOST", "localhost"),
-			Port:        getEnv("DB_PORT", "15433"),
-			Name:        getEnv("DB_NAME", "iac_platform"),
-			User:        getEnv("DB_USER", "postgres"),
-			Password:    getEnv("DB_PASSWORD", "postgres123"),
-			SSLMode:     getEnv("DB_SSLMODE", "require"),
-			SSLRootCert: getEnv("DB_SSLROOTCERT", ""),
-		},
+		Database: LoadDatabase(),
 		JWT: JWTConfig{
 			Secret: GetJWTSecret(),
 		},
@@ -64,6 +56,22 @@ func Load() *Config {
 			DashScopeAPIKey: getEnv("DASHSCOPE_API_KEY", ""),
 			XAIAPIKey:       getEnv("XAI_API_KEY", ""),
 		},
+	}
+}
+
+// LoadDatabase returns only the settings needed to open a database
+// connection. Deployment migrations intentionally use this instead of Load:
+// schema upgrades must not be coupled to runtime-only requirements such as a
+// JWT signing key or third-party API configuration.
+func LoadDatabase() DatabaseConfig {
+	return DatabaseConfig{
+		Host:        getEnv("DB_HOST", "localhost"),
+		Port:        getEnv("DB_PORT", "15433"),
+		Name:        getEnv("DB_NAME", "iac_platform"),
+		User:        getEnv("DB_USER", "postgres"),
+		Password:    getEnv("DB_PASSWORD", "postgres123"),
+		SSLMode:     getEnv("DB_SSLMODE", "require"),
+		SSLRootCert: getEnv("DB_SSLROOTCERT", ""),
 	}
 }
 

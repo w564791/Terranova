@@ -42,8 +42,8 @@ const Dashboard: React.FC = () => {
   const loadStats = async () => {
     try {
       setLoading(true);
-      const overview = await api.get('/dashboard/overview');
-      const compliance = await api.get('/dashboard/compliance');
+      const overview = await api.get('/dashboard/overview') as OverviewStats;
+      const compliance = await api.get('/dashboard/compliance') as ComplianceStats;
       setOverviewStats(overview);
       setComplianceStats(compliance);
     } catch (err) {

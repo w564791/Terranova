@@ -1272,7 +1272,8 @@ CREATE TABLE public.applications (
     created_by character varying(20),
     created_at timestamp without time zone DEFAULT now(),
     expires_at timestamp without time zone,
-    last_used_at timestamp without time zone
+    last_used_at timestamp without time zone,
+    workspace_tag_filter jsonb DEFAULT NULL
 );
 
 
@@ -1693,6 +1694,7 @@ ALTER SEQUENCE public.iam_role_policies_id_seq OWNED BY public.iam_role_policies
 
 CREATE TABLE public.iam_roles (
     id integer NOT NULL,
+    org_id bigint NOT NULL DEFAULT 0,
     name character varying(100) NOT NULL,
     display_name character varying(200) NOT NULL,
     description text,
@@ -2905,7 +2907,7 @@ CREATE TABLE public.org_permissions (
     id integer NOT NULL,
     org_id integer NOT NULL,
     principal_type character varying(20) NOT NULL,
-    principal_id character varying(20) NOT NULL,
+    principal_id character varying(64) NOT NULL,
     permission_level integer NOT NULL,
     granted_by character varying(20),
     granted_at timestamp without time zone DEFAULT now(),
@@ -3314,7 +3316,7 @@ CREATE TABLE public.project_permissions (
     id integer NOT NULL,
     project_id integer NOT NULL,
     principal_type character varying(20) NOT NULL,
-    principal_id character varying(20) NOT NULL,
+    principal_id character varying(64) NOT NULL,
     permission_level integer NOT NULL,
     granted_by character varying(20),
     granted_at timestamp without time zone DEFAULT now(),
@@ -6801,7 +6803,7 @@ ALTER SEQUENCE public.workspace_outputs_id_seq OWNED BY public.workspace_outputs
 CREATE TABLE public.workspace_permissions (
     id integer NOT NULL,
     principal_type character varying(20) NOT NULL,
-    principal_id character varying(20) NOT NULL,
+    principal_id character varying(64) NOT NULL,
     permission_level integer NOT NULL,
     granted_by character varying(20),
     granted_at timestamp without time zone DEFAULT now(),
@@ -8524,8 +8526,8 @@ COPY public.ai_parse_tasks (id, module_id, status, input_data, output_schema, er
 -- Data for Name: applications; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.applications (id, org_id, name, app_key, app_secret, description, callback_urls, is_active, created_by, created_at, expires_at, last_used_at) FROM stdin;
-1	1	Pool Token Default	pool-token-default	not-used	\N	\N	t	\N	2025-10-30 21:25:46.002523	\N	\N
+COPY public.applications (id, org_id, name, app_key, app_secret, description, callback_urls, is_active, created_by, created_at, expires_at, last_used_at, workspace_tag_filter) FROM stdin;
+1	1	Pool Token Default	pool-token-default	not-used	\N	\N	t	\N	2025-10-30 21:25:46.002523	\N	\N	\N
 \.
 
 
@@ -8853,19 +8855,19 @@ COPY public.iam_role_policies (id, role_id, permission_level, scope_type, create
 -- Data for Name: iam_roles; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.iam_roles (id, name, display_name, description, is_system, is_active, created_by, created_at, updated_at) FROM stdin;
-1	admin	超级管理员	拥有系统所有权限的超级管理员角色	t	t	\N	2025-10-23 12:49:48.958425	2025-10-23 12:49:48.958425
-2	org_admin	组织管理员	组织级别的管理员，可以管理组织内的所有资源	t	t	\N	2025-10-23 12:49:48.958911	2025-10-23 12:49:48.958911
-3	project_admin	项目管理员	项目级别的管理员，可以管理项目内的所有资源	t	t	\N	2025-10-23 12:49:48.959102	2025-10-23 12:49:48.959102
-4	workspace_admin	工作空间管理员	工作空间级别的管理员，可以完全管理工作空间	t	t	\N	2025-10-23 12:49:48.959271	2025-10-23 12:49:48.959271
-5	developer	开发者	可以创建和管理工作空间、执行任务的开发者角色	t	t	\N	2025-10-23 12:49:48.959431	2025-10-23 12:49:48.959431
-6	viewer	查看者	只能查看资源，不能进行任何修改操作	t	t	\N	2025-10-23 12:49:48.959586	2025-10-23 12:49:48.959586
-25	运维	运维		f	t	00000000000000000001	2025-10-23 21:51:22.508159	2025-10-23 21:51:22.508159
-26	iam_admin	IAM管理员	拥有所有IAM管理权限，可以管理用户、角色、权限、组织等	t	t	\N	2025-10-25 02:10:08.477844	2025-10-25 02:10:08.477844
-27	iam_write	IAM编辑者	可以创建和修改IAM资源，但不能删除	t	t	\N	2025-10-25 02:10:08.482789	2025-10-25 02:10:08.482789
-28	iam_read	IAM查看者	只能查看IAM相关信息，不能修改	t	t	\N	2025-10-25 02:10:08.484586	2025-10-25 02:10:08.484586
-29	ops	ops	ops	f	t	user-00000000	2025-10-26 13:25:35.495104	2025-10-26 13:25:35.495104
-30	user	普通用户	默认普通用户角色，无管理员权限	t	t	\N	2026-02-10 07:18:44.393232	2026-02-10 07:18:44.393232
+COPY public.iam_roles (id, org_id, name, display_name, description, is_system, is_active, created_by, created_at, updated_at) FROM stdin;
+1	0	admin	超级管理员	拥有系统所有权限的超级管理员角色	t	t	\N	2025-10-23 12:49:48.958425	2025-10-23 12:49:48.958425
+2	0	org_admin	组织管理员	组织级别的管理员，可以管理组织内的所有资源	t	t	\N	2025-10-23 12:49:48.958911	2025-10-23 12:49:48.958911
+3	0	project_admin	项目管理员	项目级别的管理员，可以管理项目内的所有资源	t	t	\N	2025-10-23 12:49:48.959102	2025-10-23 12:49:48.959102
+4	0	workspace_admin	工作空间管理员	工作空间级别的管理员，可以完全管理工作空间	t	t	\N	2025-10-23 12:49:48.959271	2025-10-23 12:49:48.959271
+5	0	developer	开发者	可以创建和管理工作空间、执行任务的开发者角色	t	t	\N	2025-10-23 12:49:48.959431	2025-10-23 12:49:48.959431
+6	0	viewer	查看者	只能查看资源，不能进行任何修改操作	t	t	\N	2025-10-23 12:49:48.959586	2025-10-23 12:49:48.959586
+25	1	运维	运维		f	t	00000000000000000001	2025-10-23 21:51:22.508159	2025-10-23 21:51:22.508159
+26	0	iam_admin	IAM管理员	拥有所有IAM管理权限，可以管理用户、角色、权限、组织等	t	t	\N	2025-10-25 02:10:08.477844	2025-10-25 02:10:08.477844
+27	0	iam_write	IAM编辑者	可以创建和修改IAM资源，但不能删除	t	t	\N	2025-10-25 02:10:08.482789	2025-10-25 02:10:08.482789
+28	0	iam_read	IAM查看者	只能查看IAM相关信息，不能修改	t	t	\N	2025-10-25 02:10:08.484586	2025-10-25 02:10:08.484586
+29	1	ops	ops	ops	f	t	user-00000000	2025-10-26 13:25:35.495104	2025-10-26 13:25:35.495104
+30	0	user	普通用户	默认普通用户角色，无管理员权限	t	t	\N	2026-02-10 07:18:44.393232	2026-02-10 07:18:44.393232
 \.
 
 
@@ -10679,7 +10681,7 @@ ALTER TABLE ONLY public.iam_role_policies
 --
 
 ALTER TABLE ONLY public.iam_roles
-    ADD CONSTRAINT iam_roles_name_key UNIQUE (name);
+    ADD CONSTRAINT iam_roles_org_name_key UNIQUE (org_id, name);
 
 
 --
@@ -14083,7 +14085,7 @@ CREATE INDEX idx_workspace_permissions_workspace_id ON public.workspace_permissi
 -- Name: idx_workspace_project_relations_workspace_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_workspace_project_relations_workspace_id ON public.workspace_project_relations USING btree (workspace_id);
+CREATE UNIQUE INDEX idx_workspace_project_relations_workspace_id ON public.workspace_project_relations USING btree (workspace_id);
 
 
 --
@@ -15843,8 +15845,30 @@ COMMENT ON COLUMN public.manifest_provider_schemas.subpath IS
   'Normalized terraform workdir under manifest; empty string = root';
 -- <<< migrations/add_manifest_provider_schemas.sql <<<
 
+-- IAM multi-tenant baseline (kept in sync with the versioned migration job).
+-- Application Role assignments use one immutable logical identity; PostgreSQL
+-- cannot use NOW() inside a partial unique-index predicate.
+CREATE TABLE IF NOT EXISTS public.iam_application_roles (
+    id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    application_principal_id character varying(64) NOT NULL,
+    role_id integer NOT NULL REFERENCES public.iam_roles(id),
+    scope_type character varying(20) NOT NULL,
+    scope_id bigint NOT NULL,
+    assigned_by character varying(20),
+    assigned_at timestamp with time zone NOT NULL DEFAULT now(),
+    expires_at timestamp with time zone,
+    reason text,
+    CONSTRAINT uq_app_roles_identity UNIQUE (application_principal_id, role_id, scope_type, scope_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_roles_principal
+    ON public.iam_application_roles (application_principal_id);
+CREATE INDEX IF NOT EXISTS idx_app_roles_scope
+    ON public.iam_application_roles (scope_type, scope_id);
+
+ALTER TABLE public.iam_roles
+    ADD CONSTRAINT chk_iam_roles_custom_org CHECK (is_system OR org_id > 0);
+
 -- PostgreSQL database dump complete
 --
 
 \unrestrict i2PxqFjCCtdX29wKUj1iMC72bcW7g1kfbb6KHXxgiYx8b3TMdNluHgnAcHtecoV
-

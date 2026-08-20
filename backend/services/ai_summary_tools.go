@@ -14,13 +14,43 @@ import (
 
 // ========== Summary 场景 Agent Tools ==========
 
-// QueryModuleResourcesTool 查询 module 完整资源列表
-type QueryModuleResourcesTool struct {
-	db *gorm.DB
+// AIAgentTaskScope is captured from the database task before an agent loop is
+// created. Tool parameters are model-controlled input, so they must never be
+// used to choose a workspace or task.
+type AIAgentTaskScope struct {
+	workspaceID string
+	taskID      uint
 }
 
-func NewQueryModuleResourcesTool(db *gorm.DB) *QueryModuleResourcesTool {
-	return &QueryModuleResourcesTool{db: db}
+func NewAIAgentTaskScope(workspaceID string, taskID uint) AIAgentTaskScope {
+	return AIAgentTaskScope{workspaceID: workspaceID, taskID: taskID}
+}
+
+func (scope AIAgentTaskScope) requireWorkspace() error {
+	if scope.workspaceID == "" {
+		return fmt.Errorf("task workspace scope is required")
+	}
+	return nil
+}
+
+func (scope AIAgentTaskScope) requireTask() error {
+	if err := scope.requireWorkspace(); err != nil {
+		return err
+	}
+	if scope.taskID == 0 {
+		return fmt.Errorf("task scope is required")
+	}
+	return nil
+}
+
+// QueryModuleResourcesTool 查询 module 完整资源列表
+type QueryModuleResourcesTool struct {
+	db    *gorm.DB
+	scope AIAgentTaskScope
+}
+
+func NewQueryModuleResourcesTool(db *gorm.DB, scope AIAgentTaskScope) *QueryModuleResourcesTool {
+	return &QueryModuleResourcesTool{db: db, scope: scope}
 }
 
 func (t *QueryModuleResourcesTool) Name() string { return "query_module_resources" }
@@ -31,25 +61,26 @@ func (t *QueryModuleResourcesTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"workspace_id": map[string]interface{}{"type": "string", "description": "工作空间 ID"},
-			"module_path":  map[string]interface{}{"type": "string", "description": "Module 路径，如 module.vpc"},
+			"module_path": map[string]interface{}{"type": "string", "description": "Module 路径，如 module.vpc"},
 		},
-		"required": []string{"workspace_id", "module_path"},
+		"required": []string{"module_path"},
 	}
 }
 
 func (t *QueryModuleResourcesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	workspaceID, _ := params["workspace_id"].(string)
 	modulePath, _ := params["module_path"].(string)
 
-	if workspaceID == "" || modulePath == "" {
-		return nil, fmt.Errorf("workspace_id and module_path are required")
+	if err := t.scope.requireWorkspace(); err != nil {
+		return nil, err
+	}
+	if modulePath == "" {
+		return nil, fmt.Errorf("module_path is required")
 	}
 
 	var resources []models.ResourceIndex
 	err := t.db.Where(
 		"workspace_id = ? AND resource_mode = 'managed' AND (module_path = ? OR module_path LIKE ?)",
-		workspaceID, modulePath, modulePath+".%",
+		t.scope.workspaceID, modulePath, modulePath+".%",
 	).Limit(50).Find(&resources).Error
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
@@ -72,7 +103,7 @@ func (t *QueryModuleResourcesTool) Execute(ctx context.Context, params map[strin
 		})
 	}
 
-	log.Printf("[QueryModuleResources] workspace=%s module=%s found=%d", workspaceID, modulePath, len(result))
+	log.Printf("[QueryModuleResources] workspace=%s module=%s found=%d", t.scope.workspaceID, modulePath, len(result))
 	return map[string]interface{}{
 		"module_path":    modulePath,
 		"resource_count": len(result),
@@ -82,11 +113,12 @@ func (t *QueryModuleResourcesTool) Execute(ctx context.Context, params map[strin
 
 // QueryCMDBDependenciesTool 查询资源依赖方
 type QueryCMDBDependenciesTool struct {
-	db *gorm.DB
+	db    *gorm.DB
+	scope AIAgentTaskScope
 }
 
-func NewQueryCMDBDependenciesTool(db *gorm.DB) *QueryCMDBDependenciesTool {
-	return &QueryCMDBDependenciesTool{db: db}
+func NewQueryCMDBDependenciesTool(db *gorm.DB, scope AIAgentTaskScope) *QueryCMDBDependenciesTool {
+	return &QueryCMDBDependenciesTool{db: db, scope: scope}
 }
 
 func (t *QueryCMDBDependenciesTool) Name() string { return "query_cmdb_dependencies" }
@@ -109,12 +141,16 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 	resourceID, _ := params["resource_id"].(string)
 	depField, _ := params["dependency_field"].(string)
 
+	if err := t.scope.requireWorkspace(); err != nil {
+		return nil, err
+	}
 	if resourceID == "" || depField == "" {
 		return nil, fmt.Errorf("resource_id and dependency_field are required")
 	}
 
-	// 全局查询，不限定 workspace，确保 __external__ CMDB 数据也能被搜索到
-	query := t.db.Where("resource_mode = 'managed'")
+	// The task workspace is captured at registration time. Do not include the
+	// global __external__ pseudo-workspace or accept a workspace from the model.
+	query := t.db.Where("workspace_id = ? AND resource_mode = 'managed'", t.scope.workspaceID)
 
 	// 搜索 JSONB 属性：字符串字段精确匹配 + 数组字段包含匹配
 	query = query.Where(
@@ -189,15 +225,16 @@ func (t *QueryCMDBDependenciesTool) Execute(ctx context.Context, params map[stri
 type QueryResourceAttributesTool struct {
 	db          *gorm.DB
 	cmdbService *CMDBService
+	scope       AIAgentTaskScope
 }
 
-func NewQueryResourceAttributesTool(db *gorm.DB) *QueryResourceAttributesTool {
-	return &QueryResourceAttributesTool{db: db, cmdbService: NewCMDBService(db)}
+func NewQueryResourceAttributesTool(db *gorm.DB, scope AIAgentTaskScope) *QueryResourceAttributesTool {
+	return &QueryResourceAttributesTool{db: db, cmdbService: NewCMDBService(db), scope: scope}
 }
 
 func (t *QueryResourceAttributesTool) Name() string { return "query_resource_attributes" }
 func (t *QueryResourceAttributesTool) Description() string {
-	return "搜索并查询资源的完整属性信息。支持通过 cloud_resource_id、terraform_address 或关键词模糊搜索，自动跨 workspace 查询（含外部 CMDB 数据）。"
+	return "在当前任务的工作空间内搜索并查询资源完整属性。支持 cloud_resource_id、terraform_address 或关键词模糊搜索。"
 }
 func (t *QueryResourceAttributesTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
@@ -212,12 +249,16 @@ func (t *QueryResourceAttributesTool) InputSchema() map[string]interface{} {
 func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	start := time.Now()
 	q, _ := params["query"].(string)
+	if err := t.scope.requireWorkspace(); err != nil {
+		return nil, err
+	}
 	if q == "" {
 		return nil, fmt.Errorf("query is required")
 	}
 
-	// 复用 CMDB 关键字搜索（支持模糊匹配，自动跨 workspace 含外部 CMDB）
-	results, err := t.cmdbService.SearchResources(q, "", "", 1)
+	// The task workspace is the only data scope; SearchResources adds an exact
+	// workspace predicate, so platform-global external records cannot match.
+	results, err := t.cmdbService.SearchResources(q, t.scope.workspaceID, "", 1)
 	if err != nil {
 		elapsed := time.Since(start)
 		go func() {
@@ -258,7 +299,7 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	// 用搜到的精确 ID 取完整属性（含 attributes、tags）
 	hit := results[0]
 	var resource models.ResourceIndex
-	if err := t.db.Where("workspace_id = ? AND cloud_resource_id = ?", hit.WorkspaceID, hit.CloudResourceID).
+	if err := t.db.Where("workspace_id = ? AND cloud_resource_id = ?", t.scope.workspaceID, hit.CloudResourceID).
 		First(&resource).Error; err != nil {
 		// 搜索能找到但取属性失败，返回搜索结果的基本信息
 		elapsed := time.Since(start)
@@ -316,13 +357,13 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 	}()
 
 	result := map[string]interface{}{
-		"found":             true,
-		"workspace_id":      resource.WorkspaceID,
-		"terraform_address": resource.TerraformAddress,
-		"resource_type":     resource.ResourceType,
-		"cloud_resource_id": resource.CloudResourceID,
+		"found":              true,
+		"workspace_id":       resource.WorkspaceID,
+		"terraform_address":  resource.TerraformAddress,
+		"resource_type":      resource.ResourceType,
+		"cloud_resource_id":  resource.CloudResourceID,
 		"cloud_resource_arn": resource.CloudResourceARN,
-		"tags":              tags,
+		"tags":               tags,
 	}
 	// 有摘要时优先返回摘要（省 token），无摘要时 fallback 返回原始 attributes
 	if resource.ResourceSummary != "" {
@@ -335,11 +376,12 @@ func (t *QueryResourceAttributesTool) Execute(ctx context.Context, params map[st
 
 // QueryStateResourcesTool 查询工作空间完整资源概览
 type QueryStateResourcesTool struct {
-	db *gorm.DB
+	db    *gorm.DB
+	scope AIAgentTaskScope
 }
 
-func NewQueryStateResourcesTool(db *gorm.DB) *QueryStateResourcesTool {
-	return &QueryStateResourcesTool{db: db}
+func NewQueryStateResourcesTool(db *gorm.DB, scope AIAgentTaskScope) *QueryStateResourcesTool {
+	return &QueryStateResourcesTool{db: db, scope: scope}
 }
 
 func (t *QueryStateResourcesTool) Name() string { return "query_state_resources" }
@@ -348,22 +390,18 @@ func (t *QueryStateResourcesTool) Description() string {
 }
 func (t *QueryStateResourcesTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"workspace_id": map[string]interface{}{"type": "string", "description": "工作空间 ID"},
-		},
-		"required": []string{"workspace_id"},
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
 func (t *QueryStateResourcesTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	workspaceID, _ := params["workspace_id"].(string)
-	if workspaceID == "" {
-		return nil, fmt.Errorf("workspace_id is required")
+	if err := t.scope.requireWorkspace(); err != nil {
+		return nil, err
 	}
 
 	var resources []models.ResourceIndex
-	err := t.db.Where("workspace_id = ? AND resource_mode = 'managed'", workspaceID).
+	err := t.db.Where("workspace_id = ? AND resource_mode = 'managed'", t.scope.workspaceID).
 		Limit(100).Find(&resources).Error
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
@@ -394,9 +432,9 @@ func (t *QueryStateResourcesTool) Execute(ctx context.Context, params map[string
 		})
 	}
 
-	log.Printf("[QueryStateResources] workspace=%s total=%d types=%d", workspaceID, len(resources), len(groups))
+	log.Printf("[QueryStateResources] workspace=%s total=%d types=%d", t.scope.workspaceID, len(resources), len(groups))
 	return map[string]interface{}{
-		"workspace_id":   workspaceID,
+		"workspace_id":    t.scope.workspaceID,
 		"total_resources": len(resources),
 		"resource_types":  len(groups),
 		"summary":         summary,
@@ -405,11 +443,12 @@ func (t *QueryStateResourcesTool) Execute(ctx context.Context, params map[string
 
 // QueryPlanSummaryTool 查询 Plan Summary（仅 apply summary 阶段使用）
 type QueryPlanSummaryTool struct {
-	db *gorm.DB
+	db    *gorm.DB
+	scope AIAgentTaskScope
 }
 
-func NewQueryPlanSummaryTool(db *gorm.DB) *QueryPlanSummaryTool {
-	return &QueryPlanSummaryTool{db: db}
+func NewQueryPlanSummaryTool(db *gorm.DB, scope AIAgentTaskScope) *QueryPlanSummaryTool {
+	return &QueryPlanSummaryTool{db: db, scope: scope}
 }
 
 func (t *QueryPlanSummaryTool) Name() string { return "query_plan_summary" }
@@ -418,23 +457,18 @@ func (t *QueryPlanSummaryTool) Description() string {
 }
 func (t *QueryPlanSummaryTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"task_id": map[string]interface{}{"type": "number", "description": "任务 ID"},
-		},
-		"required": []string{"task_id"},
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 
 func (t *QueryPlanSummaryTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	taskIDFloat, _ := params["task_id"].(float64)
-	taskID := uint(taskIDFloat)
-	if taskID == 0 {
-		return nil, fmt.Errorf("task_id is required")
+	if err := t.scope.requireTask(); err != nil {
+		return nil, err
 	}
 
 	var summary models.AIPlanSummary
-	err := t.db.Where("task_id = ? AND status = 'completed'", taskID).First(&summary).Error
+	err := t.db.Where("task_id = ? AND workspace_id = ? AND status = 'completed'", t.scope.taskID, t.scope.workspaceID).First(&summary).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return map[string]interface{}{"found": false, "message": "no completed plan summary found"}, nil
@@ -462,34 +496,37 @@ func (t *QueryPlanSummaryTool) Execute(ctx context.Context, params map[string]in
 
 // QueryResourceCodeDiffTool 查询资源代码在上次 apply 后的真实变更
 type QueryResourceCodeDiffTool struct {
-	db *gorm.DB
+	db    *gorm.DB
+	scope AIAgentTaskScope
 }
 
-func NewQueryResourceCodeDiffTool(db *gorm.DB) *QueryResourceCodeDiffTool {
-	return &QueryResourceCodeDiffTool{db: db}
+func NewQueryResourceCodeDiffTool(db *gorm.DB, scope AIAgentTaskScope) *QueryResourceCodeDiffTool {
+	return &QueryResourceCodeDiffTool{db: db, scope: scope}
 }
 
 func (t *QueryResourceCodeDiffTool) Name() string { return "query_resource_code_diff" }
 func (t *QueryResourceCodeDiffTool) Description() string {
-	return "查询资源代码自上次 apply 以来的真实变更。用于分析 after_unknown 字段：对比上次 apply 时的代码与当前代码的差异，判断 unknown 字段是否会发生实质变更。输入 workspace_id 和资源的 resource_id（CMDB 中的资源标识，如 AWS_s3-bucket.xxx）。"
+	return "查询当前任务工作空间内资源代码自上次 apply 以来的真实变更。用于分析 after_unknown 字段；输入资源 resource_id。"
 }
 func (t *QueryResourceCodeDiffTool) InputSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"workspace_id": map[string]interface{}{"type": "string", "description": "工作空间 ID"},
-			"resource_id":  map[string]interface{}{"type": "string", "description": "CMDB 资源标识（如 AWS_s3-bucket.xxx）"},
+			"resource_id": map[string]interface{}{"type": "string", "description": "CMDB 资源标识（如 AWS_s3-bucket.xxx）"},
 		},
-		"required": []string{"workspace_id", "resource_id"},
+		"required": []string{"resource_id"},
 	}
 }
 
 func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	workspaceID, _ := params["workspace_id"].(string)
 	resourceID, _ := params["resource_id"].(string)
-	if workspaceID == "" || resourceID == "" {
-		return nil, fmt.Errorf("workspace_id and resource_id are required")
+	if err := t.scope.requireWorkspace(); err != nil {
+		return nil, err
 	}
+	if resourceID == "" {
+		return nil, fmt.Errorf("resource_id is required")
+	}
+	workspaceID := t.scope.workspaceID
 
 	// 1. 找到资源
 	var resource models.WorkspaceResource
@@ -563,12 +600,12 @@ func (t *QueryResourceCodeDiffTool) Execute(ctx context.Context, params map[stri
 	// 当前版本和 apply 版本相同，没有变更
 	if appliedVersionNum == currentVersion.Version {
 		return map[string]interface{}{
-			"found":            true,
-			"has_changes":      false,
-			"message":          "code unchanged since last apply",
-			"current_version":  currentVersion.Version,
-			"applied_version":  appliedVersionNum,
-			"applied_task_id":  appliedTaskID,
+			"found":           true,
+			"has_changes":     false,
+			"message":         "code unchanged since last apply",
+			"current_version": currentVersion.Version,
+			"applied_version": appliedVersionNum,
+			"applied_task_id": appliedTaskID,
 		}, nil
 	}
 
@@ -674,13 +711,13 @@ func (t *QueryResourceCodeDiffTool) executeManifestCodeDiff(
 	// 4. 新旧版本相同，无变更
 	if *appliedTask.SnapshotManifestVersionID == dep.VersionID {
 		return map[string]interface{}{
-			"found":            true,
-			"source_type":      "manifest",
-			"has_changes":      false,
-			"message":          "manifest version unchanged since last apply",
-			"applied_version":  appliedVersion.Version,
-			"current_version":  currentVersion.Version,
-			"applied_task_id":  appliedTask.ID,
+			"found":           true,
+			"source_type":     "manifest",
+			"has_changes":     false,
+			"message":         "manifest version unchanged since last apply",
+			"applied_version": appliedVersion.Version,
+			"current_version": currentVersion.Version,
+			"applied_task_id": appliedTask.ID,
 		}, nil
 	}
 
@@ -824,17 +861,17 @@ func computeJSONDiffRecursive(prefix string, oldObj, newObj map[string]interface
 
 		if !oldExists {
 			*diffs = append(*diffs, map[string]interface{}{
-				"path":   path,
-				"type":   "added",
-				"new":    newVal,
+				"path": path,
+				"type": "added",
+				"new":  newVal,
 			})
 			continue
 		}
 		if !newExists {
 			*diffs = append(*diffs, map[string]interface{}{
-				"path":   path,
-				"type":   "removed",
-				"old":    oldVal,
+				"path": path,
+				"type": "removed",
+				"old":  oldVal,
 			})
 			continue
 		}

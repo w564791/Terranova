@@ -6,7 +6,7 @@ import "fmt"
 type PermissionLevel int
 
 const (
-	// PermissionLevelNone 显式拒绝（最高优先级）
+	// PermissionLevelNone 未授权 / 无有效权限（缺省拒绝；非「覆盖上层 ADMIN 的显式 ban」）
 	PermissionLevelNone PermissionLevel = 0
 	// PermissionLevelRead 只读权限
 	PermissionLevelRead PermissionLevel = 1

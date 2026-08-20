@@ -52,6 +52,7 @@ func TestAIAgentLoopWithRealTools(t *testing.T) {
 		{WorkspaceID: "ws-test", TerraformAddress: "module.vpc.aws_vpc.main", ResourceType: "aws_vpc", ResourceName: "main", ResourceMode: "managed", ModulePath: "module.vpc", CloudResourceID: "vpc-123"},
 		{WorkspaceID: "ws-test", TerraformAddress: "module.vpc.aws_subnet.public", ResourceType: "aws_subnet", ResourceName: "public", ResourceMode: "managed", ModulePath: "module.vpc", CloudResourceID: "subnet-456"},
 		{WorkspaceID: "ws-test", TerraformAddress: "module.vpc.aws_security_group.main", ResourceType: "aws_security_group", ResourceName: "main", ResourceMode: "managed", ModulePath: "module.vpc", CloudResourceID: "sg-789"},
+		{WorkspaceID: "ws-foreign", TerraformAddress: "module.vpc.aws_vpc.foreign", ResourceType: "aws_vpc", ResourceName: "foreign", ResourceMode: "managed", ModulePath: "module.vpc", CloudResourceID: "vpc-foreign"},
 	}
 	for _, r := range resources {
 		db.Create(&r)
@@ -64,7 +65,9 @@ func TestAIAgentLoopWithRealTools(t *testing.T) {
 				Content: "Let me check the module resources",
 				ToolCalls: []AgentToolCall{
 					{ID: "tc_1", Name: "query_module_resources", Params: map[string]interface{}{
-						"workspace_id": "ws-test",
+						// The model may try to inject another workspace, but the
+						// registered task scope must ignore it.
+						"workspace_id": "ws-foreign",
 						"module_path":  "module.vpc",
 					}},
 				},
@@ -74,10 +77,11 @@ func TestAIAgentLoopWithRealTools(t *testing.T) {
 	}
 
 	loop := NewAIAgentLoop(mockCaller, 10)
-	loop.RegisterTool(NewQueryModuleResourcesTool(db))
-	loop.RegisterTool(NewQueryCMDBDependenciesTool(db))
-	loop.RegisterTool(NewQueryResourceAttributesTool(db))
-	loop.RegisterTool(NewQueryStateResourcesTool(db))
+	agentScope := NewAIAgentTaskScope("ws-test", 1)
+	loop.RegisterTool(NewQueryModuleResourcesTool(db, agentScope))
+	loop.RegisterTool(NewQueryCMDBDependenciesTool(db, agentScope))
+	loop.RegisterTool(NewQueryResourceAttributesTool(db, agentScope))
+	loop.RegisterTool(NewQueryStateResourcesTool(db, agentScope))
 
 	result, err := loop.Run(context.Background(), "You are an analyst", "Analyze changes to module.vpc")
 	if err != nil {
@@ -108,6 +112,9 @@ func TestAIAgentLoopWithRealTools(t *testing.T) {
 	resultJSON, _ := json.Marshal(tc.Result)
 	if !strings.Contains(string(resultJSON), "vpc-123") {
 		t.Error("tool result should contain seeded resource data")
+	}
+	if strings.Contains(string(resultJSON), "vpc-foreign") {
+		t.Error("model-supplied workspace_id must not escape the task workspace")
 	}
 
 	// Verify final output
@@ -145,8 +152,9 @@ func TestAgentLoopWithMultipleToolCalls(t *testing.T) {
 	}
 
 	loop := NewAIAgentLoop(mockCaller, 10)
-	loop.RegisterTool(NewQueryResourceAttributesTool(db))
-	loop.RegisterTool(NewQueryStateResourcesTool(db))
+	agentScope := NewAIAgentTaskScope("ws-test", 1)
+	loop.RegisterTool(NewQueryResourceAttributesTool(db, agentScope))
+	loop.RegisterTool(NewQueryStateResourcesTool(db, agentScope))
 
 	result, err := loop.Run(context.Background(), "system", "analyze")
 	if err != nil {

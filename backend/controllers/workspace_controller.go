@@ -96,52 +96,54 @@ func (wc *WorkspaceController) GetWorkspaces(c *gin.Context) {
 	projectIDStr := c.Query("project_id")
 
 	// 解析 project_id 参数
-	// 0: 不过滤项目（返回所有）
+	// 0: 不过滤项目（返回组织内所有）
 	// >0: 过滤指定项目
-	// -1: 只返回未分配项目的工作空间（归入 default）
+	// -1: 多租户下不可见未绑定资源
 	projectID := 0
 	if projectIDStr != "" {
 		projectID, _ = strconv.Atoi(projectIDStr)
 	}
 
-	// 使用包含状态信息的查询方法
-	workspaces, total, err := wc.workspaceService.SearchWorkspacesWithStatus(search, page, size, projectID)
+	orgID := authOrgIDFromContext(c)
+	if orgID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "org_id is required",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// The list middleware resolves either organization-wide access or a concrete
+	// allow-list of semantic workspace IDs. Treat a missing/invalid value as a
+	// configuration error rather than falling back to an unscoped org query.
+	rawAccess, exists := c.Get(service.WorkspaceListAccessContextKey)
+	access, ok := rawAccess.(*service.WorkspaceListAccess)
+	if !exists || !ok || access == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "workspace list authorization context is missing",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	var allowedWorkspaceIDs []string
+	if !access.FullOrganization {
+		// An empty non-nil slice is intentional: it means no scoped workspace is
+		// visible and must become an empty SQL result, never "all workspaces".
+		allowedWorkspaceIDs = access.WorkspaceIDs
+	}
+
+	// 使用包含状态信息的查询方法（强制 org + IAM allow-list 过滤）
+	workspaces, total, err := wc.workspaceService.SearchWorkspacesWithStatusInOrgAndWorkspaceIDs(
+		search, page, size, orgID, projectID, allowedWorkspaceIDs,
+	)
 	if err != nil {
-		// 返回模拟数据
-		mockWorkspaces := []services.WorkspaceWithStatus{
-			{
-				WorkspaceListItem: services.WorkspaceListItem{
-					ID:               1,
-					Name:             "production",
-					Description:      "生产环境工作空间",
-					StateBackend:     "S3",
-					TerraformVersion: "1.5.0",
-					ExecutionMode:    "local",
-					CreatedAt:        time.Now(),
-					UpdatedAt:        time.Now(),
-				},
-			},
-			{
-				WorkspaceListItem: services.WorkspaceListItem{
-					ID:               2,
-					Name:             "staging",
-					Description:      "测试环境工作空间",
-					StateBackend:     "Local",
-					TerraformVersion: "1.5.0",
-					ExecutionMode:    "agent",
-					CreatedAt:        time.Now(),
-					UpdatedAt:        time.Now(),
-				},
-			},
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"code": 200,
-			"data": gin.H{
-				"items": mockWorkspaces,
-				"total": 2,
-				"page":  page,
-				"size":  size,
-			},
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":      500,
+			"message":   "获取工作空间列表失败",
+			"error":     err.Error(),
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return
@@ -157,6 +159,47 @@ func (wc *WorkspaceController) GetWorkspaces(c *gin.Context) {
 		},
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
+}
+
+// authOrgIDFromContext 读取 IAM 中间件写入的 auth_org_id
+func authOrgIDFromContext(c *gin.Context) uint {
+	if raw, ok := c.Get("auth_org_id"); ok {
+		switch v := raw.(type) {
+		case uint:
+			return v
+		case int:
+			if v > 0 {
+				return uint(v)
+			}
+		case float64:
+			if v > 0 {
+				return uint(v)
+			}
+		}
+	}
+	return 0
+}
+
+// ensureWorkspaceAccessible 资源必须属于鉴权 org（404 避免跨租户枚举）
+func (wc *WorkspaceController) ensureWorkspaceAccessible(c *gin.Context, workspaceID string) bool {
+	orgID := authOrgIDFromContext(c)
+	if orgID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "org_id is required",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return false
+	}
+	if err := wc.workspaceService.EnsureWorkspaceInOrg(workspaceID, orgID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":      404,
+			"message":   "工作空间不存在",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return false
+	}
+	return true
 }
 
 // GetWorkspace 获取单个工作空间
@@ -182,28 +225,15 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 		return
 	}
 
+	if !wc.ensureWorkspaceAccessible(c, workspaceID) {
+		return
+	}
+
 	workspace, err := wc.workspaceService.GetWorkspaceByID(workspaceID)
 	if err != nil {
-		// 返回模拟数据
-		mockWorkspace := models.Workspace{
-			WorkspaceID:      workspaceID,
-			Name:             "production",
-			Description:      "生产环境工作空间，用于部署生产级别的基础设施",
-			StateBackend:     "S3",
-			TerraformVersion: "1.5.0",
-			ExecutionMode:    "server",
-			CreatedAt:        time.Now(),
-			UpdatedAt:        time.Now(),
-		}
-		if workspaceID == "ws-staging" {
-			mockWorkspace.Name = "staging"
-			mockWorkspace.Description = "测试环境工作空间，用于开发和测试阶段的基础设施部署"
-			mockWorkspace.StateBackend = "Local"
-			mockWorkspace.ExecutionMode = "agent"
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"code":      200,
-			"data":      mockWorkspace,
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":      404,
+			"message":   "工作空间不存在",
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return
@@ -244,16 +274,16 @@ func (wc *WorkspaceController) GetWorkspace(c *gin.Context) {
 
 	// 构建响应，添加locked_by_username和ui_mode
 	response := gin.H{
-		"id":                       workspace.WorkspaceID,
-		"workspace_id":             workspace.WorkspaceID,
-		"name":                     workspace.Name,
-		"description":              workspace.Description,
-		"execution_mode":           workspace.ExecutionMode,
-		"agent_pool_id":            workspace.AgentPoolID,
-		"k8s_config_id":            workspace.K8sConfigID,
-		"auto_apply":               workspace.AutoApply,
-		"plan_only":                workspace.PlanOnly,
-		"terraform_version":        workspace.TerraformVersion,
+		"id":                workspace.WorkspaceID,
+		"workspace_id":      workspace.WorkspaceID,
+		"name":              workspace.Name,
+		"description":       workspace.Description,
+		"execution_mode":    workspace.ExecutionMode,
+		"agent_pool_id":     workspace.AgentPoolID,
+		"k8s_config_id":     workspace.K8sConfigID,
+		"auto_apply":        workspace.AutoApply,
+		"plan_only":         workspace.PlanOnly,
+		"terraform_version": workspace.TerraformVersion,
 		// 对外把 manifest_subpath 列回显为 workdir(前端字段名),保证表单往返一致
 		"workdir":                  derefOr(workspace.ManifestSubpath, ""),
 		"manifest_deployment_id":   workspace.ManifestDeploymentID,
@@ -336,6 +366,17 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		ProviderConfig    map[string]interface{}    `json:"provider_config"`
 		ProviderInstances []models.ProviderInstance `json:"provider_instances"`
 		NotifySettings    map[string]interface{}    `json:"notify_settings"`
+		ProjectID         *uint                     `json:"project_id"` // 可选；默认绑定鉴权 org 的 default 项目
+	}
+
+	orgID := authOrgIDFromContext(c)
+	if orgID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":      400,
+			"message":   "org_id is required",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -430,13 +471,13 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		PlanOnly:         req.PlanOnly,
 		TerraformVersion: req.TerraformVersion,
 		// workdir 值存进 manifest_subpath 列(executor 实际读取的字段);workdir 列本身留空不用
-		ManifestSubpath:  ptrIfNonEmpty(subpath),
-		StateBackend:     req.StateBackend,
-		StateConfig:      req.StateConfig,
-		Tags:             req.Tags,
-		ProviderConfig:   req.ProviderConfig,
-		NotifySettings:   req.NotifySettings,
-		State:            models.WorkspaceStateCreated,
+		ManifestSubpath: ptrIfNonEmpty(subpath),
+		StateBackend:    req.StateBackend,
+		StateConfig:     req.StateConfig,
+		Tags:            req.Tags,
+		ProviderConfig:  req.ProviderConfig,
+		NotifySettings:  req.NotifySettings,
+		State:           models.WorkspaceStateCreated,
 	}
 
 	// provider_instances 需要走 JSONB 自定义类型写入
@@ -452,7 +493,11 @@ func (wc *WorkspaceController) CreateWorkspace(c *gin.Context) {
 		workspace.SystemVariables = req.Variables
 	}
 
-	if err := wc.workspaceService.CreateWorkspace(workspace); err != nil {
+	var projectID uint
+	if req.ProjectID != nil {
+		projectID = *req.ProjectID
+	}
+	if err := wc.workspaceService.CreateWorkspaceInOrg(workspace, orgID, projectID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
 			"message":   "创建工作空间失败",
@@ -525,6 +570,10 @@ func (wc *WorkspaceController) UpdateWorkspace(c *gin.Context) {
 			"message":   "无效的工作空间ID",
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
+		return
+	}
+
+	if !wc.ensureWorkspaceAccessible(c, workspaceID) {
 		return
 	}
 
@@ -740,6 +789,10 @@ func (wc *WorkspaceController) DeleteWorkspace(c *gin.Context) {
 		return
 	}
 
+	if !wc.ensureWorkspaceAccessible(c, workspaceID) {
+		return
+	}
+
 	if err := wc.workspaceService.DeleteWorkspace(workspaceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":      500,
@@ -780,6 +833,10 @@ func (wc *WorkspaceController) GetWorkspaceOverview(c *gin.Context) {
 		return
 	}
 
+	if !wc.ensureWorkspaceAccessible(c, workspaceID) {
+		return
+	}
+
 	overview, err := wc.overviewService.GetWorkspaceOverview(workspaceID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -798,33 +855,43 @@ func (wc *WorkspaceController) GetWorkspaceOverview(c *gin.Context) {
 	})
 }
 
-// grantCreatorPermissions 为 workspace 创建者授予 ADMIN 权限
-// 这是一个内部方法，在创建 workspace 后自动调用
-// 授权失败不会影响 workspace 创建的成功响应，只会记录日志
+// grantCreatorPermissions 为 workspace 创建者绑定系统 Role workspace_admin（D5 Role 主路径）
+// 失败只记日志，不影响创建成功。需已 seed 角色（patch_workspace_admin_role_ensure.sql）。
 func (wc *WorkspaceController) grantCreatorPermissions(workspaceID uint, userID string) {
 	if wc.permissionService == nil {
 		return
 	}
-
-	// 使用 GrantPresetPermissions 授予 ADMIN 预设权限
-	// ADMIN 预设包含该 workspace 的所有权限
 	ctx := context.Background()
-	req := &service.GrantPresetRequest{
-		ScopeType:     valueobject.ScopeTypeWorkspace,
-		ScopeID:       workspaceID,
-		PrincipalType: valueobject.PrincipalTypeUser,
-		PrincipalID:   userID,
-		PresetName:    "ADMIN",
-		GrantedBy:     userID, // 创建者自己授权给自己
-		Reason:        "Auto-granted on workspace creation",
-	}
-
-	if err := wc.permissionService.GrantPresetPermissions(ctx, req); err != nil {
-		// 授权失败只记录日志，不影响 workspace 创建
-		log.Printf("[WARN] Failed to auto-grant permissions for workspace %d to user %s: %v",
+	err := wc.permissionService.AssignBuiltinRoleToUser(
+		ctx,
+		userID,
+		"workspace_admin",
+		valueobject.ScopeTypeWorkspace,
+		workspaceID,
+		userID,
+		"Auto-assigned workspace_admin on workspace creation",
+	)
+	if err != nil {
+		log.Printf("[WARN] Failed to assign workspace_admin role for workspace %d to user %s: %v",
 			workspaceID, userID, err)
-	} else {
-		log.Printf("[INFO] Auto-granted ADMIN permissions for workspace %d to creator %s",
-			workspaceID, userID)
+		// 回退：旧 Direct Grant preset（内部 service，非 HTTP）— 避免未 seed 角色时创建者无权限
+		if fallbackErr := wc.permissionService.GrantPresetPermissions(ctx, &service.GrantPresetRequest{
+			ScopeType:     valueobject.ScopeTypeWorkspace,
+			ScopeID:       workspaceID,
+			PrincipalType: valueobject.PrincipalTypeUser,
+			PrincipalID:   userID,
+			PresetName:    "ADMIN",
+			GrantedBy:     userID,
+			Reason:        "Fallback auto-grant on workspace creation (role missing)",
+		}); fallbackErr != nil {
+			log.Printf("[WARN] Fallback preset grant also failed for workspace %d user %s: %v",
+				workspaceID, userID, fallbackErr)
+		} else {
+			log.Printf("[INFO] Fallback Direct Grant ADMIN preset for workspace %d creator %s",
+				workspaceID, userID)
+		}
+		return
 	}
+	log.Printf("[INFO] Assigned workspace_admin role for workspace %d to creator %s",
+		workspaceID, userID)
 }

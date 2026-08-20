@@ -50,8 +50,11 @@ func (s *AgentService) GenerateTokenHash(token string) string {
 
 // ValidateApplication validates application credentials
 func (s *AgentService) ValidateApplication(appKey, appSecret string) (*entity.Application, error) {
+	// 仅选鉴权所需列，避免 JSON map 字段在 SQLite 等驱动上的扫描问题
 	var app entity.Application
-	err := s.db.Where("app_key = ? AND is_active = ?", appKey, true).First(&app).Error
+	err := s.db.Select("id", "org_id", "name", "app_key", "app_secret", "is_active", "expires_at", "last_used_at", "workspace_tag_filter").
+		Where("app_key = ? AND is_active = ?", appKey, true).
+		First(&app).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("invalid application credentials")
@@ -61,7 +64,7 @@ func (s *AgentService) ValidateApplication(appKey, appSecret string) (*entity.Ap
 
 	// Verify app secret (assuming it's hashed in database)
 	// For now, direct comparison - should use proper hash comparison in production
-	if app.AppSecret != appSecret {
+	if !verifyAppSecret(app.AppSecret, appSecret) {
 		return nil, errors.New("invalid application credentials")
 	}
 

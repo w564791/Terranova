@@ -57,6 +57,16 @@ func (h *TeamHandler) CreateTeam(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	if req.OrgID != authOrg {
+		c.JSON(http.StatusForbidden, gin.H{"error": "org_id must match authenticated organization"})
+		return
+	}
+	req.OrgID = authOrg
+
 	// 创建团队
 	createReq := &service.CreateTeamRequest{
 		OrgID:       req.OrgID,
@@ -88,9 +98,18 @@ func (h *TeamHandler) CreateTeam(c *gin.Context) {
 func (h *TeamHandler) GetTeam(c *gin.Context) {
 	teamID := c.Param("id")
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+
 	team, err := h.teamService.GetTeam(c.Request.Context(), teamID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if err := ensureTeamBelongsToAuthOrg(team.OrgID, authOrg); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "team not found"})
 		return
 	}
 
@@ -109,19 +128,23 @@ func (h *TeamHandler) GetTeam(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/iam/teams [get]
 func (h *TeamHandler) ListTeamsByOrg(c *gin.Context) {
-	orgIDStr := c.Query("org_id")
-	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
 		return
 	}
-
-	orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
-		return
+	if orgIDStr := c.Query("org_id"); orgIDStr != "" {
+		orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if uint(orgID) != authOrg {
+			c.JSON(http.StatusForbidden, gin.H{"error": "org_id must match authenticated organization"})
+			return
+		}
 	}
 
-	teams, err := h.teamService.ListTeamsByOrg(c.Request.Context(), uint(orgID))
+	teams, err := h.teamService.ListTeamsByOrg(c.Request.Context(), authOrg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -151,6 +174,16 @@ func (h *TeamHandler) DeleteTeam(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	team, err := h.teamService.GetTeam(c.Request.Context(), teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(team.OrgID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "team not found"})
 		return
 	}
 
@@ -195,6 +228,16 @@ func (h *TeamHandler) AddTeamMember(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	team, err := h.teamService.GetTeam(c.Request.Context(), teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(team.OrgID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "team not found"})
 		return
 	}
 
@@ -244,6 +287,16 @@ func (h *TeamHandler) RemoveTeamMember(c *gin.Context) {
 		return
 	}
 
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	team, err := h.teamService.GetTeam(c.Request.Context(), teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(team.OrgID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "team not found"})
+		return
+	}
+
 	if err := h.teamService.RemoveTeamMember(c.Request.Context(), teamID, memberUserID, currentUserID.(string)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -264,6 +317,16 @@ func (h *TeamHandler) RemoveTeamMember(c *gin.Context) {
 // @Router /api/v1/iam/teams/{id}/members [get]
 func (h *TeamHandler) ListTeamMembers(c *gin.Context) {
 	teamID := c.Param("id")
+
+	authOrg, ok := requireAuthOrg(c)
+	if !ok {
+		return
+	}
+	team, err := h.teamService.GetTeam(c.Request.Context(), teamID)
+	if err != nil || ensureTeamBelongsToAuthOrg(team.OrgID, authOrg) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "team not found"})
+		return
+	}
 
 	members, err := h.teamService.ListTeamMembers(c.Request.Context(), teamID)
 	if err != nil {

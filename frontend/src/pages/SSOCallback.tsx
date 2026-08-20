@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { loginSuccess } from '../store/slices/authSlice';
+import { loginSuccess, logout } from '../store/slices/authSlice';
+import api from '../services/api';
+import { isValidAuthenticatedUserId } from '../services/authIdentity';
 import { ssoService } from '../services/ssoService';
 
 const SSOCallback: React.FC = () => {
@@ -18,10 +20,13 @@ const SSOCallback: React.FC = () => {
     processedRef.current = true;
 
     const handleCallback = async () => {
-      // 检查重定向模式的 MFA 参数（优先于 token 检查，确保 MFA 不被绕过）
-      const redirectMfaRequired = searchParams.get('mfa_required');
-      const redirectMfaSetupRequired = searchParams.get('mfa_setup_required');
-      const redirectMfaToken = searchParams.get('mfa_token');
+      // 优先 hash（防 Referer/日志泄露），兼容历史 query
+      const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+
+      // MFA 参数：hash 优先，兼容旧 query
+      const redirectMfaRequired = hashParams.get('mfa_required') || searchParams.get('mfa_required');
+      const redirectMfaSetupRequired = hashParams.get('mfa_setup_required') || searchParams.get('mfa_setup_required');
+      const redirectMfaToken = hashParams.get('mfa_token') || searchParams.get('mfa_token');
 
       if (redirectMfaRequired === 'true' && redirectMfaToken) {
         navigate('/login/mfa', {
@@ -48,14 +53,34 @@ const SSOCallback: React.FC = () => {
       }
 
       // 检查是否有直接传递的 token（重定向模式，无需 MFA）
-      const directToken = searchParams.get('token');
+      const directToken = hashParams.get('token') || searchParams.get('token');
       if (directToken) {
+        // 从地址栏移除 token；后续请求只读取 localStorage 中刚设置的值。
+        window.history.replaceState(null, '', location.pathname);
+        // 先清理可能残留的前一用户状态，再用 token 获取真实身份。不能用占位
+        // user 登录，否则 active-org owner 会被错误绑定为同一个 id。
+        dispatch(logout());
         localStorage.setItem('token', directToken);
-        dispatch(loginSuccess({
-          user: { id: 0, username: '', email: '', role: '' },
-          token: directToken,
-        }));
-        navigate('/', { replace: true });
+        try {
+          const profileResponse: any = await api.get('/auth/me');
+          const user = profileResponse?.data || profileResponse;
+          if (!user || !isValidAuthenticatedUserId(user.id)) {
+            throw new Error('SSO 登录未返回有效用户信息');
+          }
+
+          dispatch(loginSuccess({ user, token: directToken }));
+          localStorage.removeItem('sso_provider');
+          navigate('/', { replace: true });
+        } catch (err: any) {
+          dispatch(logout());
+          console.error('Failed to load SSO user profile:', err);
+          setError(
+            typeof err === 'string'
+              ? err
+              : err?.message || '无法验证 SSO 登录身份，请重试',
+          );
+          setLoading(false);
+        }
         return;
       }
 
@@ -120,7 +145,7 @@ const SSOCallback: React.FC = () => {
           return;
         }
 
-        if (data.token && data.user) {
+        if (data.token && data.user && isValidAuthenticatedUserId(data.user.id)) {
           localStorage.setItem('token', data.token);
           localStorage.removeItem('sso_provider');
 
@@ -134,7 +159,12 @@ const SSOCallback: React.FC = () => {
           localStorage.removeItem('sso_return_url');
           navigate(returnUrl, { replace: true });
         } else {
-          setError('登录响应数据不完整');
+          // Both SSO callback modes must establish a real principal before
+          // marking the browser authenticated. In particular, do not let a
+          // provider response with an id: 0 placeholder retain another user's
+          // active organization context.
+          dispatch(logout());
+          setError('登录响应数据不完整或未返回有效用户信息');
         }
       } catch (err: any) {
         console.error('SSO callback error:', err);
@@ -145,7 +175,7 @@ const SSOCallback: React.FC = () => {
     };
 
     handleCallback();
-  }, [searchParams, dispatch, navigate]);
+  }, [location, searchParams, dispatch, navigate]);
 
   if (loading) {
     return (

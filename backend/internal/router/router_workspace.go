@@ -23,6 +23,8 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 	workspaces := api.Group("/workspaces")
 	workspaces.Use(middleware.JWTAuth())
 	workspaces.Use(middleware.AuditLogger(db))
+	// 多租户：path :id 必须属于请求 org（列表/创建无 :id，跳过）
+	workspaces.Use(middleware.EnforceWorkspaceOrgBinding(db))
 	{
 		workspaceController := controllers.NewWorkspaceController(
 			services.NewWorkspaceService(db),
@@ -39,9 +41,11 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 		resourceController := controllers.NewResourceController(db, streamManager)
 		lifecycleService := services.NewWorkspaceLifecycleService(db)
 
-		// 工作空间列表和详情 - Admin绕过检查，非admin需要IAM权限
+		// Workspace list supports both organization-wide grants and scoped
+		// project/workspace Roles. The middleware puts a server-enforced allow
+		// list in context for the controller when the grant is not org-wide.
 		workspaces.GET("",
-			iamMiddleware.RequirePermission("WORKSPACES", "ORGANIZATION", "READ"),
+			iamMiddleware.RequireWorkspaceListAccess(),
 			workspaceController.GetWorkspaces,
 		)
 
@@ -415,21 +419,22 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			stateHandler.RetrieveStateVersion,
 		)
 
-		// New: Download state version
+		// Download full state content — same bar as /retrieve (sensitive)
 		workspaces.GET("/:id/state/versions/:version/download",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_STATE_SENSITIVE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 			}),
 			stateHandler.DownloadStateVersion,
 		)
 
+		// 对比返回完整 State 内容 → 与 retrieve 同级敏感权限
 		workspaces.GET("/:id/state-versions/compare",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_STATE_SENSITIVE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 			}),
 			stateController.CompareVersions,
 		)
@@ -443,11 +448,12 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			stateController.GetStateVersionMetadata,
 		)
 
+		// Legacy full-content download — sensitive (do not allow plain STATE READ)
 		workspaces.GET("/:id/state-versions/:version",
 			iamMiddleware.RequireAnyPermission([]middleware.PermissionRequirement{
-				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_STATE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
-				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACES", ScopeType: "ORGANIZATION", RequiredLevel: "ADMIN"},
+				{ResourceType: "WORKSPACE_STATE_SENSITIVE", ScopeType: "WORKSPACE", RequiredLevel: "READ"},
+				{ResourceType: "WORKSPACE_MANAGEMENT", ScopeType: "WORKSPACE", RequiredLevel: "ADMIN"},
 			}),
 			stateController.GetStateVersion,
 		)
@@ -1236,7 +1242,7 @@ func setupRemoteDataPublicRoutes(api *gin.RouterGroup, db *gorm.DB) {
 
 // setupWorkspaceRunTriggerRoutes sets up workspace run trigger routes
 func setupWorkspaceRunTriggerRoutes(workspaces *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
-	rtHandler := handlers.NewRunTriggerHandler(db)
+	rtHandler := handlers.NewRunTriggerHandler(db, iamMiddleware)
 
 	// List run triggers - READ level
 	workspaces.GET("/:id/run-triggers",

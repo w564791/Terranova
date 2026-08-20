@@ -1,16 +1,75 @@
 package controllers
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// skillUsageSnapshotScope is the tenant-relevant part of a usage-log input
+// snapshot. A snapshot is treated as untrusted historical data: when it says
+// a log was created for a workspace or task, that relationship must still be
+// resolved through the canonical workspace -> project -> organization chain.
+type skillUsageSnapshotScope struct {
+	workspaceID string
+	taskID      *uint
+}
+
+// parseSkillUsageSnapshotScope reads only the identity fields used to bind a
+// usage log. Invalid or ambiguous values are an authorization failure rather
+// than a reason to silently drop the field and treat the log as global.
+func parseSkillUsageSnapshotScope(snapshot *json.RawMessage) (skillUsageSnapshotScope, error) {
+	if snapshot == nil || len(bytes.TrimSpace(*snapshot)) == 0 || bytes.Equal(bytes.TrimSpace(*snapshot), []byte("null")) {
+		return skillUsageSnapshotScope{}, nil
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(*snapshot, &fields); err != nil || fields == nil {
+		if err == nil {
+			err = fmt.Errorf("input snapshot must be an object")
+		}
+		return skillUsageSnapshotScope{}, err
+	}
+
+	scope := skillUsageSnapshotScope{}
+	if rawWorkspaceID, present := fields["workspace_id"]; present {
+		if err := json.Unmarshal(rawWorkspaceID, &scope.workspaceID); err != nil || scope.workspaceID == "" {
+			if err == nil {
+				err = fmt.Errorf("invalid workspace_id in input snapshot")
+			}
+			return skillUsageSnapshotScope{}, err
+		}
+	}
+
+	if rawTaskID, present := fields["task_id"]; present {
+		var taskIDText string
+		if err := json.Unmarshal(rawTaskID, &taskIDText); err != nil {
+			var numericTaskID json.Number
+			if err := json.Unmarshal(rawTaskID, &numericTaskID); err != nil {
+				return skillUsageSnapshotScope{}, fmt.Errorf("invalid task_id in input snapshot")
+			}
+			taskIDText = numericTaskID.String()
+		}
+		taskID, err := strconv.ParseUint(taskIDText, 10, 32)
+		if err != nil || taskID == 0 {
+			return skillUsageSnapshotScope{}, fmt.Errorf("invalid task_id in input snapshot")
+		}
+		resolvedTaskID := uint(taskID)
+		scope.taskID = &resolvedTaskID
+	}
+
+	return scope, nil
+}
 
 // SkillController Skill 管理控制器
 type SkillController struct {
@@ -598,6 +657,145 @@ func (c *SkillController) GetSkillUsageStats(ctx *gin.Context) {
 	})
 }
 
+// requireSkillUsageCaller obtains the organization selected and authorized by
+// IAM. Skill usage rows intentionally do not carry an org_id, so every access
+// path below must bind a row through its workspace/task before mutating or
+// returning it. There is no default organization for these endpoints.
+func requireSkillUsageCaller(ctx *gin.Context) (string, uint, bool) {
+	rawUserID, ok := ctx.Get("user_id")
+	userID, _ := rawUserID.(string)
+	if !ok || userID == "" {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "user authentication is required"})
+		return "", 0, false
+	}
+
+	orgID, ok := middleware.AuthOrgID(ctx)
+	if !ok {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "authenticated organization is required"})
+		return "", 0, false
+	}
+	return userID, orgID, true
+}
+
+// resolveSkillUsageWorkspaceOrg follows the one and only canonical ownership
+// chain for an AI usage log. A duplicate relation is corrupt data even when
+// both projects happen to be in the same organization, so it is rejected.
+func (c *SkillController) resolveSkillUsageWorkspaceOrg(ctx *gin.Context, workspaceID string) (uint, bool) {
+	if c.db == nil || workspaceID == "" {
+		return 0, false
+	}
+
+	var binding struct {
+		RelationCount int64 `gorm:"column:relation_count"`
+		OrgID         uint  `gorm:"column:org_id"`
+	}
+	err := c.db.WithContext(ctx.Request.Context()).Raw(`
+SELECT COUNT(*) AS relation_count, MIN(p.org_id) AS org_id
+FROM workspaces AS w
+JOIN workspace_project_relations AS wpr ON wpr.workspace_id = w.workspace_id
+JOIN projects AS p ON p.id = wpr.project_id
+WHERE w.workspace_id = ?`, workspaceID).Scan(&binding).Error
+	if err != nil || binding.RelationCount != 1 || binding.OrgID == 0 {
+		return 0, false
+	}
+	return binding.OrgID, true
+}
+
+// resolveSkillUsageTaskScope resolves a task ID before it is used as a usage
+// log selector. Task IDs are global, therefore a caller-supplied task must
+// never be trusted until its workspace has a strict organization binding.
+func (c *SkillController) resolveSkillUsageTaskScope(ctx *gin.Context, taskID uint) (string, uint, bool) {
+	if c.db == nil || taskID == 0 {
+		return "", 0, false
+	}
+
+	var task models.WorkspaceTask
+	if err := c.db.WithContext(ctx.Request.Context()).Select("workspace_id").First(&task, taskID).Error; err != nil || task.WorkspaceID == "" {
+		return "", 0, false
+	}
+	orgID, ok := c.resolveSkillUsageWorkspaceOrg(ctx, task.WorkspaceID)
+	if !ok {
+		return "", 0, false
+	}
+	return task.WorkspaceID, orgID, true
+}
+
+// resolveSkillUsageLogWorkspace resolves all workspace-bearing fields of a
+// historical usage row. Conflicting workspace_id/task_id fields, malformed
+// snapshots, missing tasks, and ambiguous workspace ownership are all denied
+// rather than allowing a fallback to a global/system record.
+//
+// The returned scoped value distinguishes an unscoped user-owned record (which
+// is still private to that user) from a system record, which must always have
+// a determinable tenant scope.
+func (c *SkillController) resolveSkillUsageLogWorkspace(ctx *gin.Context, usageLog *models.SkillUsageLog) (workspaceID string, scoped bool, valid bool) {
+	if usageLog == nil {
+		return "", true, false
+	}
+
+	snapshotScope, err := parseSkillUsageSnapshotScope(usageLog.InputSnapshot)
+	if err != nil {
+		return "", true, false
+	}
+
+	workspaceIDs := make(map[string]struct{}, 3)
+	if usageLog.WorkspaceID != "" {
+		workspaceIDs[usageLog.WorkspaceID] = struct{}{}
+	}
+	if snapshotScope.workspaceID != "" {
+		workspaceIDs[snapshotScope.workspaceID] = struct{}{}
+	}
+	if snapshotScope.taskID != nil {
+		taskWorkspaceID, _, ok := c.resolveSkillUsageTaskScope(ctx, *snapshotScope.taskID)
+		if !ok {
+			return "", true, false
+		}
+		workspaceIDs[taskWorkspaceID] = struct{}{}
+	}
+
+	if len(workspaceIDs) == 0 {
+		return "", false, true
+	}
+	if len(workspaceIDs) != 1 {
+		return "", true, false
+	}
+	for id := range workspaceIDs {
+		return id, true, true
+	}
+	return "", true, false
+}
+
+// authorizeSkillUsageLog is the single access rule for usage-log feedback:
+// a caller may update/read their own unscoped row, or their/system row only
+// after a strict workspace -> project -> org binding proves it is in the
+// authenticated organization. The local return value is used only to retain a
+// useful 403 for another user's same-tenant row; all cross-tenant and
+// indeterminate rows are hidden as 404.
+func (c *SkillController) authorizeSkillUsageLog(ctx *gin.Context, usageLog *models.SkillUsageLog, userID string, authOrgID uint) (allowed bool, local bool) {
+	if usageLog == nil || userID == "" || authOrgID == 0 {
+		return false, false
+	}
+
+	workspaceID, scoped, valid := c.resolveSkillUsageLogWorkspace(ctx, usageLog)
+	if !valid {
+		return false, false
+	}
+	if !scoped {
+		// No tenant can be proven for an unscoped system record. A user-owned
+		// legacy/global log remains private to that exact user only.
+		return usageLog.UserID == userID, usageLog.UserID == userID
+	}
+
+	orgID, ok := c.resolveSkillUsageWorkspaceOrg(ctx, workspaceID)
+	if !ok || orgID != authOrgID {
+		return false, false
+	}
+	if usageLog.UserID != userID && usageLog.UserID != "system" {
+		return false, true
+	}
+	return true, true
+}
+
 // UpdateSkillUsageAction 更新用户对 Skill 输出的操作
 // @Summary Update skill usage action
 // @Description Update user action (accepted/modified/aborted) or feedback for a skill usage log
@@ -629,17 +827,25 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 		return
 	}
 
-	// 校验用户权限：只能更新自己的 usage log
-	userID, _ := ctx.Get("user_id")
-	uid, _ := userID.(string)
+	uid, authOrgID, ok := requireSkillUsageCaller(ctx)
+	if !ok {
+		return
+	}
 
 	var usageLog models.SkillUsageLog
 	if err := c.db.First(&usageLog, "id = ?", logID).Error; err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
 		return
 	}
-	if uid != "" && usageLog.UserID != uid && usageLog.UserID != "system" {
+	allowed, local := c.authorizeSkillUsageLog(ctx, &usageLog, uid, authOrgID)
+	if !allowed && local {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's action"})
+		return
+	}
+	if !allowed {
+		// Do not disclose a cross-tenant/system row just because its UUID was
+		// guessed. This also fails closed for corrupt historical bindings.
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
 		return
 	}
 
@@ -654,7 +860,10 @@ func (c *SkillController) UpdateSkillUsageAction(ctx *gin.Context) {
 		updates["user_feedback"] = *req.Feedback
 	}
 
-	c.db.Model(&usageLog).Updates(updates)
+	if err := c.db.Model(&usageLog).Updates(updates).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update usage log"})
+		return
+	}
 
 	// 延迟补评触发：差评（<= 2）且尚未完成 Layer 2+3 评估时，提交补评
 	if req.Feedback != nil && *req.Feedback <= 2 && c.assessmentWorker != nil {
@@ -700,24 +909,49 @@ func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 		return
 	}
 
-	// 根据 capability + 关联条件查找最近的 usage log
-	query := c.db.Model(&models.SkillUsageLog{}).Where("capability = ?", req.Capability)
-	if req.TaskID != nil {
-		// task_id 存在于 input_snapshot JSON 中
-		query = query.Where("input_snapshot->>'task_id' = ?", fmt.Sprintf("%d", *req.TaskID))
-	}
-
-	var usageLog models.SkillUsageLog
-	if err := query.Order("created_at DESC").First(&usageLog).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+	uid, authOrgID, ok := requireSkillUsageCaller(ctx)
+	if !ok {
 		return
 	}
 
-	// 权限校验：只有 owner 或 system 记录可以被更新
-	userID, _ := ctx.Get("user_id")
-	uid, _ := userID.(string)
-	if uid != "" && usageLog.UserID != uid && usageLog.UserID != "system" {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's record"})
+	if req.TaskID != nil {
+		// A task ID in the request is a global identifier. Bind it first, before
+		// even looking for a matching usage log, so it cannot select another
+		// tenant's system record.
+		_, taskOrgID, taskOK := c.resolveSkillUsageTaskScope(ctx, *req.TaskID)
+		if !taskOK || taskOrgID != authOrgID {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
+			return
+		}
+	}
+
+	// Restrict the candidate set to the caller's own rows and system rows. The
+	// latter are authorized one-by-one below, because the table has no org_id.
+	var usageLogs []models.SkillUsageLog
+	if err := c.db.WithContext(ctx.Request.Context()).
+		Where("capability = ? AND user_id IN ?", req.Capability, []string{uid, "system"}).
+		Order("created_at DESC").
+		Find(&usageLogs).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query usage logs"})
+		return
+	}
+
+	var usageLog *models.SkillUsageLog
+	for i := range usageLogs {
+		candidate := &usageLogs[i]
+		if req.TaskID != nil {
+			snapshotScope, err := parseSkillUsageSnapshotScope(candidate.InputSnapshot)
+			if err != nil || snapshotScope.taskID == nil || *snapshotScope.taskID != *req.TaskID {
+				continue
+			}
+		}
+		if allowed, _ := c.authorizeSkillUsageLog(ctx, candidate, uid, authOrgID); allowed {
+			usageLog = candidate
+			break
+		}
+	}
+	if usageLog == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found"})
 		return
 	}
 
@@ -729,7 +963,10 @@ func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 		updates["user_feedback"] = *req.Feedback
 	}
 
-	c.db.Model(&usageLog).Updates(updates)
+	if err := c.db.Model(usageLog).Updates(updates).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update usage log"})
+		return
+	}
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok", "usage_log_id": usageLog.ID})
 }
 
@@ -742,10 +979,8 @@ func (c *SkillController) UpdateSkillUsageByCapability(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/ai/skill-usage/pending-feedback [get]
 func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
-	userID, _ := ctx.Get("user_id")
-	uid, _ := userID.(string)
-	if uid == "" {
-		ctx.JSON(http.StatusOK, gin.H{"items": []interface{}{}})
+	uid, authOrgID, ok := requireSkillUsageCaller(ctx)
+	if !ok {
 		return
 	}
 
@@ -757,25 +992,42 @@ func (c *SkillController) GetPendingFeedback(ctx *gin.Context) {
 		CreatedAt  string  `json:"created_at"`
 	}
 
-	var items []pendingItem
-	c.db.Raw(`
-		SELECT l.id, l.capability, l.user_action,
-		       l.input_snapshot->>'task_id' as task_id,
-		       TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI') as created_at
-		FROM skill_usage_logs l
-		LEFT JOIN workspace_tasks t ON t.id = CAST(
-		  CASE WHEN l.input_snapshot->>'task_id' ~ '^\d+$'
-		       THEN l.input_snapshot->>'task_id' ELSE NULL END AS INTEGER)
-		WHERE l.user_action IS NOT NULL
-		  AND l.user_feedback IS NULL
-		  AND l.created_at > NOW() - INTERVAL '24 hours'
-		  AND (l.user_id = ? OR t.created_by = ? OR l.user_id = 'system')
-		ORDER BY l.created_at DESC
-		LIMIT 10
-	`, uid, uid).Scan(&items)
+	var usageLogs []models.SkillUsageLog
+	if err := c.db.WithContext(ctx.Request.Context()).
+		Where("user_action IS NOT NULL AND user_feedback IS NULL AND created_at > ?", time.Now().Add(-24*time.Hour)).
+		Where("user_id IN ?", []string{uid, "system"}).
+		Order("created_at DESC").
+		Find(&usageLogs).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query usage logs"})
+		return
+	}
 
-	if items == nil {
-		items = []pendingItem{}
+	items := make([]pendingItem, 0, 10)
+	for i := range usageLogs {
+		if len(items) == 10 {
+			break
+		}
+		usageLog := &usageLogs[i]
+		if allowed, _ := c.authorizeSkillUsageLog(ctx, usageLog, uid, authOrgID); !allowed {
+			continue
+		}
+
+		var taskID *string
+		if snapshotScope, err := parseSkillUsageSnapshotScope(usageLog.InputSnapshot); err == nil && snapshotScope.taskID != nil {
+			value := strconv.FormatUint(uint64(*snapshotScope.taskID), 10)
+			taskID = &value
+		}
+		action := ""
+		if usageLog.UserAction != nil {
+			action = *usageLog.UserAction
+		}
+		items = append(items, pendingItem{
+			ID:         usageLog.ID,
+			Capability: usageLog.Capability,
+			UserAction: action,
+			TaskID:     taskID,
+			CreatedAt:  usageLog.CreatedAt.Format("2006-01-02 15:04"),
+		})
 	}
 	ctx.JSON(http.StatusOK, gin.H{"items": items})
 }
@@ -803,15 +1055,27 @@ func (c *SkillController) SubmitFeedback(ctx *gin.Context) {
 		return
 	}
 
-	userID, _ := ctx.Get("user_id")
-	uid, _ := userID.(string)
+	uid, authOrgID, ok := requireSkillUsageCaller(ctx)
+	if !ok {
+		return
+	}
 
-	result := c.db.Model(&models.SkillUsageLog{}).
-		Where("id = ? AND user_id IN (?, 'system')", logID, uid).
-		Update("user_feedback", req.Feedback)
-
-	if result.RowsAffected == 0 {
+	var usageLog models.SkillUsageLog
+	if err := c.db.WithContext(ctx.Request.Context()).First(&usageLog, "id = ?", logID).Error; err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found or not owned by you"})
+		return
+	}
+	allowed, local := c.authorizeSkillUsageLog(ctx, &usageLog, uid, authOrgID)
+	if !allowed && local {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "cannot update other user's record"})
+		return
+	}
+	if !allowed {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "usage log not found or not owned by you"})
+		return
+	}
+	if err := c.db.Model(&usageLog).Update("user_feedback", req.Feedback).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update usage log"})
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})

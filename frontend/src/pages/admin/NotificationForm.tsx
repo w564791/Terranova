@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import { apiFetch } from '../../services/api';
 import styles from './NotificationForm.module.css';
 
 interface NotificationConfig {
@@ -88,7 +89,7 @@ const NotificationForm: React.FC = () => {
     
     try {
       setInitialLoading(true);
-      const response = await fetch(`/api/v1/notifications/${notificationId}`, {
+      const response = await apiFetch(`/notifications/${notificationId}`, {
         headers: getAuthHeaders(),
       });
       
@@ -132,7 +133,7 @@ const NotificationForm: React.FC = () => {
     try {
       // 如果是编辑模式，使用已保存的配置测试
       if (isEdit && notificationId) {
-        const response = await fetch(`/api/v1/notifications/${notificationId}/test`, {
+        const response = await apiFetch(`/notifications/${notificationId}/test`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -201,7 +202,7 @@ const NotificationForm: React.FC = () => {
     if (andTest && savedId) {
       setTesting(true);
       try {
-        const response = await fetch(`/api/v1/notifications/${savedId}/test`, {
+        const response = await apiFetch(`/notifications/${savedId}/test`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -250,7 +251,7 @@ const NotificationForm: React.FC = () => {
         : '/api/v1/notifications';
       const method = isEdit ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),

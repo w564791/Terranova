@@ -25,6 +25,21 @@ spec:
     spec:
       serviceAccountName: iac-platform
       terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: database-migrations
+          image: w564791/iac-platform:latest
+          imagePullPolicy: Always
+          command: ["/app/iac-migrate"]
+          envFrom:
+            - configMapRef:
+                name: iac-platform
+            - secretRef:
+                name: iac-platform
+            - secretRef:
+                name: iac-jwt
+          env:
+            - name: TZ
+              value: Asia/Singapore
       containers:
         - name: iac-platform
           image: w564791/iac-platform:latest

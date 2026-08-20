@@ -134,7 +134,40 @@ func TestMain(m *testing.M) {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			created_by VARCHAR(20)
 		)`)
+		// ResolveDisplay 会 best-effort 查 active deployment；缺表会导致 ERROR 日志/部分路径异常
+		testDB.Exec(`CREATE TABLE IF NOT EXISTS manifest_deployments (
+			id VARCHAR(36) PRIMARY KEY,
+			workspace_id VARCHAR(50) NOT NULL,
+			manifest_id VARCHAR(36),
+			version_id VARCHAR(36),
+			status VARCHAR(30) DEFAULT 'active',
+			varset_ids JSONB,
+			variable_overrides JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`)
 	}
+	// 即便 TEMPLATE 成功也可能缺新表/列：幂等补齐
+	testDB.Exec(`CREATE TABLE IF NOT EXISTS manifest_deployments (
+		id VARCHAR(36) PRIMARY KEY,
+		workspace_id VARCHAR(50) NOT NULL,
+		manifest_id VARCHAR(36),
+		version_id VARCHAR(36),
+		status VARCHAR(30) DEFAULT 'active',
+		varset_ids JSONB,
+		variable_overrides JSONB,
+		deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`)
+	// 旧空表可能缺列
+	testDB.Exec(`ALTER TABLE manifest_deployments ADD COLUMN IF NOT EXISTS deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
+	testDB.Exec(`ALTER TABLE manifest_deployments ADD COLUMN IF NOT EXISTS variable_overrides JSONB`)
+	testDB.Exec(`ALTER TABLE manifest_deployments ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active'`)
+	testDB.Exec(`CREATE TABLE IF NOT EXISTS manifest_deployment_varsets (
+		id SERIAL PRIMARY KEY,
+		deployment_id VARCHAR(36) NOT NULL,
+		varset_id VARCHAR(50) NOT NULL,
+		priority INTEGER DEFAULT 0
+	)`)
 
 	// Run tests
 	code := m.Run()
@@ -712,7 +745,7 @@ func TestSnapshot_DeleteNonExistent(t *testing.T) {
 	db := setupVarsetTestDB(t)
 
 	snapSvc := NewVariableSnapshotService(db)
-	err := snapSvc.DeleteSnapshot("vsnap-nonexistent")
+	err := snapSvc.DeleteSnapshot("ws-any", "vsnap-nonexistent")
 	if err == nil {
 		t.Error("should error for non-existent snapshot")
 	}

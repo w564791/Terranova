@@ -8,11 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
 // checkWebSocketOrigin 验证 WebSocket 连接的来源
@@ -49,12 +51,16 @@ var upgrader = websocket.Upgrader{
 // TerraformOutputController WebSocket输出控制器
 type TerraformOutputController struct {
 	streamManager *services.OutputStreamManager
+	db            *gorm.DB
+	iam           *middleware.IAMPermissionMiddleware
 }
 
 // NewTerraformOutputController 创建控制器
-func NewTerraformOutputController(streamManager *services.OutputStreamManager) *TerraformOutputController {
+func NewTerraformOutputController(streamManager *services.OutputStreamManager, db *gorm.DB, iam *middleware.IAMPermissionMiddleware) *TerraformOutputController {
 	return &TerraformOutputController{
 		streamManager: streamManager,
+		db:            db,
+		iam:           iam,
 	}
 }
 
@@ -74,6 +80,12 @@ func (c *TerraformOutputController) StreamTaskOutput(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(taskIDStr, 10, 32)
 	if err != nil {
 		ctx.JSON(400, gin.H{"error": "invalid task_id"})
+		return
+	}
+
+	// 完整的 task → workspace → project → org 绑定以及 IAM 校验必须在
+	// Upgrade 之前完成；db/IAM 缺失或歧义绑定一律 fail-closed。
+	if _, ok := loadAndAuthorizeTaskWorkspace(ctx, c.db, c.iam); !ok {
 		return
 	}
 

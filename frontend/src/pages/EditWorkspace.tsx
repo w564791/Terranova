@@ -11,8 +11,14 @@ const EditWorkspace: React.FC = () => {
   const [formData, setFormData] = useState({
     description: '',
     terraform_version: '1.5.0',
-    execution_mode: 'server' as 'server' | 'agent' | 'k8s'
+    execution_mode: 'local' as 'local' | 'agent' | 'k8s'
   });
+
+  const normalizeExecutionMode = (mode?: string): 'local' | 'agent' | 'k8s' => {
+    if (mode === 'agent' || mode === 'k8s' || mode === 'local') return mode;
+    // 历史 server 语义对齐 local
+    return 'local';
+  };
 
   const loadWorkspace = async () => {
     if (!id) return;
@@ -23,7 +29,7 @@ const EditWorkspace: React.FC = () => {
       setFormData({
         description: workspace.description || '',
         terraform_version: workspace.terraform_version || '1.5.0',
-        execution_mode: workspace.execution_mode || 'server'
+        execution_mode: normalizeExecutionMode(workspace.execution_mode),
       });
     } catch (error) {
       console.error('加载工作空间失败:', error);

@@ -28,6 +28,77 @@ func NewResourceController(db *gorm.DB, streamManager *services.OutputStreamMana
 	}
 }
 
+// resolvePathWorkspace 解析路径 :id 为语义化 workspace_id
+func (c *ResourceController) resolvePathWorkspace(ctx *gin.Context) (string, bool) {
+	param := ctx.Param("id")
+	if param == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return "", false
+	}
+	db := c.service.GetDB()
+	var ws models.Workspace
+	if err := db.Where("workspace_id = ?", param).First(&ws).Error; err != nil {
+		if err := db.Where("id = ?", param).First(&ws).Error; err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+			return "", false
+		}
+	}
+	return ws.WorkspaceID, true
+}
+
+// loadResourceInPathWorkspace 加载资源并校验属于路径 workspace
+func (c *ResourceController) loadResourceInPathWorkspace(ctx *gin.Context, resourceID uint) (*models.WorkspaceResource, bool) {
+	wsID, ok := c.resolvePathWorkspace(ctx)
+	if !ok {
+		return nil, false
+	}
+	resource, err := c.service.GetResource(resourceID)
+	if err != nil || resource == nil || resource.WorkspaceID != wsID {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Resource not found"})
+		return nil, false
+	}
+	return resource, true
+}
+
+// parseResourceIDInPathWorkspace 解析 path resource_id 并绑定路径 workspace（防编辑会话等 IDOR）
+func (c *ResourceController) parseResourceIDInPathWorkspace(ctx *gin.Context) (uint, bool) {
+	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+		return 0, false
+	}
+	if _, ok := c.loadResourceInPathWorkspace(ctx, uint(resourceID)); !ok {
+		return 0, false
+	}
+	return uint(resourceID), true
+}
+
+// loadSnapshotInPathWorkspace 加载快照并校验属于路径 workspace
+func (c *ResourceController) loadSnapshotInPathWorkspace(ctx *gin.Context, snapshotID uint) (*models.WorkspaceResourcesSnapshot, bool) {
+	wsID, ok := c.resolvePathWorkspace(ctx)
+	if !ok {
+		return nil, false
+	}
+	// 先用轻量查询绑定 workspace_id（IDOR 防护不依赖 JSONB 全量扫描）
+	var meta struct {
+		WorkspaceID string `gorm:"column:workspace_id"`
+	}
+	if err := c.service.GetDB().Table("workspace_resources_snapshot").
+		Select("workspace_id").
+		Where("id = ?", snapshotID).
+		Take(&meta).Error; err != nil || meta.WorkspaceID != wsID {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Snapshot not found"})
+		return nil, false
+	}
+	snapshot, err := c.service.GetSnapshot(snapshotID)
+	if err != nil || snapshot == nil {
+		// 元数据已绑定成功但详情加载失败：仍拒绝，避免半开状态
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Snapshot not found"})
+		return nil, false
+	}
+	return snapshot, true
+}
+
 // ============================================================================
 // 资源CRUD
 // ============================================================================
@@ -196,9 +267,8 @@ func (c *ResourceController) GetResource(ctx *gin.Context) {
 		return
 	}
 
-	resource, err := c.service.GetResource(uint(resourceID))
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Resource not found"})
+	resource, ok := c.loadResourceInPathWorkspace(ctx, uint(resourceID))
+	if !ok {
 		return
 	}
 
@@ -225,6 +295,10 @@ func (c *ResourceController) UpdateResource(ctx *gin.Context) {
 	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+		return
+	}
+
+	if _, ok := c.loadResourceInPathWorkspace(ctx, uint(resourceID)); !ok {
 		return
 	}
 
@@ -281,6 +355,10 @@ func (c *ResourceController) DeleteResource(ctx *gin.Context) {
 		return
 	}
 
+	if _, ok := c.loadResourceInPathWorkspace(ctx, uint(resourceID)); !ok {
+		return
+	}
+
 	userID, _ := ctx.Get("user_id")
 	uid := userID.(string)
 
@@ -318,6 +396,10 @@ func (c *ResourceController) RestoreResource(ctx *gin.Context) {
 		return
 	}
 
+	if _, ok := c.loadResourceInPathWorkspace(ctx, uint(resourceID)); !ok {
+		return
+	}
+
 	if err := c.service.RestoreResource(uint(resourceID)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -352,6 +434,10 @@ func (c *ResourceController) GetResourceVersions(ctx *gin.Context) {
 		return
 	}
 
+	if _, ok := c.loadResourceInPathWorkspace(ctx, uint(resourceID)); !ok {
+		return
+	}
+
 	versions, err := c.service.GetResourceVersions(uint(resourceID))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch versions"})
@@ -379,9 +465,8 @@ func (c *ResourceController) GetResourceVersions(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions/{version} [get]
 // @Security BearerAuth
 func (c *ResourceController) GetResourceVersion(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -391,7 +476,7 @@ func (c *ResourceController) GetResourceVersion(ctx *gin.Context) {
 		return
 	}
 
-	ver, err := c.service.GetResourceVersion(uint(resourceID), version)
+	ver, err := c.service.GetResourceVersion(resourceID, version)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "Version not found"})
 		return
@@ -417,9 +502,8 @@ func (c *ResourceController) GetResourceVersion(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions/{version}/rollback [post]
 // @Security BearerAuth
 func (c *ResourceController) RollbackResource(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -432,7 +516,7 @@ func (c *ResourceController) RollbackResource(ctx *gin.Context) {
 	userID, _ := ctx.Get("user_id")
 	uid := userID.(string)
 
-	newVersion, err := c.service.RollbackResource(uint(resourceID), version, uid)
+	newVersion, err := c.service.RollbackResource(resourceID, version, uid)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -460,9 +544,8 @@ func (c *ResourceController) RollbackResource(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/versions/compare [get]
 // @Security BearerAuth
 func (c *ResourceController) CompareVersions(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -478,7 +561,7 @@ func (c *ResourceController) CompareVersions(ctx *gin.Context) {
 		return
 	}
 
-	comparison, err := c.service.CompareVersions(uint(resourceID), fromVersion, toVersion)
+	comparison, err := c.service.CompareVersions(resourceID, fromVersion, toVersion)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -611,9 +694,8 @@ func (c *ResourceController) GetSnapshot(ctx *gin.Context) {
 		return
 	}
 
-	snapshot, err := c.service.GetSnapshot(uint(snapshotID))
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "Snapshot not found"})
+	snapshot, ok := c.loadSnapshotInPathWorkspace(ctx, uint(snapshotID))
+	if !ok {
 		return
 	}
 
@@ -639,6 +721,10 @@ func (c *ResourceController) RestoreSnapshot(ctx *gin.Context) {
 	snapshotID, err := strconv.ParseUint(ctx.Param("snapshot_id"), 10, 32)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid snapshot ID"})
+		return
+	}
+
+	if _, ok := c.loadSnapshotInPathWorkspace(ctx, uint(snapshotID)); !ok {
 		return
 	}
 
@@ -675,6 +761,10 @@ func (c *ResourceController) DeleteSnapshot(ctx *gin.Context) {
 		return
 	}
 
+	if _, ok := c.loadSnapshotInPathWorkspace(ctx, uint(snapshotID)); !ok {
+		return
+	}
+
 	if err := c.service.DeleteSnapshot(uint(snapshotID)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -703,13 +793,12 @@ func (c *ResourceController) DeleteSnapshot(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/dependencies [get]
 // @Security BearerAuth
 func (c *ResourceController) GetResourceDependencies(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
-	deps, err := c.service.GetResourceDependencies(uint(resourceID))
+	deps, err := c.service.GetResourceDependencies(resourceID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch dependencies"})
 		return
@@ -733,24 +822,13 @@ func (c *ResourceController) GetResourceDependencies(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/dependencies [put]
 // @Security BearerAuth
 func (c *ResourceController) UpdateDependencies(ctx *gin.Context) {
-	workspaceIDParam := ctx.Param("id")
-	if workspaceIDParam == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+	// 先绑定 path workspace + resource 归属
+	rid, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
-
-	var workspace models.Workspace
-	err := c.service.GetDB().Where("workspace_id = ?", workspaceIDParam).First(&workspace).Error
-	if err != nil {
-		if err := c.service.GetDB().Where("id = ?", workspaceIDParam).First(&workspace).Error; err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
-			return
-		}
-	}
-
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	wsID, ok := c.resolvePathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -763,7 +841,7 @@ func (c *ResourceController) UpdateDependencies(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.service.UpdateDependencies(workspace.WorkspaceID, uint(resourceID), req.DependsOn); err != nil {
+	if err := c.service.UpdateDependencies(wsID, rid, req.DependsOn); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -871,12 +949,21 @@ func (c *ResourceController) DeployResources(ctx *gin.Context) {
 		return
 	}
 
-	// 获取资源的resource_id列表
+	// 获取资源并强制属于 path workspace（防跨 WS 部署）
 	var resources []models.WorkspaceResource
-	c.service.GetResourcesByIDs(req.ResourceIDs, &resources)
+	if err := c.service.GetDB().
+		Where("id IN ? AND workspace_id = ? AND is_active = true", req.ResourceIDs, workspace.WorkspaceID).
+		Find(&resources).Error; err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	if len(resources) == 0 {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "No valid resources found"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "No valid resources found in this workspace"})
+		return
+	}
+	if len(resources) != len(req.ResourceIDs) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Some resource_ids do not belong to this workspace"})
 		return
 	}
 
@@ -919,9 +1006,8 @@ func (c *ResourceController) DeployResources(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/start [post]
 // @Security BearerAuth
 func (c *ResourceController) StartEditing(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -937,7 +1023,7 @@ func (c *ResourceController) StartEditing(ctx *gin.Context) {
 		return
 	}
 
-	response, err := c.editingService.StartEditing(uint(resourceID), uid, req.SessionID)
+	response, err := c.editingService.StartEditing(resourceID, uid, req.SessionID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -964,9 +1050,8 @@ func (c *ResourceController) StartEditing(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/heartbeat [post]
 // @Security BearerAuth
 func (c *ResourceController) Heartbeat(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -982,7 +1067,7 @@ func (c *ResourceController) Heartbeat(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.editingService.Heartbeat(uint(resourceID), uid, req.SessionID); err != nil {
+	if err := c.editingService.Heartbeat(resourceID, uid, req.SessionID); err != nil {
 		// 如果是锁不存在，返回404而不是500
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "锁不存在或已被接管"})
@@ -1015,9 +1100,8 @@ func (c *ResourceController) Heartbeat(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/end [post]
 // @Security BearerAuth
 func (c *ResourceController) EndEditing(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -1033,7 +1117,7 @@ func (c *ResourceController) EndEditing(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.editingService.EndEditing(uint(resourceID), uid, req.SessionID); err != nil {
+	if err := c.editingService.EndEditing(resourceID, uid, req.SessionID); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -1059,9 +1143,8 @@ func (c *ResourceController) EndEditing(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/editing/status [get]
 // @Security BearerAuth
 func (c *ResourceController) GetEditingStatus(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -1074,7 +1157,7 @@ func (c *ResourceController) GetEditingStatus(ctx *gin.Context) {
 		return
 	}
 
-	status, err := c.editingService.GetEditingStatus(uint(resourceID), uid, sessionID)
+	status, err := c.editingService.GetEditingStatus(resourceID, uid, sessionID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1101,9 +1184,8 @@ func (c *ResourceController) GetEditingStatus(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift/save [post]
 // @Security BearerAuth
 func (c *ResourceController) SaveDrift(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -1120,7 +1202,7 @@ func (c *ResourceController) SaveDrift(ctx *gin.Context) {
 		return
 	}
 
-	drift, err := c.editingService.SaveDrift(uint(resourceID), uid, req.SessionID, req.DriftContent)
+	drift, err := c.editingService.SaveDrift(resourceID, uid, req.SessionID, req.DriftContent)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1151,9 +1233,8 @@ func (c *ResourceController) SaveDrift(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift [get]
 // @Security BearerAuth
 func (c *ResourceController) GetDrift(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -1166,7 +1247,7 @@ func (c *ResourceController) GetDrift(ctx *gin.Context) {
 		return
 	}
 
-	drift, hasVersionConflict, err := c.editingService.GetDrift(uint(resourceID), uid, sessionID)
+	drift, hasVersionConflict, err := c.editingService.GetDrift(resourceID, uid, sessionID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1217,9 +1298,8 @@ func (c *ResourceController) GetDrift(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift [delete]
 // @Security BearerAuth
 func (c *ResourceController) DeleteDrift(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -1232,7 +1312,7 @@ func (c *ResourceController) DeleteDrift(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.editingService.DeleteDrift(uint(resourceID), uid, sessionID); err != nil {
+	if err := c.editingService.DeleteDrift(resourceID, uid, sessionID); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -1258,9 +1338,8 @@ func (c *ResourceController) DeleteDrift(ctx *gin.Context) {
 // @Router /api/v1/workspaces/{id}/resources/{resource_id}/drift/takeover [post]
 // @Security BearerAuth
 func (c *ResourceController) TakeoverEditing(ctx *gin.Context) {
-	resourceID, err := strconv.ParseUint(ctx.Param("resource_id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource ID"})
+	resourceID, ok := c.parseResourceIDInPathWorkspace(ctx)
+	if !ok {
 		return
 	}
 
@@ -1277,7 +1356,7 @@ func (c *ResourceController) TakeoverEditing(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.editingService.TakeoverEditing(uint(resourceID), uid, req.SessionID, req.OldSessionID); err != nil {
+	if err := c.editingService.TakeoverEditing(resourceID, uid, req.SessionID, req.OldSessionID); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

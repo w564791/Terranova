@@ -10,7 +10,7 @@ import AIErrorAnalysis from '../components/AIErrorAnalysis';
 import TaskTimeline from '../components/TaskTimeline';
 import SmartLogViewer from '../components/SmartLogViewer';
 import { useNotificationContext } from '../contexts/NotificationContext';
-import api from '../services/api';
+import api, { apiFetch } from '../services/api';
 import { getTaskStatusLabel } from '../utils/taskStatus';
 import styles from './TaskDetail.module.css';
 
@@ -168,11 +168,21 @@ const TaskDetail: React.FC = () => {
     }
   };
 
-  const handleDownloadStateBackup = () => {
-    window.open(
-      `http://localhost:8080/api/v1/workspaces/${workspaceId}/tasks/${taskId}/state-backup`,
-      '_blank'
-    );
+  const handleDownloadStateBackup = async () => {
+    try {
+      const response = await apiFetch(`/workspaces/${workspaceId}/tasks/${taskId}/state-backup`);
+      if (!response.ok) {
+        throw new Error('Failed to download state backup');
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `workspace-${workspaceId}-task-${taskId}-state-backup`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      showError(err.message || '下载 State 备份失败');
+    }
   };
 
   const fetchTask = async () => {

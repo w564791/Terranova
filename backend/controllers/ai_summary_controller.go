@@ -43,22 +43,18 @@ func NewAISummaryController(db *gorm.DB) *AISummaryController {
 // @Security BearerAuth
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary [get]
 func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
-	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
 		return
 	}
 
 	summary := c.service.GetPlanSummary(uint(taskID))
 	if summary == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "plan summary not found"})
-		return
-	}
-
-	// 校验 workspace 归属，防止越权访问
-	if summary.WorkspaceID != workspaceID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
 		return
 	}
 
@@ -85,22 +81,18 @@ func (c *AISummaryController) GetPlanSummary(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/apply-summary [get]
 func (c *AISummaryController) GetApplySummary(ctx *gin.Context) {
-	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
 		return
 	}
 
 	summary := c.service.GetApplySummary(uint(taskID))
 	if summary == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "apply summary not found"})
-		return
-	}
-
-	// 校验 workspace 归属，防止越权访问
-	if summary.WorkspaceID != workspaceID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
 		return
 	}
 
@@ -129,6 +121,9 @@ func (c *AISummaryController) RetryPlanSummary(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
 		return
 	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
+		return
+	}
 
 	if err := c.service.RetryPlanSummary(uint(taskID)); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -153,6 +148,9 @@ func (c *AISummaryController) StopPlanSummary(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
 		return
 	}
 
@@ -181,6 +179,9 @@ func (c *AISummaryController) StopApplySummary(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
 		return
 	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
+		return
+	}
 
 	if err := c.service.StopApplySummary(uint(taskID)); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -205,6 +206,9 @@ func (c *AISummaryController) RetryApplySummary(ctx *gin.Context) {
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
 		return
 	}
 
@@ -233,10 +237,13 @@ func (c *AISummaryController) RetryApplySummary(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/confirm [post]
 func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
-	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+	_, task, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID))
+	if !ok {
 		return
 	}
 
@@ -259,23 +266,12 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "plan summary not found"})
 		return
 	}
-	if summary.WorkspaceID != workspaceID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
-		return
-	}
 	if !summary.RequiresConfirmation {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "this plan summary does not require confirmation"})
 		return
 	}
 	if summary.UserDecisionCode != "" {
 		ctx.JSON(http.StatusConflict, gin.H{"error": "decision already submitted"})
-		return
-	}
-
-	// 权限检查
-	var task models.WorkspaceTask
-	if err := c.db.First(&task, taskID).Error; err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
 	}
 
@@ -329,8 +325,8 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		c.db.Model(&models.WorkspaceTask{}).
 			Where("id = ? AND status = ?", taskID, string(models.TaskStatusDecisionRequired)).
 			Updates(map[string]interface{}{
-				"status":       string(models.TaskStatusCancelled),
-				"stage":        "cancelled",
+				"status":        string(models.TaskStatusCancelled),
+				"stage":         "cancelled",
 				"error_message": "用户在风险决策阶段选择终止变更",
 				"completed_at":  now,
 			})
@@ -380,8 +376,6 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 		Comment:    commentContent,
 		ActionType: "risk_decision",
 	})
-	_ = workspaceID // used in workspace validation above
-
 	ctx.JSON(http.StatusOK, gin.H{"message": "决策已提交"})
 }
 
@@ -402,10 +396,12 @@ func (c *AISummaryController) ConfirmPlanSummary(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/plan-summary/bypass [post]
 func (c *AISummaryController) BypassAIIncomplete(ctx *gin.Context) {
-	workspaceID := ctx.Param("id")
 	taskID, err := strconv.ParseUint(ctx.Param("task_id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id"})
+		return
+	}
+	if _, _, ok := loadTaskInPathWorkspace(c.db, ctx, uint(taskID)); !ok {
 		return
 	}
 
@@ -429,10 +425,6 @@ func (c *AISummaryController) BypassAIIncomplete(ctx *gin.Context) {
 	summary := c.service.GetPlanSummary(uint(taskID))
 	if summary == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "plan summary not found"})
-		return
-	}
-	if summary.WorkspaceID != workspaceID {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "summary does not belong to this workspace"})
 		return
 	}
 	if !summary.AIAnalysisIncomplete {

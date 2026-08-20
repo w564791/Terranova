@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../contexts/ToastContext';
+import { apiFetch } from '../../services/api';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import styles from './NotificationManagement.module.css';
 
@@ -43,7 +44,7 @@ const NotificationManagement: React.FC = () => {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/notifications', {
+      const response = await apiFetch('/notifications', {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -80,7 +81,7 @@ const NotificationManagement: React.FC = () => {
     
     setDeleting(true);
     try {
-      const response = await fetch(`/api/v1/notifications/${deleteConfirm.notification.notification_id}`, {
+      const response = await apiFetch(`/notifications/${deleteConfirm.notification.notification_id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -106,7 +107,7 @@ const NotificationManagement: React.FC = () => {
   const handleTestNotification = async (notificationId: string) => {
     setTesting(notificationId);
     try {
-      const response = await fetch(`/api/v1/notifications/${notificationId}/test`, {
+      const response = await apiFetch(`/notifications/${notificationId}/test`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({

@@ -3,6 +3,7 @@ import { Card, Button, Select, Input, Empty, Spin, Tag, Typography, Space, Divid
 import { PlusOutlined, DeleteOutlined, ReloadOutlined, LinkOutlined, LockOutlined, UnlockOutlined, CopyOutlined, DownOutlined, RightOutlined, CloseOutlined, SaveOutlined, EditOutlined, WarningOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
+import { apiFetch } from '../services/api';
 import styles from './WorkspaceRemoteDataConfig.module.css';
 
 const { Text, Paragraph } = Typography;
@@ -95,7 +96,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
   const fetchRemoteData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/remote-data`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/remote-data`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -106,8 +107,8 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
           const remoteDataWithOutputs = await Promise.all(
             remoteData.map(async (item: RemoteDataItem) => {
               try {
-                const outputsResponse = await fetch(
-                  `/api/v1/workspaces/${workspaceId}/remote-data/source-outputs?source_workspace_id=${item.source_workspace_id}`,
+                const outputsResponse = await apiFetch(
+                  `/workspaces/${workspaceId}/remote-data/source-outputs?source_workspace_id=${item.source_workspace_id}`,
                   { headers: getAuthHeaders() }
                 );
                 if (outputsResponse.ok) {
@@ -135,7 +136,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
 
   const fetchAccessibleWorkspaces = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/remote-data/accessible-workspaces`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/remote-data/accessible-workspaces`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -151,7 +152,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
 
   const fetchSharingSettings = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs-sharing`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/outputs-sharing`, {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -168,7 +169,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
 
   const fetchAllWorkspaces = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/workspaces`, {
+      const response = await apiFetch('/workspaces', {
         headers: getAuthHeaders(),
       });
       if (response.ok) {
@@ -199,8 +200,8 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
   const fetchSourceOutputs = async (sourceWorkspaceId: string) => {
     setLoadingOutputs(true);
     try {
-      const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/remote-data/source-outputs?source_workspace_id=${sourceWorkspaceId}`,
+      const response = await apiFetch(
+        `/workspaces/${workspaceId}/remote-data/source-outputs?source_workspace_id=${sourceWorkspaceId}`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
@@ -240,7 +241,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
     try {
       // 使用完整的 data_name（带 workspace 前缀）
       const fullDataName = getSelectedSourceWorkspaceName() + '-' + dataName;
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/remote-data`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/remote-data`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -274,7 +275,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
     const { id } = deleteConfirm;
     setDeleting(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/remote-data/${id}`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/remote-data/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -326,7 +327,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
     setSaving(true);
     try {
       const fullDataName = (editingItem.source_workspace_name || '') + '-' + editDataName;
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/remote-data/${editingItem.remote_data_id}`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/remote-data/${editingItem.remote_data_id}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -353,7 +354,7 @@ const WorkspaceRemoteDataConfig: React.FC<WorkspaceRemoteDataConfigProps> = ({ w
   const handleUpdateSharing = async () => {
     setSavingSharing(true);
     try {
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/outputs-sharing`, {
+      const response = await apiFetch(`/workspaces/${workspaceId}/outputs-sharing`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({

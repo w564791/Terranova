@@ -3,6 +3,8 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+
 	"iac-platform/internal/models"
 
 	"gorm.io/gorm"
@@ -70,9 +72,11 @@ func (s *VariableResolutionService) ResolveDisplay(workspaceID string) ([]Effect
 	// 把 active manifest deployment 选定的 varsets 折进优先级链,
 	// 让 workspace variables 页面也能看到 deployment 关联的 varset 变量(此前 display 漏注入,
 	// 仅执行路径 ResolveExecutionWithExtra 注入,导致页面看不到但实际 plan/apply 会用)。
+	// best-effort：无 deployment 表/列时不阻塞主路径解析。
 	extraVarsetIDs, _, err := s.GetActiveDeploymentExtras(workspaceID)
 	if err != nil {
-		return nil, err
+		log.Printf("[WARN] GetActiveDeploymentExtras for %s: %v", workspaceID, err)
+		extraVarsetIDs = nil
 	}
 	return s.resolveDisplayWithExtraVarsets(workspaceID, extraVarsetIDs)
 }

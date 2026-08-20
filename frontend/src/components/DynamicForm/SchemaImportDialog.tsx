@@ -133,7 +133,7 @@ export const SchemaImportDialog: React.FC<SchemaImportDialogProps> = ({
             </label>
             <MonacoJsonEditor
               value={jsonValue}
-              onChange={setJsonValue}
+              onChange={(v) => setJsonValue(typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 2))}
               minHeight={400}
             />
           </div>

@@ -71,6 +71,21 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
           go build -ldflags="-s -w -X iac-platform/internal/version.CommitHash=${COMMIT_HASH} -X iac-platform/internal/version.BuildTime=${BUILD_TIME}" -o ../dist/iac-agent-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} cmd/agent/main.go
 
+      # The backend release image also serves as the Kubernetes migration
+      # image. Build the migrator for every release platform so the image
+      # assembly below cannot publish an initContainer target that is missing
+      # `/app/iac-migrate`.
+      - name: Build database migrator
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          cd backend
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
+          go build -ldflags="-s -w" -o ../dist/iac-migrate-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./cmd/migrate
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -135,8 +150,10 @@ jobs:
           mkdir -p docker-ctx/backend/linux-amd64 docker-ctx/backend/linux-arm64
           cp binaries/binaries-linux-amd64/iac-platform-linux-amd64 docker-ctx/backend/linux-amd64/iac-platform
           cp binaries/binaries-linux-amd64/iac-agent-linux-amd64    docker-ctx/backend/linux-amd64/iac-agent
+          cp binaries/binaries-linux-amd64/iac-migrate-linux-amd64  docker-ctx/backend/linux-amd64/iac-migrate
           cp binaries/binaries-linux-arm64/iac-platform-linux-arm64 docker-ctx/backend/linux-arm64/iac-platform
           cp binaries/binaries-linux-arm64/iac-agent-linux-arm64    docker-ctx/backend/linux-arm64/iac-agent
+          cp binaries/binaries-linux-arm64/iac-migrate-linux-arm64  docker-ctx/backend/linux-arm64/iac-migrate
           chmod +x docker-ctx/backend/linux-*/iac-*
 
           # 准备前端静态文件
@@ -159,6 +176,14 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke-test migration binary in backend image
+        run: |
+          docker buildx build --platform linux/amd64 --load \
+            -t iac-platform-release-smoke \
+            -f .github/dockerfiles/Dockerfile.server docker-ctx/backend
+          docker run --rm --entrypoint /bin/sh iac-platform-release-smoke \
+            -c 'test -x /app/iac-platform && test -x /app/iac-migrate'
 
       # -- Backend (server) --
       - name: Build and push backend

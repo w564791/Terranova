@@ -93,15 +93,18 @@ const EditResource: React.FC = () => {
   const [pendingSubmitAction, setPendingSubmitAction] = useState<boolean | null>(null);
 
   const getSchemaFields = useCallback(() => {
+    // schema 结构在运行时可能为 OpenAPI 或扁平 properties
+    const rs = rawSchema as any;
+    const sc = schema as any;
     const properties =
-      rawSchema?.openapi_schema?.components?.schemas?.ModuleInput?.properties ||
-      schema?.openapi_schema?.components?.schemas?.ModuleInput?.properties ||
-      rawSchema?.schema_data?.components?.schemas?.ModuleInput?.properties ||
-      schema?.schema_data?.components?.schemas?.ModuleInput?.properties ||
-      rawSchema?.schema_data?.properties ||
-      schema?.schema_data?.properties ||
-      rawSchema?.properties ||
-      schema?.properties;
+      rs?.openapi_schema?.components?.schemas?.ModuleInput?.properties ||
+      sc?.openapi_schema?.components?.schemas?.ModuleInput?.properties ||
+      rs?.schema_data?.components?.schemas?.ModuleInput?.properties ||
+      sc?.schema_data?.components?.schemas?.ModuleInput?.properties ||
+      rs?.schema_data?.properties ||
+      sc?.schema_data?.properties ||
+      rs?.properties ||
+      sc?.properties;
     return new Set<string>(properties ? Object.keys(properties) : []);
   }, [rawSchema, schema]);
 
@@ -366,7 +369,7 @@ const EditResource: React.FC = () => {
   const [savedResourceName, setSavedResourceName] = useState('');
   
   // Ref to store handleSubmit function to avoid forward reference
-  const handleSubmitRef = useRef<(shouldRunAfter: boolean, submitData?: Record<string, any>) => Promise<void>>();
+  const handleSubmitRef = useRef<(shouldRunAfter: boolean, submitData?: Record<string, any>) => Promise<void>>(undefined);
   
   // WebSocket接管请求状态
   const [showTakeoverRequestDialog, setShowTakeoverRequestDialog] = useState(false);

@@ -17,25 +17,24 @@ func setupTaskRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *services.
 	// - api.GET("/tasks/:task_id/logs")
 	// - api.GET("/tasks/:task_id/logs/download")
 	// - api.GET("/terraform/streams/stats")
-	// 任务日志管理（全局，不在workspaces组内）- 添加IAM权限检查
-	taskLogController := controllers.NewTaskLogController(db)
-	outputController := controllers.NewTerraformOutputController(streamManager)
+	// 全局任务日志：JWT + 加载 task 后按 workspace READ 鉴权（防水平越权）
+	// 推荐客户端改用 /workspaces/{id}/tasks/{task_id}/logs
+	taskLogController := controllers.NewTaskLogController(db, iamMiddleware)
+	outputController := controllers.NewTerraformOutputController(streamManager, db, iamMiddleware)
 
 	api.GET("/tasks/:task_id/output/stream", middleware.JWTAuth(), middleware.AuditLogger(db),
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
 		outputController.StreamTaskOutput,
 	)
 
 	api.GET("/tasks/:task_id/logs", middleware.JWTAuth(), middleware.AuditLogger(db),
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
 		taskLogController.GetTaskLogs,
 	)
 
 	api.GET("/tasks/:task_id/logs/download", middleware.JWTAuth(), middleware.AuditLogger(db),
-		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
 		taskLogController.DownloadTaskLogs,
 	)
 
+	// 流统计为运维面，仍要求显式 org 级 TASK_LOGS（需 org_id 或单租户 flag）
 	api.GET("/terraform/streams/stats", middleware.JWTAuth(), middleware.AuditLogger(db),
 		iamMiddleware.RequirePermission("TASK_LOGS", "ORGANIZATION", "READ"),
 		outputController.GetStreamStats,

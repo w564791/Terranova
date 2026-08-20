@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -21,6 +22,51 @@ func NewApplicationHandler(service *service.ApplicationService) *ApplicationHand
 	}
 }
 
+// authOrgID 从 IAM 中间件写入的 auth_org_id 读取鉴权组织；缺失则 400
+func authOrgID(c *gin.Context) (uint, bool) {
+	raw, ok := c.Get("auth_org_id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "auth org not resolved; pass org_id query or use org-scoped path"})
+		return 0, false
+	}
+	switch v := raw.(type) {
+	case uint:
+		if v == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid auth org"})
+			return 0, false
+		}
+		return v, true
+	case int:
+		if v <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid auth org"})
+			return 0, false
+		}
+		return uint(v), true
+	case float64:
+		if v <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid auth org"})
+			return 0, false
+		}
+		return uint(v), true
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid auth org type"})
+		return 0, false
+	}
+}
+
+func mapAppErr(c *gin.Context, err error) {
+	if errors.Is(err, service.ErrApplicationNotFound) || errors.Is(err, service.ErrApplicationOrgMismatch) {
+		// 统一 404 防跨 org 探测
+		c.JSON(http.StatusNotFound, gin.H{"error": "application not found"})
+		return
+	}
+	if errors.Is(err, service.ErrApplicationOrgForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+}
+
 // CreateApplication 创建应用
 // @Summary 创建应用
 // @Tags IAM-Application
@@ -37,7 +83,17 @@ func (h *ApplicationHandler) CreateApplication(c *gin.Context) {
 		return
 	}
 
-	// 获取当前用户ID
+	authOrg, ok := authOrgID(c)
+	if !ok {
+		return
+	}
+	// body.org_id 必须与鉴权 org 一致（A-1）
+	if req.OrgID != 0 && req.OrgID != authOrg {
+		c.JSON(http.StatusForbidden, gin.H{"error": "org_id does not match authorized organization"})
+		return
+	}
+	req.OrgID = authOrg
+
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -46,13 +102,13 @@ func (h *ApplicationHandler) CreateApplication(c *gin.Context) {
 
 	app, secret, err := h.service.CreateApplication(c.Request.Context(), &req, userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		mapAppErr(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"application": app,
-		"app_secret":  secret, // 仅此一次返回明文密钥
+		"app_secret":  secret,
 		"message":     "Application created successfully. Please save the app_secret, it will not be shown again.",
 	})
 }
@@ -67,16 +123,22 @@ func (h *ApplicationHandler) CreateApplication(c *gin.Context) {
 // @Router /api/v1/iam/applications [get]
 // @Security BearerAuth
 func (h *ApplicationHandler) ListApplications(c *gin.Context) {
-	orgIDStr := c.Query("org_id")
-	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
+	authOrg, ok := authOrgID(c)
+	if !ok {
 		return
 	}
 
-	orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
-		return
+	// 若传了 org_id query，必须等于鉴权 org
+	if orgIDStr := c.Query("org_id"); orgIDStr != "" {
+		orgID, err := strconv.ParseUint(orgIDStr, 10, 32)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org_id"})
+			return
+		}
+		if uint(orgID) != authOrg {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot list applications for another organization"})
+			return
+		}
 	}
 
 	var isActive *bool
@@ -85,7 +147,7 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 		isActive = &val
 	}
 
-	apps, err := h.service.ListApplications(c.Request.Context(), uint(orgID), isActive)
+	apps, err := h.service.ListApplications(c.Request.Context(), authOrg, isActive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -106,6 +168,10 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 // @Router /api/v1/iam/applications/{id} [get]
 // @Security BearerAuth
 func (h *ApplicationHandler) GetApplication(c *gin.Context) {
+	authOrg, ok := authOrgID(c)
+	if !ok {
+		return
+	}
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -113,9 +179,9 @@ func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 		return
 	}
 
-	app, err := h.service.GetApplication(c.Request.Context(), uint(id))
+	app, err := h.service.GetApplicationInOrg(c.Request.Context(), uint(id), authOrg)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "application not found"})
+		mapAppErr(c, err)
 		return
 	}
 
@@ -133,6 +199,10 @@ func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 // @Router /api/v1/iam/applications/{id} [put]
 // @Security BearerAuth
 func (h *ApplicationHandler) UpdateApplication(c *gin.Context) {
+	authOrg, ok := authOrgID(c)
+	if !ok {
+		return
+	}
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -146,8 +216,8 @@ func (h *ApplicationHandler) UpdateApplication(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.UpdateApplication(c.Request.Context(), uint(id), &req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.service.UpdateApplicationInOrg(c.Request.Context(), uint(id), authOrg, &req); err != nil {
+		mapAppErr(c, err)
 		return
 	}
 
@@ -163,6 +233,10 @@ func (h *ApplicationHandler) UpdateApplication(c *gin.Context) {
 // @Router /api/v1/iam/applications/{id} [delete]
 // @Security BearerAuth
 func (h *ApplicationHandler) DeleteApplication(c *gin.Context) {
+	authOrg, ok := authOrgID(c)
+	if !ok {
+		return
+	}
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -170,8 +244,8 @@ func (h *ApplicationHandler) DeleteApplication(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.DeleteApplication(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.service.DeleteApplicationInOrg(c.Request.Context(), uint(id), authOrg); err != nil {
+		mapAppErr(c, err)
 		return
 	}
 
@@ -187,6 +261,10 @@ func (h *ApplicationHandler) DeleteApplication(c *gin.Context) {
 // @Router /api/v1/iam/applications/{id}/regenerate-secret [post]
 // @Security BearerAuth
 func (h *ApplicationHandler) RegenerateSecret(c *gin.Context) {
+	authOrg, ok := authOrgID(c)
+	if !ok {
+		return
+	}
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -194,9 +272,9 @@ func (h *ApplicationHandler) RegenerateSecret(c *gin.Context) {
 		return
 	}
 
-	newSecret, err := h.service.RegenerateSecret(c.Request.Context(), uint(id))
+	newSecret, err := h.service.RegenerateSecretInOrg(c.Request.Context(), uint(id), authOrg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		mapAppErr(c, err)
 		return
 	}
 

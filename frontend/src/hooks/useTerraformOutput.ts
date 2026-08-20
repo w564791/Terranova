@@ -15,7 +15,7 @@ export const useTerraformOutput = (taskId: number) => {
   const [isCompleted, setIsCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<number>();
+  const reconnectTimeoutRef = useRef<number | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false); // 防止重复连接
 

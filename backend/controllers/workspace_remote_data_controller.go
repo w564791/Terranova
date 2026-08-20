@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +18,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var errRemoteDataWorkspaceOutsideTenant = errors.New("workspace is outside its tenant or has an invalid tenant binding")
+
 // WorkspaceRemoteDataController 工作空间远程数据控制器
 type WorkspaceRemoteDataController struct {
 	db *gorm.DB
@@ -24,6 +28,33 @@ type WorkspaceRemoteDataController struct {
 // NewWorkspaceRemoteDataController 创建控制器实例
 func NewWorkspaceRemoteDataController(db *gorm.DB) *WorkspaceRemoteDataController {
 	return &WorkspaceRemoteDataController{db: db}
+}
+
+// workspaceTenantOrgID resolves a workspace's sole owning organization.  A
+// workspace without exactly one project relation is deliberately treated as
+// unowned: accepting one arbitrary relation would turn legacy data corruption
+// into a cross-tenant authorization bypass.
+func workspaceTenantOrgID(ctx context.Context, db *gorm.DB, workspaceID string) (uint, error) {
+	if db == nil || workspaceID == "" {
+		return 0, errRemoteDataWorkspaceOutsideTenant
+	}
+
+	var orgIDs []uint
+	err := db.WithContext(ctx).Raw(`
+SELECT p.org_id
+FROM workspaces w
+JOIN workspace_project_relations wpr ON wpr.workspace_id = w.workspace_id
+JOIN projects p ON p.id = wpr.project_id
+WHERE w.workspace_id = ?`, workspaceID).Scan(&orgIDs).Error
+	if err != nil || len(orgIDs) != 1 || orgIDs[0] == 0 {
+		return 0, errRemoteDataWorkspaceOutsideTenant
+	}
+	return orgIDs[0], nil
+}
+
+func (c *WorkspaceRemoteDataController) workspaceBelongsToOrg(ctx context.Context, workspaceID string, orgID uint) bool {
+	workspaceOrgID, err := workspaceTenantOrgID(ctx, c.db, workspaceID)
+	return err == nil && workspaceOrgID == orgID
 }
 
 // generateRemoteDataID 生成远程数据语义化ID
@@ -77,6 +108,14 @@ func (c *WorkspaceRemoteDataController) ListRemoteData(ctx *gin.Context) {
 		})
 		return
 	}
+	workspaceOrgID, err := workspaceTenantOrgID(ctx.Request.Context(), c.db, workspace.WorkspaceID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "Workspace不存在",
+		})
+		return
+	}
 
 	// 查询远程数据列表
 	var remoteDataList []models.WorkspaceRemoteData
@@ -94,6 +133,12 @@ func (c *WorkspaceRemoteDataController) ListRemoteData(ctx *gin.Context) {
 	// 构建响应，包含源workspace的outputs信息
 	var result []models.RemoteDataInfo
 	for _, rd := range remoteDataList {
+		// Cross-tenant references can exist in data written before tenant
+		// isolation was enforced. Do not disclose their source workspace or
+		// leave them usable; users can still delete the stale local record.
+		if !c.workspaceBelongsToOrg(ctx.Request.Context(), rd.SourceWorkspaceID, workspaceOrgID) {
+			continue
+		}
 		info := models.RemoteDataInfo{
 			RemoteDataID:      rd.RemoteDataID,
 			WorkspaceID:       rd.WorkspaceID,
@@ -177,7 +222,7 @@ func (c *WorkspaceRemoteDataController) CreateRemoteData(ctx *gin.Context) {
 	}
 
 	// 检查是否有权限访问源workspace的outputs
-	if !c.canAccessOutputs(workspace.WorkspaceID, sourceWorkspace.WorkspaceID) {
+	if !c.canAccessOutputs(ctx.Request.Context(), workspace.WorkspaceID, sourceWorkspace.WorkspaceID) {
 		ctx.JSON(http.StatusForbidden, gin.H{
 			"code":    403,
 			"message": "无权访问源Workspace的outputs，请联系源Workspace管理员开启共享",
@@ -263,6 +308,14 @@ func (c *WorkspaceRemoteDataController) UpdateRemoteData(ctx *gin.Context) {
 		})
 		return
 	}
+	workspaceOrgID, err := workspaceTenantOrgID(ctx.Request.Context(), c.db, workspace.WorkspaceID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "Workspace不存在",
+		})
+		return
+	}
 
 	var req struct {
 		DataName    string `json:"data_name"`
@@ -281,6 +334,13 @@ func (c *WorkspaceRemoteDataController) UpdateRemoteData(ctx *gin.Context) {
 	var remoteData models.WorkspaceRemoteData
 	if err := c.db.Where("workspace_id = ? AND remote_data_id = ?",
 		workspace.WorkspaceID, remoteDataIDParam).First(&remoteData).Error; err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "远程数据引用不存在",
+		})
+		return
+	}
+	if !c.workspaceBelongsToOrg(ctx.Request.Context(), remoteData.SourceWorkspaceID, workspaceOrgID) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"code":    404,
 			"message": "远程数据引用不存在",
@@ -423,7 +483,7 @@ func (c *WorkspaceRemoteDataController) GetSourceWorkspaceOutputs(ctx *gin.Conte
 	}
 
 	// 检查是否有权限访问源workspace的outputs
-	if !c.canAccessOutputs(workspace.WorkspaceID, sourceWorkspace.WorkspaceID) {
+	if !c.canAccessOutputs(ctx.Request.Context(), workspace.WorkspaceID, sourceWorkspace.WorkspaceID) {
 		ctx.JSON(http.StatusForbidden, gin.H{
 			"code":    403,
 			"message": "无权访问源Workspace的outputs",
@@ -601,6 +661,25 @@ func (c *WorkspaceRemoteDataController) GetAccessibleWorkspaces(ctx *gin.Context
 		})
 		return
 	}
+	workspaceOrgID, err := workspaceTenantOrgID(ctx.Request.Context(), c.db, workspace.WorkspaceID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "Workspace不存在",
+		})
+		return
+	}
+
+	// The sharing setting is an intra-tenant feature.  Keep the tenant
+	// predicate in SQL, rather than filtering after a global list has already
+	// been loaded, so this endpoint cannot enumerate other tenants' workspace
+	// metadata.
+	tenantWorkspaceIDs := c.db.Table("workspace_project_relations AS wpr").
+		Select("wpr.workspace_id").
+		Joins("JOIN projects p ON p.id = wpr.project_id").
+		Where("p.org_id = ?", workspaceOrgID).
+		Group("wpr.workspace_id").
+		Having("COUNT(*) = 1")
 
 	// 查询所有允许访问的workspace
 	// 1. outputs_sharing = 'all' 的workspace
@@ -608,7 +687,7 @@ func (c *WorkspaceRemoteDataController) GetAccessibleWorkspaces(ctx *gin.Context
 	var accessibleWorkspaces []models.Workspace
 
 	// 查询 outputs_sharing = 'all' 的workspace（排除自己）
-	c.db.Where("outputs_sharing = ? AND workspace_id != ?", "all", workspace.WorkspaceID).
+	c.db.Where("outputs_sharing = ? AND workspace_id != ? AND workspace_id IN (?)", "all", workspace.WorkspaceID, tenantWorkspaceIDs).
 		Find(&accessibleWorkspaces)
 
 	// 查询 outputs_sharing = 'specific' 且允许当前workspace访问的
@@ -619,7 +698,7 @@ func (c *WorkspaceRemoteDataController) GetAccessibleWorkspaces(ctx *gin.Context
 
 	if len(specificWorkspaceIDs) > 0 {
 		var specificWorkspaces []models.Workspace
-		c.db.Where("workspace_id IN ? AND outputs_sharing = ?", specificWorkspaceIDs, "specific").
+		c.db.Where("workspace_id IN ? AND outputs_sharing = ? AND workspace_id IN (?)", specificWorkspaceIDs, "specific", tenantWorkspaceIDs).
 			Find(&specificWorkspaces)
 		accessibleWorkspaces = append(accessibleWorkspaces, specificWorkspaces...)
 	}
@@ -679,6 +758,14 @@ func (c *WorkspaceRemoteDataController) UpdateOutputsSharing(ctx *gin.Context) {
 		})
 		return
 	}
+	workspaceOrgID, err := workspaceTenantOrgID(ctx.Request.Context(), c.db, workspace.WorkspaceID)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "Workspace不存在",
+		})
+		return
+	}
 
 	var req struct {
 		SharingMode         string   `json:"sharing_mode" binding:"required"` // none, all, specific
@@ -703,7 +790,41 @@ func (c *WorkspaceRemoteDataController) UpdateOutputsSharing(ctx *gin.Context) {
 	}
 
 	userID, _ := ctx.Get("user_id")
-	uid := userID.(string)
+	uid, ok := userID.(string)
+	if !ok || uid == "" {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未认证用户",
+		})
+		return
+	}
+
+	// Validate the complete requested allow-list before mutating anything. A
+	// source workspace may never delegate outputs to a workspace from another
+	// organization, even when the caller happens to know its semantic ID.
+	if req.SharingMode == "specific" {
+		seen := make(map[string]struct{}, len(req.AllowedWorkspaceIDs))
+		for _, allowedID := range req.AllowedWorkspaceIDs {
+			if allowedID == "" || allowedID == workspace.WorkspaceID {
+				ctx.JSON(http.StatusBadRequest, gin.H{
+					"code":    400,
+					"message": "允许访问的Workspace无效",
+				})
+				return
+			}
+			if _, duplicate := seen[allowedID]; duplicate {
+				continue
+			}
+			seen[allowedID] = struct{}{}
+			if !c.workspaceBelongsToOrg(ctx.Request.Context(), allowedID, workspaceOrgID) {
+				ctx.JSON(http.StatusNotFound, gin.H{
+					"code":    404,
+					"message": "允许访问的Workspace不存在",
+				})
+				return
+			}
+		}
+	}
 
 	// 使用事务更新
 	err = c.db.Transaction(func(tx *gorm.DB) error {
@@ -721,14 +842,12 @@ func (c *WorkspaceRemoteDataController) UpdateOutputsSharing(ctx *gin.Context) {
 			}
 
 			// 添加新的访问权限
+			seen := make(map[string]struct{}, len(req.AllowedWorkspaceIDs))
 			for _, allowedID := range req.AllowedWorkspaceIDs {
-				// 验证workspace是否存在
-				var count int64
-				tx.Model(&models.Workspace{}).Where("workspace_id = ?", allowedID).Count(&count)
-				if count == 0 {
+				if _, duplicate := seen[allowedID]; duplicate {
 					continue
 				}
-
+				seen[allowedID] = struct{}{}
 				access := &models.WorkspaceOutputsAccess{
 					WorkspaceID:        workspace.WorkspaceID,
 					AllowedWorkspaceID: allowedID,
@@ -757,6 +876,7 @@ func (c *WorkspaceRemoteDataController) UpdateOutputsSharing(ctx *gin.Context) {
 		})
 		return
 	}
+	workspace.OutputsSharing = req.SharingMode
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"code":    200,
@@ -833,7 +953,16 @@ func (c *WorkspaceRemoteDataController) GetOutputsSharing(ctx *gin.Context) {
 }
 
 // canAccessOutputs 检查是否有权限访问目标workspace的outputs
-func (c *WorkspaceRemoteDataController) canAccessOutputs(requesterWorkspaceID, targetWorkspaceID string) bool {
+func (c *WorkspaceRemoteDataController) canAccessOutputs(ctx context.Context, requesterWorkspaceID, targetWorkspaceID string) bool {
+	requesterOrgID, err := workspaceTenantOrgID(ctx, c.db, requesterWorkspaceID)
+	if err != nil {
+		return false
+	}
+	targetOrgID, err := workspaceTenantOrgID(ctx, c.db, targetWorkspaceID)
+	if err != nil || requesterOrgID != targetOrgID {
+		return false
+	}
+
 	var targetWorkspace models.Workspace
 	if err := c.db.Where("workspace_id = ?", targetWorkspaceID).First(&targetWorkspace).Error; err != nil {
 		return false
@@ -862,7 +991,7 @@ func (c *WorkspaceRemoteDataController) GenerateRemoteDataToken(
 	taskID *uint,
 ) (*models.RemoteDataToken, error) {
 	// 检查是否有权限访问
-	if !c.canAccessOutputs(requesterWorkspaceID, targetWorkspaceID) {
+	if !c.canAccessOutputs(context.Background(), requesterWorkspaceID, targetWorkspaceID) {
 		return nil, fmt.Errorf("no permission to access outputs of workspace %s", targetWorkspaceID)
 	}
 

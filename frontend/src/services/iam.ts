@@ -1,4 +1,6 @@
-import api from './api';
+import api, { clearActiveOrgId, clearAuthOrgId, getAuthOrgId, setAuthOrgId } from './api';
+
+export { clearAuthOrgId, getAuthOrgId, setAuthOrgId };
 
 // ==================== 类型定义 ====================
 
@@ -38,6 +40,42 @@ export interface Organization {
   updated_at: string;
 }
 
+export interface AccessibleOrganizationsResponse {
+  organizations: Organization[];
+  total: number;
+  default_org_id?: number;
+  active_org_id: number | null;
+}
+
+/**
+ * 从服务端允许访问的组织中恢复 active org。仅当当前选择不存在或已不可见时才
+ * 回退到服务端默认组织，避免任一页面把用户刚刚选择的组织强制改回第一项。
+ */
+export function resolveActiveOrganization(
+  organizations: Organization[],
+  defaultOrgId?: number,
+): number | null {
+  const currentOrgId = getAuthOrgId();
+  const hasOrganization = (id: number | null | undefined) =>
+    id != null && organizations.some((organization) => organization.id === id);
+
+  const selectedOrgId = hasOrganization(currentOrgId)
+    ? currentOrgId
+    : hasOrganization(defaultOrgId)
+      ? defaultOrgId!
+      : organizations[0]?.id ?? null;
+
+  if (selectedOrgId != null) {
+    if (selectedOrgId !== currentOrgId) {
+      setAuthOrgId(selectedOrgId);
+    }
+  } else if (currentOrgId != null) {
+    // 成员资格被撤销或组织不可用时，不能继续把旧 tenant id 自动附到请求上。
+    clearActiveOrgId();
+  }
+  return selectedOrgId;
+}
+
 // 项目
 export interface Project {
   id: number;
@@ -69,11 +107,11 @@ export interface Team {
 // 团队成员
 export interface TeamMember {
   id: number;
-  team_id: number;
-  user_id: number;
+  team_id: string | number;
+  user_id: string | number;
   role: 'MEMBER' | 'MAINTAINER';
   joined_at: string;
-  joined_by?: number;
+  joined_by?: string | number;
 }
 
 // 应用
@@ -84,6 +122,8 @@ export interface Application {
   app_key: string;
   description: string;
   callback_urls: Record<string, any>;
+  /** 限制可访问 workspace 的 tag 匹配（AND）；空=不限制 */
+  workspace_tag_filter?: Record<string, string | string[]>;
   is_active: boolean;
   created_by?: number;
   created_at: string;
@@ -210,6 +250,7 @@ export interface CreateApplicationRequest {
   name: string;
   description?: string;
   callback_urls?: Record<string, any>;
+  workspace_tag_filter?: Record<string, string | string[]>;
   expires_at?: string;
 }
 
@@ -217,6 +258,8 @@ export interface UpdateApplicationRequest {
   name?: string;
   description?: string;
   callback_urls?: Record<string, any>;
+  workspace_tag_filter?: Record<string, string | string[]>;
+  clear_workspace_tag_filter?: boolean;
   is_active?: boolean;
   expires_at?: string;
 }
@@ -271,7 +314,31 @@ export const iamService = {
   // 获取组织列表
   listOrganizations: async (isActive?: boolean): Promise<{ organizations: Organization[]; total: number }> => {
     const params = isActive !== undefined ? { is_active: isActive } : {};
-    return await api.get('/iam/organizations', { params });
+    const result = await api.get('/iam/organizations', { params }) as {
+      organizations: Organization[];
+      total: number;
+    };
+    return result;
+  },
+
+  /**
+   * IAM bootstrap 专用端点：已认证但不需要 org_id，返回当前用户可访问的组织。
+   * 不要用全量 organization 管理接口做启动发现，否则无 active org 时会形成
+   * IAM 中间件的 org_id 死锁。
+   */
+  bootstrapActiveOrganization: async (): Promise<AccessibleOrganizationsResponse> => {
+    const result = await api.get('/iam/organizations/accessible') as {
+      organizations?: Organization[];
+      total?: number;
+      default_org_id?: number;
+    };
+    const organizations = result.organizations || [];
+    return {
+      organizations,
+      total: result.total ?? organizations.length,
+      default_org_id: result.default_org_id,
+      active_org_id: resolveActiveOrganization(organizations, result.default_org_id),
+    };
   },
 
   // 获取组织详情
@@ -343,8 +410,8 @@ export const iamService = {
     return await api.post(`/iam/teams/${teamId}/members`, request);
   },
 
-  // 移除团队成员
-  removeTeamMember: async (teamId: string, userId: number): Promise<any> => {
+  // 移除团队成员（user_id 后端为语义化字符串）
+  removeTeamMember: async (teamId: string, userId: string | number): Promise<any> => {
     return await api.delete(`/iam/teams/${teamId}/members/${userId}`);
   },
 
@@ -368,9 +435,9 @@ export const iamService = {
     return await api.get(`/iam/teams/${teamId}/tokens`);
   },
 
-  // 吊销团队Token
-  revokeTeamToken: async (teamId: string, tokenId: number): Promise<{ message: string }> => {
-    return await api.delete(`/iam/teams/${teamId}/tokens/${tokenId}`);
+  // 吊销团队Token（按 token_name 标识，与列表返回字段一致）
+  revokeTeamToken: async (teamId: string, tokenName: string): Promise<{ message: string }> => {
+    return await api.delete(`/iam/teams/${teamId}/tokens/${encodeURIComponent(tokenName)}`);
   },
 
   // ==================== 应用管理 ====================
@@ -483,12 +550,12 @@ export const iamService = {
     return await api.post(`/iam/users/${id}/deactivate`);
   },
 
-  // 创建用户
+  // 创建用户（role 可选，后端可默认）
   createUser: async (data: {
     username: string;
     email: string;
     password: string;
-    role: string;
+    role?: string;
   }): Promise<any> => {
     return await api.post('/iam/users', data);
   },

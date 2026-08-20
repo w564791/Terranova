@@ -1,4 +1,4 @@
-import api from './api';
+import api, { apiFetch } from './api';
 
 // CMDB Overview 观测面板数据
 export interface CMDBOverview {
@@ -360,33 +360,11 @@ export const cmdbService = {
     onProgress?: (event: SearchSummaryProgressEvent) => void,
     signal?: AbortSignal
   ): Promise<SearchSummaryResult> => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('未登录');
-    }
-
-    // 与 api.ts getApiBaseUrl 一致
-    let base: string;
-    if (import.meta.env.VITE_API_BASE_URL) {
-      base = import.meta.env.VITE_API_BASE_URL as string;
-    } else {
-      const protocol = window.location.protocol;
-      const hostname = window.location.hostname;
-      const apiPort = window.location.port === '5173' ? '8080' : window.location.port;
-      base = apiPort
-        ? `${protocol}//${hostname}:${apiPort}/api/v1`
-        : `${protocol}//${hostname}/api/v1`;
-    }
-
     const payload = buildSearchSummaryPayload(query, results);
-    const url = `${base}/ai/cmdb/search-summary-sse`;
 
-    console.log('[cmdb] searchSummarySSE start', { url, query, resultCount: payload.results.length });
-
-    const response = await fetch(url, {
+    const response = await apiFetch('/ai/cmdb/search-summary-sse', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },

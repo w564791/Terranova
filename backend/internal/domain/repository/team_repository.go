@@ -29,6 +29,11 @@ type TeamRepository interface {
 	// AddMember 添加团队成员
 	AddMember(ctx context.Context, member *entity.TeamMember) error
 
+	// AddMemberWithOrganizationMembership atomically adds a team member and
+	// ensures that the user can establish the team organization's tenant
+	// context. The organization membership is idempotent.
+	AddMemberWithOrganizationMembership(ctx context.Context, member *entity.TeamMember, orgID uint) error
+
 	// RemoveMember 移除团队成员
 	RemoveMember(ctx context.Context, teamID string, userID string) error
 

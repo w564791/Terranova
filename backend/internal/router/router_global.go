@@ -9,190 +9,100 @@ import (
 	"gorm.io/gorm"
 )
 
-// setupGlobalRoutes sets up global settings routes
-func setupGlobalRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
-	globalSettings := protected.Group("/global/settings")
+// setupGlobalRoutes sets up platform-global settings routes.
+//
+// None of the resources below carry an organization identifier. Authorizing
+// them with an organization-scoped IAM grant lets an administrator in any
+// tenant change settings for every tenant. Keep the whole group behind the
+// platform-admin boundary instead of trying to infer a tenant from the request.
+func setupGlobalRoutes(protected *gin.RouterGroup, db *gorm.DB, _ *middleware.IAMPermissionMiddleware) {
+	globalSettings := protected.Group("/global/settings", middleware.RequireSystemAdmin())
 	{
 		// Terraform版本管理
 		tfVersionController := controllers.NewTerraformVersionController(db)
 
-		globalSettings.GET("/terraform-versions",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ"),
-			tfVersionController.ListTerraformVersions,
-		)
+		globalSettings.GET("/terraform-versions", tfVersionController.ListTerraformVersions)
 
-		globalSettings.GET("/terraform-versions/default",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ"),
-			tfVersionController.GetDefaultVersion,
-		)
+		globalSettings.GET("/terraform-versions/default", tfVersionController.GetDefaultVersion)
 
-		globalSettings.GET("/terraform-versions/:id",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "READ"),
-			tfVersionController.GetTerraformVersion,
-		)
+		globalSettings.GET("/terraform-versions/:id", tfVersionController.GetTerraformVersion)
 
-		globalSettings.POST("/terraform-versions",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "WRITE"),
-			tfVersionController.CreateTerraformVersion,
-		)
+		globalSettings.POST("/terraform-versions", tfVersionController.CreateTerraformVersion)
 
-		globalSettings.PUT("/terraform-versions/:id",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "WRITE"),
-			tfVersionController.UpdateTerraformVersion,
-		)
+		globalSettings.PUT("/terraform-versions/:id", tfVersionController.UpdateTerraformVersion)
 
-		globalSettings.POST("/terraform-versions/:id/set-default",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "ADMIN"),
-			tfVersionController.SetDefaultVersion,
-		)
+		globalSettings.POST("/terraform-versions/:id/set-default", tfVersionController.SetDefaultVersion)
 
-		globalSettings.DELETE("/terraform-versions/:id",
-			iamMiddleware.RequirePermission("TERRAFORM_VERSIONS", "ORGANIZATION", "ADMIN"),
-			tfVersionController.DeleteTerraformVersion,
-		)
+		globalSettings.DELETE("/terraform-versions/:id", tfVersionController.DeleteTerraformVersion)
 
 		// Provider模板管理
 		ptController := controllers.NewProviderTemplateController(db)
 
-		globalSettings.GET("/provider-templates",
-			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "READ"),
-			ptController.ListProviderTemplates,
-		)
+		globalSettings.GET("/provider-templates", ptController.ListProviderTemplates)
 
-		globalSettings.GET("/provider-templates/:id",
-			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "READ"),
-			ptController.GetProviderTemplate,
-		)
+		globalSettings.GET("/provider-templates/:id", ptController.GetProviderTemplate)
 
-		globalSettings.POST("/provider-templates",
-			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "WRITE"),
-			ptController.CreateProviderTemplate,
-		)
+		globalSettings.POST("/provider-templates", ptController.CreateProviderTemplate)
 
-		globalSettings.PUT("/provider-templates/:id",
-			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "WRITE"),
-			ptController.UpdateProviderTemplate,
-		)
+		globalSettings.PUT("/provider-templates/:id", ptController.UpdateProviderTemplate)
 
-		globalSettings.POST("/provider-templates/:id/set-default",
-			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "ADMIN"),
-			ptController.SetDefaultTemplate,
-		)
+		globalSettings.POST("/provider-templates/:id/set-default", ptController.SetDefaultTemplate)
 
-		globalSettings.DELETE("/provider-templates/:id",
-			iamMiddleware.RequirePermission("PROVIDER_TEMPLATES", "ORGANIZATION", "ADMIN"),
-			ptController.DeleteProviderTemplate,
-		)
+		globalSettings.DELETE("/provider-templates/:id", ptController.DeleteProviderTemplate)
 
 		// AI配置管理
 		aiController := controllers.NewAIController(db)
 
-		globalSettings.GET("/ai-configs",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiController.ListConfigs,
-		)
+		globalSettings.GET("/ai-configs", aiController.ListConfigs)
 
-		globalSettings.POST("/ai-configs",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE"),
-			aiController.CreateConfig,
-		)
+		globalSettings.POST("/ai-configs", aiController.CreateConfig)
 
-		globalSettings.GET("/ai-configs/:id",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiController.GetConfig,
-		)
+		globalSettings.GET("/ai-configs/:id", aiController.GetConfig)
 
-		globalSettings.PUT("/ai-configs/:id",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE"),
-			aiController.UpdateConfig,
-		)
+		globalSettings.PUT("/ai-configs/:id", aiController.UpdateConfig)
 
-		globalSettings.DELETE("/ai-configs/:id",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN"),
-			aiController.DeleteConfig,
-		)
+		globalSettings.DELETE("/ai-configs/:id", aiController.DeleteConfig)
 
-		globalSettings.PUT("/ai-configs/priorities",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "WRITE"),
-			aiController.BatchUpdatePriorities,
-		)
+		globalSettings.PUT("/ai-configs/priorities", aiController.BatchUpdatePriorities)
 
-		globalSettings.PUT("/ai-configs/:id/set-default",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN"),
-			aiController.SetAsDefault,
-		)
+		globalSettings.PUT("/ai-configs/:id/set-default", aiController.SetAsDefault)
 
 		// AI 能力开关
 		aiFeatureController := controllers.NewAIFeatureController(db)
-		globalSettings.GET("/ai-features",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiFeatureController.GetFeatures,
-		)
-		globalSettings.PUT("/ai-features",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "ADMIN"),
-			aiFeatureController.UpdateFeatures,
-		)
+		globalSettings.GET("/ai-features", aiFeatureController.GetFeatures)
+		globalSettings.PUT("/ai-features", aiFeatureController.UpdateFeatures)
 
-		globalSettings.GET("/ai-config/regions",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiController.GetAvailableRegions,
-		)
+		globalSettings.GET("/ai-config/regions", aiController.GetAvailableRegions)
 
-		globalSettings.GET("/ai-config/models",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiController.GetAvailableModels,
-		)
+		globalSettings.GET("/ai-config/models", aiController.GetAvailableModels)
 
-		globalSettings.GET("/ai-config/inference-profiles",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiController.GetAvailableInferenceProfiles,
-		)
+		globalSettings.GET("/ai-config/inference-profiles", aiController.GetAvailableInferenceProfiles)
 
-		globalSettings.POST("/ai-config/openai-models",
-			iamMiddleware.RequirePermission("AI_CONFIGS", "ORGANIZATION", "READ"),
-			aiController.ListOpenAIModels,
-		)
+		globalSettings.POST("/ai-config/openai-models", aiController.ListOpenAIModels)
 
 		// 平台配置管理
 		platformConfigHandler := handlers.NewPlatformConfigHandler(db)
 
-		globalSettings.GET("/platform-config",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			platformConfigHandler.GetPlatformConfig,
-		)
+		globalSettings.GET("/platform-config", platformConfigHandler.GetPlatformConfig)
 
-		globalSettings.PUT("/platform-config",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
-			platformConfigHandler.UpdatePlatformConfig,
-		)
+		globalSettings.PUT("/platform-config", platformConfigHandler.UpdatePlatformConfig)
 
 		// MFA全局配置管理
 		mfaHandler := handlers.NewMFAHandler(db)
 
-		globalSettings.GET("/mfa",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
-			mfaHandler.GetMFAConfig,
-		)
+		globalSettings.GET("/mfa", mfaHandler.GetMFAConfig)
 
-		globalSettings.PUT("/mfa",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
-			mfaHandler.UpdateMFAConfig,
-		)
+		globalSettings.PUT("/mfa", mfaHandler.UpdateMFAConfig)
 	}
 
-	// 管理员用户MFA管理路由
-	adminUsers := protected.Group("/admin/users")
+	// MFA records are global user-identity data, so use the same platform-admin
+	// boundary as the global settings above.
+	adminUsers := protected.Group("/admin/users", middleware.RequireSystemAdmin())
 	{
 		mfaHandler := handlers.NewMFAHandler(db)
 
-		adminUsers.GET("/:user_id/mfa/status",
-			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "READ"),
-			mfaHandler.GetUserMFAStatus,
-		)
+		adminUsers.GET("/:user_id/mfa/status", mfaHandler.GetUserMFAStatus)
 
-		adminUsers.POST("/:user_id/mfa/reset",
-			iamMiddleware.RequirePermission("USER_MANAGEMENT", "ORGANIZATION", "ADMIN"),
-			mfaHandler.ResetUserMFA,
-		)
+		adminUsers.POST("/:user_id/mfa/reset", mfaHandler.ResetUserMFA)
 	}
 }

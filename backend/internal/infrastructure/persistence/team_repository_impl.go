@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"iac-platform/internal/domain/entity"
 	"iac-platform/internal/domain/repository"
@@ -85,6 +86,43 @@ func (r *TeamRepositoryImpl) AddMember(ctx context.Context, member *entity.TeamM
 		return fmt.Errorf("failed to add team member: %w", err)
 	}
 	return nil
+}
+
+// AddMemberWithOrganizationMembership keeps team membership and the explicit
+// tenant-membership bootstrap in one transaction. Permission evaluation uses
+// team_members directly, while /organizations/accessible uses
+// user_organizations; committing only one of them would make a user
+// authorized but unable to select the organization.
+func (r *TeamRepositoryImpl) AddMemberWithOrganizationMembership(
+	ctx context.Context,
+	member *entity.TeamMember,
+	orgID uint,
+) error {
+	if member == nil || orgID == 0 {
+		return fmt.Errorf("team member and organization are required")
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(member).Error; err != nil {
+			return fmt.Errorf("insert team member: %w", err)
+		}
+
+		membership := &entity.UserOrganization{
+			UserID:   member.UserID,
+			OrgID:    orgID,
+			JoinedAt: member.JoinedAt,
+		}
+		// The production schema has a unique (user_id, org_id) constraint. Do
+		// not overwrite an existing row: its joined_at records the original
+		// organization join rather than the latest team assignment.
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "org_id"}},
+			DoNothing: true,
+		}).Create(membership).Error; err != nil {
+			return fmt.Errorf("ensure organization membership: %w", err)
+		}
+		return nil
+	})
 }
 
 // RemoveMember 移除团队成员

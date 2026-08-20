@@ -27,6 +27,58 @@ func NewCMDBService(db *gorm.DB) *CMDBService {
 	}
 }
 
+// organizationWorkspaceIDs is the canonical tenant fence for CMDB records.
+// CMDB rows are owned through workspace_project_relations -> projects.org_id;
+// do not derive access from user-controlled workspace IDs alone.
+func (s *CMDBService) organizationWorkspaceIDs(orgID uint) *gorm.DB {
+	return s.db.Table("workspace_project_relations AS wpr").
+		Select("wpr.workspace_id").
+		Joins("JOIN projects p ON p.id = wpr.project_id").
+		Group("wpr.workspace_id").
+		Having("COUNT(*) = 1 AND MIN(p.org_id) = ?", orgID)
+}
+
+// scopeOrganizationWorkspaces constrains a CMDB query to workspaces in orgID.
+// workspaceColumn is an internal SQL identifier (never user input), such as
+// "workspace_id" or "ri.workspace_id".
+func (s *CMDBService) scopeOrganizationWorkspaces(db *gorm.DB, workspaceColumn string, orgID uint) *gorm.DB {
+	if orgID == 0 {
+		return db.Where("1 = 0")
+	}
+	return db.Where(workspaceColumn+" IN (?)", s.organizationWorkspaceIDs(orgID))
+}
+
+func (s *CMDBService) ensureWorkspaceInOrganization(orgID uint, workspaceID string) error {
+	if orgID == 0 || workspaceID == "" {
+		return fmt.Errorf("organization and workspace_id are required")
+	}
+
+	var binding struct {
+		RelationCount int64 `gorm:"column:relation_count"`
+		OrgID         uint  `gorm:"column:org_id"`
+	}
+	err := s.db.Table("workspace_project_relations AS wpr").
+		Select("COUNT(*) AS relation_count, MIN(p.org_id) AS org_id").
+		Joins("JOIN projects p ON p.id = wpr.project_id").
+		Where("wpr.workspace_id = ?", workspaceID).
+		Scan(&binding).Error
+	if err != nil {
+		return err
+	}
+	if binding.RelationCount != 1 || binding.OrgID != orgID {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (s *CMDBService) resourceIndexQuery(orgID uint) *gorm.DB {
+	db := s.db.Model(&models.ResourceIndex{})
+	if orgID > 0 {
+		return s.scopeOrganizationWorkspaces(db, "workspace_id", orgID)
+	}
+	return db
+}
+
 // ResourceNameExtractor 资源名称提取器
 type ResourceNameExtractor struct {
 	fallbackRules map[string][]string
@@ -183,10 +235,10 @@ func (s *CMDBService) SyncWorkspaceResources(workspaceID string, triggeredBy ...
 	// 更新 sync log
 	now := time.Now()
 	s.db.Model(&syncLog).Updates(map[string]interface{}{
-		"status":           models.SyncStatusSuccess,
-		"completed_at":     now,
-		"resources_synced": counts.Added + counts.Updated,
-		"resources_added":  counts.Added,
+		"status":            models.SyncStatusSuccess,
+		"completed_at":      now,
+		"resources_synced":  counts.Added + counts.Updated,
+		"resources_added":   counts.Added,
 		"resources_updated": counts.Updated,
 		"resources_deleted": counts.Deleted,
 	})
@@ -604,6 +656,19 @@ const jumpURLSelectSQL = `
 
 // SearchResources 搜索资源
 func (s *CMDBService) SearchResources(query string, workspaceID string, resourceType string, limit int) ([]models.ResourceSearchResult, error) {
+	return s.searchResources(query, workspaceID, resourceType, limit, 0)
+}
+
+// SearchResourcesInOrganization searches only resources whose workspace is
+// bound to orgID. This is the tenant-safe variant for HTTP handlers.
+func (s *CMDBService) SearchResourcesInOrganization(orgID uint, query string, workspaceID string, resourceType string, limit int) ([]models.ResourceSearchResult, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
+	return s.searchResources(query, workspaceID, resourceType, limit, orgID)
+}
+
+func (s *CMDBService) searchResources(query string, workspaceID string, resourceType string, limit int, orgID uint) ([]models.ResourceSearchResult, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -655,7 +720,7 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 			END as match_rank
 		`, jumpURLSelectSQL), query, query, query, query+"%", query+"%", query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
 		Joins("LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id").
-		Joins("LEFT JOIN workspace_resources wr ON " + platformResourceJoinSQL).
+		Joins("LEFT JOIN workspace_resources wr ON "+platformResourceJoinSQL).
 		Joins("LEFT JOIN manifest_deployments md ON md.id = COALESCE(wr.manifest_deployment_id, w.manifest_deployment_id)").
 		Joins("LEFT JOIN manifests m ON m.id = md.manifest_id").
 		Joins("LEFT JOIN cmdb_external_sources es ON ri.external_source_id = es.source_id").
@@ -667,6 +732,10 @@ func (s *CMDBService) SearchResources(query string, workspaceID string, resource
 			ri.description ILIKE ? OR
 			ri.terraform_address ILIKE ?
 		`, "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%")
+
+	if orgID > 0 {
+		db = s.scopeOrganizationWorkspaces(db, "ri.workspace_id", orgID)
+	}
 
 	if workspaceID != "" {
 		db = db.Where("ri.workspace_id = ?", workspaceID)
@@ -808,6 +877,15 @@ func (s *CMDBService) GetWorkspaceResourceTree(workspaceID string) (*models.Work
 		TotalResources: len(resources),
 		Tree:           tree,
 	}, nil
+}
+
+// GetWorkspaceResourceTreeInOrganization returns a tree only after the
+// workspace-to-project relationship has been checked against orgID.
+func (s *CMDBService) GetWorkspaceResourceTreeInOrganization(orgID uint, workspaceID string) (*models.WorkspaceResourceTree, error) {
+	if err := s.ensureWorkspaceInOrganization(orgID, workspaceID); err != nil {
+		return nil, err
+	}
+	return s.GetWorkspaceResourceTree(workspaceID)
 }
 
 // buildResourceTree 构建资源树
@@ -988,26 +1066,51 @@ func (s *CMDBService) GetResourceDetail(workspaceID, terraformAddress string) (*
 	return &resource, nil
 }
 
+// GetResourceDetailInOrganization returns a resource only from a workspace
+// owned by orgID.
+func (s *CMDBService) GetResourceDetailInOrganization(orgID uint, workspaceID, terraformAddress string) (*models.ResourceIndex, error) {
+	if err := s.ensureWorkspaceInOrganization(orgID, workspaceID); err != nil {
+		return nil, err
+	}
+	return s.GetResourceDetail(workspaceID, terraformAddress)
+}
+
 // GetCMDBStats 获取CMDB统计信息
 func (s *CMDBService) GetCMDBStats() (*models.CMDBStats, error) {
+	return s.getCMDBStats(0)
+}
+
+// GetCMDBStatsInOrganization returns aggregate CMDB statistics for one org.
+func (s *CMDBService) GetCMDBStatsInOrganization(orgID uint) (*models.CMDBStats, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
+	return s.getCMDBStats(orgID)
+}
+
+func (s *CMDBService) getCMDBStats(orgID uint) (*models.CMDBStats, error) {
 	var stats models.CMDBStats
 
 	// 统计workspace数量
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Select("COUNT(DISTINCT workspace_id)").
 		Scan(&stats.TotalWorkspaces)
 
 	// 统计资源数量
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Where("resource_mode = ?", "managed").
 		Count(&stats.TotalResources)
 
 	// 统计module数量
-	s.db.Model(&models.ModuleHierarchy{}).Count(&stats.TotalModules)
+	moduleQuery := s.db.Model(&models.ModuleHierarchy{})
+	if orgID > 0 {
+		moduleQuery = s.scopeOrganizationWorkspaces(moduleQuery, "workspace_id", orgID)
+	}
+	moduleQuery.Count(&stats.TotalModules)
 
 	// 资源类型统计
 	var typeStats []models.ResourceTypeStat
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Select("resource_type, COUNT(*) as count").
 		Where("resource_mode = ?", "managed").
 		Group("resource_type").
@@ -1018,7 +1121,7 @@ func (s *CMDBService) GetCMDBStats() (*models.CMDBStats, error) {
 
 	// 最后同步时间
 	var lastSynced time.Time
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Select("MAX(last_synced_at)").
 		Scan(&lastSynced)
 	if !lastSynced.IsZero() {
@@ -1030,33 +1133,49 @@ func (s *CMDBService) GetCMDBStats() (*models.CMDBStats, error) {
 
 // GetCMDBOverview 获取 CMDB 观测面板数据
 func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
+	return s.getCMDBOverview(0)
+}
+
+// GetCMDBOverviewInOrganization returns only workspace-backed CMDB metrics
+// for orgID. Global external-source records are deliberately omitted because
+// they currently have no organization ownership column.
+func (s *CMDBService) GetCMDBOverviewInOrganization(orgID uint) (*models.CMDBOverview, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
+	return s.getCMDBOverview(orgID)
+}
+
+func (s *CMDBService) getCMDBOverview(orgID uint) (*models.CMDBOverview, error) {
 	var overview models.CMDBOverview
 
 	// === Sources ===
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Where("source_type = ?", "terraform").
 		Select("COUNT(DISTINCT workspace_id)").
 		Scan(&overview.Sources.WorkspaceCount)
 
-	s.db.Model(&models.CMDBExternalSource{}).
-		Where("is_enabled = ?", true).
-		Count(&overview.Sources.ExternalSourceCount)
-	s.db.Model(&models.CMDBExternalSource{}).
-		Where("is_enabled = ? AND last_sync_status = ?", true, "success").
-		Count(&overview.Sources.ExternalSourceHealthy)
-	overview.Sources.ExternalSourceError = overview.Sources.ExternalSourceCount - overview.Sources.ExternalSourceHealthy
+	if orgID == 0 {
+		s.db.Model(&models.CMDBExternalSource{}).
+			Where("is_enabled = ?", true).
+			Count(&overview.Sources.ExternalSourceCount)
+		s.db.Model(&models.CMDBExternalSource{}).
+			Where("is_enabled = ? AND last_sync_status = ?", true, "success").
+			Count(&overview.Sources.ExternalSourceHealthy)
+		overview.Sources.ExternalSourceError = overview.Sources.ExternalSourceCount - overview.Sources.ExternalSourceHealthy
+	}
 
 	// === Resources ===
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Where("resource_mode = ?", "managed").
 		Count(&overview.Resources.Total)
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Where("resource_mode = ? AND source_type = ?", "managed", "terraform").
 		Count(&overview.Resources.FromWorkspace)
 	overview.Resources.FromExternal = overview.Resources.Total - overview.Resources.FromWorkspace
 
 	typeStats := make([]models.ResourceTypeStat, 0)
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Select("resource_type, COUNT(*) as count").
 		Where("resource_mode = ?", "managed").
 		Group("resource_type").Order("count DESC").Limit(10).
@@ -1065,7 +1184,7 @@ func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
 
 	// === Embedding ===
 	overview.Embedding.Total = overview.Resources.Total
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Where("resource_mode = ? AND embedding IS NOT NULL", "managed").
 		Count(&overview.Embedding.Completed)
 	if overview.Embedding.Total > 0 {
@@ -1074,7 +1193,7 @@ func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
 
 	// === Summary ===
 	overview.Summary.Total = overview.Resources.Total
-	s.db.Model(&models.ResourceIndex{}).
+	s.resourceIndexQuery(orgID).
 		Where("resource_mode = ? AND resource_summary IS NOT NULL AND resource_summary != ''", "managed").
 		Count(&overview.Summary.Completed)
 	if overview.Summary.Total > 0 {
@@ -1083,29 +1202,49 @@ func (s *CMDBService) GetCMDBOverview() (*models.CMDBOverview, error) {
 
 	// === Queue ===
 	// Workspace embedding 任务队列 (embedding_tasks)
-	s.db.Model(&models.EmbeddingTask{}).Where("status = ?", "pending").Count(&overview.Queue.EmbeddingPending)
-	s.db.Model(&models.EmbeddingTask{}).Where("status = ?", "processing").Count(&overview.Queue.EmbeddingProcessing)
-	s.db.Model(&models.EmbeddingTask{}).Where("status = ?", "failed").Count(&overview.Queue.EmbeddingFailed)
-	// 外部源 summary 任务队列 (cmdb_post_sync_jobs, job_type=summary)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "pending").Count(&overview.Queue.SummaryPending)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "processing").Count(&overview.Queue.SummaryProcessing)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "failed").Count(&overview.Queue.SummaryFailed)
-	// 外部源 embedding 任务队列 (cmdb_post_sync_jobs, job_type=embedding)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "pending").Count(&overview.Queue.ExtEmbeddingPending)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "processing").Count(&overview.Queue.ExtEmbeddingProcessing)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "failed").Count(&overview.Queue.ExtEmbeddingFailed)
-	// 外部源摘要评估任务队列 (cmdb_post_sync_jobs, job_type=summary_assessment)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "pending").Count(&overview.Queue.AssessmentPending)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "processing").Count(&overview.Queue.AssessmentProcessing)
-	s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "failed").Count(&overview.Queue.AssessmentFailed)
+	embeddingTasks := func() *gorm.DB {
+		db := s.db.Model(&models.EmbeddingTask{})
+		if orgID > 0 {
+			return s.scopeOrganizationWorkspaces(db, "workspace_id", orgID)
+		}
+		return db
+	}
+	embeddingTasks().Where("status = ?", "pending").Count(&overview.Queue.EmbeddingPending)
+	embeddingTasks().Where("status = ?", "processing").Count(&overview.Queue.EmbeddingProcessing)
+	embeddingTasks().Where("status = ?", "failed").Count(&overview.Queue.EmbeddingFailed)
+	if orgID == 0 {
+		// 外部源任务目前没有 organization ownership；仅平台级概览展示。
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "pending").Count(&overview.Queue.SummaryPending)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "processing").Count(&overview.Queue.SummaryProcessing)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "summary", "failed").Count(&overview.Queue.SummaryFailed)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "pending").Count(&overview.Queue.ExtEmbeddingPending)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "processing").Count(&overview.Queue.ExtEmbeddingProcessing)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", "embedding", "failed").Count(&overview.Queue.ExtEmbeddingFailed)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "pending").Count(&overview.Queue.AssessmentPending)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "processing").Count(&overview.Queue.AssessmentProcessing)
+		s.db.Model(&models.PostSyncJob{}).Where("job_type = ? AND status = ?", models.PostSyncJobTypeSummaryAssessment, "failed").Count(&overview.Queue.AssessmentFailed)
+	}
 	// 资源级别：L2/L3 评估待补偿
-	s.db.Model(&models.ResourceIndex{}).Where("summary_assessment_status = ?", string(models.AssessmentStatusPartial)).Count(&overview.Queue.AssessmentPartial)
+	s.resourceIndexQuery(orgID).Where("summary_assessment_status = ?", string(models.AssessmentStatusPartial)).Count(&overview.Queue.AssessmentPartial)
 
 	return &overview, nil
 }
 
 // GetSyncHistory 获取同步历史（分页）
 func (s *CMDBService) GetSyncHistory(page, size int) (*models.CMDBSyncHistoryResponse, error) {
+	return s.getSyncHistory(page, size, 0)
+}
+
+// GetSyncHistoryInOrganization returns only workspace sync records whose
+// workspace is bound to orgID. External-source logs remain platform-only.
+func (s *CMDBService) GetSyncHistoryInOrganization(orgID uint, page, size int) (*models.CMDBSyncHistoryResponse, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
+	return s.getSyncHistory(page, size, orgID)
+}
+
+func (s *CMDBService) getSyncHistory(page, size int, orgID uint) (*models.CMDBSyncHistoryResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -1114,14 +1253,26 @@ func (s *CMDBService) GetSyncHistory(page, size int) (*models.CMDBSyncHistoryRes
 	}
 
 	var total int64
-	s.db.Table("cmdb_sync_logs").Count(&total)
+	query := s.db.Table("cmdb_sync_logs")
+	if orgID > 0 {
+		query = s.db.Table("cmdb_sync_logs AS l").Where("l.source_type = ?", "workspace")
+		query = s.scopeOrganizationWorkspaces(query, "l.source_id", orgID)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	syncs := make([]models.CMDBRecentSync, 0)
-	s.db.Table("cmdb_sync_logs").
+	if orgID > 0 {
+		query = query.Select("l.*")
+	}
+	if err := query.
 		Order("started_at DESC").
 		Offset((page - 1) * size).
 		Limit(size).
-		Scan(&syncs)
+		Scan(&syncs).Error; err != nil {
+		return nil, err
+	}
 
 	return &models.CMDBSyncHistoryResponse{
 		Syncs: syncs,
@@ -1148,11 +1299,56 @@ func (s *CMDBService) SyncAllWorkspaces() error {
 	return nil
 }
 
+// SyncWorkspaceResourcesInOrganization syncs one workspace only after it has
+// been bound to orgID.
+func (s *CMDBService) SyncWorkspaceResourcesInOrganization(orgID uint, workspaceID string, triggeredBy ...string) error {
+	if err := s.ensureWorkspaceInOrganization(orgID, workspaceID); err != nil {
+		return err
+	}
+	return s.SyncWorkspaceResources(workspaceID, triggeredBy...)
+}
+
+// SyncAllWorkspacesInOrganization schedules work only for workspaces owned by
+// orgID. It must be used by the organization-scoped CMDB sync-all endpoint.
+func (s *CMDBService) SyncAllWorkspacesInOrganization(orgID uint) error {
+	if orgID == 0 {
+		return fmt.Errorf("organization is required")
+	}
+
+	var workspaces []models.Workspace
+	if err := s.db.Model(&models.Workspace{}).
+		Where("workspace_id IN (?)", s.organizationWorkspaceIDs(orgID)).
+		Find(&workspaces).Error; err != nil {
+		return err
+	}
+
+	for _, ws := range workspaces {
+		if err := s.SyncWorkspaceResources(ws.WorkspaceID); err != nil {
+			log.Printf("[CMDB] Failed to sync workspace %s: %v", ws.WorkspaceID, err)
+		}
+	}
+
+	return nil
+}
+
 // GetWorkspaceResourceCounts 获取所有workspace的资源数量统计
 func (s *CMDBService) GetWorkspaceResourceCounts() ([]models.WorkspaceResourceCount, error) {
+	return s.getWorkspaceResourceCounts(0)
+}
+
+// GetWorkspaceResourceCountsInOrganization returns counts only from
+// workspaces owned by orgID.
+func (s *CMDBService) GetWorkspaceResourceCountsInOrganization(orgID uint) ([]models.WorkspaceResourceCount, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
+	return s.getWorkspaceResourceCounts(orgID)
+}
+
+func (s *CMDBService) getWorkspaceResourceCounts(orgID uint) ([]models.WorkspaceResourceCount, error) {
 	var counts []models.WorkspaceResourceCount
 
-	err := s.db.Table("resource_index ri").
+	query := s.db.Table("resource_index ri").
 		Select(`
 			ri.workspace_id,
 			w.name as workspace_name,
@@ -1162,8 +1358,11 @@ func (s *CMDBService) GetWorkspaceResourceCounts() ([]models.WorkspaceResourceCo
 		Joins("LEFT JOIN workspaces w ON ri.workspace_id = w.workspace_id").
 		Where("ri.resource_mode = ?", "managed").
 		Group("ri.workspace_id, w.name").
-		Order("w.name").
-		Scan(&counts).Error
+		Order("w.name")
+	if orgID > 0 {
+		query = s.scopeOrganizationWorkspaces(query, "ri.workspace_id", orgID)
+	}
+	err := query.Scan(&counts).Error
 
 	if err != nil {
 		return nil, err
@@ -1440,6 +1639,27 @@ func (s *CMDBService) extractValueByField(cloudID, cloudName, cloudARN, cloudReg
 
 // GetSearchSuggestions 获取搜索建议
 func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSuggestion, error) {
+	return s.getSearchSuggestions(prefix, limit, 0)
+}
+
+// GetSearchSuggestionsInOrganization returns suggestions from the caller's
+// organization only.
+func (s *CMDBService) GetSearchSuggestionsInOrganization(orgID uint, prefix string, limit int) ([]SearchSuggestion, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("organization is required")
+	}
+	return s.getSearchSuggestions(prefix, limit, orgID)
+}
+
+func (s *CMDBService) searchSuggestionQuery(orgID uint) *gorm.DB {
+	db := s.db.Table("resource_index")
+	if orgID > 0 {
+		return s.scopeOrganizationWorkspaces(db, "resource_index.workspace_id", orgID)
+	}
+	return db
+}
+
+func (s *CMDBService) getSearchSuggestions(prefix string, limit int, orgID uint) ([]SearchSuggestion, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -1457,7 +1677,7 @@ func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSu
 		ResourceType    string `gorm:"column:resource_type"`
 		SourceType      string `gorm:"column:source_type"`
 	}
-	s.db.Table("resource_index").
+	s.searchSuggestionQuery(orgID).
 		Select("DISTINCT cloud_resource_id, resource_type, source_type").
 		Where("resource_mode = ? AND cloud_resource_id ILIKE ?", "managed", searchPattern).
 		Limit(limit).
@@ -1484,7 +1704,7 @@ func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSu
 			ResourceType     string `gorm:"column:resource_type"`
 			SourceType       string `gorm:"column:source_type"`
 		}
-		s.db.Table("resource_index").
+		s.searchSuggestionQuery(orgID).
 			Select("DISTINCT cloud_resource_arn, resource_type, source_type").
 			Where("resource_mode = ? AND cloud_resource_arn ILIKE ? AND cloud_resource_arn != ''", "managed", containsPattern).
 			Limit(remaining).
@@ -1516,7 +1736,7 @@ func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSu
 			ResourceType      string `gorm:"column:resource_type"`
 			SourceType        string `gorm:"column:source_type"`
 		}
-		s.db.Table("resource_index").
+		s.searchSuggestionQuery(orgID).
 			Select("DISTINCT cloud_resource_name, resource_type, source_type").
 			Where("resource_mode = ? AND cloud_resource_name ILIKE ? AND cloud_resource_name != ''", "managed", containsPattern).
 			Limit(remaining).
@@ -1544,7 +1764,7 @@ func (s *CMDBService) GetSearchSuggestions(prefix string, limit int) ([]SearchSu
 			ResourceType string `gorm:"column:resource_type"`
 			SourceType   string `gorm:"column:source_type"`
 		}
-		s.db.Table("resource_index").
+		s.searchSuggestionQuery(orgID).
 			Select("DISTINCT description, resource_type, source_type").
 			Where("resource_mode = ? AND description ILIKE ? AND description != ''", "managed", containsPattern).
 			Limit(remaining).

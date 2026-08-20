@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 
@@ -16,13 +17,15 @@ import (
 type RunTriggerHandler struct {
 	db      *gorm.DB
 	service *services.RunTriggerService
+	iam     *middleware.IAMPermissionMiddleware
 }
 
 // NewRunTriggerHandler 创建 RunTriggerHandler 实例
-func NewRunTriggerHandler(db *gorm.DB) *RunTriggerHandler {
+func NewRunTriggerHandler(db *gorm.DB, iam *middleware.IAMPermissionMiddleware) *RunTriggerHandler {
 	return &RunTriggerHandler{
 		db:      db,
 		service: services.NewRunTriggerService(db),
+		iam:     iam,
 	}
 }
 
@@ -172,6 +175,15 @@ func (h *RunTriggerHandler) CreateInboundTrigger(c *gin.Context) {
 		return
 	}
 
+	// 对 source 写权限（被允许触发本 WS 的源）
+	if h.iam == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "IAM not configured"})
+		return
+	}
+	if !h.iam.RequireWorkspacePermission(c, req.SourceWorkspaceID, "WRITE") {
+		return
+	}
+
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
@@ -243,6 +255,15 @@ func (h *RunTriggerHandler) CreateRunTrigger(c *gin.Context) {
 		return
 	}
 
+	// 必须对 target 有 WRITE（防止把触发链指到无权限的 WS）C3
+	if h.iam == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "IAM not configured"})
+		return
+	}
+	if !h.iam.RequireWorkspacePermission(c, req.TargetWorkspaceID, "WRITE") {
+		return
+	}
+
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
@@ -289,6 +310,7 @@ func (h *RunTriggerHandler) CreateRunTrigger(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/run-triggers/{trigger_id} [put]
 // @Security BearerAuth
 func (h *RunTriggerHandler) UpdateRunTrigger(c *gin.Context) {
+	sourceWorkspaceID := c.Param("id")
 	triggerID, err := strconv.ParseUint(c.Param("trigger_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid trigger ID"})
@@ -312,7 +334,11 @@ func (h *RunTriggerHandler) UpdateRunTrigger(c *gin.Context) {
 		updates["enabled"] = *req.Enabled
 	}
 
-	if err := h.service.UpdateRunTrigger(uint(triggerID), updates); err != nil {
+	if err := h.service.UpdateRunTriggerInSource(uint(triggerID), sourceWorkspaceID, updates); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Run trigger not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update run trigger"})
 		return
 	}
@@ -334,13 +360,18 @@ func (h *RunTriggerHandler) UpdateRunTrigger(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/run-triggers/{trigger_id} [delete]
 // @Security BearerAuth
 func (h *RunTriggerHandler) DeleteRunTrigger(c *gin.Context) {
+	sourceWorkspaceID := c.Param("id")
 	triggerID, err := strconv.ParseUint(c.Param("trigger_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid trigger ID"})
 		return
 	}
 
-	if err := h.service.DeleteRunTrigger(uint(triggerID)); err != nil {
+	if err := h.service.DeleteRunTriggerInSource(uint(triggerID), sourceWorkspaceID); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Run trigger not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete run trigger"})
 		return
 	}
@@ -366,6 +397,13 @@ func (h *RunTriggerHandler) GetTaskTriggerExecutions(c *gin.Context) {
 	taskID, err := strconv.ParseUint(c.Param("task_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	// task 必须属于 path workspace
+	var task models.WorkspaceTask
+	if err := h.db.Select("id", "workspace_id").Where("id = ? AND workspace_id = ?", taskID, workspaceID).First(&task).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
 	}
 
@@ -425,9 +463,30 @@ func (h *RunTriggerHandler) GetTaskTriggerExecutions(c *gin.Context) {
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/trigger-executions/{execution_id}/toggle [post]
 // @Security BearerAuth
 func (h *RunTriggerHandler) ToggleTriggerExecution(c *gin.Context) {
+	workspaceID := c.Param("id")
+	taskID, err := strconv.ParseUint(c.Param("task_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 	executionID, err := strconv.ParseUint(c.Param("execution_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid execution ID"})
+		return
+	}
+
+	// task 必须属于 path workspace
+	var task models.WorkspaceTask
+	if err := h.db.Select("id").Where("id = ? AND workspace_id = ?", taskID, workspaceID).First(&task).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+	// execution 必须属于该 task
+	var execCount int64
+	if err := h.db.Table("run_trigger_executions").
+		Where("id = ? AND source_task_id = ?", executionID, taskID).
+		Count(&execCount).Error; err != nil || execCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Trigger execution not found"})
 		return
 	}
 

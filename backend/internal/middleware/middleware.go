@@ -130,40 +130,44 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		// 兼容新旧格式的user_id
-		userIDSet := false
-		userIDValue := claims["user_id"]
+		// 先识别 token 类型：team_token 以 team 为主体，不要求 user_id
+		tokenType, _ := claims["type"].(string)
+		c.Set("token_type", tokenType)
 
-		switch v := userIDValue.(type) {
-		case string:
-			// 新格式: string类型
-			c.Set("user_id", v)
-			userIDSet = true
-		case float64:
-			// 旧格式: 数字类型,转换为新格式
-			c.Set("user_id", fmt.Sprintf("user-%d", uint(v)))
-			userIDSet = true
-		case int, int64, uint, uint64:
-			// 其他数字类型
-			c.Set("user_id", fmt.Sprintf("user-%v", v))
-			userIDSet = true
+		if tokenType != "team_token" {
+			// 兼容新旧格式的 user_id（login / user token）
+			userIDSet := false
+			userIDValue := claims["user_id"]
+
+			switch v := userIDValue.(type) {
+			case string:
+				c.Set("user_id", v)
+				userIDSet = true
+			case float64:
+				c.Set("user_id", fmt.Sprintf("user-%d", uint(v)))
+				userIDSet = true
+			case int, int64, uint, uint64:
+				c.Set("user_id", fmt.Sprintf("user-%v", v))
+				userIDSet = true
+			}
+
+			if !userIDSet {
+				log.Printf("[JWT] Invalid user_id type in token: %T", userIDValue)
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"code":      401,
+					"message":   "Invalid token",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+
+			c.Set("username", claims["username"])
+			c.Set("principal_type", "USER")
+			c.Set("principal_id", c.GetString("user_id"))
 		}
-
-		if !userIDSet {
-			log.Printf("[JWT] Invalid user_id type in token: %T", userIDValue)
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"code":      401,
-				"message":   "Invalid token",
-				"timestamp": time.Now(),
-			})
-			c.Abort()
-			return
-		}
-
-		c.Set("username", claims["username"])
 
 		// 检查token类型并验证
-		tokenType, _ := claims["type"].(string)
 		if tokenType == "login_token" {
 			// Login token: 必须验证session_id在数据库中存在且有效
 			sessionID, _ := claims["session_id"].(string)
@@ -340,13 +344,14 @@ func JWTAuth() gin.HandlerFunc {
 			tokenIDHash := sha256.Sum256([]byte(tokenID))
 			tokenIDHashStr := base64.StdEncoding.EncodeToString(tokenIDHash[:])
 
-			// 验证token在数据库中存在且有效（使用hash）
+			// 验证 token 存在、活跃，并强制检查 DB expires_at（含旧无 JWT exp 的 token）
 			var dbToken struct {
-				TeamID   string
-				IsActive bool
+				TeamID    string
+				IsActive  bool
+				ExpiresAt *time.Time
 			}
 			err := globalDB.Table("team_tokens").
-				Select("team_id, is_active").
+				Select("team_id, is_active, expires_at").
 				Where("token_id_hash = ? AND is_active = ?", tokenIDHashStr, true).
 				First(&dbToken).Error
 
@@ -359,13 +364,41 @@ func JWTAuth() gin.HandlerFunc {
 				c.Abort()
 				return
 			}
+			// 禁止永不过期：expires_at 必须存在且未过期（B-2 / D4）
+			if dbToken.ExpiresAt == nil {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"code":      401,
+					"message":   "Team token has no expiry (forbidden); reissue required",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			if dbToken.ExpiresAt.Before(time.Now()) {
+				// 惰性失效：标记 inactive 并拒绝
+				globalDB.Table("team_tokens").
+					Where("token_id_hash = ?", tokenIDHashStr).
+					Updates(map[string]interface{}{
+						"is_active":  false,
+						"revoked_at": time.Now(),
+						"revoked_by": "system:expired",
+					})
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"code":      401,
+					"message":   "Team token has expired",
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
 
-			// Team token不需要login session检查，可以长期使用
-			// 设置team_id到context
+			// Team token：主体为 TEAM，不要求 login session
 			c.Set("team_id", dbToken.TeamID)
-
-			// Team token使用团队的权限，不设置user role
-			// 权限检查会基于team_id进行
+			c.Set("principal_type", "TEAM")
+			c.Set("principal_id", dbToken.TeamID)
+			// IAM 中间件当前仍读 user_id；设置稳定合成主体，后续 checker 按 TEAM 求值
+			c.Set("user_id", "team:"+dbToken.TeamID)
+			c.Set("username", "team:"+dbToken.TeamID)
 		} else {
 			// 没有type字段的token - 拒绝访问（不再兼容旧格式）
 			c.JSON(http.StatusUnauthorized, gin.H{

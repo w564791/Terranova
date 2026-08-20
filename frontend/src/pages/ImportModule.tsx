@@ -417,7 +417,7 @@ const ImportModule: React.FC = () => {
           <div className={styles.jsonEditorWrapper}>
             <MonacoJsonEditor
               value={jsonConfig}
-              onChange={setJsonConfig}
+              onChange={(v) => setJsonConfig(typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 2))}
               minHeight={300}
             />
           </div>

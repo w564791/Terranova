@@ -56,13 +56,28 @@ func (c *AICMDBController) GenerateConfigWithCMDB(ctx *gin.Context) {
 		return
 	}
 
+	tenantScope, err := resolveAICMDBTenantScope(
+		ctx,
+		c.db,
+		req.ContextIDs.OrganizationID,
+		req.ContextIDs.WorkspaceID,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求上下文不属于当前组织",
+		})
+		return
+	}
+
 	// 调用服务
 	response, err := c.service.GenerateConfigWithCMDB(
 		userID.(string),
 		req.ModuleID,
 		req.UserDescription,
-		req.ContextIDs.WorkspaceID,
-		req.ContextIDs.OrganizationID,
+		tenantScope.workspaceID,
+		tenantScope.organizationID,
+		tenantScope.cmdbScope,
 		req.UserSelections,
 		req.CurrentConfig,
 		req.Mode,

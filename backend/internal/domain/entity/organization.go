@@ -55,10 +55,10 @@ func (p *Project) IsValid() bool {
 	return p.OrgID > 0 && p.Name != "" && len(p.Name) <= 100
 }
 
-// WorkspaceProjectRelation 工作空间-项目关联
+// WorkspaceProjectRelation 工作空间-项目关联（一对一：每个 workspace 至多一个 project）
 type WorkspaceProjectRelation struct {
 	ID          uint      `json:"id"`
-	WorkspaceID string    `json:"workspace_id" gorm:"type:varchar(50);not null"` // 语义化ID，如 ws-xxx
+	WorkspaceID string    `json:"workspace_id" gorm:"type:varchar(50);not null;uniqueIndex"` // 语义化ID，如 ws-xxx
 	ProjectID   uint      `json:"project_id"`
 	CreatedAt   time.Time `json:"created_at"`
 

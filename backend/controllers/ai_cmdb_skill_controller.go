@@ -80,6 +80,19 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkill(ctx *gin.Context) {
 		return
 	}
 
+	tenantScope, scopeErr := resolveAICMDBTenantScope(
+		ctx,
+		c.db,
+		req.ContextIDs.OrganizationID,
+		req.ContextIDs.WorkspaceID,
+	)
+	if scopeErr != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "请求上下文不属于当前组织",
+		})
+		return
+	}
+
 	// 设置默认模式
 	mode := req.Mode
 	if mode == "" {
@@ -107,8 +120,9 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkill(ctx *gin.Context) {
 			userID.(string),
 			req.ModuleID,
 			req.UserDescription,
-			req.ContextIDs.WorkspaceID,
-			req.ContextIDs.OrganizationID,
+			tenantScope.workspaceID,
+			tenantScope.organizationID,
+			tenantScope.cmdbScope,
 			req.UserSelections,
 			req.CurrentConfig,
 			mode,
@@ -120,8 +134,9 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkill(ctx *gin.Context) {
 			userID.(string),
 			req.ModuleID,
 			req.UserDescription,
-			req.ContextIDs.WorkspaceID,
-			req.ContextIDs.OrganizationID,
+			tenantScope.workspaceID,
+			tenantScope.organizationID,
+			tenantScope.cmdbScope,
 			req.UserSelections,
 			req.CurrentConfig,
 			mode,
@@ -178,6 +193,17 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkillSSE(ctx *gin.Context)
 		return
 	}
 
+	tenantScope, scopeErr := resolveAICMDBTenantScope(
+		ctx,
+		c.db,
+		req.ContextIDs.OrganizationID,
+		req.ContextIDs.WorkspaceID,
+	)
+	if scopeErr != nil {
+		c.sendSSEError(ctx, flusher, "请求上下文不属于当前组织", 0)
+		return
+	}
+
 	// 设置默认模式
 	mode := req.Mode
 	if mode == "" {
@@ -222,8 +248,9 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkillSSE(ctx *gin.Context)
 			userID.(string),
 			req.ModuleID,
 			req.UserDescription,
-			req.ContextIDs.WorkspaceID,
-			req.ContextIDs.OrganizationID,
+			tenantScope.workspaceID,
+			tenantScope.organizationID,
+			tenantScope.cmdbScope,
 			req.UserSelections,
 			req.CurrentConfig,
 			mode,
@@ -235,8 +262,9 @@ func (c *AICMDBSkillController) GenerateConfigWithCMDBSkillSSE(ctx *gin.Context)
 			userID.(string),
 			req.ModuleID,
 			req.UserDescription,
-			req.ContextIDs.WorkspaceID,
-			req.ContextIDs.OrganizationID,
+			tenantScope.workspaceID,
+			tenantScope.organizationID,
+			tenantScope.cmdbScope,
 			req.UserSelections,
 			req.CurrentConfig,
 			mode,

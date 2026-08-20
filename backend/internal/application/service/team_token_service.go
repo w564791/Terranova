@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"iac-platform/internal/config"
@@ -42,7 +43,7 @@ type TeamTokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateToken 生成团队Token
+// GenerateToken 生成团队Token（事务内配额/同名校验，降低并发突破风险 B-2）
 func (s *TeamTokenService) GenerateToken(ctx context.Context, teamID string, tokenName string, userID string, expiresInDays int) (*models.TeamTokenCreateResponse, error) {
 	// 检查团队是否存在
 	var team struct {
@@ -56,88 +57,94 @@ func (s *TeamTokenService) GenerateToken(ctx context.Context, teamID string, tok
 		return nil, err
 	}
 
-	// 检查有效token数量限制（最多2个）
-	var activeCount int64
-	if err := s.db.WithContext(ctx).Model(&models.TeamToken{}).
-		Where("team_id = ? AND is_active = ?", teamID, true).
-		Count(&activeCount).Error; err != nil {
-		return nil, err
+	// 规格：Team Token 默认/最长 24h，禁止永不过期（32 号整改 D4）
+	now := time.Now()
+	days := expiresInDays
+	if days <= 0 || days > 1 {
+		days = 1
 	}
-	if activeCount >= 2 {
-		return nil, errors.New("maximum number of active tokens (2) reached for this team")
-	}
+	expiresAt := now.Add(time.Duration(days) * 24 * time.Hour)
+	expiresAtPtr := &expiresAt
 
-	// 生成token_id（格式：token-t-xxxxx）
 	tokenID, err := generateTeamTokenID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token ID: %w", err)
 	}
-
-	// 创建token记录
-	now := time.Now()
-	var expiresAtPtr *time.Time
-	if expiresInDays > 0 {
-		expiresAt := now.Add(time.Duration(expiresInDays) * 24 * time.Hour)
-		expiresAtPtr = &expiresAt
-	}
-	// expiresInDays = 0 表示永不过期，expiresAtPtr = nil
-
-	// 计算token_id的hash
 	tokenIDHash := sha256.Sum256([]byte(tokenID))
 	tokenIDHashStr := base64.StdEncoding.EncodeToString(tokenIDHash[:])
-
 	createdBy := userID
-	tokenRecord := &models.TeamToken{
-		TokenID:     tokenID,
-		TokenIDHash: tokenIDHashStr,
-		TeamID:      teamID,
-		TokenName:   tokenName,
-		IsActive:    true,
-		CreatedAt:   now,
-		CreatedBy:   &createdBy,
-		ExpiresAt:   expiresAtPtr,
-	}
 
-	// 保存到数据库
-	if err := s.db.WithContext(ctx).Create(tokenRecord).Error; err != nil {
-		return nil, err
-	}
+	var tokenString string
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 串行化同 team 的 Generate（PostgreSQL 行锁）；不支持 FOR UPDATE 的驱动忽略错误。
+		// 活跃上限 2：事务内 Count+Create 为 best-effort；无 DB 约束时极端并发仍可能 >2。
+		_ = tx.Exec(`SELECT team_id FROM teams WHERE team_id = ? FOR UPDATE`, teamID)
 
-	// 生成JWT token
-	registeredClaims := jwt.RegisteredClaims{
-		IssuedAt:  jwt.NewNumericDate(now),
-		NotBefore: jwt.NewNumericDate(now),
-	}
+		// 清理已过期但仍 is_active 的 token
+		_ = tx.Model(&models.TeamToken{}).
+			Where("team_id = ? AND is_active = ? AND expires_at IS NOT NULL AND expires_at < ?", teamID, true, now).
+			Updates(map[string]interface{}{"is_active": false, "revoked_at": now, "revoked_by": "system:expired"})
 
-	// 如果有过期时间，设置到claims中
-	if expiresAtPtr != nil {
-		registeredClaims.ExpiresAt = jwt.NewNumericDate(*expiresAtPtr)
-	}
+		var activeCount int64
+		if err := tx.Model(&models.TeamToken{}).
+			Where("team_id = ? AND is_active = ?", teamID, true).
+			Count(&activeCount).Error; err != nil {
+			return err
+		}
+		if activeCount >= 2 {
+			return errors.New("maximum number of active tokens (2) reached for this team")
+		}
 
-	claims := TeamTokenClaims{
-		TeamID:           teamID,
-		TeamName:         team.Name,
-		TokenID:          tokenID, // 使用字符串token_id
-		TokenType:        "team_token",
-		RegisteredClaims: registeredClaims,
-	}
+		var nameCount int64
+		if err := tx.Model(&models.TeamToken{}).
+			Where("team_id = ? AND token_name = ? AND is_active = ?", teamID, tokenName, true).
+			Count(&nameCount).Error; err != nil {
+			return err
+		}
+		if nameCount > 0 {
+			return errors.New("active token with this name already exists")
+		}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.jwtSecret))
+		tokenRecord := &models.TeamToken{
+			TokenID:     tokenID,
+			TokenIDHash: tokenIDHashStr,
+			TeamID:      teamID,
+			TokenName:   tokenName,
+			IsActive:    true,
+			CreatedAt:   now,
+			CreatedBy:   &createdBy,
+			ExpiresAt:   expiresAtPtr,
+		}
+		if err := tx.Create(tokenRecord).Error; err != nil {
+			// 并发下唯一约束冲突 → 友好错误
+			if strings.Contains(strings.ToLower(err.Error()), "unique") {
+				return errors.New("active token with this name already exists or quota exceeded")
+			}
+			return err
+		}
+
+		claims := TeamTokenClaims{
+			TeamID:    teamID,
+			TeamName:  team.Name,
+			TokenID:   tokenID,
+			TokenType: "team_token",
+			RegisteredClaims: jwt.RegisteredClaims{
+				IssuedAt:  jwt.NewNumericDate(now),
+				NotBefore: jwt.NewNumericDate(now),
+				ExpiresAt: jwt.NewNumericDate(*expiresAtPtr),
+			},
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signed, err := token.SignedString([]byte(s.jwtSecret))
+		if err != nil {
+			return fmt.Errorf("failed to sign token: %w", err)
+		}
+		tokenString = signed
+		hash := sha256.Sum256([]byte(signed))
+		tokenHash := base64.StdEncoding.EncodeToString(hash[:])
+		return tx.Model(tokenRecord).Update("token_hash", tokenHash).Error
+	})
 	if err != nil {
-		// 如果JWT生成失败，删除已创建的记录
-		s.db.WithContext(ctx).Delete(tokenRecord)
-		return nil, fmt.Errorf("failed to sign token: %w", err)
-	}
-
-	// 计算token哈希值
-	hash := sha256.Sum256([]byte(tokenString))
-	tokenHash := base64.StdEncoding.EncodeToString(hash[:])
-
-	// 更新token记录的hash值
-	if err := s.db.WithContext(ctx).Model(tokenRecord).Update("token_hash", tokenHash).Error; err != nil {
-		// 如果更新失败，删除记录
-		s.db.WithContext(ctx).Delete(tokenRecord)
 		return nil, err
 	}
 
@@ -197,20 +204,25 @@ func (s *TeamTokenService) ListTeamTokens(ctx context.Context, teamID string) ([
 	return responses, nil
 }
 
-// RevokeToken 吊销token
+// RevokeToken 吊销 token（兼容旧调用：数字 ID 已废弃）
+// 请使用 RevokeTokenByName。
 func (s *TeamTokenService) RevokeToken(ctx context.Context, teamID string, tokenID uint, userID string) error {
+	return errors.New("revoke by numeric id is no longer supported; use token_name")
+}
+
+// RevokeTokenByName 按 token_name 吊销当前活跃 token（仅命中 is_active=true，避免旧吊销记录挡新 token）
+func (s *TeamTokenService) RevokeTokenByName(ctx context.Context, teamID string, tokenName string, userID string) error {
+	if tokenName == "" {
+		return errors.New("token_name is required")
+	}
 	var token models.TeamToken
 	if err := s.db.WithContext(ctx).
-		Where("id = ? AND team_id = ?", tokenID, teamID).
+		Where("team_id = ? AND token_name = ? AND is_active = ?", teamID, tokenName, true).
 		First(&token).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("token not found")
+			return errors.New("active token not found")
 		}
 		return err
-	}
-
-	if !token.IsActive {
-		return errors.New("token is already revoked")
 	}
 
 	now := time.Now()
@@ -248,14 +260,17 @@ func (s *TeamTokenService) ValidateToken(ctx context.Context, tokenString string
 		return nil, errors.New("invalid token type")
 	}
 
-	// 计算token哈希值
-	hash := sha256.Sum256([]byte(tokenString))
-	tokenHash := base64.StdEncoding.EncodeToString(hash[:])
+	// 与 JWT 中间件一致：用 token_id 的 hash 作为主键查找
+	tokenIDHash := sha256.Sum256([]byte(claims.TokenID))
+	tokenIDHashStr := base64.StdEncoding.EncodeToString(tokenIDHash[:])
 
-	// 从数据库验证token（使用字符串token_id）
+	// 可选：校验 JWT 明文哈希（Create 时写入 token_hash）
+	fullHash := sha256.Sum256([]byte(tokenString))
+	tokenHash := base64.StdEncoding.EncodeToString(fullHash[:])
+
 	var dbToken models.TeamToken
 	if err := s.db.WithContext(ctx).
-		Where("token_id = ? AND token_hash = ?", claims.TokenID, tokenHash).
+		Where("token_id_hash = ?", tokenIDHashStr).
 		First(&dbToken).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("token not found in database")
@@ -263,13 +278,21 @@ func (s *TeamTokenService) ValidateToken(ctx context.Context, tokenString string
 		return nil, err
 	}
 
+	// 若库内已有 token_hash，必须匹配（防 JWT 伪造 token_id）
+	if dbToken.TokenHash != "" && dbToken.TokenHash != tokenHash {
+		return nil, errors.New("token hash mismatch")
+	}
+
 	// 检查token是否有效
 	if !dbToken.IsActive {
 		return nil, errors.New("token has been revoked")
 	}
 
-	// 检查是否过期
-	if dbToken.ExpiresAt != nil && dbToken.ExpiresAt.Before(time.Now()) {
+	// 禁止永不过期 + 过期检查
+	if dbToken.ExpiresAt == nil {
+		return nil, errors.New("token has no expiry")
+	}
+	if dbToken.ExpiresAt.Before(time.Now()) {
 		return nil, errors.New("token has expired")
 	}
 

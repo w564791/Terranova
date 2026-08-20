@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
 
@@ -38,3 +38,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 };
 
 export default ProtectedRoute;
+
+/** Platform-global APIs are deliberately separate from organization IAM grants. */
+export const SystemAdminRoute: React.FC = () => {
+  const { token, user } = useSelector((state: RootState) => state.auth);
+  const location = useLocation();
+
+  if (!token) {
+    const returnUrl = encodeURIComponent(location.pathname + location.search + location.hash);
+    return <Navigate to={`/login?returnUrl=${returnUrl}`} replace />;
+  }
+  if (!user) {
+    return <div>加载用户信息...</div>;
+  }
+  if (!user.is_system_admin) {
+    return <Navigate to="/" replace />;
+  }
+  return <Outlet />;
+};
