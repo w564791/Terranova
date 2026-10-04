@@ -20,13 +20,18 @@
  * 响应里的 sensitive 只用于展示(锁定为敏感),绝不回传;只有用户输入新值并勾选"敏感"才发
  * {value, sensitive: true}。
  *
+ * 变量写权限:workspace 列表项 can_write_variables === false(缺省视为 true)时只能更换版本:
+ * varset 不可改(install 发空列表;upgrade 原样回传 deployment 已存 varset,含 priority),
+ * 覆盖输入 / 敏感 / 移除覆盖全部禁用,不发 variable_overrides / unset_keys。
+ * upgrade 预览 403 => 显示"无变量查看权限",仍可只换版本。
+ *
  * 加载分两步(避免一打开就拉全量):
  *   1. 打开时只拉版本、部署记录、可写 workspace(GET /workspaces?capability=WORKSPACE_RESOURCES:WRITE)
  *   2. 选定 workspace 后才拉该 workspace 可挂载的 varset(GET /variable-sets?workspace_id=)与变量预览
  */
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { message } from 'antd'
+import { Alert, message } from 'antd'
 import {
   listVersions,
   listDeployments,
@@ -49,6 +54,7 @@ import {
   type OverrideInputs,
 } from './manifestApi'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
+import { getHttpStatus } from '../../../services/api'
 import { variableSetService, type VariableSet } from '../../../services/variableSets'
 import {
   chatPanelStyle,
@@ -291,6 +297,8 @@ interface VariablePreviewProps {
   rows: PreviewRow[]
   loading: boolean
   error: string | null
+  /** 预览 403:无变量查看权限 */
+  forbidden?: boolean
   /** 用户在本面板里输入的覆盖值(key -> 新值) */
   edits: Record<string, string>
   onEdit: (key: string, value: string) => void
@@ -310,6 +318,7 @@ function VariablePreview({
   rows,
   loading,
   error,
+  forbidden,
   edits,
   onEdit,
   changedKeys,
@@ -322,11 +331,13 @@ function VariablePreview({
   return (
     <div style={{ ...varBoxStyle, marginTop: 0 }}>
       {loading && <div style={varLabelStyle}>加载中...</div>}
-      {!loading && error && (
+      {!loading && forbidden && <div style={varLabelStyle}>无变量查看权限</div>}
+      {!loading && !forbidden && error && (
         <div style={{ ...varLabelStyle, color: 'var(--red)' }}>预览失败: {error}</div>
       )}
-      {!loading && !error && rows.length === 0 && <div style={varLabelStyle}>无变量</div>}
+      {!loading && !forbidden && !error && rows.length === 0 && <div style={varLabelStyle}>无变量</div>}
       {!loading &&
+        !forbidden &&
         !error &&
         rows.map((v) => {
           const unset = !!unsetKeys?.has(v.key)
@@ -374,7 +385,7 @@ function VariablePreview({
                 )}
                 {v.overridden && onToggleUnset && (
                   <span
-                    style={rowActionStyle}
+                    style={disabled ? { ...rowActionStyle, color: '#666', cursor: 'not-allowed' } : rowActionStyle}
                     onClick={() => {
                       if (!disabled) onToggleUnset(v.key)
                     }}
@@ -418,6 +429,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [previewVars, setPreviewVars] = useState<DeploymentPreviewVariable[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewForbidden, setPreviewForbidden] = useState(false)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -425,6 +437,9 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [workspaceId, setWorkspaceId] = useState<string | undefined>()
   const [varsetIds, setVarsetIds] = useState<string[]>([])
   const [currentVarsetIds, setCurrentVarsetIds] = useState<string[]>([])
+  // deployment 已存 varset(含 priority,按加载顺序);无变量写权限时 upgrade 原样回传
+  const [currentVarsets, setCurrentVarsets] = useState<DeploymentVarsetEntry[]>([])
+  const [currentVarsetsLoaded, setCurrentVarsetsLoaded] = useState(false)
   const [workdir, setWorkdir] = useState<string>('')
   const [workdirs, setWorkdirs] = useState<string[]>([''])
   const [workdirsLoading, setWorkdirsLoading] = useState(false)
@@ -489,6 +504,13 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return deployments.find((d) => d.workspace_id === workspaceId && d.status === 'active')
   }, [workspaceId, deployments])
 
+  // 无变量写权限(can_write_variables === false;字段缺省 = 旧后端,视为可写)
+  const canWriteVariables = useMemo(() => {
+    if (!workspaceId) return true
+    const ws = workspaces.find((w) => (w.workspace_id || String(w.id)) === workspaceId)
+    return ws?.can_write_variables !== false
+  }, [workspaceId, workspaces])
+
   const targetMode: 'install' | 'upgrade' = useMemo(() => {
     if (!workspaceId) return 'install'
     return activeDeploymentForWs ? 'upgrade' : 'install'
@@ -503,23 +525,29 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
 
   // 选中已装 workspace 时:拉它当前关联的 varset 与已存覆盖,预填表单
   useEffect(() => {
+    setCurrentVarsetsLoaded(false)
     if (!activeDeploymentForWs) {
       setCurrentVarsetIds([])
+      setCurrentVarsets([])
       setExistingOverrides([])
       return
     }
     let cancelled = false
     setExistingOverrides([])
+    setCurrentVarsets([])
     getDeploymentUpgradeContext(ctx, activeDeploymentForWs.id)
       .then((uc) => {
         if (cancelled) return
         setCurrentVarsetIds(uc.varsetIds)
+        setCurrentVarsets(uc.varsets)
+        setCurrentVarsetsLoaded(true)
         setVarsetIds(uc.varsetIds)
         setExistingOverrides(uc.overrides)
       })
       .catch(() => {
         if (cancelled) return
         setCurrentVarsetIds([])
+        setCurrentVarsets([])
         setExistingOverrides([])
       })
     return () => {
@@ -533,9 +561,18 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   //    本次输入的新值在本地叠加显示(不随每次按键重拉,也避免以预览值为基准判定改动时自我抵消),
   //    提交 upgrade 时只发这些改动的 key。
   //  - install:首装预览(需已选 workspace + 版本)。
-  const unsetKeysForPreview = useMemo(() => Array.from(unsetKeys).sort(), [unsetKeys])
+  const unsetKeysForPreview = useMemo(
+    () => (canWriteVariables ? Array.from(unsetKeys).sort() : []),
+    [unsetKeys, canWriteVariables],
+  )
+  // 本次提交 / 预览用的 varset 列表:可写 = 所选顺序即优先级;
+  // 无变量写权限 = install 恒空,upgrade 原样回传已存 varset(同顺序同 priority,后端视为未变)
+  const varsetEntries = useMemo<DeploymentVarsetEntry[]>(() => {
+    if (canWriteVariables) return varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
+    return activeDeploymentForWs ? currentVarsets : []
+  }, [canWriteVariables, varsetIds, activeDeploymentForWs, currentVarsets])
   useEffect(() => {
-    const varsets = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
+    const varsets = varsetEntries
     let req: Promise<DeploymentPreviewVariable[]> | null = null
     if (activeDeploymentForWs) {
       req = previewDeploymentVariables(ctx, activeDeploymentForWs.id, {
@@ -550,6 +587,8 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
         varsets,
       })
     }
+    const isUpgradePreview = !!activeDeploymentForWs
+    setPreviewForbidden(false)
     if (!req) {
       setPreviewVars([])
       setPreviewError(null)
@@ -565,6 +604,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       .catch((err) => {
         if (cancelled) return
         setPreviewVars([])
+        // upgrade 预览 403:无变量查看权限,仍允许只换版本
+        if (isUpgradePreview && getHttpStatus(err) === 403) {
+          setPreviewForbidden(true)
+          return
+        }
         setPreviewError(errorText(err))
       })
       .finally(() => {
@@ -573,7 +617,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return () => {
       cancelled = true
     }
-  }, [ctx, activeDeploymentForWs, unsetKeysForPreview, workspaceId, versionId, varsetIds])
+  }, [ctx, activeDeploymentForWs, unsetKeysForPreview, workspaceId, versionId, varsetEntries])
 
   const overrideByKey = useMemo(
     () => new Map(existingOverrides.map((o) => [o.key, o])),
@@ -614,6 +658,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   // 响应里的 sensitive 不回传;只有新值 + 用户勾选"敏感"(且该行未锁定敏感)才发 {value, sensitive: true}。
   const changedOverrides = useMemo(() => {
     const out: OverrideInputs = {}
+    if (!canWriteVariables) return out // 无变量写权限:永不发送覆盖
     const byKey = new Map(previewRows.map((r) => [r.key, r]))
     for (const [k, val] of Object.entries(overrideEdits)) {
       if (unsetKeys.has(k)) continue
@@ -624,12 +669,12 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       out[k] = !row.lockedSensitive && sensitiveMarks.has(k) ? { value: val, sensitive: true } : val
     }
     return out
-  }, [overrideEdits, unsetKeys, previewRows, sensitiveMarks])
+  }, [overrideEdits, unsetKeys, previewRows, sensitiveMarks, canWriteVariables])
   const changedKeys = useMemo(() => new Set(Object.keys(changedOverrides)), [changedOverrides])
 
   const unsetKeyList = useMemo(
-    () => Array.from(unsetKeys).filter((k) => overriddenKeys.has(k)),
-    [unsetKeys, overriddenKeys],
+    () => (canWriteVariables ? Array.from(unsetKeys).filter((k) => overriddenKeys.has(k)) : []),
+    [unsetKeys, overriddenKeys, canWriteVariables],
   )
 
   const handleEditOverride = useCallback((key: string, value: string) => {
@@ -659,9 +704,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     [activeDeploymentForWs, versionId],
   )
   const sameVarsets = useMemo(() => {
+    if (!canWriteVariables) return true // 原样回传已存 varset
     if (varsetIds.length !== currentVarsetIds.length) return false
     return varsetIds.every((id, i) => id === currentVarsetIds[i])
-  }, [varsetIds, currentVarsetIds])
+  }, [varsetIds, currentVarsetIds, canWriteVariables])
   const noChange =
     sameVersion && sameVarsets && Object.keys(changedOverrides).length === 0 && unsetKeyList.length === 0
 
@@ -708,7 +754,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       setSubmitError('请选择版本与 workspace')
       return false
     }
-    const vs: DeploymentVarsetEntry[] = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
+    const vs = varsetEntries
     setSubmitting(true)
     setSubmitError(null)
     try {
@@ -742,7 +788,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const doUpgrade = async (andRun: boolean) => {
     if (!versionId || !activeDeploymentForWs) return
     const wsId = activeDeploymentForWs.workspace_id
-    const vs: DeploymentVarsetEntry[] = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
+    const vs = varsetEntries
     setSubmitting(true)
     setSubmitError(null)
     try {
@@ -810,11 +856,15 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
 
   // varset 多选切换
   const toggleVarset = (id: string) => {
+    if (!canWriteVariables) return
     setVarsetIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       return [...prev, id]
     })
   }
+
+  // 无变量写权限时须先拿到已存 varset 才能原样回传,否则会被后端视为变更(403)
+  const upgradeBlocked = submitting || (!canWriteVariables && !currentVarsetsLoaded)
 
   // 底栏按钮
   const renderFooter = () => {
@@ -858,11 +908,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
             </button>
           ) : (
             <>
-              <button style={btnSecondaryStyle} onClick={() => void doUpgrade(false)} disabled={submitting}>
+              <button style={btnSecondaryStyle} onClick={() => void doUpgrade(false)} disabled={upgradeBlocked}>
                 {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
                 更新
               </button>
-              <button style={btnPrimaryStyle} onClick={() => void doUpgrade(true)} disabled={submitting}>
+              <button style={btnPrimaryStyle} onClick={() => void doUpgrade(true)} disabled={upgradeBlocked}>
                 {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
                 更新并运行
               </button>
@@ -1011,6 +1061,15 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
           </div>
         )}
 
+        {workspaceId && !canWriteVariables && (
+          <Alert
+            type="info"
+            showIcon
+            message="无变量写权限，只能更换版本"
+            style={{ marginBottom: 12, padding: '4px 10px', fontSize: 12 }}
+          />
+        )}
+
         {/* Variable Sets 多选 */}
         <div style={formGroupStyle}>
           <label style={labelStyle}>
@@ -1018,13 +1077,19 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
             <span style={labelHintStyle}>(顺序即优先级,后选的优先级高)</span>
           </label>
           <div
-            style={{ ...multiSelectWrapStyle, cursor: workspaceId ? 'pointer' : 'not-allowed' }}
+            style={{
+              ...multiSelectWrapStyle,
+              cursor: workspaceId && canWriteVariables ? 'pointer' : 'not-allowed',
+              ...(workspaceId && !canWriteVariables ? { opacity: 0.6 } : {}),
+            }}
             onClick={() => {
-              if (workspaceId) setVarsetDropdownOpen((v) => !v)
+              if (workspaceId && canWriteVariables) setVarsetDropdownOpen((v) => !v)
             }}
           >
             {!workspaceId ? (
               <span style={{ opacity: 0.5, fontSize: 12 }}>请先选择目标 workspace</span>
+            ) : !canWriteVariables && targetMode === 'install' ? (
+              <span style={{ opacity: 0.5, fontSize: 12 }}>无变量写权限,不关联 Variable Set</span>
             ) : varsetIds.length === 0 ? (
               <span style={{ opacity: 0.5, fontSize: 12 }}>可不选 — 仅用 workspace 自有变量</span>
             ) : (
@@ -1033,20 +1098,22 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
                 return (
                   <span key={id} style={multiSelectChipStyle}>
                     {vs?.name ?? id}
-                    <i
-                      className="codicon codicon-close"
-                      style={{ fontSize: 11, cursor: 'pointer', opacity: 0.7 }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleVarset(id)
-                      }}
-                    />
+                    {canWriteVariables && (
+                      <i
+                        className="codicon codicon-close"
+                        style={{ fontSize: 11, cursor: 'pointer', opacity: 0.7 }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleVarset(id)
+                        }}
+                      />
+                    )}
                   </span>
                 )
               })
             )}
           </div>
-          {varsetDropdownOpen && workspaceId && (
+          {varsetDropdownOpen && workspaceId && canWriteVariables && (
             <div style={multiSelectDropdownStyle}>
               {varsetsLoading && (
                 <div style={{ padding: '6px 10px', fontSize: 12, opacity: 0.5 }}>加载中...</div>
@@ -1086,6 +1153,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
               rows={previewRows}
               loading={previewLoading}
               error={previewError}
+              forbidden={previewForbidden}
               edits={overrideEdits}
               onEdit={handleEditOverride}
               changedKeys={changedKeys}
@@ -1093,7 +1161,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
               onToggleSensitive={toggleSensitive}
               unsetKeys={targetMode === 'upgrade' ? unsetKeys : undefined}
               onToggleUnset={targetMode === 'upgrade' ? toggleUnset : undefined}
-              disabled={submitting}
+              disabled={submitting || !canWriteVariables}
             />
           </div>
         )}

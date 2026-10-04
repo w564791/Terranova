@@ -49,6 +49,8 @@ export interface Workspace {
   manifest_deployment_id?: string | null;
   manifest_active_tag?: string | null;
   manifest_subpath?: string | null;
+  // 仅 ?capability= 列表返回:调用者对该 workspace 是否有 WORKSPACE_VARIABLES WRITE;缺省(旧后端)视为 true
+  can_write_variables?: boolean;
   created_at: string;
   updated_at: string;
 }
