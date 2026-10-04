@@ -25,6 +25,29 @@
 - `sandbox_sessions`（新）：user + workspace 绑定、provider、过期时间、只读 STS 角色；过期时 STS 与其下所有 run token 一起回收。
 - 部署：`approved_bundle_hash`、`approved_plan_hash`。
 
+### 3.1 已落地 schema（step 2，迁移 `20261004_02_manifest_sandbox_schema`）
+只做加法、可重复执行；同一份 DDL 在 `backend/migrations/add_manifest_sandbox_schema.sql` 与 `manifests/db/init_seed_data.sql`（`-- >>> migrations/add_manifest_sandbox_schema.sql >>>` 标记块）中保持一致，由 `manifest_sandbox_schema_test.go` 校验同步。
+
+| 表 | 新增 | 约束 / 说明 |
+|---|---|---|
+| `manifests` | `source_type varchar(16) NOT NULL DEFAULT 'native'`、`git_repo_url varchar(1024)`、`git_subpath varchar(512)`、`github_installation_id bigint` | `chk_manifests_source_type`（native\|git）；`chk_manifests_git_fields`：native ⇒ 三个 git 字段全为 NULL，git ⇒ `git_repo_url` 非空。存量行经默认值成为 native。API 只输出 `source_type`；创建固定为 native（git 创建在 step 8），更新时传入不同值返回 400。git 字段不出 JSON。 |
+| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填。均不出 JSON。 |
+| `manifest_deployments` | `approved_bundle_hash`、`approved_plan_hash`（varchar(64)） | 审批接入前恒为 NULL（step 7 使用），不出 JSON。 |
+| `manifest_deployments` / `workspace_tasks` | `sensitive_keys jsonb`（可空、无默认值） | 覆盖值为敏感的 key 列表（任务行是部署覆盖快照的同一标记）。迁移不回填、不批量标记；NULL = 尚未计算，API 一律按全部敏感处理（不返回任何值）。由启动时的 Go 回填任务按部署时同一敏感判定写入（见设计文档 §8.4）。不出 JSON。 |
+| `sandbox_sessions`（新） | `id`、`user_id`、`workspace_id`、`provider`、`network_mode DEFAULT 'vpc'`、`status`、`expires_at`、`closed_at`、时间戳 | `chk_sandbox_sessions_network_mode`：只允许 `vpc`（§6.2 的数据库兜底）；`UNIQUE(id, workspace_id)` 供复合外键使用。 |
+| `manifest_runs`（新） | `manifest_id`（FK CASCADE）、`version_id`（FK SET NULL，草稿预览为空）、`bundle_hash NOT NULL`、`workspace_id`、`runner`、`purpose`、`status`、`plan_hash`、`plan_redacted jsonb`、`state_serial`、`session_id`、`created_by` | runner ∈ agent\|sandbox，purpose ∈ preview\|approval；sandbox ⇒ purpose=preview 且 session 非空；`bundle_hash` 64 位 hex；`(session_id, workspace_id)` 复合 FK → session，run 不能跨出其 session 的 workspace；`UNIQUE(id, workspace_id, purpose)`。 |
+| `run_tokens`（新，§9 step 5 的表，提前建） | `run_id`、`session_id`、`workspace_id`、`purpose`、`token_hash`、`expires_at`、`revoked_at` | `token_hash` 唯一；purpose ∈ preview\|approval；`(run_id, workspace_id, purpose)` 复合 FK → run（ON DELETE CASCADE），token 的 workspace/purpose 必须与 run 一致；`(session_id, workspace_id)` 复合 FK → session。另有按 session 未撤销 token 的部分索引，供 session 关闭时批量写 `revoked_at`。 |
+
+- `status` 列（session、run）不加 CHECK：后续新增状态不需要删约束。
+- run 暂不关联 deployment（`deployment_id` 留到 step 7 再定）。
+
+### 3.2 bundle_hash 编码（`internal/manifestbundle`）
+```
+sha256( "terranova-bundle-v1" 0x00
+        对每个文件，按 path 字节序排序：path 0x00 十进制(len(content)) 0x00 content )
+```
+输出小写 hex。path 为 `manifest_files.path`（相对路径，不能为空、不能重复）；长度前缀保证二进制内容（可含 NUL）无歧义；空 bundle 也有确定的哈希。native 版本的文件集 = `manifest_files WHERE version_id = 版本 id`（草稿行 `version_id IS NULL`，不参与）。改编码必须换版本前缀，不得原地修改。迁移回填、发布与后续 run/审批都只用 `manifestbundle.Hash` / `VersionHash`；SQL 补丁里的等价回填（`ORDER BY path COLLATE "C"`）与 Go 实现由黄金向量测试锁定。
+
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。
 - `POST .../sandbox-sessions/:id/runs`：在 session 内发起 preview run。

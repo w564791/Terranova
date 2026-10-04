@@ -58,8 +58,8 @@ func setupManifestIAMDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	for _, stmt := range []string{
-		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE manifest_deployments (id TEXT PRIMARY KEY, manifest_id TEXT, version_id TEXT, workspace_id TEXT, variable_overrides TEXT, status TEXT, last_task_id INTEGER, deployed_by TEXT, deployed_at DATETIME, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, source_type TEXT NOT NULL DEFAULT 'native', git_repo_url TEXT, git_subpath TEXT, github_installation_id INTEGER, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE manifest_deployments (id TEXT PRIMARY KEY, manifest_id TEXT, version_id TEXT, workspace_id TEXT, variable_overrides TEXT, status TEXT, last_task_id INTEGER, deployed_by TEXT, deployed_at DATETIME, approved_bundle_hash TEXT, approved_plan_hash TEXT, sensitive_keys TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE manifest_deployment_varsets (deployment_id TEXT, varset_id TEXT, priority INTEGER)`,
 		`CREATE TABLE variable_sets (id INTEGER PRIMARY KEY, varset_id TEXT, name TEXT, description TEXT, scope TEXT, is_deleted INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME, created_by TEXT)`,
 		`CREATE TABLE varset_variables (id INTEGER PRIMARY KEY, variable_id TEXT, varset_id TEXT, key TEXT, value TEXT, variable_type TEXT, value_format TEXT, sensitive INTEGER, description TEXT, is_deleted INTEGER DEFAULT 0, version INTEGER, created_at DATETIME, updated_at DATETIME, created_by TEXT)`,

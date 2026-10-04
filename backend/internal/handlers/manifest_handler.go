@@ -272,6 +272,7 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 		Name:           req.Name,
 		Description:    req.Description,
 		Status:         models.ManifestStatusDraft,
+		SourceType:     models.ManifestSourceNative, // git 来源在 Git 步骤接入;创建后不可变
 		CreatedBy:      userID,
 	}
 
@@ -323,6 +324,12 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	var req models.UpdateManifestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters: " + err.Error()})
+		return
+	}
+
+	// source_type 创建后不可变(spec §1):只接受与当前值相同的回显
+	if req.SourceType != "" && req.SourceType != manifest.SourceType {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "source_type is immutable after creation"})
 		return
 	}
 

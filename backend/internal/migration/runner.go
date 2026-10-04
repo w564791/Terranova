@@ -95,6 +95,9 @@ func definitions() []definition {
 		// Register the org-level MANIFESTS catalog resource (and the previously
 		// unregistered VARIABLE_SETS) with built-in Role policies. Additive only.
 		{version: "20261004_01_manifest_iam_resource", contract: "manifests-and-variable-sets-org-catalog-v1", apply: applyManifestIAMResource},
+		// Manifest dual-source / dual-runner schema (sandbox spec §3) plus
+		// bundle_hash backfill. Additive only.
+		{version: "20261004_02_manifest_sandbox_schema", contract: "manifest-source-bundle-runs-sessions-run-tokens-v1", apply: applyManifestSandboxSchema},
 	}
 }
 

@@ -170,6 +170,14 @@ CREATE TABLE manifest_deployment_resources (
 CREATE INDEX idx_manifest_deployment_resources_deployment_id ON manifest_deployment_resources(deployment_id);
 ```
 
+#### 双来源 / 双 Runner 扩展（已实现，迁移 `20261004_02_manifest_sandbox_schema`）
+完整约束见 `manifest-sandbox-spec.md` §3.1，哈希编码见 §3.2。
+- `manifests.source_type`（native|git，默认 native，创建后不可改）及 git 字段 `git_repo_url`、`git_subpath`、`github_installation_id`（native 时必须为空）。API 只输出 `source_type`。
+- `manifest_versions.bundle_hash`（不可变 bundle 的 sha256，发布时写入，存量回填）、`source_ref`（git commit SHA，native 为空）。
+- `manifest_deployments.approved_bundle_hash`、`approved_plan_hash`：审批绑定的双哈希，apply 前校验。
+- `manifest_deployments.sensitive_keys`、`workspace_tasks.sensitive_keys`（jsonb，可空）：覆盖中敏感 key 的列表；NULL 视为全部敏感。
+- 新表 `sandbox_sessions`（network_mode 只允许 vpc）、`manifest_runs`（runner × purpose，sandbox 只能 preview）、`run_tokens`（按 run 签发的 token，只存哈希，复合外键保证与 run/session 同 workspace、同 purpose）。
+
 ### 3.2 JSONB 数据结构
 
 #### nodes 结构

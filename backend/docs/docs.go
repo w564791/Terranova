@@ -34829,6 +34829,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "source_type": {
+                    "description": "source_type 创建后不可变:提供且与当前值不同 =\u003e 400",
+                    "type": "string"
+                },
                 "status": {
                     "description": "draft, published, archived",
                     "type": "string"

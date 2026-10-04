@@ -14,6 +14,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20260717_04_iam_application_role_transition",
 		"20260717_05_iam_role_tenant_reconciliation",
 		"20261004_01_manifest_iam_resource",
+		"20261004_02_manifest_sandbox_schema",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("migration count = %d, want %d", len(definitions), len(want))

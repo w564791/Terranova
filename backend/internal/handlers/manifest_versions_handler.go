@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 )
@@ -239,6 +240,17 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 			FROM manifest_files
 			WHERE manifest_id = ? AND version_id IS NULL AND owner_user_id = ?
 		`, newVersionID, manifestID, userID).Error; err != nil {
+			return err
+		}
+
+		// 2b. 不可变 bundle 标识:对刚写入的版本快照计算 bundle_hash(与迁移回填同一函数)
+		bundleHash, err := manifestbundle.VersionHash(c.Request.Context(), tx, newVersionID)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&models.ManifestVersion{}).
+			Where("id = ?", newVersionID).
+			Update("bundle_hash", bundleHash).Error; err != nil {
 			return err
 		}
 

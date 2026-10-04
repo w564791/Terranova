@@ -7,14 +7,21 @@ import (
 
 // Manifest 可视化编排模板（Organization 级别）
 type Manifest struct {
-	ID             string    `json:"id" gorm:"primaryKey;size:36"`              // 格式: mf-{ulid}
-	OrganizationID int       `json:"organization_id" gorm:"not null;index"`     // 所属组织
-	Name           string    `json:"name" gorm:"size:255;not null"`             // 名称
-	Description    string    `json:"description" gorm:"type:text"`              // 描述
-	Status         string    `json:"status" gorm:"size:20;default:draft;index"` // draft, published, archived
-	CreatedBy      string    `json:"created_by" gorm:"size:20;not null"`        // 创建者
-	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`          // 创建时间
-	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`          // 更新时间
+	ID             string `json:"id" gorm:"primaryKey;size:36"`              // 格式: mf-{ulid}
+	OrganizationID int    `json:"organization_id" gorm:"not null;index"`     // 所属组织
+	Name           string `json:"name" gorm:"size:255;not null"`             // 名称
+	Description    string `json:"description" gorm:"type:text"`              // 描述
+	Status         string `json:"status" gorm:"size:20;default:draft;index"` // draft, published, archived
+	// 来源(创建时确定,不可修改;UpdateManifest 拒绝变更):native | git
+	SourceType string `json:"source_type" gorm:"size:16;not null;default:native"`
+	// git 来源字段(source_type=git 时 repo 必填;native 时全部为 NULL,DB CHECK 保证)。
+	// 暂不在 API 输出,Git 来源步骤接入时再开放。
+	GitRepoURL           *string   `json:"-" gorm:"column:git_repo_url;size:1024"`
+	GitSubpath           *string   `json:"-" gorm:"column:git_subpath;size:512"`
+	GitHubInstallationID *int64    `json:"-" gorm:"column:github_installation_id"`
+	CreatedBy            string    `json:"created_by" gorm:"size:20;not null"` // 创建者
+	CreatedAt            time.Time `json:"created_at" gorm:"autoCreateTime"`   // 创建时间
+	UpdatedAt            time.Time `json:"updated_at" gorm:"autoUpdateTime"`   // 更新时间
 
 	// 关联
 	Versions    []ManifestVersion    `json:"versions,omitempty" gorm:"foreignKey:ManifestID"`
@@ -50,8 +57,12 @@ type ManifestVersion struct {
 	Version    string          `json:"version" gorm:"size:50;not null"`           // 版本号，如 v1.0.0
 	Variables  json.RawMessage `json:"variables" gorm:"type:jsonb"`               // 该版本声明的 Terraform input variables 元信息(.tf 静态解析)
 	Changelog  string          `json:"changelog" gorm:"type:text"`                // 发布说明
-	CreatedBy  string          `json:"created_by" gorm:"size:20;not null"`        // 创建者
-	CreatedAt  time.Time       `json:"created_at" gorm:"autoCreateTime"`          // 创建时间
+	// 不可变 bundle 标识(manifestbundle.Hash,发布时计算,存量由迁移回填)与 git commit SHA(native 为 NULL)。
+	// 暂不在 API 输出,Bundle / Git 步骤接入时再开放。
+	BundleHash *string   `json:"-" gorm:"column:bundle_hash;size:64"`
+	SourceRef  *string   `json:"-" gorm:"column:source_ref;size:64"`
+	CreatedBy  string    `json:"created_by" gorm:"size:20;not null"` // 创建者
+	CreatedAt  time.Time `json:"created_at" gorm:"autoCreateTime"`   // 创建时间
 
 	// 非数据库字段
 	CreatedByName string `json:"created_by_name,omitempty" gorm:"-"`
@@ -72,8 +83,14 @@ type ManifestDeployment struct {
 	LastTaskID        *int            `json:"last_task_id" gorm:""`                                // 最后一次部署的任务 ID
 	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`                 // 部署者
 	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                                 // 部署时间
-	CreatedAt         time.Time       `json:"created_at" gorm:"autoCreateTime"`                    // 创建时间
-	UpdatedAt         time.Time       `json:"updated_at" gorm:"autoUpdateTime"`                    // 更新时间
+	// 审批绑定的双哈希(apply 前校验,任一不一致即拒绝);审批步骤接入前恒为 NULL,不在 API 输出
+	ApprovedBundleHash *string `json:"-" gorm:"column:approved_bundle_hash;size:64"`
+	ApprovedPlanHash   *string `json:"-" gorm:"column:approved_plan_hash;size:64"`
+	// SensitiveKeys 覆盖值为敏感的 key(jsonb 字符串数组)。NULL = 尚未计算(启动回填前的存量行),
+	// API 视为全部敏感;不在 API 输出。
+	SensitiveKeys json.RawMessage `json:"-" gorm:"column:sensitive_keys;type:jsonb"`
+	CreatedAt     time.Time       `json:"created_at" gorm:"autoCreateTime"` // 创建时间
+	UpdatedAt     time.Time       `json:"updated_at" gorm:"autoUpdateTime"` // 更新时间
 
 	// 关联
 	Version   *ManifestVersion             `json:"version,omitempty" gorm:"foreignKey:VersionID"`
@@ -117,6 +134,8 @@ type UpdateManifestRequest struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty" binding:"max=1024"`
 	Status      string `json:"status,omitempty"` // draft, published, archived
+	// source_type 创建后不可变:提供且与当前值不同 => 400
+	SourceType string `json:"source_type,omitempty"`
 }
 
 // PublishManifestVersionRequest 发布版本请求
@@ -187,6 +206,10 @@ const (
 	ManifestStatusDraft     = "draft"
 	ManifestStatusPublished = "published"
 	ManifestStatusArchived  = "archived"
+
+	// Manifest 来源(manifests.source_type)
+	ManifestSourceNative = "native"
+	ManifestSourceGit    = "git"
 
 	// 部署状态(新设计)
 	DeploymentStatusActive      = "active"
