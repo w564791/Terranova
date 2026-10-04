@@ -417,6 +417,8 @@ type WorkspaceTask struct {
 	// overrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。
 	// 数据格式: {"key": "value"}
 	VariableOverrides JSONB `json:"variable_overrides,omitempty" gorm:"type:jsonb"`
+	// SensitiveKeys 快照时 deployment 的敏感 key(jsonb 字符串数组);NULL = 全部视为敏感。不在 API 输出。
+	SensitiveKeys json.RawMessage `json:"-" gorm:"column:sensitive_keys;type:jsonb"`
 
 	// HTTP State Backend token (store SHA256 hash, not the raw token)
 	StateTokenHash string `json:"-" gorm:"type:varchar(64);index"`
