@@ -64,6 +64,62 @@ func (s *VariableSetService) List(scope string) ([]models.VariableSet, error) {
 	return varsets, nil
 }
 
+// ListMountableForWorkspace 返回指定 workspace 可挂载的变量集(manifest 部署选择 varset 用)。
+//
+// "可挂载" 沿用变量解析链(VariableResolutionService)的作用域规则:
+//   - scope = global 的变量集;
+//   - 分配到该 workspace 的变量集(varset_assignments.scope_type = workspace);
+//   - 分配到该 workspace 所属项目的变量集(varset_assignments.scope_type = project)。
+//
+// 未分配给该 workspace / 项目的 specific 变量集不可挂载。
+func (s *VariableSetService) ListMountableForWorkspace(workspaceID string) ([]models.VariableSet, error) {
+	var projectIDs []int
+	if err := s.db.Table("workspace_project_relations").
+		Where("workspace_id = ?", workspaceID).
+		Pluck("project_id", &projectIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to resolve workspace project: %w", err)
+	}
+
+	assigned := s.db.Model(&models.VarsetAssignment{}).Select("varset_id").
+		Where("scope_type = ? AND workspace_id = ?", "workspace", workspaceID)
+	if len(projectIDs) > 0 {
+		assigned = assigned.Or("scope_type = ? AND project_id IN ?", "project", projectIDs)
+	}
+
+	var varsets []models.VariableSet
+	if err := s.db.Where("is_deleted = ?", false).
+		Where(s.db.Where("scope = ?", "global").Or("varset_id IN (?)", assigned)).
+		Order("created_at DESC").
+		Find(&varsets).Error; err != nil {
+		return nil, fmt.Errorf("failed to list mountable variable sets: %w", err)
+	}
+	return varsets, nil
+}
+
+// UnmountableVarsetIDs 返回 varsetIDs 中不能挂载到 workspace 的那些(去重,保持入参顺序)。
+func (s *VariableSetService) UnmountableVarsetIDs(workspaceID string, varsetIDs []string) ([]string, error) {
+	if len(varsetIDs) == 0 {
+		return nil, nil
+	}
+	mountable, err := s.ListMountableForWorkspace(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	ok := make(map[string]bool, len(mountable))
+	for _, vs := range mountable {
+		ok[vs.VarsetID] = true
+	}
+	var bad []string
+	seen := map[string]bool{}
+	for _, id := range varsetIDs {
+		if !ok[id] && !seen[id] {
+			bad = append(bad, id)
+			seen[id] = true
+		}
+	}
+	return bad, nil
+}
+
 // GetByVarsetID 通过 varset_id 获取变量集
 func (s *VariableSetService) GetByVarsetID(varsetID string) (*models.VariableSet, error) {
 	var varset models.VariableSet

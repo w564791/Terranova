@@ -15,39 +15,40 @@ type TaskQueueManagerInterface interface {
 
 // RegisterManifestRoutes 注册 Manifest 相关路由
 func RegisterManifestRoutes(r *gin.RouterGroup, db *gorm.DB, queueManager TaskQueueManagerInterface, iamMiddleware *middleware.IAMPermissionMiddleware) {
-	manifestHandler := handlers.NewManifestHandler(db)
+	manifestHandler := handlers.NewManifestHandler(db, iamMiddleware)
 
 	// ========== 新版 manifest (VS Code Web 工作区,软链接架构) ==========
 	registerManifestV2Routes(r, db, iamMiddleware)
 	// =================================================================
 
-	// Organization 级别的 Manifest 顶层 CRUD - 使用 SYSTEM_SETTINGS 权限
+	// Organization 级别的 Manifest 顶层 CRUD - 组织级 MANIFESTS 权限
+	//   READ: 列表/详情/导出;WRITE: 创建/更新;ADMIN: 删除(归档在 UpdateManifest 内要求 ADMIN)
 	// (文件/版本/部署写操作全部走 registerManifestV2Routes)
 	orgManifests := r.Group("/organizations/:org_id/manifests")
 	orgManifests.Use(middleware.JWTAuth())
 	{
 		orgManifests.GET("",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			manifestHandler.ListManifests,
 		)
 		orgManifests.POST("",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			manifestHandler.CreateManifest,
 		)
 		orgManifests.GET("/:id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			manifestHandler.GetManifest,
 		)
 		orgManifests.PUT("/:id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			manifestHandler.UpdateManifest,
 		)
 		orgManifests.DELETE("/:id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "ADMIN"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "ADMIN"),
 			manifestHandler.DeleteManifest,
 		)
 		orgManifests.GET("/:id/export-zip",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			manifestHandler.ExportManifestZip,
 		)
 	}
@@ -80,102 +81,107 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	{
 		// === post_init 落库的 provider 类型目录（编辑器补全）===
 		g.GET("/provider-schemas",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			schemaH.GetProviderSchemas,
 		)
 
 		// === 文件 CRUD (草稿区,作用于当前用户私有副本) ===
 		g.GET("/files",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			filesH.ListFiles,
 		)
 		g.GET("/files/*path",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			filesH.ReadFile,
 		)
 		g.PUT("/files/*path",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			middleware.LimitRequestBodySize(handlers.ManifestMaxFileSize),
 			filesH.PutFile,
 		)
 		g.DELETE("/files/*path",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			filesH.DeleteFile,
 		)
 		g.POST("/files/_move",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			filesH.MoveFile,
 		)
 		g.POST("/files/_move_dir",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			filesH.MoveDir,
 		)
 		g.POST("/files/_delete_dir",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			filesH.DeleteDir,
 		)
 		g.POST("/draft/_reset_from",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			filesH.ResetDraftFromVersion,
 		)
 		g.POST("/draft/_export",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			filesH.ExportDraft,
 		)
 
 		// === 版本(新设计:仅读 + 发布;旧版本走老 manifest_handler 直至 PR4) ===
 		g.GET("/v2/versions",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.ListVersions,
 		)
 		g.GET("/v2/versions/:version_id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.GetVersion,
 		)
 		g.POST("/v2/versions",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			versionsH.PublishVersion,
 		)
 		g.GET("/v2/versions/:version_id/diff",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.DiffVersions,
 		)
 		g.GET("/v2/versions/:version_id/workdirs",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.ListWorkdirs,
 		)
 		g.GET("/v2/draft/diff",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.DiffDraft,
 		)
 		g.POST("/v2/versions/:version_id/files/_export",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.ExportVersion,
 		)
 
 		// === 部署(新设计 install/upgrade/uninstall,纯元信息) ===
+		// 全部要求 MANIFESTS READ;install/upgrade/uninstall 另在 handler 内对目标 workspace
+		// (body 或 deployment 记录)显式校验 WORKSPACE_RESOURCES WRITE;
+		// get 校验 workspace 可读;variable-preview 校验 WORKSPACE_VARIABLES READ。
+		// 列表按调用者可读 workspace 服务端过滤(RequireWorkspaceListAccess 放入 allow-list)
 		g.GET("/v2/deployments",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequireWorkspaceListAccess(),
 			deploysH.ListDeployments,
 		)
 		g.GET("/v2/deployments/:deployment_id",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.GetDeployment,
 		)
 		g.POST("/v2/deployments/install",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.Install,
 		)
 		g.POST("/v2/deployments/:deployment_id/upgrade",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.Upgrade,
 		)
 		g.POST("/v2/deployments/:deployment_id/uninstall",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "WRITE"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.Uninstall,
 		)
 		g.POST("/v2/deployments/:deployment_id/variable-preview",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.VariablePreview,
 		)
 	}
@@ -183,7 +189,7 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	// === Variable Set 反向关联 (用于 varset 详情页 "被以下 deployment 使用") ===
 	r.GET("/variable-sets/:varset_id/manifest-deployments",
 		middleware.JWTAuth(),
-		iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+		iamMiddleware.RequirePermission("VARIABLE_SETS", "ORGANIZATION", "READ"),
 		deploysH.VarsetReverseLookup,
 	)
 
@@ -210,15 +216,15 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	editor.Use(middleware.JWTAuth())
 	{
 		editor.GET("/modules",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MODULES", "ORGANIZATION", "READ"),
 			editorH.ListModules,
 		)
 		editor.GET("/modules/:module_id/demos",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MODULES", "ORGANIZATION", "READ"),
 			editorH.ListDemos,
 		)
 		editor.GET("/modules/:module_id/inputs",
-			iamMiddleware.RequirePermission("SYSTEM_SETTINGS", "ORGANIZATION", "READ"),
+			iamMiddleware.RequirePermission("MODULES", "ORGANIZATION", "READ"),
 			editorH.ListModuleInputs,
 		)
 	}

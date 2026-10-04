@@ -4,10 +4,13 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
+	"iac-platform/internal/domain/valueobject"
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -24,11 +27,30 @@ import (
 //
 // 这里只剩组织级 manifest 自身的元数据 CRUD,以及前端 ManifestManagement 列表的"导出 ZIP"动作。
 type ManifestHandler struct {
-	db *gorm.DB
+	db   *gorm.DB
+	perm *middleware.IAMPermissionMiddleware // 计算 can_deploy;nil 时 can_deploy=false
 }
 
-func NewManifestHandler(db *gorm.DB) *ManifestHandler {
-	return &ManifestHandler{db: db}
+func NewManifestHandler(db *gorm.DB, perm *middleware.IAMPermissionMiddleware) *ManifestHandler {
+	return &ManifestHandler{db: db, perm: perm}
+}
+
+// callerCapabilities 计算列表/详情项的 can_write / can_deploy。
+//   - can_write 取自路由上 MANIFESTS READ 检查得到的有效等级(>= WRITE),不做二次评估;
+//   - can_deploy 只看 WORKSPACE_RESOURCES WRITE(与 workspace 选择器同一判定),
+//     与 MANIFESTS 等级无关 —— MANIFESTS READ 绝不推出 can_deploy。
+//
+// 评估失败时降级为 false(按钮隐藏;真正的部署接口仍会做服务端校验)。
+func (h *ManifestHandler) callerCapabilities(c *gin.Context) (canWrite, canDeploy bool) {
+	canWrite = middleware.EffectiveLevelFromContext(c) >= valueobject.PermissionLevelWrite
+	if h.perm != nil {
+		ok, err := h.perm.HasWorkspaceCapability(c, valueobject.ResourceTypeWorkspaceResources, valueobject.PermissionLevelWrite)
+		if err != nil {
+			log.Printf("[Manifest] can_deploy evaluation failed: %v", err)
+		}
+		canDeploy = ok && err == nil
+	}
+	return canWrite, canDeploy
 }
 
 // ========== ID 生成 (供 v2 versions / deployments handler 也调用) ==========
@@ -106,7 +128,11 @@ func (h *ManifestHandler) ListManifests(c *gin.Context) {
 		return
 	}
 
+	canWrite, canDeploy := h.callerCapabilities(c)
 	for i := range manifests {
+		manifests[i].CanWrite = &canWrite
+		manifests[i].CanDeploy = &canDeploy
+
 		// 取最新已发布版本 (元数据,不取大字段)
 		var latestVersion models.ManifestVersion
 		if err := h.db.Select("id, manifest_id, version, created_by, created_at").
@@ -184,6 +210,10 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 	if err := h.db.Select("username").Where("user_id = ?", manifest.CreatedBy).First(&user).Error; err == nil {
 		manifest.CreatedByName = user.Username
 	}
+
+	canWrite, canDeploy := h.callerCapabilities(c)
+	manifest.CanWrite = &canWrite
+	manifest.CanDeploy = &canDeploy
 
 	c.JSON(http.StatusOK, manifest)
 }
@@ -299,6 +329,17 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	}
 
 	if req.Status != "" {
+		// 归档 / 取消归档与删除同级: 需 MANIFESTS ADMIN(路由只保证 WRITE)。
+		if isArchiveTransition(manifest.Status, req.Status) &&
+			middleware.EffectiveLevelFromContext(c) < valueobject.PermissionLevelAdmin {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":           403,
+				"message":        "Permission denied",
+				"deny_reason":    "archiving a manifest requires MANIFESTS ADMIN",
+				"required_level": "ADMIN",
+			})
+			return
+		}
 		manifest.Status = req.Status
 	}
 
@@ -308,6 +349,11 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, manifest)
+}
+
+// isArchiveTransition 状态变更是否进入或离开 archived。
+func isArchiveTransition(from, to string) bool {
+	return from != to && (to == models.ManifestStatusArchived || from == models.ManifestStatusArchived)
 }
 
 // DeleteManifest deletes a manifest and its related data

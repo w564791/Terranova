@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"iac-platform/internal/models"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -78,6 +79,7 @@ func (c *VariableSetController) Create(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param scope query string false "Filter by scope"
+// @Param workspace_id query string false "Only variable sets this workspace can mount (global + assigned to the workspace or its project); caller must be able to read the workspace"
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -86,7 +88,14 @@ func (c *VariableSetController) Create(ctx *gin.Context) {
 func (c *VariableSetController) List(ctx *gin.Context) {
 	scope := ctx.Query("scope")
 
-	varsets, err := c.service.List(scope)
+	// workspace_id: 仅返回该 workspace 可挂载的变量集(路由层已校验 workspace 可读且属于鉴权 org)
+	var varsets []models.VariableSet
+	var err error
+	if workspaceID := ctx.Query("workspace_id"); workspaceID != "" {
+		varsets, err = c.service.ListMountableForWorkspace(workspaceID)
+	} else {
+		varsets, err = c.service.List(scope)
+	}
 	if err != nil {
 		log.Printf("Failed to list variable sets: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list variable sets"})

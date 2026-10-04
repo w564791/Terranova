@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"iac-platform/internal/application/service"
 	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
@@ -52,13 +53,77 @@ func NewManifestDeploymentsV2Handler(db *gorm.DB, perm *middleware.IAMPermission
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
 	manifestID := c.Param("id")
-	var rows []models.ManifestDeployment
-	if err := h.db.Where("manifest_id = ?", manifestID).
-		Order("created_at DESC").Find(&rows).Error; err != nil {
+	if !h.manifestInAuthOrg(c, manifestID) {
+		return
+	}
+
+	// 路由上 RequireWorkspaceListAccess 已解析出调用者可读的 workspace 集合;
+	// 缺失视为配置错误,失败关闭(不退化为不过滤)。
+	rawAccess, exists := c.Get(service.WorkspaceListAccessContextKey)
+	access, ok := rawAccess.(*service.WorkspaceListAccess)
+	if !exists || !ok || access == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "workspace list authorization context is missing"})
+		return
+	}
+
+	query := h.db.Where("manifest_id = ?", manifestID)
+	if !access.FullOrganization {
+		// 空切片 => 空结果(IN () 由 gorm 渲染为 NULL 条件,不会退化成全量)
+		if len(access.WorkspaceIDs) == 0 {
+			c.JSON(http.StatusOK, gin.H{"deployments": []models.ManifestDeployment{}})
+			return
+		}
+		query = query.Where("workspace_id IN ?", access.WorkspaceIDs)
+	}
+	rows := make([]models.ManifestDeployment, 0)
+	if err := query.Order("created_at DESC").Find(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deployments": rows})
+}
+
+// rejectUnmountableVarsets 校验请求里的 varset 都可挂载到目标 workspace
+// (与 GET /variable-sets?workspace_id= 同一规则)。不可挂载 => 400,返回 false。
+func (h *ManifestDeploymentsV2Handler) rejectUnmountableVarsets(
+	c *gin.Context, workspaceID string, entries []models.DeploymentVarsetEntry,
+) bool {
+	ids := make([]string, 0, len(entries))
+	for _, e := range entries {
+		ids = append(ids, e.VarsetID)
+	}
+	bad, err := services.NewVariableSetService(h.db).UnmountableVarsetIDs(workspaceID, ids)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return false
+	}
+	if len(bad) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "variable sets not mountable on target workspace", "varset_ids": bad})
+		return false
+	}
+	return true
+}
+
+// manifestInAuthOrg 校验 path manifest 属于 IAM 中间件解析出的组织(auth_org_id)。
+// 不属于 / 不存在 => 404,避免跨租户枚举。已写响应时返回 false。
+func (h *ManifestDeploymentsV2Handler) manifestInAuthOrg(c *gin.Context, manifestID string) bool {
+	orgID, ok := middleware.AuthOrgID(c)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
+		return false
+	}
+	var count int64
+	if err := h.db.Model(&models.Manifest{}).
+		Where("id = ? AND organization_id = ?", manifestID, orgID).
+		Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return false
+	}
+	if count == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "manifest not found"})
+		return false
+	}
+	return true
 }
 
 // GetDeployment 详情(含 varsets 关联)
@@ -77,14 +142,23 @@ func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
+	manifestID := c.Param("id")
+	if !h.manifestInAuthOrg(c, manifestID) {
+		return
+	}
 	var d models.ManifestDeployment
-	if err := h.db.Where("id = ?", deploymentID).First(&d).Error; err != nil {
+	if err := h.db.Where("id = ? AND manifest_id = ?", deploymentID, manifestID).First(&d).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deployment not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
 		return
+	}
+	// 与列表一致: 只返回调用者可读 workspace 上的 deployment
+	// (WORKSPACE_MANAGEMENT READ @ workspace 或 WORKSPACES READ @ org)。
+	if h.perm != nil && !h.perm.CheckWorkspaceOrOrgWorkspacesRead(c, d.WorkspaceID) {
+		return // 403 已写
 	}
 	var varsets []models.ManifestDeploymentVarset
 	h.db.Where("deployment_id = ?", deploymentID).Order("priority ASC").Find(&varsets)
@@ -110,6 +184,9 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
+	if !h.manifestInAuthOrg(c, manifestID) {
+		return
+	}
 
 	var req models.InstallDeploymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -117,9 +194,13 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		return
 	}
 
-	// 叠加目标 workspace 写权限(组织级 manifest 权限之外,还需对该 workspace 有 WRITE)
-	if h.perm != nil && !h.perm.RequireWorkspacePermission(c, req.WorkspaceID, "WRITE") {
+	// 叠加目标 workspace 权限: 路由只要求 MANIFESTS READ,部署还需对 body 里的目标
+	// workspace 显式持有 WORKSPACE_RESOURCES WRITE(WORKSPACE_MANAGEMENT 伞形权限同样满足)。
+	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, req.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return // 403 已写
+	}
+	if !h.rejectUnmountableVarsets(c, req.WorkspaceID, req.Varsets) {
+		return
 	}
 
 	// 校验 version 属于本 manifest 且非草稿
@@ -296,6 +377,9 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
+	if !h.manifestInAuthOrg(c, manifestID) {
+		return
+	}
 
 	var req models.UpgradeDeploymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -313,9 +397,13 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		return
 	}
 
-	// 叠加目标 workspace 写权限(workspace 藏在 deployment 记录里,需在此校验)
-	if h.perm != nil && !h.perm.RequireWorkspacePermission(c, dep.WorkspaceID, "WRITE") {
+	// 叠加目标 workspace 权限(workspace 藏在 deployment 记录里,需在此校验):
+	// 显式 WORKSPACE_RESOURCES WRITE。
+	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, dep.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return // 403 已写
+	}
+	if !h.rejectUnmountableVarsets(c, dep.WorkspaceID, req.Varsets) {
+		return
 	}
 
 	// 校验 target version 属于本 manifest
@@ -458,6 +546,9 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 	manifestID := c.Param("id")
 	userID := c.GetString("user_id")
+	if !h.manifestInAuthOrg(c, manifestID) {
+		return
+	}
 
 	var dep models.ManifestDeployment
 	if err := h.db.Where("id = ? AND manifest_id = ?", deploymentID, manifestID).First(&dep).Error; err != nil {
@@ -469,8 +560,9 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 		return
 	}
 
-	// 叠加目标 workspace 写权限(workspace 藏在 deployment 记录里,需在此校验)
-	if h.perm != nil && !h.perm.RequireWorkspacePermission(c, dep.WorkspaceID, "WRITE") {
+	// 叠加目标 workspace 权限(workspace 藏在 deployment 记录里,需在此校验):
+	// 显式 WORKSPACE_RESOURCES WRITE。
+	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, dep.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return // 403 已写
 	}
 
@@ -514,9 +606,11 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 	})
 }
 
-// VariablePreview 返回最终合并后的变量值(非敏感)用于 install/upgrade 对话框预览
+// VariablePreview 返回最终合并后的变量(结构化,每条带 sensitive)用于 upgrade 对话框预览。
+// 响应: {"variables":[{"key","value","sensitive","variable_type","value_format",...}]}
+// sensitive=true 的条目 value 恒为空串(前端不得预填)。
 // @Summary Preview deployment variables
-// @Description Preview non-sensitive merged variable values for install/upgrade dialogs
+// @Description Preview merged variables with a per-variable sensitive flag; sensitive values are always empty
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -542,13 +636,24 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 		return
 	}
 
+	manifestID := c.Param("id")
+	if !h.manifestInAuthOrg(c, manifestID) {
+		return
+	}
 	var dep models.ManifestDeployment
-	if err := h.db.Where("id = ?", deploymentID).First(&dep).Error; err != nil {
+	if err := h.db.Where("id = ? AND manifest_id = ?", deploymentID, manifestID).First(&dep).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "deployment not found"})
 		return
 	}
+	// 预览即读取目标 workspace 的合并变量: 需该 workspace 的 WORKSPACE_VARIABLES READ。
+	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, dep.WorkspaceID, "WORKSPACE_VARIABLES", "READ") {
+		return // 403 已写
+	}
+	if !h.rejectUnmountableVarsets(c, dep.WorkspaceID, req.Varsets) {
+		return
+	}
 
-	// 只展示非敏感值
+	// 敏感值恒为空,带 sensitive 标记
 	resolver := services.NewVariableResolutionService(h.db)
 	extraIDs := make([]string, 0, len(req.Varsets))
 	for _, v := range req.Varsets {

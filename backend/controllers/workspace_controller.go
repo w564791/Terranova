@@ -85,7 +85,9 @@ func NewWorkspaceController(
 // @Param size query int false "Page size" default(20)
 // @Param search query string false "Search keyword (name, description, tags)"
 // @Param project_id query int false "Project ID (0=all, >0=specific, -1=unassigned)"
+// @Param capability query string false "RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN), e.g. WORKSPACE_RESOURCES:WRITE; only workspaces where the caller also holds it"
 // @Success 200 {object} map[string]interface{} "Workspace list"
+// @Failure 400 {object} map[string]interface{} "Invalid capability"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/v1/workspaces [get]
 // @Security BearerAuth
