@@ -31,7 +31,7 @@
 | 表 | 新增 | 约束 / 说明 |
 |---|---|---|
 | `manifests` | `source_type varchar(16) NOT NULL DEFAULT 'native'`、`git_repo_url varchar(1024)`、`git_subpath varchar(512)`、`github_installation_id bigint` | `chk_manifests_source_type`（native\|git）；`chk_manifests_git_fields`：native ⇒ 三个 git 字段全为 NULL，git ⇒ `git_repo_url` 非空。存量行经默认值成为 native。API 只输出 `source_type`；创建固定为 native（git 创建在 step 8），更新时传入不同值返回 400。git 字段不出 JSON。 |
-| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填。均不出 JSON。 |
+| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填（step 3 起按 bundle 规则重算，见 §3.3）。`bundle_hash` 与 step 3 新增的 `bundle_invalid_reason` 出现在版本列表/详情 JSON；`source_ref` 不出 JSON。 |
 | `manifest_deployments` | `approved_bundle_hash`、`approved_plan_hash`（varchar(64)） | 审批接入前恒为 NULL（step 7 使用），不出 JSON。 |
 | `manifest_deployments` / `workspace_tasks` | `sensitive_keys jsonb`（可空、无默认值） | 覆盖值为敏感的 key 列表（任务行是部署覆盖快照的同一标记）。迁移不回填、不批量标记；NULL = 尚未计算，API 一律按全部敏感处理（不返回任何值）。由启动时的 Go 回填任务按部署时同一敏感判定写入（见设计文档 §8.4）。不出 JSON。 |
 | `sandbox_sessions`（新） | `id`、`user_id`、`workspace_id`、`provider`、`network_mode DEFAULT 'vpc'`、`status`、`expires_at`、`closed_at`、时间戳 | `chk_sandbox_sessions_network_mode`：只允许 `vpc`（§6.2 的数据库兜底）；`UNIQUE(id, workspace_id)` 供复合外键使用。 |
@@ -41,12 +41,45 @@
 - `status` 列（session、run）不加 CHECK：后续新增状态不需要删约束。
 - run 暂不关联 deployment（`deployment_id` 留到 step 7 再定）。
 
-### 3.2 bundle_hash 编码（`internal/manifestbundle`）
+### 3.2 bundle_hash 编码（`internal/manifestbundle`，`terranova-bundle-v2`）
 ```
-sha256( "terranova-bundle-v1" 0x00
-        对每个文件，按 path 字节序排序：path 0x00 十进制(len(content)) 0x00 content )
+sha256( "terranova-bundle-v2" 0x00
+        对每个文件，按 path 字节序排序：path 0x00 mode 0x00 十进制(len(content)) 0x00 content )
 ```
-输出小写 hex。path 为 `manifest_files.path`（相对路径，不能为空、不能重复）；长度前缀保证二进制内容（可含 NUL）无歧义；空 bundle 也有确定的哈希。native 版本的文件集 = `manifest_files WHERE version_id = 版本 id`（草稿行 `version_id IS NULL`，不参与）。改编码必须换版本前缀，不得原地修改。迁移回填、发布与后续 run/审批都只用 `manifestbundle.Hash` / `VersionHash`；SQL 补丁里的等价回填（`ORDER BY path COLLATE "C"`）与 Go 实现由黄金向量测试锁定。
+输出小写 hex。path 为 `manifest_files.path`（相对路径，不能为空、不能重复）；mode 为归一化后的八进制文本：任一可执行位（0o111）置位 → `755`，否则 `644`（含 0/未知；git 的 `100755` / `100644` 同样映射，见 `ModeFromGit`，symlink / submodule 不是 bundle 文件）。发布时 `manifest_files.mode` 按归一化值写入。长度前缀保证二进制内容（可含 NUL）无歧义；空 bundle 也有确定的哈希。native 版本的文件集 = `manifest_files WHERE version_id = 版本 id`（草稿行 `version_id IS NULL`，不参与）。改编码必须换版本前缀，不得原地修改：v1（只含 path + content）没有任何已发布构建依赖，step 3 起改为 v2 并加入 mode，迁移 `20261004_03` 用 v2 重算全部存量哈希。迁移回填、发布与后续 run/审批都只用 `manifestbundle.Hash` / `VersionHash`；SQL 补丁里的等价回填（`ORDER BY path COLLATE "C"`，mode 用 `(mode & 73) <> 0` 判定）与 Go 实现由黄金向量测试锁定（向量在 PostgreSQL 17 上用 SQL 表达式独立算出）。
+
+### 3.3 Bundle（step 3，迁移 `20261004_03_manifest_bundle_rules`）
+版本发布后不可变：所有下游只读版本的 bundle，不再读草稿。
+
+**存储**：复用 `manifest_files` 的版本行（`version_id = 版本 id`、`owner_user_id IS NULL`），按 `manifest_versions.bundle_hash` 内容寻址（部分索引 `idx_manifest_versions_bundle_hash`）。不引入新存储，也不做跨版本去重；同一文件集在不同版本里各存一份，哈希相同。哈希编码见 §3.2（v2，含文件 mode）。
+
+**`internal/manifestbundle`**
+- `Source` 接口（`ReadFiles`）：`NativeDraft`（调用者的草稿）、版本快照（包内）、`GitCommit`（占位，返回 `ErrGitSourceNotImplemented`，step 8 实现）。
+- `Pack` / `PackFiles`：校验规则（`Validate`）并计算哈希；有违规时不产出 bundle。
+- `Store`：在发布事务内写版本行，再用 `VersionHash` 重算并与打包哈希比对（不一致 → `ErrIntegrity`），最后写 `bundle_hash`、清空 `bundle_invalid_reason`。
+- `OpenVersion`（按版本）/ `OpenBundle`（按哈希）：有 `bundle_hash` 时必定重算校验，不一致 → `ErrIntegrity`（API 为通用 500）；`bundle_hash` 为 NULL 时宽松打开（`Hash` 为空并带原因），由部署路径调用 `RequireValid` 拒绝。
+
+**规则**（`Problem{rule, path}`，只含规则名与路径，绝不含文件内容或命中文本；原因串为 `rule @ path` 以 `; ` 连接，最多 20 条，超出追加 `(+N more)`，不可打印的路径加引号）：
+
+| rule | 条件 |
+|---|---|
+| `path_invalid` | 空、以 `/` 开头或结尾、空段或 `.`/`..` 段、反斜杠、控制字符、非 UTF-8 |
+| `path_too_long` | 超过 256 字节 |
+| `path_not_nfc` | 非 Unicode NFC（允许 Unicode；编辑器写入仍限 ASCII） |
+| `path_duplicate` / `path_case_duplicate` | 路径重复 / 忽略大小写（NFC 后）冲突，冲突双方都报 |
+| `denylisted_file` | 文件名（不区分大小写）：`*.tfvars`、`*.tfvars.json`、`*.tfstate`、`*.tfstate.backup`、`.terraformrc`、`terraform.rc`、`.env`、`.env.*`、私钥/证书库 `*.pem`、`*.key`、`*.p12`、`*.pfx`、`id_rsa`、`id_dsa`、`id_ecdsa`、`id_ed25519`、`.git` 文件；任意深度的 `.terraform/`、`.git/` 目录段。允许：`.terraform.lock.hcl`、`id_rsa.pub` 等公钥、`.gitignore`、`.envrc` |
+| `file_too_large` / `bundle_too_large` | 单文件超过 1 MB / 内容总和超过 50 MB |
+| `secret_scan:<kind>` | 内容命中高置信度凭证格式：`aws_access_key`、`private_key`、`github_token`、`slack_token`（新写的最小扫描器，代码库原先没有） |
+
+**发布**：同一事务内读调用者草稿 → 无 `.tf` 返回 400 → 违规返回 **422** `{error:"draft violates the bundle rules", code:"bundle_rules_violated", problems:[{rule, path}]}`（不建版本）→ 变量元信息取自 bundle → 建版本 → `Store`。响应带 `bundle_hash`。
+
+**存量（迁移 03）**：只做加法：`bundle_invalid_reason text` 列 + 上述部分索引；DDL 同步在 `backend/migrations/add_manifest_bundle_rules.sql` 与 seed（由测试校验）。Go 重算遍历全部版本：合法 → 写哈希、原因置 NULL；违规 → `bundle_hash = NULL` + 原因，并记日志 `[migration] manifest version <id>: bundle invalid, republish required: <reason>`；最后一行汇总。违规不会让迁移失败，文件一律不动；可重复执行。SQL 补丁只含 DDL（重算只在 Go 里）；step 2 的 SQL 回填加了 `bundle_invalid_reason IS NULL` 守卫，不会给已判违规的版本重新写哈希。
+
+**NULL 语义与 409**：`bundle_hash IS NULL` = 该版本没有合法 bundle，需重新发布。install、首装预览、按部署预览（检查目标版本，未给目标时检查当前版本）、upgrade 的**目标**版本均返回 **409** `{error:"this version has no valid bundle; please republish it", code:"bundle_republish_required", version_id, reason}`。从 NULL 版本升级到合法版本允许；uninstall 不受影响。
+
+**下游读取**：install（workdir 校验、资源解析）、预览、导出（版本导出与 `export-zip`；后者只在没有任何已发布版本时才退回调用者草稿）、diff（版本侧；版本不存在现返回 404）、workdirs、敏感 key 计算、执行器取文件（`LocalDataAccessor.GetManifestFilesByTag`）、outputs 模块源解析与 AI 工具，全部经 `OpenVersion`。只读路径对 NULL 版本宽松打开，但有哈希时必定校验。
+
+**暂未覆盖（后续步骤）**：执行器仍可运行 NULL 版本（step 4 runner 拒绝）；Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持；编辑器 ExternalFiles 的「Run」仍用草稿内容（step 4/6 改为预览 run）；编辑器 `ListFiles` / `ReadFile` 的 `?version=` 仍直接读版本行（不做哈希校验）。
 
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。

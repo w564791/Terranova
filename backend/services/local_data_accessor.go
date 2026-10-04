@@ -1,8 +1,10 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"iac-platform/internal/database"
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"log"
 	"time"
@@ -683,16 +685,31 @@ func (a *LocalDataAccessor) ParsePlanChanges(taskID uint, planOutput string) err
 
 // GetManifestFilesByTag 通过 deployment 与 tag 拉取该 manifest 版本的全部文件
 func (a *LocalDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error) {
-	var files []models.ManifestFile
-	err := a.getDB().Raw(`
-		SELECT mf.*
-		  FROM manifest_files mf
-		  JOIN manifest_versions mv ON mv.id = mf.version_id
+	// deployment + tag -> 版本;文件只从该版本的不可变 bundle 读(校验 bundle_hash,
+	// 篡改即报错),绝不读草稿。bundle_hash 为 NULL 的旧版本照常可读(step 4 runner 再拒绝)。
+	var versionID string
+	if err := a.getDB().Raw(`
+		SELECT mv.id
+		  FROM manifest_versions mv
 		  JOIN manifest_deployments md ON md.version_id = mv.id
 		 WHERE md.id = ? AND mv.version = ?
-		 ORDER BY mf.path ASC
-	`, deploymentID, tag).Scan(&files).Error
-	return files, err
+	`, deploymentID, tag).Scan(&versionID).Error; err != nil {
+		return nil, err
+	}
+	if versionID == "" {
+		return nil, nil
+	}
+	bundle, err := manifestbundle.OpenVersion(context.Background(), a.getDB(), "", versionID)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]models.ManifestFile, len(bundle.Files))
+	for i, f := range bundle.Files {
+		vid := versionID
+		files[i] = models.ManifestFile{VersionID: &vid, Path: f.Path, Content: f.Content, Mime: f.Mime,
+			Size: len(f.Content), IsBinary: f.IsBinary, Mode: f.Mode}
+	}
+	return files, nil
 }
 
 // ============================================================================

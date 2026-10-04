@@ -1,8 +1,7 @@
 package handlers
 
 import (
-	"archive/zip"
-	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"iac-platform/internal/domain/valueobject"
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 
@@ -475,43 +475,43 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 		return
 	}
 
+	// 有已发布版本 => 只导出版本的不可变 bundle(指定 version_id 或最新版本),绝不读草稿;
+	// 仅当 manifest 尚无任何已发布版本时,才退回调用者自己的草稿。
 	var label string
-	var fileQuery *gorm.DB
-	if versionID != "" {
-		var version models.ManifestVersion
-		if err := h.db.Where("id = ? AND manifest_id = ?", versionID, manifestID).First(&version).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Version not found"})
-				return
-			}
-			_ = c.Error(fmt.Errorf("query failed: %w", err))
-			return
-		}
-		label = version.Version
-		fileQuery = h.db.Where("manifest_id = ? AND version_id = ?", manifestID, versionID)
-	} else {
-		// 优先最新已发布版本
+	var files []manifestbundle.File
+	if versionID == "" {
 		var latest models.ManifestVersion
 		if err := h.db.Where("manifest_id = ? AND version <> ?", manifestID, "draft").
 			Order("created_at DESC").First(&latest).Error; err == nil {
-			label = latest.Version
-			fileQuery = h.db.Where("manifest_id = ? AND version_id = ?", manifestID, latest.ID)
-		} else if userID != "" {
-			// 退回当前用户草稿
-			label = "draft"
-			fileQuery = h.db.Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL", manifestID, userID)
-		} else {
-			c.JSON(http.StatusNotFound, gin.H{"error": "No version or draft to export"})
+			versionID = latest.ID
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			_ = c.Error(fmt.Errorf("query failed: %w", err))
 			return
 		}
 	}
-
-	var rows []models.ManifestFile
-	if err := fileQuery.Order("path ASC").Find(&rows).Error; err != nil {
-		_ = c.Error(fmt.Errorf("query files failed: %w", err))
+	if versionID != "" {
+		bundle, ok := openVersionBundle(c, h.db, manifestID, versionID)
+		if !ok {
+			return
+		}
+		var version models.ManifestVersion
+		if err := h.db.Select("version").Where("id = ?", versionID).First(&version).Error; err != nil {
+			_ = c.Error(fmt.Errorf("query failed: %w", err))
+			return
+		}
+		label, files = version.Version, bundle.Files
+	} else if userID != "" {
+		draft, err := manifestbundle.NativeDraft{DB: h.db, ManifestID: manifestID, OwnerUserID: userID}.ReadFiles(c.Request.Context())
+		if err != nil {
+			_ = c.Error(fmt.Errorf("query files failed: %w", err))
+			return
+		}
+		label, files = "draft", draft
+	} else {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No version or draft to export"})
 		return
 	}
-	if len(rows) == 0 {
+	if len(files) == 0 {
 		// 私有草稿模型下,无 published 版本时只能导出"自己的"草稿;若调用者没有草稿
 		// (常见于他人创建、尚未发布的 manifest),给出可操作的提示而非裸 404。
 		msg := "No files to export"
@@ -522,21 +522,9 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 		return
 	}
 
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	for _, f := range rows {
-		w, err := zw.Create(f.Path)
-		if err != nil {
-			_ = c.Error(fmt.Errorf("failed to create ZIP entry: %w", err))
-			return
-		}
-		if _, err := w.Write(f.Content); err != nil {
-			_ = c.Error(fmt.Errorf("failed to write ZIP entry: %w", err))
-			return
-		}
-	}
-	if err := zw.Close(); err != nil {
-		_ = c.Error(fmt.Errorf("failed to finalize ZIP: %w", err))
+	buf, err := zipFiles(files)
+	if err != nil {
+		_ = c.Error(fmt.Errorf("failed to build ZIP: %w", err))
 		return
 	}
 

@@ -98,8 +98,12 @@ func definitions() []definition {
 		// Manifest dual-source / dual-runner schema (sandbox spec §3) plus
 		// bundle_hash backfill. Additive only.
 		{version: "20261004_02_manifest_sandbox_schema", contract: "manifest-source-bundle-runs-sessions-run-tokens-v1", apply: applyManifestSandboxSchema},
+		{version: "20261004_03_manifest_bundle_rules", contract: "manifest-bundle-rules-recompute-v1", apply: applyManifestBundleRules},
 		// Per-row data encryption key version for variable values.
 		{version: "20261010_10_variable_key_version", contract: "variable-key-version-v1", apply: applyVariableKeyVersion},
+		// Bundle rules (sandbox spec §3.3): bundle_invalid_reason + content-addressed
+		// index; recompute every bundle_hash under the rules. Never fails on bad
+		// old versions (NULL hash + reason), never touches files.
 	}
 }
 

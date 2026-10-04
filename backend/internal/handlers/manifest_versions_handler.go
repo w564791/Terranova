@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,7 +42,7 @@ var semverPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
 // ListVersions 已发布版本列表
 // @Summary List manifest versions
-// @Description List published versions for a manifest (SemVer descending)
+// @Description List published versions for a manifest (SemVer descending). Each version carries bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths only, null when valid).
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -73,7 +74,7 @@ func (h *ManifestVersionsHandler) ListVersions(c *gin.Context) {
 
 // GetVersion 版本详情
 // @Summary Get manifest version
-// @Description Get a published version detail by version ID
+// @Description Get a published version detail by version ID, including bundle_hash and bundle_invalid_reason
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -120,36 +121,22 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
 
-	// 校验版本存在且属于本 manifest
-	var v models.ManifestVersion
-	if err := h.db.Select("id").Where("id = ? AND manifest_id = ?", versionID, manifestID).First(&v).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
-		} else {
-			_ = c.Error(err)
+	bundle, ok := openVersionBundle(c, h.db, manifestID, versionID)
+	if !ok {
+		return
+	}
+	scope := make(map[string][]byte, len(bundle.Files))
+	for _, f := range bundle.Files {
+		if strings.HasSuffix(f.Path, ".tf") {
+			scope[f.Path] = nil // 目录推断不需要内容
 		}
-		return
-	}
-
-	// 只取 .tf 路径(目录推断不需要内容)
-	var rows []models.ManifestFile
-	if err := h.db.Select("path").
-		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Where("path LIKE ?", "%.tf").
-		Find(&rows).Error; err != nil {
-		_ = c.Error(err)
-		return
-	}
-	scope := make(map[string][]byte, len(rows))
-	for _, r := range rows {
-		scope[r.Path] = nil
 	}
 	c.JSON(http.StatusOK, gin.H{"workdirs": services.ListWorkdirs(scope)})
 }
 
 // PublishVersion 把当前用户草稿快照为新版本
 // @Summary Publish manifest version
-// @Description Snapshot the current user's draft into a new published version (vX.Y.Z)
+// @Description Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; problems hold rule names and paths only.
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -161,6 +148,7 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} handlers.BundleRulesViolatedResponse
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/versions [post]
 // @Security BearerAuth
@@ -199,25 +187,42 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		return
 	}
 
-	// 校验当前用户草稿至少有一个 .tf
-	var draftCount int64
-	h.db.Model(&models.ManifestFile{}).
-		Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL", manifestID, userID).
-		Where("path LIKE ?", "%.tf").Count(&draftCount)
-	if draftCount == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "draft must contain at least one .tf file before publishing"})
-		return
-	}
-
 	newVersionID := generateManifestVersionID()
 
-	// (best-effort) HCL 静态解析提取 input variables 元信息(spec §7.6/§8.2)
-	// 失败不阻塞发布:variablesJSON 留空,前端拿不到提示但发布照常成功。
-	// 只扫 .tf 文件,二进制 / .tfvars 等不参与。
-	variablesJSON, hclParseFailed := extractDraftVariablesJSON(h.db, manifestID, userID)
-
+	// 发布 = 把当前用户草稿打包成不可变 bundle(manifestbundle.Pack:规则校验 + Hash),
+	// 在同一事务里读草稿、写版本行、存 bundle(manifest_files 版本快照行)并写 bundle_hash。
+	// 变量元信息也从同一份文件集提取,与 bundle 内容一致。
+	var (
+		problems       []manifestbundle.Problem
+		noTF           bool
+		bundleHash     string
+		hclParseFailed bool
+	)
+	errRejected := errors.New("publish rejected")
 	err := h.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 写 manifest_versions
+		ctx := c.Request.Context()
+		files, err := manifestbundle.NativeDraft{DB: tx, ManifestID: manifestID, OwnerUserID: userID}.ReadFiles(ctx)
+		if err != nil {
+			return err
+		}
+		if !hasTFFile(files) {
+			noTF = true
+			return errRejected
+		}
+		bundle, probs, err := manifestbundle.PackFiles(files)
+		if err != nil {
+			return err
+		}
+		if len(probs) > 0 {
+			problems = probs
+			return errRejected
+		}
+		bundleHash = bundle.Hash
+
+		// (best-effort) HCL 静态解析提取 input variables 元信息(spec §7.6/§8.2),失败不阻塞发布
+		var variablesJSON json.RawMessage
+		variablesJSON, hclParseFailed = variablesJSONFromScope(bundle.Scope())
+
 		v := models.ManifestVersion{
 			ID:         newVersionID,
 			ManifestID: manifestID,
@@ -230,41 +235,29 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		if err := tx.Create(&v).Error; err != nil {
 			return err
 		}
-
-		// 2. 全量复制草稿到该 version_id
-		// PostgreSQL 默认 READ COMMITTED: 这个 SELECT 看到事务开始时刻的草稿快照,
-		// 同时段独立事务的 PUT 不会污染这次快照(已记入 spec §8.2)
-		if err := tx.Exec(`
-			INSERT INTO manifest_files (manifest_id, version_id, owner_user_id, path, content, mime, size, is_binary, mode, created_at, updated_at)
-			SELECT manifest_id, ?, NULL, path, content, mime, size, is_binary, mode, NOW(), NOW()
-			FROM manifest_files
-			WHERE manifest_id = ? AND version_id IS NULL AND owner_user_id = ?
-		`, newVersionID, manifestID, userID).Error; err != nil {
+		if err := manifestbundle.Store(ctx, tx, manifestID, newVersionID, bundle); err != nil {
 			return err
 		}
 
-		// 2b. 不可变 bundle 标识:对刚写入的版本快照计算 bundle_hash(与迁移回填同一函数)
-		bundleHash, err := manifestbundle.VersionHash(c.Request.Context(), tx, newVersionID)
-		if err != nil {
-			return err
-		}
-		if err := tx.Model(&models.ManifestVersion{}).
-			Where("id = ?", newVersionID).
-			Update("bundle_hash", bundleHash).Error; err != nil {
-			return err
-		}
-
-		// 3. 首次发布后把 manifest 状态从 draft 置为 published(列表页据此显示状态)
-		if err := tx.Model(&models.Manifest{}).
+		// 首次发布后把 manifest 状态从 draft 置为 published(列表页据此显示状态)
+		return tx.Model(&models.Manifest{}).
 			Where("id = ? AND status = ?", manifestID, models.ManifestStatusDraft).
-			Update("status", models.ManifestStatusPublished).Error; err != nil {
-			return err
-		}
-
-		return nil
+			Update("status", models.ManifestStatusPublished).Error
 	})
 
-	if err != nil {
+	switch {
+	case noTF:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "draft must contain at least one .tf file before publishing"})
+		return
+	case len(problems) > 0:
+		// 422 problems: 每项只有规则名与路径,不含文件内容或命中文本
+		c.JSON(http.StatusUnprocessableEntity, BundleRulesViolatedResponse{
+			Error:    "draft violates the bundle rules",
+			Code:     "bundle_rules_violated",
+			Problems: problems,
+		})
+		return
+	case err != nil:
 		_ = c.Error(err)
 		return
 	}
@@ -280,8 +273,9 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		"id":         newVersionID,
 		"version":    req.Version,
 		"changelog":  req.Changelog,
-		"created_by": userID,
-		"created_at": time.Now(),
+		"created_by":  userID,
+		"created_at":  time.Now(),
+		"bundle_hash": bundleHash,
 	}
 	if hclParseFailed {
 		resp["warning"] = "HCL parse failed, variables metadata not extracted"
@@ -289,30 +283,31 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// extractDraftVariablesJSON 读当前用户草稿的 .tf 文件,浅 parse variable block,
-// 返回 (variables 元信息 JSON, 是否解析出错)。
-//
-// best-effort 语义:任何一步失败都返回 (nil, true),由调用方决定是否在响应里加 warning,
-// 不阻塞发布。无 variable 声明时返回 ("[]", false)。
-func extractDraftVariablesJSON(db *gorm.DB, manifestID, userID string) (json.RawMessage, bool) {
-	var files []models.ManifestFile
-	if err := db.Select("path, content").
-		Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL", manifestID, userID).
-		Where("path LIKE ?", "%.tf").
-		Find(&files).Error; err != nil {
-		return nil, true
-	}
-
-	scope := make(map[string][]byte, len(files))
+// hasTFFile 文件集中至少有一个 .tf
+func hasTFFile(files []manifestbundle.File) bool {
 	for _, f := range files {
-		scope[f.Path] = f.Content
+		if strings.HasSuffix(f.Path, ".tf") {
+			return true
+		}
 	}
+	return false
+}
 
+// variablesJSONFromScope 浅 parse .tf 中的 variable block,返回 (variables 元信息 JSON, 是否解析出错)。
+//
+// best-effort 语义:失败返回 (nil, true),由调用方决定是否在响应里加 warning,
+// 不阻塞发布。无 variable 声明时返回 ("[]", false)。只扫 .tf,二进制 / .tfvars 等不参与。
+func variablesJSONFromScope(all map[string][]byte) (json.RawMessage, bool) {
+	scope := make(map[string][]byte, len(all))
+	for p, content := range all {
+		if strings.HasSuffix(p, ".tf") {
+			scope[p] = content
+		}
+	}
 	metas := services.ParseManifestVariables(scope)
 	if metas == nil {
 		metas = []services.ManifestVariableMeta{}
 	}
-
 	raw, err := json.Marshal(metas)
 	if err != nil {
 		return nil, true
@@ -337,27 +332,12 @@ func (h *ManifestVersionsHandler) ExportVersion(c *gin.Context) {
 	manifestID := c.Param("id")
 	versionID := c.Param("version_id")
 
-	var rows []models.ManifestFile
-	if err := h.db.Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Order("path ASC").Find(&rows).Error; err != nil {
-		_ = c.Error(err)
+	bundle, ok := openVersionBundle(c, h.db, manifestID, versionID)
+	if !ok {
 		return
 	}
-
-	buf := new(bytes.Buffer)
-	zw := zip.NewWriter(buf)
-	for _, f := range rows {
-		w, err := zw.Create(f.Path)
-		if err != nil {
-			_ = c.Error(err)
-			return
-		}
-		if _, err := w.Write(f.Content); err != nil {
-			_ = c.Error(err)
-			return
-		}
-	}
-	if err := zw.Close(); err != nil {
+	buf, err := zipFiles(bundle.Files)
+	if err != nil {
 		_ = c.Error(err)
 		return
 	}
@@ -380,7 +360,7 @@ type diffEntry struct {
 //   - unchanged:两边都有且内容相同
 //
 // 返回按 path 升序的扁平列表(含 unchanged,前端可自行过滤);changed 比对用 hash 避免传全量内容。
-func computeFileDiff(targetFiles, baseFiles []models.ManifestFile) []diffEntry {
+func computeFileDiff(targetFiles, baseFiles []manifestbundle.File) []diffEntry {
 	hashOf := func(b []byte) string {
 		s := sha256.Sum256(b)
 		return hex.EncodeToString(s[:])
@@ -450,13 +430,15 @@ func (h *ManifestVersionsHandler) DiffVersions(c *gin.Context) {
 		return
 	}
 
-	var aFiles, bFiles []models.ManifestFile
-	h.db.Select("path, content").
-		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).Find(&aFiles)
-	h.db.Select("path, content").
-		Where("manifest_id = ? AND version_id = ?", manifestID, against).Find(&bFiles)
-
-	c.JSON(http.StatusOK, gin.H{"files": computeFileDiff(aFiles, bFiles)})
+	a, ok := openVersionBundle(c, h.db, manifestID, versionID)
+	if !ok {
+		return
+	}
+	b, ok := openVersionBundle(c, h.db, manifestID, against)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"files": computeFileDiff(a.Files, b.Files)})
 }
 
 // DiffDraft 当前用户草稿 vs 某版本(默认最新已发布)的文件级真内容比对(target=草稿 相对 base=版本)
@@ -487,13 +469,19 @@ func (h *ManifestVersionsHandler) DiffDraft(c *gin.Context) {
 		}
 	}
 
-	var draftFiles, baseFiles []models.ManifestFile
-	h.db.Select("path, content").
-		Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL", manifestID, userID).
-		Find(&draftFiles)
+	// 草稿侧是编辑器自己的草稿(NativeDraft);基线版本侧读不可变 bundle
+	draftFiles, err := manifestbundle.NativeDraft{DB: h.db, ManifestID: manifestID, OwnerUserID: userID}.ReadFiles(c.Request.Context())
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	var baseFiles []manifestbundle.File
 	if baseVersionID != "" {
-		h.db.Select("path, content").
-			Where("manifest_id = ? AND version_id = ?", manifestID, baseVersionID).Find(&baseFiles)
+		base, ok := openVersionBundle(c, h.db, manifestID, baseVersionID)
+		if !ok {
+			return
+		}
+		baseFiles = base.Files
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -505,6 +493,40 @@ func (h *ManifestVersionsHandler) DiffDraft(c *gin.Context) {
 // =============================================================================
 // helpers
 // =============================================================================
+
+// openVersionBundle 读已发布版本的不可变 bundle(校验 bundle_hash;无合法 bundle 的
+// 旧版本仍可读,供导出 / diff / 目录选择)。版本不存在 => 404;完整性失败等 => 500。
+func openVersionBundle(c *gin.Context, db *gorm.DB, manifestID, versionID string) (*manifestbundle.Bundle, bool) {
+	bundle, err := manifestbundle.OpenVersion(c.Request.Context(), db, manifestID, versionID)
+	switch {
+	case err == nil:
+		return bundle, true
+	case errors.Is(err, manifestbundle.ErrVersionNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+	default:
+		_ = c.Error(err)
+	}
+	return nil, false
+}
+
+// zipFiles 按 path 顺序把文件写成 zip
+func zipFiles(files []manifestbundle.File) (*bytes.Buffer, error) {
+	buf := new(bytes.Buffer)
+	zw := zip.NewWriter(buf)
+	for _, f := range files {
+		w, err := zw.Create(f.Path)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(f.Content); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
 
 // compareSemver 比较 vX.Y.Z 字符串,返回 a-b(>0 表示 a 更大)
 func compareSemver(a, b string) int {

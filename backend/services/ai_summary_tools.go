@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"log"
 	"strings"
@@ -799,12 +800,15 @@ func (t *QueryResourceCodeDiffTool) executeManifestCodeDiff(
 
 // loadManifestFiles 加载指定 manifest 版本的所有文件
 func (t *QueryResourceCodeDiffTool) loadManifestFiles(manifestID, versionID string) []models.ManifestFile {
-	var files []models.ManifestFile
-	if err := t.db.Select("path, content").
-		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Find(&files).Error; err != nil {
-		log.Printf("[query_resource_code_diff] failed to load manifest files (manifest=%s version=%s): %v",
+	bundle, err := manifestbundle.OpenVersion(context.Background(), t.db, manifestID, versionID)
+	if err != nil {
+		log.Printf("[query_resource_code_diff] failed to load manifest bundle (manifest=%s version=%s): %v",
 			manifestID, versionID, err)
+		return nil
+	}
+	files := make([]models.ManifestFile, len(bundle.Files))
+	for i, f := range bundle.Files {
+		files[i] = models.ManifestFile{Path: f.Path, Content: f.Content}
 	}
 	return files
 }

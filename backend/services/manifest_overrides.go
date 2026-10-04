@@ -3,10 +3,12 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
 
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 
 	"gorm.io/gorm"
@@ -120,15 +122,14 @@ func ComputeDeploymentSensitiveKeys(db *gorm.DB, versionIDs []string, workspaceI
 			continue
 		}
 		seen[vid] = true
-		var rows []models.ManifestFile
-		if err := db.Select("path, content").Where("version_id = ?", vid).Find(&rows).Error; err != nil {
-			return nil, fmt.Errorf("load files of version %s: %w", vid, err)
+		bundle, err := manifestbundle.OpenVersion(context.Background(), db, "", vid)
+		if errors.Is(err, manifestbundle.ErrVersionNotFound) {
+			continue
 		}
-		scope := make(map[string][]byte, len(rows))
-		for _, r := range rows {
-			scope[r.Path] = r.Content
+		if err != nil {
+			return nil, fmt.Errorf("load bundle of version %s: %w", vid, err)
 		}
-		for _, m := range ParseManifestVariables(scope) {
+		for _, m := range ParseManifestVariables(bundle.Scope()) {
 			if m.Sensitive {
 				out[m.Name] = true
 			}
