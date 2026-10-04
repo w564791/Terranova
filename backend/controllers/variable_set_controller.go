@@ -17,6 +17,66 @@ import (
 // VariableSetController 变量集控制器
 type VariableSetController struct {
 	service *services.VariableSetService
+
+	// AuthorizeAssignmentTarget validates the target workspace/project of an
+	// assignment being created or removed (in the auth org, caller may write its
+	// variables). It writes the 403/404 response and returns false on deny. Nil
+	// fails closed (403).
+	AuthorizeAssignmentTarget func(ctx *gin.Context, scopeType string, projectID *int, workspaceID *string) bool
+}
+
+// VarsetInAuthOrg binds /variable-sets/:varset_id routes to the caller's org.
+// Placed after RequirePermission. A varset not visible in the auth org
+// (VarsetVisibleInOrg) is 404 for every route; on write routes a visible but
+// not writable varset (VarsetWritableInOrg: assigned to another org, someone
+// else's unassigned set, or a global set written by a non-superadmin) is 403.
+func (c *VariableSetController) VarsetInAuthOrg(write bool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		varsetID := ctx.Param("varset_id")
+		orgID, ok := middleware.AuthOrgID(ctx)
+		if !ok {
+			ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "variable set not found"})
+			return
+		}
+		userID := ctx.GetString("user_id")
+		visible, err := c.service.VarsetVisibleInOrg(varsetID, orgID, userID)
+		if err != nil {
+			log.Printf("varset org binding: %v", err)
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check variable set"})
+			return
+		}
+		if !visible {
+			ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "variable set not found"})
+			return
+		}
+		if write {
+			writable, err := c.service.VarsetWritableInOrg(varsetID, orgID, userID, isSystemAdmin(ctx))
+			if err != nil {
+				log.Printf("varset org binding: %v", err)
+				ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check variable set"})
+				return
+			}
+			if !writable {
+				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "variable set is read-only in this organization"})
+				return
+			}
+		}
+		ctx.Next()
+	}
+}
+
+func isSystemAdmin(ctx *gin.Context) bool {
+	v, _ := ctx.Get("is_system_admin")
+	b, _ := v.(bool)
+	return b
+}
+
+func (c *VariableSetController) authorizeTarget(ctx *gin.Context, scopeType string, projectID *int, workspaceID *string) bool {
+	if c.AuthorizeAssignmentTarget == nil {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "assignment target authorization not configured"})
+		return false
+	}
+	return c.AuthorizeAssignmentTarget(ctx, scopeType, projectID, workspaceID)
 }
 
 // NewVariableSetController 创建变量集控制器实例
@@ -259,6 +319,12 @@ func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 		return
 	}
 
+	// global 变量集注入所有组织的 workspace:只有平台超管可以把变量集设为 global
+	if req.Scope == "global" && !isSystemAdmin(ctx) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "only a system admin can make a variable set global"})
+		return
+	}
+
 	varset, err := c.service.UpdateScope(varsetID, req.Scope)
 	if err != nil {
 		errMsg := err.Error()
@@ -367,6 +433,10 @@ func (c *VariableSetController) CreateAssignment(ctx *gin.Context) {
 	}
 	userID := uid.(string)
 
+	if !c.authorizeTarget(ctx, req.ScopeType, req.ProjectID, req.WorkspaceID) {
+		return
+	}
+
 	assignment, err := c.service.CreateAssignment(varsetID, req.ScopeType, req.ProjectID, req.WorkspaceID, &userID)
 	if err != nil {
 		errMsg := err.Error()
@@ -408,6 +478,15 @@ func (c *VariableSetController) DeleteAssignment(ctx *gin.Context) {
 	}
 
 	varsetID := ctx.Param("varset_id")
+	// 解除分配同样改变目标的变量:按分配记录上的目标做与创建相同的校验
+	existing, err := c.service.GetAssignment(varsetID, uint(assignmentID))
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "assignment not found"})
+		return
+	}
+	if !c.authorizeTarget(ctx, existing.ScopeType, existing.ProjectID, existing.WorkspaceID) {
+		return
+	}
 	if err := c.service.DeleteAssignment(varsetID, uint(assignmentID)); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {

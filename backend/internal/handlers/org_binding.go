@@ -134,3 +134,9 @@ func loadTeamOrgID(ctx context.Context, db *gorm.DB, teamID string) (uint, error
 	}
 	return orgID, nil
 }
+
+// EnsureProjectInAuthOrg exports the PROJECT branch of ensureScopeInAuthOrg for
+// callers outside this package (e.g. varset assignment target validation).
+func EnsureProjectInAuthOrg(ctx context.Context, db *gorm.DB, projectID uint, authOrg uint) error {
+	return ensureScopeInAuthOrg(ctx, db, valueobject.ScopeTypeProject, projectID, authOrg)
+}
