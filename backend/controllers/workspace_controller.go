@@ -61,6 +61,10 @@ type WorkspaceController struct {
 	workspaceService  *services.WorkspaceService
 	overviewService   *services.WorkspaceOverviewService
 	permissionService service.PermissionService
+	// CanWriteVariables WORKSPACE_VARIABLES WRITE on one workspace (non-writing;
+	// router wires IAMPermissionMiddleware.HasWorkspaceResourcePermission, the
+	// check manifest install/upgrade use). nil => false.
+	CanWriteVariables func(c *gin.Context, workspaceID string) bool
 }
 
 func NewWorkspaceController(
@@ -85,7 +89,7 @@ func NewWorkspaceController(
 // @Param size query int false "Page size" default(20)
 // @Param search query string false "Search keyword (name, description, tags)"
 // @Param project_id query int false "Project ID (0=all, >0=specific, -1=unassigned)"
-// @Param capability query string false "RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN), e.g. WORKSPACE_RESOURCES:WRITE; only workspaces where the caller also holds it"
+// @Param capability query string false "RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN), e.g. WORKSPACE_RESOURCES:WRITE; only workspaces where the caller also holds it; each item then carries can_write_variables (WORKSPACE_VARIABLES WRITE)"
 // @Success 200 {object} map[string]interface{} "Workspace list"
 // @Failure 400 {object} map[string]interface{} "Invalid capability"
 // @Failure 500 {object} map[string]interface{} "Server error"
@@ -149,6 +153,14 @@ func (wc *WorkspaceController) GetWorkspaces(c *gin.Context) {
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return
+	}
+
+	// capability 列表(manifest 部署选择器)逐项带 can_write_variables
+	if c.Query("capability") != "" {
+		for i := range workspaces {
+			can := wc.CanWriteVariables != nil && wc.CanWriteVariables(c, workspaces[i].WorkspaceID)
+			workspaces[i].CanWriteVariables = &can
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

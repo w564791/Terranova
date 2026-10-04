@@ -139,6 +139,7 @@ func TestUpgrade_MergesOverridesInsteadOfWiping(t *testing.T) {
 	}
 	checker := &resourceChecker{levels: map[valueobject.ResourceType]valueobject.PermissionLevel{
 		valueobject.ResourceTypeWorkspaceResources: valueobject.PermissionLevelWrite,
+		valueobject.ResourceTypeWorkspaceVars:      valueobject.PermissionLevelWrite, // override changes
 	}}
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	r := gin.New()

@@ -31,6 +31,10 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 			services.NewWorkspaceOverviewService(db),
 			permissionService,
 		)
+		// ?capability= 列表的 can_write_variables:与 manifest install/upgrade 变量变更同一检查
+		workspaceController.CanWriteVariables = func(c *gin.Context, workspaceID string) bool {
+			return iamMiddleware.HasWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_VARIABLES", "WRITE")
+		}
 		// helperController := controllers.NewWorkspaceHelperController(
 		// 	services.NewTerraformVersionService(db),
 		// 	services.NewAgentPoolService(db, services.NewAgentService(db)),
