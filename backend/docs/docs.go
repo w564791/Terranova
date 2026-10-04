@@ -16749,6 +16749,88 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "Preview variables for a first install",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target workspace, version, varsets and overrides",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.FirstInstallPreviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install": {
             "post": {
                 "security": [
@@ -32128,6 +32210,34 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.RunTaskStage"
                         }
                     ]
+                }
+            }
+        },
+        "models.FirstInstallPreviewRequest": {
+            "type": "object",
+            "required": [
+                "version_id",
+                "workspace_id"
+            ],
+            "properties": {
+                "variable_overrides": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "varsets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DeploymentVarsetEntry"
+                    }
+                },
+                "version_id": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "description": "ws-xxx 语义化ID",
+                    "type": "string"
                 }
             }
         },

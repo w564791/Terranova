@@ -221,18 +221,13 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		return
 	}
 
-	// 校验 version 属于本 manifest 且非草稿
-	var version models.ManifestVersion
-	if err := h.db.Where("id = ? AND manifest_id = ?", req.VersionID, manifestID).First(&version).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid version_id"})
-		return
-	}
-	if version.Version == "draft" || version.Version == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot install draft version"})
+	// 目标校验(与首装变量预览共用):workspace 属于本 org、version 属于本 manifest 且已发布
+	version, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID)
+	if !ok {
 		return
 	}
 
-	// 校验 workspace 存在 + 同 org
+	// 加载 workspace 记录
 	var ws models.Workspace
 	if err := h.db.Where("workspace_id = ?", req.WorkspaceID).First(&ws).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "workspace not found"})
@@ -720,21 +715,80 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "deployment not found"})
 		return
 	}
-	// 预览即读取目标 workspace 的合并变量: 需该 workspace 的 WORKSPACE_VARIABLES READ。
-	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, dep.WorkspaceID, "WORKSPACE_VARIABLES", "READ") {
-		return // 403 已写
-	}
-	if !h.rejectUnmountableVarsets(c, dep.WorkspaceID, req.Varsets) {
+	h.previewVariables(c, dep.WorkspaceID, req.Varsets, req.VariableOverrides)
+}
+
+// FirstInstallVariablePreview 首次安装前的变量预览(尚无 deployment)。
+// 与 VariablePreview 共用 previewVariables;目标校验复用 Install 的 resolveInstallTarget:
+// workspace 不属于本 org、version 不属于本 manifest 或为草稿 => 404。
+// 响应同 VariablePreview: {"variables":[...]},sensitive 条目 value 恒为空串。
+// @Summary Preview variables for a first install
+// @Description Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty
+// @Tags Manifest Deployments
+// @Accept json
+// @Produce json
+// @Param org_id path string true "Organization ID"
+// @Param id path string true "Manifest ID"
+// @Param request body models.FirstInstallPreviewRequest true "Target workspace, version, varsets and overrides"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview [post]
+// @Security BearerAuth
+func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Context) {
+	manifestID := c.Param("id")
+	var req models.FirstInstallPreviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if _, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID); !ok {
+		return
+	}
+	h.previewVariables(c, req.WorkspaceID, req.Varsets, req.VariableOverrides)
+}
 
-	// 敏感值恒为空,带 sensitive 标记
+// resolveInstallTarget 安装目标校验(Install 与首装预览共用):
+//   - workspace 必须属于鉴权 org(WorkspaceService.EnsureWorkspaceInOrg);
+//   - version 必须属于本 manifest 且已发布(非草稿)。
+// 任一不满足 => 404(不区分不存在与跨 org)。已写响应时返回 false。
+func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, manifestID, workspaceID, versionID string) (models.ManifestVersion, bool) {
+	var version models.ManifestVersion
+	orgID, ok := middleware.AuthOrgID(c)
+	if !ok || services.NewWorkspaceService(h.db).EnsureWorkspaceInOrg(workspaceID, orgID) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
+		return version, false
+	}
+	if err := h.db.Where("id = ? AND manifest_id = ?", versionID, manifestID).First(&version).Error; err != nil ||
+		version.Version == "draft" || version.Version == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		return version, false
+	}
+	return version, true
+}
+
+// previewVariables 两个预览接口的共用实现(路由层已校验 MANIFESTS READ + manifest 属于 org):
+//   - 目标 workspace 的 WORKSPACE_VARIABLES READ(预览即读取其合并变量;仅 MANIFESTS READ 不够);
+//   - varset 必须可挂载到目标 workspace;
+//   - 敏感值恒为空串,带 sensitive 标记。
+func (h *ManifestDeploymentsV2Handler) previewVariables(c *gin.Context, workspaceID string, varsets []models.DeploymentVarsetEntry, overrides map[string]string) {
+	if h.perm == nil || !h.perm.RequireWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_VARIABLES", "READ") {
+		if h.perm == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "permission middleware not configured"})
+		}
+		return // 403 已写
+	}
+	if !h.rejectUnmountableVarsets(c, workspaceID, varsets) {
+		return
+	}
 	resolver := services.NewVariableResolutionService(h.db)
-	extraIDs := make([]string, 0, len(req.Varsets))
-	for _, v := range req.Varsets {
+	extraIDs := make([]string, 0, len(varsets))
+	for _, v := range varsets {
 		extraIDs = append(extraIDs, v.VarsetID)
 	}
-	values, err := resolver.ResolveDisplayWithExtra(dep.WorkspaceID, extraIDs, req.VariableOverrides)
+	values, err := resolver.ResolveDisplayWithExtra(workspaceID, extraIDs, overrides)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -142,6 +142,7 @@ func TestManifestRoutesPermissionTable(t *testing.T) {
 		// deployments: MANIFESTS READ at the route; workspace checks are in-handler
 		{"GET", base + "/mf-1/v2/deployments", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"GET", base + "/mf-1/v2/deployments/mfd-1", "MANIFESTS", "ORGANIZATION", "READ"},
+		{"POST", base + "/mf-1/v2/deployments/variable-preview", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"POST", base + "/mf-1/v2/deployments/install", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"POST", base + "/mf-1/v2/deployments/mfd-1/upgrade", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"POST", base + "/mf-1/v2/deployments/mfd-1/uninstall", "MANIFESTS", "ORGANIZATION", "READ"},
@@ -188,7 +189,7 @@ func TestManifestRoutesPermissionTable(t *testing.T) {
 // so a new route cannot silently ship without a reviewed permission.
 func TestManifestRoutesPermissionTableIsComplete(t *testing.T) {
 	r, _, _ := setupManifestRouterForPermissionTest(t)
-	if got := len(r.Routes()); got != 34 {
-		t.Fatalf("RegisterManifestRoutes registers %d routes; update TestManifestRoutesPermissionTable (34 covered)", got)
+	if got := len(r.Routes()); got != 35 {
+		t.Fatalf("RegisterManifestRoutes registers %d routes; update TestManifestRoutesPermissionTable (35 covered)", got)
 	}
 }

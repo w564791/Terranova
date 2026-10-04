@@ -573,7 +573,8 @@ module "ec2_web" {
 |------|------|------|------|
 | GET | `/v2/deployments` | 部署列表（按可读 workspace 过滤；无可读 workspace → 403） | MANIFESTS READ + workspace 列表访问 |
 | GET | `/v2/deployments/:deployment_id` | 部署详情 | MANIFESTS READ + 目标 workspace 可读 |
-| POST | `/v2/deployments/install` | 安装到 body 中的 workspace | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
+| POST | `/v2/deployments/variable-preview` | 首次安装前变量预览（body：`workspace_id`、`version_id`、`varsets`、`variable_overrides`；与按部署的预览共用实现；workspace 不属于本 org、version 为草稿或不属于本 manifest → 404） | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ + varset 可挂载 |
+| POST | `/v2/deployments/install` | 安装到 body 中的 workspace（workspace 不属于本 org、version 为草稿或不属于本 manifest → 404） | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
 | POST | `/v2/deployments/:deployment_id/upgrade` | 升级 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
 | POST | `/v2/deployments/:deployment_id/uninstall` | 卸载 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
 | POST | `/v2/deployments/:deployment_id/variable-preview` | 变量预览（`sensitive` 掩码） | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ |
