@@ -171,6 +171,13 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.GetDeployment,
 		)...)
+		// 首次安装前预览(无 deployment):与 /:deployment_id/variable-preview 共用实现,
+		// handler 内校验 workspace 属于本 org、version 已发布且属于本 manifest、
+		// 目标 workspace WORKSPACE_VARIABLES READ、varset 可挂载
+		g.POST("/v2/deployments/variable-preview", inOrg(
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
+			deploysH.FirstInstallVariablePreview,
+		)...)
 		g.POST("/v2/deployments/install", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			deploysH.Install,

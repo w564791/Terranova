@@ -89,6 +89,14 @@ type UpgradeDeploymentRequest struct {
 	UnsetKeys []string `json:"unset_keys,omitempty"`
 }
 
+// FirstInstallPreviewRequest 首次安装前的变量预览请求(与 Install 同形的目标 + varsets/overrides)
+type FirstInstallPreviewRequest struct {
+	WorkspaceID       string                  `json:"workspace_id" binding:"required"` // ws-xxx 语义化ID
+	VersionID         string                  `json:"version_id" binding:"required"`
+	Varsets           []DeploymentVarsetEntry `json:"varsets"`
+	VariableOverrides map[string]string       `json:"variable_overrides"`
+}
+
 // DeploymentVarsetEntry 部署对话框选中的 varset 条目
 type DeploymentVarsetEntry struct {
 	VarsetID string `json:"varset_id" binding:"required"`

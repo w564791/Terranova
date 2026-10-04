@@ -1662,6 +1662,25 @@ definitions:
     - run_task_id
     - stage
     type: object
+  models.FirstInstallPreviewRequest:
+    properties:
+      variable_overrides:
+        additionalProperties:
+          type: string
+        type: object
+      varsets:
+        items:
+          $ref: '#/definitions/models.DeploymentVarsetEntry'
+        type: array
+      version_id:
+        type: string
+      workspace_id:
+        description: ws-xxx 语义化ID
+        type: string
+    required:
+    - version_id
+    - workspace_id
+    type: object
   models.DeploymentVarsetEntry:
     properties:
       priority:
@@ -16548,6 +16567,62 @@ paths:
       security:
       - BearerAuth: []
       summary: Preview deployment variables
+      tags:
+      - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview:
+    post:
+      consumes:
+      - application/json
+      description: Preview merged variables for installing a published version into
+        a workspace (no deployment yet); sensitive values are always empty
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target workspace, version, varsets and overrides
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.FirstInstallPreviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Preview variables for a first install
       tags:
       - Manifest Deployments
   /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install:
