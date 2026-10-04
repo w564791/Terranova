@@ -21,7 +21,7 @@ import {
   MoreOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import type { Manifest } from '../../services/manifestApi';
+import type { Manifest, ManifestCapabilities } from '../../services/manifestApi';
 import { listManifests, deleteManifest, exportManifestZip, createManifest } from '../../services/manifestApi';
 import { iamService, setAuthOrgId } from '../../services/iam';
 import { useToast } from '../../contexts/ToastContext';
@@ -40,6 +40,7 @@ const ManifestManagement: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const [manifests, setManifests] = useState<Manifest[]>([]);
+  const [capabilities, setCapabilities] = useState<ManifestCapabilities | null>(null);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -95,8 +96,10 @@ const ManifestManagement: React.FC = () => {
       }
       
       setManifests(items);
+      setCapabilities(response.capabilities ?? null);
       setTotal(response.total || 0);
     } catch (error: any) {
+      setCapabilities(null);
       toast.error('获取 Manifest 列表失败: ' + (error.message || '未知错误'));
     } finally {
       setLoading(false);
@@ -206,9 +209,9 @@ const ManifestManagement: React.FC = () => {
 
   const totalPages = Math.ceil(total / pageSize);
 
-  // can_write 是组织级 MANIFESTS WRITE,每个列表项相同;列表为空时无从得知,
-  // 保留新建入口(后端仍按 MANIFESTS WRITE 校验),不额外发权限请求。
-  const canCreate = manifests.length === 0 || manifests.some(m => m.can_write === true);
+  // 新建入口按列表响应顶层 capabilities.can_write(列表为空时后端也返回);
+  // 后端仍按 MANIFESTS WRITE 校验。
+  const canCreate = capabilities?.can_write === true;
 
   return (
     <div className={styles.container}>
@@ -299,17 +302,19 @@ const ManifestManagement: React.FC = () => {
             <p className={styles.emptyHint}>
               Create a new manifest to start building your infrastructure templates
             </p>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                createForm.resetFields();
-                setCreateOpen(true);
-              }}
-              disabled={!selectedOrgId}
-            >
-              Create Manifest
-            </Button>
+            {canCreate && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  createForm.resetFields();
+                  setCreateOpen(true);
+                }}
+                disabled={!selectedOrgId}
+              >
+                Create Manifest
+              </Button>
+            )}
           </div>
         ) : (
           <div className={styles.manifestList}>
@@ -371,7 +376,7 @@ const ManifestManagement: React.FC = () => {
                   <Dropdown
                     menu={{
                       items: [
-                        // 编辑/删除仅 can_write;部署仅 can_deploy(后端仍逐项校验)
+                        // 编辑仅 can_write;删除仅 can_admin;部署仅 can_deploy(后端仍逐项校验)
                         manifest.can_write && {
                           key: 'edit',
                           icon: <EditOutlined />,
@@ -408,10 +413,10 @@ const ManifestManagement: React.FC = () => {
                             }
                           },
                         },
-                        manifest.can_write && {
+                        manifest.can_admin && {
                           type: 'divider' as const,
                         },
-                        manifest.can_write && {
+                        manifest.can_admin && {
                           key: 'delete',
                           icon: <DeleteOutlined />,
                           label: 'Delete',

@@ -8,6 +8,7 @@
  *   DELETE /api/v1/organizations/:org_id/manifests/:id/files/*path
  *   POST   /api/v1/organizations/:org_id/manifests/:id/files/_move
  *   POST   /api/v1/organizations/:org_id/manifests/:id/draft/_reset_from
+ *   POST   /api/v1/organizations/:org_id/manifests/:id/v2/deployments/variable-preview (首装预览)
  */
 import api from '../../../services/api'
 
@@ -335,6 +336,40 @@ export async function previewDeploymentVariables(
   return data.variables ?? []
 }
 
+// 首次安装前预览(尚无 deployment):与上面的 per-deployment 预览同形响应,敏感值恒为空串。
+// workspace 不属于本 org / version 不存在或为草稿 => 404(见 isManifestTargetNotFound)。
+export interface InstallPreviewRequest {
+  workspace_id: string
+  version_id: string
+  varsets: DeploymentVarsetEntry[]
+  variable_overrides?: Record<string, string>
+}
+
+export async function previewInstallVariables(
+  ctx: ManifestEditorContext,
+  body: InstallPreviewRequest,
+): Promise<DeploymentPreviewVariable[]> {
+  const data = (await api.post(`${basePath(ctx)}/v2/deployments/variable-preview`, body)) as {
+    variables?: DeploymentPreviewVariable[]
+  }
+  return data.variables ?? []
+}
+
+// install / 首装预览的 404 响应体(resolveInstallTarget / ManifestInAuthOrg)。
+// api 拦截器只把 error 字符串抛出(丢了 HTTP 状态码),故按后端固定的 404 文案识别。
+const MANIFEST_TARGET_NOT_FOUND_ERRORS = new Set([
+  'workspace not found',
+  'version not found',
+  'manifest not found',
+])
+
+export const MANIFEST_TARGET_NOT_FOUND_MESSAGE = '版本或工作区不存在或无权访问'
+
+export function isManifestTargetNotFound(err: unknown): boolean {
+  const msg = typeof err === 'string' ? err : (err as Error | undefined)?.message
+  return !!msg && MANIFEST_TARGET_NOT_FOUND_ERRORS.has(msg.trim().toLowerCase())
+}
+
 export interface InstallDeploymentRequest {
   version_id: string
   workspace_id: string
@@ -351,10 +386,14 @@ export async function installDeployment(
   return await api.post(`${basePath(ctx)}/v2/deployments/install`, body)
 }
 
+// upgrade 的 variable_overrides 与已存覆盖合并(后端 c89940e):
+//   缺省的 key 保留原值;敏感 key 传空串(预览掩码占位)也保留原值;
+//   只有 unset_keys 里的 key 会从已存覆盖中删除。因此只需发送用户改动过的 key。
 export interface UpgradeDeploymentRequest {
   target_version_id: string
   varsets: DeploymentVarsetEntry[]
   variable_overrides?: Record<string, string>
+  unset_keys?: string[]
 }
 
 export async function upgradeDeployment(

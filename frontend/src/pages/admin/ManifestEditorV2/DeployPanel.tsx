@@ -12,6 +12,10 @@
  *   POST /manifests/:id/v2/deployments/:id/uninstall
  *   GET  /manifests/:id/v2/versions/:id/workdirs   (列可用 workdir 目录)
  *   POST /manifests/:id/v2/deployments/:id/variable-preview (upgrade 时预览合并变量,敏感值不回显)
+ *   POST /manifests/:id/v2/deployments/variable-preview     (首次 install 前预览,同形响应)
+ *
+ * 变量覆盖:预览每行可填覆盖值,只提交用户改过的 key(敏感行未输入新值则不提交);
+ * upgrade 时已有覆盖可"移除覆盖"(进 unset_keys,提交前可撤销),未动的 key 一律不发送。
  *
  * 加载分两步(避免一打开就拉全量):
  *   1. 打开时只拉版本、部署记录、可写 workspace(GET /workspaces?capability=WORKSPACE_RESOURCES:WRITE)
@@ -24,8 +28,11 @@ import {
   listVersions,
   listDeployments,
   listVersionWorkdirs,
-  getDeploymentVarsets,
+  getDeploymentUpgradeContext,
   previewDeploymentVariables,
+  previewInstallVariables,
+  isManifestTargetNotFound,
+  MANIFEST_TARGET_NOT_FOUND_MESSAGE,
   installDeployment,
   upgradeDeployment,
   uninstallDeployment,
@@ -234,6 +241,112 @@ const uninstallConfirmStyle: React.CSSProperties = {
   marginBottom: 12,
 }
 
+const overrideInputStyle: React.CSSProperties = {
+  ...selectStyle,
+  padding: '2px 6px',
+  fontSize: 12,
+}
+
+const rowActionStyle: React.CSSProperties = {
+  marginLeft: 'auto',
+  fontSize: 11,
+  color: '#3794ff',
+  cursor: 'pointer',
+  flexShrink: 0,
+}
+
+const SENSITIVE_PLACEHOLDER = '敏感值，不回显'
+
+function errorText(err: unknown): string {
+  if (isManifestTargetNotFound(err)) return MANIFEST_TARGET_NOT_FOUND_MESSAGE
+  const msg = typeof err === 'string' ? err : (err as Error)?.message
+  return msg ?? '未知错误'
+}
+
+// ===== 变量预览(install / upgrade 共用)=====
+
+interface VariablePreviewProps {
+  vars: DeploymentPreviewVariable[]
+  loading: boolean
+  error: string | null
+  /** 用户在本面板里输入的覆盖值(key -> 新值) */
+  edits: Record<string, string>
+  onEdit: (key: string, value: string) => void
+  /** deployment 已存的覆盖 key(仅 upgrade) */
+  overriddenKeys?: Set<string>
+  /** 已标记"移除覆盖"的 key(仅 upgrade) */
+  unsetKeys?: Set<string>
+  onToggleUnset?: (key: string) => void
+  disabled?: boolean
+}
+
+// 预览列表:敏感值后端恒为空串,只显示占位不回显;每行可输入覆盖值。
+function VariablePreview({
+  vars,
+  loading,
+  error,
+  edits,
+  onEdit,
+  overriddenKeys,
+  unsetKeys,
+  onToggleUnset,
+  disabled,
+}: VariablePreviewProps) {
+  return (
+    <div style={{ ...varBoxStyle, marginTop: 0 }}>
+      {loading && <div style={varLabelStyle}>加载中...</div>}
+      {!loading && error && (
+        <div style={{ ...varLabelStyle, color: 'var(--red)' }}>预览失败: {error}</div>
+      )}
+      {!loading && !error && vars.length === 0 && <div style={varLabelStyle}>无变量</div>}
+      {!loading &&
+        !error &&
+        vars.map((v) => {
+          const overridden = !!overriddenKeys?.has(v.key)
+          const unset = !!unsetKeys?.has(v.key)
+          const edited = Object.prototype.hasOwnProperty.call(edits, v.key)
+          return (
+            <div key={v.key} style={{ fontSize: 12, padding: '3px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: '#cccccc' }} title={v.description || undefined}>
+                  {v.key}
+                </span>
+                {v.sensitive && <span style={{ color: 'var(--amber)' }}>·敏感</span>}
+                {overridden && <span style={{ color: '#3794ff' }}>·已覆盖</span>}
+                {overridden && onToggleUnset && (
+                  <span
+                    style={rowActionStyle}
+                    onClick={() => {
+                      if (!disabled) onToggleUnset(v.key)
+                    }}
+                  >
+                    {unset ? '撤销' : '移除覆盖'}
+                  </span>
+                )}
+              </div>
+              {unset ? (
+                <div style={{ color: 'var(--red)', fontStyle: 'italic', marginTop: 2 }}>
+                  提交后移除覆盖,恢复为 workspace / Variable Set 中的值
+                </div>
+              ) : (
+                <input
+                  style={{ ...overrideInputStyle, marginTop: 2 }}
+                  type={v.sensitive ? 'password' : 'text'}
+                  autoComplete="new-password"
+                  value={edited ? edits[v.key] : v.sensitive ? '' : v.value}
+                  placeholder={v.sensitive ? SENSITIVE_PLACEHOLDER : undefined}
+                  title={v.sensitive ? SENSITIVE_PLACEHOLDER : v.value}
+                  disabled={disabled}
+                  onChange={(e) => onEdit(v.key, e.target.value)}
+                />
+              )}
+            </div>
+          )
+        })}
+    </div>
+  )
+}
+
 // ===== 组件 =====
 
 export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Props) {
@@ -259,6 +372,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [varsetDropdownOpen, setVarsetDropdownOpen] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmingUninstall, setConfirmingUninstall] = useState(false)
+  // 变量覆盖:existingOverrides=deployment 已存覆盖(null=尚未加载;install 时为 {})
+  const [existingOverrides, setExistingOverrides] = useState<Record<string, string> | null>({})
+  const [overrideEdits, setOverrideEdits] = useState<Record<string, string>>({})
+  const [unsetKeys, setUnsetKeys] = useState<Set<string>>(() => new Set())
 
   // 第一步:只拉版本 / 部署记录 / 可写 workspace(部署目标只列有 WORKSPACE_RESOURCES WRITE 的)
   useEffect(() => {
@@ -317,31 +434,59 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return activeDeploymentForWs ? 'upgrade' : 'install'
   }, [workspaceId, activeDeploymentForWs])
 
-  // 选中已装 workspace 时:拉它当前关联的 varset,预填表单
+  // 切换 workspace / 已装 deployment 时:清空本面板里的覆盖输入与移除标记
+  useEffect(() => {
+    setOverrideEdits({})
+    setUnsetKeys(new Set())
+  }, [workspaceId, activeDeploymentForWs])
+
+  // 选中已装 workspace 时:拉它当前关联的 varset 与已存覆盖,预填表单
   useEffect(() => {
     if (!activeDeploymentForWs) {
       setCurrentVarsetIds([])
+      setExistingOverrides({})
       return
     }
     let cancelled = false
-    getDeploymentVarsets(ctx, activeDeploymentForWs.id)
-      .then((ids) => {
+    setExistingOverrides(null)
+    getDeploymentUpgradeContext(ctx, activeDeploymentForWs.id)
+      .then((uc) => {
         if (cancelled) return
-        setCurrentVarsetIds(ids)
-        setVarsetIds(ids)
+        setCurrentVarsetIds(uc.varsetIds)
+        setVarsetIds(uc.varsetIds)
+        setExistingOverrides(uc.variable_overrides ?? {})
       })
       .catch(() => {
-        if (!cancelled) setCurrentVarsetIds([])
+        if (cancelled) return
+        setCurrentVarsetIds([])
+        setExistingOverrides({})
       })
     return () => {
       cancelled = true
     }
   }, [ctx, activeDeploymentForWs])
 
-  // upgrade 模式:预览按当前所选 varset 合并后的变量(后端仅支持已有 deployment 的预览)。
-  // 与 doUpgrade 提交内容一致(只带 varsets);workspace / varset 选择变化时重拉。
+  // 变量预览(install / upgrade 同一渲染组件),workspace / 版本 / varset 变化时重拉:
+  //  - upgrade:per-deployment 预览;带上已存覆盖(后端预览本身不读已存覆盖),
+  //    使预览与 upgrade 合并后的结果一致。
+  //  - install:首装预览(需已选 workspace + 版本)。
   useEffect(() => {
-    if (!activeDeploymentForWs) {
+    const varsets = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
+    let req: Promise<DeploymentPreviewVariable[]> | null = null
+    if (activeDeploymentForWs) {
+      if (existingOverrides === null) return // 等已存覆盖加载完
+      req = previewDeploymentVariables(ctx, activeDeploymentForWs.id, {
+        varsets,
+        variable_overrides: existingOverrides,
+      })
+    } else if (workspaceId && versionId) {
+      req = previewInstallVariables(ctx, {
+        workspace_id: workspaceId,
+        version_id: versionId,
+        varsets,
+      })
+    }
+    if (!req) {
       setPreviewVars([])
       setPreviewError(null)
       return
@@ -349,17 +494,14 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     let cancelled = false
     setPreviewLoading(true)
     setPreviewError(null)
-    previewDeploymentVariables(ctx, activeDeploymentForWs.id, {
-      varsets: varsetIds.map((id, i) => ({ varset_id: id, priority: i })),
-    })
+    req
       .then((vars) => {
         if (!cancelled) setPreviewVars(vars)
       })
       .catch((err) => {
         if (cancelled) return
         setPreviewVars([])
-        const msg = typeof err === 'string' ? err : (err as Error)?.message
-        setPreviewError(msg ?? '未知错误')
+        setPreviewError(errorText(err))
       })
       .finally(() => {
         if (!cancelled) setPreviewLoading(false)
@@ -367,7 +509,48 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return () => {
       cancelled = true
     }
-  }, [ctx, activeDeploymentForWs, varsetIds])
+  }, [ctx, activeDeploymentForWs, existingOverrides, workspaceId, versionId, varsetIds])
+
+  const overriddenKeys = useMemo(
+    () => new Set(Object.keys(existingOverrides ?? {})),
+    [existingOverrides],
+  )
+
+  // 只提交用户改过的 key:敏感行只有输入了非空新值才提交(空 = 未修改);
+  // 非敏感行与预览值不同才提交;被标记移除覆盖的 key 不提交值。
+  const changedOverrides = useMemo(() => {
+    const out: Record<string, string> = {}
+    const byKey = new Map(previewVars.map((v) => [v.key, v]))
+    for (const [k, val] of Object.entries(overrideEdits)) {
+      if (unsetKeys.has(k)) continue
+      const row = byKey.get(k)
+      if (!row) continue
+      if (row.sensitive) {
+        if (val !== '') out[k] = val
+      } else if (val !== row.value) {
+        out[k] = val
+      }
+    }
+    return out
+  }, [overrideEdits, unsetKeys, previewVars])
+
+  const unsetKeyList = useMemo(
+    () => Array.from(unsetKeys).filter((k) => overriddenKeys.has(k)),
+    [unsetKeys, overriddenKeys],
+  )
+
+  const handleEditOverride = useCallback((key: string, value: string) => {
+    setOverrideEdits((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  const toggleUnset = useCallback((key: string) => {
+    setUnsetKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
 
   const sameVersion = useMemo(
     () => !!activeDeploymentForWs && activeDeploymentForWs.version_id === versionId,
@@ -377,7 +560,8 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     if (varsetIds.length !== currentVarsetIds.length) return false
     return varsetIds.every((id, i) => id === currentVarsetIds[i])
   }, [varsetIds, currentVarsetIds])
-  const noChange = sameVersion && sameVarsets
+  const noChange =
+    sameVersion && sameVarsets && Object.keys(changedOverrides).length === 0 && unsetKeyList.length === 0
 
   // install 模式下:版本变更时拉该版本可用 workdir 目录
   useEffect(() => {
@@ -430,6 +614,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
         version_id: versionId,
         workspace_id: workspaceId,
         varsets: vs,
+        ...(Object.keys(changedOverrides).length > 0 ? { variable_overrides: changedOverrides } : {}),
         workdir,
       })
       if (andRun) {
@@ -445,8 +630,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       }
       return true
     } catch (err) {
-      const msg = typeof err === 'string' ? err : (err as Error)?.message
-      setSubmitError(`${andRun ? '部署并运行' : 'Install'} 失败: ${msg ?? '未知错误'}`)
+      setSubmitError(`${andRun ? '部署并运行' : 'Install'} 失败: ${errorText(err)}`)
       return false
     } finally {
       setSubmitting(false)
@@ -463,6 +647,9 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       await upgradeDeployment(ctx, activeDeploymentForWs.id, {
         target_version_id: versionId,
         varsets: vs,
+        // 后端合并覆盖:只发用户改过的 key + 明确移除的 key,未动的 key 不发送
+        ...(Object.keys(changedOverrides).length > 0 ? { variable_overrides: changedOverrides } : {}),
+        ...(unsetKeyList.length > 0 ? { unset_keys: unsetKeyList } : {}),
       })
       if (andRun) {
         const taskId = await triggerWorkspacePlanApply(wsId)
@@ -786,42 +973,24 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
           )}
         </div>
 
-        {/* 变量预览:仅 upgrade(已有 deployment);敏感值后端恒为空串,显示占位不回显 */}
-        {targetMode === 'upgrade' && activeDeploymentForWs && (
+        {/* 变量预览:install(已选 workspace + 版本)与 upgrade 共用同一组件 */}
+        {workspaceId && (targetMode === 'upgrade' ? !!activeDeploymentForWs : !!versionId) && (
           <div style={formGroupStyle}>
             <label style={labelStyle}>
               变量预览
-              <span style={labelHintStyle}>(按所选 Variable Sets 合并后的最终值)</span>
+              <span style={labelHintStyle}>(按所选 Variable Sets 合并后的最终值;可在此填写覆盖值)</span>
             </label>
-            <div style={{ ...varBoxStyle, marginTop: 0 }}>
-              {previewLoading && <div style={varLabelStyle}>加载中...</div>}
-              {!previewLoading && previewError && (
-                <div style={{ ...varLabelStyle, color: 'var(--red)' }}>预览失败: {previewError}</div>
-              )}
-              {!previewLoading && !previewError && previewVars.length === 0 && (
-                <div style={varLabelStyle}>无变量</div>
-              )}
-              {!previewLoading &&
-                !previewError &&
-                previewVars.map((v) => (
-                  <div key={v.key} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '2px 0' }}>
-                    <span style={{ color: '#cccccc', flexShrink: 0 }} title={v.description || undefined}>
-                      {v.key}
-                      {v.sensitive && <span style={{ color: 'var(--amber)', marginLeft: 4 }}>·敏感</span>}
-                    </span>
-                    {v.sensitive ? (
-                      <span style={{ color: '#666', fontStyle: 'italic' }}>敏感值，不回显</span>
-                    ) : (
-                      <span
-                        style={{ color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        title={v.value}
-                      >
-                        {v.value}
-                      </span>
-                    )}
-                  </div>
-                ))}
-            </div>
+            <VariablePreview
+              vars={previewVars}
+              loading={previewLoading}
+              error={previewError}
+              edits={overrideEdits}
+              onEdit={handleEditOverride}
+              overriddenKeys={targetMode === 'upgrade' ? overriddenKeys : undefined}
+              unsetKeys={targetMode === 'upgrade' ? unsetKeys : undefined}
+              onToggleUnset={targetMode === 'upgrade' ? toggleUnset : undefined}
+              disabled={submitting}
+            />
           </div>
         )}
 
