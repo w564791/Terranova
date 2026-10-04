@@ -78,20 +78,7 @@ func (s *VariableSetService) ListForOrg(scope string, orgID uint, callerID strin
 	if orgID == 0 {
 		return nil, fmt.Errorf("org_id required")
 	}
-	orgProjects := s.db.Table("projects").Select("id").Where("org_id = ?", orgID)
-	orgWorkspaces := s.db.Table("workspace_project_relations AS wpr").Select("wpr.workspace_id").
-		Joins("JOIN projects AS p ON p.id = wpr.project_id").Where("p.org_id = ?", orgID)
-	assigned := s.db.Model(&models.VarsetAssignment{}).Select("varset_id").
-		Where(s.db.Where("scope_type = ? AND workspace_id IN (?)", "workspace", orgWorkspaces).
-			Or("scope_type = ? AND project_id IN (?)", "project", orgProjects))
-	anyAssignment := s.db.Model(&models.VarsetAssignment{}).Select("varset_id")
-
-	visible := s.db.Where("scope = ?", "global").Or("varset_id IN (?)", assigned)
-	if callerID != "" {
-		visible = visible.Or("scope <> ? AND created_by = ? AND varset_id NOT IN (?)", "global", callerID, anyAssignment)
-	}
-
-	query := s.db.Where("is_deleted = ?", false).Where(visible)
+	query := s.db.Where("is_deleted = ?", false).Where(s.visibleInOrgCond(orgID, callerID))
 	if scope != "" {
 		query = query.Where("scope = ?", scope)
 	}
@@ -100,6 +87,87 @@ func (s *VariableSetService) ListForOrg(scope string, orgID uint, callerID strin
 		return nil, fmt.Errorf("failed to list variable sets: %w", err)
 	}
 	return varsets, nil
+}
+
+// orgAssignmentCond 匹配"落在 orgID 内"的分配行:分配到本组织 workspace
+// (workspace -> workspace_project_relations -> projects.org_id)或本组织 project。
+// ListForOrg / VarsetVisibleInOrg / VarsetWritableInOrg 共用这一条分配查询。
+func (s *VariableSetService) orgAssignmentCond(orgID uint) *gorm.DB {
+	orgProjects := s.db.Table("projects").Select("id").Where("org_id = ?", orgID)
+	orgWorkspaces := s.db.Table("workspace_project_relations AS wpr").Select("wpr.workspace_id").
+		Joins("JOIN projects AS p ON p.id = wpr.project_id").Where("p.org_id = ?", orgID)
+	return s.db.Where("scope_type = ? AND workspace_id IN (?)", "workspace", orgWorkspaces).
+		Or("scope_type = ? AND project_id IN (?)", "project", orgProjects)
+}
+
+// visibleInOrgCond 变量集在 orgID 内可见的条件(见 ListForOrg 注释)。
+func (s *VariableSetService) visibleInOrgCond(orgID uint, callerID string) *gorm.DB {
+	assigned := s.db.Model(&models.VarsetAssignment{}).Select("varset_id").Where(s.orgAssignmentCond(orgID))
+	anyAssignment := s.db.Model(&models.VarsetAssignment{}).Select("varset_id")
+	visible := s.db.Where("scope = ?", "global").Or("varset_id IN (?)", assigned)
+	if callerID != "" {
+		visible = visible.Or("scope <> ? AND created_by = ? AND varset_id NOT IN (?)", "global", callerID, anyAssignment)
+	}
+	return visible
+}
+
+// VarsetVisibleInOrg 单个变量集是否对 orgID 内的 callerID 可见(by-ID 路由的读校验)。
+// 规则与 ListForOrg 完全一致:global;分配到本组织 workspace/project;尚无分配且由
+// 调用者创建。已删除或不存在 => false。
+func (s *VariableSetService) VarsetVisibleInOrg(varsetID string, orgID uint, callerID string) (bool, error) {
+	if orgID == 0 || varsetID == "" {
+		return false, nil
+	}
+	var n int64
+	if err := s.db.Model(&models.VariableSet{}).
+		Where("varset_id = ? AND is_deleted = ?", varsetID, false).
+		Where(s.visibleInOrgCond(orgID, callerID)).
+		Count(&n).Error; err != nil {
+		return false, fmt.Errorf("check variable set visibility: %w", err)
+	}
+	return n > 0, nil
+}
+
+// VarsetWritableInOrg 单个变量集是否可被 orgID 内的 callerID 修改(by-ID 写路由)。
+// 调用前应先确认可见(不可见由调用方返回 404)。可写当且仅当:
+//   - specific 且已有分配全部落在本组织 workspace/project 内(任一分配在其他组织 => 只读);
+//   - specific、尚无分配且由调用者创建;
+//   - global 且调用者为平台超管(is_system_admin);org 管理员可见 global 但不可写。
+func (s *VariableSetService) VarsetWritableInOrg(varsetID string, orgID uint, callerID string, isSystemAdmin bool) (bool, error) {
+	if orgID == 0 || varsetID == "" {
+		return false, nil
+	}
+	var vs models.VariableSet
+	if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("load variable set: %w", err)
+	}
+	if vs.Scope == "global" {
+		return isSystemAdmin, nil
+	}
+	var total, inOrg int64
+	if err := s.db.Model(&models.VarsetAssignment{}).Where("varset_id = ?", varsetID).Count(&total).Error; err != nil {
+		return false, fmt.Errorf("count assignments: %w", err)
+	}
+	if total == 0 {
+		return callerID != "" && vs.CreatedBy != nil && *vs.CreatedBy == callerID, nil
+	}
+	if err := s.db.Model(&models.VarsetAssignment{}).Where("varset_id = ?", varsetID).
+		Where(s.orgAssignmentCond(orgID)).Count(&inOrg).Error; err != nil {
+		return false, fmt.Errorf("count org assignments: %w", err)
+	}
+	return inOrg == total, nil
+}
+
+// GetAssignment 读取属于 varsetID 的分配(删除分配前校验其目标)。
+func (s *VariableSetService) GetAssignment(varsetID string, assignmentID uint) (*models.VarsetAssignment, error) {
+	var a models.VarsetAssignment
+	if err := s.db.Where("id = ? AND varset_id = ?", assignmentID, varsetID).First(&a).Error; err != nil {
+		return nil, fmt.Errorf("assignment not found: %w", err)
+	}
+	return &a, nil
 }
 
 // ListMountableForWorkspace 返回指定 workspace 可挂载的变量集(manifest 部署选择 varset 用)。

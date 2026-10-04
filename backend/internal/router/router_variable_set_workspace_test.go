@@ -39,6 +39,13 @@ func (varsetChecker) GetUserTeams(context.Context, string) ([]string, error) { r
 
 func setupVarsetRouter(t *testing.T, extra ...string) *gin.Engine {
 	t.Helper()
+	return setupVarsetRouterWith(t, varsetChecker{}, func(c *gin.Context) { c.Set("user_id", "u1") }, extra...)
+}
+
+// setupVarsetRouterWith is setupVarsetRouter with an explicit permission
+// checker and per-request principal context (user_id, is_system_admin).
+func setupVarsetRouterWith(t *testing.T, checker service.PermissionChecker, principal func(*gin.Context), extra ...string) *gin.Engine {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	t.Setenv("IAM_SINGLE_TENANT", "0")
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=private"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -68,8 +75,8 @@ func setupVarsetRouter(t *testing.T, extra ...string) *gin.Engine {
 	}
 
 	r := gin.New()
-	protected := r.Group("/api/v1", func(c *gin.Context) { c.Set("user_id", "u1"); c.Next() })
-	SetupVariableSetRoutes(protected, db, middleware.NewIAMPermissionMiddlewareWithChecker(varsetChecker{}))
+	protected := r.Group("/api/v1", func(c *gin.Context) { principal(c); c.Next() })
+	SetupVariableSetRoutes(protected, db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	return r
 }
 

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"iac-platform/controllers"
 	"iac-platform/internal/handlers"
 	"iac-platform/internal/middleware"
 
@@ -197,10 +198,13 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	}
 
 	// === Variable Set 反向关联 (用于 varset 详情页 "被以下 deployment 使用") ===
+	// varset 须在调用组织内可见(与 /variable-sets/:varset_id 读路由同一守卫)
 	r.GET("/variable-sets/:varset_id/manifest-deployments",
-		middleware.JWTAuth(),
-		iamMiddleware.RequirePermission("VARIABLE_SETS", "ORGANIZATION", "READ"),
-		deploysH.VarsetReverseLookup,
+		append([]gin.HandlerFunc{middleware.JWTAuth()}, manifestRouteChain(
+			controllers.NewVariableSetController(db).VarsetInAuthOrg(false))(
+			iamMiddleware.RequirePermission("VARIABLE_SETS", "ORGANIZATION", "READ"),
+			deploysH.VarsetReverseLookup,
+		)...)...,
 	)
 
 	// === Workspace 视角的 manifest 摘要 (资源页徽章 / 顶部 banner 共用) ===

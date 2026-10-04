@@ -511,6 +511,25 @@ func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
 func (m *IAMPermissionMiddleware) RequireWorkspaceResourcePermission(
 	c *gin.Context, workspaceID string, resourceType string, requiredLevel string,
 ) bool {
+	return m.requireScopedResourcePermission(c, valueobject.ScopeTypeWorkspace, 0, workspaceID,
+		"workspace "+workspaceID, resourceType, requiredLevel)
+}
+
+// RequireProjectResourcePermission is the project-scope counterpart of
+// RequireWorkspaceResourcePermission for a project taken from the body (e.g.
+// varset assignment to a project). The checker evaluates project and org
+// grants, so a grant on a single workspace never satisfies it.
+func (m *IAMPermissionMiddleware) RequireProjectResourcePermission(
+	c *gin.Context, projectID uint, resourceType string, requiredLevel string,
+) bool {
+	return m.requireScopedResourcePermission(c, valueobject.ScopeTypeProject, projectID, "",
+		fmt.Sprintf("project %d", projectID), resourceType, requiredLevel)
+}
+
+func (m *IAMPermissionMiddleware) requireScopedResourcePermission(
+	c *gin.Context, scopeType valueobject.ScopeType, scopeID uint, scopeIDStr string, label string,
+	resourceType string, requiredLevel string,
+) bool {
 	userID, principalType, principalID, ok := principalFromContext(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -539,22 +558,23 @@ func (m *IAMPermissionMiddleware) RequireWorkspaceResourcePermission(
 		PrincipalType: principalType,
 		PrincipalID:   principalID,
 		ResourceType:  rt,
-		ScopeType:     valueobject.ScopeTypeWorkspace,
-		ScopeIDStr:    workspaceID,
+		ScopeType:     scopeType,
+		ScopeID:       scopeID,
+		ScopeIDStr:    scopeIDStr,
 		RequiredLevel: rl,
 	}
 	result, err := m.permissionChecker.CheckPermission(c.Request.Context(), req)
 	if err != nil {
-		log.Printf("[IAM] Workspace permission check failed for %s/%s ws %s: %v",
-			principalType, principalID, workspaceID, err)
+		log.Printf("[IAM] Permission check failed for %s/%s on %s: %v",
+			principalType, principalID, label, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500, "message": "Permission check failed", "timestamp": time.Now(),
 		})
 		return false
 	}
 	if !result.IsAllowed {
-		denyMsg := fmt.Sprintf("Permission denied on workspace %s (%s required: %s, effective: %s)",
-			workspaceID, rt, requiredLevel, result.EffectiveLevel.String())
+		denyMsg := fmt.Sprintf("Permission denied on %s (%s required: %s, effective: %s)",
+			label, rt, requiredLevel, result.EffectiveLevel.String())
 		c.Set("error", denyMsg)
 		c.JSON(http.StatusForbidden, gin.H{
 			"code": 403, "message": "Permission denied", "deny_reason": result.DenyReason,
