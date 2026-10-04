@@ -31,7 +31,7 @@
 | 表 | 新增 | 约束 / 说明 |
 |---|---|---|
 | `manifests` | `source_type varchar(16) NOT NULL DEFAULT 'native'`、`git_repo_url varchar(1024)`、`git_subpath varchar(512)`、`github_installation_id bigint` | `chk_manifests_source_type`（native\|git）；`chk_manifests_git_fields`：native ⇒ 三个 git 字段全为 NULL，git ⇒ `git_repo_url` 非空。存量行经默认值成为 native。API 只输出 `source_type`；创建固定为 native（git 创建在 step 8），更新时传入不同值返回 400。git 字段不出 JSON。 |
-| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填（step 3 起按 bundle 规则重算，见 §3.3）。`bundle_hash` 与 step 3 新增的 `bundle_invalid_reason` 出现在版本列表/详情 JSON；`source_ref` 不出 JSON。 |
+| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填（step 2 为 v1；step 3 的迁移 `20261004_04` 校验后改写为 v2 并按 bundle 规则判定，见 §3.3）。`bundle_hash` 与 step 3 新增的 `bundle_invalid_reason` 出现在版本列表/详情 JSON；`source_ref` 不出 JSON。 |
 | `manifest_deployments` | `approved_bundle_hash`、`approved_plan_hash`（varchar(64)） | 审批接入前恒为 NULL（step 7 使用），不出 JSON。 |
 | `manifest_deployments` / `workspace_tasks` | `sensitive_keys jsonb`（可空、无默认值） | 覆盖值为敏感的 key 列表（任务行是部署覆盖快照的同一标记）。迁移不回填、不批量标记；NULL = 尚未计算，API 一律按全部敏感处理（不返回任何值）。由启动时的 Go 回填任务按部署时同一敏感判定写入（见设计文档 §8.4）。不出 JSON。 |
 | `sandbox_sessions`（新） | `id`、`user_id`、`workspace_id`、`provider`、`network_mode DEFAULT 'vpc'`、`status`、`expires_at`、`closed_at`、时间戳 | `chk_sandbox_sessions_network_mode`：只允许 `vpc`（§6.2 的数据库兜底）；`UNIQUE(id, workspace_id)` 供复合外键使用。 |
@@ -46,9 +46,11 @@
 sha256( "terranova-bundle-v2" 0x00
         对每个文件，按 path 字节序排序：path 0x00 mode 0x00 十进制(len(content)) 0x00 content )
 ```
-输出小写 hex。path 为 `manifest_files.path`（相对路径，不能为空、不能重复）；mode 为归一化后的八进制文本：任一可执行位（0o111）置位 → `755`，否则 `644`（含 0/未知；git 的 `100755` / `100644` 同样映射，见 `ModeFromGit`，symlink / submodule 不是 bundle 文件）。发布时 `manifest_files.mode` 按归一化值写入。长度前缀保证二进制内容（可含 NUL）无歧义；空 bundle 也有确定的哈希。native 版本的文件集 = `manifest_files WHERE version_id = 版本 id`（草稿行 `version_id IS NULL`，不参与）。改编码必须换版本前缀，不得原地修改：v1（只含 path + content）没有任何已发布构建依赖，step 3 起改为 v2 并加入 mode，迁移 `20261004_03` 用 v2 重算全部存量哈希。迁移回填、发布与后续 run/审批都只用 `manifestbundle.Hash` / `VersionHash`；SQL 补丁里的等价回填（`ORDER BY path COLLATE "C"`，mode 用 `(mode & 73) <> 0` 判定）与 Go 实现由黄金向量测试锁定（向量在 PostgreSQL 17 上用 SQL 表达式独立算出）。
+输出小写 hex。path 为 `manifest_files.path`（相对路径，不能为空、不能重复）；mode 为归一化后的八进制文本：任一可执行位（0o111）置位 → `755`，否则 `644`（含 0/未知；git 的 `100755` / `100644` 同样映射，见 `ModeFromGit`，symlink / submodule 不是 bundle 文件）。发布时 `manifest_files.mode` 按归一化值写入。长度前缀保证二进制内容（可含 NUL）无歧义；空 bundle 也有确定的哈希。native 版本的文件集 = `manifest_files WHERE version_id = 版本 id`（草稿行 `version_id IS NULL`，不参与）。改编码必须换版本前缀，不得原地修改。发布与后续 run/审批只用 `manifestbundle.Hash` / `VersionHash`（v2）；v2 黄金向量在 PostgreSQL 17 上用等价 SQL 表达式独立算出。
 
-### 3.3 Bundle（step 3，迁移 `20261004_03_manifest_bundle_rules`）
+**v1（`terranova-bundle-v1`，只含 path + content）**：step 2（迁移 `20261004_02` 与 SQL 补丁 `add_manifest_sandbox_schema.sql`，内容自 68ff86e 未改）回填的编码，Go 侧为 `LegacyHashV1` / `VersionHashV1`，与 SQL 的等价性由 v1 黄金向量锁定。v1 不再用于新哈希，只用于迁移 `20261004_04` 校验存量（§3.3）。
+
+### 3.3 Bundle（step 3，迁移 `20261004_04_manifest_bundle_v2`）
 版本发布后不可变：所有下游只读版本的 bundle，不再读草稿。
 
 **存储**：复用 `manifest_files` 的版本行（`version_id = 版本 id`、`owner_user_id IS NULL`），按 `manifest_versions.bundle_hash` 内容寻址（部分索引 `idx_manifest_versions_bundle_hash`）。不引入新存储，也不做跨版本去重；同一文件集在不同版本里各存一份，哈希相同。哈希编码见 §3.2（v2，含文件 mode）。
@@ -57,9 +59,19 @@ sha256( "terranova-bundle-v2" 0x00
 - `Source` 接口（`ReadFiles`）：`NativeDraft`（调用者的草稿）、版本快照（包内）、`GitCommit`（占位，返回 `ErrGitSourceNotImplemented`，step 8 实现）。
 - `Pack` / `PackFiles`：校验规则（`Validate`）并计算哈希；有违规时不产出 bundle。
 - `Store`：在发布事务内写版本行，再用 `VersionHash` 重算并与打包哈希比对（不一致 → `ErrIntegrity`），最后写 `bundle_hash`、清空 `bundle_invalid_reason`。
-- `OpenVersion`（按版本）/ `OpenBundle`（按哈希）：有 `bundle_hash` 时必定重算校验，不一致 → `ErrIntegrity`（API 为通用 500）；`bundle_hash` 为 NULL 时宽松打开（`Hash` 为空并带原因），由部署路径调用 `RequireValid` 拒绝。
+- `OpenVersion`（按版本）/ `OpenBundle`（按哈希）：只读存储的文件、`bundle_hash`、`bundle_invalid_reason`，**不重算、不写库**。
+- `RequireValid`：`bundle_hash` 为 NULL 或带任何 `bundle_invalid_reason` 即无效（记录的原因优先于残留哈希）。
+- `Verify`：纯重算比对。`VerifyForUse`：真正使用版本处的完整性闸门（见下）。
 
-**规则**（`Problem{rule, path}`，只含规则名与路径，绝不含文件内容或命中文本；原因串为 `rule @ path` 以 `; ` 连接，最多 20 条，超出追加 `(+N more)`，不可打印的路径加引号）：
+**完整性只在使用处校验**：版本列表 / 详情、编辑器 `ListFiles` / `ReadFile`（`?version=`）、导出、diff、workdirs、敏感 key 计算、outputs、AI 工具都只读存储值，不重算哈希、不写库。只在 install、首装预览、按部署预览（目标版本，未给则当前版本）、upgrade 的**目标**版本，以及执行器取文件（`LocalDataAccessor.GetManifestFilesByTag`，runner 交接点）重算：
+- 不一致 → 尽力把版本记为 `bundle_hash = NULL`、`bundle_invalid_reason = 'hash_mismatch'`（写失败只记日志），输出 WARN 安全日志 `[WARN] [security] manifest bundle hash mismatch: manifest_id=… version_id=… request_id=… source=…`，并写一条 `audit_logs`（`MANIFEST_VERSION` / `version.bundle_hash_mismatch`，`new_values` 带 level、manifest_id、version_id、request_id、source）。部署路径返回 **409** `bundle_republish_required`（`reason: "hash_mismatch"`），执行器报错。执行器的记录写在事务外，外层回滚不会丢。
+- **`hash_mismatch` 粘滞**：一旦记录，任何重算、回填、迁移都不会把它改回合法；使用处直接拒绝，不再重算、不再重复上报。只有发布新版本才会产生合法 bundle（仅对新版本）。
+
+**规则**：每个违规为 `Problem{file, line?, rule, message}`（422 的 problem 形状）。
+- `file`：违规路径（bundle 级规则为空）。
+- `line`：只有 secret-scan 命中才带，为首个命中的 1 起行号；路径 / 大小 / denylist 规则不带。
+- `message`：每条规则的固定文案，绝不含文件内容或命中文本。
+- 原因串（`bundle_invalid_reason` 与日志）为 `rule @ file`，以 `; ` 连接，最多 20 条，超出追加 `(+N more)`；不可打印的路径加引号；不含行号与文案。
 
 | rule | 条件 |
 |---|---|
@@ -71,15 +83,34 @@ sha256( "terranova-bundle-v2" 0x00
 | `file_too_large` / `bundle_too_large` | 单文件超过 1 MB / 内容总和超过 50 MB |
 | `secret_scan:<kind>` | 内容命中高置信度凭证格式：`aws_access_key`、`private_key`、`github_token`、`slack_token`（新写的最小扫描器，代码库原先没有） |
 
-**发布**：同一事务内读调用者草稿 → 无 `.tf` 返回 400 → 违规返回 **422** `{error:"draft violates the bundle rules", code:"bundle_rules_violated", problems:[{rule, path}]}`（不建版本）→ 变量元信息取自 bundle → 建版本 → `Store`。响应带 `bundle_hash`。
+**发布**：在同一事务内依次执行：
+1. 读调用者的草稿；没有 `.tf` 文件则返回 400。
+2. 违反规则则返回 **422**（不建版本）：`{error:"draft violates the bundle rules", code:"bundle_rules_violated", problems:[{file, line?, rule, message}]}`。
+3. 从 bundle 取变量元信息。
+4. 建版本，执行 `Store`。
 
-**存量（迁移 03）**：只做加法：`bundle_invalid_reason text` 列 + 上述部分索引；DDL 同步在 `backend/migrations/add_manifest_bundle_rules.sql` 与 seed（由测试校验）。Go 重算遍历全部版本：合法 → 写哈希、原因置 NULL；违规 → `bundle_hash = NULL` + 原因，并记日志 `[migration] manifest version <id>: bundle invalid, republish required: <reason>`；最后一行汇总。违规不会让迁移失败，文件一律不动；可重复执行。SQL 补丁只含 DDL（重算只在 Go 里）；step 2 的 SQL 回填加了 `bundle_invalid_reason IS NULL` 守卫，不会给已判违规的版本重新写哈希。
+成功响应带 `bundle_hash`。
 
-**NULL 语义与 409**：`bundle_hash IS NULL` = 该版本没有合法 bundle，需重新发布。install、首装预览、按部署预览（检查目标版本，未给目标时检查当前版本）、upgrade 的**目标**版本均返回 **409** `{error:"this version has no valid bundle; please republish it", code:"bundle_republish_required", version_id, reason}`。从 NULL 版本升级到合法版本允许；uninstall 不受影响。
+**存量（迁移 `20261004_04_manifest_bundle_v2`）**：只做加法：新增 `bundle_invalid_reason text` 列和上述部分索引。DDL 同步在 `backend/migrations/add_manifest_bundle_v2.sql` 与 seed（由测试校验）；SQL 补丁只含 DDL，哈希处理只在 Go 里。Go 遍历全部版本，文件一律不动，违规也不会让迁移失败，可重复执行：
+- `hash_mismatch`：不再判定（粘滞）；若有残留哈希则置回 NULL。
+- 有存储哈希（step 2 的 v1，或已是 v2）：当前文件的 v1 或 v2 哈希必须与之相等，**否则**置 `bundle_hash = NULL` + `hash_mismatch`，记 WARN 安全日志，绝不按当前内容重算（不洗白篡改）。
+- 哈希匹配，或从未有哈希：按规则判定。合法 → 写 v2 哈希、原因置 NULL；违规 → `bundle_hash = NULL` + `rule @ file` 原因，记 `[migration] manifest version <id>: bundle invalid, republish required: <reason>`。因规则失败的 NULL 行再次运行时会重新判定。
+- 最后一行汇总。
 
-**下游读取**：install（workdir 校验、资源解析）、预览、导出（版本导出与 `export-zip`；后者只在没有任何已发布版本时才退回调用者草稿）、diff（版本侧；版本不存在现返回 404）、workdirs、敏感 key 计算、执行器取文件（`LocalDataAccessor.GetManifestFilesByTag`）、outputs 模块源解析与 AI 工具，全部经 `OpenVersion`。只读路径对 NULL 版本宽松打开，但有哈希时必定校验。
+本迁移取代了分支上曾短暂存在的 `20261004_03_manifest_bundle_rules`（未合并，只有开发/测试库跑过；不做补偿，跑过 03 的开发库需重建）。step 2 的 Go 回填改用 `VersionHashV1`，与恢复到 68ff86e 的 SQL 补丁一致，并在列存在时跳过带原因的行。SQL 补丁本身没有原因守卫：手工重跑可能给 NULL 行写回 v1 哈希，但记录的原因始终优先（`RequireValid` / `VerifyForUse`），版本仍被拒绝；再跑 04 会把这些哈希清回 NULL。
 
-**暂未覆盖（后续步骤）**：执行器仍可运行 NULL 版本（step 4 runner 拒绝）；Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持；编辑器 ExternalFiles 的「Run」仍用草稿内容（step 4/6 改为预览 run）；编辑器 `ListFiles` / `ReadFile` 的 `?version=` 仍直接读版本行（不做哈希校验）。
+**NULL 语义与 409**：`bundle_hash IS NULL`（或带原因）= 该版本没有合法 bundle，需重新发布。以下路径都返回 **409** `{error:"this version has no valid bundle; please republish it", code:"bundle_republish_required", version_id, reason}`（前端按 `code` 判断）：install、首装预览、按部署预览（检查目标版本，未给目标时检查当前版本）、upgrade 的**目标**版本。从无效版本升级到合法版本允许；uninstall 不受影响。
+
+**下游读取**：都经 `OpenVersion` 读版本内容，不读草稿：
+- install（workdir 校验、资源解析）与预览；
+- 导出：版本导出与 `export-zip`（后者只在没有任何已发布版本时才退回调用者草稿）；
+- diff 的版本侧（版本不存在现返回 404）；
+- workdirs、敏感 key 计算、执行器取文件、outputs 模块源解析与 AI 工具。
+
+**暂未覆盖（后续步骤）**：
+- 执行器仍可运行因规则失败而 NULL 的版本（step 4 runner 拒绝），但 `hash_mismatch` 已拒绝。
+- Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持。
+- 编辑器 ExternalFiles 的「Run」仍用草稿内容（step 4/6 改为预览 run）。
 
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。

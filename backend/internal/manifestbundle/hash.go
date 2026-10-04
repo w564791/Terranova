@@ -22,7 +22,8 @@ import (
 // requires a new version string (and new hashes), never an in-place edit.
 // v2 added the normalized file mode to every entry (v1 hashed path + content
 // only and was never relied on by a released build; migration
-// 20261004_03 recomputes every stored hash with v2).
+// 20261004_04_manifest_bundle_v2 verifies each stored v1 hash and rewrites
+// it as v2).
 const HashFormatVersion = "terranova-bundle-v2"
 
 // Normalized file modes. Only the executable bit is significant.
@@ -124,4 +125,53 @@ func VersionHash(ctx context.Context, db *gorm.DB, versionID string) (string, er
 		files[i] = File{Path: r.Path, Content: r.Content, Mode: r.Mode}
 	}
 	return Hash(files)
+}
+
+// LegacyHashV1 is the retired terranova-bundle-v1 encoding (path + content,
+// no mode), the encoding of the step-2 backfill (migration
+// 20261004_02_manifest_sandbox_schema and its SQL patch). Migration
+// 20261004_04_manifest_bundle_v2 checks stored v1 hashes with it: a match is
+// rewritten as v2, anything else becomes a sticky hash_mismatch. Never use it
+// for new hashes.
+func LegacyHashV1(files []File) (string, error) {
+	sorted := make([]File, len(files))
+	copy(sorted, files)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })
+	h := sha256.New()
+	h.Write([]byte("terranova-bundle-v1"))
+	h.Write([]byte{0})
+	for i, f := range sorted {
+		if f.Path == "" {
+			return "", fmt.Errorf("bundle file with empty path")
+		}
+		if i > 0 && sorted[i-1].Path == f.Path {
+			return "", fmt.Errorf("duplicate bundle path %q", f.Path)
+		}
+		h.Write([]byte(f.Path))
+		h.Write([]byte{0})
+		h.Write([]byte(strconv.Itoa(len(f.Content))))
+		h.Write([]byte{0})
+		h.Write(f.Content)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// VersionHashV1 is VersionHash in the legacy v1 encoding; only the step-2
+// backfill (20261004_02) uses it, so its Go and SQL forms stay identical.
+func VersionHashV1(ctx context.Context, db *gorm.DB, versionID string) (string, error) {
+	var rows []struct {
+		Path    string
+		Content []byte
+	}
+	if err := db.WithContext(ctx).Table("manifest_files").
+		Select("path, content").
+		Where("version_id = ?", versionID).
+		Find(&rows).Error; err != nil {
+		return "", fmt.Errorf("load files of version %s: %w", versionID, err)
+	}
+	files := make([]File, len(rows))
+	for i, r := range rows {
+		files[i] = File{Path: r.Path, Content: r.Content}
+	}
+	return LegacyHashV1(files)
 }

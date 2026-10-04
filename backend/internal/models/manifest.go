@@ -57,9 +57,9 @@ type ManifestVersion struct {
 	Version    string          `json:"version" gorm:"size:50;not null"`           // 版本号，如 v1.0.0
 	Variables  json.RawMessage `json:"variables" gorm:"type:jsonb"`               // 该版本声明的 Terraform input variables 元信息(.tf 静态解析)
 	Changelog  string          `json:"changelog" gorm:"type:text"`                // 发布说明
-	// 不可变 bundle 标识(manifestbundle.Hash,发布时写入,迁移按 bundle 规则重算)。
-	// NULL = 该版本没有合法 bundle(违反 bundle 规则,原因见 BundleInvalidReason,
-	// 只含规则名与路径),install / upgrade / 预览拒绝,需重新发布。
+	// 不可变 bundle 标识(manifestbundle.Hash,发布时写入;迁移 04 校验存量后改写为 v2)。
+	// NULL = 该版本没有合法 bundle(原因见 BundleInvalidReason:"rule @ file" 或粘滞的
+	// hash_mismatch),install / upgrade / 预览拒绝,需重新发布。读接口只返回存储值,不重算。
 	BundleHash          *string `json:"bundle_hash" gorm:"column:bundle_hash;size:64"`
 	BundleInvalidReason *string `json:"bundle_invalid_reason" gorm:"column:bundle_invalid_reason;type:text"`
 	// git commit SHA(native 为 NULL),git 来源(step 8)接入时再开放。

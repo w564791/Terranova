@@ -16030,39 +16030,36 @@ CREATE INDEX IF NOT EXISTS idx_run_tokens_session_active ON public.run_tokens (s
 
 -- Backfill bundle_hash of existing versions. Same encoding as
 -- manifestbundle.Hash (the Go migration uses that function directly):
---   sha256("terranova-bundle-v2" 0x00 { path 0x00 mode 0x00 len(content) 0x00 content } sorted by path, byte order)
--- mode = '755' when any executable bit (0o111 = 73) is set, else '644'.
+--   sha256("terranova-bundle-v1" 0x00 { path 0x00 len(content) 0x00 content } sorted by path, byte order)
 UPDATE public.manifest_versions v
    SET bundle_hash = encode(sha256(
-         convert_to('terranova-bundle-v2', 'UTF8') || '\x00'::bytea ||
+         convert_to('terranova-bundle-v1', 'UTF8') || '\x00'::bytea ||
          COALESCE((SELECT string_agg(
                      convert_to(f.path, 'UTF8') || '\x00'::bytea ||
-                     convert_to(CASE WHEN (COALESCE(f.mode, 420) & 73) <> 0 THEN '755' ELSE '644' END, 'UTF8') || '\x00'::bytea ||
                      convert_to(octet_length(f.content)::text, 'UTF8') || '\x00'::bytea ||
                      f.content,
                      ''::bytea ORDER BY f.path COLLATE "C")
                    FROM public.manifest_files f
                   WHERE f.version_id = v.id), ''::bytea)), 'hex')
- WHERE v.bundle_hash IS NULL
-   -- a version marked invalid by 20261004_03 (bundle rules) stays NULL; to_jsonb
-   -- keeps this valid before that column exists
-   AND to_jsonb(v) ->> 'bundle_invalid_reason' IS NULL;
+ WHERE v.bundle_hash IS NULL;
 -- <<< migrations/add_manifest_sandbox_schema.sql <<<
 
--- >>> migrations/add_manifest_bundle_rules.sql >>>
--- Manifest bundle rules (docs/manifest/manifest-sandbox-spec.md §3.3)
--- (kept in sync with versioned migration 20261004_03_manifest_bundle_rules).
+-- >>> migrations/add_manifest_bundle_v2.sql >>>
+-- Manifest bundle v2 (docs/manifest/manifest-sandbox-spec.md §3.3)
+-- (kept in sync with versioned migration 20261004_04_manifest_bundle_v2).
 -- Additive and idempotent: one nullable column and one partial index.
 --
--- bundle_hash recompute under the bundle rules (NFC paths, case duplicates,
--- denylisted files, size limits, secret scan) needs the Go implementation
--- (manifestbundle.Validate) and runs only in the migration job; this patch
--- writes no hashes. Run the migration job after applying it.
+-- Moving bundle_hash to terranova-bundle-v2 (verify the stored v1 hash
+-- against the current files first, sticky hash_mismatch otherwise) and the
+-- bundle rules (NFC paths, case duplicates, denylisted files, size limits,
+-- secret scan) need the Go implementation (manifestbundle) and run only in
+-- the migration job; this patch writes no hashes. Run the migration job
+-- after applying it.
 
 ALTER TABLE public.manifest_versions ADD COLUMN IF NOT EXISTS bundle_invalid_reason text;
 
 CREATE INDEX IF NOT EXISTS idx_manifest_versions_bundle_hash ON public.manifest_versions (bundle_hash) WHERE bundle_hash IS NOT NULL;
--- <<< migrations/add_manifest_bundle_rules.sql <<<
+-- <<< migrations/add_manifest_bundle_v2.sql <<<
 
 -- PostgreSQL database dump complete
 --

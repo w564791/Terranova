@@ -72,7 +72,8 @@ type PublishVersionRequest struct {
 type InstallDeploymentRequest struct {
 	VersionID         string                  `json:"version_id" binding:"required"`
 	WorkspaceID       string                  `json:"workspace_id" binding:"required"` // ws-xxx 语义化ID
-	Varsets           []DeploymentVarsetEntry `json:"varsets"`
+	// Varsets 指针:缺省(nil)与 [] 在首装时等价,都表示不挂 varset。
+	Varsets           *[]DeploymentVarsetEntry `json:"varsets"`
 	VariableOverrides OverrideInputs          `json:"variable_overrides"`
 	// Workdir 可选:terraform 执行子目录(归一化后存入 workspaces.manifest_subpath)。
 	// 省略(nil)= 沿用 workspace 记录里已有的 ManifestSubpath(向后兼容);
@@ -82,8 +83,10 @@ type InstallDeploymentRequest struct {
 
 // UpgradeDeploymentRequest upgrade 请求
 type UpgradeDeploymentRequest struct {
-	TargetVersionID string                  `json:"target_version_id" binding:"required"`
-	Varsets         []DeploymentVarsetEntry `json:"varsets"`
+	TargetVersionID string `json:"target_version_id" binding:"required"`
+	// Varsets 指针,缺省 != []:缺省(nil)= 保持部署已挂的 varset 不变(也不算变量变更);
+	// [] = 清空;非空 = 整体替换(按 priority 生效顺序比较是否变化)。
+	Varsets *[]DeploymentVarsetEntry `json:"varsets"`
 	// VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;
 	// 敏感变量传空串(预览里的掩码占位)视为"不修改",也保留原值。
 	VariableOverrides OverrideInputs `json:"variable_overrides"`
@@ -102,8 +105,9 @@ type FirstInstallPreviewRequest struct {
 // DeploymentPreviewRequest 已有 deployment 的变量预览:与 upgrade 同一合并
 // (已存覆盖 + 本次覆盖 - unset_keys),可选 target_version_id 参与敏感判定。
 type DeploymentPreviewRequest struct {
-	TargetVersionID   string                  `json:"target_version_id,omitempty"`
-	Varsets           []DeploymentVarsetEntry `json:"varsets"`
+	TargetVersionID string `json:"target_version_id,omitempty"`
+	// Varsets 与 upgrade 同义:缺省 = 部署已挂的 varset;[] = 无;非空 = 以此为准。
+	Varsets           *[]DeploymentVarsetEntry `json:"varsets"`
 	VariableOverrides OverrideInputs          `json:"variable_overrides"`
 	UnsetKeys         []string                `json:"unset_keys,omitempty"`
 }

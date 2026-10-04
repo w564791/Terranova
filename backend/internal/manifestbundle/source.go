@@ -2,8 +2,10 @@ package manifestbundle
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"gorm.io/gorm"
 
@@ -13,8 +15,9 @@ import (
 // Source is the single read-files interface of a manifest bundle source.
 // Publish packs a Source into a bundle (native: the publisher's draft; git:
 // the tree at a pinned commit SHA, step 8). Downstream consumers never read a
-// Source directly: they open the stored, hash-verified bundle with
-// OpenVersion / OpenBundle.
+// Source directly: they open the stored bundle with OpenVersion /
+// OpenBundle; places that actually use a version (install, previews, upgrade
+// target, runner hand-off) additionally call VerifyForUse.
 type Source interface {
 	ReadFiles(ctx context.Context) ([]File, error)
 }
@@ -80,10 +83,12 @@ func readFileRows(q *gorm.DB) ([]File, error) {
 
 // Bundle an immutable, content-addressed file set.
 type Bundle struct {
-	// Hash is the verified bundle_hash. Empty when the version has no valid
-	// bundle (bundle_hash NULL, see InvalidReason).
+	// Hash is the stored bundle_hash (verified only by Verify /
+	// VerifyForUse). Empty when the version has no valid bundle (bundle_hash
+	// NULL, see InvalidReason).
 	Hash          string
 	VersionID     string
+	ManifestID    string
 	InvalidReason string
 	Files         []File
 }
@@ -98,7 +103,7 @@ func (b *Bundle) Scope() map[string][]byte {
 }
 
 // InvalidError the version has no valid bundle (bundle_hash NULL); it must be
-// republished. Reason holds only rule names and paths.
+// republished. Reason holds only rule names and paths, or hash_mismatch.
 type InvalidError struct {
 	VersionID string
 	Reason    string
@@ -111,11 +116,13 @@ func (e *InvalidError) Error() string {
 	return fmt.Sprintf("version %s has no valid bundle: %s", e.VersionID, e.Reason)
 }
 
-// RequireValid fails with *InvalidError when the bundle is not valid. Deploy
-// paths (install, upgrade, previews) call it; later the runner (step 4) and
-// approval (step 7) do too.
+// RequireValid fails with *InvalidError when the version has no bundle_hash
+// (no re-hash; see Verify / VerifyForUse). Deploy paths (install, upgrade,
+// previews) call it; later the runner (step 4) and approval (step 7) do too.
 func (b *Bundle) RequireValid() error {
-	if b.Hash == "" {
+	// a recorded reason wins over a stray hash (e.g. a manual re-run of the
+	// step-2 SQL backfill, which has no reason guard)
+	if b.Hash == "" || b.InvalidReason != "" {
 		return &InvalidError{VersionID: b.VersionID, Reason: b.InvalidReason}
 	}
 	return nil
@@ -188,13 +195,13 @@ func Store(ctx context.Context, tx *gorm.DB, manifestID, versionID string, b *Bu
 		Updates(map[string]interface{}{"bundle_hash": b.Hash, "bundle_invalid_reason": nil}).Error
 }
 
-// OpenVersion opens the stored bundle of a published version. When the
-// version has a bundle_hash the files are re-hashed and must match
-// (ErrIntegrity otherwise). A version without bundle_hash (failed the bundle
-// rules, or published by an old binary during a rolling upgrade) opens with
-// Hash == "" so read-only consumers (export, diff, running workspaces) keep
-// working; deploy paths call RequireValid. manifestID may be empty when the
-// caller only has a version id.
+// OpenVersion reads the stored bundle of a published version: its files plus
+// the stored bundle_hash / bundle_invalid_reason. It never re-hashes and
+// never writes, so read-only endpoints (list, detail, export, diff, workdirs)
+// stay cheap and side-effect free. Places that actually use the version
+// (install, previews, upgrade target, runner hand-off) call RequireValid
+// and/or VerifyForUse. manifestID may be empty when the caller only has a
+// version id.
 func OpenVersion(ctx context.Context, db *gorm.DB, manifestID, versionID string) (*Bundle, error) {
 	var v struct {
 		ID                  string
@@ -216,8 +223,8 @@ func OpenVersion(ctx context.Context, db *gorm.DB, manifestID, versionID string)
 	return openStored(ctx, db, v.ManifestID, v.ID, v.BundleHash, v.BundleInvalidReason)
 }
 
-// OpenBundle content-addressed read: the bundle whose hash is bundleHash
-// (any version carrying it; identical hash means identical files).
+// OpenBundle content-addressed read: the bundle whose stored hash is
+// bundleHash (any version carrying it). Unverified like OpenVersion.
 func OpenBundle(ctx context.Context, db *gorm.DB, bundleHash string) (*Bundle, error) {
 	var v struct {
 		ID         string
@@ -240,19 +247,129 @@ func openStored(ctx context.Context, db *gorm.DB, manifestID, versionID string, 
 	if err != nil {
 		return nil, err
 	}
-	b := &Bundle{VersionID: versionID, Files: files}
-	if bundleHash == nil || *bundleHash == "" {
-		if reason != nil {
-			b.InvalidReason = *reason
-		}
-		return b, nil
+	b := &Bundle{VersionID: versionID, ManifestID: manifestID, Files: files}
+	if bundleHash != nil {
+		b.Hash = *bundleHash
 	}
-	got, err := Hash(files)
-	if err != nil || got != *bundleHash {
-		return nil, fmt.Errorf("%w: version %s", ErrIntegrity, versionID)
+	if reason != nil {
+		b.InvalidReason = *reason
 	}
-	b.Hash = got
 	return b, nil
+}
+
+// Verify re-hashes the files and compares with the stored bundle_hash.
+// *InvalidError when the version has no valid bundle; ErrIntegrity when the
+// files no longer match. Pure: no DB access. Use VerifyForUse in request /
+// runner paths so a mismatch is recorded and reported.
+func (b *Bundle) Verify() error {
+	if err := b.RequireValid(); err != nil {
+		return err
+	}
+	got, err := Hash(b.Files)
+	if err != nil || got != b.Hash {
+		return fmt.Errorf("%w: version %s", ErrIntegrity, b.VersionID)
+	}
+	return nil
+}
+
+// ReasonHashMismatch is the sticky bundle_invalid_reason of a version whose
+// stored files no longer match its bundle_hash. Once set, no recompute,
+// backfill or migration may make the version valid again; only publishing a
+// new version produces a valid bundle (for that new version).
+const ReasonHashMismatch = "hash_mismatch"
+
+// MismatchEvent identifies where a hash mismatch was detected.
+type MismatchEvent struct {
+	ManifestID string
+	VersionID  string
+	RequestID  string // HTTP request id, empty for background callers
+	Source     string // e.g. "install", "upgrade_target", "runner"
+	UserID     string
+}
+
+// securityLogf is the WARN sink of ReportHashMismatch (stdlib log, the
+// repo's request logging; tests capture it with log.SetOutput).
+var securityLogf = log.Printf
+
+// ReportHashMismatch records a detected mismatch: best effort
+// bundle_hash = NULL + bundle_invalid_reason = 'hash_mismatch' (a failure is
+// logged, never returned), a WARN security log line and an audit_logs row
+// (resource MANIFEST_VERSION, action version.bundle_hash_mismatch).
+func ReportHashMismatch(ctx context.Context, db *gorm.DB, ev MismatchEvent) {
+	securityLogf("[WARN] [security] manifest bundle hash mismatch: manifest_id=%s version_id=%s request_id=%s source=%s; version marked %s, republish required",
+		ev.ManifestID, ev.VersionID, ev.RequestID, ev.Source, ReasonHashMismatch)
+	if err := db.WithContext(ctx).Model(&models.ManifestVersion{}).Where("id = ?", ev.VersionID).
+		Updates(map[string]interface{}{"bundle_hash": nil, "bundle_invalid_reason": ReasonHashMismatch}).Error; err != nil {
+		securityLogf("[WARN] [security] could not record %s on manifest version %s (request_id=%s): %v", ReasonHashMismatch, ev.VersionID, ev.RequestID, err)
+	}
+	raw, _ := json.Marshal(map[string]string{
+		"level": "WARN", "manifest_id": ev.ManifestID, "version_id": ev.VersionID,
+		"request_id": ev.RequestID, "source": ev.Source, "reason": ReasonHashMismatch,
+	})
+	var uid *string
+	if ev.UserID != "" {
+		uid = &ev.UserID
+	}
+	if err := db.WithContext(ctx).Create(&models.AuditLog{
+		UserID: uid, Action: "version.bundle_hash_mismatch", ResourceType: "MANIFEST_VERSION", NewValues: string(raw),
+	}).Error; err != nil {
+		securityLogf("[WARN] [security] could not write hash mismatch audit row for manifest version %s (request_id=%s): %v", ev.VersionID, ev.RequestID, err)
+	}
+}
+
+// VerifyForUse is the integrity gate of places that actually use a version.
+// A version already marked hash_mismatch is rejected without re-hashing.
+// When the version has a bundle_hash the files are re-hashed; on mismatch
+// the event is reported (ReportHashMismatch) and an *InvalidError with
+// Reason hash_mismatch is returned. A version without bundle_hash for another
+// reason (bundle rules) returns nil here: callers that require a valid bundle
+// call RequireValid first.
+func VerifyForUse(ctx context.Context, db *gorm.DB, b *Bundle, ev MismatchEvent) error {
+	if b.InvalidReason == ReasonHashMismatch {
+		return &InvalidError{VersionID: b.VersionID, Reason: ReasonHashMismatch}
+	}
+	if b.Hash == "" || b.InvalidReason != "" {
+		return nil // no valid bundle for another reason (rules): RequireValid decides
+	}
+	if got, err := Hash(b.Files); err == nil && got == b.Hash {
+		return nil
+	}
+	if ev.VersionID == "" {
+		ev.VersionID = b.VersionID
+	}
+	if ev.ManifestID == "" {
+		ev.ManifestID = b.ManifestID
+	}
+	ReportHashMismatch(ctx, db, ev)
+	b.Hash, b.InvalidReason = "", ReasonHashMismatch
+	return &InvalidError{VersionID: b.VersionID, Reason: ReasonHashMismatch}
+}
+
+// CheckStoredVersion is the migration check of one version against its
+// stored bundle_hash. When storedHash is set it must equal the v2 or legacy
+// v1 hash of the current files; otherwise mismatch is true and nothing else
+// is computed (never re-derive a hash from content that no longer matches).
+// Without a stored hash (or after a match) the bundle rules are applied and
+// hash is the v2 hash when problems is empty.
+func CheckStoredVersion(ctx context.Context, db *gorm.DB, versionID, storedHash string) (hash string, problems []Problem, mismatch bool, err error) {
+	files, err := nativeVersion{DB: db, VersionID: versionID}.ReadFiles(ctx)
+	if err != nil {
+		return "", nil, false, err
+	}
+	v2, err := Hash(files)
+	if err != nil {
+		// duplicate / empty paths: reported through the rules below
+		v2 = ""
+	}
+	if storedHash != "" && storedHash != v2 {
+		if v1, err := LegacyHashV1(files); err != nil || v1 != storedHash {
+			return "", nil, true, nil
+		}
+	}
+	if problems := Validate(files); len(problems) > 0 {
+		return "", problems, false, nil
+	}
+	return v2, nil, false, nil
 }
 
 // CheckVersion re-reads a version's stored files and applies the bundle

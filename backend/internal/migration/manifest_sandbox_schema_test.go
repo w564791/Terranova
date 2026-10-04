@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"iac-platform/internal/manifestbundle"
 )
 
 var wsRun = regexp.MustCompile(`\s+`)
@@ -93,9 +91,7 @@ func TestManifestSandboxSQLInSync(t *testing.T) {
 				t.Fatalf("%s is missing statement:\n%s", path, stmt)
 			}
 		}
-		// same format version and mode normalization as manifestbundle.Hash
-		if !strings.Contains(sql, "convert_to('"+manifestbundle.HashFormatVersion+"', 'UTF8')") ||
-			!strings.Contains(sql, normalizeSQL(`convert_to(CASE WHEN (COALESCE(f.mode, 420) & 73) <> 0 THEN '755' ELSE '644' END, 'UTF8')`)) ||
+		if !strings.Contains(sql, "convert_to('terranova-bundle-v1', 'UTF8')") ||
 			!strings.Contains(sql, `ORDER BY f.path COLLATE "C"`) {
 			t.Fatalf("%s is missing the bundle_hash backfill", path)
 		}

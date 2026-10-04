@@ -222,7 +222,7 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 
 // Install 把指定 published version 装到空 workspace
 // @Summary Install manifest deployment
-// @Description Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required.
+// @Description Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required; so is a version whose stored files no longer match bundle_hash (reason hash_mismatch, recorded on the version and sticky until a new version is published).
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -255,15 +255,16 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		return // 403 已写
 	}
 	// 首装带覆盖或 varset 即变更目标 workspace 的变量
-	if !h.requireVariablesWriteIf(c, req.WorkspaceID, len(req.VariableOverrides) > 0 || len(req.Varsets) > 0) {
+	installVarsets := derefVarsets(req.Varsets) // 首装:缺省与 [] 等价
+	if !h.requireVariablesWriteIf(c, req.WorkspaceID, len(req.VariableOverrides) > 0 || len(installVarsets) > 0) {
 		return
 	}
-	if !h.rejectUnmountableVarsets(c, req.WorkspaceID, req.Varsets) {
+	if !h.rejectUnmountableVarsets(c, req.WorkspaceID, installVarsets) {
 		return
 	}
 
 	// 目标校验(与首装变量预览共用):workspace 属于本 org、version 属于本 manifest 且已发布
-	version, bundle, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID)
+	version, bundle, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID, "install")
 	if !ok {
 		return
 	}
@@ -318,7 +319,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	deploymentID := generateManifestDeploymentID()
 
 	// 敏感 key = 版本 variable 块 sensitive + 同名敏感变量 + 请求里标记的 sensitive
-	sensitive, err := services.ComputeDeploymentSensitiveKeys(h.db, []string{req.VersionID}, req.WorkspaceID, varsetIDsOf(req.Varsets))
+	sensitive, err := services.ComputeDeploymentSensitiveKeys(h.db, []string{req.VersionID}, req.WorkspaceID, varsetIDsOf(installVarsets))
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -349,7 +350,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		}
 
 		// 2. 写 varsets
-		for _, v := range req.Varsets {
+		for _, v := range installVarsets {
 			if err := tx.Create(&models.ManifestDeploymentVarset{
 				DeploymentID: deploymentID,
 				VarsetID:     v.VarsetID,
@@ -406,7 +407,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 		"version_id":      req.VersionID,
 		"version":         version.Version,
 		"resources_added": len(resourceRefs),
-		"varset_count":    len(req.Varsets),
+		"varset_count":    len(installVarsets),
 	})
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -419,7 +420,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 
 // Upgrade 切换版本与 varsets,reconcile workspace_resources
 // @Summary Upgrade manifest deployment
-// @Description Switch deployment version and varsets; reconcile workspace resources. The target version must have a valid bundle (409 bundle_republish_required); upgrading away from a version without one is allowed.
+// @Description Switch deployment version and varsets; reconcile workspace resources. varsets absent keeps the attached varsets, [] clears them, a list replaces them. The target version must have a valid, intact bundle (409 bundle_republish_required, reason hash_mismatch when its files no longer match); upgrading away from a version without one is allowed.
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -466,19 +467,29 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	}
 	// 覆盖 / unset / varset 列表(按生效顺序比较)有变化 => 还需 WORKSPACE_VARIABLES WRITE;
 	// 原样回传 varset、只换版本沿用上面的规则。
+	// varsets 缺省(nil)= 保持不变,不算变化、不重写;[] = 清空;非空 = 替换。
+	replaceVarsets := req.Varsets != nil
+	effectiveVarsets, err := h.storedVarsetEntries(dep.ID)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
 	variablesChanged := len(req.VariableOverrides) > 0 || len(req.UnsetKeys) > 0
-	if !variablesChanged {
-		changed, err := h.deploymentVarsetsChanged(dep.ID, req.Varsets)
-		if err != nil {
-			_ = c.Error(err)
-			return
+	if replaceVarsets {
+		if !variablesChanged {
+			changed, err := h.deploymentVarsetsChanged(dep.ID, *req.Varsets)
+			if err != nil {
+				_ = c.Error(err)
+				return
+			}
+			variablesChanged = changed
 		}
-		variablesChanged = changed
+		effectiveVarsets = *req.Varsets
 	}
 	if !h.requireVariablesWriteIf(c, dep.WorkspaceID, variablesChanged) {
 		return
 	}
-	if !h.rejectUnmountableVarsets(c, dep.WorkspaceID, req.Varsets) {
+	if replaceVarsets && !h.rejectUnmountableVarsets(c, dep.WorkspaceID, *req.Varsets) {
 		return
 	}
 
@@ -494,7 +505,7 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	}
 
 	// 只校验目标版本的 bundle(从无合法 bundle 的版本升级到合法版本是允许的)
-	targetBundle, ok := h.openDeployableBundle(c, manifestID, req.TargetVersionID)
+	targetBundle, ok := h.openDeployableBundle(c, manifestID, req.TargetVersionID, "upgrade_target")
 	if !ok {
 		return
 	}
@@ -505,7 +516,7 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	newRefs := shallowParseBundleResources(targetBundle, ws.ManifestSubpath)
 
 	// 覆盖合并(修复 upgrade 清空已有覆盖):缺省 key / 敏感空占位均保留原值,仅 unset_keys 删除
-	overrides, sensitive, err := h.mergeDeploymentOverrides(dep, []string{req.TargetVersionID}, req.Varsets, req.VariableOverrides, req.UnsetKeys)
+	overrides, sensitive, err := h.mergeDeploymentOverrides(dep, []string{req.TargetVersionID}, effectiveVarsets, req.VariableOverrides, req.UnsetKeys)
 	if err != nil {
 		_ = c.Error(err)
 		return
@@ -524,11 +535,13 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 			return err
 		}
 
-		// 2. 重写 varsets
-		if err := tx.Where("deployment_id = ?", deploymentID).Delete(&models.ManifestDeploymentVarset{}).Error; err != nil {
-			return err
+		// 2. 重写 varsets(仅当请求带了 varsets;缺省保持原样)
+		if replaceVarsets {
+			if err := tx.Where("deployment_id = ?", deploymentID).Delete(&models.ManifestDeploymentVarset{}).Error; err != nil {
+				return err
+			}
 		}
-		for _, v := range req.Varsets {
+		for _, v := range derefVarsets(req.Varsets) {
 			if err := tx.Create(&models.ManifestDeploymentVarset{
 				DeploymentID: deploymentID,
 				VarsetID:     v.VarsetID,
@@ -602,7 +615,7 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		"old_version_id":  dep.VersionID,
 		"new_version_id":  req.TargetVersionID,
 		"new_version":     version.Version,
-		"varset_count":    len(req.Varsets),
+		"varset_count":    len(effectiveVarsets),
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"deployment_id": deploymentID,
@@ -673,7 +686,7 @@ func (h *ManifestDeploymentsV2Handler) requireVariablesWriteIf(c *gin.Context, w
 // deploymentVarsetsChanged 比较请求 varset 列表与已存列表的生效形态:
 // 已存行按 priority ASC 读出(同 priority 按写入顺序,即当时请求顺序),请求列表按
 // priority 稳定排序后逐项比较 (varset_id, priority)。集合、priority 或同级顺序
-// 任一不同即变化;字段缺省等同空列表(upgrade 会按请求整体重写 varsets)。
+// 任一不同即变化。只在请求带了 varsets 时调用(缺省 = 保持不变,不算变化)。
 func (h *ManifestDeploymentsV2Handler) deploymentVarsetsChanged(deploymentID string, req []models.DeploymentVarsetEntry) (bool, error) {
 	var stored []models.ManifestDeploymentVarset
 	if err := h.db.Where("deployment_id = ?", deploymentID).
@@ -692,6 +705,27 @@ func (h *ManifestDeploymentsV2Handler) deploymentVarsetsChanged(deploymentID str
 		}
 	}
 	return false, nil
+}
+
+// storedVarsetEntries 部署已挂的 varset,按生效顺序(priority ASC,同级按写入顺序)。
+func (h *ManifestDeploymentsV2Handler) storedVarsetEntries(deploymentID string) ([]models.DeploymentVarsetEntry, error) {
+	var rows []models.ManifestDeploymentVarset
+	if err := h.db.Where("deployment_id = ?", deploymentID).Order("priority ASC, id ASC").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("load deployment varsets: %w", err)
+	}
+	out := make([]models.DeploymentVarsetEntry, len(rows))
+	for i, r := range rows {
+		out[i] = models.DeploymentVarsetEntry{VarsetID: r.VarsetID, Priority: r.Priority}
+	}
+	return out, nil
+}
+
+// derefVarsets nil 指针 => 空列表。
+func derefVarsets(p *[]models.DeploymentVarsetEntry) []models.DeploymentVarsetEntry {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 func varsetIDsOf(entries []models.DeploymentVarsetEntry) []string {
@@ -854,12 +888,21 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 	if req.TargetVersionID != "" {
 		previewed = req.TargetVersionID
 	}
-	if _, ok := h.openDeployableBundle(c, manifestID, previewed); !ok {
+	if _, ok := h.openDeployableBundle(c, manifestID, previewed, "deployment_preview"); !ok {
 		return
 	}
+	// varsets 与 upgrade 同义:缺省 = 部署已挂的 varset
+	previewVarsets, err := h.storedVarsetEntries(dep.ID)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	if req.Varsets != nil {
+		previewVarsets = *req.Varsets
+	}
 	// 与 upgrade 同一合并:已存覆盖 + 本次覆盖 - unset_keys,敏感值保持空
-	h.previewVariables(c, dep.WorkspaceID, req.Varsets, func() (map[string]string, map[string]bool, error) {
-		merged, sens, err := h.mergeDeploymentOverrides(dep, targets, req.Varsets, req.VariableOverrides, req.UnsetKeys)
+	h.previewVariables(c, dep.WorkspaceID, previewVarsets, func() (map[string]string, map[string]bool, error) {
+		merged, sens, err := h.mergeDeploymentOverrides(dep, targets, previewVarsets, req.VariableOverrides, req.UnsetKeys)
 		return merged, sens.display, err
 	})
 }
@@ -891,7 +934,7 @@ func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Contex
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if _, _, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID); !ok {
+	if _, _, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID, "first_install_preview"); !ok {
 		return
 	}
 	h.previewVariables(c, req.WorkspaceID, req.Varsets, func() (map[string]string, map[string]bool, error) {
@@ -910,7 +953,7 @@ func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Contex
 //   - workspace 必须属于鉴权 org(WorkspaceService.EnsureWorkspaceInOrg);
 //   - version 必须属于本 manifest 且已发布(非草稿)。
 // 任一不满足 => 404(不区分不存在与跨 org)。已写响应时返回 false。
-func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, manifestID, workspaceID, versionID string) (models.ManifestVersion, *manifestbundle.Bundle, bool) {
+func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, manifestID, workspaceID, versionID, use string) (models.ManifestVersion, *manifestbundle.Bundle, bool) {
 	var version models.ManifestVersion
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok || services.NewWorkspaceService(h.db).EnsureWorkspaceInOrg(workspaceID, orgID) != nil {
@@ -922,17 +965,29 @@ func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, mani
 		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
 		return version, nil, false
 	}
-	bundle, ok := h.openDeployableBundle(c, manifestID, versionID)
+	bundle, ok := h.openDeployableBundle(c, manifestID, versionID, use)
 	return version, bundle, ok
 }
 
-// openDeployableBundle 打开版本的不可变 bundle(校验 bundle_hash),供部署路径
-// (install / upgrade 目标 / 两个预览)使用。版本没有合法 bundle(bundle_hash NULL)
-// => 409 bundle_republish_required(reason 只含规则名与路径);完整性校验失败等 => 500。
-func (h *ManifestDeploymentsV2Handler) openDeployableBundle(c *gin.Context, manifestID, versionID string) (*manifestbundle.Bundle, bool) {
-	bundle, err := manifestbundle.OpenVersion(c.Request.Context(), h.db, manifestID, versionID)
+// openDeployableBundle 打开版本的不可变 bundle,供真正使用版本的部署路径
+// (install / upgrade 目标 / 两个预览;use 标明是哪一个)。这里是唯一做完整性校验的
+// 请求路径(只读接口不重算哈希):
+//   - 版本没有合法 bundle(bundle_hash NULL)=> 409 bundle_republish_required,
+//     reason 为规则名与路径,或已记录的 hash_mismatch(粘滞,不再重算);
+//   - 重算哈希与 bundle_hash 不一致 => 记录 hash_mismatch(尽力而为)、WARN 安全日志与
+//     审计行(manifest_id / version_id / request_id),同样 409;
+//   - 版本不存在 => 404;数据库错误 => 500。
+func (h *ManifestDeploymentsV2Handler) openDeployableBundle(c *gin.Context, manifestID, versionID, use string) (*manifestbundle.Bundle, bool) {
+	ctx := c.Request.Context()
+	bundle, err := manifestbundle.OpenVersion(ctx, h.db, manifestID, versionID)
 	if err == nil {
 		err = bundle.RequireValid()
+	}
+	if err == nil {
+		err = manifestbundle.VerifyForUse(ctx, h.db, bundle, manifestbundle.MismatchEvent{
+			ManifestID: manifestID, VersionID: versionID, Source: use,
+			RequestID: c.GetString(middleware.RequestIDContextKey), UserID: c.GetString("user_id"),
+		})
 	}
 	var invalid *manifestbundle.InvalidError
 	switch {

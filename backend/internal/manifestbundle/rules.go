@@ -1,6 +1,7 @@
 package manifestbundle
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"regexp"
@@ -37,20 +38,64 @@ const (
 	RuleSecretScanPrefix  = "secret_scan:"
 )
 
-// Problem one rule violation: rule name + offending path (empty for
-// bundle-wide rules). Never extend this with content or matched text.
+// Problem one rule violation, the 422 publish shape {file, line?, rule,
+// message}: File is the offending path (empty for bundle-wide rules), Line
+// the 1-based line of a secret-scan hit (omitted for path / size / denylist
+// rules), Message a fixed text per rule. Never extend this with content or
+// matched text.
 type Problem struct {
-	Rule string `json:"rule"`
-	Path string `json:"path,omitempty"`
+	File    string `json:"file"`
+	Line    int    `json:"line,omitempty"`
+	Rule    string `json:"rule"`
+	Message string `json:"message"`
 }
 
-// String renders "rule @ path" (path quoted when it is not printable, so a
-// hostile path cannot inject log lines).
+// String renders "rule @ file" (file quoted when it is not printable, so a
+// hostile path cannot inject log lines). It is the bundle_invalid_reason /
+// log form and carries no line or message.
 func (p Problem) String() string {
-	if p.Path == "" {
+	if p.File == "" {
 		return p.Rule
 	}
-	return p.Rule + " @ " + displayPath(p.Path)
+	return p.Rule + " @ " + displayPath(p.File)
+}
+
+// secretKindNames human names of the secret-scan kinds (for messages).
+var secretKindNames = map[string]string{
+	"aws_access_key": "AWS access key",
+	"private_key":    "private key",
+	"github_token":   "GitHub token",
+	"slack_token":    "Slack token",
+}
+
+// ruleMessage fixed, content-free message of a rule.
+func ruleMessage(rule string) string {
+	switch rule {
+	case RulePathInvalid:
+		return "invalid path: must be a relative POSIX path without empty, '.' or '..' segments, backslashes or control characters"
+	case RulePathTooLong:
+		return fmt.Sprintf("path is longer than %d bytes", MaxPathLen)
+	case RulePathNotNFC:
+		return "path is not Unicode NFC normalized"
+	case RulePathDuplicate:
+		return "duplicate path"
+	case RulePathCaseDuplicate:
+		return "path differs from another path only by letter case"
+	case RuleDenylistedFile:
+		return "file type is not allowed in a bundle (variable values, state, git metadata, env or private key files)"
+	case RuleFileTooLarge:
+		return fmt.Sprintf("file is larger than %d MB", MaxFileSize/(1024*1024))
+	case RuleBundleTooLarge:
+		return fmt.Sprintf("bundle is larger than %d MB", MaxBundleSize/(1024*1024))
+	}
+	if kind, ok := strings.CutPrefix(rule, RuleSecretScanPrefix); ok {
+		name := secretKindNames[kind]
+		if name == "" {
+			name = "credential"
+		}
+		return "possible " + name + " found; remove it and use a variable or secret store instead"
+	}
+	return rule
 }
 
 func displayPath(p string) string {
@@ -174,10 +219,12 @@ var secretPatterns = []struct {
 }
 
 // Validate applies every bundle rule and returns the problems sorted by
-// (path, rule). nil means the file set is a valid bundle.
+// (file, rule). nil means the file set is a valid bundle.
 func Validate(files []File) []Problem {
 	var out []Problem
-	add := func(rule, path string) { out = append(out, Problem{Rule: rule, Path: path}) }
+	add := func(rule, path string) {
+		out = append(out, Problem{File: path, Rule: rule, Message: ruleMessage(rule)})
+	}
 
 	seen := make(map[string]bool, len(files))
 	folded := make(map[string]string, len(files))
@@ -206,8 +253,10 @@ func Validate(files []File) []Problem {
 			add(RuleFileTooLarge, f.Path)
 		}
 		for _, sp := range secretPatterns {
-			if sp.re.Match(f.Content) {
-				add(RuleSecretScanPrefix+sp.kind, f.Path)
+			if loc := sp.re.FindIndex(f.Content); loc != nil {
+				rule := RuleSecretScanPrefix + sp.kind
+				line := bytes.Count(f.Content[:loc[0]], []byte{'\n'}) + 1 // 1-based line of the first hit
+				out = append(out, Problem{File: f.Path, Line: line, Rule: rule, Message: ruleMessage(rule)})
 			}
 		}
 	}
@@ -215,8 +264,8 @@ func Validate(files []File) []Problem {
 		add(RuleBundleTooLarge, "")
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Path != out[j].Path {
-			return out[i].Path < out[j].Path
+		if out[i].File != out[j].File {
+			return out[i].File < out[j].File
 		}
 		return out[i].Rule < out[j].Rule
 	})

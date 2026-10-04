@@ -569,7 +569,7 @@ module "ec2_web" {
 | POST | `/draft/_reset_from` | 从版本重置 draft | MANIFESTS WRITE |
 | POST | `/draft/_export` | 导出 draft | MANIFESTS READ |
 | GET | `/v2/versions`、`/v2/versions/:version_id` | 版本列表 / 详情（带 `bundle_hash`、`bundle_invalid_reason`；前者为 null 表示需重新发布） | MANIFESTS READ |
-| POST | `/v2/versions` | 发布版本：草稿打包为不可变 bundle，响应带 `bundle_hash`；违反 bundle 规则 → 422 `bundle_rules_violated`（`problems` 只含规则名与路径） | MANIFESTS WRITE |
+| POST | `/v2/versions` | 发布版本：草稿打包为不可变 bundle，响应带 `bundle_hash`；违反 bundle 规则 → 422 `bundle_rules_violated`（`problems: [{file, line?, rule, message}]`，不含文件内容） | MANIFESTS WRITE |
 | GET | `/v2/versions/:version_id/diff`、`/v2/versions/:version_id/workdirs`、`/v2/draft/diff` | diff / workdirs | MANIFESTS READ |
 | POST | `/v2/versions/:version_id/files/_export` | 导出版本文件 | MANIFESTS READ |
 
@@ -591,7 +591,7 @@ module "ec2_web" {
 
 install / upgrade 在 `WORKSPACE_RESOURCES` WRITE 之外，以下情况还要求目标 workspace 的 `WORKSPACE_VARIABLES` WRITE（与其它 workspace 权限同一检查器；否则返回 403）：
 - `variable_overrides` 或 `unset_keys` 非空；
-- upgrade 的 varset 列表与部署上已存的列表不同。比较的是生效形态：集合、priority，以及同一 priority 内的顺序（已存行按 `priority ASC` 读出，同级按写入顺序；请求列表按 priority 稳定排序）。只看内容，不看字段是否出现：缺省等同空列表（upgrade 会整体重写），原样回传不算变化；
+- upgrade 的 varset 列表与部署上已存的列表不同。比较的是生效形态：集合、priority，以及同一 priority 内的顺序（已存行按 `priority ASC` 读出，同级按写入顺序；请求列表按 priority 稳定排序）。原样回传不算变化。`varsets` 为指针，缺省与 `[]` 不同：缺省 = 保持已挂 varset 不变（不重写、不算变化），`[]` = 清空，非空 = 整体替换；按部署预览的 `varsets` 同义（缺省 = 已挂的 varset）；
 - 首装时 varset 列表非空。
 
 只换版本时沿用原规则（`WORKSPACE_RESOURCES` WRITE）。`GET /workspaces?capability=...` 的每一项带 `can_write_variables`，用同一检查计算，部署面板据此提前禁用变量编辑。
@@ -599,9 +599,14 @@ install / upgrade 在 `WORKSPACE_RESOURCES` WRITE 之外，以下情况还要求
 #### 版本 bundle（不可变）
 
 部署路径只用版本的不可变 bundle（规则、存储与迁移见 sandbox spec §3.3），不读草稿：
-- 版本 `bundle_hash` 为 NULL（违反 bundle 规则，需重新发布）时，install、首装预览、按部署预览（目标版本，未给则当前版本）、upgrade 的**目标**版本返回 **409** `{error, code:"bundle_republish_required", version_id, reason}`；`reason` 只含规则名与路径。
-- upgrade 只检查目标版本：从 NULL 版本升级到合法版本允许。uninstall 不检查。
-- bundle 文件与 `bundle_hash` 不一致（被篡改）→ 通用 500（`ErrIntegrity`，不暴露细节）。
+- 版本无合法 bundle（`bundle_hash` 为 NULL：违反 bundle 规则，或已记录 `hash_mismatch`）时，install、首装预览、按部署预览（目标版本，未给则当前版本）、upgrade 的**目标**版本返回 **409** `{error, code:"bundle_republish_required", version_id, reason}`。`reason` 为规则名与路径，或 `hash_mismatch`；前端按 `code` 判断。
+- 完整性只在这些使用处（以及执行器取文件）重算校验。文件与 `bundle_hash` 不一致时：
+  - 返回同样的 409（`reason: "hash_mismatch"`）；
+  - 尽力把版本记为 `hash_mismatch`，该标记粘滞，只有发布新版本才产生合法 bundle；
+  - 写 WARN 安全日志与审计行，带 manifest_id、version_id、request_id。
+- 版本列表 / 详情、编辑器读文件、导出、diff、workdirs 只读存储的 `bundle_hash` / `bundle_invalid_reason`，不重算、不写库。
+- upgrade 只检查目标版本：从无效版本升级到合法版本允许。uninstall 不检查。
+- publish 违规 → 422 `bundle_rules_violated`，`problems: [{file, line?, rule, message}]`。`line` 只出现在 secret-scan 命中（1 起行号），`message` 为固定文案，不含文件内容。
 
 #### 覆盖值（variable_overrides）的输入、存储与输出
 

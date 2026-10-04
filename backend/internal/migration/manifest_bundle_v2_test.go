@@ -15,8 +15,8 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func TestManifestBundleRulesSchemaIsAdditive(t *testing.T) {
-	for _, stmt := range manifestBundleRulesStatements() {
+func TestManifestBundleV2SchemaIsAdditive(t *testing.T) {
+	for _, stmt := range manifestBundleV2Statements() {
 		upper := strings.ToUpper(stmt)
 		for _, forbidden := range []string{"DROP ", "DELETE FROM", "TRUNCATE ", "UPDATE ", "RENAME ", "ALTER COLUMN", " TYPE "} {
 			if strings.Contains(upper, forbidden) {
@@ -32,9 +32,9 @@ func TestManifestBundleRulesSchemaIsAdditive(t *testing.T) {
 	}
 }
 
-func TestManifestBundleRulesSQLInSync(t *testing.T) {
+func TestManifestBundleV2SQLInSync(t *testing.T) {
 	for _, path := range []string{
-		filepath.Join("..", "..", "migrations", "add_manifest_bundle_rules.sql"),
+		filepath.Join("..", "..", "migrations", "add_manifest_bundle_v2.sql"),
 		filepath.Join("..", "..", "..", "manifests", "db", "init_seed_data.sql"),
 	} {
 		content, err := os.ReadFile(path)
@@ -42,22 +42,16 @@ func TestManifestBundleRulesSQLInSync(t *testing.T) {
 			t.Fatal(err)
 		}
 		sql := normalizeSQL(string(content))
-		for _, stmt := range manifestBundleRulesStatements() {
+		for _, stmt := range manifestBundleV2Statements() {
 			if !strings.Contains(sql, normalizeSQL(stmt)+";") {
 				t.Fatalf("%s is missing statement:\n%s", path, stmt)
 			}
 		}
 	}
-	// the step-2 SQL backfill must not re-hash versions the rules marked invalid
-	for _, path := range []string{
-		filepath.Join("..", "..", "migrations", "add_manifest_sandbox_schema.sql"),
-		filepath.Join("..", "..", "..", "manifests", "db", "init_seed_data.sql"),
-	} {
-		content, _ := os.ReadFile(path)
-		if !strings.Contains(normalizeSQL(string(content)), "AND to_jsonb(v) ->> 'bundle_invalid_reason' IS NULL;") {
-			t.Fatalf("%s: step-2 bundle_hash backfill lacks the bundle_invalid_reason guard", path)
-		}
-	}
+	// The step-2 SQL backfill (unchanged since 68ff86e) has no reason guard: a
+	// manual re-run may write a v1 hash onto a NULL row, but a recorded
+	// bundle_invalid_reason always wins (Bundle.RequireValid / VerifyForUse),
+	// so hash_mismatch and rule failures stay rejected.
 }
 
 const fakeAWSKey = "AKIAQWERTYUIOPASDFGH" // matches the aws_access_key format; not a real key
@@ -80,12 +74,11 @@ func setupBundleRulesDB(t *testing.T) *gorm.DB {
 	for _, stmt := range []string{
 		`CREATE TABLE manifest_versions (id TEXT PRIMARY KEY, manifest_id TEXT, version TEXT, bundle_hash TEXT, bundle_invalid_reason TEXT, created_at DATETIME)`,
 		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary BOOLEAN DEFAULT 0, mode INTEGER DEFAULT 420, created_at DATETIME, updated_at DATETIME)`,
-		// mfv-good: valid, with a stale hash that must be recomputed
+		// stored hashes are set to the real v1 hash below (as the step-2 backfill
+		// does); mfv-empty was never hashed
 		`INSERT INTO manifest_versions (id, manifest_id, version, bundle_hash) VALUES
-		   ('mfv-good', 'mf-1', 'v1.0.0', '0000000000000000000000000000000000000000000000000000000000000000'),
-		   ('mfv-bad', 'mf-1', 'v1.1.0', 'd9bbb44c83b611cca6924418c94982c70829682413fc12f76147a40a43cd2ddb'),
-		   ('mfv-secret', 'mf-1', 'v1.2.0', 'd9bbb44c83b611cca6924418c94982c70829682413fc12f76147a40a43cd2ddb'),
-		   ('mfv-empty', 'mf-1', 'v0.0.1', NULL)`,
+		   ('mfv-good', 'mf-1', 'v1.0.0', NULL), ('mfv-bad', 'mf-1', 'v1.1.0', NULL),
+		   ('mfv-secret', 'mf-1', 'v1.2.0', NULL), ('mfv-empty', 'mf-1', 'v0.0.1', NULL)`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
 			t.Fatal(err)
@@ -105,6 +98,13 @@ func setupBundleRulesDB(t *testing.T) *gorm.DB {
 	ins("mfv-bad", "README.md", "a")
 	ins("mfv-bad", "readme.md", "b")
 	ins("mfv-secret", "main.tf", "provider \"aws\" {\n  access_key = \""+fakeAWSKey+"\"\n}\n")
+	for _, id := range []string{"mfv-good", "mfv-bad", "mfv-secret"} {
+		h, err := manifestbundle.VersionHashV1(context.Background(), db, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db.Exec(`UPDATE manifest_versions SET bundle_hash = ? WHERE id = ?`, h, id)
+	}
 	return db
 }
 
@@ -144,7 +144,7 @@ func TestRecomputeBundleHashes_BadOldVersionsDoNotFailAndFilesUntouched(t *testi
 		t.Fatal("migration modified manifest_files")
 	}
 
-	// valid version: stale hash replaced by manifestbundle.Hash of its files
+	// valid version: matching v1 hash rewritten as the v2 manifestbundle.Hash of its files
 	want, _ := manifestbundle.Hash([]manifestbundle.File{
 		{Path: "main.tf", Content: []byte(`resource "null_resource" "a" {}`)},
 		{Path: "modules/x/variables.tf", Content: []byte(`variable "x" {}`)},
@@ -210,5 +210,80 @@ func TestRecomputeBundleHashes_SecretHitReasonAndLogCarryNoSecret(t *testing.T) 
 	}
 	if secretLine != "[migration] manifest version mfv-secret: bundle invalid, republish required: secret_scan:aws_access_key @ main.tf" {
 		t.Fatalf("log line = %q", secretLine)
+	}
+}
+
+func TestRecomputeBundleHashes_TamperedVersionIsMarkedNotLaundered(t *testing.T) {
+	db := setupBundleRulesDB(t)
+	var logs []string
+	bundleRulesLogf = func(format string, args ...interface{}) { logs = append(logs, fmt.Sprintf(format, args...)) }
+	t.Cleanup(func() { bundleRulesLogf = defaultBundleRulesLogf })
+
+	// a published version's file content is changed in the DB after its v1 hash was stored
+	db.Exec(`UPDATE manifest_files SET content = CAST('resource "null_resource" "evil" {}' AS BLOB) WHERE version_id = 'mfv-good' AND path = 'main.tf'`)
+	if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if h, r := versionState(t, db, "mfv-good"); h != nil || r == nil || *r != manifestbundle.ReasonHashMismatch {
+		t.Fatalf("tampered version must be NULL + hash_mismatch, got hash=%v reason=%v", h, r)
+	}
+	var warn string
+	for _, l := range logs {
+		if strings.Contains(l, "mfv-good") {
+			warn = l
+		}
+	}
+	if !strings.HasPrefix(warn, "[WARN] [security]") || !strings.Contains(warn, "manifest_id=mf-1") || strings.Contains(warn, "evil") {
+		t.Fatalf("mismatch log line = %q", warn)
+	}
+
+	// sticky: restoring the original content and re-running the v2 migration or
+	// the step-2 backfill never makes it valid again
+	db.Exec(`UPDATE manifest_files SET content = CAST('resource "null_resource" "a" {}' AS BLOB) WHERE version_id = 'mfv-good' AND path = 'main.tf'`)
+	for i := 0; i < 2; i++ {
+		if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := backfillManifestVersionBundleHashes(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if h, r := versionState(t, db, "mfv-good"); h != nil || r == nil || *r != manifestbundle.ReasonHashMismatch {
+		t.Fatalf("hash_mismatch must be sticky, got hash=%v reason=%v", h, r)
+	}
+
+	// a stray hash on a mismatched row (manual re-run of the unguarded step-2
+	// SQL backfill) is cleared, the reason kept
+	db.Exec(`UPDATE manifest_versions SET bundle_hash = ? WHERE id = 'mfv-good'`, strings.Repeat("ab", 32))
+	if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if h, r := versionState(t, db, "mfv-good"); h != nil || r == nil || *r != manifestbundle.ReasonHashMismatch {
+		t.Fatalf("stray hash must be cleared, got hash=%v reason=%v", h, r)
+	}
+}
+
+func TestRecomputeBundleHashes_StoredV2KeptAndRuleFailuresReevaluated(t *testing.T) {
+	db := setupBundleRulesDB(t)
+	bundleRulesLogf = func(string, ...interface{}) {}
+	t.Cleanup(func() { bundleRulesLogf = defaultBundleRulesLogf })
+	if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	good, _ := versionState(t, db, "mfv-good")
+	// a stored v2 hash that matches is kept
+	if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if again, r := versionState(t, db, "mfv-good"); again == nil || *again != *good || r != nil {
+		t.Fatalf("stored v2 hash changed: %v %v", again, r)
+	}
+	// a rule failure (not hash_mismatch) is re-evaluated: fix the files, run again => valid
+	db.Exec(`DELETE FROM manifest_files WHERE version_id = 'mfv-bad' AND path <> 'main.tf'`)
+	if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if h, r := versionState(t, db, "mfv-bad"); h == nil || r != nil {
+		t.Fatalf("rule failure must be re-evaluated: hash=%v reason=%v", h, r)
 	}
 }

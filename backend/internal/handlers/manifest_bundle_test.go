@@ -5,9 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -31,6 +32,7 @@ func newBundleEnv(t *testing.T) *bundleEnv {
 	t.Helper()
 	db := setupOverrideDB(t)
 	for _, stmt := range []string{
+		`CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT, resource_type TEXT, resource_id INTEGER, old_values TEXT, new_values TEXT, ip_address TEXT, user_agent TEXT, created_at DATETIME, deleted_at DATETIME)`,
 		`INSERT INTO workspaces (id, workspace_id) VALUES (2, 'ws-new')`,
 		`CREATE TABLE projects (id INTEGER PRIMARY KEY, org_id INTEGER)`,
 		`INSERT INTO projects (id, org_id) VALUES (10, 1)`,
@@ -58,6 +60,9 @@ func newBundleEnv(t *testing.T) *bundleEnv {
 	g.POST("/v2/versions/:version_id/files/_export", vh.ExportVersion)
 	g.GET("/v2/draft/diff", vh.DiffDraft)
 	g.GET("/export-zip", mh.ExportManifestZip)
+	fh := NewManifestFilesHandler(db)
+	g.GET("/files", fh.ListFiles)
+	g.GET("/files/*path", fh.ReadFile)
 	g.POST("/v2/deployments/install", dh.Install)
 	g.POST("/v2/deployments/variable-preview", dh.FirstInstallVariablePreview)
 	g.POST("/v2/deployments/:deployment_id/upgrade", dh.Upgrade)
@@ -150,7 +155,11 @@ func TestPublish_RejectsRuleViolationsWithProblemsOnly(t *testing.T) {
 		t.Fatalf("want 422, got %d %s", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	for _, want := range []string{`{"rule":"denylisted_file","path":"prod.tfvars"}`, `{"rule":"secret_scan:aws_access_key","path":"main.tf"}`, `"code":"bundle_rules_violated"`} {
+	for _, want := range []string{
+		`{"file":"main.tf","line":2,"rule":"secret_scan:aws_access_key","message":"possible AWS access key found; remove it and use a variable or secret store instead"}`,
+		`{"file":"prod.tfvars","rule":"denylisted_file","message":"file type is not allowed in a bundle (variable values, state, git metadata, env or private key files)"}`,
+		`"code":"bundle_rules_violated"`,
+	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("422 body lacks %s: %s", want, body)
 		}
@@ -175,22 +184,154 @@ func TestBundle_ImmutableAfterPublish(t *testing.T) {
 	// editing the draft afterwards does not touch the version
 	e.putDraft(t, "u1", "main.tf", `resource "null_resource" "draft_only" {}`)
 	b, err := manifestbundle.OpenVersion(context.Background(), e.db, "mf-1", id)
-	if err != nil || b.Hash != hash || string(b.Scope()["main.tf"]) != pubMain {
+	if err != nil || b.Hash != hash || string(b.Scope()["main.tf"]) != pubMain || b.Verify() != nil {
 		t.Fatalf("version changed with the draft: %+v %v", b, err)
 	}
+}
 
-	// tampering with the stored snapshot is detected by every reader
+func versionRow(t *testing.T, db *gorm.DB, id string) (hash, reason *string) {
+	t.Helper()
+	var v struct {
+		BundleHash          *string
+		BundleInvalidReason *string
+	}
+	if err := db.Table("manifest_versions").Select("bundle_hash, bundle_invalid_reason").Where("id = ?", id).Take(&v).Error; err != nil {
+		t.Fatal(err)
+	}
+	return v.BundleHash, v.BundleInvalidReason
+}
+
+// Integrity is checked only where a version is used. A tampered version:
+// read endpoints serve the stored data without re-hashing or writing; install
+// answers 409 bundle_republish_required, records hash_mismatch and emits a
+// WARN security log + audit row with manifest_id, version_id and request_id.
+func TestTamperedBundle_ReadsDoNotVerify_DeployPaths409AndReport(t *testing.T) {
+	e := newBundleEnv(t)
+	e.putDraft(t, "u1", "main.tf", pubMain)
+	id, hash := e.publish(t, "v2.0.0")
 	e.db.Exec(`UPDATE manifest_files SET content = CAST('resource "null_resource" "evil" {}' AS BLOB) WHERE version_id = ?`, id)
-	if _, err := manifestbundle.OpenVersion(context.Background(), e.db, "mf-1", id); !errors.Is(err, manifestbundle.ErrIntegrity) {
-		t.Fatalf("tampered bundle must fail integrity, got %v", err)
+
+	// read endpoint: no verification, no DB write
+	if w := doJSON(e.r, "POST", base+"/v2/versions/"+id+"/files/_export", ""); w.Code != http.StatusOK {
+		t.Fatalf("export must not verify: %d %s", w.Code, w.Body.String())
 	}
-	w := doJSON(e.r, "POST", base+"/v2/versions/"+id+"/files/_export", "")
-	if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "evil") {
-		t.Fatalf("export of tampered bundle: %d %s", w.Code, w.Body.String())
+	if h, r := versionRow(t, e.db, id); h == nil || *h != hash || r != nil {
+		t.Fatalf("a read endpoint wrote the version: %v %v", h, r)
 	}
-	w = doJSON(e.r, "POST", base+"/v2/deployments/install", `{"version_id":"`+id+`","workspace_id":"ws-new"}`)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("install of tampered bundle: %d %s", w.Code, w.Body.String())
+
+	var logBuf bytes.Buffer
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	w := doJSON(e.r, "POST", base+"/v2/deployments/install", `{"version_id":"`+id+`","workspace_id":"ws-new"}`)
+	var resp BundleRepublishRequiredResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if w.Code != http.StatusConflict || resp.Code != "bundle_republish_required" || resp.Reason != manifestbundle.ReasonHashMismatch || resp.VersionID != id {
+		t.Fatalf("install of tampered bundle: want 409 bundle_republish_required/hash_mismatch, got %d %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "evil") {
+		t.Fatal("409 leaks content")
+	}
+	reqID := w.Header().Get("X-Request-ID")
+	logs := logBuf.String()
+	for _, want := range []string{"[WARN] [security] manifest bundle hash mismatch", "manifest_id=mf-1", "version_id=" + id, "request_id=" + reqID, "source=install"} {
+		if reqID == "" || !strings.Contains(logs, want) {
+			t.Fatalf("WARN log lacks %q (request id %q): %s", want, reqID, logs)
+		}
+	}
+	var audit struct{ Action, ResourceType, NewValues string }
+	e.db.Raw(`SELECT action, resource_type, new_values FROM audit_logs WHERE action = 'version.bundle_hash_mismatch'`).Scan(&audit)
+	for _, want := range []string{`"level":"WARN"`, `"manifest_id":"mf-1"`, `"version_id":"` + id + `"`, `"request_id":"` + reqID + `"`} {
+		if audit.ResourceType != "MANIFEST_VERSION" || !strings.Contains(audit.NewValues, want) {
+			t.Fatalf("audit row lacks %s: %+v", want, audit)
+		}
+	}
+	if h, r := versionRow(t, e.db, id); h != nil || r == nil || *r != manifestbundle.ReasonHashMismatch {
+		t.Fatalf("version must be NULL + hash_mismatch: %v %v", h, r)
+	}
+
+	// sticky: even with the content restored, every deploy path keeps answering 409
+	e.db.Exec(`UPDATE manifest_files SET content = ? WHERE version_id = ?`, []byte(pubMain), id)
+	for name, req := range map[string][2]string{
+		"install":               {base + "/v2/deployments/install", `{"version_id":"` + id + `","workspace_id":"ws-new"}`},
+		"first-install preview": {base + "/v2/deployments/variable-preview", `{"version_id":"` + id + `","workspace_id":"ws-new"}`},
+		"upgrade target":        {base + "/v2/deployments/mfd-a/upgrade", `{"target_version_id":"` + id + `"}`},
+		"deployment preview":    {base + "/v2/deployments/mfd-a/variable-preview", `{"target_version_id":"` + id + `"}`},
+	} {
+		w := doJSON(e.r, "POST", req[0], req[1])
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"code":"bundle_republish_required"`) || !strings.Contains(w.Body.String(), `"reason":"hash_mismatch"`) {
+			t.Fatalf("%s after hash_mismatch: %d %s", name, w.Code, w.Body.String())
+		}
+	}
+	if n := strings.Count(logBuf.String(), "manifest bundle hash mismatch"); n != 1 {
+		t.Fatalf("a recorded mismatch must not be re-hashed / re-reported, got %d reports", n)
+	}
+	// list shows the recorded state
+	if lw := doJSON(e.r, "GET", base+"/v2/versions/"+id, ""); !strings.Contains(lw.Body.String(), `"bundle_hash":null`) || !strings.Contains(lw.Body.String(), `"bundle_invalid_reason":"hash_mismatch"`) {
+		t.Fatalf("detail: %s", lw.Body.String())
+	}
+	// only a new publish produces a valid bundle (for the new version)
+	e.putDraft(t, "u1", "main.tf", pubMain)
+	newID, newHash := e.publish(t, "v2.0.1")
+	if newHash == "" {
+		t.Fatal("new publish must be valid")
+	}
+	if h, r := versionRow(t, e.db, newID); h == nil || r != nil {
+		t.Fatalf("new version: %v %v", h, r)
+	}
+	if _, r := versionRow(t, e.db, id); r == nil || *r != manifestbundle.ReasonHashMismatch {
+		t.Fatal("publishing a new version must not clear the old version's hash_mismatch")
+	}
+}
+
+// List / detail / editor GET reads only read the stored bundle_hash and
+// bundle_invalid_reason: no re-hash (no manifest_files read for list/detail)
+// and no DB write.
+func TestVersionReads_DoNotRecomputeOrWrite(t *testing.T) {
+	e := newBundleEnv(t)
+	e.putDraft(t, "u1", "main.tf", pubMain)
+	id, _ := e.publish(t, "v2.0.0")
+	bogus := strings.Repeat("f", 64) // does not match the files: a re-hash would notice
+	e.db.Exec(`UPDATE manifest_versions SET bundle_hash = ? WHERE id = ?`, bogus, id)
+
+	var stmts []string
+	record := func(db *gorm.DB) { stmts = append(stmts, db.Statement.SQL.String()) }
+	cb := e.db.Callback()
+	_ = cb.Query().After("gorm:query").Register("test:rec_query", record)
+	_ = cb.Raw().After("gorm:raw").Register("test:rec_raw", record)
+	_ = cb.Row().After("gorm:row").Register("test:rec_row", record)
+	_ = cb.Create().After("gorm:create").Register("test:rec_create", record)
+	_ = cb.Update().After("gorm:update").Register("test:rec_update", record)
+	_ = cb.Delete().After("gorm:delete").Register("test:rec_delete", record)
+
+	for _, path := range []string{base + "/v2/versions", base + "/v2/versions/" + id} {
+		stmts = nil
+		w := doJSON(e.r, "GET", path, "")
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"bundle_hash":"`+bogus+`"`) {
+			t.Fatalf("%s must return the stored hash as-is: %d %s", path, w.Code, w.Body.String())
+		}
+		for _, q := range stmts {
+			uq := strings.ToUpper(q)
+			if strings.Contains(q, "manifest_files") || strings.HasPrefix(uq, "UPDATE") || strings.HasPrefix(uq, "INSERT") || strings.HasPrefix(uq, "DELETE") {
+				t.Fatalf("%s re-hashed or wrote: %s", path, q)
+			}
+		}
+	}
+	// editor reads of a version (?version=) never write either
+	for _, path := range []string{base + "/files?version=" + id, base + "/files/main.tf?version=" + id} {
+		stmts = nil
+		if w := doJSON(e.r, "GET", path, ""); w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+		for _, q := range stmts {
+			uq := strings.ToUpper(q)
+			if strings.HasPrefix(uq, "UPDATE") || strings.HasPrefix(uq, "INSERT") || strings.HasPrefix(uq, "DELETE") {
+				t.Fatalf("%s wrote: %s", path, q)
+			}
+		}
+	}
+	if h, r := versionRow(t, e.db, id); h == nil || *h != bogus || r != nil {
+		t.Fatalf("reads changed the version row: %v %v", h, r)
 	}
 }
 
