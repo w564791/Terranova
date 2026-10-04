@@ -184,13 +184,28 @@ export interface ManifestVersion {
   created_at: string
 }
 
+// deployment / 任务响应里的覆盖(后端 services.RedactOverrides,b2bb4a7):
+//   - sensitive=true 时永不带 value;无该 workspace WORKSPACE_VARIABLES READ 时也不带 value;
+//   - 后端 sensitive_keys 为 NULL(未计算)时所有条目都是 sensitive。
+// sensitive 只用于展示,绝不能原样回传给后端。
+export interface DeploymentOverrideView {
+  key: string
+  sensitive: boolean
+  has_value: boolean
+  value?: string
+}
+
+// 提交覆盖(install / upgrade / 预览):"k": "v",或用户新输入值并勾选"敏感"时 "k": {value, sensitive: true}
+export type OverrideInputValue = string | { value: string; sensitive?: boolean }
+export type OverrideInputs = Record<string, OverrideInputValue>
+
 export interface ManifestDeployment {
   id: string
   manifest_id: string
   version_id: string
   workspace_id: string
   status: 'active' | 'uninstalled' | string
-  variable_overrides?: Record<string, unknown>
+  overrides?: DeploymentOverrideView[] | null
   deployed_by: string
   deployed_at?: string
 }
@@ -276,20 +291,20 @@ export async function getDeploymentVarsets(
   return ctx2.varsetIds
 }
 
-/** upgrade 时需要保留的既有 varset / overrides 上下文 */
+/** upgrade 时需要保留的既有 varset / 已存覆盖(脱敏视图,仅供展示,不回传) */
 export interface DeploymentUpgradeContext {
   varsetIds: string[]
   varsets: DeploymentVarsetEntry[]
-  variable_overrides?: Record<string, string>
+  overrides: DeploymentOverrideView[]
 }
 
-// 取 deployment 的 varset + variable_overrides,供 upgrade / 发布后自动更新复用。
+// 取 deployment 的 varset + 已存覆盖(overrides 脱敏视图),供 upgrade / 发布后自动更新复用。
 export async function getDeploymentUpgradeContext(
   ctx: ManifestEditorContext,
   deploymentId: string,
 ): Promise<DeploymentUpgradeContext> {
   const data = (await api.get(`${basePath(ctx)}/v2/deployments/${deploymentId}`)) as {
-    deployment?: { variable_overrides?: Record<string, unknown> | null }
+    deployment?: { overrides?: DeploymentOverrideView[] | null }
     varsets?: { varset_id: string; priority: number }[]
   }
   const sorted = (data.varsets ?? [])
@@ -300,16 +315,10 @@ export async function getDeploymentUpgradeContext(
     varset_id: v.varset_id,
     priority: v.priority ?? i,
   }))
-  let variable_overrides: Record<string, string> | undefined
-  const raw = data.deployment?.variable_overrides
-  if (raw && typeof raw === 'object') {
-    variable_overrides = {}
-    for (const [k, v] of Object.entries(raw)) {
-      if (v != null) variable_overrides[k] = String(v)
-    }
-    if (Object.keys(variable_overrides).length === 0) variable_overrides = undefined
-  }
-  return { varsetIds, varsets, variable_overrides }
+  const overrides = Array.isArray(data.deployment?.overrides)
+    ? data.deployment!.overrides!.filter((o) => o && typeof o.key === 'string')
+    : []
+  return { varsetIds, varsets, overrides }
 }
 
 // 变量预览(upgrade 用):合并后的最终变量,每条带 sensitive。
@@ -324,10 +333,20 @@ export interface DeploymentPreviewVariable {
   source_type?: string
 }
 
+// per-deployment 预览(后端 DeploymentPreviewRequest):服务端与 upgrade 同一 mergeDeploymentOverrides
+// 合并已存覆盖,前端不得回传已存值;只发本次改动的 key 与 unset_keys。
+// target_version_id 可选,参与敏感判定(须属于本 manifest,否则 400)。
+export interface DeploymentPreviewRequest {
+  target_version_id?: string
+  varsets: DeploymentVarsetEntry[]
+  variable_overrides?: OverrideInputs
+  unset_keys?: string[]
+}
+
 export async function previewDeploymentVariables(
   ctx: ManifestEditorContext,
   deploymentId: string,
-  body: { varsets: DeploymentVarsetEntry[]; variable_overrides?: Record<string, string> },
+  body: DeploymentPreviewRequest,
 ): Promise<DeploymentPreviewVariable[]> {
   const data = (await api.post(
     `${basePath(ctx)}/v2/deployments/${deploymentId}/variable-preview`,
@@ -342,7 +361,7 @@ export interface InstallPreviewRequest {
   workspace_id: string
   version_id: string
   varsets: DeploymentVarsetEntry[]
-  variable_overrides?: Record<string, string>
+  variable_overrides?: OverrideInputs
 }
 
 export async function previewInstallVariables(
@@ -376,7 +395,7 @@ export interface InstallDeploymentRequest {
   version_id: string
   workspace_id: string
   varsets: DeploymentVarsetEntry[]
-  variable_overrides?: Record<string, string>
+  variable_overrides?: OverrideInputs
   // terraform 执行子目录(空串=根)。省略则后端沿用 workspace 已有 manifest_subpath。
   workdir?: string
 }
@@ -391,10 +410,11 @@ export async function installDeployment(
 // upgrade 的 variable_overrides 与已存覆盖合并(后端 c89940e):
 //   缺省的 key 保留原值;敏感 key 传空串(预览掩码占位)也保留原值;
 //   只有 unset_keys 里的 key 会从已存覆盖中删除。因此只需发送用户改动过的 key。
+//   敏感标记粘滞(后端 b2bb4a7):已敏感的 key 无法改回普通。
 export interface UpgradeDeploymentRequest {
   target_version_id: string
   varsets: DeploymentVarsetEntry[]
-  variable_overrides?: Record<string, string>
+  variable_overrides?: OverrideInputs
   unset_keys?: string[]
 }
 
