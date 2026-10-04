@@ -92,6 +92,9 @@ func definitions() []definition {
 		// the tenant-boundary rules were complete.  Keep this separate so their
 		// historical checksums remain valid.
 		{version: "20260717_05_iam_role_tenant_reconciliation", contract: "role-quarantine-and-application-tenant-v1", apply: applyIAMRoleTenantReconciliation},
+		// Register the org-level MANIFESTS catalog resource (and the previously
+		// unregistered VARIABLE_SETS) with built-in Role policies. Additive only.
+		{version: "20261004_01_manifest_iam_resource", contract: "manifests-and-variable-sets-org-catalog-v1", apply: applyManifestIAMResource},
 	}
 }
 

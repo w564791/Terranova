@@ -57,6 +57,8 @@ const (
 	ResourceTypeRunTasks ResourceType = "RUN_TASKS"
 	// ResourceTypeVariableSets 变量集管理
 	ResourceTypeVariableSets ResourceType = "VARIABLE_SETS"
+	// ResourceTypeManifests Manifest 目录管理（组织级）
+	ResourceTypeManifests ResourceType = "MANIFESTS"
 )
 
 // 项目级资源
@@ -105,6 +107,7 @@ func (r ResourceType) IsValid() bool {
 		ResourceTypeIAMUsers, ResourceTypeIAMRoles,
 		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis,
 		ResourceTypeSystemSettings, ResourceTypeRunTasks, ResourceTypeVariableSets,
+		ResourceTypeManifests,
 		// 项目级
 		ResourceTypeProjectSettings, ResourceTypeProjectTeams,
 		ResourceTypeProjectWorkspaces,
@@ -130,7 +133,8 @@ func (r ResourceType) GetScopeLevel() ScopeType {
 		ResourceTypeIAMProjects, ResourceTypeIAMApplications, ResourceTypeIAMAudit,
 		ResourceTypeIAMUsers, ResourceTypeIAMRoles,
 		ResourceTypeTerraformVersions, ResourceTypeAIConfigs, ResourceTypeAIAnalysis,
-		ResourceTypeSystemSettings, ResourceTypeRunTasks, ResourceTypeVariableSets:
+		ResourceTypeSystemSettings, ResourceTypeRunTasks, ResourceTypeVariableSets,
+		ResourceTypeManifests:
 		return ScopeTypeOrganization
 
 	// 项目级资源
@@ -181,6 +185,8 @@ func ParseResourceType(s string) (ResourceType, error) {
 		"TASK_DATA_ACCESS":     ResourceTypeTaskData,
 		"projects":             ResourceTypeAllProjects,
 		"PROJECTS":             ResourceTypeAllProjects,
+		"manifests":            ResourceTypeManifests,
+		"MANIFESTS":            ResourceTypeManifests,
 	}
 
 	if rt, ok := lowerMap[s]; ok {
