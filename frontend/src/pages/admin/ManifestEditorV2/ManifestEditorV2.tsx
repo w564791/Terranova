@@ -233,7 +233,11 @@ export default function ManifestEditorV2() {
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set()) // 内容被修改过的文件
   // Gutter diff 指示条:对比上次发布版本的变更标记
   const baseVersionIdRef = useRef<string>('') // 上次发布的版本 ID
-  const publishedContentCache = useRef<Map<string, string>>(new Map()) // path → 发布版内容(仅 changed 文件)
+  const publishedContentCache = useRef<Map<string, string>>(new Map()) // path → 发布版内容(仅 changed 文件,打开时懒加载)
+  const publishedFetchTriedRef = useRef<Set<string>>(new Set()) // 已发起过发布版内容懒加载的 path(避免失败后反复请求)
+  const publishedFetchingRef = useRef<Set<string>>(new Set()) // 发布版内容懒加载进行中的 path
+  // applyDiffDecorations 的 ref:懒加载完成后回调最新版本
+  const applyDiffDecorationsRef = useRef<(path: string) => void>(() => {})
   const diffFilesSetRef = useRef<Set<string>>(new Set()) // diff 结果中 changed/added 的文件路径集合
   const diffDecorationsRef = useRef<string[]>([]) // 当前 decoration IDs(deltaDecorations 返回值)
   // 每文件一个 model(保留 undo 历史)+ viewState(保留光标/滚动),切 tab 回到原状态
@@ -366,8 +370,34 @@ export default function ManifestEditorV2() {
       return
     }
 
-    const currentContent = model.getValue()
     const publishedContent = publishedContentCache.current.get(path)
+    // 懒加载:只在打开/需要该文件时才拉发布版内容,缓存后重新应用装饰
+    if (publishedContent === undefined && publishedFetchingRef.current.has(path)) {
+      // 请求进行中:先清空,完成后 finally 会重新应用
+      diffDecorationsRef.current = ed.deltaDecorations(diffDecorationsRef.current, [])
+      return
+    }
+    if (publishedContent === undefined && !publishedFetchTriedRef.current.has(path)) {
+      publishedFetchTriedRef.current.add(path)
+      publishedFetchingRef.current.add(path)
+      const baseId = baseVersionIdRef.current
+      readFile(ctx, path, baseId)
+        .then((content) => {
+          if (baseVersionIdRef.current === baseId) {
+            publishedContentCache.current.set(path, content.content ?? '')
+          }
+        })
+        .catch(() => {
+          // 读取失败:忽略(与之前预加载失败时行为一致)
+        })
+        .finally(() => {
+          publishedFetchingRef.current.delete(path)
+          if (currentFileRef.current === path) applyDiffDecorationsRef.current(path)
+        })
+      diffDecorationsRef.current = ed.deltaDecorations(diffDecorationsRef.current, [])
+      return
+    }
+    const currentContent = model.getValue()
     const lineDiff = computeLineDiff(currentContent, publishedContent, isInDiff)
 
     const decorations: monaco.editor.IModelDeltaDecoration[] = []
@@ -394,7 +424,8 @@ export default function ManifestEditorV2() {
     })
 
     diffDecorationsRef.current = ed.deltaDecorations(diffDecorationsRef.current, decorations)
-  }, [computeLineDiff])
+  }, [computeLineDiff, ctx])
+  applyDiffDecorationsRef.current = applyDiffDecorations
 
   const [bootError, setBootError] = useState<string | null>(null)
   const [manifestMissing, setManifestMissing] = useState(false)
@@ -470,6 +501,8 @@ export default function ManifestEditorV2() {
   // manifest 元信息(名称/描述),顶栏就地编辑。null=未加载
   const [manifestName, setManifestName] = useState<string>('')
   const [manifestDesc, setManifestDesc] = useState<string>('')
+  // 调用者能力(复用挂载时 getManifest 返回的 can_write / can_deploy);undefined=未知,不隐藏入口
+  const [manifestCaps, setManifestCaps] = useState<{ can_write?: boolean; can_deploy?: boolean }>({})
   // 顶栏就地编辑:'name' | 'desc' | null
   const [editingMeta, setEditingMeta] = useState<'name' | 'desc' | null>(null)
   const [metaDraft, setMetaDraft] = useState('')
@@ -498,9 +531,21 @@ export default function ManifestEditorV2() {
         // 注册 4 个 demo provider (Completion / Hover / InlayHint / CodeAction)
         registerHclProviders()
         // 通用 HCL 补全 (跨文件工作区索引 + Tier1/Tier3)
-        registerHclCompletion({ getIndex: () => defIndexRef.current })
+        // 首次补全请求时才懒加载跨文件索引与 provider 类型目录(不在挂载时全量读)
+        registerHclCompletion({
+          getIndex: () => {
+            void ensureDefIndexRef.current()
+            ensureProviderSchemaRef.current()
+            return defIndexRef.current
+          },
+        })
         // 转到定义:var/local/module/resource/data + hover
-        registerHclDefinition({ getIndex: () => defIndexRef.current })
+        registerHclDefinition({
+          getIndex: async () => {
+            await ensureDefIndexRef.current()
+            return defIndexRef.current
+          },
+        })
         // spec §10.3.3: Inlay Hint (· N demos) 不用 monaco 默认灰,覆盖为高对比青绿,
         // 让 demo 标签看起来既"是信息"也"是按钮"。
         monaco.editor.defineTheme('vs-dark-manifest', {
@@ -701,25 +746,13 @@ export default function ManifestEditorV2() {
         // 记录所有 changed/added 的文件路径(用于区分"新文件" vs "未变更文件")
         const diffFiles = result.files.filter((f) => f.state === 'changed' || f.state === 'added')
         diffFilesSetRef.current = new Set(diffFiles.map((f) => f.path))
-        // 预加载所有 changed 文件的发布版内容
-        return Promise.all(
-          diffFiles.map(async (f) => {
-            if (f.state === 'added') {
-              // 新增文件:发布版不存在,缓存空串
-              publishedContentCache.current.set(f.path, '')
-            } else if (baseVersionIdRef.current) {
-              try {
-                const content = await readFile(ctx, f.path, baseVersionIdRef.current)
-                publishedContentCache.current.set(f.path, content.content ?? '')
-              } catch {
-                // 读取失败:忽略,该文件不会有 diff 标记
-              }
-            }
-          }),
-        )
-      })
-      .then(() => {
-        if (cancelled) return
+        // 不再预加载所有 changed 文件的发布版内容:改为打开文件时由 applyDiffDecorations 懒加载
+        publishedContentCache.current.clear()
+        publishedFetchTriedRef.current.clear()
+        diffFiles.forEach((f) => {
+          // 新增文件:发布版不存在,缓存空串
+          if (f.state === 'added') publishedContentCache.current.set(f.path, '')
+        })
         // diff 加载完成后,对当前打开的文件重新应用 gutter 装饰(解决竞态:文件可能在 diff 之前打开)
         if (currentFileRef.current) {
           applyDiffDecorations(currentFileRef.current)
@@ -1475,8 +1508,23 @@ export default function ManifestEditorV2() {
     })
   }, [collectDraftTfFiles])
 
+  // 全量索引(collectDraftTfFiles 会读所有 .tf)不在挂载时建:首次补全 / 转到定义 / hover /
+  // 打开问题视图时由 ensureDefIndexRef 触发;此后文件树变化(新建/删除/重命名)才自动重建。
+  const defIndexRequestedRef = useRef(false)
+  const defIndexPromiseRef = useRef<Promise<void> | null>(null)
+  const rebuildDefIndexRef = useRef(rebuildDefIndex)
+  rebuildDefIndexRef.current = rebuildDefIndex
+  const ensureDefIndexRef = useRef<() => Promise<void>>(async () => {})
+  ensureDefIndexRef.current = () => {
+    if (!defIndexRequestedRef.current || !defIndexPromiseRef.current) {
+      defIndexRequestedRef.current = true
+      defIndexPromiseRef.current = rebuildDefIndexRef.current().catch(() => {})
+    }
+    return defIndexPromiseRef.current
+  }
   useEffect(() => {
-    void rebuildDefIndex()
+    if (!defIndexRequestedRef.current) return
+    defIndexPromiseRef.current = rebuildDefIndex().catch(() => {})
   }, [rebuildDefIndex])
 
   // 让 Cmd+W 快捷键始终调最新的"关当前 tab"逻辑(diff tab 优先,否则当前文件)
@@ -1578,12 +1626,14 @@ export default function ManifestEditorV2() {
   }, [ctx])
 
   // 拉已部署 workspace(active deployment)+ 对应 workspace 名称映射
+  // 仅在切到"部署"视图 / 手动刷新时调用(不在挂载时跑)。名称映射复用部署面板同一个
+  // capability 过滤列表(可写 workspace),不拉全量 workspace;映射不到的显示 workspace_id。
   const loadDeployments = useCallback(() => {
     setDeployLoading(true)
     Promise.all([
       listDeployments(ctx).catch(() => [] as ManifestDeployment[]),
       workspaceService
-        .getWorkspaces()
+        .getWorkspaces({ capability: 'WORKSPACE_RESOURCES:WRITE' })
         .then((r) => {
           const d: any = (r as any)?.data
           return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
@@ -1616,41 +1666,44 @@ export default function ManifestEditorV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx])
 
-  // 挂载即拉版本 + 部署 + manifest 元信息(名称/描述,供顶栏就地编辑)
+  // 挂载即拉版本 + manifest 元信息(名称/描述,供顶栏就地编辑)。
+  // 部署列表不在挂载时拉:切到"部署"视图时由下方 activeView effect 加载。
   useEffect(() => {
     loadVersions()
-    loadDeployments()
     getManifest(String(orgId), manifestId)
       .then((m) => {
         setManifestName(m.name ?? '')
         setManifestDesc(m.description ?? '')
+        setManifestCaps({ can_write: m.can_write, can_deploy: m.can_deploy })
       })
       .catch(() => {
         setManifestName('')
         setManifestDesc('')
+        setManifestCaps({})
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifestId, orgId])
 
-  // 拉取 post_init 落库的 provider 类型目录(默认根 subpath;部署 workspace 的 subpath 优先)
-  useEffect(() => {
-    let cancelled = false
+  // 拉取 post_init 落库的 provider 类型目录(默认根 subpath;部署 workspace 的 subpath 优先)。
+  // 不在挂载时跑:首次补全请求时由 ensureProviderSchemaRef 触发一次(manifest 切换后重置)。
+  const providerSchemaRequestedRef = useRef(false)
+  const providerSchemaGenRef = useRef(0)
+  const ensureProviderSchemaRef = useRef<() => void>(() => {})
+  ensureProviderSchemaRef.current = () => {
+    if (providerSchemaRequestedRef.current) return
+    providerSchemaRequestedRef.current = true
+    const gen = providerSchemaGenRef.current
     ;(async () => {
       let subpath = ''
       try {
         const deps = await listDeployments(ctx).catch(() => [] as ManifestDeployment[])
         const active = deps.filter((d) => d.status === 'active')
         if (active.length > 0) {
-          const wss = await workspaceService
-            .getWorkspaces()
-            .then((r) => {
-              const d: any = (r as any)?.data
-              return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
-            })
-            .catch(() => [] as any[])
-          const ws = (wss as any[]).find(
-            (w) => (w.workspace_id || String(w.id)) === active[0].workspace_id,
-          )
+          // 只读首个 active 部署所在 workspace(单个 GET),不拉全量 workspace 列表
+          const ws = await workspaceService
+            .getWorkspace(active[0].workspace_id)
+            .then((r) => r?.data)
+            .catch(() => undefined)
           if (ws?.manifest_subpath) subpath = String(ws.manifest_subpath)
         }
       } catch {
@@ -1658,19 +1711,22 @@ export default function ManifestEditorV2() {
       }
       try {
         const schema = await getProviderSchemas(ctx, subpath)
-        if (cancelled) return
+        if (gen !== providerSchemaGenRef.current) return
         setProviderTypeCatalog(schema)
         setSchemaVersionLabel(getProviderSchemaVersion())
       } catch {
-        if (cancelled) return
+        if (gen !== providerSchemaGenRef.current) return
         setProviderTypeCatalog(null)
         setSchemaVersionLabel('—')
       }
     })()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }
+  useEffect(() => {
+    // manifest 切换(含首次挂载):作废进行中的请求,清掉上一个 manifest 的类型目录,下次补全时重新拉
+    providerSchemaGenRef.current++
+    providerSchemaRequestedRef.current = false
+    setProviderTypeCatalog(null)
+    setSchemaVersionLabel('—')
   }, [manifestId, orgId])
 
   // 顶栏就地编辑:开始编辑某字段(name/desc)
@@ -1725,6 +1781,9 @@ export default function ManifestEditorV2() {
       void loadDraftDiff()
     } else if (activeView === 'deploy') {
       loadDeployments()
+    } else if (activeView === 'problems') {
+      // 问题视图需要全量索引才能报"未定义引用"
+      void ensureDefIndexRef.current()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView])
@@ -2916,16 +2975,16 @@ export default function ManifestEditorV2() {
             <i className="codicon codicon-play" /> Run
           </button>
           <button
-            title="把当前草稿固化为新的不可变版本"
-            disabled={manifestMissing}
+            title={manifestCaps.can_write === false ? '需要 MANIFESTS 写权限' : '把当前草稿固化为新的不可变版本'}
+            disabled={manifestMissing || manifestCaps.can_write === false}
             onClick={() => setPublishOpen(true)}
           >
             <i className="codicon codicon-tag" /> 发布版本
           </button>
           <button
             className={styles.primary}
-            title="把已发布版本部署到 Workspace"
-            disabled={manifestMissing}
+            title={manifestCaps.can_deploy === false ? '没有可写的 workspace(需 WORKSPACE_RESOURCES 写权限)' : '把已发布版本部署到 Workspace'}
+            disabled={manifestMissing || manifestCaps.can_deploy === false}
             onClick={() => setActiveRightPanel('deploy')}
           >
             <i className="codicon codicon-rocket" /> 部署到 Workspace
