@@ -11,6 +11,11 @@
  *   POST /manifests/:id/v2/deployments/:id/upgrade
  *   POST /manifests/:id/v2/deployments/:id/uninstall
  *   GET  /manifests/:id/v2/versions/:id/workdirs   (列可用 workdir 目录)
+ *   POST /manifests/:id/v2/deployments/:id/variable-preview (upgrade 时预览合并变量,敏感值不回显)
+ *
+ * 加载分两步(避免一打开就拉全量):
+ *   1. 打开时只拉版本、部署记录、可写 workspace(GET /workspaces?capability=WORKSPACE_RESOURCES:WRITE)
+ *   2. 选定 workspace 后才拉该 workspace 可挂载的 varset(GET /variable-sets?workspace_id=)与变量预览
  */
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -20,6 +25,7 @@ import {
   listDeployments,
   listVersionWorkdirs,
   getDeploymentVarsets,
+  previewDeploymentVariables,
   installDeployment,
   upgradeDeployment,
   uninstallDeployment,
@@ -28,6 +34,7 @@ import {
   type ManifestVersion,
   type ManifestDeployment,
   type DeploymentVarsetEntry,
+  type DeploymentPreviewVariable,
 } from './manifestApi'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import { variableSetService, type VariableSet } from '../../../services/variableSets'
@@ -235,6 +242,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [varsets, setVarsets] = useState<VariableSet[]>([])
+  const [varsetsLoading, setVarsetsLoading] = useState(false)
+  const [previewVars, setPreviewVars] = useState<DeploymentPreviewVariable[]>([])
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -249,30 +260,52 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmingUninstall, setConfirmingUninstall] = useState(false)
 
-  // 加载数据
+  // 第一步:只拉版本 / 部署记录 / 可写 workspace(部署目标只列有 WORKSPACE_RESOURCES WRITE 的)
   useEffect(() => {
     setLoading(true)
     Promise.all([
       listVersions(ctx).catch(() => []),
       listDeployments(ctx).catch(() => []),
       workspaceService
-        .getWorkspaces()
+        .getWorkspaces({ capability: 'WORKSPACE_RESOURCES:WRITE' })
         .then((r) => {
           const d: any = (r as any)?.data
           return Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : []
         })
         .catch(() => []),
-      variableSetService.list().then((r) => r.items ?? []).catch(() => []),
     ])
-      .then(([v, d, w, vs]) => {
+      .then(([v, d, w]) => {
         setVersions(v)
         setDeployments(d)
         setWorkspaces(w)
-        setVarsets(vs)
         if (v.length > 0) setVersionId(v[0].id)
       })
       .finally(() => setLoading(false))
   }, [ctx])
+
+  // 第二步:选定 workspace 后才拉它可挂载的 varset;切换 workspace 时重拉
+  useEffect(() => {
+    if (!workspaceId) {
+      setVarsets([])
+      return
+    }
+    let cancelled = false
+    setVarsetsLoading(true)
+    variableSetService
+      .list(undefined, workspaceId)
+      .then((r) => {
+        if (!cancelled) setVarsets(r.items ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setVarsets([])
+      })
+      .finally(() => {
+        if (!cancelled) setVarsetsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceId])
 
   const activeDeploymentForWs = useMemo<ManifestDeployment | undefined>(() => {
     if (!workspaceId) return undefined
@@ -304,6 +337,37 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       cancelled = true
     }
   }, [ctx, activeDeploymentForWs])
+
+  // upgrade 模式:预览按当前所选 varset 合并后的变量(后端仅支持已有 deployment 的预览)。
+  // 与 doUpgrade 提交内容一致(只带 varsets);workspace / varset 选择变化时重拉。
+  useEffect(() => {
+    if (!activeDeploymentForWs) {
+      setPreviewVars([])
+      setPreviewError(null)
+      return
+    }
+    let cancelled = false
+    setPreviewLoading(true)
+    setPreviewError(null)
+    previewDeploymentVariables(ctx, activeDeploymentForWs.id, {
+      varsets: varsetIds.map((id, i) => ({ varset_id: id, priority: i })),
+    })
+      .then((vars) => {
+        if (!cancelled) setPreviewVars(vars)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setPreviewVars([])
+        const msg = typeof err === 'string' ? err : (err as Error)?.message
+        setPreviewError(msg ?? '未知错误')
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ctx, activeDeploymentForWs, varsetIds])
 
   const sameVersion = useMemo(
     () => !!activeDeploymentForWs && activeDeploymentForWs.version_id === versionId,
@@ -602,8 +666,13 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
           <select
             style={selectStyle}
             value={workspaceId ?? ''}
-            onChange={(e) => setWorkspaceId(e.target.value || undefined)}
-            disabled={loading}
+            onChange={(e) => {
+              setWorkspaceId(e.target.value || undefined)
+              // varset 按 workspace 收口:切换后清空已选(upgrade 会按 deployment 重新预填)
+              setVarsetIds([])
+              setVarsetDropdownOpen(false)
+            }}
+            disabled={loading || workspaces.length === 0}
           >
             <option value="">选择 workspace</option>
             {workspaces.map((w) => {
@@ -615,6 +684,12 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
               )
             })}
           </select>
+          {!loading && workspaces.length === 0 && (
+            <div style={{ ...warnBoxStyle, marginTop: 6, marginBottom: 0 }}>
+              <i className="codicon codicon-warning" />
+              <span>没有可部署的 workspace:需要目标 workspace 的 WORKSPACE_RESOURCES 写权限</span>
+            </div>
+          )}
           {targetMode === 'upgrade' && activeDeploymentForWs && (
             <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={tagBlueStyle}>当前已装</span>
@@ -654,10 +729,14 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
             <span style={labelHintStyle}>(顺序即优先级,后选的优先级高)</span>
           </label>
           <div
-            style={multiSelectWrapStyle}
-            onClick={() => setVarsetDropdownOpen((v) => !v)}
+            style={{ ...multiSelectWrapStyle, cursor: workspaceId ? 'pointer' : 'not-allowed' }}
+            onClick={() => {
+              if (workspaceId) setVarsetDropdownOpen((v) => !v)
+            }}
           >
-            {varsetIds.length === 0 ? (
+            {!workspaceId ? (
+              <span style={{ opacity: 0.5, fontSize: 12 }}>请先选择目标 workspace</span>
+            ) : varsetIds.length === 0 ? (
               <span style={{ opacity: 0.5, fontSize: 12 }}>可不选 — 仅用 workspace 自有变量</span>
             ) : (
               varsetIds.map((id) => {
@@ -678,9 +757,12 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
               })
             )}
           </div>
-          {varsetDropdownOpen && (
+          {varsetDropdownOpen && workspaceId && (
             <div style={multiSelectDropdownStyle}>
-              {varsets.length === 0 && (
+              {varsetsLoading && (
+                <div style={{ padding: '6px 10px', fontSize: 12, opacity: 0.5 }}>加载中...</div>
+              )}
+              {!varsetsLoading && varsets.length === 0 && (
                 <div style={{ padding: '6px 10px', fontSize: 12, opacity: 0.5 }}>无可用 Variable Sets</div>
               )}
               {varsets.map((vs) => (
@@ -703,6 +785,45 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
             </div>
           )}
         </div>
+
+        {/* 变量预览:仅 upgrade(已有 deployment);敏感值后端恒为空串,显示占位不回显 */}
+        {targetMode === 'upgrade' && activeDeploymentForWs && (
+          <div style={formGroupStyle}>
+            <label style={labelStyle}>
+              变量预览
+              <span style={labelHintStyle}>(按所选 Variable Sets 合并后的最终值)</span>
+            </label>
+            <div style={{ ...varBoxStyle, marginTop: 0 }}>
+              {previewLoading && <div style={varLabelStyle}>加载中...</div>}
+              {!previewLoading && previewError && (
+                <div style={{ ...varLabelStyle, color: 'var(--red)' }}>预览失败: {previewError}</div>
+              )}
+              {!previewLoading && !previewError && previewVars.length === 0 && (
+                <div style={varLabelStyle}>无变量</div>
+              )}
+              {!previewLoading &&
+                !previewError &&
+                previewVars.map((v) => (
+                  <div key={v.key} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '2px 0' }}>
+                    <span style={{ color: '#cccccc', flexShrink: 0 }} title={v.description || undefined}>
+                      {v.key}
+                      {v.sensitive && <span style={{ color: 'var(--amber)', marginLeft: 4 }}>·敏感</span>}
+                    </span>
+                    {v.sensitive ? (
+                      <span style={{ color: '#666', fontStyle: 'italic' }}>敏感值，不回显</span>
+                    ) : (
+                      <span
+                        style={{ color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={v.value}
+                      >
+                        {v.value}
+                      </span>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* 错误提示 */}
         {submitError && <div style={errorStyle}>{submitError}</div>}
