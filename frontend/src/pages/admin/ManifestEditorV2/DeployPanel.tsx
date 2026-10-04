@@ -16,6 +16,9 @@
  *
  * 变量覆盖:预览每行可填覆盖值,只提交用户改过的 key(敏感行未输入新值则不提交);
  * upgrade 时已有覆盖可"移除覆盖"(进 unset_keys,提交前可撤销),未动的 key 一律不发送。
+ * 已存覆盖来自 deployment.overrides 脱敏视图:有 value 才预填;无 value 显示"已设置"、输入框为空。
+ * 响应里的 sensitive 只用于展示(锁定为敏感),绝不回传;只有用户输入新值并勾选"敏感"才发
+ * {value, sensitive: true}。
  *
  * 加载分两步(避免一打开就拉全量):
  *   1. 打开时只拉版本、部署记录、可写 workspace(GET /workspaces?capability=WORKSPACE_RESOURCES:WRITE)
@@ -42,6 +45,8 @@ import {
   type ManifestDeployment,
   type DeploymentVarsetEntry,
   type DeploymentPreviewVariable,
+  type DeploymentOverrideView,
+  type OverrideInputs,
 } from './manifestApi'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import { variableSetService, type VariableSet } from '../../../services/variableSets'
@@ -256,6 +261,7 @@ const rowActionStyle: React.CSSProperties = {
 }
 
 const SENSITIVE_PLACEHOLDER = '敏感值，不回显'
+const VALUE_SET_PLACEHOLDER = '已设置'
 
 function errorText(err: unknown): string {
   if (isManifestTargetNotFound(err)) return MANIFEST_TARGET_NOT_FOUND_MESSAGE
@@ -265,15 +271,34 @@ function errorText(err: unknown): string {
 
 // ===== 变量预览(install / upgrade 共用)=====
 
+/** 预览行的展示状态(install / upgrade 共用,DeployPanel 计算) */
+interface PreviewRow {
+  key: string
+  description?: string
+  /** 输入框的初始值(未编辑时显示);值不可见时为空串 */
+  baseline: string
+  /** 值不回显:敏感,或已存覆盖未带 value */
+  valueHidden: boolean
+  /** 已是敏感(预览或已存覆盖标记),UI 锁定,不能取消 */
+  lockedSensitive: boolean
+  /** deployment 已存覆盖(仅 upgrade) */
+  overridden: boolean
+  /** 已存覆盖有值但未回显 */
+  hasHiddenValue: boolean
+}
+
 interface VariablePreviewProps {
-  vars: DeploymentPreviewVariable[]
+  rows: PreviewRow[]
   loading: boolean
   error: string | null
   /** 用户在本面板里输入的覆盖值(key -> 新值) */
   edits: Record<string, string>
   onEdit: (key: string, value: string) => void
-  /** deployment 已存的覆盖 key(仅 upgrade) */
-  overriddenKeys?: Set<string>
+  /** 本次被视为改动、将提交的 key */
+  changedKeys: Set<string>
+  /** 用户勾选"敏感"的 key(仅对改动且未锁定敏感的行生效) */
+  sensitiveMarks: Set<string>
+  onToggleSensitive: (key: string) => void
   /** 已标记"移除覆盖"的 key(仅 upgrade) */
   unsetKeys?: Set<string>
   onToggleUnset?: (key: string) => void
@@ -282,12 +307,14 @@ interface VariablePreviewProps {
 
 // 预览列表:敏感值后端恒为空串,只显示占位不回显;每行可输入覆盖值。
 function VariablePreview({
-  vars,
+  rows,
   loading,
   error,
   edits,
   onEdit,
-  overriddenKeys,
+  changedKeys,
+  sensitiveMarks,
+  onToggleSensitive,
   unsetKeys,
   onToggleUnset,
   disabled,
@@ -298,22 +325,54 @@ function VariablePreview({
       {!loading && error && (
         <div style={{ ...varLabelStyle, color: 'var(--red)' }}>预览失败: {error}</div>
       )}
-      {!loading && !error && vars.length === 0 && <div style={varLabelStyle}>无变量</div>}
+      {!loading && !error && rows.length === 0 && <div style={varLabelStyle}>无变量</div>}
       {!loading &&
         !error &&
-        vars.map((v) => {
-          const overridden = !!overriddenKeys?.has(v.key)
+        rows.map((v) => {
           const unset = !!unsetKeys?.has(v.key)
           const edited = Object.prototype.hasOwnProperty.call(edits, v.key)
+          const changed = changedKeys.has(v.key)
+          const markedSensitive = !v.lockedSensitive && changed && sensitiveMarks.has(v.key)
+          const masked = v.lockedSensitive || markedSensitive
+          const placeholder = v.lockedSensitive
+            ? SENSITIVE_PLACEHOLDER
+            : v.hasHiddenValue
+              ? VALUE_SET_PLACEHOLDER
+              : undefined
           return (
             <div key={v.key} style={{ fontSize: 12, padding: '3px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#cccccc' }} title={v.description || undefined}>
                   {v.key}
                 </span>
-                {v.sensitive && <span style={{ color: 'var(--amber)' }}>·敏感</span>}
-                {overridden && <span style={{ color: '#3794ff' }}>·已覆盖</span>}
-                {overridden && onToggleUnset && (
+                {v.lockedSensitive && <span style={{ color: 'var(--amber)' }}>·敏感</span>}
+                {v.overridden && <span style={{ color: '#3794ff' }}>·已覆盖</span>}
+                {v.hasHiddenValue && !v.lockedSensitive && (
+                  <span style={{ color: '#888' }}>·{VALUE_SET_PLACEHOLDER}</span>
+                )}
+                {!v.lockedSensitive && !unset && (
+                  <label
+                    style={{
+                      marginLeft: v.overridden && onToggleUnset ? 8 : 'auto',
+                      fontSize: 11,
+                      color: changed ? '#cccccc' : '#666',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      cursor: changed && !disabled ? 'pointer' : 'not-allowed',
+                    }}
+                    title="仅在输入新值时生效;标记后不可改回普通"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={markedSensitive}
+                      disabled={disabled || !changed}
+                      onChange={() => onToggleSensitive(v.key)}
+                    />
+                    敏感
+                  </label>
+                )}
+                {v.overridden && onToggleUnset && (
                   <span
                     style={rowActionStyle}
                     onClick={() => {
@@ -331,11 +390,11 @@ function VariablePreview({
               ) : (
                 <input
                   style={{ ...overrideInputStyle, marginTop: 2 }}
-                  type={v.sensitive ? 'password' : 'text'}
+                  type={masked ? 'password' : 'text'}
                   autoComplete="new-password"
-                  value={edited ? edits[v.key] : v.sensitive ? '' : v.value}
-                  placeholder={v.sensitive ? SENSITIVE_PLACEHOLDER : undefined}
-                  title={v.sensitive ? SENSITIVE_PLACEHOLDER : v.value}
+                  value={edited ? edits[v.key] : v.baseline}
+                  placeholder={placeholder}
+                  title={v.valueHidden ? placeholder : v.baseline}
                   disabled={disabled}
                   onChange={(e) => onEdit(v.key, e.target.value)}
                 />
@@ -372,9 +431,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [varsetDropdownOpen, setVarsetDropdownOpen] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmingUninstall, setConfirmingUninstall] = useState(false)
-  // 变量覆盖:existingOverrides=deployment 已存覆盖(null=尚未加载;install 时为 {})
-  const [existingOverrides, setExistingOverrides] = useState<Record<string, string> | null>({})
+  // 变量覆盖:existingOverrides=deployment 已存覆盖脱敏视图(仅展示,不回传;install 时为 [])
+  const [existingOverrides, setExistingOverrides] = useState<DeploymentOverrideView[]>([])
   const [overrideEdits, setOverrideEdits] = useState<Record<string, string>>({})
+  const [sensitiveMarks, setSensitiveMarks] = useState<Set<string>>(() => new Set())
   const [unsetKeys, setUnsetKeys] = useState<Set<string>>(() => new Set())
 
   // 第一步:只拉版本 / 部署记录 / 可写 workspace(部署目标只列有 WORKSPACE_RESOURCES WRITE 的)
@@ -437,6 +497,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   // 切换 workspace / 已装 deployment 时:清空本面板里的覆盖输入与移除标记
   useEffect(() => {
     setOverrideEdits({})
+    setSensitiveMarks(new Set())
     setUnsetKeys(new Set())
   }, [workspaceId, activeDeploymentForWs])
 
@@ -444,22 +505,22 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   useEffect(() => {
     if (!activeDeploymentForWs) {
       setCurrentVarsetIds([])
-      setExistingOverrides({})
+      setExistingOverrides([])
       return
     }
     let cancelled = false
-    setExistingOverrides(null)
+    setExistingOverrides([])
     getDeploymentUpgradeContext(ctx, activeDeploymentForWs.id)
       .then((uc) => {
         if (cancelled) return
         setCurrentVarsetIds(uc.varsetIds)
         setVarsetIds(uc.varsetIds)
-        setExistingOverrides(uc.variable_overrides ?? {})
+        setExistingOverrides(uc.overrides)
       })
       .catch(() => {
         if (cancelled) return
         setCurrentVarsetIds([])
-        setExistingOverrides({})
+        setExistingOverrides([])
       })
     return () => {
       cancelled = true
@@ -467,17 +528,20 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   }, [ctx, activeDeploymentForWs])
 
   // 变量预览(install / upgrade 同一渲染组件),workspace / 版本 / varset 变化时重拉:
-  //  - upgrade:per-deployment 预览;带上已存覆盖(后端预览本身不读已存覆盖),
-  //    使预览与 upgrade 合并后的结果一致。
+  //  - upgrade:per-deployment 预览;后端与 upgrade 同一 mergeDeploymentOverrides 合并已存覆盖,
+  //    前端不回传已存值,只带 unset_keys 与 target_version_id(参与敏感判定)。
+  //    本次输入的新值在本地叠加显示(不随每次按键重拉,也避免以预览值为基准判定改动时自我抵消),
+  //    提交 upgrade 时只发这些改动的 key。
   //  - install:首装预览(需已选 workspace + 版本)。
+  const unsetKeysForPreview = useMemo(() => Array.from(unsetKeys).sort(), [unsetKeys])
   useEffect(() => {
     const varsets = varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
     let req: Promise<DeploymentPreviewVariable[]> | null = null
     if (activeDeploymentForWs) {
-      if (existingOverrides === null) return // 等已存覆盖加载完
       req = previewDeploymentVariables(ctx, activeDeploymentForWs.id, {
+        ...(versionId ? { target_version_id: versionId } : {}),
         varsets,
-        variable_overrides: existingOverrides,
+        ...(unsetKeysForPreview.length > 0 ? { unset_keys: unsetKeysForPreview } : {}),
       })
     } else if (workspaceId && versionId) {
       req = previewInstallVariables(ctx, {
@@ -509,30 +573,59 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return () => {
       cancelled = true
     }
-  }, [ctx, activeDeploymentForWs, existingOverrides, workspaceId, versionId, varsetIds])
+  }, [ctx, activeDeploymentForWs, unsetKeysForPreview, workspaceId, versionId, varsetIds])
 
-  const overriddenKeys = useMemo(
-    () => new Set(Object.keys(existingOverrides ?? {})),
+  const overrideByKey = useMemo(
+    () => new Map(existingOverrides.map((o) => [o.key, o])),
     [existingOverrides],
   )
+  const overriddenKeys = useMemo(() => new Set(overrideByKey.keys()), [overrideByKey])
 
-  // 只提交用户改过的 key:敏感行只有输入了非空新值才提交(空 = 未修改);
-  // 非敏感行与预览值不同才提交;被标记移除覆盖的 key 不提交值。
+  // 预览行 = 预览变量 + 预览里没有的已存覆盖 key(仍可移除 / 改值)。
+  // 已存覆盖:有 value(非敏感且有读权限)才预填,否则输入框为空并提示"已设置"。
+  const previewRows = useMemo<PreviewRow[]>(() => {
+    const isUpgrade = !!activeDeploymentForWs
+    const toRow = (key: string, v?: DeploymentPreviewVariable): PreviewRow => {
+      const ov = isUpgrade ? overrideByKey.get(key) : undefined
+      const lockedSensitive = !!v?.sensitive || !!ov?.sensitive
+      const ovHidden = !!ov && ov.value === undefined
+      const valueHidden = lockedSensitive || ovHidden
+      const baseline = valueHidden ? '' : ov ? (ov.value ?? '') : (v?.value ?? '')
+      return {
+        key,
+        description: v?.description,
+        baseline,
+        valueHidden,
+        lockedSensitive,
+        overridden: !!ov,
+        hasHiddenValue: !!ov && ov.has_value && ov.value === undefined,
+      }
+    }
+    const rows = previewVars.map((v) => toRow(v.key, v))
+    if (isUpgrade) {
+      const seen = new Set(previewVars.map((v) => v.key))
+      for (const o of existingOverrides) if (!seen.has(o.key)) rows.push(toRow(o.key))
+    }
+    return rows
+  }, [previewVars, existingOverrides, overrideByKey, activeDeploymentForWs])
+
+  // 只提交用户改过的 key:值不回显的行只有输入了非空新值才提交(空 = 未修改);
+  // 其余行与初始值不同才提交;被标记移除覆盖的 key 不提交值。
+  // 响应里的 sensitive 不回传;只有新值 + 用户勾选"敏感"(且该行未锁定敏感)才发 {value, sensitive: true}。
   const changedOverrides = useMemo(() => {
-    const out: Record<string, string> = {}
-    const byKey = new Map(previewVars.map((v) => [v.key, v]))
+    const out: OverrideInputs = {}
+    const byKey = new Map(previewRows.map((r) => [r.key, r]))
     for (const [k, val] of Object.entries(overrideEdits)) {
       if (unsetKeys.has(k)) continue
       const row = byKey.get(k)
       if (!row) continue
-      if (row.sensitive) {
-        if (val !== '') out[k] = val
-      } else if (val !== row.value) {
-        out[k] = val
-      }
+      const changed = row.valueHidden ? val !== '' : val !== row.baseline
+      if (!changed) continue
+      out[k] = !row.lockedSensitive && sensitiveMarks.has(k) ? { value: val, sensitive: true } : val
     }
     return out
-  }, [overrideEdits, unsetKeys, previewVars])
+  }, [overrideEdits, unsetKeys, previewRows, sensitiveMarks])
+  const changedKeys = useMemo(() => new Set(Object.keys(changedOverrides)), [changedOverrides])
 
   const unsetKeyList = useMemo(
     () => Array.from(unsetKeys).filter((k) => overriddenKeys.has(k)),
@@ -541,6 +634,15 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
 
   const handleEditOverride = useCallback((key: string, value: string) => {
     setOverrideEdits((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  const toggleSensitive = useCallback((key: string) => {
+    setSensitiveMarks((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }, [])
 
   const toggleUnset = useCallback((key: string) => {
@@ -981,12 +1083,14 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
               <span style={labelHintStyle}>(按所选 Variable Sets 合并后的最终值;可在此填写覆盖值)</span>
             </label>
             <VariablePreview
-              vars={previewVars}
+              rows={previewRows}
               loading={previewLoading}
               error={previewError}
               edits={overrideEdits}
               onEdit={handleEditOverride}
-              overriddenKeys={targetMode === 'upgrade' ? overriddenKeys : undefined}
+              changedKeys={changedKeys}
+              sensitiveMarks={sensitiveMarks}
+              onToggleSensitive={toggleSensitive}
               unsetKeys={targetMode === 'upgrade' ? unsetKeys : undefined}
               onToggleUnset={targetMode === 'upgrade' ? toggleUnset : undefined}
               disabled={submitting}

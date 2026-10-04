@@ -203,16 +203,24 @@ api.interceptors.request.use(
  *   渲染时等价于渲染原字符串（普通 Error 对象作为 React child 会直接抛错）；
  * - 不暴露 `response` 字段，避免激活调用方里原本走不到的 `err.response?.data` 分支。
  * 新增：`status`（HTTP 状态码，网络错误等无响应时为 undefined）与 `data`（响应体）。
+ * `requestId`：后端 ErrorHandler 的 request_id（响应体）或 X-Request-ID 响应头；
+ * 5xx 且有 requestId 时 message 末尾追加「（请求 ID：xxx）」，所有沿用
+ * message.error(err) / `${err}` 的调用方无需改动即可展示，便于按 ID 查日志。
  */
 export class ApiError extends Error {
   readonly status?: number;
   readonly data?: unknown;
+  readonly requestId?: string;
 
-  constructor(message: string, status?: number, data?: unknown, cause?: unknown) {
-    super(message, cause === undefined ? undefined : { cause });
+  constructor(message: string, status?: number, data?: unknown, cause?: unknown, requestId?: string) {
+    const st = typeof status === 'number' ? status : undefined;
+    const rid = requestId || undefined;
+    const full = st !== undefined && st >= 500 && rid ? `${message}（请求 ID：${rid}）` : message;
+    super(full, cause === undefined ? undefined : { cause });
     this.name = 'ApiError';
-    this.status = typeof status === 'number' ? status : undefined;
+    this.status = st;
     this.data = data;
+    this.requestId = rid;
   }
 
   toString(): string {
@@ -229,6 +237,37 @@ export class ApiError extends Error {
 
   *[Symbol.iterator](): Iterator<string> {
     yield this.message;
+  }
+}
+
+/** 从响应体 request_id 或 X-Request-ID 响应头取请求 ID（跨域时头需后端 Expose）。 */
+function extractRequestId(data: unknown, headers: unknown): string | undefined {
+  if (data && typeof data === 'object') {
+    const rid = (data as { request_id?: unknown }).request_id;
+    if (typeof rid === 'string' && rid) return rid;
+  }
+  if (headers && typeof headers === 'object') {
+    const h = headers as { get?: (name: string) => unknown } & Record<string, unknown>;
+    const v = typeof h.get === 'function' ? h.get('x-request-id') : h['x-request-id'];
+    if (typeof v === 'string' && v) return v;
+  }
+  return undefined;
+}
+
+/** 取错误携带的请求 ID（ApiError.requestId），没有则 undefined。 */
+export function getRequestId(err: unknown): string | undefined {
+  return err instanceof ApiError ? err.requestId : undefined;
+}
+
+/** 复制错误的请求 ID 到剪贴板；无 ID 或剪贴板不可用时返回 false。 */
+export async function copyRequestId(err: unknown): Promise<boolean> {
+  const rid = getRequestId(err);
+  if (!rid || !navigator.clipboard) return false;
+  try {
+    await navigator.clipboard.writeText(rid);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -284,7 +323,10 @@ api.interceptors.response.use(
     }
     // 提取错误消息：优先使用 error.response.data.error，其次使用 error.message
     const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || '未知错误';
-    return Promise.reject(new ApiError(String(errorMessage), error.response?.status, error.response?.data, error));
+    const requestId = extractRequestId(error.response?.data, error.response?.headers);
+    return Promise.reject(
+      new ApiError(String(errorMessage), error.response?.status, error.response?.data, error, requestId),
+    );
   }
 );
 
