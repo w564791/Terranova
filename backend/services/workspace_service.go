@@ -358,6 +358,9 @@ type WorkspaceWithStatus struct {
 	LatestRunTaskType  string     `json:"latest_run_task_type,omitempty"`
 	LatestRunCreatedAt *time.Time `json:"latest_run_created_at,omitempty"`
 	LatestApplyTime    *time.Time `json:"latest_apply_time,omitempty"`
+	// CanWriteVariables 仅 ?capability= 列表填充:调用者对该 workspace 是否持有
+	// WORKSPACE_VARIABLES WRITE(与 manifest install/upgrade 变量变更同一检查)。
+	CanWriteVariables *bool `json:"can_write_variables,omitempty"`
 }
 
 // toWorkspaceListItem 将Workspace转换为WorkspaceListItem（排除tf_state等大字段）

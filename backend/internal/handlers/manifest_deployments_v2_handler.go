@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"sort"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -252,6 +253,10 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, req.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return // 403 已写
 	}
+	// 首装带覆盖或 varset 即变更目标 workspace 的变量
+	if !h.requireVariablesWriteIf(c, req.WorkspaceID, len(req.VariableOverrides) > 0 || len(req.Varsets) > 0) {
+		return
+	}
 	if !h.rejectUnmountableVarsets(c, req.WorkspaceID, req.Varsets) {
 		return
 	}
@@ -462,6 +467,20 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, dep.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return // 403 已写
 	}
+	// 覆盖 / unset / varset 列表(按生效顺序比较)有变化 => 还需 WORKSPACE_VARIABLES WRITE;
+	// 原样回传 varset、只换版本沿用上面的规则。
+	variablesChanged := len(req.VariableOverrides) > 0 || len(req.UnsetKeys) > 0
+	if !variablesChanged {
+		changed, err := h.deploymentVarsetsChanged(dep.ID, req.Varsets)
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		variablesChanged = changed
+	}
+	if !h.requireVariablesWriteIf(c, dep.WorkspaceID, variablesChanged) {
+		return
+	}
 	if !h.rejectUnmountableVarsets(c, dep.WorkspaceID, req.Varsets) {
 		return
 	}
@@ -641,6 +660,39 @@ func (h *ManifestDeploymentsV2Handler) mergeDeploymentOverrides(
 		}
 	}
 	return mergeOverrides(stored, incoming.Values(), sens.display, unset), sens, nil
+}
+
+// requireVariablesWriteIf: changed 时要求目标 workspace WORKSPACE_VARIABLES WRITE
+// (与 WORKSPACE_RESOURCES 同一检查实现;403 已写则返回 false)。
+func (h *ManifestDeploymentsV2Handler) requireVariablesWriteIf(c *gin.Context, workspaceID string, changed bool) bool {
+	if !changed || h.perm == nil {
+		return true
+	}
+	return h.perm.RequireWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_VARIABLES", "WRITE")
+}
+
+// deploymentVarsetsChanged 比较请求 varset 列表与已存列表的生效形态:
+// 已存行按 priority ASC 读出(同 priority 按写入顺序,即当时请求顺序),请求列表按
+// priority 稳定排序后逐项比较 (varset_id, priority)。集合、priority 或同级顺序
+// 任一不同即变化;字段缺省等同空列表(upgrade 会按请求整体重写 varsets)。
+func (h *ManifestDeploymentsV2Handler) deploymentVarsetsChanged(deploymentID string, req []models.DeploymentVarsetEntry) (bool, error) {
+	var stored []models.ManifestDeploymentVarset
+	if err := h.db.Where("deployment_id = ?", deploymentID).
+		Order("priority ASC, id ASC").Find(&stored).Error; err != nil {
+		return false, err
+	}
+	if len(stored) != len(req) {
+		return true, nil
+	}
+	want := make([]models.DeploymentVarsetEntry, len(req))
+	copy(want, req)
+	sort.SliceStable(want, func(i, j int) bool { return want[i].Priority < want[j].Priority })
+	for i := range want {
+		if want[i].VarsetID != stored[i].VarsetID || want[i].Priority != stored[i].Priority {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func varsetIDsOf(entries []models.DeploymentVarsetEntry) []string {

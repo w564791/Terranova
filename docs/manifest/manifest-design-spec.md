@@ -582,10 +582,19 @@ module "ec2_web" {
 | GET | `/v2/deployments` | 部署列表（按可读 workspace 过滤；无可读 workspace → 403） | MANIFESTS READ + workspace 列表访问 |
 | GET | `/v2/deployments/:deployment_id` | 部署详情 | MANIFESTS READ + 目标 workspace 可读 |
 | POST | `/v2/deployments/variable-preview` | 首次安装前变量预览（body：`workspace_id`、`version_id`、`varsets`、`variable_overrides`；与按部署的预览共用实现；workspace 不属于本 org、version 为草稿或不属于本 manifest → 404） | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ + varset 可挂载 |
-| POST | `/v2/deployments/install` | 安装到 body 中的 workspace（workspace 不属于本 org、version 为草稿或不属于本 manifest → 404） | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
-| POST | `/v2/deployments/:deployment_id/upgrade` | 升级 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
+| POST | `/v2/deployments/install` | 安装到 body 中的 workspace（workspace 不属于本 org、version 为草稿或不属于本 manifest → 404） | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE；涉及变量变更时另需目标 `WORKSPACE_VARIABLES` WRITE（见下） |
+| POST | `/v2/deployments/:deployment_id/upgrade` | 升级 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE；涉及变量变更时另需目标 `WORKSPACE_VARIABLES` WRITE（见下） |
 | POST | `/v2/deployments/:deployment_id/uninstall` | 卸载 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
 | POST | `/v2/deployments/:deployment_id/variable-preview` | 变量预览（`sensitive` 掩码）。body `models.DeploymentPreviewRequest`：可选 `target_version_id`（须属于本 manifest，否则 400）、`varsets`、`variable_overrides`、`unset_keys`；已存覆盖按 upgrade 的同一合并规则叠加后再预览 | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ |
+
+#### 变量变更需 `WORKSPACE_VARIABLES` WRITE
+
+install / upgrade 在 `WORKSPACE_RESOURCES` WRITE 之外，以下情况还要求目标 workspace 的 `WORKSPACE_VARIABLES` WRITE（与其它 workspace 权限同一检查器；否则返回 403）：
+- `variable_overrides` 或 `unset_keys` 非空；
+- upgrade 的 varset 列表与部署上已存的列表不同。比较的是生效形态：集合、priority，以及同一 priority 内的顺序（已存行按 `priority ASC` 读出，同级按写入顺序；请求列表按 priority 稳定排序）。只看内容，不看字段是否出现：缺省等同空列表（upgrade 会整体重写），原样回传不算变化；
+- 首装时 varset 列表非空。
+
+只换版本时沿用原规则（`WORKSPACE_RESOURCES` WRITE）。`GET /workspaces?capability=...` 的每一项带 `can_write_variables`，用同一检查计算，部署面板据此提前禁用变量编辑。
 
 #### 覆盖值（variable_overrides）的输入、存储与输出
 
@@ -600,7 +609,7 @@ module "ec2_web" {
 
 #### 500 响应
 
-handler 遇到内部错误时只调用 `c.Error(err)`，由全局 `middleware.ErrorHandler`（已挂在 router 上）记录日志（带 `request_id`），并返回通用响应体 `middleware.InternalErrorResponse`：`{code:500, error:"internal error", message, request_id, timestamp}`，不含任何数据库或 SQL 文本。入站 `X-Request-ID` 只有匹配 `^[A-Za-z0-9-]{8,64}$` 时才复用，否则生成 UUID；该值总会回写到响应头 `X-Request-ID`。
+handler 遇到内部错误时只调用 `c.Error(err)`，由全局 `middleware.ErrorHandler`（已挂在 router 上）记录日志（带 `request_id`），并返回通用响应体 `middleware.InternalErrorResponse`：`{code:500, error:"internal error", message, request_id, timestamp}`，不含任何数据库或 SQL 文本。入站 `X-Request-ID` 只有匹配 `^[A-Za-z0-9-]{8,64}$` 时才复用，否则生成 UUID；该值总会回写到响应头 `X-Request-ID`。CORS 配置（`middleware.CORS`）带 `Access-Control-Expose-Headers: X-Request-ID`，跨域前端可读取该头；`X-Request-ID` 也在允许的请求头内。
 
 ### 8.5 其它视角
 

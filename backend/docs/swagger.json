@@ -20689,11 +20689,24 @@
                         "description": "Project ID (0=all, \u003e0=specific, -1=unassigned)",
                         "name": "project_id",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN), e.g. WORKSPACE_RESOURCES:WRITE; only workspaces where the caller also holds it; each item then carries can_write_variables (WORKSPACE_VARIABLES WRITE)",
+                        "name": "capability",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "Workspace list",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid capability",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true

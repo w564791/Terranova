@@ -85,6 +85,13 @@ var readVars = map[valueobject.ResourceType]valueobject.PermissionLevel{
 	valueobject.ResourceTypeWorkspaceResources: valueobject.PermissionLevelWrite,
 }
 
+// writeVars: upgrade with overrides also needs WORKSPACE_VARIABLES WRITE
+var writeVars = map[valueobject.ResourceType]valueobject.PermissionLevel{
+	valueobject.ResourceTypeAllWorkspaces:      valueobject.PermissionLevelRead,
+	valueobject.ResourceTypeWorkspaceVars:      valueobject.PermissionLevelWrite,
+	valueobject.ResourceTypeWorkspaceResources: valueobject.PermissionLevelWrite,
+}
+
 func overridesOf(t *testing.T, raw json.RawMessage) map[string]services.OverrideView {
 	t.Helper()
 	var d struct {
@@ -179,7 +186,7 @@ func sensitiveKeysOf(t *testing.T, db *gorm.DB, id string) (map[string]bool, boo
 func TestUpgrade_SensitivityIsSticky(t *testing.T) {
 	db := setupOverrideDB(t)
 	db.Exec(`UPDATE manifest_deployments SET sensitive_keys = CAST('["db_password","manual"]' AS BLOB) WHERE id = 'mfd-a'`)
-	r := overrideRouter(db, readVars)
+	r := overrideRouter(db, writeVars)
 	w := doJSON(r, "POST", "/organizations/1/manifests/mf-1/v2/deployments/mfd-a/upgrade",
 		`{"target_version_id":"mfv-2","variable_overrides":{"manual":"now-plain","flagged":{"value":"f","sensitive":true}}}`)
 	if w.Code != http.StatusOK {
@@ -209,7 +216,7 @@ func TestUpgrade_SensitivityIsSticky(t *testing.T) {
 func TestUpgrade_NullRowIgnoresRequestFlags(t *testing.T) {
 	db := setupOverrideDB(t)
 	db.Exec(`UPDATE manifest_deployments SET sensitive_keys = NULL WHERE id = 'mfd-a'`)
-	r := overrideRouter(db, readVars)
+	r := overrideRouter(db, writeVars)
 	w := doJSON(r, "POST", "/organizations/1/manifests/mf-1/v2/deployments/mfd-a/upgrade",
 		`{"target_version_id":"mfv-2","variable_overrides":{"flagged":{"value":"f","sensitive":true}}}`)
 	if w.Code != http.StatusOK {

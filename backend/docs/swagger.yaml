@@ -19047,11 +19047,22 @@ paths:
         in: query
         name: project_id
         type: integer
+      - description: 'RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN),
+          e.g. WORKSPACE_RESOURCES:WRITE; only workspaces where the caller also holds
+          it; each item then carries can_write_variables (WORKSPACE_VARIABLES WRITE)'
+        in: query
+        name: capability
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: Workspace list
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid capability
           schema:
             additionalProperties: true
             type: object
