@@ -7,6 +7,7 @@ import {
   type PlanSummary, type ApplySummary,
 } from '../services/ai';
 import { reportSkillUsageByCapability } from '../services/aiForm';
+import { getApiErrorMessage } from '../services/api';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
 import styles from './ExecuteSummary.module.css';
@@ -72,7 +73,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
       setLoading(true);
       setTimeout(fetchSummary, 1000);
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : 'Stop failed');
+      setError(getApiErrorMessage(err) ?? 'Stop failed');
     } finally {
       setRetrying(false);
     }
@@ -104,7 +105,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
       }
     } catch (err: any) {
       if (cancelledRef.current) return;
-      // 注意：api 拦截器的 error 已被转为字符串（errorMessage），不是原始 error 对象
+      // 注意：api 拦截器 reject 的是 ApiError（message 为错误文案，另带 status），不是原始 axios error
       // 404 = summary 还没生成,有限次重试(AI 未配置 / manifest Run 无摘要时不无限轮询)
       const errStr = typeof err === 'string' ? err : (err?.message || '');
       if (errStr.includes('not found') || errStr.includes('404')) {
@@ -155,7 +156,7 @@ const ExecuteSummary: React.FC<ExecuteSummaryProps> = ({
       setLoading(true);
       setTimeout(fetchSummary, 2000);
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : '重试失败');
+      setError(getApiErrorMessage(err) ?? '重试失败');
     } finally {
       setRetrying(false);
     }
@@ -653,7 +654,7 @@ const DecisionConfirmation: React.FC<{
       reportSkillUsageByCapability('plan_summary', 'accepted', taskId);
       onConfirmed();
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : '提交失败');
+      setError(getApiErrorMessage(err) ?? '提交失败');
     } finally {
       setSubmitting(false);
     }
@@ -667,7 +668,7 @@ const DecisionConfirmation: React.FC<{
       reportSkillUsageByCapability('plan_summary', 'aborted', taskId);
       onConfirmed();
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : '提交失败');
+      setError(getApiErrorMessage(err) ?? '提交失败');
     } finally {
       setSubmitting(false);
     }
@@ -793,7 +794,7 @@ const AIIncompleteWarning: React.FC<{
       await bypassAIIncomplete(workspaceId, taskId, bypassReason);
       onBypassed();
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : 'Bypass failed');
+      setError(getApiErrorMessage(err) ?? 'Bypass failed');
     } finally {
       setSubmitting(false);
     }
