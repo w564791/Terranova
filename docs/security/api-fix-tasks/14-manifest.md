@@ -112,3 +112,38 @@ backend/main.go
 backend/internal/manifestbundle/{rules,source}.go（step 3）
 backend/internal/migration/manifest_bundle_v2.go + backend/migrations/add_manifest_bundle_v2.sql（step 3）
 ```
+
+### 未完成项（2026-10-04 暂停时记录，合并 `feat/manifest-sandbox` 前必须处理）
+
+**上生产前必须完成（security 阻塞项）**
+1. 执行器拦截哈希为 NULL 的版本：在执行器取文件、校验哈希的那一处，`bundle_hash IS NULL` 时只放行 uninstall 发起的 destroy，其余任务失败，报错 `bundle_republish_required: <reason>`。
+   - 因违反规则被置 NULL 的版本：解包后先删掉命中黑名单的文件（复用 `manifestbundle` 的黑名单函数，包括 `.terraformrc`、`terraform.rc`、`*.tfvars`、`*.tfstate*`、`.terraform/`），再强制把 `TF_CLI_CONFIG_FILE` 指向平台自己的文件，然后执行 destroy。
+   - `hash_mismatch` 的版本：不自动 destroy。uninstall 返回 409 `{code:"untrusted_bundle_confirm_required", reason:"hash_mismatch"}`；带 `force_destroy_untrusted: true` 且是 org MANIFESTS ADMIN 才放行，非管理员返回 403；确认动作写审计（操作者、manifest_id、version_id、request_id）。前端用这个单独的 code 弹确认框。
+   - 测试：违反规则的 NULL 版本跑 plan 失败、跑 destroy 通过，且 destroy 用的不是 bundle 里的 `.terraformrc`；`hash_mismatch` 版本不确认就不能 uninstall，非管理员确认返回 403，管理员确认后写入审计。
+2. `MaxFiles = 2000`（`too_many_files`）已在本次暂停前的提交里完成。
+
+**第 4 步（runner）**
+- 解包：每个条目都要过 `manifestbundle.ValidatePath`；条目类型只接受普通文件和目录，链接、设备文件一律拒绝；写盘用 `O_EXCL|O_NOFOLLOW`；解包过程中累计计算大小和文件数（`MaxFileSize`、`MaxBundleSize`、`MaxFiles`），超限立刻停止。
+- 解完后用 `manifestbundle.Hash` 重算，与 `bundle_hash` 一致才能 `init`；拒绝 NULL 哈希的版本；对不上按 `hash_mismatch` 处理（记录原因、WARN 审计）。
+- `RemoteDataAccessor.SetVariableOverrides` 目前什么都不做，agent 模式会丢掉 override：改为通过 agent 已有的任务数据通道下发，不能走环境变量或日志。
+- agent、本地、sandbox 三种 runner 共用一个 tfvars 生成函数，加一条测试保证输出逐字节一致。
+- 审批 run 要拿锁；plan 先脱敏再存储，然后计算 `plan_hash`。
+
+**第 5 步（run token）**
+- `run_tokens` 带 `session_id`；token 过期时间取 run 超时和 session 过期里较早的那个。
+- JWT 加 `typ` claim（`task`/`run`）；`run` 路径在数据库校验出错时拒绝，`task` 路径保持现有行为。
+- `preview` token 拒绝 POST/LOCK/UNLOCK。
+- run 结束只撤销这个 run 自己的 token；session 结束或过期时，统一回收它的所有 token 和 STS 凭证。
+
+**第 6 步**：AgentCore 只支持 VPC 模式，代码里拒绝 Sandbox 和 Public 模式；创建 session 时检查 `WORKSPACE_STATE` READ 和 plan 权限。
+
+**第 7 步**：审批只接受 `purpose=approval`、`runner=agent` 的 run；apply 之前 agent 要核对 `approved_bundle_hash` 和 `approved_plan_hash`；拒绝 NULL 哈希的版本。
+
+**第 8 步（git 来源）**
+- 私有 module 的 `ref` 必须是 commit SHA（或者 vendor 进来）。
+- git token 按 run 现签：GitHub App installation token，权限为单仓库 `contents:read`，有效期约 1 小时，不落库；通过 `GIT_ASKPASS` 注入，不能拼进 URL。
+- 发布时由平台拉取仓库，并固定到某个 SHA；webhook 要验签。
+
+**其他**
+- `variable_sets` 表加 `org_id` 列，改为直接按列绑定组织。
+- 跑过已删除迁移 `20261004_03_manifest_bundle_rules` 的开发库和测试库需要重建（`20261004_04` 不会修复它们）。

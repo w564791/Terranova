@@ -77,6 +77,48 @@ func TestValidate_BundleTooLarge(t *testing.T) {
 	}
 }
 
+func TestValidate_MaxFiles(t *testing.T) {
+	files := make([]File, 0, MaxFiles+1)
+	for i := 0; i < MaxFiles; i++ {
+		files = append(files, File{Path: fmt.Sprintf("f%04d.tf", i), Content: []byte{}})
+	}
+	if got := Validate(files); got != nil {
+		t.Fatalf("%d files must be valid, got %v", MaxFiles, got)
+	}
+	if b, problems, err := PackFiles(files); err != nil || problems != nil || b == nil {
+		t.Fatalf("PackFiles(%d files) = %v %v %v", MaxFiles, b, problems, err)
+	}
+
+	files = append(files, File{Path: "f2000.tf", Content: []byte{}})
+	want := []Problem{{File: "", Rule: RuleTooManyFiles, Message: "bundle has more than 2000 files"}}
+	if got := Validate(files); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%d files: Validate = %v", MaxFiles+1, got)
+	}
+	if b, problems, err := PackFiles(files); err != nil || b != nil || !reflect.DeepEqual(problems, want) {
+		t.Fatalf("PackFiles(%d files) = %v %v %v", MaxFiles+1, b, problems, err)
+	}
+	raw, _ := json.Marshal(want)
+	if string(raw) != `[{"file":"","rule":"too_many_files","message":"bundle has more than 2000 files"}]` {
+		t.Fatalf("JSON = %s", raw)
+	}
+	if r := Reason(want); r != "too_many_files" {
+		t.Fatalf("Reason = %q", r)
+	}
+}
+
+// The count is checked before any per-file work: 50k files that would each
+// trip path, denylist and secret rules yield only the single count problem.
+func TestValidate_MaxFilesShortCircuits(t *testing.T) {
+	files := make([]File, 50000)
+	for i := range files {
+		files[i] = File{Path: "../prod.tfvars", Content: []byte("AKIAQWERTYUIOPASDFGH")}
+	}
+	got := Validate(files)
+	if len(got) != 1 || got[0].Rule != RuleTooManyFiles || got[0].File != "" || got[0].Line != 0 {
+		t.Fatalf("Validate = %v", got)
+	}
+}
+
 func TestReason_NeverContainsContent(t *testing.T) {
 	secret := "AKIAQWERTYUIOPASDFGH"
 	ps := Validate([]File{f("main.tf", `k = "`+secret+`"`), f("a.tfvars", `pw = "hunter2"`), f("x\ny.tf", "")})
@@ -119,7 +161,7 @@ func TestProblem_JSONShapeAndMessages(t *testing.T) {
 	}
 	// every rule has a fixed message that never echoes content
 	for _, rule := range []string{RulePathInvalid, RulePathTooLong, RulePathNotNFC, RulePathDuplicate, RulePathCaseDuplicate,
-		RuleDenylistedFile, RuleFileTooLarge, RuleBundleTooLarge, RuleSecretScanPrefix + "aws_access_key", RuleSecretScanPrefix + "private_key",
+		RuleDenylistedFile, RuleFileTooLarge, RuleBundleTooLarge, RuleTooManyFiles, RuleSecretScanPrefix + "aws_access_key", RuleSecretScanPrefix + "private_key",
 		RuleSecretScanPrefix + "github_token", RuleSecretScanPrefix + "slack_token"} {
 		if m := ruleMessage(rule); m == "" || m == rule || strings.Contains(m, secret) {
 			t.Fatalf("message of %s = %q", rule, m)
