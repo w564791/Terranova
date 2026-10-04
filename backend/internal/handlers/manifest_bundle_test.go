@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -173,6 +174,33 @@ func TestPublish_RejectsRuleViolationsWithProblemsOnly(t *testing.T) {
 	e.db.Table("manifest_versions").Count(&after)
 	if after != before {
 		t.Fatal("rejected publish must not create a version")
+	}
+}
+
+func TestPublish_FileCountCap(t *testing.T) {
+	e := newBundleEnv(t)
+	addDrafts := func(from, to int) {
+		rows := make([]map[string]interface{}, 0, to-from)
+		for i := from; i < to; i++ {
+			rows = append(rows, map[string]interface{}{"manifest_id": "mf-1", "owner_user_id": "u1", "path": fmt.Sprintf("f%04d.tf", i),
+				"content": []byte{}, "mime": "text/x-terraform", "size": 0, "is_binary": false, "mode": 420})
+		}
+		if err := e.db.Table("manifest_files").CreateInBatches(rows, 500).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	addDrafts(0, manifestbundle.MaxFiles+1)
+	w := doJSON(e.r, "POST", base+"/v2/versions", `{"version":"v9.1.0"}`)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("%d files: want 422, got %d %s", manifestbundle.MaxFiles+1, w.Code, w.Body.String())
+	}
+	if want := `"problems":[{"file":"","rule":"too_many_files","message":"bundle has more than 2000 files"}]`; !strings.Contains(w.Body.String(), want) {
+		t.Fatalf("422 body lacks %s: %s", want, w.Body.String())
+	}
+
+	e.db.Exec(`DELETE FROM manifest_files WHERE version_id IS NULL AND path = 'f2000.tf'`)
+	if id, hash := e.publish(t, "v9.2.0"); id == "" || hash == "" {
+		t.Fatalf("%d files must publish, got id=%q hash=%q", manifestbundle.MaxFiles, id, hash)
 	}
 }
 

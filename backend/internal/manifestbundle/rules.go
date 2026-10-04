@@ -14,13 +14,15 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// Bundle limits. The editor enforces the same values on every draft write
-// (manifest_files_handler), so a draft that the editor accepted only fails
-// publish for the content rules (denylist, secret scan).
+// Bundle limits. The editor enforces the path and per-file size limits on
+// every draft write (manifest_files_handler); the file count and total size
+// are only checked at publish. Exported so other bundle consumers (step 4
+// unpacking) apply the same caps.
 const (
 	MaxPathLen    = 256              // bytes, POSIX relative path
 	MaxFileSize   = 1 * 1024 * 1024  // bytes per file
 	MaxBundleSize = 50 * 1024 * 1024 // bytes, sum of all file contents
+	MaxFiles      = 2000             // files per bundle
 )
 
 // Rule names. A Problem carries only a rule name and a path; it never carries
@@ -35,6 +37,7 @@ const (
 	RuleDenylistedFile    = "denylisted_file"
 	RuleFileTooLarge      = "file_too_large"
 	RuleBundleTooLarge    = "bundle_too_large"
+	RuleTooManyFiles      = "too_many_files"
 	RuleSecretScanPrefix  = "secret_scan:"
 )
 
@@ -87,6 +90,8 @@ func ruleMessage(rule string) string {
 		return fmt.Sprintf("file is larger than %d MB", MaxFileSize/(1024*1024))
 	case RuleBundleTooLarge:
 		return fmt.Sprintf("bundle is larger than %d MB", MaxBundleSize/(1024*1024))
+	case RuleTooManyFiles:
+		return fmt.Sprintf("bundle has more than %d files", MaxFiles)
 	}
 	if kind, ok := strings.CutPrefix(rule, RuleSecretScanPrefix); ok {
 		name := secretKindNames[kind]
@@ -219,8 +224,13 @@ var secretPatterns = []struct {
 }
 
 // Validate applies every bundle rule and returns the problems sorted by
-// (file, rule). nil means the file set is a valid bundle.
+// (file, rule). nil means the file set is a valid bundle. More than MaxFiles
+// files is rejected up front with the single bundle-wide too_many_files
+// problem (file "", no line), before any per-file work.
 func Validate(files []File) []Problem {
+	if len(files) > MaxFiles {
+		return []Problem{{File: "", Rule: RuleTooManyFiles, Message: ruleMessage(RuleTooManyFiles)}}
+	}
 	var out []Problem
 	add := func(rule, path string) {
 		out = append(out, Problem{File: path, Rule: rule, Message: ruleMessage(rule)})

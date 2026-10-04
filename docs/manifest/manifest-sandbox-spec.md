@@ -68,10 +68,12 @@ sha256( "terranova-bundle-v2" 0x00
 - **`hash_mismatch` 粘滞**：一旦记录，任何重算、回填、迁移都不会把它改回合法；使用处直接拒绝，不再重算、不再重复上报。只有发布新版本才会产生合法 bundle（仅对新版本）。
 
 **规则**：每个违规为 `Problem{file, line?, rule, message}`（422 的 problem 形状）。
-- `file`：违规路径（bundle 级规则为空）。
+- `file`：违规路径；bundle 级规则（`bundle_too_large`、`too_many_files`）为空串，原因串里只有规则名。
 - `line`：只有 secret-scan 命中才带，为首个命中的 1 起行号；路径 / 大小 / denylist 规则不带。
 - `message`：每条规则的固定文案，绝不含文件内容或命中文本。
 - 原因串（`bundle_invalid_reason` 与日志）为 `rule @ file`，以 `; ` 连接，最多 20 条，超出追加 `(+N more)`；不可打印的路径加引号；不含行号与文案。
+
+上限常量 `MaxPathLen` / `MaxFileSize` / `MaxBundleSize` / `MaxFiles` 均导出，供 step 4 解包等复用。编辑器写草稿时只限制路径与单文件大小，文件数与总大小只在发布时检查。迁移 04 对存量版本用同一套规则：超限 → `bundle_hash = NULL` + 原因，迁移不失败。
 
 | rule | 条件 |
 |---|---|
@@ -81,6 +83,7 @@ sha256( "terranova-bundle-v2" 0x00
 | `path_duplicate` / `path_case_duplicate` | 路径重复 / 忽略大小写（NFC 后）冲突，冲突双方都报 |
 | `denylisted_file` | 文件名（不区分大小写）：`*.tfvars`、`*.tfvars.json`、`*.tfstate`、`*.tfstate.backup`、`.terraformrc`、`terraform.rc`、`.env`、`.env.*`、私钥/证书库 `*.pem`、`*.key`、`*.p12`、`*.pfx`、`id_rsa`、`id_dsa`、`id_ecdsa`、`id_ed25519`、`.git` 文件；任意深度的 `.terraform/`、`.git/` 目录段。允许：`.terraform.lock.hcl`、`id_rsa.pub` 等公钥、`.gitignore`、`.envrc` |
 | `file_too_large` / `bundle_too_large` | 单文件超过 1 MB / 内容总和超过 50 MB |
+| `too_many_files` | 文件数超过 `MaxFiles` = 2000。在任何逐文件检查之前判定，命中即只返回这一条（`file` 为空串、无 `line`），不再做路径 / 内容扫描 |
 | `secret_scan:<kind>` | 内容命中高置信度凭证格式：`aws_access_key`、`private_key`、`github_token`、`slack_token`（新写的最小扫描器，代码库原先没有） |
 
 **发布**：在同一事务内依次执行：

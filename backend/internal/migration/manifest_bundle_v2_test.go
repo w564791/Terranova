@@ -287,3 +287,34 @@ func TestRecomputeBundleHashes_StoredV2KeptAndRuleFailuresReevaluated(t *testing
 		t.Fatalf("rule failure must be re-evaluated: hash=%v reason=%v", h, r)
 	}
 }
+
+func TestRecomputeBundleHashes_FileCountCap(t *testing.T) {
+	db := setupBundleRulesDB(t)
+	var logs []string
+	bundleRulesLogf = func(f string, a ...interface{}) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	t.Cleanup(func() { bundleRulesLogf = defaultBundleRulesLogf })
+	for id, n := range map[string]int{"mfv-max": manifestbundle.MaxFiles, "mfv-over": manifestbundle.MaxFiles + 1} {
+		if err := db.Exec(`INSERT INTO manifest_versions (id, manifest_id, version) VALUES (?, 'mf-1', ?)`, id, "v3.0."+fmt.Sprint(n)).Error; err != nil {
+			t.Fatal(err)
+		}
+		rows := make([]map[string]interface{}, n)
+		for i := range rows {
+			rows[i] = map[string]interface{}{"manifest_id": "mf-1", "version_id": id, "path": fmt.Sprintf("f%04d.tf", i), "content": []byte{}, "mime": "text/plain", "size": 0}
+		}
+		if err := db.Table("manifest_files").CreateInBatches(rows, 500).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := recomputeManifestBundleHashes(context.Background(), db); err != nil {
+		t.Fatalf("over-limit version must not fail the migration: %v", err)
+	}
+	if h, r := versionState(t, db, "mfv-max"); h == nil || r != nil {
+		t.Fatalf("%d files must get a hash, got hash=%v reason=%v", manifestbundle.MaxFiles, h, r)
+	}
+	if h, r := versionState(t, db, "mfv-over"); h != nil || r == nil || *r != manifestbundle.RuleTooManyFiles {
+		t.Fatalf("%d files must be NULL + too_many_files, got hash=%v reason=%v", manifestbundle.MaxFiles+1, h, r)
+	}
+	if !strings.Contains(strings.Join(logs, "\n"), "manifest version mfv-over: bundle invalid, republish required: too_many_files") {
+		t.Fatalf("missing log line: %v", logs)
+	}
+}
