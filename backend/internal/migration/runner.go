@@ -100,10 +100,15 @@ func definitions() []definition {
 		{version: "20261004_02_manifest_sandbox_schema", contract: "manifest-source-bundle-runs-sessions-run-tokens-v1", apply: applyManifestSandboxSchema},
 		{version: "20261004_03_manifest_bundle_rules", contract: "manifest-bundle-rules-recompute-v1", apply: applyManifestBundleRules},
 		// Per-row data encryption key version for variable values.
+		{version: "20261004_04_manifest_bundle_v2", contract: "manifest-bundle-v2-verify-stored-then-rules-v1", apply: applyManifestBundleV2},
 		{version: "20261010_10_variable_key_version", contract: "variable-key-version-v1", apply: applyVariableKeyVersion},
 		// Bundle rules (sandbox spec §3.3): bundle_invalid_reason + content-addressed
 		// index; recompute every bundle_hash under the rules. Never fails on bad
 		// old versions (NULL hash + reason), never touches files.
+		// Bundle v2 (sandbox spec §3.3): bundle_invalid_reason + content-addressed
+		// index; a stored (v1) hash must match the current files before it is
+		// rewritten as v2 (else sticky hash_mismatch), then the bundle rules.
+		// Never fails on bad old versions, never touches files.
 	}
 }
 

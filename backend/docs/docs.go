@@ -16842,7 +16842,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required.",
+                "description": "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required; so is a version whose stored files no longer match bundle_hash (reason hash_mismatch, recorded on the version and sticky until a new version is published).",
                 "consumes": [
                     "application/json"
                 ],
@@ -17067,7 +17067,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Switch deployment version and varsets; reconcile workspace resources. The target version must have a valid bundle (409 bundle_republish_required); upgrading away from a version without one is allowed.",
+                "description": "Switch deployment version and varsets; reconcile workspace resources. varsets absent keeps the attached varsets, [] clears them, a list replaces them. The target version must have a valid, intact bundle (409 bundle_republish_required, reason hash_mismatch when its files no longer match); upgrading away from a version without one is allowed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -17300,7 +17300,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "List published versions for a manifest (SemVer descending). Each version carries bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths only, null when valid).",
+                "description": "List published versions for a manifest (SemVer descending). Each version carries the stored bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths, or hash_mismatch; null when valid). Read-only: hashes are never recomputed here.",
                 "consumes": [
                     "application/json"
                 ],
@@ -17350,7 +17350,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; problems hold rule names and paths only.",
+                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} (line only for secret-scan hits) and never contains file content.",
                 "consumes": [
                     "application/json"
                 ],
@@ -31430,7 +31430,13 @@ const docTemplate = `{
         "manifestbundle.Problem": {
             "type": "object",
             "properties": {
-                "path": {
+                "file": {
+                    "type": "string"
+                },
+                "line": {
+                    "type": "integer"
+                },
+                "message": {
                     "type": "string"
                 },
                 "rule": {
@@ -32332,6 +32338,7 @@ const docTemplate = `{
                     }
                 },
                 "varsets": {
+                    "description": "Varsets 与 upgrade 同义:缺省 = 部署已挂的 varset;[] = 无;非空 = 以此为准。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.DeploymentVarsetEntry"
@@ -32719,6 +32726,7 @@ const docTemplate = `{
                     }
                 },
                 "varsets": {
+                    "description": "Varsets 指针:缺省(nil)与 [] 在首装时等价,都表示不挂 varset。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.DeploymentVarsetEntry"
@@ -35256,6 +35264,7 @@ const docTemplate = `{
                     }
                 },
                 "varsets": {
+                    "description": "Varsets 指针,缺省 != []:缺省(nil)= 保持部署已挂的 varset 不变(也不算变量变更);\n[] = 清空;非空 = 整体替换(按 priority 生效顺序比较是否变化)。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.DeploymentVarsetEntry"

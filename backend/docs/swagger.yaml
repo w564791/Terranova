@@ -2,7 +2,11 @@ basePath: /
 definitions:
   manifestbundle.Problem:
     properties:
-      path:
+      file:
+        type: string
+      line:
+        type: integer
+      message:
         type: string
       rule:
         type: string
@@ -1756,6 +1760,7 @@ definitions:
           Map of key -> override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}. Sensitivity is sticky once recorded.
         type: object
       varsets:
+        description: Varsets 与 upgrade 同义:缺省 = 部署已挂的 varset;[] = 无;非空 = 以此为准。
         items:
           $ref: '#/definitions/models.DeploymentVarsetEntry'
         type: array
@@ -2000,6 +2005,7 @@ definitions:
           Sensitivity is sticky once recorded.'
         type: object
       varsets:
+        description: Varsets 指针:缺省(nil)与 [] 在首装时等价,都表示不挂 varset。
         items:
           $ref: '#/definitions/models.DeploymentVarsetEntry'
         type: array
@@ -3749,6 +3755,9 @@ definitions:
           $ref: '#/definitions/models.OverrideInput'
         type: object
       varsets:
+        description: |-
+          Varsets 指针,缺省 != []:缺省(nil)= 保持部署已挂的 varset 不变(也不算变量变更);
+          [] = 清空;非空 = 整体替换(按 priority 生效顺序比较是否变化)。
         items:
           $ref: '#/definitions/models.DeploymentVarsetEntry'
         type: array
@@ -16547,7 +16556,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Switch deployment version and varsets; reconcile workspace resources. The target version must have a valid bundle (409 bundle_republish_required); upgrading away from a version without one is allowed.
+      description: "Switch deployment version and varsets; reconcile workspace resources. varsets absent keeps the attached varsets, [] clears them, a list replaces them. The target version must have a valid, intact bundle (409 bundle_republish_required, reason hash_mismatch when its files no longer match); upgrading away from a version without one is allowed."
       parameters:
       - description: Organization ID
         in: path
@@ -16728,7 +16737,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required.
+      description: "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required; so is a version whose stored files no longer match bundle_hash (reason hash_mismatch, recorded on the version and sticky until a new version is published)."
       parameters:
       - description: Organization ID
         in: path
@@ -16816,7 +16825,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: List published versions for a manifest (SemVer descending). Each version carries bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths only, null when valid).
+      description: "List published versions for a manifest (SemVer descending). Each version carries the stored bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths, or hash_mismatch; null when valid). Read-only: hashes are never recomputed here."
       parameters:
       - description: Organization ID
         in: path
@@ -16849,7 +16858,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; problems hold rule names and paths only.
+      description: "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} (line only for secret-scan hits) and never contains file content."
       parameters:
       - description: Organization ID
         in: path

@@ -152,3 +152,15 @@ func TestModeFromGit(t *testing.T) {
 		t.Fatal("git and stored modes must hash the same")
 	}
 }
+
+// LegacyHashV1 must keep producing the step-2 (v1) values: these are the v1
+// golden vectors pinned against the step-2 SQL backfill (unchanged since
+// 68ff86e).
+func TestLegacyHashV1GoldenVector(t *testing.T) {
+	empty, _ := LegacyHashV1(nil)
+	h, _ := LegacyHashV1(goldenFiles()) // v1 ignores modes
+	if empty != "d9bbb44c83b611cca6924418c94982c70829682413fc12f76147a40a43cd2ddb" ||
+		h != "60dd1afddb5888f071aacc2b418a2fb8f6e8a4e7abed4cff15b5a1ee08307eec" {
+		t.Fatalf("LegacyHashV1 drifted: %s %s", empty, h)
+	}
+}

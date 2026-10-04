@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"iac-platform/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // resourcesOnly: WORKSPACE_RESOURCES WRITE (+ read access), no WORKSPACE_VARIABLES WRITE.
@@ -49,7 +51,6 @@ func TestUpgrade_VariableChangesRequireWorkspaceVariablesWrite(t *testing.T) {
 		"varset added":     `{"target_version_id":"mfv-2","varsets":[{"varset_id":"vs-proj","priority":1},{"varset_id":"vs-two","priority":2}]}`,
 		"priority changed": `{"target_version_id":"mfv-2","varsets":[{"varset_id":"vs-proj","priority":5}]}`,
 		"varset replaced":  `{"target_version_id":"mfv-2","varsets":[{"varset_id":"vs-two","priority":1}]}`,
-		"varsets omitted":  `{"target_version_id":"mfv-2"}`,
 		"varsets cleared":  `{"target_version_id":"mfv-2","varsets":[]}`,
 	} {
 		if w := doJSON(r, "POST", upgradePath, body); w.Code != http.StatusForbidden {
@@ -131,4 +132,68 @@ func toVarsetEntries(in []struct {
 		out[i] = models.DeploymentVarsetEntry{VarsetID: e.VarsetID, Priority: e.Priority}
 	}
 	return out
+}
+
+// varsets is a pointer: absent keeps the stored list (and is no variable
+// change), [] clears it, a non-empty list replaces it.
+func storedVarsets(t *testing.T, db *gorm.DB) string {
+	t.Helper()
+	var rows []struct {
+		VarsetID string
+		Priority int
+	}
+	db.Table("manifest_deployment_varsets").Where("deployment_id = ?", "mfd-a").Order("priority, id").Find(&rows)
+	return fmt.Sprintf("%v", rows)
+}
+
+func varsetsPointerEnv(t *testing.T, levels map[valueobject.ResourceType]valueobject.PermissionLevel) (*gin.Engine, *gorm.DB) {
+	t.Helper()
+	db := setupOverrideDB(t) // stored varsets [vs-proj@1]
+	db.Exec(`UPDATE manifest_deployment_varsets SET id = 1`)
+	for _, stmt := range []string{
+		`INSERT INTO variable_sets (varset_id, name, scope) VALUES ('vs-two', 't', 'specific')`,
+		`INSERT INTO varset_assignments (varset_id, scope_type, project_id) VALUES ('vs-two', 'project', 10)`,
+	} {
+		if err := db.Exec(stmt).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(&resourceChecker{levels: levels}))
+	r := gin.New()
+	r.Use(middleware.ErrorHandler())
+	r.POST("/organizations/:org_id/manifests/:id/v2/deployments/:deployment_id/upgrade", withCaller(valueobject.PermissionLevelRead), h.Upgrade)
+	return r, db
+}
+
+func TestUpgrade_VarsetsAbsentKeepsUnchanged(t *testing.T) {
+	r, db := varsetsPointerEnv(t, resourcesOnly) // no WORKSPACE_VARIABLES WRITE
+	before := storedVarsets(t, db)
+	w := doJSON(r, "POST", upgradePath, `{"target_version_id":"mfv-2"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("absent varsets is no variable change, resources WRITE suffices: %d %s", w.Code, w.Body.String())
+	}
+	if after := storedVarsets(t, db); after != before || after == "[]" {
+		t.Fatalf("absent varsets must keep the stored list: before %s after %s", before, after)
+	}
+}
+
+func TestUpgrade_VarsetsEmptyClears(t *testing.T) {
+	r, db := varsetsPointerEnv(t, writeVars)
+	if w := doJSON(r, "POST", upgradePath, `{"target_version_id":"mfv-2","varsets":[]}`); w.Code != http.StatusOK {
+		t.Fatalf("clear: %d %s", w.Code, w.Body.String())
+	}
+	if got := storedVarsets(t, db); got != "[]" {
+		t.Fatalf("[] must clear the varsets, got %s", got)
+	}
+}
+
+func TestUpgrade_VarsetsNonEmptyReplaces(t *testing.T) {
+	r, db := varsetsPointerEnv(t, writeVars)
+	body := `{"target_version_id":"mfv-2","varsets":[{"varset_id":"vs-two","priority":3}]}`
+	if w := doJSON(r, "POST", upgradePath, body); w.Code != http.StatusOK {
+		t.Fatalf("replace: %d %s", w.Code, w.Body.String())
+	}
+	if got := storedVarsets(t, db); got != "[{vs-two 3}]" {
+		t.Fatalf("non-empty list must replace, got %s", got)
+	}
 }

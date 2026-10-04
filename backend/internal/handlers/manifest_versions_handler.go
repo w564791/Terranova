@@ -42,7 +42,7 @@ var semverPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
 // ListVersions 已发布版本列表
 // @Summary List manifest versions
-// @Description List published versions for a manifest (SemVer descending). Each version carries bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths only, null when valid).
+// @Description List published versions for a manifest (SemVer descending). Each version carries the stored bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths, or hash_mismatch; null when valid). Read-only: hashes are never recomputed here.
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -136,7 +136,7 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 
 // PublishVersion 把当前用户草稿快照为新版本
 // @Summary Publish manifest version
-// @Description Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; problems hold rule names and paths only.
+// @Description Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} (line only for secret-scan hits) and never contains file content.
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -494,8 +494,9 @@ func (h *ManifestVersionsHandler) DiffDraft(c *gin.Context) {
 // helpers
 // =============================================================================
 
-// openVersionBundle 读已发布版本的不可变 bundle(校验 bundle_hash;无合法 bundle 的
-// 旧版本仍可读,供导出 / diff / 目录选择)。版本不存在 => 404;完整性失败等 => 500。
+// openVersionBundle 只读接口(导出 / diff / 目录选择)读已发布版本的 bundle:只读存储的
+// 文件与 bundle_hash,不重算哈希、不写库(完整性只在真正使用版本处校验,见
+// openDeployableBundle)。无合法 bundle 的版本仍可读。版本不存在 => 404;数据库错误 => 500。
 func openVersionBundle(c *gin.Context, db *gorm.DB, manifestID, versionID string) (*manifestbundle.Bundle, bool) {
 	bundle, err := manifestbundle.OpenVersion(c.Request.Context(), db, manifestID, versionID)
 	switch {

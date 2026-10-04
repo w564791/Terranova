@@ -275,6 +275,7 @@ func TestVariablePreview_SensitiveValuesAreNeverPrefilled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := setupManifestIAMDB(t)
 	for _, stmt := range []string{
+		`ALTER TABLE manifest_deployment_varsets ADD COLUMN id INTEGER`, // real table: id BIGSERIAL (effective order)
 		`INSERT INTO variable_sets (varset_id, name, scope) VALUES ('vs-global', 'g', 'global'), ('vs-proj', 'p', 'specific'), ('vs-foreign', 'f', 'specific')`,
 		`INSERT INTO varset_assignments (varset_id, scope_type, project_id) VALUES ('vs-proj', 'project', 10)`,
 		`INSERT INTO varset_variables (variable_id, varset_id, key, value, variable_type, value_format, sensitive, version) VALUES

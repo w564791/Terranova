@@ -72,12 +72,12 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 8. install / upgrade 的变量变更需要目标 workspace 的 `WORKSPACE_VARIABLES` WRITE（403），包括：
    - 覆盖或 `unset_keys` 非空；
-   - varset 列表按集合、priority 与同级顺序比较后有变化（原样回传不算）；
+   - varset 列表按集合、priority 与同级顺序比较后有变化（原样回传不算；`varsets` 缺省 = 保持不变，不算变化）；
    - 首装时带 varset。
 
    只换版本仍只需 `WORKSPACE_RESOURCES` WRITE。`GET /workspaces?capability=` 的每一项带 `can_write_variables`。CORS 增加 `Access-Control-Expose-Headers: X-Request-ID`，`X-Request-ID` 也加入允许的请求头。
 
-9. 版本 bundle 不可变（feat/manifest-sandbox step 3）：发布违反 bundle 规则（`.tfvars` / state / `.git/` / `.env` / 私钥文件名 / 凭证内容扫描等）→ 422 `bundle_rules_violated`，`problems` 只含规则名与路径，不回显任何文件内容；`bundle_hash` 为 NULL 的版本 install / 预览 / upgrade 目标 → 409 `bundle_republish_required`（uninstall 不受限，可从 NULL 版本升级到合法版本）；所有部署、导出、执行读取都走带哈希校验的 bundle，篡改 → 通用 500。细节见 sandbox spec §3.3、design spec §8.4。
+9. 版本 bundle 不可变（feat/manifest-sandbox step 3）：发布违反 bundle 规则（`.tfvars` / state / `.git/` / `.env` / 私钥文件名 / 凭证内容扫描等）→ 422 `bundle_rules_violated`，`problems: [{file, line?, rule, message}]`，不回显任何文件内容；无合法 bundle 的版本 install / 预览 / upgrade 目标 → 409 `bundle_republish_required`（uninstall 不受限，可从无效版本升级到合法版本）。完整性只在这些使用处与执行器取文件时校验，读接口不重算、不写库；篡改 → 409 + 粘滞的 `hash_mismatch` + WARN 安全日志 / 审计（manifest_id、version_id、request_id），迁移也不会按篡改后的内容重算。细节见 sandbox spec §3.3、design spec §8.4。
 
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
@@ -110,5 +110,5 @@ backend/internal/middleware/middleware.go
 backend/internal/models/manifest_v2.go
 backend/main.go
 backend/internal/manifestbundle/{rules,source}.go（step 3）
-backend/internal/migration/manifest_bundle_rules.go + backend/migrations/add_manifest_bundle_rules.sql（step 3）
+backend/internal/migration/manifest_bundle_v2.go + backend/migrations/add_manifest_bundle_v2.sql（step 3）
 ```

@@ -127,8 +127,9 @@ END $$`, name, table, table, name, definition)
 }
 
 // applyManifestSandboxSchema applies the DDL, then backfills bundle_hash of
-// existing versions with manifestbundle.VersionHash, the same function publish
-// and later bundle consumers use. Existing manifests become 'native' through the
+// existing versions in the step-2 encoding (manifestbundle.VersionHashV1,
+// identical to the SQL patch); 20261004_04_manifest_bundle_v2 verifies these
+// v1 hashes and moves them to v2. Existing manifests become 'native' through the
 // column default. Only rows with bundle_hash IS NULL are touched.
 func applyManifestSandboxSchema(ctx context.Context, tx *gorm.DB) error {
 	for _, stmt := range manifestSandboxSchemaStatements() {
@@ -141,13 +142,18 @@ func applyManifestSandboxSchema(ctx context.Context, tx *gorm.DB) error {
 
 func backfillManifestVersionBundleHashes(ctx context.Context, tx *gorm.DB) error {
 	var versionIDs []string
-	if err := tx.WithContext(ctx).Table("manifest_versions").
-		Where("bundle_hash IS NULL").Order("id").
-		Pluck("id", &versionIDs).Error; err != nil {
+	q := tx.WithContext(ctx).Table("manifest_versions").Where("bundle_hash IS NULL")
+	// a version that already carries a reason (bundle rules, or the sticky
+	// hash_mismatch) stays NULL; the column only exists once 20261004_04 (or its
+	// SQL patch) has run
+	if tx.Migrator().HasColumn("manifest_versions", "bundle_invalid_reason") {
+		q = q.Where("bundle_invalid_reason IS NULL")
+	}
+	if err := q.Order("id").Pluck("id", &versionIDs).Error; err != nil {
 		return fmt.Errorf("list versions without bundle_hash: %w", err)
 	}
 	for _, id := range versionIDs {
-		hash, err := manifestbundle.VersionHash(ctx, tx, id)
+		hash, err := manifestbundle.VersionHashV1(ctx, tx, id)
 		if err != nil {
 			return err
 		}
