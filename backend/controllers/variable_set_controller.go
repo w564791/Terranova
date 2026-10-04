@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 
@@ -94,7 +95,13 @@ func (c *VariableSetController) List(ctx *gin.Context) {
 	if workspaceID := ctx.Query("workspace_id"); workspaceID != "" {
 		varsets, err = c.service.ListMountableForWorkspace(workspaceID)
 	} else {
-		varsets, err = c.service.List(scope)
+		// 无 workspace_id: 只返回调用组织可见的变量集(VariableSet 无 org_id,见 ListForOrg)
+		orgID, ok := middleware.AuthOrgID(ctx)
+		if !ok {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
+			return
+		}
+		varsets, err = c.service.ListForOrg(scope, orgID, ctx.GetString("user_id"))
 	}
 	if err != nil {
 		log.Printf("Failed to list variable sets: %v", err)

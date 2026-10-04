@@ -59,11 +59,10 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 2. 每条路由使用现有 `RequirePermission` / `RequireAnyPermission`（见上表）。
 3. 部署写操作在 handler 内对目标 workspace 检查 `WORKSPACE_RESOURCES` WRITE（`RequireWorkspaceResourcePermission`，与 `RequireWorkspacePermission` 同一实现）。
 4. 部署列表复用 `RequireWorkspaceListAccess` 服务端过滤。
-5. 部署接口校验 manifest 属于认证 org。
+5. `/organizations/:org_id/manifests/:id/*` 全部 23 条路由在各自 `RequirePermission` 之后挂 `ManifestInAuthOrg`（与部署 handler 的 `manifestInAuthOrg` 同一实现）：path manifest 不属于 path org 或不存在 => 404；无权限者先得到 403，无法用 404/403 探测 ID。`/:id` CRUD 与 export-zip 由 handler 按 organization_id 过滤。
 
 ### 遗留
-- files / versions / provider-schemas 等 v2 handler 仍未把 manifest 绑定到 org_id（跨 org 依赖路由层 org 权限，handler 内未做 404）。
-- variable_sets 表无 org_id（既有租户隔离缺口）。
+- variable_sets 表无 org_id（既有租户隔离缺口）：`GET /variable-sets` 列表已按组织推导收口（global + 分配到本组织 workspace/project + 调用者自己创建且未分配的），但 `/variable-sets/:varset_id/...` 按 ID 的读写接口仍未绑定组织，需加 org_id 列后统一修复。
 
 ### 修改文件
 ```

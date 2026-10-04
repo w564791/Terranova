@@ -31,6 +31,8 @@ type Manifest struct {
 	//                 MANIFESTS READ/WRITE 永不推出 can_deploy)
 	CanWrite  *bool `json:"can_write,omitempty" gorm:"-"`
 	CanDeploy *bool `json:"can_deploy,omitempty" gorm:"-"`
+	//   can_admin  = 调用者持有 MANIFESTS ADMIN(删除 / 归档)
+	CanAdmin *bool `json:"can_admin,omitempty" gorm:"-"`
 }
 
 func (Manifest) TableName() string {
@@ -61,17 +63,17 @@ func (ManifestVersion) TableName() string {
 
 // ManifestDeployment Manifest 部署记录
 type ManifestDeployment struct {
-	ID                string          `json:"id" gorm:"primaryKey;size:36"`                              // 格式: mfd-{ulid}
-	ManifestID        string          `json:"manifest_id" gorm:"size:36;not null;index"`                 // 所属 Manifest
-	VersionID         string          `json:"version_id" gorm:"size:36;not null"`                        // 部署的版本
-	WorkspaceID       string          `json:"workspace_id" gorm:"type:varchar(50);not null;index"`       // 目标 Workspace 语义化ID(对齐全平台)
-	VariableOverrides json.RawMessage `json:"variable_overrides" gorm:"type:jsonb"`                      // 应急变量覆盖(扁平 key->string,优先级最高)
-	Status            string          `json:"status" gorm:"size:20;default:active;index"`                // active, uninstalled
-	LastTaskID        *int            `json:"last_task_id" gorm:""`                                      // 最后一次部署的任务 ID
-	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`                       // 部署者
-	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                                       // 部署时间
-	CreatedAt         time.Time       `json:"created_at" gorm:"autoCreateTime"`                          // 创建时间
-	UpdatedAt         time.Time       `json:"updated_at" gorm:"autoUpdateTime"`                          // 更新时间
+	ID                string          `json:"id" gorm:"primaryKey;size:36"`                        // 格式: mfd-{ulid}
+	ManifestID        string          `json:"manifest_id" gorm:"size:36;not null;index"`           // 所属 Manifest
+	VersionID         string          `json:"version_id" gorm:"size:36;not null"`                  // 部署的版本
+	WorkspaceID       string          `json:"workspace_id" gorm:"type:varchar(50);not null;index"` // 目标 Workspace 语义化ID(对齐全平台)
+	VariableOverrides json.RawMessage `json:"variable_overrides" gorm:"type:jsonb"`                // 应急变量覆盖(扁平 key->string,优先级最高)
+	Status            string          `json:"status" gorm:"size:20;default:active;index"`          // active, uninstalled
+	LastTaskID        *int            `json:"last_task_id" gorm:""`                                // 最后一次部署的任务 ID
+	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`                 // 部署者
+	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                                 // 部署时间
+	CreatedAt         time.Time       `json:"created_at" gorm:"autoCreateTime"`                    // 创建时间
+	UpdatedAt         time.Time       `json:"updated_at" gorm:"autoUpdateTime"`                    // 更新时间
 
 	// 关联
 	Version   *ManifestVersion             `json:"version,omitempty" gorm:"foreignKey:VersionID"`
@@ -139,13 +141,25 @@ type UpdateManifestDeploymentRequest struct {
 	PlanOnly          bool            `json:"plan_only"`
 }
 
+// ManifestCapabilities 调用者能力(与列表项的 can_* 同一判定)
+//   - can_read / can_write / can_admin: 路由 MANIFESTS 检查得到的有效等级 >= READ / WRITE / ADMIN
+//   - can_deploy: 至少一个可读 workspace 上有 WORKSPACE_RESOURCES WRITE(与 ?capability= 同一判定)
+type ManifestCapabilities struct {
+	CanRead   bool `json:"can_read"`
+	CanWrite  bool `json:"can_write"`
+	CanAdmin  bool `json:"can_admin"`
+	CanDeploy bool `json:"can_deploy"`
+}
+
 // ManifestListResponse 列表响应
 type ManifestListResponse struct {
-	Items      []Manifest `json:"items"`
-	Total      int64      `json:"total"`
-	Page       int        `json:"page"`
-	PageSize   int        `json:"page_size"`
-	TotalPages int        `json:"total_pages"`
+	Items []Manifest `json:"items"`
+	// 调用者在本组织 manifest 目录上的能力(列表为空时也返回,前端据此决定"新建"/"部署"入口)
+	Capabilities *ManifestCapabilities `json:"capabilities,omitempty"`
+	Total        int64                 `json:"total"`
+	Page         int                   `json:"page"`
+	PageSize     int                   `json:"page_size"`
+	TotalPages   int                   `json:"total_pages"`
 }
 
 // ManifestVersionListResponse 版本列表响应

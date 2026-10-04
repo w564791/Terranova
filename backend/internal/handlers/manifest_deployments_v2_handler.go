@@ -107,13 +107,17 @@ func (h *ManifestDeploymentsV2Handler) rejectUnmountableVarsets(
 // manifestInAuthOrg 校验 path manifest 属于 IAM 中间件解析出的组织(auth_org_id)。
 // 不属于 / 不存在 => 404,避免跨租户枚举。已写响应时返回 false。
 func (h *ManifestDeploymentsV2Handler) manifestInAuthOrg(c *gin.Context, manifestID string) bool {
+	return manifestInAuthOrg(c, h.db, manifestID)
+}
+
+func manifestInAuthOrg(c *gin.Context, db *gorm.DB, manifestID string) bool {
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
 		return false
 	}
 	var count int64
-	if err := h.db.Model(&models.Manifest{}).
+	if err := db.Model(&models.Manifest{}).
 		Where("id = ? AND organization_id = ?", manifestID, orgID).
 		Count(&count).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -124,6 +128,20 @@ func (h *ManifestDeploymentsV2Handler) manifestInAuthOrg(c *gin.Context, manifes
 		return false
 	}
 	return true
+}
+
+// ManifestInAuthOrg 把同一 manifestInAuthOrg 校验挂成路由中间件,用于
+// /organizations/:org_id/manifests/:id/... 下每条路由。必须放在该路由的
+// RequirePermission 之后:auth_org_id 由 RequirePermission 写入,且先鉴权可保证
+// 无组织权限的调用者只拿到 403,无法用 404/403 差异探测 manifest ID。
+func ManifestInAuthOrg(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !manifestInAuthOrg(c, db, c.Param("id")) {
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 // GetDeployment 详情(含 varsets 关联)
@@ -426,7 +444,13 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		return
 	}
 
-	overridesJSON, _ := json.Marshal(req.VariableOverrides)
+	// 覆盖合并(修复 upgrade 清空已有覆盖):缺省 key / 敏感空占位均保留原值,仅 unset_keys 删除
+	overrides, err := h.mergeUpgradeOverrides(dep, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	overridesJSON, _ := json.Marshal(overrides)
 
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 更新 deployment
@@ -523,6 +547,57 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		"deployment_id": deploymentID,
 		"version":       version.Version,
 	})
+}
+
+// mergeUpgradeOverrides 计算 upgrade 后的 variable_overrides。
+// 敏感判定沿用变量预览的同一解析(ResolveDisplayWithExtra 的 sensitive 标记),
+// 候选 varset 取新旧两组的并集(偏向保留,绝不因判定不全而清空敏感值)。
+func (h *ManifestDeploymentsV2Handler) mergeUpgradeOverrides(dep models.ManifestDeployment, req models.UpgradeDeploymentRequest) (map[string]string, error) {
+	stored := map[string]string{}
+	if len(dep.VariableOverrides) > 0 {
+		if err := json.Unmarshal(dep.VariableOverrides, &stored); err != nil {
+			return nil, fmt.Errorf("parse stored variable_overrides: %w", err)
+		}
+	}
+	var varsetIDs []string
+	if err := h.db.Model(&models.ManifestDeploymentVarset{}).
+		Where("deployment_id = ?", dep.ID).Pluck("varset_id", &varsetIDs).Error; err != nil {
+		return nil, fmt.Errorf("load deployment varsets: %w", err)
+	}
+	for _, v := range req.Varsets {
+		varsetIDs = append(varsetIDs, v.VarsetID)
+	}
+	resolved, err := services.NewVariableResolutionService(h.db).ResolveDisplayWithExtra(dep.WorkspaceID, varsetIDs, nil)
+	if err != nil {
+		return nil, fmt.Errorf("resolve variable sensitivity: %w", err)
+	}
+	sensitive := make(map[string]bool, len(resolved))
+	for _, v := range resolved {
+		if v.Sensitive {
+			sensitive[v.Key] = true
+		}
+	}
+	return mergeOverrides(stored, req.VariableOverrides, sensitive, req.UnsetKeys), nil
+}
+
+// mergeOverrides: stored 为基础;incoming 中非空值或非敏感 key 覆盖写入;
+// 敏感 key 的空串是预览掩码占位 => 不写(保留 stored,stored 没有也不新增空覆盖,
+// 否则会用空串遮住 varset/workspace 里的真实敏感值);unset 中的 key 最后删除。
+func mergeOverrides(stored, incoming map[string]string, sensitive map[string]bool, unset []string) map[string]string {
+	out := make(map[string]string, len(stored)+len(incoming))
+	for k, v := range stored {
+		out[k] = v
+	}
+	for k, v := range incoming {
+		if v == "" && sensitive[k] {
+			continue
+		}
+		out[k] = v
+	}
+	for _, k := range unset {
+		delete(out, k)
+	}
+	return out
 }
 
 // Uninstall 解绑 manifest 与 workspace,清相关 workspace_resources

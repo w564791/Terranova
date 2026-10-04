@@ -52,6 +52,16 @@ func (d *denyAllChecker) reset() []*service.CheckPermissionRequest {
 
 func setupManifestRouterForPermissionTest(t *testing.T) (*gin.Engine, *denyAllChecker, string) {
 	t.Helper()
+	checker := &denyAllChecker{}
+	r, _, tok := setupManifestRouterWithChecker(t, checker)
+	return r, checker, tok
+}
+
+// setupManifestRouterWithChecker wires RegisterManifestRoutes with a real JWT
+// session and the given PermissionChecker. Seeds manifests mf-1 (org 1) and
+// mf-b (org 2) plus one published file of mf-1 version mfv-1.
+func setupManifestRouterWithChecker(t *testing.T, checker service.PermissionChecker) (*gin.Engine, *gorm.DB, string) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	secret := "test-jwt-secret-at-least-32-bytes-long!!"
 	t.Setenv("JWT_SECRET", secret)
@@ -67,6 +77,10 @@ func setupManifestRouterForPermissionTest(t *testing.T) (*gin.Engine, *denyAllCh
 		`CREATE TABLE users (user_id TEXT PRIMARY KEY, is_active INTEGER, is_system_admin INTEGER)`,
 		`CREATE TABLE login_sessions (session_id TEXT PRIMARY KEY, user_id TEXT, is_active INTEGER, expires_at DATETIME, last_used_at DATETIME)`,
 		`INSERT INTO users (user_id, is_active, is_system_admin) VALUES ('user-1', 1, 0)`,
+		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`INSERT INTO manifests (id, organization_id, name, status, created_by) VALUES ('mf-1', 1, 'm1', 'published', 'user-1'), ('mf-b', 2, 'mb', 'published', 'user-1')`,
+		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
+		`INSERT INTO manifest_files (manifest_id, version_id, path, content, mime, size, is_binary, mode) VALUES ('mf-1', 'mfv-1', 'main.tf', X'00', 'text/plain', 1, 0, 420)`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
 			t.Fatal(err)
@@ -87,10 +101,9 @@ func setupManifestRouterForPermissionTest(t *testing.T) (*gin.Engine, *denyAllCh
 		t.Fatal(err)
 	}
 
-	checker := &denyAllChecker{}
 	r := gin.New()
 	RegisterManifestRoutes(r.Group("/api/v1"), db, nil, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
-	return r, checker, tok
+	return r, db, tok
 }
 
 func TestManifestRoutesPermissionTable(t *testing.T) {

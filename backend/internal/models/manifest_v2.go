@@ -80,9 +80,13 @@ type InstallDeploymentRequest struct {
 
 // UpgradeDeploymentRequest upgrade 请求
 type UpgradeDeploymentRequest struct {
-	TargetVersionID   string                  `json:"target_version_id" binding:"required"`
-	Varsets           []DeploymentVarsetEntry `json:"varsets"`
-	VariableOverrides map[string]string       `json:"variable_overrides"`
+	TargetVersionID string                  `json:"target_version_id" binding:"required"`
+	Varsets         []DeploymentVarsetEntry `json:"varsets"`
+	// VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;
+	// 敏感变量传空串(预览里的掩码占位)视为"不修改",也保留原值。
+	VariableOverrides map[string]string `json:"variable_overrides"`
+	// UnsetKeys 可选:只有列在这里的 key 才会从已存覆盖中删除。
+	UnsetKeys []string `json:"unset_keys,omitempty"`
 }
 
 // DeploymentVarsetEntry 部署对话框选中的 varset 条目

@@ -35,22 +35,33 @@ func NewManifestHandler(db *gorm.DB, perm *middleware.IAMPermissionMiddleware) *
 	return &ManifestHandler{db: db, perm: perm}
 }
 
-// callerCapabilities 计算列表/详情项的 can_write / can_deploy。
-//   - can_write 取自路由上 MANIFESTS READ 检查得到的有效等级(>= WRITE),不做二次评估;
+// callerCapabilities 计算调用者能力(列表顶层 capabilities 与列表/详情项的 can_*)。
+//   - can_read / can_write / can_admin 取自路由上 MANIFESTS 检查得到的有效等级,不做二次评估;
 //   - can_deploy 只看 WORKSPACE_RESOURCES WRITE(与 workspace 选择器同一判定),
 //     与 MANIFESTS 等级无关 —— MANIFESTS READ 绝不推出 can_deploy。
 //
 // 评估失败时降级为 false(按钮隐藏;真正的部署接口仍会做服务端校验)。
-func (h *ManifestHandler) callerCapabilities(c *gin.Context) (canWrite, canDeploy bool) {
-	canWrite = middleware.EffectiveLevelFromContext(c) >= valueobject.PermissionLevelWrite
+func (h *ManifestHandler) callerCapabilities(c *gin.Context) models.ManifestCapabilities {
+	level := middleware.EffectiveLevelFromContext(c)
+	caps := models.ManifestCapabilities{
+		CanRead:  level >= valueobject.PermissionLevelRead,
+		CanWrite: level >= valueobject.PermissionLevelWrite,
+		CanAdmin: level >= valueobject.PermissionLevelAdmin,
+	}
 	if h.perm != nil {
 		ok, err := h.perm.HasWorkspaceCapability(c, valueobject.ResourceTypeWorkspaceResources, valueobject.PermissionLevelWrite)
 		if err != nil {
 			log.Printf("[Manifest] can_deploy evaluation failed: %v", err)
 		}
-		canDeploy = ok && err == nil
+		caps.CanDeploy = ok && err == nil
 	}
-	return canWrite, canDeploy
+	return caps
+}
+
+// applyCapabilities 把调用者能力写到单个 manifest 上(仅 list/get)。
+func applyCapabilities(m *models.Manifest, caps models.ManifestCapabilities) {
+	canWrite, canAdmin, canDeploy := caps.CanWrite, caps.CanAdmin, caps.CanDeploy
+	m.CanWrite, m.CanAdmin, m.CanDeploy = &canWrite, &canAdmin, &canDeploy
 }
 
 // ========== ID 生成 (供 v2 versions / deployments handler 也调用) ==========
@@ -128,10 +139,9 @@ func (h *ManifestHandler) ListManifests(c *gin.Context) {
 		return
 	}
 
-	canWrite, canDeploy := h.callerCapabilities(c)
+	caps := h.callerCapabilities(c)
 	for i := range manifests {
-		manifests[i].CanWrite = &canWrite
-		manifests[i].CanDeploy = &canDeploy
+		applyCapabilities(&manifests[i], caps)
 
 		// 取最新已发布版本 (元数据,不取大字段)
 		var latestVersion models.ManifestVersion
@@ -158,12 +168,16 @@ func (h *ManifestHandler) ListManifests(c *gin.Context) {
 		totalPages++
 	}
 
+	if manifests == nil {
+		manifests = []models.Manifest{}
+	}
 	c.JSON(http.StatusOK, models.ManifestListResponse{
-		Items:      manifests,
-		Total:      total,
-		Page:       page,
-		PageSize:   pageSize,
-		TotalPages: totalPages,
+		Items:        manifests,
+		Capabilities: &caps,
+		Total:        total,
+		Page:         page,
+		PageSize:     pageSize,
+		TotalPages:   totalPages,
 	})
 }
 
@@ -211,9 +225,7 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 		manifest.CreatedByName = user.Username
 	}
 
-	canWrite, canDeploy := h.callerCapabilities(c)
-	manifest.CanWrite = &canWrite
-	manifest.CanDeploy = &canDeploy
+	applyCapabilities(&manifest, h.callerCapabilities(c))
 
 	c.JSON(http.StatusOK, manifest)
 }
