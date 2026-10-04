@@ -21,12 +21,13 @@
  * {value, sensitive: true}。
  *
  * 变量写权限:workspace 列表项 can_write_variables === false(缺省视为 true)时只能更换版本:
- * varset 不可改(install 发空列表;upgrade 原样回传 deployment 已存 varset,含 priority),
+ * varset 不可改(install 发空列表;upgrade / upgrade 预览省略 varsets 字段 = 后端保持已存 varset;已存 varset 只读展示),
  * 覆盖输入 / 敏感 / 移除覆盖全部禁用,不发 variable_overrides / unset_keys。
  * upgrade 预览 403 => 显示"无变量查看权限",仍可只换版本。
  *
  * 不可变 bundle:bundle_hash 为空(或 hash_mismatch)的版本在版本下拉中禁用并标注"需重新发布";
- * install / 预览 / upgrade 返回 409 bundle_republish_required 时提示"该版本需要重新发布"并重拉版本
+ * install / 预览 / upgrade 返回 409 bundle_republish_required 时按 reason 提示
+ * (hash_mismatch => "完整性校验失败，请重新发布",否则"该版本需要重新发布")并重拉版本
  * (列表只返回已存值,看似正常的版本也可能 409;该版本随后在本面板内禁用)。
  * 从此类版本升级走、卸载不受影响。
  *
@@ -61,6 +62,7 @@ import {
 import BundleStatusTag from './BundleStatusTag'
 import {
   REPUBLISH_REQUIRED_MESSAGE,
+  republishRequiredMessage,
   bundleStatusLabel,
   isBundleRepublishRequired,
   versionNeedsRepublish,
@@ -282,7 +284,7 @@ const SENSITIVE_PLACEHOLDER = '敏感值，不回显'
 const VALUE_SET_PLACEHOLDER = '已设置'
 
 function errorText(err: unknown): string {
-  if (isBundleRepublishRequired(err)) return REPUBLISH_REQUIRED_MESSAGE
+  if (isBundleRepublishRequired(err)) return republishRequiredMessage(err)
   if (isManifestTargetNotFound(err)) return MANIFEST_TARGET_NOT_FOUND_MESSAGE
   const msg = typeof err === 'string' ? err : (err as Error)?.message
   return msg ?? '未知错误'
@@ -451,8 +453,6 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [varsetIds, setVarsetIds] = useState<string[]>([])
   const [currentVarsetIds, setCurrentVarsetIds] = useState<string[]>([])
   // deployment 已存 varset(含 priority,按加载顺序);无变量写权限时 upgrade 原样回传
-  const [currentVarsets, setCurrentVarsets] = useState<DeploymentVarsetEntry[]>([])
-  const [currentVarsetsLoaded, setCurrentVarsetsLoaded] = useState(false)
   const [workdir, setWorkdir] = useState<string>('')
   const [workdirs, setWorkdirs] = useState<string[]>([''])
   const [workdirsLoading, setWorkdirsLoading] = useState(false)
@@ -567,29 +567,23 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
 
   // 选中已装 workspace 时:拉它当前关联的 varset 与已存覆盖,预填表单
   useEffect(() => {
-    setCurrentVarsetsLoaded(false)
     if (!activeDeploymentForWs) {
       setCurrentVarsetIds([])
-      setCurrentVarsets([])
       setExistingOverrides([])
       return
     }
     let cancelled = false
     setExistingOverrides([])
-    setCurrentVarsets([])
     getDeploymentUpgradeContext(ctx, activeDeploymentForWs.id)
       .then((uc) => {
         if (cancelled) return
         setCurrentVarsetIds(uc.varsetIds)
-        setCurrentVarsets(uc.varsets)
-        setCurrentVarsetsLoaded(true)
         setVarsetIds(uc.varsetIds)
         setExistingOverrides(uc.overrides)
       })
       .catch(() => {
         if (cancelled) return
         setCurrentVarsetIds([])
-        setCurrentVarsets([])
         setExistingOverrides([])
       })
     return () => {
@@ -608,25 +602,25 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     [unsetKeys, canWriteVariables],
   )
   // 本次提交 / 预览用的 varset 列表:可写 = 所选顺序即优先级;
-  // 无变量写权限 = install 恒空,upgrade 原样回传已存 varset(同顺序同 priority,后端视为未变)
-  const varsetEntries = useMemo<DeploymentVarsetEntry[]>(() => {
+  // 无变量写权限 = install 恒空;upgrade / upgrade 预览为 undefined => 省略 varsets 字段(后端保持已存 varset)
+  const varsetEntries = useMemo<DeploymentVarsetEntry[] | undefined>(() => {
     if (canWriteVariables) return varsetIds.map((id, i) => ({ varset_id: id, priority: i }))
-    return activeDeploymentForWs ? currentVarsets : []
-  }, [canWriteVariables, varsetIds, activeDeploymentForWs, currentVarsets])
+    return activeDeploymentForWs ? undefined : []
+  }, [canWriteVariables, varsetIds, activeDeploymentForWs])
   useEffect(() => {
     const varsets = varsetEntries
     let req: Promise<DeploymentPreviewVariable[]> | null = null
     if (activeDeploymentForWs) {
       req = previewDeploymentVariables(ctx, activeDeploymentForWs.id, {
         ...(versionId ? { target_version_id: versionId } : {}),
-        varsets,
+        ...(varsets !== undefined ? { varsets } : {}),
         ...(unsetKeysForPreview.length > 0 ? { unset_keys: unsetKeysForPreview } : {}),
       })
     } else if (workspaceId && versionId) {
       req = previewInstallVariables(ctx, {
         workspace_id: workspaceId,
         version_id: versionId,
-        varsets,
+        varsets: varsets ?? [],
       })
     }
     const isUpgradePreview = !!activeDeploymentForWs
@@ -750,7 +744,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     [activeDeploymentForWs, versionId],
   )
   const sameVarsets = useMemo(() => {
-    if (!canWriteVariables) return true // 原样回传已存 varset
+    if (!canWriteVariables) return true // 省略 varsets = 不变
     if (varsetIds.length !== currentVarsetIds.length) return false
     return varsetIds.every((id, i) => id === currentVarsetIds[i])
   }, [varsetIds, currentVarsetIds, canWriteVariables])
@@ -807,7 +801,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       await installDeployment(ctx, {
         version_id: versionId,
         workspace_id: workspaceId,
-        varsets: vs,
+        varsets: vs ?? [],
         ...(Object.keys(changedOverrides).length > 0 ? { variable_overrides: changedOverrides } : {}),
         workdir,
       })
@@ -841,7 +835,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     try {
       await upgradeDeployment(ctx, activeDeploymentForWs.id, {
         target_version_id: versionId,
-        varsets: vs,
+        ...(vs !== undefined ? { varsets: vs } : {}),
         // 后端合并覆盖:只发用户改过的 key + 明确移除的 key,未动的 key 不发送
         ...(Object.keys(changedOverrides).length > 0 ? { variable_overrides: changedOverrides } : {}),
         ...(unsetKeyList.length > 0 ? { unset_keys: unsetKeyList } : {}),
@@ -860,7 +854,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     } catch (err) {
       if (isBundleRepublishRequired(err)) {
         handleRepublishRequired(err, versionId)
-        setSubmitError(`${andRun ? '更新并运行' : '更新'} 失败: ${REPUBLISH_REQUIRED_MESSAGE}`)
+        setSubmitError(`${andRun ? '更新并运行' : '更新'} 失败: ${republishRequiredMessage(err)}`)
         return
       }
       const msg = typeof err === 'string' ? err : (err as Error)?.message
@@ -915,11 +909,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     })
   }
 
-  // 无变量写权限时须先拿到已存 varset 才能原样回传,否则会被后端视为变更(403)
   // 选中的版本需重新发布(或尚未选中)=> install / upgrade 到它会 409,直接禁用
   const selectedVersion = useMemo(() => versions.find((v) => v.id === versionId), [versions, versionId])
   const selectedNotDeployable = !selectedVersion || !isDeployable(selectedVersion)
-  const upgradeBlocked = submitting || selectedNotDeployable || (!canWriteVariables && !currentVarsetsLoaded)
+  const upgradeBlocked = submitting || selectedNotDeployable
   const installBlocked = submitting || selectedNotDeployable
 
   // 底栏按钮

@@ -340,9 +340,10 @@ export interface DeploymentPreviewVariable {
 // per-deployment 预览(后端 DeploymentPreviewRequest):服务端与 upgrade 同一 mergeDeploymentOverrides
 // 合并已存覆盖,前端不得回传已存值;只发本次改动的 key 与 unset_keys。
 // target_version_id 可选,参与敏感判定(须属于本 manifest,否则 400)。
+// varsets 缺省 = 使用部署已挂的 varset(后端 b89568d 指针语义);[] = 无;非空 = 以此为准。
 export interface DeploymentPreviewRequest {
   target_version_id?: string
-  varsets: DeploymentVarsetEntry[]
+  varsets?: DeploymentVarsetEntry[]
   variable_overrides?: OverrideInputs
   unset_keys?: string[]
 }
@@ -415,9 +416,10 @@ export async function installDeployment(
 //   缺省的 key 保留原值;敏感 key 传空串(预览掩码占位)也保留原值;
 //   只有 unset_keys 里的 key 会从已存覆盖中删除。因此只需发送用户改动过的 key。
 //   敏感标记粘滞(后端 b2bb4a7):已敏感的 key 无法改回普通。
+// varsets(后端 b89568d 指针):缺省 = 保持已挂 varset 不变(不算变量变更);[] = 清空;非空 = 整体替换。
 export interface UpgradeDeploymentRequest {
   target_version_id: string
-  varsets: DeploymentVarsetEntry[]
+  varsets?: DeploymentVarsetEntry[]
   variable_overrides?: OverrideInputs
   unset_keys?: string[]
 }

@@ -3577,14 +3577,15 @@ export default function ManifestEditorV2() {
         onClose={() => setPublishOpen(false)}
         onPublishAttempt={() => setPublishProblems([])}
         onPublishRejected={(list: PublishProblem[]) => {
-          // 只含规则名 / 路径 / 行号,不含文件内容;点击条目复用 ProblemsPanel 的 openAt 定位
+          // {file, line?, rule, message},不含文件内容;点击复用 openAt 定位
+          // (无 line 打开文件停在第 1 行;file 为空 = bundle 级问题,不可跳转)
           setPublishProblems(
             list.map((p) => {
               const line = p.line ?? 1
               return {
                 path: p.file,
                 severity: monaco.MarkerSeverity.Error,
-                message: `${p.rule}: ${p.message}`,
+                message: p.message === p.rule ? p.rule : `${p.rule}: ${p.message}`,
                 startLineNumber: line,
                 startColumn: 1,
                 endLineNumber: line,
