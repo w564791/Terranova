@@ -11,6 +11,7 @@ import {
   Form,
   message,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
@@ -205,6 +206,10 @@ const ManifestManagement: React.FC = () => {
 
   const totalPages = Math.ceil(total / pageSize);
 
+  // can_write 是组织级 MANIFESTS WRITE,每个列表项相同;列表为空时无从得知,
+  // 保留新建入口(后端仍按 MANIFESTS WRITE 校验),不额外发权限请求。
+  const canCreate = manifests.length === 0 || manifests.some(m => m.can_write === true);
+
   return (
     <div className={styles.container}>
       {/* 页面头部 */}
@@ -227,17 +232,19 @@ const ManifestManagement: React.FC = () => {
           )}
         </div>
         <div className={styles.headerRight}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              createForm.resetFields();
-              setCreateOpen(true);
-            }}
-            disabled={!selectedOrgId}
-          >
-            New Manifest
-          </Button>
+          {canCreate && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                createForm.resetFields();
+                setCreateOpen(true);
+              }}
+              disabled={!selectedOrgId}
+            >
+              New Manifest
+            </Button>
+          )}
         </div>
       </div>
 
@@ -364,13 +371,14 @@ const ManifestManagement: React.FC = () => {
                   <Dropdown
                     menu={{
                       items: [
-                        {
+                        // 编辑/删除仅 can_write;部署仅 can_deploy(后端仍逐项校验)
+                        manifest.can_write && {
                           key: 'edit',
                           icon: <EditOutlined />,
                           label: 'Edit',
                           onClick: () => navigate(`/admin/manifests-v2/${manifest.id}/edit?org=${selectedOrgId}`),
                         },
-                        {
+                        manifest.can_deploy && {
                           key: 'deploy',
                           icon: <RocketOutlined />,
                           label: 'Deploy',
@@ -400,10 +408,10 @@ const ManifestManagement: React.FC = () => {
                             }
                           },
                         },
-                        {
-                          type: 'divider',
+                        manifest.can_write && {
+                          type: 'divider' as const,
                         },
-                        {
+                        manifest.can_write && {
                           key: 'delete',
                           icon: <DeleteOutlined />,
                           label: 'Delete',
@@ -418,7 +426,7 @@ const ManifestManagement: React.FC = () => {
                             }
                           },
                         },
-                      ],
+                      ].filter(Boolean) as MenuProps['items'],
                     }}
                     trigger={['click']}
                     placement="bottomRight"
