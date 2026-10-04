@@ -191,6 +191,66 @@ api.interceptors.request.use(
   }
 );
 
+/**
+ * 响应拦截器 reject 的错误类型。
+ *
+ * 历史上拦截器直接 reject 错误字符串，调用方普遍写成 `message.error(err)`、
+ * `setError(err)` 后 `{error}` 渲染、`'失败: ' + err`、`${err}`、`String(err)`、
+ * `typeof err === 'string' ? err : err?.message` 等。为保持这些调用方不变：
+ * - message 即原错误字符串；toString / toJSON / Symbol.toPrimitive 都返回它，
+ *   所以拼接、模板字符串、String()、JSON.stringify 的结果与之前一致；
+ * - 实现 Symbol.iterator（只产出 message 一项），React / antd 把它当作 children
+ *   渲染时等价于渲染原字符串（普通 Error 对象作为 React child 会直接抛错）；
+ * - 不暴露 `response` 字段，避免激活调用方里原本走不到的 `err.response?.data` 分支。
+ * 新增：`status`（HTTP 状态码，网络错误等无响应时为 undefined）与 `data`（响应体）。
+ */
+export class ApiError extends Error {
+  readonly status?: number;
+  readonly data?: unknown;
+
+  constructor(message: string, status?: number, data?: unknown, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = 'ApiError';
+    this.status = typeof status === 'number' ? status : undefined;
+    this.data = data;
+  }
+
+  toString(): string {
+    return this.message;
+  }
+
+  toJSON(): string {
+    return this.message;
+  }
+
+  [Symbol.toPrimitive](): string {
+    return this.message;
+  }
+
+  *[Symbol.iterator](): Iterator<string> {
+    yield this.message;
+  }
+}
+
+/** 从任意错误中取 HTTP 状态码：ApiError.status、原始 axios error.response.status 或 { status: number }。 */
+export function getHttpStatus(err: unknown): number | undefined {
+  if (err == null || typeof err !== 'object') return undefined;
+  const e = err as { status?: unknown; response?: { status?: unknown } };
+  if (typeof e.status === 'number') return e.status;
+  if (typeof e.response?.status === 'number') return e.response.status;
+  return undefined;
+}
+
+/**
+ * 取拦截器错误的文案：旧的字符串错误或 ApiError 返回其文案，其它异常返回 undefined。
+ * 供原先 `typeof err === 'string' ? err : '兜底文案'` 的调用方使用。
+ */
+export function getApiErrorMessage(err: unknown): string | undefined {
+  if (typeof err === 'string') return err;
+  if (err instanceof ApiError) return err.message;
+  return undefined;
+}
+
 // 响应拦截器 - 处理错误
 api.interceptors.response.use(
   (response) => {
@@ -224,7 +284,7 @@ api.interceptors.response.use(
     }
     // 提取错误消息：优先使用 error.response.data.error，其次使用 error.message
     const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || '未知错误';
-    return Promise.reject(errorMessage);
+    return Promise.reject(new ApiError(String(errorMessage), error.response?.status, error.response?.data, error));
   }
 );
 

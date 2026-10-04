@@ -10,7 +10,7 @@
  *   POST   /api/v1/organizations/:org_id/manifests/:id/draft/_reset_from
  *   POST   /api/v1/organizations/:org_id/manifests/:id/v2/deployments/variable-preview (首装预览)
  */
-import api from '../../../services/api'
+import api, { getHttpStatus } from '../../../services/api'
 
 export interface ManifestFileEntry {
   path: string
@@ -355,8 +355,8 @@ export async function previewInstallVariables(
   return data.variables ?? []
 }
 
-// install / 首装预览的 404 响应体(resolveInstallTarget / ManifestInAuthOrg)。
-// api 拦截器只把 error 字符串抛出(丢了 HTTP 状态码),故按后端固定的 404 文案识别。
+// install / 首装预览的 404(resolveInstallTarget / ManifestInAuthOrg):以 HTTP 状态码判断;
+// 仅当错误不带状态码(非拦截器抛出的旧式字符串错误等)时,才回退到后端固定的 404 文案匹配。
 const MANIFEST_TARGET_NOT_FOUND_ERRORS = new Set([
   'workspace not found',
   'version not found',
@@ -366,6 +366,8 @@ const MANIFEST_TARGET_NOT_FOUND_ERRORS = new Set([
 export const MANIFEST_TARGET_NOT_FOUND_MESSAGE = '版本或工作区不存在或无权访问'
 
 export function isManifestTargetNotFound(err: unknown): boolean {
+  const status = getHttpStatus(err)
+  if (status !== undefined) return status === 404
   const msg = typeof err === 'string' ? err : (err as Error | undefined)?.message
   return !!msg && MANIFEST_TARGET_NOT_FOUND_ERRORS.has(msg.trim().toLowerCase())
 }
