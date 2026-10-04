@@ -363,7 +363,7 @@ export default function PublishVersionDialog({
               await upgradeDeployment(ctx, t.deployment.id, {
                 target_version_id: publishedVersionId,
                 varsets: upgradeCtx.varsets,
-                variable_overrides: upgradeCtx.variable_overrides,
+                // 后端 upgrade 合并已存覆盖(缺省 key 保留原值),无需回传 variable_overrides
               })
               await triggerWorkspacePlanApply(
                 wsId,
