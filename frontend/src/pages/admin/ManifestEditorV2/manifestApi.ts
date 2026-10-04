@@ -311,6 +311,30 @@ export async function getDeploymentUpgradeContext(
   return { varsetIds, varsets, variable_overrides }
 }
 
+// 变量预览(upgrade 用):合并后的最终变量,每条带 sensitive。
+// sensitive=true 时 value 恒为空串 —— 不是真实值,前端不得当作值预填。
+export interface DeploymentPreviewVariable {
+  key: string
+  value: string
+  sensitive: boolean
+  variable_type?: string
+  value_format?: string
+  description?: string
+  source_type?: string
+}
+
+export async function previewDeploymentVariables(
+  ctx: ManifestEditorContext,
+  deploymentId: string,
+  body: { varsets: DeploymentVarsetEntry[]; variable_overrides?: Record<string, string> },
+): Promise<DeploymentPreviewVariable[]> {
+  const data = (await api.post(
+    `${basePath(ctx)}/v2/deployments/${deploymentId}/variable-preview`,
+    body,
+  )) as { variables?: DeploymentPreviewVariable[] }
+  return data.variables ?? []
+}
+
 export interface InstallDeploymentRequest {
   version_id: string
   workspace_id: string

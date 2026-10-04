@@ -58,8 +58,11 @@ export interface EffectiveVariable {
 }
 
 export const variableSetService = {
-  list: async (scope?: string): Promise<{ items: VariableSet[] }> => {
-    const params = scope ? { scope } : undefined;
+  // workspaceId: 仅返回该 workspace 可挂载的变量集(global + 分配给该 workspace 或其 project 的)
+  list: async (scope?: string, workspaceId?: string): Promise<{ items: VariableSet[] }> => {
+    const params = scope || workspaceId
+      ? { ...(scope ? { scope } : {}), ...(workspaceId ? { workspace_id: workspaceId } : {}) }
+      : undefined;
     const response = await api.get('/variable-sets', { params });
     return response as any;
   },

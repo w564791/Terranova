@@ -107,8 +107,9 @@ export interface WorkspaceFormData {
 
 export const workspaceService = {
   // 获取工作空间列表
-  getWorkspaces: async (): Promise<{ data: Workspace[] }> => {
-    return api.get('/workspaces');
+  // params.capability: 'RESOURCE_TYPE:LEVEL'(如 WORKSPACE_RESOURCES:WRITE),仅返回调用者同时具备该能力的 workspace;非法值后端返回 400
+  getWorkspaces: async (params?: { capability?: string }): Promise<{ data: Workspace[] }> => {
+    return api.get('/workspaces', params ? { params } : undefined);
   },
 
   // 获取单个工作空间
