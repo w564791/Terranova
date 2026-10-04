@@ -524,12 +524,15 @@ module "ec2_web" {
 |------|------|------|
 | `can_write` | `GET /organizations/:org_id/manifests` 列表项与 `GET .../manifests/:id` | 调用者 MANIFESTS 有效级别 ≥ WRITE（显示编辑/发布入口） |
 | `can_deploy` | 同上 | 调用者至少在一个可读 workspace 上拥有 `WORKSPACE_RESOURCES` WRITE（与 `capability` 过滤同一判定；显示"部署"入口） |
+| `can_admin` | 同上 | 调用者 MANIFESTS 有效级别 = ADMIN（显示删除/归档入口；删除与归档仍由服务端要求 ADMIN） |
+| `capabilities` | `GET /organizations/:org_id/manifests` 响应顶层 `{can_read, can_write, can_admin, can_deploy}` | 与列表项同一判定；**列表为空时也返回**（决定"新建"/"部署"入口） |
 | `capability` | `GET /api/v1/workspaces?capability=WORKSPACE_RESOURCES:WRITE` | 部署目标选择器：仅返回调用者可读**且**具备该能力的 workspace。格式 `RESOURCE_TYPE:LEVEL`，资源必须是 workspace 级，LEVEL ∈ READ/WRITE/ADMIN；未知值返回 **400** |
 | `sensitive` | `POST .../v2/deployments/:deployment_id/variable-preview` 响应 `{"variables":[{key,value,sensitive,source_type,...}]}` | 敏感变量 `value` 恒为空串（含被 override 覆盖的敏感 key），前端显示为掩码 |
 
 补充：
 - `GET /api/v1/variable-sets?workspace_id=<ws>`：只返回该 workspace 可挂载的变量集（global + 分配给该 workspace 或其 project 的）；调用者需能读该 workspace（且属于当前 org，否则 404/403）。安装/升级/预览时提交不可挂载的 varset 返回 400。
 - 部署列表按调用者可读 workspace 在服务端过滤；调用者**没有任何可读 workspace** 时返回 **403**（复用 `RequireWorkspaceListAccess` 的语义），而非空列表。
+- upgrade 的 `variable_overrides` 与已存覆盖**合并**：请求中缺省的 key 保留原值；敏感变量传空串（预览掩码占位）视为不修改，也不会新增空覆盖；只有 `unset_keys: []string` 中列出的 key 被删除。形状不变（扁平 key→string）。
 - 没有批量文件 API：文件操作只有 `PUT/DELETE /files/*path` 与 `_move` / `_move_dir` / `_delete_dir`。
 
 ### 8.2 Manifest CRUD（Organization 级别）

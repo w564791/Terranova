@@ -37,14 +37,15 @@ func (varsetChecker) CheckBatchPermissions(context.Context, []*service.CheckPerm
 }
 func (varsetChecker) GetUserTeams(context.Context, string) ([]string, error) { return nil, nil }
 
-func TestVariableSetList_WorkspaceIDFilterAndAuthorization(t *testing.T) {
+func setupVarsetRouter(t *testing.T, extra ...string) *gin.Engine {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	t.Setenv("IAM_SINGLE_TENANT", "0")
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=private"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, stmt := range []string{
+	for _, stmt := range append([]string{
 		`CREATE TABLE workspaces (id INTEGER PRIMARY KEY, workspace_id TEXT)`,
 		`CREATE TABLE projects (id INTEGER PRIMARY KEY, org_id INTEGER)`,
 		`CREATE TABLE workspace_project_relations (workspace_id TEXT, project_id INTEGER)`,
@@ -60,7 +61,7 @@ func TestVariableSetList_WorkspaceIDFilterAndAuthorization(t *testing.T) {
 		`INSERT INTO variable_sets (varset_id, name, scope, is_deleted) VALUES ('vs-deleted', 'd', 'global', 1)`,
 		`INSERT INTO varset_assignments (varset_id, scope_type, project_id, workspace_id) VALUES
 		   ('vs-proj', 'project', 10, NULL), ('vs-ws', 'workspace', NULL, 'ws-a'), ('vs-ws-b', 'workspace', NULL, 'ws-b')`,
-	} {
+	}, extra...) {
 		if err := db.Exec(stmt).Error; err != nil {
 			t.Fatalf("%v\n%s", err, stmt)
 		}
@@ -69,7 +70,11 @@ func TestVariableSetList_WorkspaceIDFilterAndAuthorization(t *testing.T) {
 	r := gin.New()
 	protected := r.Group("/api/v1", func(c *gin.Context) { c.Set("user_id", "u1"); c.Next() })
 	SetupVariableSetRoutes(protected, db, middleware.NewIAMPermissionMiddlewareWithChecker(varsetChecker{}))
+	return r
+}
 
+func TestVariableSetList_WorkspaceIDFilterAndAuthorization(t *testing.T) {
+	r := setupVarsetRouter(t)
 	get := func(q string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/variable-sets?org_id=1"+q, nil))
@@ -105,8 +110,58 @@ func TestVariableSetList_WorkspaceIDFilterAndAuthorization(t *testing.T) {
 	if w := get("&workspace_id=ws-other"); w.Code != http.StatusNotFound {
 		t.Fatalf("other-org workspace must 404, got %d", w.Code)
 	}
-	// without workspace_id the existing list behaviour is unchanged
 	if w := get(""); w.Code != http.StatusOK {
 		t.Fatalf("plain list: %d", w.Code)
 	}
+}
+
+// GET /variable-sets without workspace_id lists only varsets visible to the
+// path/query org: global ones, ones assigned to the org's workspaces/projects,
+// and the caller's own not-yet-assigned specific varsets.
+func TestVariableSetList_ScopedToCallerOrg(t *testing.T) {
+	r := setupVarsetRouter(t,
+		`INSERT INTO variable_sets (varset_id, name, scope, created_by) VALUES
+		   ('vs-other-ws', 'ow', 'specific', 'u2'), ('vs-other-proj', 'op', 'specific', 'u2'),
+		   ('vs-mine', 'm', 'specific', 'u1'), ('vs-theirs', 't', 'specific', 'u2'),
+		   ('vs-mine-elsewhere', 'me', 'specific', 'u1')`,
+		`INSERT INTO varset_assignments (varset_id, scope_type, project_id, workspace_id) VALUES
+		   ('vs-other-ws', 'workspace', NULL, 'ws-other'), ('vs-other-proj', 'project', 30, NULL),
+		   ('vs-mine-elsewhere', 'project', 30, NULL)`,
+	)
+	list := func(org string, extra string) map[string]bool {
+		t.Helper()
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/variable-sets?org_id="+org+extra, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("org %s: %d %s", org, w.Code, w.Body.String())
+		}
+		var body struct {
+			Items []struct {
+				VarsetID string `json:"varset_id"`
+			} `json:"items"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &body)
+		got := map[string]bool{}
+		for _, it := range body.Items {
+			got[it.VarsetID] = true
+		}
+		return got
+	}
+	assertSet := func(got map[string]bool, want ...string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+		for _, w := range want {
+			if !got[w] {
+				t.Fatalf("missing %s in %v", w, got)
+			}
+		}
+	}
+	// org 1 must not see org 2's assigned varsets (vs-other-*, vs-mine-elsewhere),
+	// nobody else's unassigned varset (vs-theirs), no ownerless unassigned one
+	// (vs-none: created_by NULL, cannot be attributed to any org), nor deleted ones.
+	assertSet(list("1", ""), "vs-global", "vs-proj", "vs-ws", "vs-ws-b", "vs-mine")
+	assertSet(list("2", ""), "vs-global", "vs-other-ws", "vs-other-proj", "vs-mine-elsewhere", "vs-mine")
+	assertSet(list("1", "&scope=global"), "vs-global")
 }

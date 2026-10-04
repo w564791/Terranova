@@ -64,6 +64,44 @@ func (s *VariableSetService) List(scope string) ([]models.VariableSet, error) {
 	return varsets, nil
 }
 
+// ListForOrg 返回调用组织可见的变量集(GET /variable-sets 无 workspace_id 时)。
+//
+// variable_sets 没有 org_id(名称全平台唯一,global 变量集按解析链注入所有组织的
+// workspace),因此组织归属沿用现有租户关系推导,与 ListMountableForWorkspace 同一套
+// 分配规则:
+//   - scope = global:平台级共享,本来就会注入每个组织的 workspace,对所有组织可见;
+//   - 分配到本组织 workspace 的变量集(workspace -> workspace_project_relations -> projects.org_id);
+//   - 分配到本组织 project 的变量集(projects.org_id);
+//   - 尚无任何分配的 specific 变量集仅对其创建者可见(否则刚创建的变量集无法在
+//     列表中找到并分配;不能归属到任何组织,所以不对其他人展示)。
+func (s *VariableSetService) ListForOrg(scope string, orgID uint, callerID string) ([]models.VariableSet, error) {
+	if orgID == 0 {
+		return nil, fmt.Errorf("org_id required")
+	}
+	orgProjects := s.db.Table("projects").Select("id").Where("org_id = ?", orgID)
+	orgWorkspaces := s.db.Table("workspace_project_relations AS wpr").Select("wpr.workspace_id").
+		Joins("JOIN projects AS p ON p.id = wpr.project_id").Where("p.org_id = ?", orgID)
+	assigned := s.db.Model(&models.VarsetAssignment{}).Select("varset_id").
+		Where(s.db.Where("scope_type = ? AND workspace_id IN (?)", "workspace", orgWorkspaces).
+			Or("scope_type = ? AND project_id IN (?)", "project", orgProjects))
+	anyAssignment := s.db.Model(&models.VarsetAssignment{}).Select("varset_id")
+
+	visible := s.db.Where("scope = ?", "global").Or("varset_id IN (?)", assigned)
+	if callerID != "" {
+		visible = visible.Or("scope <> ? AND created_by = ? AND varset_id NOT IN (?)", "global", callerID, anyAssignment)
+	}
+
+	query := s.db.Where("is_deleted = ?", false).Where(visible)
+	if scope != "" {
+		query = query.Where("scope = ?", scope)
+	}
+	var varsets []models.VariableSet
+	if err := query.Order("created_at DESC").Find(&varsets).Error; err != nil {
+		return nil, fmt.Errorf("failed to list variable sets: %w", err)
+	}
+	return varsets, nil
+}
+
 // ListMountableForWorkspace 返回指定 workspace 可挂载的变量集(manifest 部署选择 varset 用)。
 //
 // "可挂载" 沿用变量解析链(VariableResolutionService)的作用域规则:
