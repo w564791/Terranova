@@ -19,6 +19,11 @@ export interface Manifest {
   updated_at: string;
   latest_version?: ManifestVersion;
   deployment_count?: number;
+  // 调用者能力标记(后端仅 list/get 填充):
+  //   can_write  = MANIFESTS WRITE(显示新建/编辑/发布/删除入口)
+  //   can_deploy = 至少一个可读 workspace 上有 WORKSPACE_RESOURCES WRITE(显示部署入口)
+  can_write?: boolean;
+  can_deploy?: boolean;
 }
 
 // 列表页只读展示用的版本元信息(新模型:画布字段已废弃)

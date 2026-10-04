@@ -18,6 +18,7 @@ const Layout: React.FC = () => {
   const [hasModulesPermission, setHasModulesPermission] = useState(false);
   const [hasIAMPermission, setHasIAMPermission] = useState(false);
   const [hasVariableSetsPermission, setHasVariableSetsPermission] = useState(false);
+  const [hasManifestsPermission, setHasManifestsPermission] = useState(false);
   const [hasGlobalSettingsPermission, setHasGlobalSettingsPermission] = useState(false);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -60,6 +61,7 @@ const Layout: React.FC = () => {
           setHasIAMPermission(false);
           setHasGlobalSettingsPermission(false);
           setHasVariableSetsPermission(false);
+          setHasManifestsPermission(false);
           setPermissionsLoading(false);
           return;
         }
@@ -87,15 +89,16 @@ const Layout: React.FC = () => {
           };
 
           // 检查各项权限
-          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, varsetPerm] = await Promise.all([
+          const [dashPerm, workspacesPerm, modulesPerm, iamPerm, varsetPerm, manifestsPerm] = await Promise.all([
             checkPermission('ORGANIZATION'),
             checkPermission('WORKSPACES'),
             checkPermission('MODULES'),
             checkPermission('IAM_PERMISSIONS'),
             checkPermission('VARIABLE_SETS'),
+            checkPermission('MANIFESTS'),
           ]);
 
-          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'VarSets:', varsetPerm);
+          console.log('[权限检查] Dashboard:', dashPerm, 'Workspaces:', workspacesPerm, 'Modules:', modulesPerm, 'IAM:', iamPerm, 'VarSets:', varsetPerm, 'Manifests:', manifestsPerm);
 
           setHasDashboardPermission(dashPerm);
           setHasWorkspacesPermission(workspacesPerm);
@@ -104,6 +107,7 @@ const Layout: React.FC = () => {
           // 平台全局设置不再由组织 IAM grant 决定；仅 system admin 可见和访问。
           setHasGlobalSettingsPermission(false);
           setHasVariableSetsPermission(varsetPerm);
+          setHasManifestsPermission(manifestsPerm);
         } catch (error) {
           setHasDashboardPermission(false);
           setHasWorkspacesPermission(false);
@@ -111,6 +115,7 @@ const Layout: React.FC = () => {
           setHasIAMPermission(false);
           setHasGlobalSettingsPermission(false);
           setHasVariableSetsPermission(false);
+          setHasManifestsPermission(false);
         }
       } else if (user && user.is_system_admin) {
         setHasDashboardPermission(true);
@@ -119,6 +124,7 @@ const Layout: React.FC = () => {
         setHasIAMPermission(true);
         setHasGlobalSettingsPermission(true);
         setHasVariableSetsPermission(true);
+        setHasManifestsPermission(true);
       }
       setPermissionsLoading(false);
     };
@@ -134,7 +140,7 @@ const Layout: React.FC = () => {
   const allNavItems = [
     { path: '/', label: 'Dashboard', icon: '', requireAdmin: false },
     { path: '/modules', label: 'Modules', icon: '', requireAdmin: false, requireModulesPermission: true },
-    { path: '/admin/manifests', label: 'Manifests', icon: '', requireGlobalSettingsPermission: true },
+    { path: '/admin/manifests', label: 'Manifests', icon: '', requireManifestsPermission: true },
     { path: '/workspaces', label: 'Workspaces', icon: '', requireWorkspacesPermission: true },
     { path: '/variable-sets', label: 'Variable Sets', icon: '', requireVariableSetsPermission: true },
     { path: '/cmdb', label: 'CMDB', icon: '' },
@@ -181,6 +187,7 @@ const Layout: React.FC = () => {
         if ((item as any).requireModulesPermission) return hasModulesPermission;
         if ((item as any).requireWorkspacesPermission) return hasWorkspacesPermission;
         if ((item as any).requireVariableSetsPermission) return hasVariableSetsPermission;
+        if ('requireManifestsPermission' in item) return hasManifestsPermission;
         if ((item as any).requireIAMPermission) return hasIAMPermission;
         if ((item as any).requireGlobalSettingsPermission) return hasGlobalSettingsPermission;
         return true;
@@ -227,7 +234,7 @@ const Layout: React.FC = () => {
   }
 
   // 如果用户不是admin且没有任何权限，显示NoPermission页面
-  if (!user?.is_system_admin && !hasDashboardPermission && !hasWorkspacesPermission && !hasModulesPermission && !hasIAMPermission && !hasGlobalSettingsPermission && !hasVariableSetsPermission) {
+  if (!user?.is_system_admin && !hasDashboardPermission && !hasWorkspacesPermission && !hasModulesPermission && !hasIAMPermission && !hasGlobalSettingsPermission && !hasVariableSetsPermission && !hasManifestsPermission) {
     return <NoPermission />;
   }
 

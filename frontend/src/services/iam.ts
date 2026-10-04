@@ -25,7 +25,9 @@ export type ResourceType =
   | 'TASK_DATA_ACCESS'
   | 'WORKSPACE_EXECUTION'
   | 'WORKSPACE_STATE'
-  | 'WORKSPACE_VARIABLES';
+  | 'WORKSPACE_VARIABLES'
+  | 'MANIFESTS'
+  | 'VARIABLE_SETS';
 
 // 组织
 export interface Organization {
