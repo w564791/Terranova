@@ -16704,7 +16704,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "List all deployments for a manifest",
+                "description": "List all deployments for a manifest. Each deployment carries overrides ([]services.OverrideView: key, sensitive, has_value, value); raw variable_overrides are never returned. value is present only for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ on the workspace; a deployment whose sensitive_keys is not yet computed treats every key as sensitive.",
                 "consumes": [
                     "application/json"
                 ],
@@ -16742,8 +16742,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -16824,8 +16823,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -16906,8 +16904,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -16920,7 +16917,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get deployment detail including linked variable sets",
+                "description": "Get deployment detail including linked variable sets. Overrides are returned redacted as overrides ([]services.OverrideView), never as raw variable_overrides.",
                 "consumes": [
                     "application/json"
                 ],
@@ -16972,8 +16969,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -17052,8 +17048,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -17148,8 +17143,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -17196,13 +17190,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Varsets and variable_overrides for preview",
+                        "description": "Optional target version, varsets, overrides and unset_keys; stored overrides are merged as in upgrade",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/models.DeploymentPreviewRequest"
                         }
                     }
                 ],
@@ -17231,8 +17224,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -20238,8 +20230,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
                         }
                     }
                 }
@@ -31365,6 +31356,30 @@ const docTemplate = `{
                 }
             }
         },
+        "middleware.InternalErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 500
+                },
+                "error": {
+                    "type": "string",
+                    "example": "internal error"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Internal server error"
+                },
+                "request_id": {
+                    "type": "string",
+                    "example": "3f2b8c1e-6a4d-4e2a-9c51-0d7e2f1a9b33"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "models.AIConfig": {
             "type": "object",
             "properties": {
@@ -32213,17 +32228,25 @@ const docTemplate = `{
                 }
             }
         },
-        "models.FirstInstallPreviewRequest": {
+        "models.DeploymentPreviewRequest": {
             "type": "object",
-            "required": [
-                "version_id",
-                "workspace_id"
-            ],
             "properties": {
+                "target_version_id": {
+                    "description": "Optional upgrade target; sensitivity of its variable blocks is applied. Must belong to the same manifest.",
+                    "type": "string"
+                },
+                "unset_keys": {
+                    "description": "Stored override keys to drop from the preview (same semantics as upgrade).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "variable_overrides": {
+                    "description": "Merged over the deployment's stored overrides, exactly like upgrade.\nMap of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
                     "type": "object",
                     "additionalProperties": {
-                        "type": "string"
+                        "$ref": "#/definitions/models.OverrideInput"
                     }
                 },
                 "varsets": {
@@ -32231,13 +32254,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/models.DeploymentVarsetEntry"
                     }
-                },
-                "version_id": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "description": "ws-xxx 语义化ID",
-                    "type": "string"
                 }
             }
         },
@@ -32546,6 +32562,35 @@ const docTemplate = `{
                 }
             }
         },
+        "models.FirstInstallPreviewRequest": {
+            "type": "object",
+            "required": [
+                "version_id",
+                "workspace_id"
+            ],
+            "properties": {
+                "variable_overrides": {
+                    "description": "Map of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/models.OverrideInput"
+                    }
+                },
+                "varsets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DeploymentVarsetEntry"
+                    }
+                },
+                "version_id": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "description": "ws-xxx 语义化ID",
+                    "type": "string"
+                }
+            }
+        },
         "models.FreezeSchedule": {
             "type": "object",
             "properties": {
@@ -32585,9 +32630,10 @@ const docTemplate = `{
             ],
             "properties": {
                 "variable_overrides": {
+                    "description": "Map of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
                     "type": "object",
                     "additionalProperties": {
-                        "type": "string"
+                        "$ref": "#/definitions/models.OverrideInput"
                     }
                 },
                 "varsets": {
@@ -33238,6 +33284,18 @@ const docTemplate = `{
                 },
                 "type": {},
                 "value": {}
+            }
+        },
+        "models.OverrideInput": {
+            "description": "OverrideInput one override; requests may also send a bare string as shorthand for {\"value\": s}.",
+            "type": "object",
+            "properties": {
+                "sensitive": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string"
+                }
             }
         },
         "models.ParseTFRequest": {
@@ -35109,10 +35167,10 @@ const docTemplate = `{
                     }
                 },
                 "variable_overrides": {
-                    "description": "VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;\n敏感变量传空串(预览里的掩码占位)视为\"不修改\",也保留原值。",
+                    "description": "VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;\n敏感变量传空串(预览里的掩码占位)视为\"不修改\",也保留原值。\nMap of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
                     "type": "object",
                     "additionalProperties": {
-                        "type": "string"
+                        "$ref": "#/definitions/models.OverrideInput"
                     }
                 },
                 "varsets": {
@@ -36009,14 +36067,6 @@ const docTemplate = `{
                 "updated_at": {
                     "type": "string"
                 },
-                "variable_overrides": {
-                    "description": "Manifest deployment 变量应急覆盖快照: 任务创建时把当时 active deployment 的\nvariable_overrides(扁平 key=string,最高优先级)固化到任务行;执行时 overlay 到\n解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——\noverrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。\n数据格式: {\"key\": \"value\"}",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.JSONB"
-                        }
-                    ]
-                },
                 "variable_snapshot_id": {
                     "description": "变量快照ID（关联variable_snapshots表）",
                     "type": "string"
@@ -36756,6 +36806,24 @@ const docTemplate = `{
                 },
                 "total_pages": {
                     "type": "integer"
+                }
+            }
+        },
+        "services.OverrideView": {
+            "description": "Redacted view of one deployment / task override. value is only present for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ; when sensitive_keys was never computed every key is reported sensitive.",
+            "type": "object",
+            "properties": {
+                "has_value": {
+                    "type": "boolean"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "sensitive": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string"
                 }
             }
         },

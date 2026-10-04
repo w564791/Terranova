@@ -416,7 +416,9 @@ type WorkspaceTask struct {
 	// 解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——
 	// overrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。
 	// 数据格式: {"key": "value"}
-	VariableOverrides JSONB `json:"variable_overrides,omitempty" gorm:"type:jsonb"`
+	// 不直接输出(含敏感值);任务详情/列表经 services.RedactOverrides 输出 overrides。
+	// 执行器从数据库行读取,不经 JSON。
+	VariableOverrides JSONB `json:"-" gorm:"type:jsonb"`
 	// SensitiveKeys 快照时 deployment 的敏感 key(jsonb 字符串数组);NULL = 全部视为敏感。不在 API 输出。
 	SensitiveKeys json.RawMessage `json:"-" gorm:"column:sensitive_keys;type:jsonb"`
 

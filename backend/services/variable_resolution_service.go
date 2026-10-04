@@ -428,16 +428,25 @@ func (s *VariableResolutionService) collectExtraVarsets(varsetIDs []string) ([]v
 func (s *VariableResolutionService) GetActiveDeploymentExtras(
 	workspaceID string,
 ) (extraVarsetIDs []string, overrides map[string]string, err error) {
+	extraVarsetIDs, overrides, _, err = s.GetActiveDeploymentSnapshot(workspaceID)
+	return extraVarsetIDs, overrides, err
+}
+
+// GetActiveDeploymentSnapshot 同 GetActiveDeploymentExtras,另返回同一行的
+// sensitive_keys 原值(NULL => nil),供任务创建时与覆盖一起固化。
+func (s *VariableResolutionService) GetActiveDeploymentSnapshot(
+	workspaceID string,
+) (extraVarsetIDs []string, overrides map[string]string, sensitiveKeys json.RawMessage, err error) {
 	var dep models.ManifestDeployment
 	res := s.db.Where("workspace_id = ? AND status = ?", workspaceID, models.DeploymentStatusActive).
 		Order("deployed_at DESC").
 		Limit(1).
 		Find(&dep)
 	if res.Error != nil {
-		return nil, nil, res.Error
+		return nil, nil, nil, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	// varsets 按 priority ASC(数字大者优先级高 → 后压栈 → 覆盖语义成立)
@@ -445,7 +454,7 @@ func (s *VariableResolutionService) GetActiveDeploymentExtras(
 	if err := s.db.Where("deployment_id = ?", dep.ID).
 		Order("priority ASC").
 		Find(&links).Error; err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, l := range links {
 		extraVarsetIDs = append(extraVarsetIDs, l.VarsetID)
@@ -455,18 +464,11 @@ func (s *VariableResolutionService) GetActiveDeploymentExtras(
 	if len(dep.VariableOverrides) > 0 {
 		var raw map[string]interface{}
 		if jsonErr := json.Unmarshal(dep.VariableOverrides, &raw); jsonErr == nil {
-			overrides = make(map[string]string, len(raw))
-			for k, v := range raw {
-				if sv, ok := v.(string); ok {
-					overrides[k] = sv
-				} else {
-					overrides[k] = fmt.Sprintf("%v", v)
-				}
-			}
+			overrides = FlattenOverrides(raw)
 		}
 	}
 
-	return extraVarsetIDs, overrides, nil
+	return extraVarsetIDs, overrides, dep.SensitiveKeys, nil
 }
 
 // collectGlobalVarsets loads global variable sets and their active variables.

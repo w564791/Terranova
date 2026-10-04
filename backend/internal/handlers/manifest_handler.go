@@ -135,7 +135,7 @@ func (h *ManifestHandler) ListManifests(c *gin.Context) {
 
 	offset := (page - 1) * pageSize
 	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&manifests).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("query failed: %w", err))
 		return
 	}
 
@@ -204,7 +204,7 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Manifest not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("query failed: %w", err))
 		return
 	}
 
@@ -278,7 +278,7 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 
 	// 新模型: 不再创建初始 ManifestVersion (草稿走 manifest_files.version_id IS NULL,按需懒创建)
 	if err := h.db.Create(&manifest).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Creation failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("creation failed: %w", err))
 		return
 	}
 
@@ -317,7 +317,7 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Manifest not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("query failed: %w", err))
 		return
 	}
 
@@ -363,7 +363,7 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	}
 
 	if err := h.db.Save(&manifest).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("update failed: %w", err))
 		return
 	}
 
@@ -399,7 +399,7 @@ func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Manifest not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("query failed: %w", err))
 		return
 	}
 
@@ -425,7 +425,7 @@ func (h *ManifestHandler) DeleteManifest(c *gin.Context) {
 		}
 		return tx.Delete(&manifest).Error
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Deletion failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("deletion failed: %w", err))
 		return
 	}
 
@@ -471,7 +471,7 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Manifest not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("query failed: %w", err))
 		return
 	}
 
@@ -484,7 +484,7 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Version not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed: " + err.Error()})
+			_ = c.Error(fmt.Errorf("query failed: %w", err))
 			return
 		}
 		label = version.Version
@@ -508,7 +508,7 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 
 	var rows []models.ManifestFile
 	if err := fileQuery.Order("path ASC").Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query files failed: " + err.Error()})
+		_ = c.Error(fmt.Errorf("query files failed: %w", err))
 		return
 	}
 	if len(rows) == 0 {
@@ -527,16 +527,16 @@ func (h *ManifestHandler) ExportManifestZip(c *gin.Context) {
 	for _, f := range rows {
 		w, err := zw.Create(f.Path)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ZIP entry: " + err.Error()})
+			_ = c.Error(fmt.Errorf("failed to create ZIP entry: %w", err))
 			return
 		}
 		if _, err := w.Write(f.Content); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write ZIP entry: " + err.Error()})
+			_ = c.Error(fmt.Errorf("failed to write ZIP entry: %w", err))
 			return
 		}
 	}
 	if err := zw.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize ZIP: " + err.Error()})
+		_ = c.Error(fmt.Errorf("failed to finalize ZIP: %w", err))
 		return
 	}
 

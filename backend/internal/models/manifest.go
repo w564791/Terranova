@@ -74,15 +74,17 @@ func (ManifestVersion) TableName() string {
 
 // ManifestDeployment Manifest 部署记录
 type ManifestDeployment struct {
-	ID                string          `json:"id" gorm:"primaryKey;size:36"`                        // 格式: mfd-{ulid}
-	ManifestID        string          `json:"manifest_id" gorm:"size:36;not null;index"`           // 所属 Manifest
-	VersionID         string          `json:"version_id" gorm:"size:36;not null"`                  // 部署的版本
-	WorkspaceID       string          `json:"workspace_id" gorm:"type:varchar(50);not null;index"` // 目标 Workspace 语义化ID(对齐全平台)
-	VariableOverrides json.RawMessage `json:"variable_overrides" gorm:"type:jsonb"`                // 应急变量覆盖(扁平 key->string,优先级最高)
-	Status            string          `json:"status" gorm:"size:20;default:active;index"`          // active, uninstalled
-	LastTaskID        *int            `json:"last_task_id" gorm:""`                                // 最后一次部署的任务 ID
-	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`                 // 部署者
-	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                                 // 部署时间
+	ID          string `json:"id" gorm:"primaryKey;size:36"`                        // 格式: mfd-{ulid}
+	ManifestID  string `json:"manifest_id" gorm:"size:36;not null;index"`           // 所属 Manifest
+	VersionID   string `json:"version_id" gorm:"size:36;not null"`                  // 部署的版本
+	WorkspaceID string `json:"workspace_id" gorm:"type:varchar(50);not null;index"` // 目标 Workspace 语义化ID(对齐全平台)
+	// 应急变量覆盖(扁平 key->string,优先级最高)。不直接输出:所有响应经 services.RedactOverrides
+	// 输出 overrides: [{key, sensitive, has_value, value?}]。
+	VariableOverrides json.RawMessage `json:"-" gorm:"type:jsonb"`
+	Status            string          `json:"status" gorm:"size:20;default:active;index"` // active, uninstalled
+	LastTaskID        *int            `json:"last_task_id" gorm:""`                       // 最后一次部署的任务 ID
+	DeployedBy        string          `json:"deployed_by" gorm:"size:20;not null"`        // 部署者
+	DeployedAt        *time.Time      `json:"deployed_at" gorm:""`                        // 部署时间
 	// 审批绑定的双哈希(apply 前校验,任一不一致即拒绝);审批步骤接入前恒为 NULL,不在 API 输出
 	ApprovedBundleHash *string `json:"-" gorm:"column:approved_bundle_hash;size:64"`
 	ApprovedPlanHash   *string `json:"-" gorm:"column:approved_plan_hash;size:64"`

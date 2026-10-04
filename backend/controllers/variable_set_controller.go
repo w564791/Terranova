@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -41,8 +42,8 @@ func (c *VariableSetController) VarsetInAuthOrg(write bool) gin.HandlerFunc {
 		userID := ctx.GetString("user_id")
 		visible, err := c.service.VarsetVisibleInOrg(varsetID, orgID, userID)
 		if err != nil {
-			log.Printf("varset org binding: %v", err)
-			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check variable set"})
+			_ = ctx.Error(fmt.Errorf("varset org binding: %w", err))
+			ctx.Abort()
 			return
 		}
 		if !visible {
@@ -52,8 +53,8 @@ func (c *VariableSetController) VarsetInAuthOrg(write bool) gin.HandlerFunc {
 		if write {
 			writable, err := c.service.VarsetWritableInOrg(varsetID, orgID, userID, isSystemAdmin(ctx))
 			if err != nil {
-				log.Printf("varset org binding: %v", err)
-				ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check variable set"})
+				_ = ctx.Error(fmt.Errorf("varset org binding: %w", err))
+				ctx.Abort()
 				return
 			}
 			if !writable {
@@ -124,8 +125,7 @@ func (c *VariableSetController) Create(ctx *gin.Context) {
 		if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "invalid") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to create variable set: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create variable set"})
+			_ = ctx.Error(fmt.Errorf("Failed to create variable set: %w", err))
 		}
 		return
 	}
@@ -164,8 +164,7 @@ func (c *VariableSetController) List(ctx *gin.Context) {
 		varsets, err = c.service.ListForOrg(scope, orgID, ctx.GetString("user_id"))
 	}
 	if err != nil {
-		log.Printf("Failed to list variable sets: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list variable sets"})
+		_ = ctx.Error(fmt.Errorf("Failed to list variable sets: %w", err))
 		return
 	}
 
@@ -283,8 +282,7 @@ func (c *VariableSetController) Update(ctx *gin.Context) {
 		} else if strings.Contains(errMsg, "already exists") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to update variable set: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update variable set"})
+			_ = ctx.Error(fmt.Errorf("Failed to update variable set: %w", err))
 		}
 		return
 	}
@@ -333,8 +331,7 @@ func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 		} else if strings.Contains(errMsg, "invalid") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to update variable set scope: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update variable set scope"})
+			_ = ctx.Error(fmt.Errorf("Failed to update variable set scope: %w", err))
 		}
 		return
 	}
@@ -363,8 +360,7 @@ func (c *VariableSetController) Delete(ctx *gin.Context) {
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to delete variable set: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete variable set"})
+			_ = ctx.Error(fmt.Errorf("Failed to delete variable set: %w", err))
 		}
 		return
 	}
@@ -389,8 +385,7 @@ func (c *VariableSetController) ListAssignments(ctx *gin.Context) {
 
 	assignments, err := c.service.ListAssignments(varsetID)
 	if err != nil {
-		log.Printf("Failed to list assignments: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list assignments"})
+		_ = ctx.Error(fmt.Errorf("Failed to list assignments: %w", err))
 		return
 	}
 
@@ -445,8 +440,7 @@ func (c *VariableSetController) CreateAssignment(ctx *gin.Context) {
 		} else if strings.Contains(errMsg, "cannot") || strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to create assignment: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create assignment"})
+			_ = ctx.Error(fmt.Errorf("Failed to create assignment: %w", err))
 		}
 		return
 	}
@@ -492,8 +486,7 @@ func (c *VariableSetController) DeleteAssignment(ctx *gin.Context) {
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to delete assignment: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete assignment"})
+			_ = ctx.Error(fmt.Errorf("Failed to delete assignment: %w", err))
 		}
 		return
 	}

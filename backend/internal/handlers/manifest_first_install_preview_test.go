@@ -38,6 +38,7 @@ func setupFirstInstallPreview(t *testing.T, levels map[valueobject.ResourceType]
 	checker := &resourceChecker{levels: levels}
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	r := gin.New()
+	r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	r.POST("/organizations/:org_id/manifests/:id/v2/deployments/variable-preview", withCaller(valueobject.PermissionLevelRead), h.FirstInstallVariablePreview)
 	return r, checker
 }
@@ -149,6 +150,7 @@ func TestInstall_SharesTargetValidation(t *testing.T) {
 	}}
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	ir := gin.New()
+	ir.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	ir.POST("/organizations/:org_id/manifests/:id/v2/deployments/install", withCaller(valueobject.PermissionLevelRead), h.Install)
 	for name, body := range map[string]string{
 		"workspace from another org": `{"workspace_id":"ws-foreign","version_id":"mfv-1"}`,

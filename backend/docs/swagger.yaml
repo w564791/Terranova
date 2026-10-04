@@ -1,5 +1,22 @@
 basePath: /
 definitions:
+  middleware.InternalErrorResponse:
+    properties:
+      code:
+        example: 500
+        type: integer
+      error:
+        example: internal error
+        type: string
+      message:
+        example: Internal server error
+        type: string
+      request_id:
+        example: 3f2b8c1e-6a4d-4e2a-9c51-0d7e2f1a9b33
+        type: string
+      timestamp:
+        type: string
+    type: object
   controllers.AnalyzeErrorRequest:
     properties:
       task_id:
@@ -1666,7 +1683,10 @@ definitions:
     properties:
       variable_overrides:
         additionalProperties:
-          type: string
+          $ref: '#/definitions/models.OverrideInput'
+        description: 'Map of key -> override. Each value may be a plain string (legacy
+          shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}.
+          Sensitivity is sticky once recorded.'
         type: object
       varsets:
         items:
@@ -1680,6 +1700,30 @@ definitions:
     required:
     - version_id
     - workspace_id
+    type: object
+  models.DeploymentPreviewRequest:
+    properties:
+      target_version_id:
+        description: Optional upgrade target; sensitivity of its variable blocks is
+          applied. Must belong to the same manifest.
+        type: string
+      unset_keys:
+        description: Stored override keys to drop from the preview (same semantics
+          as upgrade).
+        items:
+          type: string
+        type: array
+      variable_overrides:
+        additionalProperties:
+          $ref: '#/definitions/models.OverrideInput'
+        description: |-
+          Merged over the deployment's stored overrides, exactly like upgrade.
+          Map of key -> override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}. Sensitivity is sticky once recorded.
+        type: object
+      varsets:
+        items:
+          $ref: '#/definitions/models.DeploymentVarsetEntry'
+        type: array
     type: object
   models.DeploymentVarsetEntry:
     properties:
@@ -1915,7 +1959,10 @@ definitions:
     properties:
       variable_overrides:
         additionalProperties:
-          type: string
+          $ref: '#/definitions/models.OverrideInput'
+        description: 'Map of key -> override. Each value may be a plain string (legacy
+          shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}.
+          Sensitivity is sticky once recorded.'
         type: object
       varsets:
         items:
@@ -2358,6 +2405,15 @@ definitions:
     x-enum-varnames:
     - NotificationTypeWebhook
     - NotificationTypeLarkRobot
+  models.OverrideInput:
+    description: 'OverrideInput one override; requests may also send a bare string
+      as shorthand for {"value": s}.'
+    properties:
+      sensitive:
+        type: boolean
+      value:
+        type: string
+    type: object
   models.OutputValue:
     properties:
       sensitive:
@@ -3653,8 +3709,9 @@ definitions:
         description: |-
           VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;
           敏感变量传空串(预览里的掩码占位)视为"不修改",也保留原值。
+          Map of key -> override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}. Sensitivity is sticky once recorded.
         additionalProperties:
-          type: string
+          $ref: '#/definitions/models.OverrideInput'
         type: object
       varsets:
         items:
@@ -4263,15 +4320,6 @@ definitions:
         description: 任务类型
       updated_at:
         type: string
-      variable_overrides:
-        allOf:
-        - $ref: '#/definitions/models.JSONB'
-        description: |-
-          Manifest deployment 变量应急覆盖快照: 任务创建时把当时 active deployment 的
-          variable_overrides(扁平 key=string,最高优先级)固化到任务行;执行时 overlay 到
-          解析出的变量之上。与 VariableSnapshotID(varset/workspace 变量引用快照)互补——
-          overrides 无 variable_id 不能走引用快照,故随任务行一起固化保证可复现。
-          数据格式: {"key": "value"}
       variable_snapshot_id:
         description: 变量快照ID（关联variable_snapshots表）
         type: string
@@ -4417,6 +4465,20 @@ definitions:
     properties:
       is_active:
         type: boolean
+    type: object
+  services.OverrideView:
+    description: Redacted view of one deployment / task override. value is only
+      present for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ;
+      when sensitive_keys was never computed every key is reported sensitive.
+    properties:
+      has_value:
+        type: boolean
+      key:
+        type: string
+      sensitive:
+        type: boolean
+      value:
+        type: string
     type: object
   services.AssessmentOverview:
     properties:
@@ -16321,7 +16383,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: List all deployments for a manifest
+      description: 'List all deployments for a manifest. Each deployment carries overrides ([]services.OverrideView: key, sensitive, has_value, value); raw variable_overrides are never returned. value is present only for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ on the workspace; a deployment whose sensitive_keys is not yet computed treats every key as sensitive.'
       parameters:
       - description: Organization ID
         in: path
@@ -16344,8 +16406,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: List manifest deployments
@@ -16355,7 +16416,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get deployment detail including linked variable sets
+      description: 'Get deployment detail including linked variable sets. Overrides are returned redacted as overrides ([]services.OverrideView), never as raw variable_overrides.'
       parameters:
       - description: Organization ID
         in: path
@@ -16388,8 +16449,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: Get manifest deployment
@@ -16443,8 +16503,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: Uninstall manifest deployment
@@ -16508,8 +16567,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: Upgrade manifest deployment
@@ -16537,13 +16595,13 @@ paths:
         name: deployment_id
         required: true
         type: string
-      - description: Varsets and variable_overrides for preview
+      - description: Optional target version, varsets, overrides and unset_keys; stored
+          overrides are merged as in upgrade
         in: body
         name: request
         required: true
         schema:
-          additionalProperties: true
-          type: object
+          $ref: '#/definitions/models.DeploymentPreviewRequest'
       produces:
       - application/json
       responses:
@@ -16565,8 +16623,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: Preview deployment variables
@@ -16621,8 +16678,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: Preview variables for a first install
@@ -16676,8 +16732,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: Install manifest deployment
@@ -18686,8 +18741,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/middleware.InternalErrorResponse'
       security:
       - BearerAuth: []
       summary: List deployments using variable set

@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"log"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -73,8 +73,7 @@ func (c *VarsetVariableController) Create(ctx *gin.Context) {
 		if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to create varset variable: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create variable"})
+			_ = ctx.Error(fmt.Errorf("Failed to create varset variable: %w", err))
 		}
 		return
 	}
@@ -101,8 +100,7 @@ func (c *VarsetVariableController) List(ctx *gin.Context) {
 
 	variables, err := c.service.List(varsetID, varType)
 	if err != nil {
-		log.Printf("Failed to list varset variables: %v", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list variables"})
+		_ = ctx.Error(fmt.Errorf("Failed to list varset variables: %w", err))
 		return
 	}
 
@@ -180,8 +178,7 @@ func (c *VarsetVariableController) Update(ctx *gin.Context) {
 		} else if strings.Contains(errMsg, "cannot") || strings.Contains(errMsg, "invalid") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to update varset variable: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update variable"})
+			_ = ctx.Error(fmt.Errorf("Failed to update varset variable: %w", err))
 		}
 		return
 	}
@@ -212,8 +209,7 @@ func (c *VarsetVariableController) Delete(ctx *gin.Context) {
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
 		} else {
-			log.Printf("Failed to delete varset variable: %v", err)
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete variable"})
+			_ = ctx.Error(fmt.Errorf("Failed to delete varset variable: %w", err))
 		}
 		return
 	}

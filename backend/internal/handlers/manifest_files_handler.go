@@ -73,7 +73,7 @@ func (h *ManifestFilesHandler) ListFiles(c *gin.Context) {
 	if versionID == "" || versionID == "draft" {
 		// 当前用户私有草稿;若不存在,首次按 latest published 初始化(ON CONFLICT DO NOTHING)
 		if err := h.ensureDraftInitialized(manifestID, userID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 			return
 		}
 		q = q.Where("version_id IS NULL").Where("owner_user_id = ?", userID)
@@ -83,7 +83,7 @@ func (h *ManifestFilesHandler) ListFiles(c *gin.Context) {
 
 	var rows []models.ManifestFile
 	if err := q.Order("path ASC").Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (h *ManifestFilesHandler) ReadFile(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -252,7 +252,7 @@ func (h *ManifestFilesHandler) PutFile(c *gin.Context) {
 			"content", "mime", "size", "is_binary", "updated_at",
 		}),
 	}).Create(&row).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -294,7 +294,7 @@ func (h *ManifestFilesHandler) DeleteFile(c *gin.Context) {
 	res := h.db.Where("manifest_id = ? AND owner_user_id = ? AND path = ? AND version_id IS NULL",
 		manifestID, userID, path).Delete(&models.ManifestFile{})
 	if res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": res.Error.Error()})
+		_ = c.Error(res.Error)
 		return
 	}
 	if res.RowsAffected == 0 {
@@ -423,7 +423,7 @@ func (h *ManifestFilesHandler) DeleteDir(c *gin.Context) {
 		manifestID, userID, pattern,
 	).Delete(&models.ManifestFile{})
 	if res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": res.Error.Error()})
+		_ = c.Error(res.Error)
 		return
 	}
 	if res.RowsAffected == 0 {
@@ -560,7 +560,7 @@ func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 		}
 		return
 	}
@@ -580,7 +580,7 @@ func (h *ManifestFilesHandler) ResetDraftFromVersion(c *gin.Context) {
 		`, userID, manifestID, versionID).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -614,7 +614,7 @@ func (h *ManifestFilesHandler) ExportDraft(c *gin.Context) {
 	var rows []models.ManifestFile
 	if err := h.db.Where("manifest_id = ? AND owner_user_id = ? AND version_id IS NULL",
 		manifestID, userID).Order("path ASC").Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -623,16 +623,16 @@ func (h *ManifestFilesHandler) ExportDraft(c *gin.Context) {
 	for _, f := range rows {
 		w, err := zw.Create(f.Path)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 			return
 		}
 		if _, err := w.Write(f.Content); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 			return
 		}
 	}
 	if err := zw.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 

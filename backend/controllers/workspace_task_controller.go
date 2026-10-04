@@ -28,6 +28,22 @@ type WorkspaceTaskController struct {
 	agentCCHandler     interface {
 		CancelTaskOnAgent(agentID string, taskID uint) error
 	}
+
+	// CanReadVariableValues 覆盖快照值的可见性(workspace WORKSPACE_VARIABLES READ,
+	// 与 manifest 变量预览同一检查,不写响应)。nil => 不返回任何值。
+	CanReadVariableValues func(ctx *gin.Context, workspaceID string) bool
+}
+
+// taskOverrides 任务行覆盖快照的对外形态(唯一出口 services.RedactOverrides)。
+func (c *WorkspaceTaskController) taskOverrides(ctx *gin.Context, t models.WorkspaceTask, canRead *bool) []services.OverrideView {
+	if len(t.VariableOverrides) == 0 {
+		return nil
+	}
+	return services.RedactOverrides(services.FlattenOverrides(t.VariableOverrides), t.SensitiveKeys, *canRead)
+}
+
+func (c *WorkspaceTaskController) canReadVariableValues(ctx *gin.Context, workspaceID string) bool {
+	return c.CanReadVariableValues != nil && c.CanReadVariableValues(ctx, workspaceID)
 }
 
 // loadTaskInPathWorkspace resolves the workspace named by the route and then
@@ -229,15 +245,18 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 
 	// Manifest deployment variable_overrides 快照: 任务创建时固化当时 active deployment 的
 	// 应急覆盖(最高优先级),执行时 overlay。与 vsnap(varset/workspace 变量引用快照)互补。
+	// sensitive_keys 随覆盖一起固化(NULL 照原样保留 => 任务视图按全部敏感处理)。
 	var overridesJSONB models.JSONB
-	if _, extraOverrides, ovErr := services.NewVariableResolutionService(c.db).
-		GetActiveDeploymentExtras(workspace.WorkspaceID); ovErr != nil {
+	var overridesSensitive json.RawMessage
+	if _, extraOverrides, sensKeys, ovErr := services.NewVariableResolutionService(c.db).
+		GetActiveDeploymentSnapshot(workspace.WorkspaceID); ovErr != nil {
 		log.Printf("[WARN] resolve deployment overrides for %s failed: %v", workspace.WorkspaceID, ovErr)
 	} else if len(extraOverrides) > 0 {
 		overridesJSONB = make(models.JSONB, len(extraOverrides))
 		for k, v := range extraOverrides {
 			overridesJSONB[k] = v
 		}
+		overridesSensitive = sensKeys
 	}
 
 	// 创建任务（只创建一个任务）
@@ -252,6 +271,7 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		VariableSnapshotID: vsnapID,
 		ExternalFiles:      externalFilesJSONB,
 		VariableOverrides:  overridesJSONB,
+		SensitiveKeys:      overridesSensitive,
 	}
 
 	if err := c.db.Create(task).Error; err != nil {
@@ -443,6 +463,12 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 		taskResponse["variable_snapshot_id"] = nil
 	}
 
+	// deployment 覆盖快照:不输出原值,经 RedactOverrides
+	if len(task.VariableOverrides) > 0 {
+		canRead := c.canReadVariableValues(ctx, task.WorkspaceID)
+		taskResponse["overrides"] = c.taskOverrides(ctx, task, &canRead)
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"task": taskResponse,
 	})
@@ -628,7 +654,7 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 	if err := query.
 		Select("id", "workspace_id", "task_type", "status", "created_at", "created_by",
 			"description", "changes_add", "changes_change", "changes_destroy",
-			"stage", "started_at", "completed_at").
+			"stage", "started_at", "completed_at", "variable_overrides", "sensitive_keys").
 		Order("created_at DESC").
 		Limit(pageSize).
 		Offset(offset).
@@ -657,11 +683,14 @@ func (c *WorkspaceTaskController) GetTasks(ctx *gin.Context) {
 	// 构建带 username 的响应
 	type taskWithUsername struct {
 		models.WorkspaceTask
-		CreatedByUsername string `json:"created_by_username"`
+		CreatedByUsername string                  `json:"created_by_username"`
+		Overrides         []services.OverrideView `json:"overrides,omitempty"`
 	}
 	tasksResp := make([]taskWithUsername, len(tasks))
+	canReadValues := c.canReadVariableValues(ctx, workspace.WorkspaceID)
 	for i, t := range tasks {
 		tasksResp[i].WorkspaceTask = t
+		tasksResp[i].Overrides = c.taskOverrides(ctx, t, &canReadValues)
 		if t.CreatedBy != nil {
 			tasksResp[i].CreatedByUsername = usernameMap[*t.CreatedBy]
 		}

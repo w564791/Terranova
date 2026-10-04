@@ -62,6 +62,14 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 4. 部署列表复用 `RequireWorkspaceListAccess` 服务端过滤。
 5. `/organizations/:org_id/manifests/:id/*` 全部 24 条路由在各自 `RequirePermission` 之后挂 `ManifestInAuthOrg`（与部署 handler 的 `manifestInAuthOrg` 同一实现）：path manifest 不属于 path org 或不存在 => 404；无权限者先得到 403，无法用 404/403 探测 ID。`/:id` CRUD 与 export-zip 由 handler 按 organization_id 过滤。
 
+6. 部署覆盖值脱敏（详见 design spec §8.4「覆盖值」）：
+   - 部署详情/列表与任务详情/列表不再返回 `variable_overrides`，改为返回 `overrides: [{key, sensitive, has_value, value?}]`；
+   - 敏感 key 永不带值，非敏感值需要目标 workspace 的 `WORKSPACE_VARIABLES` READ；
+   - `sensitive_keys` 为 NULL 时全部按敏感处理；
+   - 敏感标记是粘滞的，启动时回填 deployment 行；
+   - 按部署的 variable-preview 会合并已存覆盖。
+7. manifest 各 handler 与 varset 控制器的 500 响应统一走 `c.Error` + 全局 `ErrorHandler`：响应体为 `{error:"internal error", request_id}`，不含 SQL 文本；`X-Request-ID` 只复用符合 `^[A-Za-z0-9-]{8,64}$` 的值，否则生成 UUID。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
@@ -85,4 +93,11 @@ backend/services/variable_resolution_service.go
 backend/services/variable_set_service.go
 backend/controllers/variable_set_controller.go
 backend/controllers/workspace_controller.go (swagger 注释)
+backend/controllers/workspace_task_controller.go
+backend/controllers/varset_variable_controller.go
+backend/services/manifest_overrides.go
+backend/internal/handlers/manifest_{editor,files,provider_schema,versions}_handler.go (500 → c.Error)
+backend/internal/middleware/middleware.go
+backend/internal/models/manifest_v2.go
+backend/main.go
 ```

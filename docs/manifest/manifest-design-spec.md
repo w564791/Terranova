@@ -585,7 +585,22 @@ module "ec2_web" {
 | POST | `/v2/deployments/install` | 安装到 body 中的 workspace（workspace 不属于本 org、version 为草稿或不属于本 manifest → 404） | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
 | POST | `/v2/deployments/:deployment_id/upgrade` | 升级 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
 | POST | `/v2/deployments/:deployment_id/uninstall` | 卸载 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
-| POST | `/v2/deployments/:deployment_id/variable-preview` | 变量预览（`sensitive` 掩码） | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ |
+| POST | `/v2/deployments/:deployment_id/variable-preview` | 变量预览（`sensitive` 掩码）。body `models.DeploymentPreviewRequest`：可选 `target_version_id`（须属于本 manifest，否则 400）、`varsets`、`variable_overrides`、`unset_keys`；已存覆盖按 upgrade 的同一合并规则叠加后再预览 | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ |
+
+#### 覆盖值（variable_overrides）的输入、存储与输出
+
+- **输入**：install / upgrade / 两个 variable-preview 的 `variable_overrides` 每项可写成 `"key": "value"`（旧格式，等价 `sensitive=false`）或 `"key": {"value": "...", "sensitive": true}`。
+- **存储**：`manifest_deployments.variable_overrides`（原值，仅执行用）+ `manifest_deployments.sensitive_keys`（jsonb 字符串数组）。任务创建时两列一起快照到 `workspace_tasks`。
+- **敏感判定**：当前版本与目标版本中 `variable` 块 `sensitive = true` 的 key，加上 `ResolveDisplayWithExtra` 给出的敏感 key（varset 与 workspace 变量，是挂载 varset 的超集），再加上请求里标记的 key。
+- **粘滞**：一旦记为敏感，之后的 upgrade 即使传 `sensitive:false` 也不会取消；upgrade 写回的 `sensitive_keys` 是“已存 ∪ 新计算 ∪ 请求标记”。
+- **NULL 语义**：`sensitive_keys IS NULL` 表示尚未计算，此时每个 key 都按敏感处理（不返回任何值）。在 NULL 行上，upgrade 忽略请求里的标记，只写入计算得到的集合。
+- **回填**：启动时由后台 goroutine 运行 `BackfillDeploymentSensitiveKeys`。它只处理 `sensitive_keys IS NULL` 的 deployment 行，可重复运行；单行失败只记日志，其他行照常处理，不阻塞启动。`workspace_tasks.sensitive_keys` 不回填，历史任务一律按全敏感处理。
+- **输出**：任何响应都不包含原始 `variable_overrides` 和 `sensitive_keys`（模型字段为 `json:"-"`），包括部署详情/列表、任务详情/列表。统一经 `services.RedactOverrides` 输出为 `overrides: [{key, sensitive, has_value, value?}]`：敏感 key 永不带 `value`；非敏感 key 只有在调用者对该 workspace 有 `WORKSPACE_VARIABLES` READ 时才带 `value`。
+- **预览**：敏感 key 的 `value` 恒为空串；按部署的预览会先合并已存覆盖（与 upgrade 同一实现 `mergeDeploymentOverrides`），所以已存的非敏感覆盖会显示出来。
+
+#### 500 响应
+
+handler 遇到内部错误时只调用 `c.Error(err)`，由全局 `middleware.ErrorHandler`（已挂在 router 上）记录日志（带 `request_id`），并返回通用响应体 `middleware.InternalErrorResponse`：`{code:500, error:"internal error", message, request_id, timestamp}`，不含任何数据库或 SQL 文本。入站 `X-Request-ID` 只有匹配 `^[A-Za-z0-9-]{8,64}$` 时才复用，否则生成 UUID；该值总会回写到响应头 `X-Request-ID`。
 
 ### 8.5 其它视角
 

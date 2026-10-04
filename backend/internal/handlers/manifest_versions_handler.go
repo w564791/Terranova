@@ -59,7 +59,7 @@ func (h *ManifestVersionsHandler) ListVersions(c *gin.Context) {
 		Where("version <> ?", "draft").
 		Order("created_at DESC").
 		Find(&versions).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *ManifestVersionsHandler) GetVersion(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 		}
 		return
 	}
@@ -126,7 +126,7 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 		}
 		return
 	}
@@ -137,7 +137,7 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
 		Where("path LIKE ?", "%.tf").
 		Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 	scope := make(map[string][]byte, len(rows))
@@ -265,7 +265,7 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -340,7 +340,7 @@ func (h *ManifestVersionsHandler) ExportVersion(c *gin.Context) {
 	var rows []models.ManifestFile
 	if err := h.db.Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
 		Order("path ASC").Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -349,16 +349,16 @@ func (h *ManifestVersionsHandler) ExportVersion(c *gin.Context) {
 	for _, f := range rows {
 		w, err := zw.Create(f.Path)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 			return
 		}
 		if _, err := w.Write(f.Content); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 			return
 		}
 	}
 	if err := zw.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
