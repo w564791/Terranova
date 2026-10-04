@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"iac-platform/internal/domain/valueobject"
 
@@ -34,6 +35,44 @@ type WorkspaceListAccessRequest struct {
 	PrincipalType valueobject.PrincipalType
 	PrincipalID   string
 	OrgID         uint
+	// Capability optionally narrows the visible list to workspaces where the
+	// principal additionally holds Capability.ResourceType at
+	// Capability.Level (e.g. WORKSPACE_RESOURCES WRITE for the manifest deploy
+	// picker). nil keeps the plain list semantics.
+	Capability *WorkspaceCapability
+}
+
+// WorkspaceCapability is a workspace-scoped permission requirement used to
+// filter a workspace list server-side (GET /workspaces?capability=RES:LEVEL).
+type WorkspaceCapability struct {
+	ResourceType valueobject.ResourceType
+	Level        valueobject.PermissionLevel
+}
+
+// ParseWorkspaceCapability parses "RESOURCE_TYPE:LEVEL". The resource type
+// must be a known workspace-level resource and the level READ/WRITE/ADMIN;
+// anything else is rejected so callers can answer 400 instead of silently
+// returning an unfiltered list.
+func ParseWorkspaceCapability(raw string) (*WorkspaceCapability, error) {
+	parts := strings.Split(raw, ":")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return nil, fmt.Errorf("capability must be RESOURCE_TYPE:LEVEL")
+	}
+	rt, err := valueobject.ParseResourceType(strings.ToUpper(parts[0]))
+	if err != nil {
+		return nil, err
+	}
+	if !rt.IsWorkspaceLevel() {
+		return nil, fmt.Errorf("capability resource type %s is not workspace-scoped", rt)
+	}
+	level, err := valueobject.ParsePermissionLevel(strings.ToUpper(parts[1]))
+	if err != nil {
+		return nil, err
+	}
+	if level == valueobject.PermissionLevelNone {
+		return nil, fmt.Errorf("capability level must be READ, WRITE or ADMIN")
+	}
+	return &WorkspaceCapability{ResourceType: rt, Level: level}, nil
 }
 
 // WorkspaceListAccessResolver is deliberately small so the HTTP middleware
@@ -64,6 +103,90 @@ func NewWorkspaceListAccessService(db *gorm.DB, checker PermissionChecker) *Work
 }
 
 func (s *WorkspaceListAccessService) ResolveWorkspaceListAccess(
+	ctx context.Context,
+	req WorkspaceListAccessRequest,
+) (*WorkspaceListAccess, error) {
+	access, err := s.resolveReadableWorkspaces(ctx, req)
+	if err != nil || req.Capability == nil || access == nil || !access.HasAccess {
+		return access, err
+	}
+	return s.narrowByCapability(ctx, req, access)
+}
+
+// narrowByCapability intersects the readable list with the workspaces where
+// the principal holds the requested capability, using the same
+// PermissionChecker path as the per-workspace endpoints (so ORGANIZATION,
+// PROJECT and WORKSPACE scoped Roles and the WORKSPACE_MANAGEMENT umbrella are
+// all honoured). HasAccess is preserved: an authorized caller with no capable
+// workspace gets an empty list, not a 403.
+func (s *WorkspaceListAccessService) narrowByCapability(
+	ctx context.Context,
+	req WorkspaceListAccessRequest,
+	access *WorkspaceListAccess,
+) (*WorkspaceListAccess, error) {
+	capReq := func(scope valueobject.ScopeType, scopeID uint, scopeIDStr string) *CheckPermissionRequest {
+		return &CheckPermissionRequest{
+			UserID:        req.UserID,
+			PrincipalType: req.PrincipalType,
+			PrincipalID:   req.PrincipalID,
+			ResourceType:  req.Capability.ResourceType,
+			ScopeType:     scope,
+			ScopeID:       scopeID,
+			ScopeIDStr:    scopeIDStr,
+			RequiredLevel: req.Capability.Level,
+		}
+	}
+
+	orgResult, err := s.checker.CheckPermission(ctx, capReq(valueobject.ScopeTypeOrganization, req.OrgID, ""))
+	if err != nil {
+		return nil, fmt.Errorf("check organization capability %s: %w", req.Capability.ResourceType, err)
+	}
+	if orgResult != nil && orgResult.IsAllowed {
+		return access, nil
+	}
+
+	candidates := access.WorkspaceIDs
+	if access.FullOrganization {
+		if candidates, err = s.workspaceIDsInOrg(ctx, req.OrgID); err != nil {
+			return nil, err
+		}
+	}
+	allowed := make([]string, 0, len(candidates))
+	for _, workspaceID := range candidates {
+		result, err := s.checker.CheckPermission(ctx, capReq(valueobject.ScopeTypeWorkspace, 0, workspaceID))
+		if err != nil {
+			return nil, fmt.Errorf("check capability %s for %q: %w", req.Capability.ResourceType, workspaceID, err)
+		}
+		if result != nil && result.IsAllowed {
+			allowed = append(allowed, workspaceID)
+		}
+	}
+	return &WorkspaceListAccess{HasAccess: true, WorkspaceIDs: allowed}, nil
+}
+
+// HasAnyWorkspace reports whether the access covers at least one workspace.
+// FullOrganization is treated as true without enumerating.
+func (a *WorkspaceListAccess) HasAnyWorkspace() bool {
+	return a != nil && a.HasAccess && (a.FullOrganization || len(a.WorkspaceIDs) > 0)
+}
+
+// AllowsWorkspace reports whether workspaceID is inside the access set.
+func (a *WorkspaceListAccess) AllowsWorkspace(workspaceID string) bool {
+	if a == nil || !a.HasAccess {
+		return false
+	}
+	if a.FullOrganization {
+		return true
+	}
+	for _, id := range a.WorkspaceIDs {
+		if id == workspaceID {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *WorkspaceListAccessService) resolveReadableWorkspaces(
 	ctx context.Context,
 	req WorkspaceListAccessRequest,
 ) (*WorkspaceListAccess, error) {

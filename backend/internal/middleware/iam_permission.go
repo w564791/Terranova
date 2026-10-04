@@ -37,6 +37,13 @@ func NewIAMPermissionMiddlewareWithChecker(checker service.PermissionChecker) *I
 	return &IAMPermissionMiddleware{permissionChecker: checker}
 }
 
+// WithWorkspaceListAccess sets the workspace list resolver (custom wiring /
+// tests outside this package). Returns the receiver for chaining.
+func (m *IAMPermissionMiddleware) WithWorkspaceListAccess(resolver service.WorkspaceListAccessResolver) *IAMPermissionMiddleware {
+	m.workspaceListAccess = resolver
+	return m
+}
+
 // principalFromContext 从 JWT 上下文解析主体（USER / TEAM / APPLICATION）
 // 业务 IAM 不再旁路 system_admin；平台级 API 请使用 RequireSystemAdmin()。
 func principalFromContext(c *gin.Context) (userID string, pt valueobject.PrincipalType, pid string, ok bool) {
@@ -169,6 +176,22 @@ func AuthOrgID(c *gin.Context) (uint, bool) {
 	}
 
 	return 0, false
+}
+
+// EffectiveLevelFromContext returns the effective level computed by the last
+// RequirePermission/RequireAnyPermission that allowed this request (stored as
+// "permission_check_result"), or NONE when absent. Handlers use it to derive
+// UI capability flags (e.g. can_write) or stricter sub-checks without a second
+// permission evaluation.
+func EffectiveLevelFromContext(c *gin.Context) valueobject.PermissionLevel {
+	raw, ok := c.Get("permission_check_result")
+	if !ok {
+		return valueobject.PermissionLevelNone
+	}
+	if result, ok := raw.(*service.CheckPermissionResult); ok && result != nil {
+		return result.EffectiveLevel
+	}
+	return valueobject.PermissionLevelNone
 }
 
 // RequirePermission 要求特定权限的中间件工厂函数
@@ -318,52 +341,29 @@ func (m *IAMPermissionMiddleware) RequirePermission(
 // grant receives 200 even when its currently visible workspace set is empty.
 func (m *IAMPermissionMiddleware) RequireWorkspaceListAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, principalType, principalID, ok := principalFromContext(c)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"code":      401,
-				"message":   "User not authenticated",
-				"timestamp": time.Now(),
-			})
-			c.Abort()
-			return
+		// Optional ?capability=RESOURCE:LEVEL narrows the list server-side to
+		// workspaces where the caller also holds that workspace permission
+		// (e.g. WORKSPACE_RESOURCES:WRITE for the manifest deploy picker).
+		var capability *service.WorkspaceCapability
+		if raw := c.Query("capability"); raw != "" {
+			parsed, err := service.ParseWorkspaceCapability(raw)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code":      400,
+					"message":   "invalid capability: " + err.Error(),
+					"timestamp": time.Now(),
+				})
+				c.Abort()
+				return
+			}
+			capability = parsed
 		}
 
-		orgID, err := resolveOrgScopeID(c)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code":      400,
-				"message":   "invalid org_id",
-				"timestamp": time.Now(),
-			})
-			c.Abort()
-			return
-		}
-		c.Set("auth_org_id", orgID)
-
-		if m.workspaceListAccess == nil {
-			log.Printf("[IAM] workspace list access resolver is not configured")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code":      500,
-				"message":   "Permission check failed",
-				"timestamp": time.Now(),
-			})
-			c.Abort()
-			return
-		}
-
-		access, err := m.workspaceListAccess.ResolveWorkspaceListAccess(c.Request.Context(), service.WorkspaceListAccessRequest{
-			UserID:        userID,
-			PrincipalType: principalType,
-			PrincipalID:   principalID,
-			OrgID:         orgID,
-		})
-		if err != nil {
-			log.Printf("[IAM] workspace list permission check failed for %s/%s in org %d: %v",
-				principalType, principalID, orgID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code":      500,
-				"message":   "Permission check failed",
+		access, status, message := m.resolveWorkspaceListAccess(c, capability)
+		if status != http.StatusOK {
+			c.JSON(status, gin.H{
+				"code":      status,
+				"message":   message,
 				"timestamp": time.Now(),
 			})
 			c.Abort()
@@ -384,6 +384,59 @@ func (m *IAMPermissionMiddleware) RequireWorkspaceListAccess() gin.HandlerFunc {
 		c.Set(service.WorkspaceListAccessContextKey, access)
 		c.Next()
 	}
+}
+
+// HasWorkspaceCapability reports whether the caller can list at least one
+// workspace in the request organization on which it also holds the given
+// capability. It uses exactly the same resolution as
+// GET /workspaces?capability=..., so a UI flag derived from it (the manifest
+// list can_deploy) never disagrees with the workspace picker. It never writes
+// a response; callers decide how to degrade on error.
+func (m *IAMPermissionMiddleware) HasWorkspaceCapability(
+	c *gin.Context, resourceType valueobject.ResourceType, level valueobject.PermissionLevel,
+) (bool, error) {
+	access, status, message := m.resolveWorkspaceListAccess(c, &service.WorkspaceCapability{ResourceType: resourceType, Level: level})
+	if status != http.StatusOK {
+		return false, fmt.Errorf("%d: %s", status, message)
+	}
+	return access.HasAnyWorkspace(), nil
+}
+
+// resolveWorkspaceListAccess resolves principal + org and calls the shared
+// workspace list resolver. It does not write a response: on failure it returns
+// the HTTP status and message for the caller to emit.
+func (m *IAMPermissionMiddleware) resolveWorkspaceListAccess(
+	c *gin.Context, capability *service.WorkspaceCapability,
+) (*service.WorkspaceListAccess, int, string) {
+	userID, principalType, principalID, ok := principalFromContext(c)
+	if !ok {
+		return nil, http.StatusUnauthorized, "User not authenticated"
+	}
+
+	orgID, err := resolveOrgScopeID(c)
+	if err != nil {
+		return nil, http.StatusBadRequest, "invalid org_id"
+	}
+	c.Set("auth_org_id", orgID)
+
+	if m.workspaceListAccess == nil {
+		log.Printf("[IAM] workspace list access resolver is not configured")
+		return nil, http.StatusInternalServerError, "Permission check failed"
+	}
+
+	access, err := m.workspaceListAccess.ResolveWorkspaceListAccess(c.Request.Context(), service.WorkspaceListAccessRequest{
+		UserID:        userID,
+		PrincipalType: principalType,
+		PrincipalID:   principalID,
+		OrgID:         orgID,
+		Capability:    capability,
+	})
+	if err != nil {
+		log.Printf("[IAM] workspace list permission check failed for %s/%s in org %d: %v",
+			principalType, principalID, orgID, err)
+		return nil, http.StatusInternalServerError, "Permission check failed"
+	}
+	return access, http.StatusOK, ""
 }
 
 // CheckWorkspaceOrOrgWorkspacesRead 允许：
@@ -444,8 +497,19 @@ func (m *IAMPermissionMiddleware) CheckWorkspaceOrOrgWorkspacesRead(c *gin.Conte
 
 // RequireWorkspacePermission 在 handler 内部对"运行时才知道的 workspace"做权限校验。
 // 系统管理员不再旁路；需持有对应 Role/grant。
+// Always checks WORKSPACE_MANAGEMENT (task read / run trigger depend on it).
 func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
 	c *gin.Context, workspaceID string, requiredLevel string,
+) bool {
+	return m.RequireWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_MANAGEMENT", requiredLevel)
+}
+
+// RequireWorkspaceResourcePermission is RequireWorkspacePermission for an
+// explicit workspace-level resource type (e.g. WORKSPACE_RESOURCES for
+// manifest install/upgrade/uninstall on a workspace taken from the body or a
+// deployment record). Writes 401/403/500 and returns false on deny.
+func (m *IAMPermissionMiddleware) RequireWorkspaceResourcePermission(
+	c *gin.Context, workspaceID string, resourceType string, requiredLevel string,
 ) bool {
 	userID, principalType, principalID, ok := principalFromContext(c)
 	if !ok {
@@ -455,7 +519,7 @@ func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
 		return false
 	}
 
-	rt, err := valueobject.ParseResourceType("WORKSPACE_MANAGEMENT")
+	rt, err := valueobject.ParseResourceType(resourceType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500, "message": "Invalid resource type", "timestamp": time.Now(),
@@ -489,8 +553,8 @@ func (m *IAMPermissionMiddleware) RequireWorkspacePermission(
 		return false
 	}
 	if !result.IsAllowed {
-		denyMsg := fmt.Sprintf("Permission denied on workspace %s (required: %s, effective: %s)",
-			workspaceID, requiredLevel, result.EffectiveLevel.String())
+		denyMsg := fmt.Sprintf("Permission denied on workspace %s (%s required: %s, effective: %s)",
+			workspaceID, rt, requiredLevel, result.EffectiveLevel.String())
 		c.Set("error", denyMsg)
 		c.JSON(http.StatusForbidden, gin.H{
 			"code": 403, "message": "Permission denied", "deny_reason": result.DenyReason,

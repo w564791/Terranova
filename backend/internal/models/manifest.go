@@ -24,6 +24,13 @@ type Manifest struct {
 	LatestVersion   *ManifestVersion `json:"latest_version,omitempty" gorm:"-"`
 	DeploymentCount int              `json:"deployment_count,omitempty" gorm:"-"`
 	CreatedByName   string           `json:"created_by_name,omitempty" gorm:"-"`
+	// 调用者能力标记(仅 list/get 填充;其他响应为 nil 不输出):
+	//   can_write  = 调用者持有 MANIFESTS WRITE(组织级)
+	//   can_deploy = 调用者在至少一个可见 workspace 上持有 WORKSPACE_RESOURCES WRITE
+	//                (与 GET /workspaces?capability=WORKSPACE_RESOURCES:WRITE 同一判定;
+	//                 MANIFESTS READ/WRITE 永不推出 can_deploy)
+	CanWrite  *bool `json:"can_write,omitempty" gorm:"-"`
+	CanDeploy *bool `json:"can_deploy,omitempty" gorm:"-"`
 }
 
 func (Manifest) TableName() string {

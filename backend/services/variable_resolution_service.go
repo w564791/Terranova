@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 
 	"iac-platform/internal/models"
 
@@ -238,24 +239,53 @@ func (s *VariableResolutionService) ResolveExecutionWithExtra(
 }
 
 // ResolveDisplayWithExtra 与 ResolveDisplay 类似,但接受 manifest deployment 注入的
-// extraVarsetIDs 与 overrides。敏感值仍然 mask。
+// extraVarsetIDs 与 overrides,返回最终生效的变量(每个 key 一条,按 key 排序)。
+//
+// 每条带 Sensitive 标记;敏感变量 Value 恒为空串(绝不预填)。若某 key 在 override
+// 之前的优先级链中是敏感变量,即使被 override 覆盖也保持 sensitive=true 且值为空,
+// 防止通过 preview 回显敏感槽位。
 func (s *VariableResolutionService) ResolveDisplayWithExtra(
 	workspaceID string,
 	extraVarsetIDs []string,
 	overrides map[string]string,
-) (map[string]string, error) {
-	full, err := s.ResolveExecutionWithExtra(workspaceID, extraVarsetIDs, overrides)
+) ([]EffectiveVariable, error) {
+	base, err := s.ResolveExecutionWithExtra(workspaceID, extraVarsetIDs, nil)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]string, len(full))
-	for _, v := range full {
+	sensitiveKeys := make(map[string]bool, len(base))
+	for _, v := range base {
 		if v.Sensitive {
-			out[v.Key] = ""
-			continue
+			sensitiveKeys[v.Key] = true
 		}
-		out[v.Key] = v.Value
 	}
+	full := base
+	if len(overrides) > 0 {
+		if full, err = s.ResolveExecutionWithExtra(workspaceID, extraVarsetIDs, overrides); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]EffectiveVariable, 0, len(full))
+	for _, v := range full {
+		sensitive := v.Sensitive || sensitiveKeys[v.Key]
+		ev := EffectiveVariable{
+			VariableID:   v.VariableID,
+			Key:          v.Key,
+			Version:      v.Version,
+			VariableType: v.VariableType,
+			ValueFormat:  v.ValueFormat,
+			Sensitive:    sensitive,
+			Description:  v.Description,
+		}
+		if _, overridden := overrides[v.Key]; overridden {
+			ev.SourceType = "override"
+		}
+		if !sensitive {
+			ev.Value = v.Value
+		}
+		out = append(out, ev)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil
 }
 
