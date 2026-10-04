@@ -491,56 +491,101 @@ module "ec2_web" {
 
 ## 八、API 设计
 
-### 8.1 认证与权限
+### 8.1 认证与权限（MANIFESTS IAM，已实现）
 
-**所有接口都需要认证**
+所有接口都需要认证（JWT / API Token），授权全部走现有 role-policy IAM（`RequirePermission` / `RequireAnyPermission` + PermissionChecker），不再使用 `SYSTEM_SETTINGS` / `ORGANIZATION_MANAGEMENT` 作为替代。
 
-| 操作类型 | HTTP 方法 | 权限要求 |
-|---------|----------|---------|
-| 只读操作 | GET | `MANIFESTS` READ 或 `ORGANIZATION_MANAGEMENT` READ |
-| 写操作 | POST/PUT/DELETE | `MANIFESTS` WRITE 或 `ORGANIZATION_MANAGEMENT` WRITE |
-| 部署操作 | POST (deploy) | `WORKSPACE_RESOURCES` WRITE |
+`MANIFESTS` 是 **ORGANIZATION 级**资源类型（`valueobject.ResourceTypeManifests`），由迁移 `20261004_01_manifest_iam_resource`（`backend/internal/migration/manifests_iam.go`，同内容 SQL：`backend/migrations/add_manifest_iam_permissions.sql`）注册为 `orgpm-manifests`。内置角色授权（ORGANIZATION 作用域，与 MODULES 一致）：
+
+| 内置角色 | MANIFESTS |
+|---------|-----------|
+| admin / org_admin | ADMIN |
+| developer / viewer / user | READ |
+
+> 同一迁移顺带注册了此前缺失的 `orgpm-variable-sets`（VARIABLE_SETS：admin/org_admin ADMIN，viewer READ，与 RUN_TASKS 一致），否则所有 `/variable-sets` 路由对非超管均 403。
+
+| 操作 | 权限要求 |
+|------|---------|
+| 目录/详情/文件/版本/diff/导出/provider-schemas 读取 | `MANIFESTS` READ |
+| 创建、更新、文件写入/移动/删除、draft reset、发布版本 | `MANIFESTS` WRITE |
+| 删除 Manifest、归档/取消归档（`PUT /:id` 修改 `status` 进出 `archived`） | `MANIFESTS` ADMIN |
+| 部署列表/详情/预览/安装/升级/卸载（路由层） | `MANIFESTS` READ |
+| 安装 / 升级 / 卸载（handler 内对**目标 workspace**） | `WORKSPACE_RESOURCES` WRITE（workspace 作用域，或 org 级 `WORKSPACE_MANAGEMENT` 等价上级） |
+| 部署详情 | 目标 workspace 可读 |
+| 变量预览 | 目标 workspace `WORKSPACE_VARIABLES` READ |
+| `/manifest-editor/*`（模块、demo、inputs） | `MODULES` READ |
+| `GET /variable-sets/:varset_id/manifest-deployments` | `VARIABLE_SETS` READ |
+
+`MANIFESTS` READ **不**隐含任何部署能力；部署能力只来自目标 workspace 上的 `WORKSPACE_RESOURCES` WRITE。部署相关接口都会校验 manifest 属于当前认证 org（否则 404）。
+
+#### 前端约定字段
+
+| 字段 | 位置 | 含义 |
+|------|------|------|
+| `can_write` | `GET /organizations/:org_id/manifests` 列表项与 `GET .../manifests/:id` | 调用者 MANIFESTS 有效级别 ≥ WRITE（显示编辑/发布入口） |
+| `can_deploy` | 同上 | 调用者至少在一个可读 workspace 上拥有 `WORKSPACE_RESOURCES` WRITE（与 `capability` 过滤同一判定；显示"部署"入口） |
+| `capability` | `GET /api/v1/workspaces?capability=WORKSPACE_RESOURCES:WRITE` | 部署目标选择器：仅返回调用者可读**且**具备该能力的 workspace。格式 `RESOURCE_TYPE:LEVEL`，资源必须是 workspace 级，LEVEL ∈ READ/WRITE/ADMIN；未知值返回 **400** |
+| `sensitive` | `POST .../v2/deployments/:deployment_id/variable-preview` 响应 `{"variables":[{key,value,sensitive,source_type,...}]}` | 敏感变量 `value` 恒为空串（含被 override 覆盖的敏感 key），前端显示为掩码 |
+
+补充：
+- `GET /api/v1/variable-sets?workspace_id=<ws>`：只返回该 workspace 可挂载的变量集（global + 分配给该 workspace 或其 project 的）；调用者需能读该 workspace（且属于当前 org，否则 404/403）。安装/升级/预览时提交不可挂载的 varset 返回 400。
+- 部署列表按调用者可读 workspace 在服务端过滤；调用者**没有任何可读 workspace** 时返回 **403**（复用 `RequireWorkspaceListAccess` 的语义），而非空列表。
+- 没有批量文件 API：文件操作只有 `PUT/DELETE /files/*path` 与 `_move` / `_move_dir` / `_delete_dir`。
 
 ### 8.2 Manifest CRUD（Organization 级别）
 
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| GET | `/api/v1/organizations/:org_id/manifests` | 列表 | READ |
-| POST | `/api/v1/organizations/:org_id/manifests` | 创建 | WRITE |
-| GET | `/api/v1/organizations/:org_id/manifests/:id` | 详情 | READ |
-| PUT | `/api/v1/organizations/:org_id/manifests/:id` | 更新 | WRITE |
-| DELETE | `/api/v1/organizations/:org_id/manifests/:id` | 删除 | WRITE |
-
-### 8.3 版本管理
+前缀 `/api/v1/organizations/:org_id/manifests`
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| GET | `/api/v1/organizations/:org_id/manifests/:id/versions` | 版本列表 | READ |
-| POST | `/api/v1/organizations/:org_id/manifests/:id/versions` | 发布版本 | WRITE |
-| GET | `/api/v1/organizations/:org_id/manifests/:id/versions/:version_id` | 版本详情 | READ |
+| GET | `` | 列表（含 `can_write`/`can_deploy`） | MANIFESTS READ |
+| POST | `` | 创建 | MANIFESTS WRITE |
+| GET | `/:id` | 详情（含 `can_write`/`can_deploy`） | MANIFESTS READ |
+| PUT | `/:id` | 更新；`status` 进出 `archived` 需 ADMIN | MANIFESTS WRITE（归档 ADMIN） |
+| DELETE | `/:id` | 删除 | MANIFESTS ADMIN |
+| GET | `/:id/export-zip` | 导出 zip | MANIFESTS READ |
 
-### 8.4 部署管理
+### 8.3 文件与版本（v2）
 
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| GET | `/api/v1/organizations/:org_id/manifests/:id/deployments` | 部署列表 | READ |
-| POST | `/api/v1/organizations/:org_id/manifests/:id/deployments` | 创建部署 | WRITE |
-| GET | `/api/v1/organizations/:org_id/manifests/:id/deployments/:deployment_id` | 部署详情 | READ |
-| PUT | `/api/v1/organizations/:org_id/manifests/:id/deployments/:deployment_id` | 更新部署 | WRITE |
-| DELETE | `/api/v1/organizations/:org_id/manifests/:id/deployments/:deployment_id` | 删除部署 | WRITE |
-
-### 8.5 Workspace 视角
+前缀 `/api/v1/organizations/:org_id/manifests/:id`
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| GET | `/api/v1/workspaces/:workspace_id/manifest-deployment` | 获取当前部署 | READ |
+| GET | `/provider-schemas` | provider schema | MANIFESTS READ |
+| GET | `/files`、`/files/*path` | 文件树 / 文件内容 | MANIFESTS READ |
+| PUT / DELETE | `/files/*path` | 写入 / 删除文件 | MANIFESTS WRITE |
+| POST | `/files/_move`、`/files/_move_dir`、`/files/_delete_dir` | 移动 / 目录操作 | MANIFESTS WRITE |
+| POST | `/draft/_reset_from` | 从版本重置 draft | MANIFESTS WRITE |
+| POST | `/draft/_export` | 导出 draft | MANIFESTS READ |
+| GET | `/v2/versions`、`/v2/versions/:version_id` | 版本列表 / 详情 | MANIFESTS READ |
+| POST | `/v2/versions` | 发布版本 | MANIFESTS WRITE |
+| GET | `/v2/versions/:version_id/diff`、`/v2/versions/:version_id/workdirs`、`/v2/draft/diff` | diff / workdirs | MANIFESTS READ |
+| POST | `/v2/versions/:version_id/files/_export` | 导出版本文件 | MANIFESTS READ |
+
+### 8.4 部署管理（v2）
+
+前缀 `/api/v1/organizations/:org_id/manifests/:id`
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/v2/deployments` | 部署列表（按可读 workspace 过滤；无可读 workspace → 403） | MANIFESTS READ + workspace 列表访问 |
+| GET | `/v2/deployments/:deployment_id` | 部署详情 | MANIFESTS READ + 目标 workspace 可读 |
+| POST | `/v2/deployments/install` | 安装到 body 中的 workspace | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
+| POST | `/v2/deployments/:deployment_id/upgrade` | 升级 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
+| POST | `/v2/deployments/:deployment_id/uninstall` | 卸载 | MANIFESTS READ + 目标 `WORKSPACE_RESOURCES` WRITE |
+| POST | `/v2/deployments/:deployment_id/variable-preview` | 变量预览（`sensitive` 掩码） | MANIFESTS READ + 目标 `WORKSPACE_VARIABLES` READ |
+
+### 8.5 其它视角
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/api/v1/workspaces/:id/manifest-summary` | workspace 上的 manifest 摘要 | WORKSPACES READ(org) 或 WORKSPACE_MANAGEMENT READ(ws)（未改动） |
+| GET | `/api/v1/variable-sets/:varset_id/manifest-deployments` | 变量集被哪些部署引用 | VARIABLE_SETS READ |
+| GET | `/api/v1/manifest-editor/modules`、`/modules/:module_id/demos`、`/modules/:module_id/inputs` | 编辑器模块数据 | MODULES READ |
 
 ### 8.6 Import/Export
 
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| POST | `/api/v1/organizations/:org_id/manifests/import` | 导入 HCL | WRITE |
-| GET | `/api/v1/organizations/:org_id/manifests/:id/export` | 导出 HCL | READ |
+旧的 HCL/JSON import 接口已不在路由中；导出通过 `GET /:id/export-zip`、`POST /draft/_export`、`POST /v2/versions/:version_id/files/_export`（均 MANIFESTS READ）。
 
 ### 8.7 部署时复用现有接口
 
