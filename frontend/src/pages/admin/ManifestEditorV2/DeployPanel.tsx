@@ -25,6 +25,11 @@
  * 覆盖输入 / 敏感 / 移除覆盖全部禁用,不发 variable_overrides / unset_keys。
  * upgrade 预览 403 => 显示"无变量查看权限",仍可只换版本。
  *
+ * 不可变 bundle:bundle_hash 为空(或 hash_mismatch)的版本在版本下拉中禁用并标注"需重新发布";
+ * install / 预览 / upgrade 返回 409 bundle_republish_required 时提示"该版本需要重新发布"并重拉版本
+ * (列表只返回已存值,看似正常的版本也可能 409;该版本随后在本面板内禁用)。
+ * 从此类版本升级走、卸载不受影响。
+ *
  * 加载分两步(避免一打开就拉全量):
  *   1. 打开时只拉版本、部署记录、可写 workspace(GET /workspaces?capability=WORKSPACE_RESOURCES:WRITE)
  *   2. 选定 workspace 后才拉该 workspace 可挂载的 varset(GET /variable-sets?workspace_id=)与变量预览
@@ -53,6 +58,13 @@ import {
   type DeploymentOverrideView,
   type OverrideInputs,
 } from './manifestApi'
+import BundleStatusTag from './BundleStatusTag'
+import {
+  REPUBLISH_REQUIRED_MESSAGE,
+  bundleStatusLabel,
+  isBundleRepublishRequired,
+  versionNeedsRepublish,
+} from './bundleStatus'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import { getHttpStatus } from '../../../services/api'
 import { variableSetService, type VariableSet } from '../../../services/variableSets'
@@ -270,6 +282,7 @@ const SENSITIVE_PLACEHOLDER = '敏感值，不回显'
 const VALUE_SET_PLACEHOLDER = '已设置'
 
 function errorText(err: unknown): string {
+  if (isBundleRepublishRequired(err)) return REPUBLISH_REQUIRED_MESSAGE
   if (isManifestTargetNotFound(err)) return MANIFEST_TARGET_NOT_FOUND_MESSAGE
   const msg = typeof err === 'string' ? err : (err as Error)?.message
   return msg ?? '未知错误'
@@ -451,6 +464,36 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [overrideEdits, setOverrideEdits] = useState<Record<string, string>>({})
   const [sensitiveMarks, setSensitiveMarks] = useState<Set<string>>(() => new Set())
   const [unsetKeys, setUnsetKeys] = useState<Set<string>>(() => new Set())
+  // 部署路径上返回过 409 bundle_republish_required 的版本(列表里可能仍显示为正常)
+  const [republishIds, setRepublishIds] = useState<Set<string>>(() => new Set())
+
+  const isDeployable = useCallback(
+    (v: ManifestVersion) => !versionNeedsRepublish(v) && !republishIds.has(v.id),
+    [republishIds],
+  )
+
+  // 写入版本列表并修正选中项:选中的版本不存在或需重新发布时,改选第一个可部署的版本
+  const applyVersions = useCallback((v: ManifestVersion[]) => {
+    setVersions(v)
+    setVersionId((cur) => {
+      const keep = cur ? v.find((x) => x.id === cur) : undefined
+      if (keep && !versionNeedsRepublish(keep)) return cur
+      return v.find((x) => !versionNeedsRepublish(x))?.id
+    })
+  }, [])
+
+  // 409 bundle_republish_required:记下该版本(本面板内禁用)并重拉版本列表
+  const handleRepublishRequired = useCallback(
+    (err: unknown, fallbackVersionId?: string) => {
+      const data = (err as { data?: { version_id?: unknown } } | null)?.data
+      const vid = typeof data?.version_id === 'string' && data.version_id ? data.version_id : fallbackVersionId
+      if (vid) setRepublishIds((prev) => (prev.has(vid) ? prev : new Set(prev).add(vid)))
+      listVersions(ctx)
+        .then(applyVersions)
+        .catch(() => {})
+    },
+    [ctx, applyVersions],
+  )
 
   // 第一步:只拉版本 / 部署记录 / 可写 workspace(部署目标只列有 WORKSPACE_RESOURCES WRITE 的)
   useEffect(() => {
@@ -467,13 +510,12 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
         .catch(() => []),
     ])
       .then(([v, d, w]) => {
-        setVersions(v)
+        applyVersions(v)
         setDeployments(d)
         setWorkspaces(w)
-        if (v.length > 0) setVersionId(v[0].id)
       })
       .finally(() => setLoading(false))
-  }, [ctx])
+  }, [ctx, applyVersions])
 
   // 第二步:选定 workspace 后才拉它可挂载的 varset;切换 workspace 时重拉
   useEffect(() => {
@@ -609,6 +651,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
           setPreviewForbidden(true)
           return
         }
+        if (isBundleRepublishRequired(err)) {
+          // upgrade 预览未带 target 时预览的是当前版本
+          handleRepublishRequired(err, versionId ?? activeDeploymentForWs?.version_id)
+        }
         setPreviewError(errorText(err))
       })
       .finally(() => {
@@ -617,7 +663,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return () => {
       cancelled = true
     }
-  }, [ctx, activeDeploymentForWs, unsetKeysForPreview, workspaceId, versionId, varsetEntries])
+  }, [ctx, activeDeploymentForWs, unsetKeysForPreview, workspaceId, versionId, varsetEntries, handleRepublishRequired])
 
   const overrideByKey = useMemo(
     () => new Map(existingOverrides.map((o) => [o.key, o])),
@@ -778,6 +824,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
       }
       return true
     } catch (err) {
+      if (isBundleRepublishRequired(err)) handleRepublishRequired(err, versionId)
       setSubmitError(`${andRun ? '部署并运行' : 'Install'} 失败: ${errorText(err)}`)
       return false
     } finally {
@@ -811,6 +858,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
         handleClose()
       }
     } catch (err) {
+      if (isBundleRepublishRequired(err)) {
+        handleRepublishRequired(err, versionId)
+        setSubmitError(`${andRun ? '更新并运行' : '更新'} 失败: ${REPUBLISH_REQUIRED_MESSAGE}`)
+        return
+      }
       const msg = typeof err === 'string' ? err : (err as Error)?.message
       setSubmitError(`${andRun ? '更新并运行' : '更新'} 失败: ${msg ?? '未知错误'}`)
     } finally {
@@ -864,7 +916,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   }
 
   // 无变量写权限时须先拿到已存 varset 才能原样回传,否则会被后端视为变更(403)
-  const upgradeBlocked = submitting || (!canWriteVariables && !currentVarsetsLoaded)
+  // 选中的版本需重新发布(或尚未选中)=> install / upgrade 到它会 409,直接禁用
+  const selectedVersion = useMemo(() => versions.find((v) => v.id === versionId), [versions, versionId])
+  const selectedNotDeployable = !selectedVersion || !isDeployable(selectedVersion)
+  const upgradeBlocked = submitting || selectedNotDeployable || (!canWriteVariables && !currentVarsetsLoaded)
+  const installBlocked = submitting || selectedNotDeployable
 
   // 底栏按钮
   const renderFooter = () => {
@@ -924,11 +980,11 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     return (
       <div style={footerStyle}>
         <button style={btnSecondaryStyle} onClick={handleClose}>取消</button>
-        <button style={btnSecondaryStyle} onClick={() => void doInstall(false)} disabled={submitting}>
+        <button style={btnSecondaryStyle} onClick={() => void doInstall(false)} disabled={installBlocked}>
           {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
           Install
         </button>
-        <button style={btnPrimaryStyle} onClick={() => void doInstall(true)} disabled={submitting}>
+        <button style={btnPrimaryStyle} onClick={() => void doInstall(true)} disabled={installBlocked}>
           {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
           部署并运行 (Plan+Apply)
         </button>
@@ -969,10 +1025,32 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
             onChange={(e) => setVersionId(e.target.value || undefined)}
             disabled={loading || versions.length === 0}
           >
-            {versions.map((v) => (
-              <option key={v.id} value={v.id}>{v.version}</option>
-            ))}
+            {versions.map((v) => {
+              // 原生 option 放不下 Tag:后缀文案 + title 作为提示,并禁用(install / upgrade 目标都不可选)
+              const status =
+                bundleStatusLabel(v) ??
+                (republishIds.has(v.id) ? { label: '需重新发布', tooltip: REPUBLISH_REQUIRED_MESSAGE } : null)
+              return (
+                <option key={v.id} value={v.id} disabled={!!status} title={status?.tooltip}>
+                  {status ? `${v.version} (${status.label})` : v.version}
+                </option>
+              )
+            })}
           </select>
+          {selectedVersion && !isDeployable(selectedVersion) && (
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#cca700' }}>
+              {versionNeedsRepublish(selectedVersion) ? (
+                <BundleStatusTag version={selectedVersion} />
+              ) : null}
+              <span>{REPUBLISH_REQUIRED_MESSAGE}</span>
+            </div>
+          )}
+          {!loading && versions.length > 0 && !versions.some(isDeployable) && (
+            <div style={{ ...warnBoxStyle, marginTop: 6, marginBottom: 0 }}>
+              <i className="codicon codicon-warning" />
+              <span>所有已发布版本都需要重新发布,请先发布新版本</span>
+            </div>
+          )}
           {versionId && selectedVersionVars.length > 0 && (
             <div style={varBoxStyle}>
               <div style={varLabelStyle}>
@@ -1037,6 +1115,10 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
                 {versions.find((v) => v.id === activeDeploymentForWs.version_id)?.version ??
                   activeDeploymentForWs.version_id}
               </span>
+              {(() => {
+                const cur = versions.find((v) => v.id === activeDeploymentForWs.version_id)
+                return cur ? <BundleStatusTag version={cur} /> : null
+              })()}
             </div>
           )}
         </div>

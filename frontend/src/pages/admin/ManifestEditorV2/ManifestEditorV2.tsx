@@ -37,6 +37,8 @@ import RunDialog from './RunDialog'
 import SearchPanel from './SearchPanel'
 import ProblemsPanel, { type ProblemItem } from './ProblemsPanel'
 import { collectManifestProblems } from './collectProblems'
+import BundleStatusTag from './BundleStatusTag'
+import type { PublishProblem } from './bundleStatus'
 import QuickOpen from './QuickOpen'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
 import ManifestAiTools, { type EditorBridge, type CheckFile } from './ManifestAiTools'
@@ -486,6 +488,9 @@ export default function ManifestEditorV2() {
   const [searchShowReplace, setSearchShowReplace] = useState(false) // Cmd+Shift+H 进来时默认展开替换
   const [quickOpen, setQuickOpen] = useState(false)
   const [problems, setProblems] = useState<ProblemItem[]>([])
+  // 发布被 bundle 规则拒绝(422)的问题:与 Monaco markers 分开存,下次发布尝试时清空
+  const [publishProblems, setPublishProblems] = useState<ProblemItem[]>([])
+  const allProblems = useMemo(() => [...publishProblems, ...problems], [publishProblems, problems])
   const problemTickRef = useRef(0)
   const gutterDiffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 侧栏宽度可拖拽(VS Code 行为),限 170–600px
@@ -3056,7 +3061,7 @@ export default function ManifestEditorV2() {
         )}
         {activeView === 'problems' && (
           <ProblemsPanel
-            problems={problems}
+            problems={allProblems}
             onOpenAt={(p, line, col, endCol) => void openAt(p, line, col, endCol)}
           />
         )}
@@ -3312,6 +3317,7 @@ export default function ManifestEditorV2() {
                         <i className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ color: '#858585' }} />
                         <i className="codicon codicon-tag" style={{ color: '#4ec9b0' }} />
                         <span className={styles.versionTag}>{v.version}</span>
+                        <BundleStatusTag version={v} />
                         <i
                           className={`codicon codicon-cloud-download ${styles.versionExport}`}
                           title="导出该版本为 zip"
@@ -3465,8 +3471,8 @@ export default function ManifestEditorV2() {
             setActiveView('problems')
           }}
         >
-          <i className="codicon codicon-error" /> {problems.filter((p) => p.severity === monaco.MarkerSeverity.Error).length}
-          <i className="codicon codicon-warning" style={{ marginLeft: 6 }} /> {problems.filter((p) => p.severity === monaco.MarkerSeverity.Warning).length}
+          <i className="codicon codicon-error" /> {allProblems.filter((p) => p.severity === monaco.MarkerSeverity.Error).length}
+          <i className="codicon codicon-warning" style={{ marginLeft: 6 }} /> {allProblems.filter((p) => p.severity === monaco.MarkerSeverity.Warning).length}
         </span>
         <div className={styles.spacer} />
         {pasteProgress && (
@@ -3569,7 +3575,30 @@ export default function ManifestEditorV2() {
         }}
         onSkipCheck={() => setPublishCheckSummary({ done: false, skipped: true, issues: [] })}
         onClose={() => setPublishOpen(false)}
+        onPublishAttempt={() => setPublishProblems([])}
+        onPublishRejected={(list: PublishProblem[]) => {
+          // 只含规则名 / 路径 / 行号,不含文件内容;点击条目复用 ProblemsPanel 的 openAt 定位
+          setPublishProblems(
+            list.map((p) => {
+              const line = p.line ?? 1
+              return {
+                path: p.file,
+                severity: monaco.MarkerSeverity.Error,
+                message: `${p.rule}: ${p.message}`,
+                startLineNumber: line,
+                startColumn: 1,
+                endLineNumber: line,
+                endColumn: 1,
+                owner: 'publish',
+                source: 'publish',
+              }
+            }),
+          )
+          setActiveView('problems')
+          message.error(`发布被拒绝：${list.length} 个问题`, 6)
+        }}
         onPublished={(v, meta) => {
+          setPublishProblems([])
           // 发布成功提示放在父组件(对话框 portal 已关,antd message 更稳定)
           const ver = v.version || '新版本'
           if (meta?.autoUpdateCount && meta.autoUpdateCount > 0) {

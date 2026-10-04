@@ -24,6 +24,7 @@ import {
 } from './manifestApi'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import type { ManifestIssue } from '../../../services/manifestAi'
+import { parsePublishProblems, type PublishProblem } from './bundleStatus'
 
 export interface PublishCheckSummary {
   done: boolean
@@ -40,6 +41,13 @@ interface Props {
   onClose: () => void
   /** 仅在发布 API 成功后调用;autoUpdateCount 为本次勾选并后台更新的 workspace 数 */
   onPublished?: (version: ManifestVersion, meta?: { autoUpdateCount: number }) => void
+  /** 每次发起发布前调用(父组件清空上一次的发布问题) */
+  onPublishAttempt?: () => void
+  /**
+   * 发布被 bundle 规则拒绝(422 + problems)。父组件把问题推入 Problems 面板;
+   * problems 只含规则名 / 路径,不含文件内容。对话框随后关闭以便点击问题定位。
+   */
+  onPublishRejected?: (problems: PublishProblem[]) => void
 }
 
 const SEMVER_RE = /^v\d+\.\d+\.\d+$/
@@ -231,6 +239,8 @@ export default function PublishVersionDialog({
   onSkipCheck,
   onClose,
   onPublished,
+  onPublishAttempt,
+  onPublishRejected,
 }: Props) {
   const { orgId, manifestId } = ctx
   const [version, setVersion] = useState('v1.0.0')
@@ -342,6 +352,7 @@ export default function PublishVersionDialog({
     setVersionError(null)
     setSubmitError(null)
     setProgress(null)
+    onPublishAttempt?.()
     try {
       setSubmitting(true)
       setProgress('正在发布版本…')
@@ -379,6 +390,18 @@ export default function PublishVersionDialog({
       onPublished?.(v, { autoUpdateCount: selected.length })
       onClose()
     } catch (err) {
+      // 422 bundle 规则拒绝:问题交给 Problems 面板(只含规则名 / 路径,不展示任何文件内容)
+      const problems = parsePublishProblems(err)
+      if (problems) {
+        const summary = `发布被拒绝：${problems.length} 个问题`
+        if (onPublishRejected) {
+          onPublishRejected(problems)
+          onClose()
+        } else {
+          setSubmitError(summary)
+        }
+        return
+      }
       // 仅发布本身失败才展示错误
       const msg = typeof err === 'string' ? err : (err as Error)?.message
       if (msg) setSubmitError(`发布失败: ${msg}`)

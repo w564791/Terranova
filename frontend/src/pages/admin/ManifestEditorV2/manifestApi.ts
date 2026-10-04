@@ -180,6 +180,10 @@ export interface ManifestVersion {
   version: string
   changelog: string
   variables?: ManifestVariableMeta[] | null
+  /** 不可变 bundle 哈希;null = 无合法 bundle,部署路径 409 bundle_republish_required,需重新发布 */
+  bundle_hash?: string | null
+  /** 无合法 bundle 的原因(规则名 + 路径,如 `secret_scan:aws_access_key @ main.tf`,或 `hash_mismatch`) */
+  bundle_invalid_reason?: string | null
   created_by: string
   created_at: string
 }

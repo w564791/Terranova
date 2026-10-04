@@ -15,7 +15,12 @@ export interface ProblemItem {
   endLineNumber: number
   endColumn: number
   owner: string
+  /** 来源标记(如 'publish' = 发布被 bundle 规则拒绝);缺省为 Monaco markers */
+  source?: string
 }
+
+/** path 为空的问题(bundle 级规则)无文件可跳转 */
+const NO_FILE_LABEL = '(整个 bundle)'
 
 interface Props {
   problems: ProblemItem[]
@@ -66,7 +71,7 @@ export default function ProblemsPanel({ problems, onOpenAt }: Props) {
             <div key={path} className={styles.problemsFileGroup}>
               <div className={styles.problemsFilePath}>
                 <i className="codicon codicon-file-code" />
-                <span title={path}>{path}</span>
+                <span title={path || NO_FILE_LABEL}>{path || NO_FILE_LABEL}</span>
                 <span className={styles.problemsFileCount}>{items.length}</span>
               </div>
               {items.map((item, i) => {
@@ -76,10 +81,10 @@ export default function ProblemsPanel({ problems, onOpenAt }: Props) {
                     key={`${path}-${item.startLineNumber}-${item.startColumn}-${i}`}
                     className={styles.problemsItem}
                     role="button"
-                    onClick={() =>
-                      onOpenAt(item.path, item.startLineNumber, item.startColumn, item.endColumn)
-                    }
-                    title={item.message}
+                    onClick={() => {
+                      if (item.path) onOpenAt(item.path, item.startLineNumber, item.startColumn, item.endColumn)
+                    }}
+                    title={item.source ? `[${item.source}] ${item.message}` : item.message}
                   >
                     <i className={`codicon ${sev.icon}`} style={{ color: sev.color }} />
                     <span className={styles.problemsMsg}>{item.message}</span>
