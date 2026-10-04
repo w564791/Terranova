@@ -1,5 +1,12 @@
 basePath: /
 definitions:
+  manifestbundle.Problem:
+    properties:
+      path:
+        type: string
+      rule:
+        type: string
+    type: object
   middleware.InternalErrorResponse:
     properties:
       code:
@@ -692,6 +699,34 @@ definitions:
     - principal_type
     - scope_id
     - scope_type
+    type: object
+  handlers.BundleRepublishRequiredResponse:
+    properties:
+      code:
+        example: bundle_republish_required
+        type: string
+      error:
+        example: this version has no valid bundle; please republish it
+        type: string
+      reason:
+        example: denylisted_file @ prod.tfvars
+        type: string
+      version_id:
+        example: mfv-01hxyz
+        type: string
+    type: object
+  handlers.BundleRulesViolatedResponse:
+    properties:
+      code:
+        example: bundle_rules_violated
+        type: string
+      error:
+        example: draft violates the bundle rules
+        type: string
+      problems:
+        items:
+          $ref: '#/definitions/manifestbundle.Problem'
+        type: array
     type: object
   handlers.ChangePasswordRequest:
     properties:
@@ -16459,8 +16494,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Unbind manifest from workspace and clear related workspace resources
-        (does not destroy cloud resources)
+      description: Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources). Not blocked when the deployed version has no valid bundle.
       parameters:
       - description: Organization ID
         in: path
@@ -16513,7 +16547,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Switch deployment version and varsets; reconcile workspace resources
+      description: Switch deployment version and varsets; reconcile workspace resources. The target version must have a valid bundle (409 bundle_republish_required); upgrading away from a version without one is allowed.
       parameters:
       - description: Organization ID
         in: path
@@ -16577,8 +16611,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Preview non-sensitive merged variable values for install/upgrade
-        dialogs
+      description: Preview merged variables with a per-variable sensitive flag; sensitive values are always empty. The previewed version (target, else current) must have a valid bundle (409 bundle_republish_required).
       parameters:
       - description: Organization ID
         in: path
@@ -16620,6 +16653,10 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.BundleRepublishRequiredResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -16633,8 +16670,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Preview merged variables for installing a published version into
-        a workspace (no deployment yet); sensitive values are always empty
+      description: Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty. The version must have a valid bundle (409 bundle_republish_required).
       parameters:
       - description: Organization ID
         in: path
@@ -16675,6 +16711,10 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.BundleRepublishRequiredResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -16688,7 +16728,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Install a published version onto an empty workspace
+      description: Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required.
       parameters:
       - description: Organization ID
         in: path
@@ -16776,7 +16816,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: List published versions for a manifest (SemVer descending)
+      description: List published versions for a manifest (SemVer descending). Each version carries bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths only, null when valid).
       parameters:
       - description: Organization ID
         in: path
@@ -16809,8 +16849,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Snapshot the current user's draft into a new published version
-        (vX.Y.Z)
+      description: Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; problems hold rule names and paths only.
       parameters:
       - description: Organization ID
         in: path
@@ -16856,6 +16895,10 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.BundleRulesViolatedResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -16870,7 +16913,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a published version detail by version ID
+      description: Get a published version detail by version ID, including bundle_hash and bundle_invalid_reason
       parameters:
       - description: Organization ID
         in: path

@@ -35,6 +35,7 @@ func setupFirstInstallPreview(t *testing.T, levels map[valueobject.ResourceType]
 			t.Fatalf("%v\n%s", err, stmt)
 		}
 	}
+	sealFixtureVersions(t, db)
 	checker := &resourceChecker{levels: levels}
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	r := gin.New()
@@ -145,6 +146,7 @@ func TestInstall_SharesTargetValidation(t *testing.T) {
 			t.Fatalf("%v\n%s", err, stmt)
 		}
 	}
+	sealFixtureVersions(t, db)
 	checker := &resourceChecker{levels: map[valueobject.ResourceType]valueobject.PermissionLevel{
 		valueobject.ResourceTypeWorkspaceResources: valueobject.PermissionLevelWrite,
 	}}

@@ -288,6 +288,7 @@ func TestVariablePreview_SensitiveValuesAreNeverPrefilled(t *testing.T) {
 			t.Fatalf("%v\n%s", err, stmt)
 		}
 	}
+	sealFixtureVersions(t, db)
 	checker := &resourceChecker{levels: map[valueobject.ResourceType]valueobject.PermissionLevel{
 		valueobject.ResourceTypeWorkspaceVars: valueobject.PermissionLevelRead,
 	}}

@@ -61,6 +61,7 @@ variable "region" {
 			t.Fatalf("%v\n%s", err, stmt)
 		}
 	}
+	sealFixtureVersions(t, db)
 	return db
 }
 

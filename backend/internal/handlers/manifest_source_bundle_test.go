@@ -95,7 +95,7 @@ func TestPublishVersionRecordsBundleHash(t *testing.T) {
 	for _, stmt := range []string{
 		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, source_type TEXT NOT NULL DEFAULT 'native', git_repo_url TEXT, git_subpath TEXT, github_installation_id INTEGER, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO manifests (id, organization_id, name, status, created_by) VALUES ('mf-1', 1, 'm1', 'draft', 'u1')`,
-		`CREATE TABLE manifest_versions (id TEXT PRIMARY KEY, manifest_id TEXT, version TEXT, variables TEXT, changelog TEXT, bundle_hash TEXT, source_ref TEXT, created_by TEXT, created_at DATETIME)`,
+		`CREATE TABLE manifest_versions (id TEXT PRIMARY KEY, manifest_id TEXT, version TEXT, variables TEXT, changelog TEXT, bundle_hash TEXT, bundle_invalid_reason TEXT, source_ref TEXT, created_by TEXT, created_at DATETIME)`,
 		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO manifest_files (manifest_id, version_id, owner_user_id, path, content, mime, size, is_binary, mode) VALUES
 		   ('mf-1', NULL, 'u1', 'main.tf', CAST('variable "x" {}' AS BLOB), 'text/plain', 15, 0, 420),
@@ -115,9 +115,6 @@ func TestPublishVersionRecordsBundleHash(t *testing.T) {
 	}
 	var resp map[string]interface{}
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if _, ok := resp["bundle_hash"]; ok {
-		t.Fatal("publish response must not change in this step")
-	}
 
 	var v models.ManifestVersion
 	if err := db.First(&v, "id = ?", resp["id"]).Error; err != nil {
@@ -127,6 +124,9 @@ func TestPublishVersionRecordsBundleHash(t *testing.T) {
 		{Path: "main.tf", Content: []byte(`variable "x" {}`)},
 		{Path: "mod/a.tf", Content: []byte{0x00, 0xff}},
 	})
+	if resp["bundle_hash"] != want {
+		t.Fatalf("publish response bundle_hash = %v, want %s", resp["bundle_hash"], want)
+	}
 	if v.BundleHash == nil || *v.BundleHash != want {
 		t.Fatalf("bundle_hash = %v, want %s (caller's draft only)", v.BundleHash, want)
 	}

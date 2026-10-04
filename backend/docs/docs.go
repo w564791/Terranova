@@ -16755,7 +16755,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty",
+                "description": "Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty. The version must have a valid bundle (409 bundle_republish_required).",
                 "consumes": [
                     "application/json"
                 ],
@@ -16820,6 +16820,12 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BundleRepublishRequiredResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -16836,7 +16842,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Install a published version onto an empty workspace",
+                "description": "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required.",
                 "consumes": [
                     "application/json"
                 ],
@@ -16982,7 +16988,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources)",
+                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources). Not blocked when the deployed version has no valid bundle.",
                 "consumes": [
                     "application/json"
                 ],
@@ -17061,7 +17067,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Switch deployment version and varsets; reconcile workspace resources",
+                "description": "Switch deployment version and varsets; reconcile workspace resources. The target version must have a valid bundle (409 bundle_republish_required); upgrading away from a version without one is allowed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -17156,7 +17162,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Preview non-sensitive merged variable values for install/upgrade dialogs",
+                "description": "Preview merged variables with a per-variable sensitive flag; sensitive values are always empty. The previewed version (target, else current) must have a valid bundle (409 bundle_republish_required).",
                 "consumes": [
                     "application/json"
                 ],
@@ -17219,6 +17225,12 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BundleRepublishRequiredResponse"
                         }
                     },
                     "500": {
@@ -17288,7 +17300,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "List published versions for a manifest (SemVer descending)",
+                "description": "List published versions for a manifest (SemVer descending). Each version carries bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths only, null when valid).",
                 "consumes": [
                     "application/json"
                 ],
@@ -17338,7 +17350,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z)",
+                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; problems hold rule names and paths only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -17410,6 +17422,12 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BundleRulesViolatedResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -17427,7 +17445,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a published version detail by version ID",
+                "description": "Get a published version detail by version ID, including bundle_hash and bundle_invalid_reason",
                 "consumes": [
                     "application/json"
                 ],
@@ -30758,6 +30776,46 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.BundleRepublishRequiredResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "bundle_republish_required"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "this version has no valid bundle; please republish it"
+                },
+                "reason": {
+                    "type": "string",
+                    "example": "denylisted_file @ prod.tfvars"
+                },
+                "version_id": {
+                    "type": "string",
+                    "example": "mfv-01hxyz"
+                }
+            }
+        },
+        "handlers.BundleRulesViolatedResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "bundle_rules_violated"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "draft violates the bundle rules"
+                },
+                "problems": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/manifestbundle.Problem"
+                    }
+                }
+            }
+        },
         "handlers.ChangePasswordRequest": {
             "type": "object",
             "required": [
@@ -31365,6 +31423,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "mfa_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "manifestbundle.Problem": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string"
+                },
+                "rule": {
                     "type": "string"
                 }
             }

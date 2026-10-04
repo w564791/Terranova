@@ -568,8 +568,8 @@ module "ec2_web" {
 | POST | `/files/_move`、`/files/_move_dir`、`/files/_delete_dir` | 移动 / 目录操作 | MANIFESTS WRITE |
 | POST | `/draft/_reset_from` | 从版本重置 draft | MANIFESTS WRITE |
 | POST | `/draft/_export` | 导出 draft | MANIFESTS READ |
-| GET | `/v2/versions`、`/v2/versions/:version_id` | 版本列表 / 详情 | MANIFESTS READ |
-| POST | `/v2/versions` | 发布版本 | MANIFESTS WRITE |
+| GET | `/v2/versions`、`/v2/versions/:version_id` | 版本列表 / 详情（带 `bundle_hash`、`bundle_invalid_reason`；前者为 null 表示需重新发布） | MANIFESTS READ |
+| POST | `/v2/versions` | 发布版本：草稿打包为不可变 bundle，响应带 `bundle_hash`；违反 bundle 规则 → 422 `bundle_rules_violated`（`problems` 只含规则名与路径） | MANIFESTS WRITE |
 | GET | `/v2/versions/:version_id/diff`、`/v2/versions/:version_id/workdirs`、`/v2/draft/diff` | diff / workdirs | MANIFESTS READ |
 | POST | `/v2/versions/:version_id/files/_export` | 导出版本文件 | MANIFESTS READ |
 
@@ -595,6 +595,13 @@ install / upgrade 在 `WORKSPACE_RESOURCES` WRITE 之外，以下情况还要求
 - 首装时 varset 列表非空。
 
 只换版本时沿用原规则（`WORKSPACE_RESOURCES` WRITE）。`GET /workspaces?capability=...` 的每一项带 `can_write_variables`，用同一检查计算，部署面板据此提前禁用变量编辑。
+
+#### 版本 bundle（不可变）
+
+部署路径只用版本的不可变 bundle（规则、存储与迁移见 sandbox spec §3.3），不读草稿：
+- 版本 `bundle_hash` 为 NULL（违反 bundle 规则，需重新发布）时，install、首装预览、按部署预览（目标版本，未给则当前版本）、upgrade 的**目标**版本返回 **409** `{error, code:"bundle_republish_required", version_id, reason}`；`reason` 只含规则名与路径。
+- upgrade 只检查目标版本：从 NULL 版本升级到合法版本允许。uninstall 不检查。
+- bundle 文件与 `bundle_hash` 不一致（被篡改）→ 通用 500（`ErrIntegrity`，不暴露细节）。
 
 #### 覆盖值（variable_overrides）的输入、存储与输出
 

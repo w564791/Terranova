@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"iac-platform/internal/application/service"
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
@@ -221,7 +222,7 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 
 // Install 把指定 published version 装到空 workspace
 // @Summary Install manifest deployment
-// @Description Install a published version onto an empty workspace
+// @Description Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required.
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -262,7 +263,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	}
 
 	// 目标校验(与首装变量预览共用):workspace 属于本 org、version 属于本 manifest 且已发布
-	version, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID)
+	version, bundle, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID)
 	if !ok {
 		return
 	}
@@ -304,7 +305,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 
 	// 校验 subpath 在 manifest_files 内存在(若非根)
 	if effectiveSubpath != "" {
-		if !h.subpathExistsInVersion(manifestID, req.VersionID, effectiveSubpath) {
+		if !subpathExistsInBundle(bundle, effectiveSubpath) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("subpath %q not found in version %s (must contain at least one .tf)", effectiveSubpath, req.VersionID)})
 			return
 		}
@@ -312,11 +313,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 
 	// 拉 manifest_files 浅 parse(按 effective subpath)
 	subpathPtr := ptrIfNonEmptyStr(effectiveSubpath)
-	resourceRefs, err := h.shallowParseVersionResources(manifestID, req.VersionID, subpathPtr)
-	if err != nil {
-		_ = c.Error(err)
-		return
-	}
+	resourceRefs := shallowParseBundleResources(bundle, subpathPtr)
 
 	deploymentID := generateManifestDeploymentID()
 
@@ -422,7 +419,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 
 // Upgrade 切换版本与 varsets,reconcile workspace_resources
 // @Summary Upgrade manifest deployment
-// @Description Switch deployment version and varsets; reconcile workspace resources
+// @Description Switch deployment version and varsets; reconcile workspace resources. The target version must have a valid bundle (409 bundle_republish_required); upgrading away from a version without one is allowed.
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -496,14 +493,16 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		return
 	}
 
+	// 只校验目标版本的 bundle(从无合法 bundle 的版本升级到合法版本是允许的)
+	targetBundle, ok := h.openDeployableBundle(c, manifestID, req.TargetVersionID)
+	if !ok {
+		return
+	}
+
 	// 拉新版本的 resource refs
 	var ws models.Workspace
 	h.db.Where("workspace_id = ?", dep.WorkspaceID).First(&ws)
-	newRefs, err := h.shallowParseVersionResources(manifestID, req.TargetVersionID, ws.ManifestSubpath)
-	if err != nil {
-		_ = c.Error(err)
-		return
-	}
+	newRefs := shallowParseBundleResources(targetBundle, ws.ManifestSubpath)
 
 	// 覆盖合并(修复 upgrade 清空已有覆盖):缺省 key / 敏感空占位均保留原值,仅 unset_keys 删除
 	overrides, sensitive, err := h.mergeDeploymentOverrides(dep, []string{req.TargetVersionID}, req.Varsets, req.VariableOverrides, req.UnsetKeys)
@@ -726,7 +725,7 @@ func mergeOverrides(stored, incoming map[string]string, sensitive map[string]boo
 // Uninstall 解绑 manifest 与 workspace,清相关 workspace_resources
 // 不动云端;workspace 进入"反向漂移"状态等待用户跑 Plan+Apply 清理
 // @Summary Uninstall manifest deployment
-// @Description Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources)
+// @Description Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources). Not blocked when the deployed version has no valid bundle.
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -808,7 +807,7 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 // 响应: {"variables":[{"key","value","sensitive","variable_type","value_format",...}]}
 // sensitive=true 的条目 value 恒为空串(前端不得预填)。
 // @Summary Preview deployment variables
-// @Description Preview merged variables with a per-variable sensitive flag; sensitive values are always empty
+// @Description Preview merged variables with a per-variable sensitive flag; sensitive values are always empty. The previewed version (target, else current) must have a valid bundle (409 bundle_republish_required).
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -819,6 +818,7 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} handlers.BundleRepublishRequiredResponse
 // @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/variable-preview [post]
 // @Security BearerAuth
@@ -850,6 +850,13 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 		}
 		targets = append(targets, req.TargetVersionID)
 	}
+	previewed := dep.VersionID
+	if req.TargetVersionID != "" {
+		previewed = req.TargetVersionID
+	}
+	if _, ok := h.openDeployableBundle(c, manifestID, previewed); !ok {
+		return
+	}
 	// 与 upgrade 同一合并:已存覆盖 + 本次覆盖 - unset_keys,敏感值保持空
 	h.previewVariables(c, dep.WorkspaceID, req.Varsets, func() (map[string]string, map[string]bool, error) {
 		merged, sens, err := h.mergeDeploymentOverrides(dep, targets, req.Varsets, req.VariableOverrides, req.UnsetKeys)
@@ -862,7 +869,7 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 // workspace 不属于本 org、version 不属于本 manifest 或为草稿 => 404。
 // 响应同 VariablePreview: {"variables":[...]},sensitive 条目 value 恒为空串。
 // @Summary Preview variables for a first install
-// @Description Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty
+// @Description Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty. The version must have a valid bundle (409 bundle_republish_required).
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -873,6 +880,7 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 403 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} handlers.BundleRepublishRequiredResponse
 // @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview [post]
 // @Security BearerAuth
@@ -883,7 +891,7 @@ func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Contex
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if _, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID); !ok {
+	if _, _, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID); !ok {
 		return
 	}
 	h.previewVariables(c, req.WorkspaceID, req.Varsets, func() (map[string]string, map[string]bool, error) {
@@ -902,19 +910,47 @@ func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Contex
 //   - workspace 必须属于鉴权 org(WorkspaceService.EnsureWorkspaceInOrg);
 //   - version 必须属于本 manifest 且已发布(非草稿)。
 // 任一不满足 => 404(不区分不存在与跨 org)。已写响应时返回 false。
-func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, manifestID, workspaceID, versionID string) (models.ManifestVersion, bool) {
+func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, manifestID, workspaceID, versionID string) (models.ManifestVersion, *manifestbundle.Bundle, bool) {
 	var version models.ManifestVersion
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok || services.NewWorkspaceService(h.db).EnsureWorkspaceInOrg(workspaceID, orgID) != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
-		return version, false
+		return version, nil, false
 	}
 	if err := h.db.Where("id = ? AND manifest_id = ?", versionID, manifestID).First(&version).Error; err != nil ||
 		version.Version == "draft" || version.Version == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
-		return version, false
+		return version, nil, false
 	}
-	return version, true
+	bundle, ok := h.openDeployableBundle(c, manifestID, versionID)
+	return version, bundle, ok
+}
+
+// openDeployableBundle 打开版本的不可变 bundle(校验 bundle_hash),供部署路径
+// (install / upgrade 目标 / 两个预览)使用。版本没有合法 bundle(bundle_hash NULL)
+// => 409 bundle_republish_required(reason 只含规则名与路径);完整性校验失败等 => 500。
+func (h *ManifestDeploymentsV2Handler) openDeployableBundle(c *gin.Context, manifestID, versionID string) (*manifestbundle.Bundle, bool) {
+	bundle, err := manifestbundle.OpenVersion(c.Request.Context(), h.db, manifestID, versionID)
+	if err == nil {
+		err = bundle.RequireValid()
+	}
+	var invalid *manifestbundle.InvalidError
+	switch {
+	case err == nil:
+		return bundle, true
+	case errors.As(err, &invalid):
+		c.JSON(http.StatusConflict, BundleRepublishRequiredResponse{
+			Error:     "this version has no valid bundle; please republish it",
+			Code:      "bundle_republish_required",
+			VersionID: versionID,
+			Reason:    invalid.Reason,
+		})
+	case errors.Is(err, manifestbundle.ErrVersionNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+	default:
+		_ = c.Error(err)
+	}
+	return nil, false
 }
 
 // previewVariables 两个预览接口的共用实现(路由层已校验 MANIFESTS READ + manifest 属于 org):
@@ -1103,46 +1139,28 @@ func (h *ManifestDeploymentsV2Handler) workspaceIsEmpty(workspaceID string, ws *
 	return true, ""
 }
 
-// subpathExistsInVersion: 校验 subpath 直接下层(非递归)至少有一个 .tf 文件。
+// subpathExistsInBundle: 校验 subpath 直接下层(非递归)至少有一个 .tf 文件。
 //
 // 必须与执行/解析的 scope 语义一致: terraform 在 cd subpath 后只读该目录顶层 .tf,
 // 不递归子目录。所以这里也只认 subpath 的直接子级 .tf —— 用 ParseManifestResources
 // 同款 shouldParse 规则,避免"深层嵌套 .tf 让校验通过、实际 plan 目录却为空"。
-func (h *ManifestDeploymentsV2Handler) subpathExistsInVersion(manifestID, versionID, subpath string) bool {
-	var rows []models.ManifestFile
-	if err := h.db.Select("path").
-		Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Where("path LIKE ?", "%.tf").
-		Find(&rows).Error; err != nil {
-		return false
-	}
+func subpathExistsInBundle(b *manifestbundle.Bundle, subpath string) bool {
 	sp := strings.TrimSuffix(subpath, "/")
-	for _, r := range rows {
-		if services.IsTopLevelTFUnderSubpath(r.Path, sp) {
+	for _, f := range b.Files {
+		if strings.HasSuffix(f.Path, ".tf") && services.IsTopLevelTFUnderSubpath(f.Path, sp) {
 			return true
 		}
 	}
 	return false
 }
 
-// shallowParseVersionResources 拉 version 的 manifest_files,浅 parse 出 resource/module refs
-func (h *ManifestDeploymentsV2Handler) shallowParseVersionResources(
-	manifestID, versionID string, subpath *string,
-) ([]services.ManifestResourceRef, error) {
-	var rows []models.ManifestFile
-	if err := h.db.Where("manifest_id = ? AND version_id = ?", manifestID, versionID).
-		Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	scope := make(map[string][]byte, len(rows))
-	for _, r := range rows {
-		scope[r.Path] = r.Content
-	}
+// shallowParseBundleResources 浅 parse 版本 bundle 的 resource/module refs
+func shallowParseBundleResources(b *manifestbundle.Bundle, subpath *string) []services.ManifestResourceRef {
 	sp := ""
 	if subpath != nil {
 		sp = *subpath
 	}
-	return services.ParseManifestResources(scope, sp), nil
+	return services.ParseManifestResources(b.Scope(), sp)
 }
 
 // derefStr 解引用 *string,nil 返回空串

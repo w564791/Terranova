@@ -1,11 +1,13 @@
 package controllers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 
@@ -969,20 +971,11 @@ func (c *WorkspaceOutputController) parseManifestModuleSources(deploymentID, tag
 	if err := c.db.Where("id = ?", deploymentID).First(&dep).Error; err != nil {
 		return nil
 	}
-	var rows []models.ManifestFile
-	if err := c.db.Select("path, content").
-		Where("manifest_id = ? AND version_id = ?", dep.ManifestID, dep.VersionID).
-		Where("path LIKE ?", "%.tf").
-		Find(&rows).Error; err != nil {
+	bundle, err := manifestbundle.OpenVersion(context.Background(), c.db, dep.ManifestID, dep.VersionID)
+	if err != nil || len(bundle.Files) == 0 {
 		return nil
 	}
-	if len(rows) == 0 {
-		return nil
-	}
-	scope := make(map[string][]byte, len(rows))
-	for _, r := range rows {
-		scope[r.Path] = r.Content
-	}
+	scope := bundle.Scope()
 	sp := ""
 	if subpath != nil {
 		sp = *subpath

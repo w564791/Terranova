@@ -137,6 +137,7 @@ func TestUpgrade_MergesOverridesInsteadOfWiping(t *testing.T) {
 			t.Fatalf("%v\n%s", err, stmt)
 		}
 	}
+	sealFixtureVersions(t, db)
 	checker := &resourceChecker{levels: map[valueobject.ResourceType]valueobject.PermissionLevel{
 		valueobject.ResourceTypeWorkspaceResources: valueobject.PermissionLevelWrite,
 		valueobject.ResourceTypeWorkspaceVars:      valueobject.PermissionLevelWrite, // override changes
