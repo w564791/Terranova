@@ -5056,6 +5056,7 @@ definitions:
     - SYSTEM_SETTINGS
     - RUN_TASKS
     - VARIABLE_SETS
+    - MANIFESTS
     - PROJECT_SETTINGS
     - PROJECT_TEAM_MANAGEMENT
     - PROJECT_WORKSPACES
@@ -5093,6 +5094,7 @@ definitions:
     - ResourceTypeSystemSettings
     - ResourceTypeRunTasks
     - ResourceTypeVariableSets
+    - ResourceTypeManifests
     - ResourceTypeProjectSettings
     - ResourceTypeProjectTeams
     - ResourceTypeProjectWorkspaces
