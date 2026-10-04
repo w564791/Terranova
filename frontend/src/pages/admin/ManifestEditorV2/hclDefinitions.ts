@@ -404,7 +404,8 @@ function refLabel(hit: RefHit): string {
 const REGISTRY_KEY = '__manifestHclDefinition__'
 
 interface RegisterOpts {
-  getIndex: () => DefinitionIndex
+  // 可返回 Promise:编辑器首次转到定义 / hover 时才懒建索引
+  getIndex: () => DefinitionIndex | Promise<DefinitionIndex>
 }
 
 export function registerHclDefinition({ getIndex }: RegisterOpts): void {
@@ -416,10 +417,10 @@ export function registerHclDefinition({ getIndex }: RegisterOpts): void {
 
   const registerOn = (langId: string) => {
     disposables.push(monaco.languages.registerDefinitionProvider(langId, {
-      provideDefinition(model, position) {
+      async provideDefinition(model, position) {
         const hit = resolveReferenceAt(model, position)
         if (!hit) return null
-        const def = lookupDefinition(getIndex(), hit)
+        const def = lookupDefinition(await getIndex(), hit)
         if (!def) return null
         return {
           uri: pathToManifestUri(def.path),
@@ -434,10 +435,10 @@ export function registerHclDefinition({ getIndex }: RegisterOpts): void {
     }))
 
     disposables.push(monaco.languages.registerHoverProvider(langId, {
-      provideHover(model, position) {
+      async provideHover(model, position) {
         const hit = resolveReferenceAt(model, position)
         if (!hit) return null
-        const def = lookupDefinition(getIndex(), hit)
+        const def = lookupDefinition(await getIndex(), hit)
         const label = refLabel(hit)
         const lines: string[] = []
         if (def) {
