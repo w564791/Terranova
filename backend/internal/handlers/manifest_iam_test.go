@@ -61,6 +61,7 @@ func setupManifestIAMDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, source_type TEXT NOT NULL DEFAULT 'native', git_repo_url TEXT, git_subpath TEXT, github_installation_id INTEGER, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE manifest_deployments (id TEXT PRIMARY KEY, manifest_id TEXT, version_id TEXT, workspace_id TEXT, variable_overrides TEXT, status TEXT, last_task_id INTEGER, deployed_by TEXT, deployed_at DATETIME, approved_bundle_hash TEXT, approved_plan_hash TEXT, sensitive_keys TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE manifest_deployment_varsets (deployment_id TEXT, varset_id TEXT, priority INTEGER)`,
+		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE variable_sets (id INTEGER PRIMARY KEY, varset_id TEXT, name TEXT, description TEXT, scope TEXT, is_deleted INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME, created_by TEXT)`,
 		`CREATE TABLE varset_variables (id INTEGER PRIMARY KEY, variable_id TEXT, varset_id TEXT, key TEXT, value TEXT, variable_type TEXT, value_format TEXT, sensitive INTEGER, description TEXT, is_deleted INTEGER DEFAULT 0, version INTEGER, created_at DATETIME, updated_at DATETIME, created_by TEXT)`,
 		`CREATE TABLE varset_assignments (id INTEGER PRIMARY KEY, varset_id TEXT, scope_type TEXT, project_id INTEGER, workspace_id TEXT, attached_at DATETIME, attached_by TEXT)`,
@@ -122,6 +123,7 @@ func TestListManifests_CanWriteAndCanDeploy(t *testing.T) {
 			perm := middleware.NewIAMPermissionMiddlewareWithChecker(&resourceChecker{}).WithWorkspaceListAccess(resolver)
 			h := NewManifestHandler(db, perm)
 			r := gin.New()
+			r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 			r.GET("/organizations/:org_id/manifests", withCaller(tc.manifestLevel), h.ListManifests)
 			r.GET("/organizations/:org_id/manifests/:id", withCaller(tc.manifestLevel), h.GetManifest)
 
@@ -167,6 +169,7 @@ func TestUpdateManifest_ArchiveRequiresAdmin(t *testing.T) {
 		db := setupManifestIAMDB(t)
 		h := NewManifestHandler(db, nil)
 		r := gin.New()
+		r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 		r.PUT("/organizations/:org_id/manifests/:id", withCaller(tc.level), h.UpdateManifest)
 		if w := doJSON(r, "PUT", "/organizations/1/manifests/mf-1", tc.body); w.Code != tc.want {
 			t.Fatalf("level %s body %s: got %d want %d (%s)", tc.level, tc.body, w.Code, tc.want, w.Body.String())
@@ -190,6 +193,7 @@ func TestListDeployments_FilteredToReadableWorkspaces(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := gin.New()
+			r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 			r.GET("/organizations/:org_id/manifests/:id/v2/deployments", withCaller(valueobject.PermissionLevelRead), func(c *gin.Context) {
 				c.Set(service.WorkspaceListAccessContextKey, tc.access)
 			}, h.ListDeployments)
@@ -220,6 +224,7 @@ func TestListDeployments_FilteredToReadableWorkspaces(t *testing.T) {
 
 	// missing allow-list context fails closed; another org's manifest is 404
 	r := gin.New()
+	r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	r.GET("/organizations/:org_id/manifests/:id/v2/deployments", withCaller(valueobject.PermissionLevelRead), h.ListDeployments)
 	if w := doJSON(r, "GET", "/organizations/1/manifests/mf-1/v2/deployments", ""); w.Code != http.StatusInternalServerError {
 		t.Fatalf("missing access context must fail closed, got %d", w.Code)
@@ -240,6 +245,7 @@ func TestDeploymentWrites_RequireWorkspaceResourcesWriteOnTarget(t *testing.T) {
 	db := setupManifestIAMDB(t)
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	r := gin.New()
+	r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	g := r.Group("/organizations/:org_id/manifests/:id/v2/deployments", withCaller(valueobject.PermissionLevelAdmin))
 	g.POST("/install", h.Install)
 	g.POST("/:deployment_id/upgrade", h.Upgrade)
@@ -287,6 +293,7 @@ func TestVariablePreview_SensitiveValuesAreNeverPrefilled(t *testing.T) {
 	}}
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	r := gin.New()
+	r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	r.POST("/organizations/:org_id/manifests/:id/v2/deployments/:deployment_id/variable-preview", withCaller(valueobject.PermissionLevelRead), h.VariablePreview)
 	path := "/organizations/1/manifests/mf-1/v2/deployments/mfd-a/variable-preview"
 

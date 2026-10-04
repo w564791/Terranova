@@ -530,27 +530,56 @@ func (m *IAMPermissionMiddleware) requireScopedResourcePermission(
 	c *gin.Context, scopeType valueobject.ScopeType, scopeID uint, scopeIDStr string, label string,
 	resourceType string, requiredLevel string,
 ) bool {
+	status, body, denyMsg := m.checkScopedResourcePermission(c, scopeType, scopeID, scopeIDStr, label, resourceType, requiredLevel)
+	if status == http.StatusOK {
+		return true
+	}
+	if denyMsg != "" {
+		c.Set("error", denyMsg)
+	}
+	c.JSON(status, body)
+	return false
+}
+
+// HasWorkspaceResourcePermission is RequireWorkspaceResourcePermission without
+// writing a response (same check; any error counts as "no"). Used to decide
+// whether a response may carry values, e.g. deployment/task override values
+// need WORKSPACE_VARIABLES READ on the workspace.
+func (m *IAMPermissionMiddleware) HasWorkspaceResourcePermission(
+	c *gin.Context, workspaceID string, resourceType string, requiredLevel string,
+) bool {
+	if m == nil || m.permissionChecker == nil {
+		return false
+	}
+	status, _, _ := m.checkScopedResourcePermission(c, valueobject.ScopeTypeWorkspace, 0, workspaceID,
+		"workspace "+workspaceID, resourceType, requiredLevel)
+	return status == http.StatusOK
+}
+
+// checkScopedResourcePermission evaluates one scoped permission and returns
+// 200 or the status/body to emit; it never writes the response.
+func (m *IAMPermissionMiddleware) checkScopedResourcePermission(
+	c *gin.Context, scopeType valueobject.ScopeType, scopeID uint, scopeIDStr string, label string,
+	resourceType string, requiredLevel string,
+) (int, gin.H, string) {
 	userID, principalType, principalID, ok := principalFromContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
+		return http.StatusUnauthorized, gin.H{
 			"code": 401, "message": "User not authenticated", "timestamp": time.Now(),
-		})
-		return false
+		}, ""
 	}
 
 	rt, err := valueobject.ParseResourceType(resourceType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		return http.StatusInternalServerError, gin.H{
 			"code": 500, "message": "Invalid resource type", "timestamp": time.Now(),
-		})
-		return false
+		}, ""
 	}
 	rl, err := valueobject.ParsePermissionLevel(requiredLevel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		return http.StatusBadRequest, gin.H{
 			"code": 400, "message": "Invalid permission level", "timestamp": time.Now(),
-		})
-		return false
+		}, ""
 	}
 
 	req := &service.CheckPermissionRequest{
@@ -567,23 +596,20 @@ func (m *IAMPermissionMiddleware) requireScopedResourcePermission(
 	if err != nil {
 		log.Printf("[IAM] Permission check failed for %s/%s on %s: %v",
 			principalType, principalID, label, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
+		return http.StatusInternalServerError, gin.H{
 			"code": 500, "message": "Permission check failed", "timestamp": time.Now(),
-		})
-		return false
+		}, ""
 	}
 	if !result.IsAllowed {
 		denyMsg := fmt.Sprintf("Permission denied on %s (%s required: %s, effective: %s)",
 			label, rt, requiredLevel, result.EffectiveLevel.String())
-		c.Set("error", denyMsg)
-		c.JSON(http.StatusForbidden, gin.H{
+		return http.StatusForbidden, gin.H{
 			"code": 403, "message": "Permission denied", "deny_reason": result.DenyReason,
 			"required_level": requiredLevel, "effective_level": result.EffectiveLevel.String(),
 			"timestamp": time.Now(),
-		})
-		return false
+		}, denyMsg
 	}
-	return true
+	return http.StatusOK, nil, ""
 }
 
 // RequireAnyPermission 要求任意一个权限即可（OR逻辑）

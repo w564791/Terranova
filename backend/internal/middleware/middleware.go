@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -54,17 +56,51 @@ func Logger() gin.HandlerFunc {
 	})
 }
 
+// RequestIDHeader 请求 ID 头(请求可携带,响应总是回写)。
+const RequestIDHeader = "X-Request-ID"
+
+// RequestIDContextKey gin context 中的请求 ID。
+const RequestIDContextKey = "request_id"
+
+// validRequestID 只复用形如 [A-Za-z0-9-]{8,64} 的入站请求 ID(防日志/头注入)。
+var validRequestID = regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`)
+
+// ErrorHandler 统一 500 出口:handler 用 c.Error(err) 后 return,这里记录真实错误
+// (日志带 request_id),响应只给通用信息,不泄露数据库 / SQL 文本。
+// 每个请求都有 request_id:合法的入站 X-Request-ID 原样复用,否则生成 UUID;
+// 写入响应头 X-Request-ID 与 500 响应体 request_id。
+// InternalErrorResponse ErrorHandler 的通用 500 响应体(不含任何数据库 / SQL 文本)。
+type InternalErrorResponse struct {
+	Code      int       `json:"code" example:"500"`
+	Error     string    `json:"error" example:"internal error"`
+	Message   string    `json:"message" example:"Internal server error"`
+	RequestID string    `json:"request_id" example:"3f2b8c1e-6a4d-4e2a-9c51-0d7e2f1a9b33"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		requestID := c.GetHeader(RequestIDHeader)
+		if !validRequestID.MatchString(requestID) {
+			requestID = uuid.NewString()
+		}
+		c.Set(RequestIDContextKey, requestID)
+		c.Header(RequestIDHeader, requestID)
+
 		c.Next()
 
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last()
-			log.Printf("[Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err.Err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code":      500,
-				"message":   "Internal server error",
-				"timestamp": time.Now(),
+			log.Printf("[Error] request_id=%s %s %s: %v", requestID, c.Request.Method, c.Request.URL.Path, err.Err)
+			if c.Writer.Written() {
+				return // handler 已自行响应
+			}
+			c.JSON(http.StatusInternalServerError, InternalErrorResponse{
+				Code:      http.StatusInternalServerError,
+				Error:     "internal error",
+				Message:   "Internal server error",
+				RequestID: requestID,
+				Timestamp: time.Now(),
 			})
 		}
 	}

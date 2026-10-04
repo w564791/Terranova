@@ -40,6 +40,7 @@ func TestListManifests_TopLevelCapabilitiesAndCanAdmin(t *testing.T) {
 				WithWorkspaceListAccess(&fakeWorkspaceListResolver{access: tc.access})
 			h := NewManifestHandler(db, perm)
 			r := gin.New()
+			r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 			r.GET("/organizations/:org_id/manifests", withCaller(tc.level), h.ListManifests)
 			r.GET("/organizations/:org_id/manifests/:id", withCaller(tc.level), h.GetManifest)
 
@@ -81,6 +82,7 @@ func TestDeleteAndArchiveStayAdmin(t *testing.T) {
 	db := setupManifestIAMDB(t)
 	h := NewManifestHandler(db, nil)
 	r := gin.New()
+	r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	r.PUT("/organizations/:org_id/manifests/:id", withCaller(valueobject.PermissionLevelWrite), h.UpdateManifest)
 	if w := doJSON(r, "PUT", "/organizations/1/manifests/mf-1", `{"status":"archived"}`); w.Code != http.StatusForbidden {
 		t.Fatalf("archive with WRITE: %d", w.Code)
@@ -117,7 +119,6 @@ func TestUpgrade_MergesOverridesInsteadOfWiping(t *testing.T) {
 	for _, stmt := range []string{
 		`CREATE TABLE manifest_versions (id TEXT PRIMARY KEY, manifest_id TEXT, version TEXT, variables TEXT, changelog TEXT, created_by TEXT, created_at DATETIME)`,
 		`INSERT INTO manifest_versions (id, manifest_id, version, created_by) VALUES ('mfv-1', 'mf-1', 'v1.0.0', 'u1'), ('mfv-2', 'mf-1', 'v1.1.0', 'u1')`,
-		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE workspaces (id INTEGER PRIMARY KEY, workspace_id TEXT, manifest_subpath TEXT, manifest_active_tag TEXT, manifest_deployment_id TEXT, updated_at DATETIME)`,
 		`INSERT INTO workspaces (id, workspace_id, manifest_deployment_id, manifest_active_tag) VALUES (1, 'ws-a', 'mfd-a', 'v1.0.0')`,
 		`CREATE TABLE workspace_resources (id INTEGER PRIMARY KEY, workspace_id TEXT, resource_id TEXT, manifest_deployment_id TEXT)`,
@@ -141,6 +142,7 @@ func TestUpgrade_MergesOverridesInsteadOfWiping(t *testing.T) {
 	}}
 	h := NewManifestDeploymentsV2Handler(db, middleware.NewIAMPermissionMiddlewareWithChecker(checker))
 	r := gin.New()
+	r.Use(middleware.ErrorHandler()) // production 500 path (router.go)
 	r.POST("/organizations/:org_id/manifests/:id/v2/deployments/:deployment_id/upgrade", withCaller(valueobject.PermissionLevelRead), h.Upgrade)
 
 	// api_token omitted -> kept; db_password sent as the sensitive placeholder "" -> kept;

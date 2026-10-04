@@ -101,7 +101,7 @@ func (h *ManifestEditorHandler) ListModules(c *gin.Context) {
 		Order("demo_count DESC, m.name ASC").
 		Limit(limit).
 		Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -162,7 +162,7 @@ func (h *ManifestEditorHandler) ListDemos(c *gin.Context) {
 		Where("d.module_version_id = m.default_version_id").
 		Order("d.created_at ASC").
 		Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -229,7 +229,7 @@ func (h *ManifestEditorHandler) ListModuleInputs(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"inputs": []ModuleInputField{}})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 

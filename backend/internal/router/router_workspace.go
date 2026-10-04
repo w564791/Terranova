@@ -36,6 +36,10 @@ func setupWorkspaceRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *serv
 		// 	services.NewAgentPoolService(db, services.NewAgentService(db)),
 		// )
 		taskController := controllers.NewWorkspaceTaskController(db, streamManager, queueManager, agentCCHandler)
+		// 任务覆盖快照的值:与 manifest 变量预览同一检查(WORKSPACE_VARIABLES READ)
+		taskController.CanReadVariableValues = func(c *gin.Context, workspaceID string) bool {
+			return iamMiddleware.HasWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_VARIABLES", "READ")
+		}
 		stateController := controllers.NewStateVersionController(db)
 		variableController := controllers.NewWorkspaceVariableController(services.NewWorkspaceVariableService(db))
 		resourceController := controllers.NewResourceController(db, streamManager)

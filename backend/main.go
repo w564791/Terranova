@@ -91,6 +91,19 @@ func main() {
 		}()
 	}
 
+	// 一次性回填 manifest_deployments.sensitive_keys(仍为 NULL 的行;幂等)。
+	// 后台执行,失败只记日志,不阻塞启动;NULL 行在回填前被 API 视为全部敏感,下次启动重试。
+	go func() {
+		n, err := services.BackfillDeploymentSensitiveKeys(shutdownCtx, db)
+		if err != nil {
+			log.Printf("[WARN] sensitive_keys backfill incomplete (updated %d, will retry on next start): %v", n, err)
+			return
+		}
+		if n > 0 {
+			log.Printf("sensitive_keys backfill: updated %d deployment(s)", n)
+		}
+	}()
+
 	// 初始化全局信号管理器
 	signalManager := services.GetSignalManager()
 	log.Println("Global signal manager initialized")

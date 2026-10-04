@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -71,7 +73,7 @@ type InstallDeploymentRequest struct {
 	VersionID         string                  `json:"version_id" binding:"required"`
 	WorkspaceID       string                  `json:"workspace_id" binding:"required"` // ws-xxx 语义化ID
 	Varsets           []DeploymentVarsetEntry `json:"varsets"`
-	VariableOverrides map[string]string       `json:"variable_overrides"`
+	VariableOverrides OverrideInputs          `json:"variable_overrides"`
 	// Workdir 可选:terraform 执行子目录(归一化后存入 workspaces.manifest_subpath)。
 	// 省略(nil)= 沿用 workspace 记录里已有的 ManifestSubpath(向后兼容);
 	// 非 nil(含空串)= 以本次值为准(空串 => 根目录)。
@@ -84,7 +86,7 @@ type UpgradeDeploymentRequest struct {
 	Varsets         []DeploymentVarsetEntry `json:"varsets"`
 	// VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;
 	// 敏感变量传空串(预览里的掩码占位)视为"不修改",也保留原值。
-	VariableOverrides map[string]string `json:"variable_overrides"`
+	VariableOverrides OverrideInputs `json:"variable_overrides"`
 	// UnsetKeys 可选:只有列在这里的 key 才会从已存覆盖中删除。
 	UnsetKeys []string `json:"unset_keys,omitempty"`
 }
@@ -94,7 +96,69 @@ type FirstInstallPreviewRequest struct {
 	WorkspaceID       string                  `json:"workspace_id" binding:"required"` // ws-xxx 语义化ID
 	VersionID         string                  `json:"version_id" binding:"required"`
 	Varsets           []DeploymentVarsetEntry `json:"varsets"`
-	VariableOverrides map[string]string       `json:"variable_overrides"`
+	VariableOverrides OverrideInputs          `json:"variable_overrides"`
+}
+
+// DeploymentPreviewRequest 已有 deployment 的变量预览:与 upgrade 同一合并
+// (已存覆盖 + 本次覆盖 - unset_keys),可选 target_version_id 参与敏感判定。
+type DeploymentPreviewRequest struct {
+	TargetVersionID   string                  `json:"target_version_id,omitempty"`
+	Varsets           []DeploymentVarsetEntry `json:"varsets"`
+	VariableOverrides OverrideInputs          `json:"variable_overrides"`
+	UnsetKeys         []string                `json:"unset_keys,omitempty"`
+}
+
+// OverrideInput 单个覆盖:请求里可写成 "key": "value"(兼容旧格式)或
+// "key": {"value": "...", "sensitive": true}。sensitive 一旦记录即粘滞,不能改回普通。
+type OverrideInput struct {
+	Value     string `json:"value"`
+	Sensitive bool   `json:"sensitive,omitempty"`
+}
+
+// OverrideInputs variable_overrides 请求体(key -> OverrideInput)
+type OverrideInputs map[string]OverrideInput
+
+// UnmarshalJSON 接受字符串或 {value, sensitive} 对象
+func (o *OverrideInputs) UnmarshalJSON(b []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return fmt.Errorf("variable_overrides must be an object: %w", err)
+	}
+	out := make(OverrideInputs, len(raw))
+	for k, v := range raw {
+		var str string
+		if err := json.Unmarshal(v, &str); err == nil {
+			out[k] = OverrideInput{Value: str}
+			continue
+		}
+		var in OverrideInput
+		if err := json.Unmarshal(v, &in); err != nil {
+			return fmt.Errorf("variable_overrides[%q] must be a string or {value, sensitive}", k)
+		}
+		out[k] = in
+	}
+	*o = out
+	return nil
+}
+
+// Values 扁平 key -> value
+func (o OverrideInputs) Values() map[string]string {
+	out := make(map[string]string, len(o))
+	for k, v := range o {
+		out[k] = v.Value
+	}
+	return out
+}
+
+// SensitiveFlags 请求里标记 sensitive 的 key
+func (o OverrideInputs) SensitiveFlags() map[string]bool {
+	out := map[string]bool{}
+	for k, v := range o {
+		if v.Sensitive {
+			out[k] = true
+		}
+	}
+	return out
 }
 
 // DeploymentVarsetEntry 部署对话框选中的 varset 条目

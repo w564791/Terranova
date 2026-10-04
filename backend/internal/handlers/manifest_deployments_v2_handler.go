@@ -41,14 +41,14 @@ func NewManifestDeploymentsV2Handler(db *gorm.DB, perm *middleware.IAMPermission
 
 // ListDeployments 列出某 manifest 的所有 deployment
 // @Summary List manifest deployments
-// @Description List all deployments for a manifest
+// @Description List all deployments for a manifest. Each deployment carries overrides ([]services.OverrideView: key, sensitive, has_value, value); raw variable_overrides are never returned. value is present only for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ on the workspace; a deployment whose sensitive_keys is not yet computed treats every key as sensitive.
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments [get]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
@@ -62,7 +62,7 @@ func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
 	rawAccess, exists := c.Get(service.WorkspaceListAccessContextKey)
 	access, ok := rawAccess.(*service.WorkspaceListAccess)
 	if !exists || !ok || access == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "workspace list authorization context is missing"})
+		_ = c.Error(errors.New("workspace list authorization context is missing"))
 		return
 	}
 
@@ -70,17 +70,52 @@ func (h *ManifestDeploymentsV2Handler) ListDeployments(c *gin.Context) {
 	if !access.FullOrganization {
 		// 空切片 => 空结果(IN () 由 gorm 渲染为 NULL 条件,不会退化成全量)
 		if len(access.WorkspaceIDs) == 0 {
-			c.JSON(http.StatusOK, gin.H{"deployments": []models.ManifestDeployment{}})
+			c.JSON(http.StatusOK, gin.H{"deployments": []deploymentView{}})
 			return
 		}
 		query = query.Where("workspace_id IN ?", access.WorkspaceIDs)
 	}
 	rows := make([]models.ManifestDeployment, 0)
 	if err := query.Order("created_at DESC").Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"deployments": rows})
+	c.JSON(http.StatusOK, gin.H{"deployments": h.deploymentViews(c, rows)})
+}
+
+// deploymentView 部署的对外形态:variable_overrides 不直接输出,统一经
+// services.RedactOverrides 输出 overrides。
+type deploymentView struct {
+	models.ManifestDeployment
+	Overrides []services.OverrideView `json:"overrides"`
+}
+
+// canReadOverrideValues 覆盖值可见性:与变量预览同一检查(目标 workspace
+// WORKSPACE_VARIABLES READ),但不写响应;perm 未配置 => 不可见(失败关闭)。
+func (h *ManifestDeploymentsV2Handler) canReadOverrideValues(c *gin.Context, workspaceID string) bool {
+	return h.perm.HasWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_VARIABLES", "READ")
+}
+
+// redactOverrides 是返回 ManifestDeployment 的唯一出口(详情、列表)。
+func (h *ManifestDeploymentsV2Handler) redactOverrides(c *gin.Context, d models.ManifestDeployment, canRead bool) deploymentView {
+	return deploymentView{
+		ManifestDeployment: d,
+		Overrides:          services.RedactOverrides(services.ParseOverrides(d.VariableOverrides), d.SensitiveKeys, canRead),
+	}
+}
+
+func (h *ManifestDeploymentsV2Handler) deploymentViews(c *gin.Context, rows []models.ManifestDeployment) []deploymentView {
+	canRead := map[string]bool{}
+	out := make([]deploymentView, 0, len(rows))
+	for _, d := range rows {
+		ok, cached := canRead[d.WorkspaceID]
+		if !cached {
+			ok = h.canReadOverrideValues(c, d.WorkspaceID)
+			canRead[d.WorkspaceID] = ok
+		}
+		out = append(out, h.redactOverrides(c, d, ok))
+	}
+	return out
 }
 
 // rejectUnmountableVarsets 校验请求里的 varset 都可挂载到目标 workspace
@@ -94,7 +129,7 @@ func (h *ManifestDeploymentsV2Handler) rejectUnmountableVarsets(
 	}
 	bad, err := services.NewVariableSetService(h.db).UnmountableVarsetIDs(workspaceID, ids)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return false
 	}
 	if len(bad) > 0 {
@@ -120,7 +155,7 @@ func manifestInAuthOrg(c *gin.Context, db *gorm.DB, manifestID string) bool {
 	if err := db.Model(&models.Manifest{}).
 		Where("id = ? AND organization_id = ?", manifestID, orgID).
 		Count(&count).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return false
 	}
 	if count == 0 {
@@ -146,7 +181,7 @@ func ManifestInAuthOrg(db *gorm.DB) gin.HandlerFunc {
 
 // GetDeployment 详情(含 varsets 关联)
 // @Summary Get manifest deployment
-// @Description Get deployment detail including linked variable sets
+// @Description Get deployment detail including linked variable sets. Overrides are returned redacted as overrides ([]services.OverrideView), never as raw variable_overrides.
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json
@@ -155,7 +190,7 @@ func ManifestInAuthOrg(db *gorm.DB) gin.HandlerFunc {
 // @Param deployment_id path string true "Deployment ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id} [get]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
@@ -169,7 +204,7 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deployment not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			_ = c.Error(err)
 		}
 		return
 	}
@@ -180,7 +215,7 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 	}
 	var varsets []models.ManifestDeploymentVarset
 	h.db.Where("deployment_id = ?", deploymentID).Order("priority ASC").Find(&varsets)
-	c.JSON(http.StatusOK, gin.H{"deployment": d, "varsets": varsets})
+	c.JSON(http.StatusOK, gin.H{"deployment": h.redactOverrides(c, d, h.canReadOverrideValues(c, d.WorkspaceID)), "varsets": varsets})
 }
 
 // Install 把指定 published version 装到空 workspace
@@ -196,7 +231,7 @@ func (h *ManifestDeploymentsV2Handler) GetDeployment(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 403 {object} map[string]interface{}
 // @Failure 409 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install [post]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
@@ -274,13 +309,24 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	subpathPtr := ptrIfNonEmptyStr(effectiveSubpath)
 	resourceRefs, err := h.shallowParseVersionResources(manifestID, req.VersionID, subpathPtr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
 	deploymentID := generateManifestDeploymentID()
 
-	overridesJSON, _ := json.Marshal(req.VariableOverrides)
+	// 敏感 key = 版本 variable 块 sensitive + 同名敏感变量 + 请求里标记的 sensitive
+	sensitive, err := services.ComputeDeploymentSensitiveKeys(h.db, []string{req.VersionID}, req.WorkspaceID, varsetIDsOf(req.Varsets))
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	for k := range req.VariableOverrides.SensitiveFlags() {
+		sensitive[k] = true
+	}
+	// 敏感 key 的空串是掩码占位,不写入(与 upgrade 同一 mergeOverrides 规则)
+	overridesJSON, _ := json.Marshal(mergeOverrides(nil, req.VariableOverrides.Values(), sensitive, nil))
+	sensitiveJSON := services.EncodeSensitiveKeys(sensitive)
 
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 写 manifest_deployments
@@ -291,6 +337,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 			VersionID:         req.VersionID,
 			WorkspaceID:       req.WorkspaceID,
 			VariableOverrides: overridesJSON,
+			SensitiveKeys:     sensitiveJSON,
 			Status:            models.DeploymentStatusActive,
 			DeployedBy:        userID,
 			DeployedAt:        &now,
@@ -346,7 +393,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
@@ -383,7 +430,7 @@ func (h *ManifestDeploymentsV2Handler) Install(c *gin.Context) {
 // @Failure 403 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 409 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/upgrade [post]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
@@ -435,14 +482,14 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	h.db.Where("workspace_id = ?", dep.WorkspaceID).First(&ws)
 	newRefs, err := h.shallowParseVersionResources(manifestID, req.TargetVersionID, ws.ManifestSubpath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
 	// 覆盖合并(修复 upgrade 清空已有覆盖):缺省 key / 敏感空占位均保留原值,仅 unset_keys 删除
-	overrides, err := h.mergeUpgradeOverrides(dep, req)
+	overrides, sensitive, err := h.mergeDeploymentOverrides(dep, []string{req.TargetVersionID}, req.Varsets, req.VariableOverrides, req.UnsetKeys)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 	overridesJSON, _ := json.Marshal(overrides)
@@ -452,6 +499,7 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 		if err := tx.Model(&dep).Updates(map[string]interface{}{
 			"version_id":         req.TargetVersionID,
 			"variable_overrides": overridesJSON,
+			"sensitive_keys":     services.EncodeSensitiveKeys(sensitive.stored),
 			"deployed_by":        userID,
 			"deployed_at":        time.Now(),
 		}).Error; err != nil {
@@ -526,7 +574,7 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 	writeManifestAudit(h.db, auditResourceManifestDeployment, "deployment.upgrade", userID, map[string]interface{}{
@@ -544,35 +592,63 @@ func (h *ManifestDeploymentsV2Handler) Upgrade(c *gin.Context) {
 	})
 }
 
-// mergeUpgradeOverrides 计算 upgrade 后的 variable_overrides。
-// 敏感判定沿用变量预览的同一解析(ResolveDisplayWithExtra 的 sensitive 标记),
-// 候选 varset 取新旧两组的并集(偏向保留,绝不因判定不全而清空敏感值)。
-func (h *ManifestDeploymentsV2Handler) mergeUpgradeOverrides(dep models.ManifestDeployment, req models.UpgradeDeploymentRequest) (map[string]string, error) {
-	stored := map[string]string{}
-	if len(dep.VariableOverrides) > 0 {
-		if err := json.Unmarshal(dep.VariableOverrides, &stored); err != nil {
-			return nil, fmt.Errorf("parse stored variable_overrides: %w", err)
-		}
-	}
+// overrideSensitivity 一次合并的敏感判定。
+//   - stored:写回 sensitive_keys 的集合(粘滞:已存集合只增不减);
+//   - display:预览展示 / 空占位判定用的集合 = stored ∪(sensitive_keys 为 NULL 时的全部已存覆盖 key),
+//     NULL 行未计算前一律不展示已存值,但不会因此把这些 key 永久标成敏感。
+type overrideSensitivity struct {
+	stored  map[string]bool
+	display map[string]bool
+}
+
+// mergeDeploymentOverrides 计算 upgrade 写回(以及预览展示)的覆盖与敏感 key,
+// upgrade 与 VariablePreview 共用,保证预览与 upgrade 写入完全一致。
+//
+// 敏感判定 = ComputeDeploymentSensitiveKeys(当前版本 ∪ 目标版本,已存 varsets ∪ 请求 varsets)
+//   - 已存 sensitive_keys 非 NULL:并上已存集合(粘滞)与请求里的 sensitive 标记;
+//   - 已存 sensitive_keys 为 NULL:只认版本与 varset 的判定,忽略请求标记。
+func (h *ManifestDeploymentsV2Handler) mergeDeploymentOverrides(
+	dep models.ManifestDeployment, targetVersionIDs []string, varsets []models.DeploymentVarsetEntry,
+	incoming models.OverrideInputs, unset []string,
+) (map[string]string, overrideSensitivity, error) {
+	stored := services.ParseOverrides(dep.VariableOverrides)
 	var varsetIDs []string
 	if err := h.db.Model(&models.ManifestDeploymentVarset{}).
 		Where("deployment_id = ?", dep.ID).Pluck("varset_id", &varsetIDs).Error; err != nil {
-		return nil, fmt.Errorf("load deployment varsets: %w", err)
+		return nil, overrideSensitivity{}, fmt.Errorf("load deployment varsets: %w", err)
 	}
-	for _, v := range req.Varsets {
-		varsetIDs = append(varsetIDs, v.VarsetID)
-	}
-	resolved, err := services.NewVariableResolutionService(h.db).ResolveDisplayWithExtra(dep.WorkspaceID, varsetIDs, nil)
+	varsetIDs = append(varsetIDs, varsetIDsOf(varsets)...)
+	computed, err := services.ComputeDeploymentSensitiveKeys(h.db, append([]string{dep.VersionID}, targetVersionIDs...), dep.WorkspaceID, varsetIDs)
 	if err != nil {
-		return nil, fmt.Errorf("resolve variable sensitivity: %w", err)
+		return nil, overrideSensitivity{}, err
 	}
-	sensitive := make(map[string]bool, len(resolved))
-	for _, v := range resolved {
-		if v.Sensitive {
-			sensitive[v.Key] = true
+	sens := overrideSensitivity{stored: computed, display: map[string]bool{}}
+	storedKeys, known := services.ParseSensitiveKeys(dep.SensitiveKeys)
+	if known {
+		for k := range storedKeys {
+			sens.stored[k] = true
+		}
+		for k := range incoming.SensitiveFlags() {
+			sens.stored[k] = true
 		}
 	}
-	return mergeOverrides(stored, req.VariableOverrides, sensitive, req.UnsetKeys), nil
+	for k := range sens.stored {
+		sens.display[k] = true
+	}
+	if !known {
+		for k := range stored {
+			sens.display[k] = true
+		}
+	}
+	return mergeOverrides(stored, incoming.Values(), sens.display, unset), sens, nil
+}
+
+func varsetIDsOf(entries []models.DeploymentVarsetEntry) []string {
+	ids := make([]string, 0, len(entries))
+	for _, e := range entries {
+		ids = append(ids, e.VarsetID)
+	}
+	return ids
 }
 
 // mergeOverrides: stored 为基础;incoming 中非空值或非敏感 key 覆盖写入;
@@ -609,7 +685,7 @@ func mergeOverrides(stored, incoming map[string]string, sensitive map[string]boo
 // @Failure 403 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 409 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/uninstall [post]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
@@ -660,7 +736,7 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 	writeManifestAudit(h.db, auditResourceManifestDeployment, "deployment.uninstall", userID, map[string]interface{}{
@@ -687,20 +763,17 @@ func (h *ManifestDeploymentsV2Handler) Uninstall(c *gin.Context) {
 // @Param org_id path string true "Organization ID"
 // @Param id path string true "Manifest ID"
 // @Param deployment_id path string true "Deployment ID"
-// @Param request body map[string]interface{} true "Varsets and variable_overrides for preview"
+// @Param request body models.DeploymentPreviewRequest true "Optional target version, varsets, overrides and unset_keys; stored overrides are merged as in upgrade"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}/variable-preview [post]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 	deploymentID := c.Param("deployment_id")
 
-	var req struct {
-		Varsets           []models.DeploymentVarsetEntry `json:"varsets"`
-		VariableOverrides map[string]string              `json:"variable_overrides"`
-	}
+	var req models.DeploymentPreviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -715,7 +788,21 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "deployment not found"})
 		return
 	}
-	h.previewVariables(c, dep.WorkspaceID, req.Varsets, req.VariableOverrides)
+	var targets []string
+	if req.TargetVersionID != "" {
+		var n int64
+		h.db.Model(&models.ManifestVersion{}).Where("id = ? AND manifest_id = ?", req.TargetVersionID, manifestID).Count(&n)
+		if n == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid target_version_id"})
+			return
+		}
+		targets = append(targets, req.TargetVersionID)
+	}
+	// 与 upgrade 同一合并:已存覆盖 + 本次覆盖 - unset_keys,敏感值保持空
+	h.previewVariables(c, dep.WorkspaceID, req.Varsets, func() (map[string]string, map[string]bool, error) {
+		merged, sens, err := h.mergeDeploymentOverrides(dep, targets, req.Varsets, req.VariableOverrides, req.UnsetKeys)
+		return merged, sens.display, err
+	})
 }
 
 // FirstInstallVariablePreview 首次安装前的变量预览(尚无 deployment)。
@@ -734,7 +821,7 @@ func (h *ManifestDeploymentsV2Handler) VariablePreview(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 403 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview [post]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Context) {
@@ -747,7 +834,16 @@ func (h *ManifestDeploymentsV2Handler) FirstInstallVariablePreview(c *gin.Contex
 	if _, ok := h.resolveInstallTarget(c, manifestID, req.WorkspaceID, req.VersionID); !ok {
 		return
 	}
-	h.previewVariables(c, req.WorkspaceID, req.Varsets, req.VariableOverrides)
+	h.previewVariables(c, req.WorkspaceID, req.Varsets, func() (map[string]string, map[string]bool, error) {
+		sensitive, err := services.ComputeDeploymentSensitiveKeys(h.db, []string{req.VersionID}, req.WorkspaceID, varsetIDsOf(req.Varsets))
+		if err != nil {
+			return nil, nil, err
+		}
+		for k := range req.VariableOverrides.SensitiveFlags() {
+			sensitive[k] = true
+		}
+		return req.VariableOverrides.Values(), sensitive, nil
+	})
 }
 
 // resolveInstallTarget 安装目标校验(Install 与首装预览共用):
@@ -773,7 +869,10 @@ func (h *ManifestDeploymentsV2Handler) resolveInstallTarget(c *gin.Context, mani
 //   - 目标 workspace 的 WORKSPACE_VARIABLES READ(预览即读取其合并变量;仅 MANIFESTS READ 不够);
 //   - varset 必须可挂载到目标 workspace;
 //   - 敏感值恒为空串,带 sensitive 标记。
-func (h *ManifestDeploymentsV2Handler) previewVariables(c *gin.Context, workspaceID string, varsets []models.DeploymentVarsetEntry, overrides map[string]string) {
+//
+// prepare 在权限与可挂载校验之后才执行,返回要叠加的覆盖与部署层敏感 key。
+func (h *ManifestDeploymentsV2Handler) previewVariables(c *gin.Context, workspaceID string, varsets []models.DeploymentVarsetEntry,
+	prepare func() (overrides map[string]string, sensitive map[string]bool, err error)) {
 	if h.perm == nil || !h.perm.RequireWorkspaceResourcePermission(c, workspaceID, "WORKSPACE_VARIABLES", "READ") {
 		if h.perm == nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "permission middleware not configured"})
@@ -783,6 +882,11 @@ func (h *ManifestDeploymentsV2Handler) previewVariables(c *gin.Context, workspac
 	if !h.rejectUnmountableVarsets(c, workspaceID, varsets) {
 		return
 	}
+	overrides, sensitive, err := prepare()
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
 	resolver := services.NewVariableResolutionService(h.db)
 	extraIDs := make([]string, 0, len(varsets))
 	for _, v := range varsets {
@@ -790,8 +894,15 @@ func (h *ManifestDeploymentsV2Handler) previewVariables(c *gin.Context, workspac
 	}
 	values, err := resolver.ResolveDisplayWithExtra(workspaceID, extraIDs, overrides)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
+	}
+	// 部署层敏感 key(版本 variable 块 / sensitive_keys / 请求标记)同样不出值
+	for i := range values {
+		if sensitive[values[i].Key] {
+			values[i].Sensitive = true
+			values[i].Value = ""
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"variables": values})
 }
@@ -887,7 +998,7 @@ func (h *ManifestDeploymentsV2Handler) GetWorkspaceManifestSummary(c *gin.Contex
 // @Produce json
 // @Param varset_id path string true "Variable set ID"
 // @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Failure 500 {object} middleware.InternalErrorResponse
 // @Router /api/v1/variable-sets/{varset_id}/manifest-deployments [get]
 // @Security BearerAuth
 func (h *ManifestDeploymentsV2Handler) VarsetReverseLookup(c *gin.Context) {
@@ -910,7 +1021,7 @@ func (h *ManifestDeploymentsV2Handler) VarsetReverseLookup(c *gin.Context) {
 		 WHERE mdv.varset_id = ? AND md.status = ?
 		 ORDER BY md.deployed_at DESC
 	`, varsetID, models.DeploymentStatusActive).Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deployments": rows})

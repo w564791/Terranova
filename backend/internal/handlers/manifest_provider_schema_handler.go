@@ -66,7 +66,7 @@ func (h *ManifestProviderSchemaHandler) GetProviderSchemas(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.Error(err)
 		return
 	}
 
