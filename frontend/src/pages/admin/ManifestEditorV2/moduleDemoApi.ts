@@ -7,7 +7,7 @@
  *
  * 编辑器 IntelliSense 频繁调用,这里做内存缓存:
  *  - modules 全量列表缓存 60s (足够 1 次编辑会话)
- *  - 每个 module 的 demos 也缓存
+ *  - 每个 module 的 demos / inputs 按需拉取(ensureDemos / ensureInputs)并缓存,不预热
  *  - 不做磁盘缓存,刷新页面重拉
  */
 import api from '../../../services/api'
@@ -119,10 +119,48 @@ export function getCachedInputs(moduleId: number): ModuleInputField[] {
   return inputsCache.get(moduleId)?.data ?? []
 }
 
-/** 后台预热: 进入编辑器时调一次,把 modules + 每个 module 的 demos/inputs 都拉好 */
-export async function warmUpCache(): Promise<void> {
-  const modules = await fetchModules()
-  await Promise.all(
-    modules.flatMap((m) => [fetchDemos(m.module_id), fetchInputs(m.module_id)]),
-  )
+// ---- 按需加载(每个 module 首次被补全 / hover / inlay / quick fix 用到时才拉,结果按 module 缓存) ----
+// 不再在打开编辑器时预热全部 module 的 demos/inputs(原来 2N+1 个请求)。
+// 语义与原 getCached* 一致:已有非空缓存一直复用;空结果过期(TTL)后才重拉;并发调用共享同一请求。
+const modulesInflight: { p: Promise<ModuleSummary[]> | null } = { p: null }
+const demosInflight = new Map<number, Promise<DemoSummary[]>>()
+const inputsInflight = new Map<number, Promise<ModuleInputField[]>>()
+
+function usable<T>(c: { at: number; data: T[] } | null | undefined): c is { at: number; data: T[] } {
+  return !!c && (c.data.length > 0 || isFresh(c.at))
+}
+
+/** module 列表:有缓存直接用,否则拉一次(并发去重) */
+export function ensureModules(): Promise<ModuleSummary[]> {
+  if (usable(modulesCache)) return Promise.resolve(modulesCache.data)
+  if (!modulesInflight.p) {
+    modulesInflight.p = fetchModules().finally(() => {
+      modulesInflight.p = null
+    })
+  }
+  return modulesInflight.p
+}
+
+/** 某 module 的 demos:有缓存直接用,否则拉一次(并发去重) */
+export function ensureDemos(moduleId: number): Promise<DemoSummary[]> {
+  const cached = demosCache.get(moduleId)
+  if (usable(cached)) return Promise.resolve(cached.data)
+  let p = demosInflight.get(moduleId)
+  if (!p) {
+    p = fetchDemos(moduleId).finally(() => demosInflight.delete(moduleId))
+    demosInflight.set(moduleId, p)
+  }
+  return p
+}
+
+/** 某 module 的 inputs:有缓存直接用,否则拉一次(并发去重) */
+export function ensureInputs(moduleId: number): Promise<ModuleInputField[]> {
+  const cached = inputsCache.get(moduleId)
+  if (usable(cached)) return Promise.resolve(cached.data)
+  let p = inputsInflight.get(moduleId)
+  if (!p) {
+    p = fetchInputs(moduleId).finally(() => inputsInflight.delete(moduleId))
+    inputsInflight.set(moduleId, p)
+  }
+  return p
 }

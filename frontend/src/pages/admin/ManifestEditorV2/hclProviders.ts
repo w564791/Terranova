@@ -21,10 +21,10 @@
 import * as monaco from 'monaco-editor'
 import { HCL_LANGUAGE_IDS } from './hclLanguage'
 import {
-  warmUpCache,
+  ensureModules,
+  ensureDemos,
   getCachedModules,
   getCachedDemos,
-  fetchDemos,
   type ModuleSummary,
   type DemoSummary,
 } from './moduleDemoApi'
@@ -42,8 +42,9 @@ export function registerHclProviders(): void {
   const disposables: monaco.IDisposable[] = []
   g[REGISTRY_KEY] = disposables
 
-  // 后台预热缓存(不阻塞)
-  void warmUpCache()
+  // 只预取 module 列表(1 个请求,hover 等同步 provider 依赖它);
+  // 各 module 的 demos / inputs 改为首次用到时按需拉取(见 demosFor / hclCompletion)
+  void ensureModules()
 
   for (const langId of HCL_LANGUAGE_IDS) {
 
@@ -61,7 +62,7 @@ export function registerHclProviders(): void {
         endColumn: word.endColumn,
       }
       const suggestions: monaco.languages.CompletionItem[] = []
-      const modules = getCachedModules()
+      const modules = await ensureModules()
 
       // 场景 A: 在 source = "<here>" 内 → 仅 module source 列表
       const inSourceQuote = /source\s*=\s*"[^"]*$/.test(before)
@@ -115,11 +116,12 @@ export function registerHclProviders(): void {
       const rawFilter = trimmedBefore.toLowerCase()
       const moduleKw = /^(m|mo|mod|modu|modul|module)$/
       const filter = moduleKw.test(rawFilter) || rawFilter === '' ? '' : rawFilter.replace(/^module\s+/, '')
+      const matched = modules.filter((m) => !filter || `${m.source} ${m.name}`.toLowerCase().includes(filter))
+      // 按需拉取命中 module 的 demos(已缓存的不发请求)
+      const demosByModule = await Promise.all(matched.map((m) => demosFor(m)))
 
-      modules.forEach((m) => {
-        const hay = `${m.source} ${m.name}`.toLowerCase()
-        if (filter && !hay.includes(filter)) return
-        const demos = getCachedDemos(m.module_id)
+      matched.forEach((m, mi) => {
+        const demos = demosByModule[mi]
 
         suggestions.push({
           label: { label: `module "${m.source}"`, description: '空配置 — 仅 source/version' },
@@ -187,7 +189,7 @@ export function registerHclProviders(): void {
       const hints: monaco.languages.InlayHint[] = []
       const text = model.getValue()
       const lines = text.split('\n')
-      const modules = getCachedModules()
+      const modules = await ensureModules()
 
       // 关键: 必须只返回落在 Monaco 请求的可见范围(range)内的 hint。
       // 否则 adapter 在滚动 / 草稿自动保存触发模型版本变化、对新可见范围重新请求时,
@@ -214,13 +216,9 @@ export function registerHclProviders(): void {
           }
         }
         if (!mod || blockEnd < 0) continue
-        // 拉 demo (异步,但不阻塞 inlay hint 渲染 — 已缓存就直接用)
-        const demos = getCachedDemos(mod.module_id)
-        if (demos.length === 0) {
-          // 没缓存,触发后台拉,这次先不显示
-          void fetchDemos(mod.module_id)
-          continue
-        }
+        // 按需拉 demo(已缓存直接用;首次用到才请求)
+        const demos = await demosFor(mod)
+        if (demos.length === 0) continue
 
         // 构 tooltip
         const tooltipLines = [
@@ -262,7 +260,7 @@ export function registerHclProviders(): void {
 
   // ---- 通道 4: Code Action (Quick Fix 灯泡) ----
   disposables.push(monaco.languages.registerCodeActionProvider(langId as string, {
-    provideCodeActions(model, range) {
+    async provideCodeActions(model, range) {
       const text = model.getValue()
       const lines = text.split('\n')
       const cursorLine = range.startLineNumber - 1
@@ -298,7 +296,7 @@ export function registerHclProviders(): void {
       }
       const mod = getCachedModules().find((p) => p.source === sourceLine)
       if (!mod) return { actions: [], dispose: () => {} }
-      const demos = getCachedDemos(mod.module_id)
+      const demos = await demosFor(mod)
       if (demos.length === 0) return { actions: [], dispose: () => {} }
       // body "基本为空" 检查 — 排除 source/version 后非空行 < 2
       const bodyContentLines: string[] = []
@@ -378,6 +376,12 @@ export function registerHclProviders(): void {
       editor.focus()
     },
   ))
+}
+
+/** module 的 demos:demo_count 为 0 不发请求,否则按需拉取并缓存 */
+function demosFor(mod: ModuleSummary): Promise<DemoSummary[]> {
+  if (mod.demo_count <= 0) return Promise.resolve(getCachedDemos(mod.module_id))
+  return ensureDemos(mod.module_id)
 }
 
 // ============================================================

@@ -11,7 +11,7 @@
  */
 import * as monaco from 'monaco-editor'
 import { HCL_LANGUAGE_IDS } from './hclLanguage'
-import { getCachedModules, getCachedInputs, fetchInputs, type ModuleInputField } from './moduleDemoApi'
+import { getCachedModules, getCachedInputs, ensureInputs, type ModuleInputField } from './moduleDemoApi'
 import { symbolsFromIndex, type DefinitionIndex } from './hclDefinitions'
 
 // HMR 会重算本模块、抹掉模块级变量,但 Monaco 全局 provider 注册表不会跟着重置。
@@ -575,8 +575,8 @@ export function registerHclCompletion(opts: RegisterCompletionOpts = {}): void {
               if (mod) {
                 const inputs = getCachedInputs(mod.module_id)
                 if (inputs.length === 0) {
-                  // 异步拉完后重触发补全，避免首次打开块时 inputs 还是空
-                  void fetchInputs(mod.module_id).then((list) => {
+                  // 按需拉取(首次用到该 module 才请求,并发去重);拉完后重触发补全
+                  void ensureInputs(mod.module_id).then((list) => {
                     if (list.length > 0) retriggerSuggest()
                   })
                 }
