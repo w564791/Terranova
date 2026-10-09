@@ -17,6 +17,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20261004_02_manifest_sandbox_schema",
 		"20261004_03_manifest_bundle_rules",
 		"20261004_04_manifest_bundle_v2",
+		"20261010_01_workspace_task_error_code",
 		"20261010_10_variable_key_version",
 	}
 	if len(definitions) != len(want) {

@@ -4268,6 +4268,11 @@ definitions:
       duration:
         description: 秒
         type: integer
+      error_code:
+        description: |-
+          ErrorCode 结构化失败码(与 ErrorMessage 并存,前端按 code 判断),见 TaskErrorCode*;
+          空 = 无结构化码。由执行器写入(agent 经状态上报,仅接受已知码)。
+        type: string
       error_message:
         type: string
       execution_mode:
@@ -8135,8 +8140,9 @@ paths:
         name: task_id
         required: true
         type: string
-      - description: Status update with status, stage, error_message, changes, duration,
-          etc.
+      - description: Status update with status, stage, error_message, error_code (only
+          known structured codes such as bundle_republish_required are stored), changes,
+          duration, etc.
         in: body
         name: request
         required: true
@@ -23218,7 +23224,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get workspace task list with pagination, search and filtering
+      description: Get workspace task list with pagination, search and filtering.
+        Each task carries error_code when its failure has a structured code (e.g.
+        "bundle_republish_required").
       parameters:
       - description: Workspace ID
         in: path
@@ -23286,7 +23294,10 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get task detail by ID
+      description: 'Get task detail by ID. A failed task carries error_message and,
+        when the failure has a structured code, error_code (currently "bundle_republish_required":
+        the manifest version has no valid bundle; error_message is then "bundle_republish_required:
+        <reason>").'
       parameters:
       - description: Workspace ID
         in: path

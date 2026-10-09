@@ -122,8 +122,14 @@ func (s *PlanParserService) executeTerraformShowJSON(planFile string) (map[strin
 	workDir := filepath.Dir(planFile)
 
 	// 先执行terraform init（plan文件需要provider）
-	initCmd := exec.CommandContext(ctx, "terraform", "init", "-no-color")
+	// 与执行器同一 init 策略:不 -upgrade,只用本目录私有的插件缓存(不继承共享 TF_PLUGIN_CACHE_DIR)
+	initCmd := exec.CommandContext(ctx, "terraform", terraformInitArgs(false)...)
 	initCmd.Dir = workDir
+	cacheDir, cacheErr := preparePerTaskPluginCache(workDir, true)
+	if cacheErr != nil {
+		cacheDir = ""
+	}
+	initCmd.Env = withPluginCache(os.Environ(), cacheDir)
 	if err := initCmd.Run(); err != nil {
 		log.Printf("Warning: terraform init failed: %v (continuing anyway)", err)
 		// 不阻塞，继续尝试show

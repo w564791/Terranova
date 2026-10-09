@@ -698,7 +698,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 // @Produce json
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Status update with status, stage, error_message, changes, duration, etc."
+// @Param request body map[string]interface{} true "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), changes, duration, etc."
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -729,6 +729,7 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		Status         models.TaskStatus      `json:"status" binding:"required"`
 		Stage          string                 `json:"stage"`
 		ErrorMessage   string                 `json:"error_message"`
+		ErrorCode      string                 `json:"error_code"` // structured failure code; only models.KnownTaskErrorCode values are stored
 		ChangesAdd     int                    `json:"changes_add"`
 		ChangesChange  int                    `json:"changes_change"`
 		ChangesDestroy int                    `json:"changes_destroy"`
@@ -784,6 +785,9 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 	}
 	if req.ErrorMessage != "" {
 		updates["error_message"] = req.ErrorMessage
+	}
+	if models.KnownTaskErrorCode(req.ErrorCode) {
+		updates["error_code"] = req.ErrorCode
 	}
 	if req.ChangesAdd > 0 || req.ChangesChange > 0 || req.ChangesDestroy > 0 {
 		updates["changes_add"] = req.ChangesAdd

@@ -109,6 +109,10 @@ func definitions() []definition {
 		// index; a stored (v1) hash must match the current files before it is
 		// rewritten as v2 (else sticky hash_mismatch), then the bundle rules.
 		// Never fails on bad old versions, never touches files.
+		{version: "20261004_04_manifest_bundle_v2", contract: "manifest-bundle-v2-verify-stored-then-rules-v1", apply: applyManifestBundleV2},
+		// Structured task failure code (workspace_tasks.error_code, e.g.
+		// bundle_republish_required). Additive only.
+		{version: "20261010_01_workspace_task_error_code", contract: "workspace-task-error-code-v1", apply: applyWorkspaceTaskErrorCode},
 	}
 }
 

@@ -81,6 +81,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 10. 执行器闸门与发布 HCL 检查（feat/manifest-sandbox）：执行器取文件处 `bundle_hash IS NULL`（规则违规或 `hash_mismatch`）一律拒绝，任务失败报 `bundle_republish_required: <reason>`；uninstall 仍只解绑元信息（之后的 Plan+Apply 不加载 bundle），不需确认。native 发布新增 HCL 静态检查（422 同一 problem 形状，带行号）：`hcl_parse_error`、`hcl_provisioner`、`hcl_external_data`、`hcl_http_data`、`hcl_module_source`；module source 白名单 = bundle 内相对路径 + 平台 module 目录中 active module 的 `module_source`（`manifestbundle.PublishModuleSourcePolicy`）。只在发布时检查，不追溯已有合法版本。细节见 sandbox spec §3.3。
 
+11. 执行器 provider 安装（step 4 前置）：`terraform init` 从不加 `-upgrade`，provider 与 `.terraform.lock.hcl` 不符（版本约束或 checksum）即失败、不重试；manifest bundle 自带的 lock 优先于 workspace 已存 lock（不再被覆盖）；workspace provider 配置被修改后（`provider_config_hash != last_init_hash`）本次不恢复已存 lock、按新约束重新解析并保存新 lock。插件缓存改为按任务私有目录（`<workDir>/.terranova-plugin-cache`，首次尝试时清空重建，随工作目录删除），进程环境与 workspace 变量里的 `TF_PLUGIN_CACHE_DIR`、`TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE`、`TF_CLI_ARGS_init` 一律忽略；不再写工作目录 `.terraformrc`（Terraform 从未读取它，且其中的 `plugin_cache_may_break_dependency_lock_file = true` 会绕过 lock 校验），也不设置 `TF_CLI_CONFIG_FILE`。任务失败带结构化 `error_code`（`workspace_tasks.error_code`，迁移 `20261010_01_workspace_task_error_code`），bundle 闸门失败为 `bundle_republish_required`，任务详情/列表输出；agent 上报只接受已知码。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
