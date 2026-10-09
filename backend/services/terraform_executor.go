@@ -225,35 +225,23 @@ func taskUsesExternalFiles(task *models.WorkspaceTask) bool {
 
 // writeExternalFiles 把 task.ExternalFiles 全量落 workDir(Run 第三分支)
 //
-// ExternalFiles 格式: { "files": [ {"path":"main.tf","content_b64":"..."}, ... ] }
+// ExternalFiles 格式: { "files": [ {"path":"main.tf","content_b64":"...","mode":420}, ... ],
+// "bundle_hash": "...", "manifest_version_id"?: "..." }。创建任务时已按发布规则校验
+// (PrepareManifestRunFiles)并固化 bundle_hash;这里与部署 bundle 走同一个归档 +
+// manifestbundle.Unpack 交接,落盘集合哈希必须等于 bundle_hash 才继续。
 func (s *TerraformExecutor) writeExternalFiles(task *models.WorkspaceTask, workDir string) error {
 	if !taskUsesExternalFiles(task) {
 		return nil
 	}
-	files, _ := task.ExternalFiles["files"].([]interface{})
-	for _, item := range files {
-		entry, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		path, _ := entry["path"].(string)
-		contentB64, _ := entry["content_b64"].(string)
-		if path == "" {
-			continue
-		}
-		content, err := base64.StdEncoding.DecodeString(contentB64)
-		if err != nil {
-			return fmt.Errorf("decode external file %s: %w", path, err)
-		}
-		target := filepath.Join(workDir, path)
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
-		}
-		if err := os.WriteFile(target, content, 0644); err != nil {
-			return fmt.Errorf("write %s: %w", target, err)
-		}
+	h, err := externalFilesHandoff(task)
+	if err != nil {
+		return err
 	}
-	log.Printf("[manifest-run] wrote %d external files to %s", len(files), workDir)
+	files, err := unpackManifestHandoff(h, workDir)
+	if err != nil {
+		return err
+	}
+	log.Printf("[manifest-run] unpacked %d external files to %s (bundle_hash=%s)", len(files), workDir, h.BundleHash)
 	return nil
 }
 
@@ -1274,7 +1262,9 @@ func (s *TerraformExecutor) ExecutePlan(
 	if err != nil {
 		logger.Warn("Failed to generate plan JSON: %v", err)
 	} else {
-		logger.Info("✓ Generated plan.json (%.1f KB)", float64(len(fmt.Sprintf("%v", planJSON)))/1024)
+		// 先脱敏:之后的统计、resource changes 上传、入库都只见脱敏后的 plan
+		planJSON = RedactPlanJSON(planJSON)
+		logger.Info("✓ Generated plan.json (%.1f KB, sensitive values redacted)", float64(len(fmt.Sprintf("%v", planJSON)))/1024)
 	}
 
 	// 解析资源变更统计
@@ -1635,6 +1625,8 @@ func (s *TerraformExecutor) SavePlanData(
 		log.Printf("ERROR: Failed to read plan file: %v", err)
 		return
 	}
+
+	planJSON = RedactPlanJSON(planJSON) // 只存脱敏后的 plan(幂等)
 
 	// 带简单重试
 	maxRetries := 3
@@ -4427,7 +4419,8 @@ func (s *TerraformExecutor) SavePlanDataWithLogging(
 	s.signalManager.EnterCriticalSection("saving_plan")
 	defer s.signalManager.ExitCriticalSection("saving_plan")
 
-	// 设置 plan data
+	// 设置 plan data(plan_json 只存脱敏后的形式,幂等)
+	planJSON = RedactPlanJSON(planJSON)
 	task.PlanData = planData
 	task.PlanJSON = planJSON
 	log.Printf("[CRITICAL] Set task.PlanData (len=%d) and task.PlanJSON (exists=%v) for task %d",

@@ -3722,7 +3722,7 @@
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Upload plan JSON from agent after plan execution",
+                "description": "Upload plan JSON from agent after plan execution. Sensitive values are redacted (services.RedactPlanJSON) before the plan is stored.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27014,7 +27014,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a Terraform Plan task or Plan+Apply task",
+                "description": "Create a Terraform Plan task or Plan+Apply task. Manifest Run: external_files ([{path, content_b64}], plan only) are validated before the task is created. Without manifest_version_id they are treated as a draft and must pass the publish rules (bundle rules and HCL static check) or the request fails with 422 bundle_rules_violated ({file, line?, rule, message}; never file content). With manifest_version_id (files opened from a published version) the version is verified (re-hash; 409 bundle_republish_required when it has no valid bundle) and the files must hash to its bundle_hash (409 bundle_hash_mismatch otherwise). The accepted files and their bundle_hash are frozen on the task; the runner unpacks them and checks the hash again before terraform init.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27034,7 +27034,7 @@
                         "required": true
                     },
                     {
-                        "description": "Task configuration (description and run_type optional)",
+                        "description": "Task configuration (description, run_type, external_files, manifest_version_id optional)",
                         "name": "request",
                         "in": "body",
                         "schema": {
@@ -27065,7 +27065,21 @@
                         }
                     },
                     "404": {
-                        "description": "Workspace not found",
+                        "description": "Workspace or manifest version not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "bundle_republish_required or bundle_hash_mismatch (manifest Run of a published version)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "bundle_rules_violated (manifest Run files)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true

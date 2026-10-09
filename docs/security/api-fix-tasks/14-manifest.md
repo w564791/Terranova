@@ -85,6 +85,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 12. Runner 接口与 bundle 交接（step 4）：任务投递统一经 `Runner`（local / agent+K8s / sandbox 占位），approval（`plan_and_apply`、`apply`）必须持 workspace advisory lock 才能投递，`ExecuteConfirmedApply` 补上了锁；approval 的 plan 持 state 锁（只有 preview 用 `-lock=false`）。`pglock` 每把锁独占连接（修复会话级锁在连接池上泄漏 / 重入）。manifest 文件改为「归档 + `bundle_hash`」交接，`manifestbundle.Unpack` 逐条校验路径与类型、`O_EXCL|O_NOFOLLOW` 写盘、累计限额即时中止、落盘后重算哈希一致才进入 `init`。agent / K8s 经 `GetTaskData` 收到 manifest 三列、已校验 bundle（或拒绝原因）和 override 快照：修复 agent 模式把 manifest workspace 当 UI workspace 生成空配置、以及 override 在 agent 模式被丢弃的问题。tfvars / `variables.tf.json` 生成由各 runner 共用，override 不再把敏感变量降为非敏感。细节见 sandbox spec §3.4。
 
+13. plan 脱敏与编辑器 Run 校验（step 4）：`plan_json` 入库前脱敏（`RedactPlanJSON`，按 plan 自带的敏感标记 + provider 配置常量），local 保存、agent 上传（平台侧再脱敏）、plan parser 回退路径一致；脱敏后的 plan 的哈希由 `RedactedPlanHash` 计算（供 `manifest_runs.plan_hash`）。历史 `plan_json` 未回填脱敏，`plan_data`（apply 需要的二进制 plan）仍含明文敏感值。编辑器 Run 的 `external_files` 建任务时校验：草稿走发布规则（422），带 `manifest_version_id` 时校验版本并比对 `bundle_hash`（409），固化 `bundle_hash` 后执行时复核。细节见 sandbox spec §3.4。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
@@ -119,6 +121,7 @@ backend/internal/manifestbundle/{rules,source}.go（step 3）
 backend/internal/migration/manifest_bundle_v2.go + backend/migrations/add_manifest_bundle_v2.sql（step 3）
 backend/internal/manifestbundle/hcl.go、backend/services/local_data_accessor.go（第 10 条）
 backend/internal/manifestbundle/archive.go、backend/services/{runner,manifest_handoff,task_variables}.go、backend/internal/pglock/advisory_lock.go、backend/internal/handlers/agent_handler.go（第 12 条）
+backend/services/{plan_redaction,manifest_run_files}.go、backend/controllers/workspace_task_controller.go（第 13 条）
 ```
 
 ### 未完成项（2026-10-04 暂停时记录，合并 `feat/manifest-sandbox` 前必须处理）
@@ -128,7 +131,7 @@ backend/internal/manifestbundle/archive.go、backend/services/{runner,manifest_h
 2. `MaxFiles = 2000`（`too_many_files`）已在本次暂停前的提交里完成。
 
 **第 4 步（runner）**
-- ~~解包、哈希复核、override 下发、共用 tfvars、审批 run 拿锁~~ —— 已完成（第 12 条）。以下为原始要求：
+- ~~解包、哈希复核、override 下发、共用 tfvars、审批 run 拿锁、plan 先脱敏再算哈希~~ —— 已完成（第 12、13 条）；`manifest_runs` 的写入（`plan_redacted` / `plan_hash`）随 step 6/7 的 run 记录落地。以下为原始要求：
 - 解包：每个条目都要过 `manifestbundle.ValidatePath`；条目类型只接受普通文件和目录，链接、设备文件一律拒绝；写盘用 `O_EXCL|O_NOFOLLOW`；解包过程中累计计算大小和文件数（`MaxFileSize`、`MaxBundleSize`、`MaxFiles`），超限立刻停止。
 - 解完后用 `manifestbundle.Hash` 重算，与 `bundle_hash` 一致才能 `init`；拒绝 NULL 哈希的版本；对不上按 `hash_mismatch` 处理（记录原因、WARN 审计）。
 - `RemoteDataAccessor.SetVariableOverrides` 目前什么都不做，agent 模式会丢掉 override：改为通过 agent 已有的任务数据通道下发，不能走环境变量或日志。
