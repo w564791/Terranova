@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"iac-platform/internal/database"
-	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"log"
 	"time"
@@ -18,7 +17,7 @@ type LocalDataAccessor struct {
 	db           *gorm.DB
 	tx           *gorm.DB                   // 用于事务支持
 	snapshotVars []models.WorkspaceVariable // cached snapshot variables
-	overrides    map[string]string          // manifest deployment 应急覆盖(最高优先级,仅 Terraform 变量)
+	overrides    VariableOverrides          // manifest deployment 应急覆盖(最高优先级,仅 Terraform 变量)
 }
 
 // NewLocalDataAccessor 创建 Local 数据访问器
@@ -79,37 +78,13 @@ func (a *LocalDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
 }
 
 // SetVariableOverrides 注入 manifest deployment 应急覆盖(最高优先级)。
-func (a *LocalDataAccessor) SetVariableOverrides(overrides map[string]string) {
+func (a *LocalDataAccessor) SetVariableOverrides(overrides VariableOverrides) {
 	a.overrides = overrides
 }
 
-// applyOverrides 把 overrides overlay 到已解析的 Terraform 变量上(最高优先级)。
-// 仅作用于 Terraform 变量;已存在则覆盖值并清敏感标记(overrides 不存敏感值),
-// 不存在则追加。返回新切片,不改入参。
+// applyOverrides 见 ApplyVariableOverrides(与 RemoteDataAccessor 共用同一规则)。
 func (a *LocalDataAccessor) applyOverrides(vars []models.WorkspaceVariable, varType models.VariableType) []models.WorkspaceVariable {
-	if len(a.overrides) == 0 || varType != models.VariableTypeTerraform {
-		return vars
-	}
-	seen := make(map[string]int, len(vars))
-	for i, v := range vars {
-		seen[v.Key] = i
-	}
-	for k, val := range a.overrides {
-		if idx, ok := seen[k]; ok {
-			vars[idx].Value = val
-			vars[idx].Sensitive = false
-			vars[idx].VariableID = "override-" + k
-		} else {
-			vars = append(vars, models.WorkspaceVariable{
-				VariableID:   "override-" + k,
-				Key:          k,
-				Value:        val,
-				VariableType: models.VariableTypeTerraform,
-				Sensitive:    false,
-			})
-		}
-	}
-	return vars
+	return ApplyVariableOverrides(vars, varType, a.overrides)
 }
 
 // GetWorkspaceVariables 获取 Workspace 变量列表（含 Variable Set 合并，优先级解析后的最终结果）
@@ -691,35 +666,24 @@ func (a *LocalDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]m
 	// (bundle 规则或 hash_mismatch)一律拒绝,任务失败报 "bundle_republish_required: <reason>"。
 	// uninstall 只解绑元信息、不经这里取文件:其后的 Plan+Apply 不含 bundle 代码,
 	// 所以无效版本仍可 uninstall,且 bundle 内容不会被执行。
-	var versionID string
-	if err := a.getDB().Raw(`
-		SELECT mv.id
-		  FROM manifest_versions mv
-		  JOIN manifest_deployments md ON md.version_id = mv.id
-		 WHERE md.id = ? AND mv.version = ?
-	`, deploymentID, tag).Scan(&versionID).Error; err != nil {
+	// executor 走 GetManifestBundleByTag(同一校验,外加归档 + Unpack 复核)。
+	h, err := a.GetManifestBundleByTag(deploymentID, tag)
+	if err != nil || h == nil {
 		return nil, err
 	}
-	if versionID == "" {
-		return nil, nil
-	}
-	bundle, err := manifestbundle.OpenVersion(context.Background(), a.getDB(), "", versionID)
-	if err != nil {
-		return nil, err
-	}
-	// 记录写在事务外(a.db),外层事务回滚也不会丢掉 hash_mismatch 标记
-	if err := manifestbundle.RequireValidForRun(context.Background(), a.db, bundle, manifestbundle.MismatchEvent{
-		VersionID: versionID, Source: "runner:deployment=" + deploymentID,
-	}); err != nil {
-		return nil, err
-	}
-	files := make([]models.ManifestFile, len(bundle.Files))
-	for i, f := range bundle.Files {
-		vid := versionID
-		files[i] = models.ManifestFile{VersionID: &vid, Path: f.Path, Content: f.Content, Mime: f.Mime,
+	out := make([]models.ManifestFile, len(h.Files))
+	for i, f := range h.Files {
+		vid := h.VersionID
+		out[i] = models.ManifestFile{VersionID: &vid, Path: f.Path, Content: f.Content, Mime: f.Mime,
 			Size: len(f.Content), IsBinary: f.IsBinary, Mode: f.Mode}
 	}
-	return files, nil
+	return out, nil
+}
+
+// GetManifestBundleByTag 见 DataAccessor:查询走当前事务(getDB),hash_mismatch 记录写在
+// 事务外(a.db),外层事务回滚也不会丢掉标记。
+func (a *LocalDataAccessor) GetManifestBundleByTag(deploymentID, tag string) (*ManifestBundleHandoff, error) {
+	return LoadRunnableManifestBundle(context.Background(), a.getDB(), a.db, deploymentID, tag)
 }
 
 // ============================================================================

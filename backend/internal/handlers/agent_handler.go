@@ -377,7 +377,7 @@ func (h *AgentHandler) UnregisterAgent(c *gin.Context) {
 
 // GetTaskData retrieves all data needed for task execution
 // @Summary Get task execution data
-// @Description Get complete task data including workspace config, resources, variables, and state
+// @Description Get complete task data including workspace config (with manifest_deployment_id / manifest_active_tag / manifest_subpath), resources, variables, the task variable override snapshot (task.variable_overrides, task.override_sensitive_keys), Manifest Run files (task.external_files), the verified manifest bundle hand-off (manifest_bundle: archive_b64 + bundle_hash, or manifest_bundle_error when the version must be republished), and state
 // @Tags Agent Task
 // @Accept json
 // @Produce json
@@ -520,33 +520,39 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 	}
 
 	// Build response
+	taskData := gin.H{
+		"id":           task.ID,
+		"workspace_id": task.WorkspaceID,
+		"task_type":    task.TaskType,
+		"action":       task.TaskType,
+		"context":      task.Context,
+		"created_at":   task.CreatedAt,
+		"plan_task_id": task.PlanTaskID, // 【修复】添加 plan_task_id 字段
+		"agent_id":     task.AgentID,    // 【Phase 1优化】添加 agent_id 字段
+	}
+	workspaceData := gin.H{
+		"workspace_id":       workspace.WorkspaceID,
+		"name":               workspace.Name,
+		"terraform_version":  workspace.TerraformVersion,
+		"execution_mode":     workspace.ExecutionMode,
+		"provider_config":    providerConfig,
+		"tf_code":            workspace.TFCode,
+		"system_variables":   workspace.SystemVariables,
+		"terraform_lock_hcl": workspace.TerraformLockHCL, // 用于恢复 .terraform.lock.hcl 文件
+	}
 	response := gin.H{
-		"task": gin.H{
-			"id":           task.ID,
-			"workspace_id": task.WorkspaceID,
-			"task_type":    task.TaskType,
-			"action":       task.TaskType,
-			"context":      task.Context,
-			"created_at":   task.CreatedAt,
-			"plan_task_id": task.PlanTaskID, // 【修复】添加 plan_task_id 字段
-			"agent_id":     task.AgentID,    // 【Phase 1优化】添加 agent_id 字段
-		},
-		"workspace": gin.H{
-			"workspace_id":       workspace.WorkspaceID,
-			"name":               workspace.Name,
-			"terraform_version":  workspace.TerraformVersion,
-			"execution_mode":     workspace.ExecutionMode,
-			"provider_config":    providerConfig,
-			"tf_code":            workspace.TFCode,
-			"system_variables":   workspace.SystemVariables,
-			"terraform_lock_hcl": workspace.TerraformLockHCL, // 用于恢复 .terraform.lock.hcl 文件
-		},
+		"task":            taskData,
+		"workspace":       workspaceData,
 		"resources":       resources,
 		"variables":       variables,
 		"outputs":         outputs,          // 【新增】添加 outputs 配置，用于生成 outputs.tf.json
 		"remote_data":     remoteDataConfig, // 【新增】添加 remote_data 配置，用于生成 remote_data.tf.json
 		"module_versions": moduleVersions,   // 【新增】添加 module_versions，用于 Agent 模式下补充 tf_code 中缺失的 version 字段
 	}
+
+	// Manifest: override snapshot, Run draft files, manifest fields and the
+	// verified bundle hand-off (or the reason it was refused).
+	services.AddManifestTaskData(c.Request.Context(), h.db, &task, &workspace, taskData, workspaceData, response)
 
 	// Add state version ONLY if it actually exists in database
 	if hasStateVersion {

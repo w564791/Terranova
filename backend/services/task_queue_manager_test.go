@@ -238,6 +238,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		snapshot_manifest_version_id TEXT,
 		external_files TEXT,
 		variable_overrides TEXT,
+		sensitive_keys TEXT,
+		error_code TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
@@ -1082,6 +1084,36 @@ func TestExecuteConfirmedApply_AgentMode_CallsPush(t *testing.T) {
 	sent := mockHandler.getSentTasks()
 	require.Len(t, sent, 1)
 	assert.Equal(t, "apply", sent[0].Action)
+}
+
+// Approval runs dispatch only under the workspace lock: a confirmed apply
+// whose workspace lock is held elsewhere is not sent (the caller retries).
+func TestExecuteConfirmedApply_RequiresWorkspaceLock(t *testing.T) {
+	db := setupTestDB(t)
+	poolID := "pool-eca-lock"
+	createTestWorkspace(t, db, "ws-eca-lock", func(ws *testWorkspace) {
+		ws.ExecutionMode = models.ExecutionModeAgent
+		ws.CurrentPoolID = &poolID
+	})
+	confirmedAt := time.Now()
+	task := createTestTask(t, db, "ws-eca-lock", models.TaskTypePlanAndApply, models.TaskStatusApplyPending, func(task *testWorkspaceTask) {
+		task.ApplyConfirmedBy = strPtr("admin")
+		task.ApplyConfirmedAt = &confirmedAt
+	})
+	createTestAgent(t, db, "agent-eca-lock", poolID)
+	mockHandler := &mockAgentCCHandler{connectedAgents: []string{"agent-eca-lock"}}
+
+	locker := newMockLockProvider()
+	locker.blocked = true
+	mgr := newTestManager(db, mockHandler, locker)
+	err := mgr.ExecuteConfirmedApply("ws-eca-lock", task.ID)
+	assert.Error(t, err)
+	assert.Empty(t, mockHandler.getSentTasks(), "apply must not be sent without the workspace lock")
+
+	locker.blocked = false
+	require.NoError(t, mgr.ExecuteConfirmedApply("ws-eca-lock", task.ID))
+	require.Len(t, mockHandler.getSentTasks(), 1)
+	assert.Empty(t, locker.locked, "lock released after dispatch")
 }
 
 func TestExecuteConfirmedApply_K8sMode_CallsPush(t *testing.T) {
