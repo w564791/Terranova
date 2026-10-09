@@ -38,7 +38,7 @@ import SearchPanel from './SearchPanel'
 import ProblemsPanel, { type ProblemItem } from './ProblemsPanel'
 import { collectManifestProblems } from './collectProblems'
 import BundleStatusTag from './BundleStatusTag'
-import type { PublishProblem } from './bundleStatus'
+import { publishProblemText, type PublishProblem } from './bundleStatus'
 import QuickOpen from './QuickOpen'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
 import ManifestAiTools, { type EditorBridge, type CheckFile } from './ManifestAiTools'
@@ -3585,7 +3585,9 @@ export default function ManifestEditorV2() {
               return {
                 path: p.file,
                 severity: monaco.MarkerSeverity.Error,
-                message: p.message === p.rule ? p.rule : `${p.rule}: ${p.message}`,
+                // 按 rule 显示中文(未知规则回退后端英文 message);悬停保留规则码与英文原文
+                message: publishProblemText(p),
+                detail: p.message === p.rule ? p.rule : `${p.rule}: ${p.message}`,
                 startLineNumber: line,
                 startColumn: 1,
                 endLineNumber: line,
