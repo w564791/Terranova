@@ -8,7 +8,8 @@ import DynamicForm, { type FormSchema, FormPreview } from '../components/Dynamic
 import { FormRenderer as OpenAPIFormRenderer } from '../components/OpenAPIFormRenderer';
 import FormRendererV3 from '../components/OpenAPIFormRenderer/FormRendererV3';
 import HCLEditor from '../components/HCLEditor/HCLEditor';
-import MonacoHclEditor from '../components/MonacoHclEditor';
+// 懒加载:Monaco 只在切到 HCL 视图时下载
+import MonacoHclEditor from '../components/MonacoHclEditor/LazyMonacoHclEditor';
 import { useUIVersion } from '../hooks/useUIVersion';
 import { jsonToHCL } from '../utils/hclFormatter';
 import { parseHCLModule, TF_SYSTEM_PARAMS } from '../utils/hclParser';

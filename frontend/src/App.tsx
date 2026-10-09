@@ -1,7 +1,7 @@
-import type { FC } from 'react';
+import { lazy, Suspense, type FC } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { store } from './store';
 import { antdTheme } from './styles/antd-theme';
@@ -64,7 +64,6 @@ import NotificationManagement from './pages/admin/NotificationManagement';
 import NotificationForm from './pages/admin/NotificationForm';
 import PlatformConfig from './pages/admin/PlatformConfig';
 import ManifestManagement from './pages/admin/ManifestManagement';
-import ManifestEditorV2 from './pages/admin/ManifestEditorV2/ManifestEditorV2';
 import SwaggerUI from './pages/SwaggerUI';
 import PersonalSettings from './pages/PersonalSettings';
 import CMDB from './pages/CMDB';
@@ -77,6 +76,15 @@ import MFASetup from './pages/MFASetup';
 import MFAVerify from './pages/MFAVerify';
 import MFAConfig from './pages/admin/MFAConfig';
 import './App.css';
+
+// Manifest IDE 依赖 Monaco / vscode-api(数 MB),懒加载以免进入主入口 chunk
+const ManifestEditorV2 = lazy(() => import('./pages/admin/ManifestEditorV2/ManifestEditorV2'));
+
+const editorFallback = (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+    <Spin size="large" />
+  </div>
+);
 
 console.log('App component loaded');
 
@@ -196,12 +204,16 @@ const App: FC = () => {
 
               <Route path="/admin/manifests-v2/:id/edit" element={
                 <ProtectedRoute>
-                  <ManifestEditorV2 />
+                  <Suspense fallback={editorFallback}>
+                    <ManifestEditorV2 />
+                  </Suspense>
                 </ProtectedRoute>
               } />
               <Route path="/admin/manifests-v2/_sandbox" element={
                 <ProtectedRoute>
-                  <ManifestEditorV2 />
+                  <Suspense fallback={editorFallback}>
+                    <ManifestEditorV2 />
+                  </Suspense>
                 </ProtectedRoute>
               } />
             </Routes>

@@ -75,6 +75,9 @@ export default defineConfig({
         //  - 减小单 chunk 体积, 让 rollup 不一次性持有所有 AST,降低 OOM 风险
         //  - 浏览器可并行下载, 缓存命中率更高(只改业务代码不重打 monaco)
         manualChunks(id) {
+          // Vite 的 preload helper / commonjs helper 若不显式归属,会被 rollup 并进
+          // monaco-editor 手动 chunk,导致主入口为了一个 helper 静态 import 整个 monaco(4MB)。
+          if (id.includes('vite/preload-helper') || id.includes('commonjsHelpers')) return 'vite-helpers'
           if (!id.includes('node_modules')) return undefined
           // React 必须留在 主 chunk,否则 antd 加载时 React 还没初始化会炸
           // ('Cannot set properties of undefined setting Children')。
