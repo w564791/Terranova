@@ -27,11 +27,69 @@ export function versionNeedsRepublish(v: BundleFields | undefined | null): boole
   return !v.bundle_hash || isHashMismatch(v)
 }
 
-/** 下拉 option 的后缀文案与 title(原生 select 无法放 Tag) */
+/**
+ * bundle 规则码 -> 中文说明(后端 backend/internal/manifestbundle/rules.go 的 Rule* 常量;
+ * 后端 message 固定为英文,前端按 rule 显示中文,未知规则回退后端 message)。
+ * 数值与后端 MaxPathLen / MaxFileSize / MaxBundleSize / MaxFiles 保持一致。
+ */
+const RULE_TEXT: Record<string, string> = {
+  path_invalid: '路径不合法：须为相对 POSIX 路径，不能含空段、"."、".."、反斜杠或控制字符',
+  path_too_long: '路径超过 256 字节',
+  path_not_nfc: '路径未做 Unicode NFC 规范化',
+  path_duplicate: '路径重复',
+  path_case_duplicate: '路径与其他文件仅大小写不同',
+  denylisted_file: '该文件类型不允许放入 bundle（变量值、state、git 元数据、env 或私钥文件）',
+  file_too_large: '文件超过 1 MB',
+  bundle_too_large: 'bundle 总大小超过 50 MB',
+  too_many_files: 'bundle 文件数超过 2000 个',
+}
+const SECRET_SCAN_PREFIX = 'secret_scan:'
+
+/** 规则码的中文说明;未知规则返回 null(调用方回退后端 message / 原始规则名) */
+export function ruleText(rule: string): string | null {
+  if (Object.prototype.hasOwnProperty.call(RULE_TEXT, rule)) return RULE_TEXT[rule]
+  if (rule.startsWith(SECRET_SCAN_PREFIX)) {
+    const kind = rule.slice(SECRET_SCAN_PREFIX.length)
+    return kind ? `疑似包含密钥（${kind}）` : '疑似包含密钥'
+  }
+  return null
+}
+
+/** 发布问题的展示文案:按 rule 显示中文,未知规则回退后端 message */
+export function publishProblemText(p: Pick<PublishProblem, 'rule' | 'message'>): string {
+  return ruleText(p.rule) ?? p.message
+}
+
+/**
+ * bundle_invalid_reason(`rule @ path; rule @ path; (+N more)`)本地化为多行中文;
+ * 无法识别的片段原样保留。hash_mismatch 单独处理(见 bundleStatusLabel)。
+ */
+export function localizeInvalidReason(reason: string): string {
+  return reason
+    .split('; ')
+    .map((part) => {
+      const more = /^\(\+(\d+) more\)$/.exec(part)
+      if (more) return `（另有 ${more[1]} 个问题）`
+      const at = part.indexOf(' @ ')
+      const rule = at >= 0 ? part.slice(0, at) : part
+      const text = ruleText(rule)
+      if (!text) return part
+      return at >= 0 ? `${text} @ ${part.slice(at + 3)}` : text
+    })
+    .join('\n')
+}
+
+/** 下拉 option 的后缀文案与 title(原生 select 无法放 Tag);tooltip 可能含换行 */
 export function bundleStatusLabel(v: BundleFields): { label: string; tooltip: string } | null {
   if (!versionNeedsRepublish(v)) return null
   if (isHashMismatch(v)) return { label: '完整性校验失败', tooltip: HASH_MISMATCH_TOOLTIP }
-  return { label: '需重新发布', tooltip: v.bundle_invalid_reason || '该版本没有合法 bundle,请重新发布' }
+  const reason = v.bundle_invalid_reason
+  if (!reason) return { label: '需重新发布', tooltip: '该版本没有合法 bundle,请重新发布' }
+  const localized = localizeInvalidReason(reason)
+  return {
+    label: '需重新发布',
+    tooltip: localized === reason ? reason : `${localized}\n\n原始原因：${reason}`,
+  }
 }
 
 function errorData(err: unknown): Record<string, unknown> | null {

@@ -17,6 +17,8 @@ export interface ProblemItem {
   owner: string
   /** 来源标记(如 'publish' = 发布被 bundle 规则拒绝);缺省为 Monaco markers */
   source?: string
+  /** 悬停补充说明(如发布问题的规则码与后端英文原文) */
+  detail?: string
 }
 
 /** path 为空的问题(bundle 级规则)无文件可跳转 */
@@ -84,7 +86,10 @@ export default function ProblemsPanel({ problems, onOpenAt }: Props) {
                     onClick={() => {
                       if (item.path) onOpenAt(item.path, item.startLineNumber, item.startColumn, item.endColumn)
                     }}
-                    title={item.source ? `[${item.source}] ${item.message}` : item.message}
+                    title={
+                      (item.source ? `[${item.source}] ${item.message}` : item.message) +
+                      (item.detail ? `\n${item.detail}` : '')
+                    }
                   >
                     <i className={`codicon ${sev.icon}`} style={{ color: sev.color }} />
                     <span className={styles.problemsMsg}>{item.message}</span>

@@ -10,7 +10,7 @@ export default function BundleStatusTag({ version, style }: { version: BundleFie
   const s = bundleStatusLabel(version)
   if (!s) return null
   return (
-    <Tooltip title={s.tooltip}>
+    <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{s.tooltip}</span>}>
       <Tag
         color={isHashMismatch(version) ? 'error' : 'warning'}
         style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px', padding: '0 4px', ...style }}
