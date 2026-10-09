@@ -311,6 +311,23 @@ const (
 	TaskTypeDriftCheck   TaskType = "drift_check"    // Drift 检测任务
 )
 
+// Structured task failure codes (workspace_tasks.error_code).
+const (
+	// TaskErrorCodeBundleRepublishRequired the manifest version has no valid
+	// bundle (bundle_hash NULL: bundle rules or hash_mismatch); the message is
+	// "bundle_republish_required: <reason>".
+	TaskErrorCodeBundleRepublishRequired = "bundle_republish_required"
+)
+
+// KnownTaskErrorCode reports codes an agent may report (status update).
+func KnownTaskErrorCode(code string) bool {
+	switch code {
+	case TaskErrorCodeBundleRepublishRequired:
+		return true
+	}
+	return false
+}
+
 // TaskStatus 任务状态枚举
 type TaskStatus string
 
@@ -362,6 +379,9 @@ type WorkspaceTask struct {
 	PlanOutput   string `json:"plan_output" gorm:"type:text"`
 	ApplyOutput  string `json:"apply_output" gorm:"type:text"`
 	ErrorMessage string `json:"error_message" gorm:"type:text"`
+	// ErrorCode 结构化失败码(与 ErrorMessage 并存,前端按 code 判断),见 TaskErrorCode*;
+	// 空 = 无结构化码。由执行器写入(agent 经状态上报,仅接受已知码)。
+	ErrorCode string `json:"error_code,omitempty" gorm:"type:varchar(64)"`
 
 	// 执行时间
 	StartedAt   *time.Time `json:"started_at"`

@@ -16061,6 +16061,15 @@ ALTER TABLE public.manifest_versions ADD COLUMN IF NOT EXISTS bundle_invalid_rea
 CREATE INDEX IF NOT EXISTS idx_manifest_versions_bundle_hash ON public.manifest_versions (bundle_hash) WHERE bundle_hash IS NOT NULL;
 -- <<< migrations/add_manifest_bundle_v2.sql <<<
 
+-- >>> migrations/add_workspace_task_error_code.sql >>>
+-- Structured task failure code (kept in sync with versioned migration
+-- 20261010_01_workspace_task_error_code). Additive and idempotent: one
+-- nullable column; existing rows stay NULL. Values are models.TaskErrorCode*
+-- (e.g. bundle_republish_required), shown next to error_message.
+
+ALTER TABLE public.workspace_tasks ADD COLUMN IF NOT EXISTS error_code character varying(64);
+-- <<< migrations/add_workspace_task_error_code.sql <<<
+
 -- PostgreSQL database dump complete
 --
 

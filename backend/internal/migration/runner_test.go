@@ -16,6 +16,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20261004_01_manifest_iam_resource",
 		"20261004_02_manifest_sandbox_schema",
 		"20261004_04_manifest_bundle_v2",
+		"20261010_01_workspace_task_error_code",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("migration count = %d, want %d", len(definitions), len(want))

@@ -2,7 +2,6 @@ package services
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -711,81 +710,13 @@ func (s *TerraformExecutor) PrepareStateFile(
 // Terraform命令执行
 // ============================================================================
 
-// TerraformInit 执行terraform init
-func (s *TerraformExecutor) TerraformInit(
-	ctx context.Context,
-	workDir string,
-	task *models.WorkspaceTask,
-	workspace *models.Workspace,
-) error {
-	// 获取Terraform二进制文件路径（已在Fetching阶段下载）
-	// 必须使用下载的版本，不允许回退到系统terraform
-	if s.downloader == nil {
-		return fmt.Errorf("terraform downloader not initialized")
-	}
-
-	// 使用EnsureTerraformBinary确保二进制文件存在，并获取实际路径
-	// 这样可以正确处理"latest"等特殊版本标识
-	binaryPath, err := s.downloader.EnsureTerraformBinary(workspace.TerraformVersion)
-	if err != nil {
-		return fmt.Errorf("failed to ensure terraform binary for version %s: %w", workspace.TerraformVersion, err)
-	}
-
-	terraformCmd := binaryPath
-	log.Printf("Using terraform binary: %s", terraformCmd)
-
-	// 配置Provider插件缓存到工作目录（随工作目录一起清理）
-	pluginCacheDir := filepath.Join(workDir, ".terraform-plugin-cache")
-	if err := os.MkdirAll(pluginCacheDir, 0755); err != nil {
-		log.Printf("Warning: failed to create plugin cache dir: %v", err)
-		// 不阻塞执行，继续不使用缓存
-		pluginCacheDir = ""
-	}
-
-	// 构建命令（必须包含-upgrade）
-	args := []string{
-		"init",
-		"-no-color",
-		"-input=false",
-		"-upgrade", // 每次都升级Provider
-	}
-
-	cmd := exec.CommandContext(ctx, terraformCmd, args...)
-	cmd.Dir = s.ResolveRunDir(workspace, workDir)
-
-	// 设置环境变量
-	cmd.Env = s.buildEnvironmentVariables(workspace)
-
-	// 添加插件缓存目录（如果创建成功）
-	if pluginCacheDir != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("TF_PLUGIN_CACHE_DIR=%s", pluginCacheDir))
-	}
-
-	// 执行
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	log.Printf("Executing: terraform init -upgrade in %s", workDir)
-	startTime := time.Now()
-
-	if err := cmd.Run(); err != nil {
-		s.saveTaskLog(task.ID, "init", stderr.String(), "error")
-		return fmt.Errorf("terraform init failed: %w\n%s", err, stderr.String())
-	}
-
-	duration := time.Since(startTime)
-	log.Printf("terraform init completed in %v", duration)
-
-	s.saveTaskLog(task.ID, "init", stdout.String(), "info")
-	return nil
-}
-
 // buildEnvironmentVariables 构建环境变量
 func (s *TerraformExecutor) buildEnvironmentVariables(
 	workspace *models.Workspace,
 ) []string {
-	env := append(os.Environ(),
+	// 进程环境里的插件缓存/lock 相关变量一律剔除(如 agent 池配置的共享
+	// TF_PLUGIN_CACHE_DIR):缓存只用按任务的私有目录(见 withPluginCache)。
+	env := append(sanitizeTerraformEnv(os.Environ()),
 		"TF_IN_AUTOMATION=true",
 		"TF_INPUT=false",
 		// 设置 Registry 客户端超时为 60 秒（默认 10 秒对于慢速网络不够）
@@ -812,6 +743,11 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 		for _, v := range envVars {
 			// 跳过TF_CLI_ARGS，它会被特殊处理添加到命令参数中
 			if v.Key == "TF_CLI_ARGS" {
+				continue
+			}
+			// workspace 变量不能改插件缓存位置 / 放松 lock 校验 / 给 init 塞 -upgrade
+			if isProtectedTerraformEnvKey(v.Key) {
+				log.Printf("WARNING: ignoring protected environment variable %s for workspace %s", v.Key, workspace.WorkspaceID)
 				continue
 			}
 			env = append(env, fmt.Sprintf("%s=%s", v.Key, v.Value))
@@ -1166,7 +1102,7 @@ func (s *TerraformExecutor) ExecutePlan(
 	// 1.9 恢复 .terraform.lock.hcl 文件（加速 terraform init）。lock 落到 runDir(=subpath),
 	// 与 terraform init 的实际 cwd 一致,否则 subpath 内 init 拿不到缓存。
 	logger.Info("Restoring terraform lock file...")
-	s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
+	s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace, logger)
 
 	logger.Info("Configuration fetch completed successfully")
 	logger.StageEnd("fetching")
@@ -2030,6 +1966,7 @@ func (s *TerraformExecutor) saveTaskFailure(
 	// 更新task字段
 	task.Status = models.TaskStatusFailed
 	task.ErrorMessage = errorMessage // 使用提取的真实错误
+	task.ErrorCode, task.ErrorMessage = classifyTaskFailure(err, task.ErrorMessage)
 	task.CompletedAt = timePtr(time.Now())
 
 	log.Printf("[DEBUG] saveTaskFailure: task.ErrorMessage set to: %s", task.ErrorMessage[:min(100, len(task.ErrorMessage))])
@@ -2531,7 +2468,7 @@ func (s *TerraformExecutor) ExecuteApply(
 
 		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）。lock 落 runDir(=subpath)。
 		logger.Info("Restoring terraform lock file...")
-		s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace.WorkspaceID, logger)
+		s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace, logger)
 	}
 
 	logger.Info("Configuration fetch completed successfully")
@@ -3732,7 +3669,23 @@ func (s *TerraformExecutor) calculatePlanHash(planFile string) (string, error) {
 // verifyPlanHash 验证plan文件的hash是否匹配
 // restoreTerraformLockHCL 从数据库恢复 .terraform.lock.hcl 文件到工作目录
 // 这个文件记录了 provider 的精确版本和 hash，有了它 terraform init 可以跳过 provider 下载
-func (s *TerraformExecutor) restoreTerraformLockHCL(workDir, workspaceID string, logger *TerraformLogger) {
+//
+// 优先级:
+//  1. runDir 里已有 lock(manifest bundle 自带,已随 bundle 哈希校验)=> 原样使用,不覆盖;
+//  2. workspace 的 provider 配置自上次 init 后被修改(providerConfigChanged)=> 不恢复
+//     已存 lock,本次 init 按新约束重新解析并写出新 lock(取代以前的 -upgrade);
+//  3. 否则恢复已存 lock。init 从不 -upgrade,provider 与 lock 不符即失败。
+func (s *TerraformExecutor) restoreTerraformLockHCL(workDir string, workspace *models.Workspace, logger *TerraformLogger) {
+	workspaceID := workspace.WorkspaceID
+	lockFile := filepath.Join(workDir, ".terraform.lock.hcl")
+	if _, err := os.Lstat(lockFile); err == nil {
+		logger.Info("Using .terraform.lock.hcl from the configuration (stored workspace lock not restored)")
+		return
+	}
+	if providerConfigChanged(workspace) {
+		logger.Info("Workspace provider configuration changed since the last init: providers are re-resolved and a new lock file is recorded")
+		return
+	}
 	lockContent, err := s.dataAccessor.GetTerraformLockHCL(workspaceID)
 	if err != nil {
 		logger.Debug("Failed to get terraform lock hcl: %v", err)
@@ -3744,7 +3697,6 @@ func (s *TerraformExecutor) restoreTerraformLockHCL(workDir, workspaceID string,
 		return
 	}
 
-	lockFile := filepath.Join(workDir, ".terraform.lock.hcl")
 	if err := os.WriteFile(lockFile, []byte(lockContent), 0644); err != nil {
 		logger.Warn("Failed to restore .terraform.lock.hcl: %v", err)
 		return
@@ -4270,7 +4222,6 @@ func (s *TerraformExecutor) TerraformInitWithLogging(
 	maxDelay := 30 * time.Second
 
 	var lastErr error
-	var forceUpgrade bool
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			// 计算退避延迟（指数退避）
@@ -4278,15 +4229,11 @@ func (s *TerraformExecutor) TerraformInitWithLogging(
 			if delay > maxDelay {
 				delay = maxDelay
 			}
-			if forceUpgrade {
-				logger.Warn("Terraform init failed due to locked provider version mismatch, retrying with -upgrade flag...")
-			} else {
-				logger.Warn("Terraform init failed (attempt %d/%d), retrying in %v...", attempt, maxRetries, delay)
-			}
+			logger.Warn("Terraform init failed (attempt %d/%d), retrying in %v...", attempt, maxRetries, delay)
 			time.Sleep(delay)
 		}
 
-		err := s.terraformInitOnce(ctx, workDir, task, workspace, logger, attempt+1, maxRetries, forceUpgrade)
+		err := s.terraformInitOnce(ctx, workDir, task, workspace, logger, attempt+1, maxRetries)
 		if err == nil {
 			return nil
 		}
@@ -4298,11 +4245,10 @@ func (s *TerraformExecutor) TerraformInitWithLogging(
 			return fmt.Errorf("task cancelled by user")
 		}
 
-		// 检查是否是 locked provider 版本不匹配错误，如果是则强制使用 -upgrade 重试
+		// provider 与 lock 文件不符(版本约束或 checksum):不重试、绝不 -upgrade
 		if s.isLockedProviderError(err) {
-			logger.Warn("Detected locked provider version mismatch, will retry with -upgrade flag")
-			forceUpgrade = true
-			continue
+			logger.Error("Providers do not match the dependency lock file; init never upgrades. Update .terraform.lock.hcl in the manifest bundle, or change the workspace provider configuration to re-resolve providers.")
+			return fmt.Errorf("provider lock mismatch (terraform init never runs with -upgrade): %w", err)
 		}
 
 		// 检查是否是可重试的错误（网络超时、注册表访问失败等）
@@ -4356,16 +4302,18 @@ func (s *TerraformExecutor) isRetryableInitError(err error) bool {
 	return false
 }
 
-// isLockedProviderError 检测是否为 locked provider 版本不匹配错误
-// 这种错误发生在 .terraform.lock.hcl 中锁定的 provider 版本不满足模块约束时
-// 解决方案是使用 -upgrade 参数重新执行 terraform init
+// isLockedProviderError 检测 provider 与 .terraform.lock.hcl 不符:锁定版本不满足
+// 约束,或下载/缓存的包 checksum 与 lock 记录不一致。init 从不 -upgrade,这类错误
+// 直接失败(不重试)。
 func (s *TerraformExecutor) isLockedProviderError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
+	errStr := strings.Join(strings.Fields(err.Error()), " ") // terraform wraps diagnostics across lines
 	return strings.Contains(errStr, "locked provider") ||
-		strings.Contains(errStr, "must use terraform init -upgrade")
+		strings.Contains(errStr, "must use terraform init -upgrade") ||
+		strings.Contains(errStr, "checksums previously recorded in the dependency lock file") ||
+		strings.Contains(errStr, "does not match any of the checksums")
 }
 
 // terraformInitOnce 执行单次 terraform init
@@ -4377,7 +4325,6 @@ func (s *TerraformExecutor) terraformInitOnce(
 	logger *TerraformLogger,
 	attempt int,
 	maxAttempts int,
-	forceUpgrade bool,
 ) error {
 	// 获取Terraform二进制文件路径（已在Fetching阶段下载）
 	// 必须使用下载的版本，不允许回退到系统terraform
@@ -4408,82 +4355,28 @@ func (s *TerraformExecutor) terraformInitOnce(
 			}
 		}
 
-		// 创建 .terraformrc 配置文件，设置 HTTP 超时为 60 秒
-		// 这对于访问慢速网络的 registry 很重要
-		terraformrcPath := filepath.Join(workDir, ".terraformrc")
-		terraformrcContent := `# Auto-generated by IAC Platform
-# HTTP timeout for registry access (default is 10s, which is too short for slow networks)
-plugin_cache_may_break_dependency_lock_file = true
-`
-		if err := os.WriteFile(terraformrcPath, []byte(terraformrcContent), 0644); err != nil {
-			logger.Warn("Failed to create .terraformrc: %v", err)
-		} else {
-			logger.Debug("Created .terraformrc with custom settings")
+		// 本任务私有的 .terraform:runDir 下也清掉(bundle 规则禁止 .terraform/,
+		// 但编辑器 Run 的草稿文件不走 bundle 规则)
+		if runTerraformDir := filepath.Join(s.ResolveRunDir(workspace, workDir), ".terraform"); runTerraformDir != terraformDir {
+			_ = os.RemoveAll(runTerraformDir)
 		}
 	}
 
-	// 检查是否已经设置了全局 TF_PLUGIN_CACHE_DIR（优先使用全局缓存）
-	globalPluginCacheDir := os.Getenv("TF_PLUGIN_CACHE_DIR")
-	pluginCacheDir := ""
-	if attempt == 1 {
-		logger.Info("Checking TF_PLUGIN_CACHE_DIR environment variable: '%s'", globalPluginCacheDir)
-	}
-	if globalPluginCacheDir != "" {
-		// 使用全局缓存目录
-		pluginCacheDir = globalPluginCacheDir
-		if attempt == 1 {
-			logger.Info("Using global plugin cache directory: %s", pluginCacheDir)
-		}
-	} else {
-		// 没有全局缓存，使用工作目录级别的缓存（随工作目录一起清理）
-		pluginCacheDir = filepath.Join(workDir, ".terraform-plugin-cache")
-		if err := os.MkdirAll(pluginCacheDir, 0755); err != nil {
-			logger.Warn("Failed to create plugin cache dir: %v", err)
-			// 不阻塞执行，继续不使用缓存
-			pluginCacheDir = ""
-		} else if attempt == 1 {
-			logger.Info("Using workspace-level plugin cache directory: %s", pluginCacheDir)
-		}
-	}
-
-	// 判断是否需要使用 -upgrade 参数
-	// 只在 provider 配置变更或首次运行时使用 -upgrade，以加速 init 过程
-	// forceUpgrade 用于检测到 locked provider 错误后强制重试
-	needUpgrade := forceUpgrade || s.shouldUseUpgrade(workspace, logger)
-
-	// 构建命令
-	args := []string{
-		"init",
-		"-no-color",
-		"-input=false",
-	}
-
-	// HTTP backend mode: plan-only tasks don't modify state, skip locking
-	// plan_and_apply tasks need locking because apply will write state
-	if s.stateBackendURL != "" && task.TaskType == models.TaskTypePlan {
-		args = append(args, "-lock=false")
-	}
-
-	if needUpgrade {
-		args = append(args, "-upgrade")
-		if attempt == 1 {
-			logger.Info("Using -upgrade flag (provider config changed or first run)")
-		} else if forceUpgrade {
-			logger.Info("Using -upgrade flag (forced: locked provider version mismatch detected)")
-		}
+	// 按任务的私有插件缓存(第一次尝试时重建,重试复用本任务自己的下载);绝不使用
+	// 跨 workspace / 组织共享的可写缓存。lock 文件始终生效:不加 -upgrade,provider
+	// 与 lock 不符(版本或 checksum)即失败。
+	pluginCacheDir, cacheErr := preparePerTaskPluginCache(workDir, attempt == 1)
+	if cacheErr != nil {
+		logger.Warn("Failed to create per-task plugin cache dir (continuing without cache): %v", cacheErr)
 	} else if attempt == 1 {
-		logger.Info("Skipping -upgrade flag (provider config unchanged, saving time)")
+		logger.Info("Using per-task plugin cache directory: %s", pluginCacheDir)
 	}
+
+	args := terraformInitArgs(s.stateBackendURL != "" && task.TaskType == models.TaskTypePlan)
 
 	cmd := exec.CommandContext(ctx, terraformCmd, args...)
 	cmd.Dir = s.ResolveRunDir(workspace, workDir)
-	cmd.Env = s.buildEnvironmentVariables(workspace)
-
-	// 添加插件缓存目录（仅当不是使用全局缓存时才需要添加）
-	// 如果使用全局缓存，buildEnvironmentVariables 已经通过 os.Environ() 包含了 TF_PLUGIN_CACHE_DIR
-	if pluginCacheDir != "" && globalPluginCacheDir == "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("TF_PLUGIN_CACHE_DIR=%s", pluginCacheDir))
-	}
+	cmd.Env = withPluginCache(s.buildEnvironmentVariables(workspace), pluginCacheDir)
 
 	// 使用Pipe实时捕获输出
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -4568,8 +4461,9 @@ plugin_cache_may_break_dependency_lock_file = true
 	logger.Info("✓ Terraform initialization completed successfully")
 	logger.Info("Initialization time: %.1f seconds", duration.Seconds())
 
-	// 更新 last_init_hash（用于下次判断是否需要 -upgrade）
-	if needUpgrade {
+	// 记录本次 init 对应的 provider 配置(providerConfigChanged 据此决定是否沿用已存 lock)
+	if workspace.ProviderConfigHash != "" && (workspace.ProviderConfigHash != workspace.LastInitHash ||
+		workspace.LastInitTerraformVersion != workspace.TerraformVersion) {
 		s.updateLastInitHash(workspace, logger)
 	}
 
@@ -5583,43 +5477,13 @@ func (s *TerraformExecutor) generateRemoteDataTFJSONWithLogging(
 	return nil
 }
 
-// shouldUseUpgrade 判断是否需要使用 -upgrade 参数
-// 只在以下情况使用 -upgrade：
-// 1. provider_config 发生变更（hash 不匹配）
-// 2. terraform 版本发生变更
-// 注意：首次运行不需要 -upgrade，terraform init 会自动下载所需的 provider
-func (s *TerraformExecutor) shouldUseUpgrade(workspace *models.Workspace, logger *TerraformLogger) bool {
-	// 如果 provider_config_hash 为空，说明还没有计算过 hash
-	// 这种情况下不需要 -upgrade，让 terraform 自动下载
-	if workspace.ProviderConfigHash == "" {
-		logger.Debug("Provider config hash not calculated yet, skipping -upgrade")
-		return false
-	}
-
-	// 如果没有 last_init_hash，说明是首次运行或旧数据
-	// 首次运行不需要 -upgrade，terraform init 会自动下载所需的 provider
-	if workspace.LastInitHash == "" {
-		logger.Debug("First run detected (last_init_hash is empty), skipping -upgrade")
-		return false
-	}
-
-	// 比较 hash - 只有当配置变更时才需要 -upgrade
-	if workspace.ProviderConfigHash != workspace.LastInitHash {
-		logger.Debug("Provider config changed: current=%s, last_init=%s",
-			workspace.ProviderConfigHash[:16]+"...", workspace.LastInitHash[:16]+"...")
-		return true
-	}
-
-	// 检查 terraform 版本是否变更
-	if workspace.LastInitTerraformVersion != "" && workspace.LastInitTerraformVersion != workspace.TerraformVersion {
-		logger.Debug("Terraform version changed: current=%s, last_init=%s",
-			workspace.TerraformVersion, workspace.LastInitTerraformVersion)
-		return true
-	}
-
-	// 没有变更，可以跳过 -upgrade
-	logger.Debug("No provider config or terraform version changes detected")
-	return false
+// providerConfigChanged 报告 workspace 的 provider 配置自上次成功 init 后被修改
+// (provider_config_hash != last_init_hash)。此时不恢复已存 lock,让 init 按新约束
+// 重新解析(以前靠 -upgrade;现在 init 从不 -upgrade)。首次运行(last_init_hash 为空)
+// 与 terraform 版本变化不算:lock 只记录 provider。
+func providerConfigChanged(workspace *models.Workspace) bool {
+	return workspace != nil && workspace.ProviderConfigHash != "" && workspace.LastInitHash != "" &&
+		workspace.ProviderConfigHash != workspace.LastInitHash
 }
 
 // updateLastInitHash 更新 last_init_hash（在 init 成功后调用）
