@@ -3372,7 +3372,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Get complete task data including workspace config, resources, variables, and state",
+                "description": "Get complete task data including workspace config (with manifest_deployment_id / manifest_active_tag / manifest_subpath), resources, variables, the task variable override snapshot (task.variable_overrides, task.override_sensitive_keys), Manifest Run files (task.external_files), the verified manifest bundle hand-off (manifest_bundle: archive_b64 + bundle_hash, or manifest_bundle_error when the version must be republished), and state",
                 "consumes": [
                     "application/json"
                 ],

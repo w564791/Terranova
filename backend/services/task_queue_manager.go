@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"log"
 	"os"
 	"runtime/debug"
@@ -277,17 +276,15 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 		return nil
 	}
 
-	// 2. 根据任务类型决定是否加锁
-	// Plan任务：不加锁，可以并发执行
-	// Plan+Apply任务：加锁，必须串行执行
-	if task.TaskType == models.TaskTypePlanAndApply {
-		log.Printf("[TaskQueue] Plan+Apply task %d requires workspace lock", task.ID)
+	// 2. 根据运行目的决定是否加锁(Runner 契约,见 StartRun)
+	// Preview(plan / drift_check):不加锁,可以并发执行
+	// Approval(plan_and_apply / apply):持 workspace advisory lock 投递,必须串行
+	workspaceLocked := false
+	if PurposeOfTask(task) == RunPurposeApproval {
+		log.Printf("[TaskQueue] %s task %d requires workspace lock", task.TaskType, task.ID)
 
 		// Acquire PG advisory lock for workspace serialization.
-		// Use FNV hash of workspace ID string to derive a stable int64 key.
-		h := fnv.New64a()
-		h.Write([]byte(workspaceID))
-		lockKey := int64(h.Sum64())
+		lockKey := WorkspaceLockKey(workspaceID)
 
 		locked, err := m.pgLocker.TryLock(lockKey)
 		if err != nil {
@@ -300,8 +297,9 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 			return nil
 		}
 		defer m.pgLocker.Unlock(lockKey)
+		workspaceLocked = true
 
-		log.Printf("[TaskQueue] Acquired PG advisory lock for plan+apply task %d (workspace %s, key %d)", task.ID, workspaceID, lockKey)
+		log.Printf("[TaskQueue] Acquired PG advisory lock for %s task %d (workspace %s, key %d)", task.TaskType, task.ID, workspaceID, lockKey)
 
 		// 重新检查任务状态（可能在等待锁期间被其他goroutine处理了）
 		var currentTask models.WorkspaceTask
@@ -318,7 +316,7 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 		// 更新task为最新状态
 		task = &currentTask
 	} else {
-		log.Printf("[TaskQueue] Plan task %d does not require workspace lock (can execute concurrently)", task.ID)
+		log.Printf("[TaskQueue] %s task %d does not require workspace lock (can execute concurrently)", task.TaskType, task.ID)
 	}
 
 	// 3. 获取workspace信息以确定执行模式
@@ -328,39 +326,18 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 		return err
 	}
 
-	// 4. 检查是否为K8s执行模式
-	if workspace.ExecutionMode == models.ExecutionModeK8s {
-		log.Printf("[TaskQueue] Workspace %s is in K8s mode, pushing task to K8s deployment agent", workspaceID)
-		// K8s模式使用Deployment + auto-scaler
-		// Agent通过C&C channel接收任务,和Agent模式一样
-		return m.pushTaskToAgent(task, &workspace)
-	}
-
-	// 5. 检查是否为Agent执行模式
-	if workspace.ExecutionMode == models.ExecutionModeAgent {
-		log.Printf("[TaskQueue] Workspace %s is in Agent mode, pushing task to agent", workspaceID)
-		return m.pushTaskToAgent(task, &workspace)
-	}
-
-	// 6. 本地模式 - 直接执行任务
-	log.Printf("[TaskQueue] Starting task %d (type: %s, status: %s) for workspace %s in Local mode",
-		task.ID, task.TaskType, task.Status, workspaceID)
-
+	// 4. 交给执行模式对应的 Runner(Local: 本进程 executor;Agent/K8s: C&C 推给 agent)
 	// 在 CAS 前确定执行动作（CAS 会改变 task.Status）
 	action := "plan"
 	if task.Status == models.TaskStatusApplyPending {
 		action = "apply"
 	}
-
-	// 在启动 goroutine 前通过 CAS 将 task 标记为 running，防止其他 pod 重复拾取
-	if err := m.casTaskStatus(task, action); err != nil {
-		log.Printf("[TaskQueue] CAS failed for task %d: %v", task.ID, err)
-		return nil
-	}
-
-	go m.executeTask(task, action)
-
-	return nil
+	runner := m.runnerFor(&workspace)
+	log.Printf("[TaskQueue] Starting task %d (type: %s, status: %s, purpose: %s) for workspace %s via %s runner",
+		task.ID, task.TaskType, task.Status, PurposeOfTask(task), workspaceID, runner.Kind())
+	return StartRun(runner, RunRequest{
+		Task: task, Workspace: &workspace, Action: action, WorkspaceLocked: workspaceLocked,
+	})
 }
 
 // createK8sJobForTask 为任务创建K8s Job（带指数退避重试）
@@ -1675,17 +1652,28 @@ func (m *TaskQueueManager) ExecuteConfirmedApply(workspaceID string, taskID uint
 		return fmt.Errorf("workspace not found: %w", err)
 	}
 
-	// Execute based on execution mode
-	if workspace.ExecutionMode == models.ExecutionModeK8s || workspace.ExecutionMode == models.ExecutionModeAgent {
-		return m.pushTaskToAgent(&task, &workspace)
+	// Approval run: dispatch only while holding the workspace lock (the same
+	// advisory lock TryExecuteNextTask takes), then re-check the task under it.
+	lockKey := WorkspaceLockKey(workspaceID)
+	locked, err := m.pgLocker.TryLock(lockKey)
+	if err != nil {
+		return fmt.Errorf("acquire workspace lock: %w", err)
+	}
+	if !locked {
+		// caller (ConfirmApply retry loop / PendingTasksMonitor) retries
+		return fmt.Errorf("workspace %s lock is held by another dispatcher, retry later", workspaceID)
+	}
+	defer m.pgLocker.Unlock(lockKey)
+
+	if err := m.db.First(&task, taskID).Error; err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+	if task.Status != models.TaskStatusApplyPending || task.ApplyConfirmedBy == nil {
+		log.Printf("[TaskQueue] Task %d is %s after acquiring the workspace lock, skipping", taskID, task.Status)
+		return nil
 	}
 
-	// Local mode — CAS 标记 running 后再启动 goroutine
-	if err := m.casTaskStatus(&task, "apply"); err != nil {
-		log.Printf("[TaskQueue] CAS failed for confirmed apply task %d: %v", task.ID, err)
-		return fmt.Errorf("failed to mark task as running: %w", err)
-	}
-
-	go m.executeTask(&task, "apply")
-	return nil
+	return StartRun(m.runnerFor(&workspace), RunRequest{
+		Task: &task, Workspace: &workspace, Action: "apply", WorkspaceLocked: true,
+	})
 }

@@ -83,6 +83,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 11. 执行器 provider 安装（step 4 前置）：`terraform init` 从不加 `-upgrade`，provider 与 `.terraform.lock.hcl` 不符（版本约束或 checksum）即失败、不重试；manifest bundle 自带的 lock 优先于 workspace 已存 lock（不再被覆盖）；workspace provider 配置被修改后（`provider_config_hash != last_init_hash`）本次不恢复已存 lock、按新约束重新解析并保存新 lock。插件缓存改为按任务私有目录（`<workDir>/.terranova-plugin-cache`，首次尝试时清空重建，随工作目录删除），进程环境与 workspace 变量里的 `TF_PLUGIN_CACHE_DIR`、`TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE`、`TF_CLI_ARGS_init` 一律忽略；不再写工作目录 `.terraformrc`（Terraform 从未读取它，且其中的 `plugin_cache_may_break_dependency_lock_file = true` 会绕过 lock 校验），也不设置 `TF_CLI_CONFIG_FILE`。任务失败带结构化 `error_code`（`workspace_tasks.error_code`，迁移 `20261010_01_workspace_task_error_code`），bundle 闸门失败为 `bundle_republish_required`，任务详情/列表输出；agent 上报只接受已知码。
 
+12. Runner 接口与 bundle 交接（step 4）：任务投递统一经 `Runner`（local / agent+K8s / sandbox 占位），approval（`plan_and_apply`、`apply`）必须持 workspace advisory lock 才能投递，`ExecuteConfirmedApply` 补上了锁；approval 的 plan 持 state 锁（只有 preview 用 `-lock=false`）。`pglock` 每把锁独占连接（修复会话级锁在连接池上泄漏 / 重入）。manifest 文件改为「归档 + `bundle_hash`」交接，`manifestbundle.Unpack` 逐条校验路径与类型、`O_EXCL|O_NOFOLLOW` 写盘、累计限额即时中止、落盘后重算哈希一致才进入 `init`。agent / K8s 经 `GetTaskData` 收到 manifest 三列、已校验 bundle（或拒绝原因）和 override 快照：修复 agent 模式把 manifest workspace 当 UI workspace 生成空配置、以及 override 在 agent 模式被丢弃的问题。tfvars / `variables.tf.json` 生成由各 runner 共用，override 不再把敏感变量降为非敏感。细节见 sandbox spec §3.4。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
@@ -116,6 +118,7 @@ backend/main.go
 backend/internal/manifestbundle/{rules,source}.go（step 3）
 backend/internal/migration/manifest_bundle_v2.go + backend/migrations/add_manifest_bundle_v2.sql（step 3）
 backend/internal/manifestbundle/hcl.go、backend/services/local_data_accessor.go（第 10 条）
+backend/internal/manifestbundle/archive.go、backend/services/{runner,manifest_handoff,task_variables}.go、backend/internal/pglock/advisory_lock.go、backend/internal/handlers/agent_handler.go（第 12 条）
 ```
 
 ### 未完成项（2026-10-04 暂停时记录，合并 `feat/manifest-sandbox` 前必须处理）
@@ -125,6 +128,7 @@ backend/internal/manifestbundle/hcl.go、backend/services/local_data_accessor.go
 2. `MaxFiles = 2000`（`too_many_files`）已在本次暂停前的提交里完成。
 
 **第 4 步（runner）**
+- ~~解包、哈希复核、override 下发、共用 tfvars、审批 run 拿锁~~ —— 已完成（第 12 条）。以下为原始要求：
 - 解包：每个条目都要过 `manifestbundle.ValidatePath`；条目类型只接受普通文件和目录，链接、设备文件一律拒绝；写盘用 `O_EXCL|O_NOFOLLOW`；解包过程中累计计算大小和文件数（`MaxFileSize`、`MaxBundleSize`、`MaxFiles`），超限立刻停止。
 - 解完后用 `manifestbundle.Hash` 重算，与 `bundle_hash` 一致才能 `init`；拒绝 NULL 哈希的版本；对不上按 `hash_mismatch` 处理（记录原因、WARN 审计）。
 - `RemoteDataAccessor.SetVariableOverrides` 目前什么都不做，agent 模式会丢掉 override：改为通过 agent 已有的任务数据通道下发，不能走环境变量或日志。

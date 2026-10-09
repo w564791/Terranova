@@ -16,7 +16,7 @@ type DataAccessor interface {
 	LoadSnapshot(vsnapID string, db *gorm.DB) error
 	// SetVariableOverrides 设置 manifest deployment 应急覆盖(最高优先级,仅 Terraform 变量),
 	// executor 在任务执行前从任务行 variable_overrides 快照注入。空 map 等价于不覆盖。
-	SetVariableOverrides(overrides map[string]string)
+	SetVariableOverrides(overrides VariableOverrides)
 	LockWorkspace(workspaceID string, lockInfo map[string]interface{}) error
 	UnlockWorkspace(workspaceID string) error
 	UpdateWorkspaceFields(workspaceID string, updates map[string]interface{}) error
@@ -61,8 +61,10 @@ type DataAccessor interface {
 	// Plan parsing
 	ParsePlanChanges(taskID uint, planOutput string) error
 
-	// Manifest 相关 (新设计 manifest_files 软链接架构)
-	GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error)
+	// Manifest 相关: deployment + tag 对应版本的 bundle 交接(已过 RequireValidForRun 的
+	// 归档 + bundle_hash),executor 用 manifestbundle.Unpack 落盘并在 init 前复核哈希。
+	// deployment/tag 不再解析到版本时返回 (nil, nil)。
+	GetManifestBundleByTag(deploymentID, tag string) (*ManifestBundleHandoff, error)
 
 	// Transaction 支持
 	BeginTransaction() (DataAccessor, error)

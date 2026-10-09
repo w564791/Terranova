@@ -16,6 +16,7 @@ type RemoteDataAccessor struct {
 	apiClient     *AgentAPIClient
 	taskData      map[string]interface{} // Cached task data
 	streamManager *OutputStreamManager   // For WebSocket updates
+	overrides     VariableOverrides      // task override snapshot (from task data)
 }
 
 // NewRemoteDataAccessor creates a new remote data accessor
@@ -24,6 +25,13 @@ func NewRemoteDataAccessor(apiClient *AgentAPIClient) *RemoteDataAccessor {
 		apiClient: apiClient,
 		taskData:  make(map[string]interface{}),
 	}
+}
+
+// NewRemoteDataAccessorFromTaskData a remote accessor over task data that is
+// already in hand (the decoded GetTaskData response): runners that receive
+// the task data out of band (the step-6 sandbox) and tests.
+func NewRemoteDataAccessorFromTaskData(data map[string]interface{}) *RemoteDataAccessor {
+	return &RemoteDataAccessor{taskData: data}
 }
 
 // SetStreamManager sets the stream manager for WebSocket updates
@@ -86,6 +94,17 @@ func (a *RemoteDataAccessor) GetWorkspace(workspaceID string) (*models.Workspace
 		ProviderConfig:   getMap(workspaceData, "provider_config"),
 		TFCode:           getMap(workspaceData, "tf_code"),
 		SystemVariables:  getMap(workspaceData, "system_variables"),
+	}
+	// Manifest-managed workspaces: without these the executor would treat the
+	// workspace as a UI workspace and plan an empty main.tf.json.
+	if v := getString(workspaceData, "manifest_deployment_id"); v != "" {
+		workspace.ManifestDeploymentID = &v
+	}
+	if v := getString(workspaceData, "manifest_active_tag"); v != "" {
+		workspace.ManifestActiveTag = &v
+	}
+	if v := getString(workspaceData, "manifest_subpath"); v != "" {
+		workspace.ManifestSubpath = &v
 	}
 
 	return workspace, nil
@@ -165,7 +184,7 @@ func (a *RemoteDataAccessor) GetWorkspaceVariables(workspaceID string, varType m
 		variables = append(variables, variable)
 	}
 
-	return variables, nil
+	return ApplyVariableOverrides(variables, varType, a.overrides), nil
 }
 
 // LoadSnapshot is a no-op for agent mode.
@@ -173,9 +192,13 @@ func (a *RemoteDataAccessor) LoadSnapshot(vsnapID string, db *gorm.DB) error {
 	return nil
 }
 
-// SetVariableOverrides no-op: 远程/Agent 模式不支持 manifest deployment 覆盖
-// (manifest 工作区当前不在 Agent 模式执行,变量由 task payload 提供)。
-func (a *RemoteDataAccessor) SetVariableOverrides(overrides map[string]string) {}
+// SetVariableOverrides 注入任务的 manifest deployment 覆盖快照(最高优先级)。Agent 模式下
+// 快照随 task data 下发(GetTaskData task.variable_overrides / override_sensitive_keys,
+// GetTask 解析到 task 上),executor 再经此注入;覆盖规则与 Local 共用
+// ApplyVariableOverrides。覆盖值只经 task-data 通道,不进环境变量、不进日志。
+func (a *RemoteDataAccessor) SetVariableOverrides(overrides VariableOverrides) {
+	a.overrides = overrides
+}
 
 // ============================================================================
 // State 相关
@@ -223,6 +246,21 @@ func (a *RemoteDataAccessor) GetTask(taskID uint) (*models.WorkspaceTask, error)
 	// 【修复】解析 plan_task_id 字段
 	if planTaskID := getUint(taskData, "plan_task_id"); planTaskID > 0 {
 		task.PlanTaskID = &planTaskID
+	}
+
+	// Manifest deployment 覆盖快照 + 敏感 key(与任务行同形,executor 经
+	// TaskVariableOverrides -> SetVariableOverrides 使用)
+	if ov := getMap(taskData, "variable_overrides"); len(ov) > 0 {
+		task.VariableOverrides = ov
+		if raw, ok := taskData["override_sensitive_keys"]; ok && raw != nil {
+			if b, err := json.Marshal(raw); err == nil {
+				task.SensitiveKeys = b
+			}
+		}
+	}
+	// Manifest [Run] 草稿文件
+	if ef := getMap(taskData, "external_files"); len(ef) > 0 {
+		task.ExternalFiles = ef
 	}
 
 	return task, nil
@@ -461,11 +499,12 @@ func (a *RemoteDataAccessor) ParsePlanChanges(taskID uint, planOutput string) er
 // Manifest 相关
 // ============================================================================
 
-// GetManifestFilesByTag Agent 模式占位:由 platform 通过 GetTaskData 把 manifest_files 一次性
-// 下发到 Agent 节点工作目录,Agent 模式不再单独查询。返回空切片,executor 在分支 2 通过
-// stagedManifestFiles 字段读取。
-func (a *RemoteDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error) {
-	return nil, fmt.Errorf("GetManifestFilesByTag not supported in remote mode; use GetTaskData payload instead")
+// GetManifestBundleByTag Agent 模式:平台在 GetTaskData 里经 RequireValidForRun 校验后
+// 下发 "manifest_bundle"(归档 + bundle_hash),或在拒绝时下发 "manifest_bundle_error"
+// (bundle_republish_required 原样还原,任务以同一 error_code 失败)。executor 用
+// manifestbundle.Unpack 落盘并在 init 前复核哈希。
+func (a *RemoteDataAccessor) GetManifestBundleByTag(deploymentID, tag string) (*ManifestBundleHandoff, error) {
+	return manifestHandoffFromTaskData(a.taskData, deploymentID, tag)
 }
 
 // ============================================================================

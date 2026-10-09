@@ -63,7 +63,7 @@ sha256( "terranova-bundle-v2" 0x00
 - `RequireValid`：`bundle_hash` 为 NULL 或带任何 `bundle_invalid_reason` 即无效（记录的原因优先于残留哈希）。
 - `Verify`：纯重算比对。`VerifyForUse`：真正使用版本处的完整性闸门（见下）。
 
-**完整性只在使用处校验**：版本列表 / 详情、编辑器 `ListFiles` / `ReadFile`（`?version=`）、导出、diff、workdirs、敏感 key 计算、outputs、AI 工具都只读存储值，不重算哈希、不写库。只在 install、首装预览、按部署预览（目标版本，未给则当前版本）、upgrade 的**目标**版本，以及执行器取文件（`LocalDataAccessor.GetManifestFilesByTag`，runner 交接点）重算：
+**完整性只在使用处校验**：版本列表 / 详情、编辑器 `ListFiles` / `ReadFile`（`?version=`）、导出、diff、workdirs、敏感 key 计算、outputs、AI 工具都只读存储值，不重算哈希、不写库。只在 install、首装预览、按部署预览（目标版本，未给则当前版本）、upgrade 的**目标**版本，以及执行器取文件（`GetManifestBundleByTag` → `LoadRunnableManifestBundle`，runner 交接点，local 与 agent 同一路径）重算：
 - 不一致 → 尽力把版本记为 `bundle_hash = NULL`、`bundle_invalid_reason = 'hash_mismatch'`（写失败只记日志），输出 WARN 安全日志 `[WARN] [security] manifest bundle hash mismatch: manifest_id=… version_id=… request_id=… source=…`，并写一条 `audit_logs`（`MANIFEST_VERSION` / `version.bundle_hash_mismatch`，`new_values` 带 level、manifest_id、version_id、request_id、source）。部署路径返回 **409** `bundle_republish_required`（`reason: "hash_mismatch"`），执行器报错。执行器的记录写在事务外，外层回滚不会丢。
 - **`hash_mismatch` 粘滞**：一旦记录，任何重算、回填、迁移都不会把它改回合法；使用处直接拒绝，不再重算、不再重复上报。只有发布新版本才会产生合法 bundle（仅对新版本）。
 
@@ -122,11 +122,28 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 - diff 的版本侧（版本不存在现返回 404）；
 - workdirs、敏感 key 计算、执行器取文件、outputs 模块源解析与 AI 工具。
 
-**执行器闸门**：执行器取文件（`LocalDataAccessor.GetManifestFilesByTag` → `manifestbundle.RequireValidForRun`）先做 `VerifyForUse`，再 `RequireValid`：`bundle_hash` 为 NULL 的版本（规则违规或 `hash_mismatch`）一律不交给 Terraform，plan / apply / drift 任务失败，错误为 `bundle_republish_required: <reason>`（`*RepublishRequiredError`）。uninstall 不受影响：它只解绑元信息（清 workspace 的 manifest 三列与 manifest 资源行），不创建任务；之后在 workspace 跑的 Plan+Apply 不再加载 manifest 文件，按 state 销毁残留资源，bundle 代码（包括 destroy-time provisioner、`.terraformrc` 等）不会被执行，所以无效版本无需确认即可 uninstall。
+**执行器闸门**：执行器取文件（`LoadRunnableManifestBundle` → `manifestbundle.RequireValidForRun`，agent 模式由平台在 `GetTaskData` 里执行）先做 `VerifyForUse`，再 `RequireValid`：`bundle_hash` 为 NULL 的版本（规则违规或 `hash_mismatch`）一律不交给 Terraform，plan / apply / drift 任务失败，错误为 `bundle_republish_required: <reason>`（`*RepublishRequiredError`）。uninstall 不受影响：它只解绑元信息（清 workspace 的 manifest 三列与 manifest 资源行），不创建任务；之后在 workspace 跑的 Plan+Apply 不再加载 manifest 文件，按 state 销毁残留资源，bundle 代码（包括 destroy-time provisioner、`.terraformrc` 等）不会被执行，所以无效版本无需确认即可 uninstall。
 
 **暂未覆盖（后续步骤）**：
-- Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持。
+- ~~Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持~~ —— step 4 已改为 bundle 交接（§3.4）。
 - 编辑器 ExternalFiles 的「Run」仍用草稿内容（step 4/6 改为预览 run）。
+
+### 3.4 Runner（step 4）
+
+**接口**（`services/runner.go`）：`Runner{Kind, Supports(purpose), Start(RunRequest)}`，任务队列按 workspace 执行模式选 runner，统一经 `StartRun` 投递：
+- `LocalRunner`：现有本进程 executor（CAS 置 running → `executeTask`）；
+- `AgentRunner`：现有 agent / K8s 驱动（`pushTaskToAgent`，C&C 推给 agent，agent 用同一个 `TerraformExecutor` + `RemoteDataAccessor`）；
+- `SandboxRunner`：step 6 占位，只支持 preview，`Start` 返回 `ErrSandboxRunnerNotImplemented`。
+
+规格里的四步（prepare → exec → fetch → destroy）仍在 executor 内部完成，step 4 只抽投递接口，不重写执行流程；sandbox 实现时再按四步拆。
+
+**purpose 与锁**：`plan`、`drift_check` 为 preview；`plan_and_apply`（plan 与 apply 两个阶段）与 `apply` 为 approval。`StartRun` 拒绝未持 workspace 锁的 approval 投递（`ErrApprovalRequiresWorkspaceLock`）；`TryExecuteNextTask` 与 `ExecuteConfirmedApply`（原先不加锁）都先拿 workspace advisory lock（`WorkspaceLockKey`）、锁内复查任务状态再投递。HTTP state backend 下只有 preview 的 `init` / `plan` 带 `-lock=false`，approval 的 plan 现在持 state 锁（原先 `plan_and_apply` 的 plan 也是 `-lock=false`）。顺带修了 `pglock`：advisory lock 是会话级的，原实现 lock / unlock 走连接池里任意连接，unlock 可能落在别的会话上导致锁泄漏，同进程第二次 `TryLock` 也可能在同一会话上重入、被当成拿到锁；现在每把锁从 `TryLock` 到 `Unlock` 独占一个连接。
+
+**bundle 交接**：执行器不再拿「文件列表」，而是 `DataAccessor.GetManifestBundleByTag` 返回的 `ManifestBundleHandoff`（平台侧 `RequireValidForRun` 之后的确定性 tar 归档 + `bundle_hash`）。Local 进程内构建；agent / K8s 由 `GetTaskData` 下发 `manifest_bundle`（`archive_b64`、`bundle_hash`、`version_id`、deployment/tag），平台拒绝时下发 `manifest_bundle_error`，agent 还原为同一个 `bundle_republish_required: <reason>`（同一 `error_code`）。`GetTaskData` 同时下发 workspace 的 `manifest_deployment_id` / `manifest_active_tag` / `manifest_subpath`：此前 agent 收不到这三列，会把 manifest workspace 当 UI workspace 生成空 `main.tf.json` 去 plan（可能销毁 manifest 资源）；现在缺 bundle 时任务直接失败，不回退。
+
+落盘统一走 `manifestbundle.Unpack`：工作目录先清空；每个条目过 `ValidatePath`；只接受普通文件和目录（符号链接、硬链接、设备、fifo 等一律拒绝）；文件用 `O_CREAT|O_EXCL|O_NOFOLLOW` 创建，父目录逐级 `Lstat` 校验（已有的非目录、符号链接拒绝）；`MaxFileSize` / `MaxBundleSize` / 条目数（`MaxFiles`，目录也计入）在读 header 时累计检查、超限立即停止，不再读后续内容；全部写完后 `Hash` 必须等于 `bundle_hash` 才继续（之后才到 `init`），不一致报 `ErrIntegrity` 并记 `[SECURITY]` 日志；空哈希直接 `bundle_republish_required`。版本本身的 `hash_mismatch` 记录仍在平台侧 `RequireValidForRun` 完成（agent 不写库）。
+
+**变量**：任务的 override 快照（`variable_overrides` + `sensitive_keys`）经 `GetTaskData` 的 task 对象下发，`RemoteDataAccessor.SetVariableOverrides` 不再是空操作，不走环境变量、不进日志。override 规则（`ApplyVariableOverrides`）与 tfvars / `variables.tf.json` 生成（`RenderTFVars` / `VariablesTFJSON`，只含 Terraform 变量、按 key 排序）由 local、agent、快照 apply（以及之后的 sandbox）共用，测试保证 local 与 agent 输出逐字节一致（含 override 与敏感值）。override 不再把变量降为非敏感：原变量敏感或 `sensitive_keys` 判定敏感（NULL = 全部敏感）即声明 `sensitive`。
 
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。

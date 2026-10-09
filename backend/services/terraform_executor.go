@@ -223,23 +223,6 @@ func taskUsesExternalFiles(task *models.WorkspaceTask) bool {
 	return ok && len(files) > 0
 }
 
-// taskVariableOverrides 从任务行 variable_overrides(JSONB,任务创建时快照)取出扁平 key=string。
-// 返回 nil 表示无覆盖。值非 string 时按 fmt 兜底。
-func taskVariableOverrides(task *models.WorkspaceTask) map[string]string {
-	if task == nil || len(task.VariableOverrides) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(task.VariableOverrides))
-	for k, v := range task.VariableOverrides {
-		if sv, ok := v.(string); ok {
-			out[k] = sv
-		} else {
-			out[k] = fmt.Sprintf("%v", v)
-		}
-	}
-	return out
-}
-
 // writeExternalFiles 把 task.ExternalFiles 全量落 workDir(Run 第三分支)
 //
 // ExternalFiles 格式: { "files": [ {"path":"main.tf","content_b64":"..."}, ... ] }
@@ -274,29 +257,33 @@ func (s *TerraformExecutor) writeExternalFiles(task *models.WorkspaceTask, workD
 	return nil
 }
 
-// writeManifestFiles 把 manifest_files 全量落盘到 workDir,保留目录结构。
+// writeManifestFiles 把部署版本的 bundle 全量落盘到 workDir,保留目录结构。
 // 任务执行时 cd 到 subpath (在 RunDir 中处理),terraform 自然解析相对引用。
+//
+// 交接走 GetManifestBundleByTag(平台侧 RequireValidForRun:NULL hash / hash_mismatch
+// 拒绝)+ manifestbundle.Unpack(逐条 ValidatePath、只允许普通文件与目录、O_EXCL|
+// O_NOFOLLOW、累计 MaxFileSize/MaxBundleSize/MaxFiles 即时中止、落盘集合 Hash 必须等于
+// bundle_hash)。Local 与 Agent/K8s 同一路径;它是 workDir 的第一批写入(在 init 之前)。
 func (s *TerraformExecutor) writeManifestFiles(workspace *models.Workspace, workDir string) error {
-	files, err := s.dataAccessor.GetManifestFilesByTag(*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
+	h, err := s.dataAccessor.GetManifestBundleByTag(*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
 	if err != nil {
-		return fmt.Errorf("load manifest files: %w", err)
+		return fmt.Errorf("load manifest bundle: %w", err)
 	}
-	if len(files) == 0 {
-		return fmt.Errorf("no manifest files found for deployment=%s tag=%s",
+	if h == nil {
+		return fmt.Errorf("no manifest version found for deployment=%s tag=%s",
 			*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
 	}
-	for _, f := range files {
-		target := filepath.Join(workDir, f.Path)
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
-		}
-		if err := os.WriteFile(target, f.Content, 0644); err != nil {
-			return fmt.Errorf("write %s: %w", target, err)
-		}
+	files, err := unpackManifestHandoff(h, workDir)
+	if err != nil {
+		return err
 	}
-	log.Printf("[manifest] wrote %d files to %s (deployment=%s, tag=%s, subpath=%s)",
+	if len(files) == 0 {
+		return fmt.Errorf("manifest bundle of deployment=%s tag=%s is empty",
+			*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag)
+	}
+	log.Printf("[manifest] unpacked %d files to %s (deployment=%s, tag=%s, version=%s, bundle_hash=%s, subpath=%s)",
 		len(files), workDir,
-		*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag,
+		*workspace.ManifestDeploymentID, *workspace.ManifestActiveTag, h.VersionID, h.BundleHash,
 		safeStringPtr(workspace.ManifestSubpath))
 	return nil
 }
@@ -423,13 +410,11 @@ func (s *TerraformExecutor) GenerateConfigFilesForTask(
 	return nil
 }
 
-// generateVariablesTFJSON 生成variables.tf.json
+// generateVariablesTFJSON 生成variables.tf.json (共用 VariablesTFJSON)
 func (s *TerraformExecutor) generateVariablesTFJSON(
 	workspace *models.Workspace,
 	workDir string,
 ) error {
-	variables := make(map[string]interface{})
-
 	// 使用 DataAccessor 获取变量定义
 	workspaceVars, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform)
 	if err != nil {
@@ -437,80 +422,27 @@ func (s *TerraformExecutor) generateVariablesTFJSON(
 		// 如果获取变量失败，不生成 variables.tf.json 文件
 		return nil
 	}
-
-	for _, v := range workspaceVars {
-		varDef := map[string]interface{}{
-			"type": "string", // 暂时简化，都使用string类型
-		}
-
-		if v.Description != "" {
-			varDef["description"] = v.Description
-		}
-
-		if v.Sensitive {
-			varDef["sensitive"] = true
-		}
-
-		variables[v.Key] = varDef
-	}
-
-	// 如果没有变量，不生成 variables.tf.json 文件
-	if len(variables) == 0 {
+	config := VariablesTFJSON(workspaceVars)
+	if config == nil {
 		log.Printf("No terraform variables found, skipping variables.tf.json generation")
 		return nil
 	}
-
-	config := map[string]interface{}{
-		"variable": variables,
-	}
-
 	return s.writeJSONFile(workDir, "variables.tf.json", config)
 }
 
-// generateVariablesTFVars 生成variables.tfvars
+// generateVariablesTFVars 生成variables.tfvars (共用 RenderTFVars:Local / Agent / K8s /
+// 快照 apply 同一生成器,同输入同字节)
 func (s *TerraformExecutor) generateVariablesTFVars(
 	workspace *models.Workspace,
 	workDir string,
 ) error {
-	var tfvars strings.Builder
-
-	// 使用 DataAccessor 获取变量值
+	// 使用 DataAccessor 获取变量值(含任务级 overrides)
 	workspaceVars, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform)
 	if err != nil {
 		log.Printf("Warning: failed to get variables: %v", err)
 		return s.writeFile(workDir, "variables.tfvars", "")
 	}
-
-	for _, v := range workspaceVars {
-		// 根据ValueFormat处理
-		if v.ValueFormat == models.ValueFormatHCL {
-			// HCL格式：需要判断是否为string类型
-			// 如果值不是以 { [ 开头，且不是 true/false/数字，则认为是string，需要加引号
-			trimmedValue := strings.TrimSpace(v.Value)
-			needsQuotes := !strings.HasPrefix(trimmedValue, "{") &&
-				!strings.HasPrefix(trimmedValue, "[") &&
-				trimmedValue != "true" &&
-				trimmedValue != "false" &&
-				!isNumeric(trimmedValue)
-
-			if needsQuotes {
-				// String类型的HCL值需要加引号
-				escapedValue := strings.ReplaceAll(v.Value, "\"", "\\\"")
-				escapedValue = strings.ReplaceAll(escapedValue, "\n", "\\n")
-				tfvars.WriteString(fmt.Sprintf("%s = \"%s\"\n", v.Key, escapedValue))
-			} else {
-				// 其他HCL格式直接使用
-				tfvars.WriteString(fmt.Sprintf("%s = %s\n", v.Key, v.Value))
-			}
-		} else {
-			// String格式需要加引号
-			escapedValue := strings.ReplaceAll(v.Value, "\"", "\\\"")
-			escapedValue = strings.ReplaceAll(escapedValue, "\n", "\\n")
-			tfvars.WriteString(fmt.Sprintf("%s = \"%s\"\n", v.Key, escapedValue))
-		}
-	}
-
-	return s.writeFile(workDir, "variables.tfvars", tfvars.String())
+	return s.writeFile(workDir, "variables.tfvars", RenderTFVars(workspaceVars))
 }
 
 // isNumeric 检查字符串是否为数字
@@ -861,7 +793,7 @@ func (s *TerraformExecutor) ExecutePlan(
 		}
 	}
 	// Manifest deployment 应急覆盖(任务创建时已快照到任务行)overlay 到 Terraform 变量
-	s.dataAccessor.SetVariableOverrides(taskVariableOverrides(task))
+	s.dataAccessor.SetVariableOverrides(TaskVariableOverrides(task))
 
 	// 读取TF_LOG（从DataAccessor，使用snapshot缓存）
 	tfLogLevel := "info"
@@ -1157,9 +1089,10 @@ func (s *TerraformExecutor) ExecutePlan(
 	planFile := filepath.Join(workDir, "plan.out")
 	args := []string{"plan", "-out=" + planFile, "-no-color", "-var-file=variables.tfvars"}
 
-	// HTTP backend mode: plan doesn't modify state, skip locking to avoid
-	// blocking concurrent plans or conflicting with apply locks
-	if s.stateBackendURL != "" {
+	// HTTP backend mode: preview runs (plan / drift_check) don't modify state,
+	// skip locking so they can run concurrently. Approval runs
+	// (plan_and_apply) plan under the state lock (Runner contract).
+	if skipStateLock(task, s.stateBackendURL != "") {
 		args = append(args, "-lock=false")
 	}
 
@@ -2241,7 +2174,7 @@ func (s *TerraformExecutor) ExecuteApply(
 		}
 	}
 	// Manifest deployment 应急覆盖(任务创建时已快照到任务行)overlay 到 Terraform 变量
-	s.dataAccessor.SetVariableOverrides(taskVariableOverrides(task))
+	s.dataAccessor.SetVariableOverrides(TaskVariableOverrides(task))
 
 	// 清理可能存在的孤儿 temp state 记录
 	if cleanupErr := s.dataAccessor.CleanupOrphanedTempStates(task.WorkspaceID); cleanupErr != nil {
@@ -4372,7 +4305,7 @@ func (s *TerraformExecutor) terraformInitOnce(
 		logger.Info("Using per-task plugin cache directory: %s", pluginCacheDir)
 	}
 
-	args := terraformInitArgs(s.stateBackendURL != "" && task.TaskType == models.TaskTypePlan)
+	args := terraformInitArgs(skipStateLock(task, s.stateBackendURL != ""))
 
 	cmd := exec.CommandContext(ctx, terraformCmd, args...)
 	cmd.Dir = s.ResolveRunDir(workspace, workDir)
@@ -5652,64 +5585,24 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 		logger.Info("⏭ Skipping provider.tf.json from snapshot (no provider config)")
 	}
 
-	// 3. 生成 variables.tf.json（从快照的变量）
-	variablesDef := make(map[string]interface{})
-	for _, v := range snapshotVariables {
-		varDef := map[string]interface{}{
-			"type": "string",
-		}
-		if v.Description != "" {
-			varDef["description"] = v.Description
-		}
-		if v.Sensitive {
-			varDef["sensitive"] = true
-		}
-		variablesDef[v.Key] = varDef
-	}
-
-	if len(variablesDef) > 0 {
-		config := map[string]interface{}{
-			"variable": variablesDef,
-		}
+	// 3. 生成 variables.tf.json（从快照的变量;共用 VariablesTFJSON,仅 Terraform 变量）
+	if config := VariablesTFJSON(snapshotVariables); config != nil {
 		if err := s.writeJSONFile(runDir, "variables.tf.json", config); err != nil {
 			return fmt.Errorf("failed to write variables.tf.json: %w", err)
 		}
-		logger.Info("✓ Generated variables.tf.json from snapshot (%d variables)", len(variablesDef))
+		logger.Info("✓ Generated variables.tf.json from snapshot (%d variables)", len(config["variable"].(map[string]interface{})))
 	} else {
 		logger.Info("No terraform variables in snapshot, skipping variables.tf.json generation")
 	}
 
-	// 4. 生成 variables.tfvars（从快照的变量）
-	var tfvars strings.Builder
+	// 4. 生成 variables.tfvars（从快照的变量;共用 RenderTFVars）
 	sensitiveCount := 0
-
 	for _, v := range snapshotVariables {
 		if v.Sensitive {
 			sensitiveCount++
 		}
-		if v.ValueFormat == models.ValueFormatHCL {
-			trimmedValue := strings.TrimSpace(v.Value)
-			needsQuotes := !strings.HasPrefix(trimmedValue, "{") &&
-				!strings.HasPrefix(trimmedValue, "[") &&
-				trimmedValue != "true" &&
-				trimmedValue != "false" &&
-				!isNumeric(trimmedValue)
-
-			if needsQuotes {
-				escapedValue := strings.ReplaceAll(v.Value, "\"", "\\\"")
-				escapedValue = strings.ReplaceAll(escapedValue, "\n", "\\n")
-				tfvars.WriteString(fmt.Sprintf("%s = \"%s\"\n", v.Key, escapedValue))
-			} else {
-				tfvars.WriteString(fmt.Sprintf("%s = %s\n", v.Key, v.Value))
-			}
-		} else {
-			escapedValue := strings.ReplaceAll(v.Value, "\"", "\\\"")
-			escapedValue = strings.ReplaceAll(escapedValue, "\n", "\\n")
-			tfvars.WriteString(fmt.Sprintf("%s = \"%s\"\n", v.Key, escapedValue))
-		}
 	}
-
-	if err := s.writeFile(runDir, "variables.tfvars", tfvars.String()); err != nil {
+	if err := s.writeFile(runDir, "variables.tfvars", RenderTFVars(snapshotVariables)); err != nil {
 		return fmt.Errorf("failed to write variables.tfvars: %w", err)
 	}
 	logger.Info("✓ Generated variables.tfvars from snapshot (%d assignments, %d sensitive)",
