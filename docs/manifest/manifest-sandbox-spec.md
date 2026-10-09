@@ -126,7 +126,7 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 
 **暂未覆盖（后续步骤）**：
 - ~~Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持~~ —— step 4 已改为 bundle 交接（§3.4）。
-- 编辑器 ExternalFiles 的「Run」仍用草稿内容（step 4/6 改为预览 run）。
+- 编辑器 ExternalFiles 的「Run」仍是 workspace 上的 plan 任务（step 6 改为 sandbox 预览 run），但 step 4 起文件在建任务时校验、执行时复核（§3.4）。
 
 ### 3.4 Runner（step 4）
 
@@ -144,6 +144,10 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 落盘统一走 `manifestbundle.Unpack`：工作目录先清空；每个条目过 `ValidatePath`；只接受普通文件和目录（符号链接、硬链接、设备、fifo 等一律拒绝）；文件用 `O_CREAT|O_EXCL|O_NOFOLLOW` 创建，父目录逐级 `Lstat` 校验（已有的非目录、符号链接拒绝）；`MaxFileSize` / `MaxBundleSize` / 条目数（`MaxFiles`，目录也计入）在读 header 时累计检查、超限立即停止，不再读后续内容；全部写完后 `Hash` 必须等于 `bundle_hash` 才继续（之后才到 `init`），不一致报 `ErrIntegrity` 并记 `[SECURITY]` 日志；空哈希直接 `bundle_republish_required`。版本本身的 `hash_mismatch` 记录仍在平台侧 `RequireValidForRun` 完成（agent 不写库）。
 
 **变量**：任务的 override 快照（`variable_overrides` + `sensitive_keys`）经 `GetTaskData` 的 task 对象下发，`RemoteDataAccessor.SetVariableOverrides` 不再是空操作，不走环境变量、不进日志。override 规则（`ApplyVariableOverrides`）与 tfvars / `variables.tf.json` 生成（`RenderTFVars` / `VariablesTFJSON`，只含 Terraform 变量、按 key 排序）由 local、agent、快照 apply（以及之后的 sandbox）共用，测试保证 local 与 agent 输出逐字节一致（含 override 与敏感值）。override 不再把变量降为非敏感：原变量敏感或 `sensitive_keys` 判定敏感（NULL = 全部敏感）即声明 `sensitive`。
+
+**编辑器 Run（external_files）**：建任务时校验（`PrepareManifestRunFiles`），不通过不建任务。不带 `manifest_version_id` 视为草稿，必须通过发布规则（bundle 规则 + HCL 静态检查，同一 module source 白名单），否则 422 `bundle_rules_violated`；带 `manifest_version_id`（编辑器 `?version=` 打开的已发布版本）时对该版本做 `RequireValidForRun`（重算；NULL → 409 `bundle_republish_required`，篡改 → 记 `hash_mismatch`），且文件哈希必须等于其 `bundle_hash`（否则 409 `bundle_hash_mismatch`）。服务端只比对、不返回版本内容，所以不新增读路径、不需要额外 IAM。通过后文件连同 `bundle_hash` 固化在 `external_files`，执行器走与部署 bundle 相同的归档 + `Unpack` 交接，落盘哈希不符即失败；没有 `bundle_hash` 的旧 Run 任务拒绝执行（需重新发起）。编辑器读（`ListFiles` / `ReadFile ?version=`）仍按设计不校验，校验只在 run。前端需在从版本视图 Run 时带上 `manifest_version_id`，并展示 422 / 409。
+
+**plan 脱敏**：`RedactPlanJSON` 按 plan 格式自带的敏感标记脱敏（`resource_changes` / `resource_drift` / `output_changes` 的 `before_sensitive` / `after_sensitive`，`planned_values` / `prior_state` 的 `sensitive_values` 与敏感 output，`configuration` 中声明 sensitive 的变量值与 default），并把 `configuration.provider_config` 里的常量全部替换（provider 块里的凭证 Terraform 不标记）。脱敏发生在 `terraform show -json` 之后、任何使用之前：变更统计、agent 上传的 resource changes、`plan_json` 入库（local 保存、agent 上传接口在平台侧再脱敏一次以兼容旧 agent、plan parser 的 plan_data 回退路径）都只见脱敏结果；run task 回调与 UI 读到的也是脱敏后的 plan。`RedactedPlanHash` / `RedactPlanForStorage` 在脱敏后的 plan 上算 `plan_hash`（`sha256("terranova-plan-v1" 0x00 规范 JSON)`），供 step 6/7 写 `manifest_runs.plan_redacted` / `plan_hash`；`workspace_tasks.plan_hash` 仍是 `plan.out` 二进制文件的哈希（apply 复用工作目录时校验文件用），语义不变。
 
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。

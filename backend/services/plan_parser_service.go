@@ -80,6 +80,7 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 	if err != nil {
 		return fmt.Errorf("failed to execute terraform show: %w", err)
 	}
+	planJSON = RedactPlanJSON(planJSON)
 
 	// 解析 resource_changes
 	resourceChanges, err := s.parseResourceChanges(planJSON, isDriftCheck)

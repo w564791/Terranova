@@ -1246,7 +1246,7 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 
 // UploadPlanJSON handles plan JSON upload from agent
 // @Summary Upload plan JSON
-// @Description Upload plan JSON from agent after plan execution
+// @Description Upload plan JSON from agent after plan execution. Sensitive values are redacted (services.RedactPlanJSON) before the plan is stored.
 // @Tags Agent Task
 // @Accept json
 // @Produce json
@@ -1293,8 +1293,9 @@ func (h *AgentHandler) UploadPlanJSON(c *gin.Context) {
 		return
 	}
 
-	// Store the plan_json
-	if err := h.db.Model(&task).Update("plan_json", req.PlanJSON).Error; err != nil {
+	// Store the plan_json — redacted on the platform side as well, so an agent
+	// that uploads a raw plan (older build) never gets sensitive values stored
+	if err := h.db.Model(&task).Update("plan_json", services.RedactPlanJSON(req.PlanJSON)).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to save plan_json: " + err.Error(),
 		})

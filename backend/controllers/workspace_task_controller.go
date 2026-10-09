@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"iac-platform/internal/manifestbundle"
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/services"
 
@@ -108,16 +111,18 @@ func NewWorkspaceTaskController(
 
 // CreatePlanTask 创建Plan任务
 // @Summary Create plan task
-// @Description Create a Terraform Plan task or Plan+Apply task
+// @Description Create a Terraform Plan task or Plan+Apply task. Manifest Run: external_files ([{path, content_b64}], plan only) are validated before the task is created. Without manifest_version_id they are treated as a draft and must pass the publish rules (bundle rules and HCL static check) or the request fails with 422 bundle_rules_violated ({file, line?, rule, message}; never file content). With manifest_version_id (files opened from a published version) the version is verified (re-hash; 409 bundle_republish_required when it has no valid bundle) and the files must hash to its bundle_hash (409 bundle_hash_mismatch otherwise). The accepted files and their bundle_hash are frozen on the task; the runner unpacks them and checks the hash again before terraform init.
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
 // @Param id path string true "Workspace ID"
-// @Param request body object false "Task configuration (description and run_type optional)"
+// @Param request body object false "Task configuration (description, run_type, external_files, manifest_version_id optional)"
 // @Success 201 {object} map[string]interface{} "Task created"
 // @Failure 400 {object} map[string]interface{} "Invalid request"
 // @Failure 401 {object} map[string]interface{} "Unauthorized"
-// @Failure 404 {object} map[string]interface{} "Workspace not found"
+// @Failure 404 {object} map[string]interface{} "Workspace or manifest version not found"
+// @Failure 409 {object} map[string]interface{} "bundle_republish_required or bundle_hash_mismatch (manifest Run of a published version)"
+// @Failure 422 {object} map[string]interface{} "bundle_rules_violated (manifest Run files)"
 // @Failure 500 {object} map[string]interface{} "Creation failed"
 // @Router /api/v1/workspaces/{id}/tasks/plan [post]
 // @Security BearerAuth
@@ -144,10 +149,10 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		RunType            string  `json:"run_type"`             // "plan" 或 "plan_and_apply"
 		VariableSnapshotID *string `json:"variable_snapshot_id"` // 可选，API 用户可传已有 vsnap_id
 		// Manifest Run: 当前用户草稿上传 (Run 按钮专用,只允许 plan,不允许 plan_and_apply)
-		ExternalFiles []struct {
-			Path       string `json:"path"`
-			ContentB64 string `json:"content_b64"`
-		} `json:"external_files,omitempty"`
+		ExternalFiles []services.ManifestRunFileInput `json:"external_files,omitempty"`
+		// 可选:external_files 是某个已发布版本的内容(编辑器 ?version=)。给出时校验该版本
+		// (RequireValidForRun)并要求文件哈希等于其 bundle_hash;不给则按草稿走发布规则。
+		ManifestVersionID string `json:"manifest_version_id,omitempty"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		// 如果没有请求体，继续执行（description是可选的）
@@ -159,6 +164,12 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 	if len(req.ExternalFiles) > 0 && req.RunType != "plan" {
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"error": "external_files only supported for plan tasks (manifest Run)",
+		})
+		return
+	}
+	if req.ManifestVersionID != "" && len(req.ExternalFiles) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "manifest_version_id requires external_files",
 		})
 		return
 	}
@@ -207,6 +218,53 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		taskType = models.TaskTypePlan
 	}
 
+	// external_files (Manifest Run): 草稿按发布规则校验(bundle 规则 + HCL 静态检查),
+	// 已发布版本校验版本并比对 bundle_hash;通过后连同 bundle_hash 固化到任务,执行器
+	// 落盘后复核。必须在创建快照 / 任务之前完成。
+	var externalFilesJSONB models.JSONB
+	if len(req.ExternalFiles) > 0 {
+		efs, problems, err := services.PrepareManifestRunFiles(ctx.Request.Context(), c.db, req.ExternalFiles,
+			req.ManifestVersionID, manifestbundle.MismatchEvent{
+				RequestID: ctx.GetString(middleware.RequestIDContextKey), UserID: uid,
+			})
+		var rr *manifestbundle.RepublishRequiredError
+		switch {
+		case len(problems) > 0:
+			ctx.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error":    "manifest run files violate the bundle rules",
+				"code":     "bundle_rules_violated",
+				"problems": problems,
+			})
+			return
+		case errors.Is(err, services.ErrRunFilesMalformed):
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		case errors.Is(err, manifestbundle.ErrVersionNotFound):
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "manifest version not found"})
+			return
+		case errors.As(err, &rr):
+			ctx.JSON(http.StatusConflict, gin.H{
+				"error":      "this version has no valid bundle; please republish it",
+				"code":       "bundle_republish_required",
+				"version_id": req.ManifestVersionID,
+				"reason":     rr.Invalid.Reason,
+			})
+			return
+		case errors.Is(err, services.ErrRunFilesVersionMismatch):
+			ctx.JSON(http.StatusConflict, gin.H{
+				"error":      "external_files do not match the published version",
+				"code":       "bundle_hash_mismatch",
+				"version_id": req.ManifestVersionID,
+			})
+			return
+		case err != nil:
+			log.Printf("[ERROR] validate manifest run files for %s: %v", workspace.WorkspaceID, err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate manifest run files"})
+			return
+		}
+		externalFilesJSONB = efs
+	}
+
 	// Variable snapshot: use provided vsnap_id or create new one
 	var vsnapID *string
 	if req.VariableSnapshotID != nil && *req.VariableSnapshotID != "" {
@@ -228,19 +286,6 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 		if snapshotErr != nil {
 			log.Printf("[WARN] Failed to create variable snapshot for workspace %s: %v", workspace.WorkspaceID, snapshotErr)
 		}
-	}
-
-	// external_files (Manifest Run): 序列化为 JSONB 写入 task
-	var externalFilesJSONB models.JSONB
-	if len(req.ExternalFiles) > 0 {
-		efs := make([]map[string]string, 0, len(req.ExternalFiles))
-		for _, f := range req.ExternalFiles {
-			efs = append(efs, map[string]string{
-				"path":        f.Path,
-				"content_b64": f.ContentB64,
-			})
-		}
-		externalFilesJSONB = models.JSONB{"files": efs}
 	}
 
 	// Manifest deployment variable_overrides 快照: 任务创建时固化当时 active deployment 的
