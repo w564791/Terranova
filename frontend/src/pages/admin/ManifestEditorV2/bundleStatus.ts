@@ -28,7 +28,7 @@ export function versionNeedsRepublish(v: BundleFields | undefined | null): boole
 }
 
 /**
- * bundle 规则码 -> 中文说明(后端 backend/internal/manifestbundle/rules.go 的 Rule* 常量;
+ * bundle 规则码 -> 中文说明(后端 backend/internal/manifestbundle/rules.go / hcl.go 的 Rule* 常量;
  * 后端 message 固定为英文,前端按 rule 显示中文,未知规则回退后端 message)。
  * 数值与后端 MaxPathLen / MaxFileSize / MaxBundleSize / MaxFiles 保持一致。
  */
@@ -42,6 +42,12 @@ const RULE_TEXT: Record<string, string> = {
   file_too_large: '文件超过 1 MB',
   bundle_too_large: 'bundle 总大小超过 50 MB',
   too_many_files: 'bundle 文件数超过 2000 个',
+  // HCL 执行面检查(后端 manifestbundle/hcl.go,dff2936;仅发布时检查,带行号)
+  hcl_parse_error: 'Terraform 配置文件无法解析',
+  hcl_provisioner: '不允许使用 provisioner 块（local-exec、remote-exec、file 等）',
+  hcl_external_data: '不允许使用 "external" 数据源 / hashicorp/external provider',
+  hcl_http_data: '不允许使用 "http" 数据源 / hashicorp/http provider',
+  hcl_module_source: 'module source 不被允许：请使用 bundle 内的相对路径或平台模块目录中已注册的模块',
 }
 const SECRET_SCAN_PREFIX = 'secret_scan:'
 
@@ -79,6 +85,21 @@ export function localizeInvalidReason(reason: string): string {
     .join('\n')
 }
 
+/** 已部署版本失效(需重新发布 / 完整性校验失败)时的提示 */
+export const STALE_DEPLOYMENT_MESSAGE = '当前版本已失效，workspace 上的 plan/apply/drift 会失败，请升级到有效版本'
+
+/**
+ * 部署的已装版本是否失效:在版本列表中找到该版本且 bundle_hash 为空或 hash_mismatch。
+ * 版本列表里找不到(未加载 / 已删除)时不判定为失效。
+ */
+export function deploymentVersionStale(
+  d: { version_id: string } | undefined | null,
+  versions: readonly ManifestVersion[],
+): boolean {
+  if (!d) return false
+  return versionNeedsRepublish(versions.find((v) => v.id === d.version_id))
+}
+
 /** 下拉 option 的后缀文案与 title(原生 select 无法放 Tag);tooltip 可能含换行 */
 export function bundleStatusLabel(v: BundleFields): { label: string; tooltip: string } | null {
   if (!versionNeedsRepublish(v)) return null
@@ -112,7 +133,7 @@ export function republishRequiredMessage(err: unknown): string {
 export interface PublishProblem {
   /** 相对路径;bundle 级规则(如 bundle_too_large)为空串,不可跳转 */
   file: string
-  /** 仅密钥扫描(secret_scan:*)带 1-based 行号 */
+  /** 1-based 行号:密钥扫描(secret_scan:*)与 HCL 检查(hcl_*)带;路径 / 大小 / 黑名单规则不带 */
   line?: number
   rule: string
   /** 服务端固定说明;为空时回退为规则名 */

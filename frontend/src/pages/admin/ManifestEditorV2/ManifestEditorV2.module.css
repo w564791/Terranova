@@ -588,3 +588,21 @@
 .editorBreadcrumbSeg { color: var(--fg-muted); padding: 0 2px; }
 .editorBreadcrumbCurrent { color: var(--fg-default); }
 .editorBreadcrumbSep { color: #555; margin: 0 1px; }
+
+/* 部署列表:已装版本失效时的红色提示行 + 升级按钮 */
+.deployStale {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0 12px 4px 36px; padding: 4px 8px;
+  background: rgba(241, 76, 76, 0.1); border: 1px solid rgba(241, 76, 76, 0.4);
+  border-radius: 3px; color: var(--red, #f14c4c);
+  font-size: 12px; line-height: 18px; white-space: normal;
+}
+.deployStale > span { flex: 1; }
+.deployUpgradeBtn {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border: none; border-radius: 2px; cursor: pointer;
+  background: #0e639c; color: #fff; font-size: 12px; font-weight: 600; line-height: 18px;
+  font-family: inherit;
+}
+.deployUpgradeBtn:hover { background: #1177bb; }
+.deployUpgradeBtn:disabled { opacity: 0.5; cursor: not-allowed; }
