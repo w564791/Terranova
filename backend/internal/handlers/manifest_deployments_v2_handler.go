@@ -759,7 +759,7 @@ func mergeOverrides(stored, incoming map[string]string, sensitive map[string]boo
 // Uninstall 解绑 manifest 与 workspace,清相关 workspace_resources
 // 不动云端;workspace 进入"反向漂移"状态等待用户跑 Plan+Apply 清理
 // @Summary Uninstall manifest deployment
-// @Description Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources). Not blocked when the deployed version has no valid bundle.
+// @Description Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources and creates no task). Not blocked when the deployed version has no valid bundle: the bundle is never executed after uninstall, because the follow-up workspace Plan+Apply no longer loads manifest files (the executor refuses to run any version whose bundle_hash is NULL, failing the task with "bundle_republish_required: <reason>").
 // @Tags Manifest Deployments
 // @Accept json
 // @Produce json

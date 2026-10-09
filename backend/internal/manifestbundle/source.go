@@ -386,3 +386,38 @@ func CheckVersion(ctx context.Context, db *gorm.DB, versionID string) (hash stri
 	hash, err = Hash(files)
 	return hash, nil, err
 }
+
+// RepublishRequiredError is the runner-side form of *InvalidError: its text
+// is exactly "bundle_republish_required: <reason>" (rule names and paths, or
+// hash_mismatch; never file content). The executor fails the task with it.
+type RepublishRequiredError struct {
+	Invalid *InvalidError
+}
+
+func (e *RepublishRequiredError) Error() string {
+	reason := e.Invalid.Reason
+	if reason == "" {
+		reason = "no valid bundle"
+	}
+	return "bundle_republish_required: " + reason
+}
+
+func (e *RepublishRequiredError) Unwrap() error { return e.Invalid }
+
+// RequireValidForRun is the runner hand-off gate: VerifyForUse (re-hash;
+// a mismatch is recorded and reported) and then RequireValid, so a version
+// whose bundle_hash is NULL for any reason (bundle rules or hash_mismatch)
+// is never handed to Terraform. Failures are *RepublishRequiredError.
+// recordDB receives the hash_mismatch record (pass a handle outside any
+// surrounding transaction so a rollback cannot lose it).
+func RequireValidForRun(ctx context.Context, recordDB *gorm.DB, b *Bundle, ev MismatchEvent) error {
+	err := VerifyForUse(ctx, recordDB, b, ev)
+	if err == nil {
+		err = b.RequireValid()
+	}
+	var invalid *InvalidError
+	if errors.As(err, &invalid) {
+		return &RepublishRequiredError{Invalid: invalid}
+	}
+	return err
+}

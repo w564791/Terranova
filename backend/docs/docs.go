@@ -16988,7 +16988,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources). Not blocked when the deployed version has no valid bundle.",
+                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources and creates no task). Not blocked when the deployed version has no valid bundle: the bundle is never executed after uninstall, because the follow-up workspace Plan+Apply no longer loads manifest files (the executor refuses to run any version whose bundle_hash is NULL, failing the task with \"bundle_republish_required: <reason>\").",
                 "consumes": [
                     "application/json"
                 ],
@@ -17350,7 +17350,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} (line only for secret-scan hits) and never contains file content.",
+                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} and never contains file content. Besides the path / denylist / size / secret-scan rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner block), hcl_external_data / hcl_http_data (data \"external\" / data \"http\", or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source (module source that is not a relative path inside the bundle nor an active platform module catalog source). line is set for secret-scan and HCL problems (1-based line of the hit / block / attribute).",
                 "consumes": [
                     "application/json"
                 ],

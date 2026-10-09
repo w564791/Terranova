@@ -86,6 +86,18 @@ sha256( "terranova-bundle-v2" 0x00
 | `too_many_files` | 文件数超过 `MaxFiles` = 2000。在任何逐文件检查之前判定，命中即只返回这一条（`file` 为空串、无 `line`），不再做路径 / 内容扫描 |
 | `secret_scan:<kind>` | 内容命中高置信度凭证格式：`aws_access_key`、`private_key`、`github_token`、`slack_token`（新写的最小扫描器，代码库原先没有） |
 
+**HCL 静态检查（仅发布，`manifestbundle.CheckHCL` / `ValidateForPublish`）**：对 Terraform 会加载的每个配置文件（任意深度，本地 module 也会被加载）：`*.tf`、`*.tf.json`（含 `override.tf`、`*_override.tf` 及其 `.json`）、OpenTofu 的 `*.tofu`、`*.tofu.json`，不区分大小写，连 Terraform 自己忽略的 `.`/`#` 开头、`~` 结尾的文件也检查（宁多勿少）。用 `hclparse`（原生 `ParseHCL`、JSON `ParseJSON`）解析，按 body schema 检查块，不用正则。problem 带 `file` 与命中块 / 属性的 1 起 `line`。
+
+| rule | 条件 |
+|---|---|
+| `hcl_parse_error` | 文件无法解析，或检查的块头不合法（标签数不对等）；解析失败一律算命中，绝不跳过 |
+| `hcl_provisioner` | 任意 `resource`（含 `null_resource`、`terraform_data`）或 `removed` 块里的任意 `provisioner`（local-exec / remote-exec / file 等，任何 `when`） |
+| `hcl_external_data` | `data "external"`（顶层或 `check` 块内的嵌套 data）；`required_providers` 把 `hashicorp/external` 映射到任意本地名 |
+| `hcl_http_data` | `data "http"`（同上）；`required_providers` 映射 `hashicorp/http` |
+| `hcl_module_source` | `module` 的 `source` 不是静态字符串、缺失，或既不是留在 bundle 内的相对路径（`./`、`../`，相对声明文件所在目录解析后不越出 bundle 根），也不在白名单内 |
+
+module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`（step 8 在此扩展）：仓库里没有独立的 module source / registry 白名单配置，因此白名单 = 平台 module 目录中 `status='active'` 的 module 的 `modules.module_source` 及其 `module_versions.module_source`（即编辑器可选的 module；`modules.source` 是导入方式标识，不算）。精确匹配，另允许 `<条目>//<子目录>` 形式。目录只在遇到第一个非本地 source 时才查询。HCL 检查只在发布时执行：迁移与存量重判仍只用 `Validate`，不会让已有合法哈希的版本因新规则失效。`manifestbundle.LocalModulesOnly`（nil 策略）只允许本地路径，供以后检查不可信 bundle 使用。
+
 **发布**：在同一事务内依次执行：
 1. 读调用者的草稿；没有 `.tf` 文件则返回 400。
 2. 违反规则则返回 **422**（不建版本）：`{error:"draft violates the bundle rules", code:"bundle_rules_violated", problems:[{file, line?, rule, message}]}`。
@@ -110,8 +122,9 @@ sha256( "terranova-bundle-v2" 0x00
 - diff 的版本侧（版本不存在现返回 404）；
 - workdirs、敏感 key 计算、执行器取文件、outputs 模块源解析与 AI 工具。
 
+**执行器闸门**：执行器取文件（`LocalDataAccessor.GetManifestFilesByTag` → `manifestbundle.RequireValidForRun`）先做 `VerifyForUse`，再 `RequireValid`：`bundle_hash` 为 NULL 的版本（规则违规或 `hash_mismatch`）一律不交给 Terraform，plan / apply / drift 任务失败，错误为 `bundle_republish_required: <reason>`（`*RepublishRequiredError`）。uninstall 不受影响：它只解绑元信息（清 workspace 的 manifest 三列与 manifest 资源行），不创建任务；之后在 workspace 跑的 Plan+Apply 不再加载 manifest 文件，按 state 销毁残留资源，bundle 代码（包括 destroy-time provisioner、`.terraformrc` 等）不会被执行，所以无效版本无需确认即可 uninstall。
+
 **暂未覆盖（后续步骤）**：
-- 执行器仍可运行因规则失败而 NULL 的版本（step 4 runner 拒绝），但 `hash_mismatch` 已拒绝。
 - Agent 模式 `RemoteDataAccessor.GetManifestFilesByTag` 仍不支持。
 - 编辑器 ExternalFiles 的「Run」仍用草稿内容（step 4/6 改为预览 run）。
 

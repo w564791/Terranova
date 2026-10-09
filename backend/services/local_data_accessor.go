@@ -687,8 +687,10 @@ func (a *LocalDataAccessor) ParsePlanChanges(taskID uint, planOutput string) err
 func (a *LocalDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]models.ManifestFile, error) {
 	// deployment + tag -> 版本;文件只从该版本的不可变 bundle 读,绝不读草稿。这是 runner
 	// 交接点:有 bundle_hash 时重算校验,不一致 => 记录 hash_mismatch + WARN 安全日志/审计
-	// 并报错;已记录 hash_mismatch 的版本直接拒绝(粘滞)。因 bundle 规则而 bundle_hash
-	// 为 NULL 的旧版本暂时照常可读(step 4 runner 再拒绝)。
+	// 并报错;已记录 hash_mismatch 的版本直接拒绝(粘滞)。bundle_hash 为 NULL 的版本
+	// (bundle 规则或 hash_mismatch)一律拒绝,任务失败报 "bundle_republish_required: <reason>"。
+	// uninstall 只解绑元信息、不经这里取文件:其后的 Plan+Apply 不含 bundle 代码,
+	// 所以无效版本仍可 uninstall,且 bundle 内容不会被执行。
 	var versionID string
 	if err := a.getDB().Raw(`
 		SELECT mv.id
@@ -706,7 +708,7 @@ func (a *LocalDataAccessor) GetManifestFilesByTag(deploymentID, tag string) ([]m
 		return nil, err
 	}
 	// 记录写在事务外(a.db),外层事务回滚也不会丢掉 hash_mismatch 标记
-	if err := manifestbundle.VerifyForUse(context.Background(), a.db, bundle, manifestbundle.MismatchEvent{
+	if err := manifestbundle.RequireValidForRun(context.Background(), a.db, bundle, manifestbundle.MismatchEvent{
 		VersionID: versionID, Source: "runner:deployment=" + deploymentID,
 	}); err != nil {
 		return nil, err
