@@ -12,7 +12,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
-import { message } from 'antd'
+import { Tag, message } from 'antd'
 import { getAuthOrgId } from '../../../services/api'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
@@ -38,7 +38,12 @@ import SearchPanel from './SearchPanel'
 import ProblemsPanel, { type ProblemItem } from './ProblemsPanel'
 import { collectManifestProblems } from './collectProblems'
 import BundleStatusTag from './BundleStatusTag'
-import { publishProblemText, type PublishProblem } from './bundleStatus'
+import {
+  publishProblemText,
+  deploymentVersionStale,
+  STALE_DEPLOYMENT_MESSAGE,
+  type PublishProblem,
+} from './bundleStatus'
 import QuickOpen from './QuickOpen'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
 import ManifestAiTools, { type EditorBridge, type CheckFile } from './ManifestAiTools'
@@ -499,6 +504,8 @@ export default function ManifestEditorV2() {
   const [versionsLoading, setVersionsLoading] = useState(false)
   // 已部署 workspace(active deployment)+ workspace 名称映射,用于左侧"部署"视图与 DRAFT 徽标
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
+  // 从部署列表"升级"失效部署时,部署面板预选的 workspace
+  const [deployTargetWsId, setDeployTargetWsId] = useState<string | undefined>()
   const [wsNameById, setWsNameById] = useState<Record<string, string>>({})
   const [deployLoading, setDeployLoading] = useState(false)
   // post_init 落库的 provider schema 版本(状态栏);无缓存为 —
@@ -3246,17 +3253,42 @@ export default function ManifestEditorV2() {
                 deployments.map((d) => {
                   const wsName = wsNameById[d.workspace_id] || d.workspace_id
                   const ver = versions.find((v) => v.id === d.version_id)?.version
+                  // 已装版本失效(bundle_hash 为空 / hash_mismatch):红色提示 + 醒目的升级入口
+                  const stale = deploymentVersionStale(d, versions)
                   return (
-                    <div
-                      key={d.id}
-                      className={styles.deployRow}
-                      title={`跳转到 ${wsName}`}
-                      onClick={() => navigate(`/workspaces/${d.workspace_id}`)}
-                    >
-                      <i className={`codicon codicon-vm ${styles.deployIcon}`} />
-                      <span className={styles.deployName}>{wsName}</span>
-                      {ver && <span className={styles.deployVersion}>{ver}</span>}
-                      <i className={`codicon codicon-arrow-right ${styles.deployGo}`} />
+                    <div key={d.id}>
+                      <div
+                        className={styles.deployRow}
+                        title={`跳转到 ${wsName}`}
+                        onClick={() => navigate(`/workspaces/${d.workspace_id}`)}
+                      >
+                        <i className={`codicon codicon-vm ${styles.deployIcon}`} />
+                        <span className={styles.deployName}>{wsName}</span>
+                        {ver && <span className={styles.deployVersion}>{ver}</span>}
+                        {stale && (
+                          <Tag color="error" style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px', padding: '0 4px' }}>
+                            已失效
+                          </Tag>
+                        )}
+                        <i className={`codicon codicon-arrow-right ${styles.deployGo}`} />
+                      </div>
+                      {stale && (
+                        <div className={styles.deployStale}>
+                          <span>{STALE_DEPLOYMENT_MESSAGE}</span>
+                          <button
+                            type="button"
+                            className={styles.deployUpgradeBtn}
+                            disabled={manifestCaps.can_deploy === false}
+                            title={manifestCaps.can_deploy === false ? '没有可写的 workspace(需 WORKSPACE_RESOURCES 写权限)' : '打开部署面板升级该 workspace'}
+                            onClick={() => {
+                              setDeployTargetWsId(d.workspace_id)
+                              setActiveRightPanel('deploy')
+                            }}
+                          >
+                            <i className="codicon codicon-arrow-up" /> 升级
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -3559,7 +3591,14 @@ export default function ManifestEditorV2() {
       {activeRightPanel === 'deploy' && (
         <DeployPanel
           ctx={ctx}
-          onClose={() => setActiveRightPanel((prev) => (prev === 'deploy' ? null : prev))}
+          initialWorkspaceId={deployTargetWsId}
+          onDeployed={() => {
+            if (activeView === 'deploy') loadDeployments()
+          }}
+          onClose={() => {
+            setActiveRightPanel((prev) => (prev === 'deploy' ? null : prev))
+            setDeployTargetWsId(undefined)
+          }}
           panelWidth={rightPanelWidth}
         />
       )}

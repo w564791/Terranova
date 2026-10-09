@@ -36,8 +36,8 @@
  *   2. 选定 workspace 后才拉该 workspace 可挂载的 varset(GET /variable-sets?workspace_id=)与变量预览
  */
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Alert, message } from 'antd'
+import { Link, useNavigate } from 'react-router-dom'
+import { Alert, Tag, message } from 'antd'
 import {
   listVersions,
   listDeployments,
@@ -66,6 +66,8 @@ import {
   bundleStatusLabel,
   isBundleRepublishRequired,
   versionNeedsRepublish,
+  deploymentVersionStale,
+  STALE_DEPLOYMENT_MESSAGE,
 } from './bundleStatus'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import { getHttpStatus } from '../../../services/api'
@@ -84,6 +86,8 @@ interface Props {
   onClose: () => void
   onDeployed?: () => void
   panelWidth?: number
+  /** 打开时预选的 workspace(如从部署列表"升级"失效部署进入) */
+  initialWorkspaceId?: string
 }
 
 // ===== 内联样式(VS Code 暗色主题)=====
@@ -434,7 +438,7 @@ function VariablePreview({
 
 // ===== 组件 =====
 
-export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Props) {
+export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth, initialWorkspaceId }: Props) {
   const navigate = useNavigate()
   const [versions, setVersions] = useState<ManifestVersion[]>([])
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
@@ -449,7 +453,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
   const [submitting, setSubmitting] = useState(false)
 
   const [versionId, setVersionId] = useState<string | undefined>()
-  const [workspaceId, setWorkspaceId] = useState<string | undefined>()
+  const [workspaceId, setWorkspaceId] = useState<string | undefined>(initialWorkspaceId)
   const [varsetIds, setVarsetIds] = useState<string[]>([])
   const [currentVarsetIds, setCurrentVarsetIds] = useState<string[]>([])
   // deployment 已存 varset(含 priority,按加载顺序);无变量写权限时 upgrade 原样回传
@@ -541,10 +545,21 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     }
   }, [workspaceId])
 
+  // 面板已打开时再次从部署列表点"升级":切到对应 workspace
+  useEffect(() => {
+    if (initialWorkspaceId) setWorkspaceId(initialWorkspaceId)
+  }, [initialWorkspaceId])
+
   const activeDeploymentForWs = useMemo<ManifestDeployment | undefined>(() => {
     if (!workspaceId) return undefined
     return deployments.find((d) => d.workspace_id === workspaceId && d.status === 'active')
   }, [workspaceId, deployments])
+
+  // 已装版本失效(bundle_hash 为空 / hash_mismatch):plan/apply/drift 都会失败,须升级到有效版本
+  const installedStale = useMemo(
+    () => deploymentVersionStale(activeDeploymentForWs, versions),
+    [activeDeploymentForWs, versions],
+  )
 
   // 无变量写权限(can_write_variables === false;字段缺省 = 旧后端,视为可写)
   const canWriteVariables = useMemo(() => {
@@ -888,7 +903,7 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
     setSubmitError(null)
     try {
       await uninstallDeployment(ctx, activeDeploymentForWs.id)
-      message.success('已 uninstall,请到 workspace 跑 Plan+Apply 销毁残留资源')
+      message.success('已卸载：云上资源不会被删除；要删除资源，请到该 workspace 上运行 Plan + Apply', 6)
       setConfirmingUninstall(false)
       onDeployed?.()
       handleClose()
@@ -930,7 +945,24 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
         return (
           <>
             <div style={uninstallConfirmStyle}>
-              确认解除关联?残留云端资源需到 workspace 跑 Plan+Apply 销毁。
+              卸载只解除 Manifest 与 workspace 的绑定，云上资源不会被删除。要删除资源，请到该 workspace 上运行 Plan + Apply。
+              <div style={{ marginTop: 6 }}>
+                <Link
+                  to={`/workspaces/${activeDeploymentForWs.workspace_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#3794ff' }}
+                >
+                  打开 workspace
+                  {(() => {
+                    const ws = workspaces.find(
+                      (w) => (w.workspace_id || String(w.id)) === activeDeploymentForWs.workspace_id,
+                    )
+                    return ws?.name ? ` ${ws.name}` : ''
+                  })()}{' '}
+                  <i className="codicon codicon-link-external" style={{ fontSize: 11 }} />
+                </Link>
+              </div>
             </div>
             <div style={footerStyle}>
               <button style={btnSecondaryStyle} onClick={() => setConfirmingUninstall(false)} disabled={submitting}>
@@ -950,7 +982,23 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
           <button style={btnDangerStyle} onClick={() => setConfirmingUninstall(true)} disabled={submitting}>
             卸载
           </button>
-          {noChange ? (
+          {installedStale ? (
+            // 已装版本失效:运行必失败,不提供"运行";升级为主操作
+            <>
+              <button style={btnSecondaryStyle} onClick={() => void doUpgrade(false)} disabled={upgradeBlocked || noChange}>
+                {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
+                仅升级
+              </button>
+              <button
+                style={{ ...btnPrimaryStyle, fontWeight: 600 }}
+                onClick={() => void doUpgrade(true)}
+                disabled={upgradeBlocked || noChange}
+              >
+                {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
+                <i className="codicon codicon-arrow-up" /> 升级到所选版本并运行
+              </button>
+            </>
+          ) : noChange ? (
             <button style={btnPrimaryStyle} onClick={() => void handleRunOnly()} disabled={submitting}>
               {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
               <i className="codicon codicon-play" /> 运行 (Plan+Apply)
@@ -1113,6 +1161,19 @@ export default function DeployPanel({ ctx, onClose, onDeployed, panelWidth }: Pr
                 return cur ? <BundleStatusTag version={cur} /> : null
               })()}
             </div>
+          )}
+          {targetMode === 'upgrade' && installedStale && (
+            <Alert
+              type="error"
+              showIcon
+              style={{ marginTop: 8, fontSize: 12 }}
+              message={
+                <span>
+                  <Tag color="error" style={{ marginInlineEnd: 6 }}>已失效</Tag>
+                  {STALE_DEPLOYMENT_MESSAGE}
+                </span>
+              }
+            />
           )}
         </div>
 
