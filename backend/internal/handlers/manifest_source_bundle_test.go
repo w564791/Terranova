@@ -99,7 +99,7 @@ func TestPublishVersionRecordsBundleHash(t *testing.T) {
 		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO manifest_files (manifest_id, version_id, owner_user_id, path, content, mime, size, is_binary, mode) VALUES
 		   ('mf-1', NULL, 'u1', 'main.tf', CAST('variable "x" {}' AS BLOB), 'text/plain', 15, 0, 420),
-		   ('mf-1', NULL, 'u1', 'mod/a.tf', X'00FF', 'application/octet-stream', 2, 1, 420),
+		   ('mf-1', NULL, 'u1', 'mod/a.bin', X'00FF', 'application/octet-stream', 2, 1, 420), -- binary non-Terraform file (a binary .tf would now be hcl_parse_error)
 		   ('mf-1', NULL, 'u2', 'other-user.tf', X'01', 'text/plain', 1, 0, 420)`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -122,7 +122,7 @@ func TestPublishVersionRecordsBundleHash(t *testing.T) {
 	}
 	want, _ := manifestbundle.Hash([]manifestbundle.File{
 		{Path: "main.tf", Content: []byte(`variable "x" {}`)},
-		{Path: "mod/a.tf", Content: []byte{0x00, 0xff}},
+		{Path: "mod/a.bin", Content: []byte{0x00, 0xff}},
 	})
 	if resp["bundle_hash"] != want {
 		t.Fatalf("publish response bundle_hash = %v, want %s", resp["bundle_hash"], want)

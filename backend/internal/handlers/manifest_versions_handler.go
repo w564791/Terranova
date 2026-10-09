@@ -136,7 +136,7 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 
 // PublishVersion 把当前用户草稿快照为新版本
 // @Summary Publish manifest version
-// @Description Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} (line only for secret-scan hits) and never contains file content.
+// @Description Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} and never contains file content. Besides the path / denylist / size / secret-scan rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner block), hcl_external_data / hcl_http_data (data "external" / data "http", or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source (module source that is not a relative path inside the bundle nor an active platform module catalog source). line is set for secret-scan and HCL problems (1-based line of the hit / block / attribute).
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -209,7 +209,10 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 			noTF = true
 			return errRejected
 		}
-		bundle, probs, err := manifestbundle.PackFiles(files)
+		// 发布规则 = bundle 规则 + HCL 静态检查(provisioner / data external|http /
+		// module source 白名单,见 manifestbundle.CheckHCL);白名单唯一入口
+		// PublishModuleSourcePolicy(本地相对路径 + 平台 module 目录里的 module_source)。
+		bundle, probs, err := manifestbundle.PackFilesForPublish(files, manifestbundle.PublishModuleSourcePolicy(ctx, tx))
 		if err != nil {
 			return err
 		}

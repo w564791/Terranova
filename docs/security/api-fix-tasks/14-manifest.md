@@ -79,6 +79,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 9. 版本 bundle 不可变（feat/manifest-sandbox step 3）：发布违反 bundle 规则（`.tfvars` / state / `.git/` / `.env` / 私钥文件名 / 凭证内容扫描等）→ 422 `bundle_rules_violated`，`problems: [{file, line?, rule, message}]`，不回显任何文件内容；无合法 bundle 的版本 install / 预览 / upgrade 目标 → 409 `bundle_republish_required`（uninstall 不受限，可从无效版本升级到合法版本）。完整性只在这些使用处与执行器取文件时校验，读接口不重算、不写库；篡改 → 409 + 粘滞的 `hash_mismatch` + WARN 安全日志 / 审计（manifest_id、version_id、request_id），迁移也不会按篡改后的内容重算。细节见 sandbox spec §3.3、design spec §8.4。
 
+10. 执行器闸门与发布 HCL 检查（feat/manifest-sandbox）：执行器取文件处 `bundle_hash IS NULL`（规则违规或 `hash_mismatch`）一律拒绝，任务失败报 `bundle_republish_required: <reason>`；uninstall 仍只解绑元信息（之后的 Plan+Apply 不加载 bundle），不需确认。native 发布新增 HCL 静态检查（422 同一 problem 形状，带行号）：`hcl_parse_error`、`hcl_provisioner`、`hcl_external_data`、`hcl_http_data`、`hcl_module_source`；module source 白名单 = bundle 内相对路径 + 平台 module 目录中 active module 的 `module_source`（`manifestbundle.PublishModuleSourcePolicy`）。只在发布时检查，不追溯已有合法版本。细节见 sandbox spec §3.3。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
@@ -111,15 +113,13 @@ backend/internal/models/manifest_v2.go
 backend/main.go
 backend/internal/manifestbundle/{rules,source}.go（step 3）
 backend/internal/migration/manifest_bundle_v2.go + backend/migrations/add_manifest_bundle_v2.sql（step 3）
+backend/internal/manifestbundle/hcl.go、backend/services/local_data_accessor.go（第 10 条）
 ```
 
 ### 未完成项（2026-10-04 暂停时记录，合并 `feat/manifest-sandbox` 前必须处理）
 
 **上生产前必须完成（security 阻塞项）**
-1. 执行器拦截哈希为 NULL 的版本：在执行器取文件、校验哈希的那一处，`bundle_hash IS NULL` 时只放行 uninstall 发起的 destroy，其余任务失败，报错 `bundle_republish_required: <reason>`。
-   - 因违反规则被置 NULL 的版本：解包后先删掉命中黑名单的文件（复用 `manifestbundle` 的黑名单函数，包括 `.terraformrc`、`terraform.rc`、`*.tfvars`、`*.tfstate*`、`.terraform/`），再强制把 `TF_CLI_CONFIG_FILE` 指向平台自己的文件，然后执行 destroy。
-   - `hash_mismatch` 的版本：不自动 destroy。uninstall 返回 409 `{code:"untrusted_bundle_confirm_required", reason:"hash_mismatch"}`；带 `force_destroy_untrusted: true` 且是 org MANIFESTS ADMIN 才放行，非管理员返回 403；确认动作写审计（操作者、manifest_id、version_id、request_id）。前端用这个单独的 code 弹确认框。
-   - 测试：违反规则的 NULL 版本跑 plan 失败、跑 destroy 通过，且 destroy 用的不是 bundle 里的 `.terraformrc`；`hash_mismatch` 版本不确认就不能 uninstall，非管理员确认返回 403，管理员确认后写入审计。
+1. ~~执行器拦截哈希为 NULL 的版本~~ —— 已完成（见上文第 10 条）。原计划的「uninstall 发起的 sanitized destroy / `force_destroy_untrusted` 确认」未实施：核实后 uninstall 只解绑元信息、不创建 destroy 任务，之后的 Plan+Apply 不加载 bundle，bundle 内容不会被执行，因此执行器对所有 NULL 版本一律拒绝即可，不需要放行例外、确认流程和 `workspace_tasks` 新列。若以后改为「uninstall 直接带 bundle 跑 destroy」，需重新设计：先删黑名单文件、平台自有 `TF_CLI_CONFIG_FILE`（`provider_installation` 只含 `network_mirror`；仓库目前没有 provider mirror 配置，在有之前所有不可信 destroy 都必须管理员确认）、`CheckHCL(..., LocalModulesOnly)` 命中或 `hash_mismatch` 需 org MANIFESTS ADMIN 确认并在执行时复核。
 2. `MaxFiles = 2000`（`too_many_files`）已在本次暂停前的提交里完成。
 
 **第 4 步（runner）**

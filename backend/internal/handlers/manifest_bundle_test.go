@@ -42,6 +42,9 @@ func newBundleEnv(t *testing.T) *bundleEnv {
 		`ALTER TABLE workspaces ADD COLUMN tf_state TEXT`,
 		`ALTER TABLE workspace_resources ADD COLUMN resource_type TEXT`,
 		`ALTER TABLE workspace_resources ADD COLUMN resource_name TEXT`,
+		// platform module catalog = publish module-source allowlist (empty by default)
+		`CREATE TABLE modules (id INTEGER PRIMARY KEY, name TEXT, source TEXT, module_source TEXT, status TEXT)`,
+		`CREATE TABLE module_versions (id TEXT PRIMARY KEY, module_id INTEGER, module_source TEXT)`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
 			t.Fatalf("%v\n%s", err, stmt)
