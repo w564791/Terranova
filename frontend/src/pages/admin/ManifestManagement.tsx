@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
   Select,
@@ -27,17 +27,26 @@ import {
   EditFilled,
   GithubOutlined,
 } from '@ant-design/icons';
-import type { Manifest, ManifestCapabilities, ManifestSourceType, GitHubAppInstallation } from '../../services/manifestApi';
+import type {
+  Manifest,
+  ManifestCapabilities,
+  ManifestSourceType,
+  AvailableGitHubInstallation,
+  GitHubRepoInfo,
+} from '../../services/manifestApi';
 import {
   listManifests,
   deleteManifest,
   exportManifestZip,
   createManifest,
-  listGitHubInstallations,
+  listAvailableGitHubInstallations,
+  checkOrgAdmin,
   gitRepoName,
+  urlHost,
 } from '../../services/manifestApi';
-import { getHttpStatus } from '../../services/api';
 import { gitErrorMessage } from './ManifestEditorV2/bundleStatus';
+import { GitHubAppConnectButton, GitHubRepoSelect } from './manifestGit/GitHubAppControls';
+import { GITHUB_APP_CALLBACK_PARAMS, githubAppCallbackNotice } from './manifestGit/githubAppCallback';
 import { iamService, setAuthOrgId } from '../../services/iam';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -55,7 +64,8 @@ interface CreateFormValues {
   name: string;
   description?: string;
   github_installation_id?: number;
-  git_repo_url?: string;
+  /** 仓库 full name "<owner>/<repo>" */
+  git_repo?: string;
   git_subpath?: string;
 }
 
@@ -113,11 +123,15 @@ const ManifestManagement: React.FC = () => {
   // 新建第一步:选择来源(创建后不可更改)
   const [createStep, setCreateStep] = useState<0 | 1>(0);
   const [createSource, setCreateSource] = useState<ManifestSourceType>('native');
-  // git 来源:本组织已登记的 GitHub App installation(列表接口需要组织 ADMIN;403 / 空 => 空状态)
-  const [installations, setInstallations] = useState<GitHubAppInstallation[] | null>(null);
+  // git 来源:本组织已绑定的 GitHub App installation(MANIFESTS WRITE 可读;空 => 空状态)
+  const [installations, setInstallations] = useState<AvailableGitHubInstallation[] | null>(null);
   const [installationsLoading, setInstallationsLoading] = useState(false);
+  const [installationsError, setInstallationsError] = useState<string | null>(null);
+  // "连接 GitHub App" 仅组织 ADMIN 可见(后端 connect 路由 RequirePermission(ORGANIZATION, ORGANIZATION, ADMIN))
+  const [isOrgAdmin, setIsOrgAdmin] = useState(false);
   const selectedInstallationId = Form.useWatch('github_installation_id', createForm);
-  const selectedInstallation = installations?.find(i => i.installation_id === selectedInstallationId);
+  // 平台 GitHub 主机(GitHub Enterprise 时放行安装地址):来自已有 git manifest 与仓库 html_url
+  const [repoHosts, setRepoHosts] = useState<string[]>([]);
 
   const openCreate = () => {
     createForm.resetFields();
@@ -130,16 +144,49 @@ const ManifestManagement: React.FC = () => {
     if (!orgId) return;
     setInstallationsLoading(true);
     try {
-      const rows = await listGitHubInstallations(orgId);
+      setInstallationsError(null);
+      const [rows, admin] = await Promise.all([
+        listAvailableGitHubInstallations(orgId).catch((err) => {
+          setInstallationsError(gitErrorMessage(err) ?? (err as Error)?.message ?? '加载失败');
+          return [] as AvailableGitHubInstallation[];
+        }),
+        checkOrgAdmin(orgId),
+      ]);
       setInstallations(rows);
-    } catch (err) {
-      // 无权限查看(非组织管理员)与未连接同样处理:显示空状态,不提供手工录入
-      if (getHttpStatus(err) !== 403) console.error('加载 GitHub App 安装失败:', err);
-      setInstallations([]);
+      setIsOrgAdmin(admin);
     } finally {
       setInstallationsLoading(false);
     }
   }, [orgId]);
+
+  const knownGitHosts = useMemo(() => {
+    const hosts = new Set(repoHosts);
+    for (const m of manifests) {
+      const h = urlHost(m.git_repo_url);
+      if (h) hosts.add(h);
+    }
+    return Array.from(hosts);
+  }, [manifests, repoHosts]);
+  const onReposLoaded = useCallback((repos: GitHubRepoInfo[]) => {
+    const hosts = Array.from(new Set(repos.map(r => urlHost(r.html_url)).filter(Boolean)));
+    setRepoHosts(prev => (hosts.every(h => prev.includes(h)) ? prev : Array.from(new Set([...prev, ...hosts]))));
+  }, []);
+
+  // GitHub App setup callback 回跳(?github_app=connected|requested|error&reason=...):提示一次后去掉参数
+  const [searchParams, setSearchParams] = useSearchParams();
+  const callbackHandledRef = useRef(false);
+  useEffect(() => {
+    const result = searchParams.get('github_app');
+    if (!result) return;
+    if (!callbackHandledRef.current) {
+      callbackHandledRef.current = true;
+      const notice = githubAppCallbackNotice(result, searchParams.get('reason'));
+      if (notice) message.open({ type: notice.type, content: notice.text, key: 'github-app-callback', duration: 5 });
+    }
+    const next = new URLSearchParams(searchParams);
+    GITHUB_APP_CALLBACK_PARAMS.forEach(k => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // 加载组织列表
   useEffect(() => {
@@ -218,7 +265,7 @@ const ManifestManagement: React.FC = () => {
               description: values.description ?? '',
               source_type: 'git',
               github_installation_id: values.github_installation_id,
-              git_repo_url: (values.git_repo_url ?? '').trim(),
+              git_repo: values.git_repo,
               git_subpath: (values.git_subpath ?? '').trim().replace(/^\/+|\/+$/g, '') || undefined,
             }
           : { name: values.name, description: values.description ?? '', source_type: 'native' }
@@ -694,7 +741,18 @@ const ManifestManagement: React.FC = () => {
                 <Spin />
               </div>
             ) : createSource === 'git' && !installations?.length ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未连接 GitHub App，请联系组织管理员" />
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  installationsError
+                    ? `加载 GitHub App 安装失败：${installationsError}`
+                    : isOrgAdmin
+                      ? '尚未连接 GitHub App'
+                      : '尚未连接 GitHub App，请联系组织管理员'
+                }
+              >
+                {isOrgAdmin && <GitHubAppConnectButton orgId={orgId} knownHosts={knownGitHosts} type="primary" />}
+              </Empty>
             ) : (
               <Form
                 form={createForm}
@@ -702,7 +760,7 @@ const ManifestManagement: React.FC = () => {
                 preserve={false}
                 initialValues={
                   createSource === 'git' && installations?.length === 1
-                    ? { github_installation_id: installations[0].installation_id }
+                    ? { github_installation_id: installations[0].id }
                     : undefined
                 }
               >
@@ -725,58 +783,28 @@ const ManifestManagement: React.FC = () => {
                 </Form.Item>
                 {createSource === 'git' && (
                   <>
-                    <Form.Item
-                      label="GitHub 账户"
-                      name="github_installation_id"
-                      rules={[{ required: true, message: '请选择 GitHub 账户' }]}
-                      extra="仓库必须属于该账户，且 GitHub App 已授权访问该仓库"
-                    >
-                      <Select
-                        placeholder="选择已连接的 GitHub 账户"
-                        options={(installations ?? []).map(i => ({
-                          value: i.installation_id,
-                          label: i.account_login,
-                        }))}
-                        onChange={() => {
-                          if (createForm.getFieldValue('git_repo_url')) createForm.validateFields(['git_repo_url']);
-                        }}
-                      />
+                    <Form.Item label="GitHub 账户" required extra="仓库列表来自该账户下 GitHub App 已授权的仓库">
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <Form.Item
+                          name="github_installation_id"
+                          noStyle
+                          rules={[{ required: true, message: '请选择 GitHub 账户' }]}
+                        >
+                          <Select
+                            style={{ flex: 1 }}
+                            placeholder="选择已连接的 GitHub 账户"
+                            options={(installations ?? []).map(i => ({ value: i.id, label: i.account }))}
+                            onChange={() => createForm.setFieldValue('git_repo', undefined)}
+                          />
+                        </Form.Item>
+                        {isOrgAdmin && <GitHubAppConnectButton orgId={orgId} knownHosts={knownGitHosts} />}
+                      </div>
                     </Form.Item>
-                    <Form.Item
-                      label="仓库 URL"
-                      name="git_repo_url"
-                      rules={[
-                        { required: true, message: '请输入仓库 URL' },
-                        { max: 1024, message: '不超过 1024 字符' },
-                        {
-                          validator: async (_, value?: string) => {
-                            const v = (value ?? '').trim();
-                            if (!v) return;
-                            let u: URL;
-                            try {
-                              u = new URL(v);
-                            } catch {
-                              throw new Error('请输入完整的 https 仓库 URL');
-                            }
-                            if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) {
-                              throw new Error('仓库 URL 须为 https，且不能包含凭证、查询参数或锚点');
-                            }
-                            const parts = u.pathname.replace(/^\/+|\/+$/g, '').split('/');
-                            if (parts.length !== 2 || !parts[0] || !parts[1]) {
-                              throw new Error('格式应为 https://<GitHub 地址>/<owner>/<repo>');
-                            }
-                            if (
-                              selectedInstallation &&
-                              parts[0].toLowerCase() !== selectedInstallation.account_login.toLowerCase()
-                            ) {
-                              throw new Error(`仓库须属于所选账户 ${selectedInstallation.account_login}`);
-                            }
-                          },
-                        },
-                      ]}
-                    >
-                      <Input
-                        placeholder={`https://github.com/${selectedInstallation?.account_login ?? '<owner>'}/<repo>`}
+                    <Form.Item label="仓库" name="git_repo" rules={[{ required: true, message: '请选择仓库' }]}>
+                      <GitHubRepoSelect
+                        orgId={orgId}
+                        installationId={selectedInstallationId}
+                        onReposLoaded={onReposLoaded}
                       />
                     </Form.Item>
                     <Form.Item
