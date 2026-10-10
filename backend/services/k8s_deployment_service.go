@@ -618,6 +618,7 @@ func (s *K8sDeploymentService) buildDeployment(deploymentName, namespace string,
 		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
 	}
 	envVars = withAgentMode(envVars, keys.IsProduction())
+	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction())
 
 	// Build resource requirements
 	resources := corev1.ResourceRequirements{

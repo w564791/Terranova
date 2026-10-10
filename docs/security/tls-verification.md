@@ -53,8 +53,22 @@ pods it creates (K8s pools, deployments, jobs); a pool template cannot
 override it. Static agents started by hand must set `ENV=production`
 themselves.
 
-The agent also warns when `IAC_AGENT_PROTOCOL=http` in production (token,
-variables and state are then sent unencrypted).
+### Plaintext agent protocol (`http` / `ws`)
+
+`IAC_AGENT_PROTOCOL` defaults to `http` (C&C WebSocket then uses `ws`). In
+production (`ENV=production`) the agent **refuses to start** on plaintext
+unless `IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal` is set exactly; any other
+value of that variable is a startup error. With the flag set it starts with a
+loud warning. Outside production, plaintext still starts with a warning.
+
+Platform-created K8s agent pods/deployments/jobs: a production platform that
+still speaks `http` to in-cluster agents injects
+`IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal` so existing pools do not break.
+Choice: opt-in the cluster-internal flag rather than force `https`, because
+ClusterIP traffic is commonly plaintext today; operators who terminate TLS on
+the platform set protocol `https` (or `PLATFORM_PROTOCOL=https`) and need no
+flag. External / static agents must set `IAC_AGENT_PROTOCOL=https` (or the
+exact allow flag if they intentionally use plaintext inside a trusted network).
 
 ## Not covered
 

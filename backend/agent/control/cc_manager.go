@@ -147,11 +147,8 @@ func (m *CCManager) tryConnect() error {
 		ccPort = apiPort + 10
 	}
 
-	// Build WebSocket URL
-	wsScheme := "ws"
-	if m.protocol == "https" {
-		wsScheme = "wss"
-	}
+	// Build WebSocket URL (wss iff API protocol is https)
+	wsScheme := tlstrust.WebSocketScheme(m.protocol)
 
 	ccURL := &url.URL{
 		Scheme: wsScheme,

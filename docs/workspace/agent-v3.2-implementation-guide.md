@@ -350,7 +350,8 @@ export IAC_AGENT_TOKEN="<pool token>"                        # Agent Token (Pool
 export IAC_AGENT_NAME="agent-01"                             # Agent 名称
 
 # 传输与 TLS
-export IAC_AGENT_PROTOCOL="https"                            # http | https（生产环境使用 https）
+export IAC_AGENT_PROTOCOL="https"                            # http | https（生产默认拒绝 http；集群内明文需 IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal）
+# export IAC_AGENT_ALLOW_PLAINTEXT="cluster-internal"           # 仅当生产环境必须用 http/ws（集群内）时设置
 export SERVER_PORT="8080"; export CC_SERVER_PORT="8090"      # API / C&C 端口
 export ENV="production"                                      # 生产模式：拒绝任何 TLS 校验绕过选项
 export IAC_CA_FILE="/etc/terranova-ca/ca.crt"                # 可选：私有 CA（PEM，追加到系统根证书；别名 AGENT_CA_FILE）

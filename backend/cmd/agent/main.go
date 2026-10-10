@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"iac-platform/agent/control"
-	"iac-platform/internal/keys"
 	"iac-platform/internal/tlstrust"
 	"iac-platform/internal/version"
 	"iac-platform/services"
@@ -44,24 +43,23 @@ func main() {
 		log.Fatal("Required environment variables not set: IAC_API_ENDPOINT, IAC_AGENT_TOKEN, IAC_AGENT_NAME")
 	}
 
-	// Default protocol to http if not specified
-	if protocol == "" {
-		protocol = "http"
+	var err error
+	protocol, err = tlstrust.ResolveAgentProtocol(protocol)
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
-
-	// Validate protocol
-	if protocol != "http" && protocol != "https" {
-		log.Fatalf("Invalid IAC_AGENT_PROTOCOL: %s (must be 'http' or 'https')", protocol)
+	if w, err := tlstrust.CheckAgentPlaintext(protocol); err != nil {
+		log.Fatalf("[TLS] refusing to start: %v", err)
+	} else {
+		for _, msg := range w {
+			log.Printf("[TLS] WARNING: %s", msg)
+		}
 	}
 
 	// Get API server port (default: 8080)
 	serverPort := "8080"
 	if port := os.Getenv("SERVER_PORT"); port != "" {
 		serverPort = port
-	}
-
-	if protocol == "http" && keys.IsProduction() {
-		log.Printf("[TLS] WARNING: IAC_AGENT_PROTOCOL=http in production: the agent token, variables and state travel unencrypted; use https")
 	}
 
 	log.Printf("Configuration:")
@@ -78,7 +76,6 @@ func main() {
 	// 3. Register agent with retry logic
 	log.Printf("Registering agent (with exponential backoff: 2s, 4s, 8s, 16s, then 60s)...")
 	var agentID, poolID string
-	var err error
 
 	backoff := 2 * time.Second
 	maxBackoff := 60 * time.Second

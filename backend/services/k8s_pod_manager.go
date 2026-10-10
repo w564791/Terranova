@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
 	"iac-platform/internal/keys"
 	"iac-platform/internal/models"
+	"iac-platform/internal/tlstrust"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -789,6 +791,7 @@ func (m *K8sPodManager) buildPodSpec(podName, namespace, poolID string, config *
 		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
 	}
 	envVars = withAgentMode(envVars, keys.IsProduction())
+	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction())
 
 	// Build resource requirements
 	resources := corev1.ResourceRequirements{
@@ -961,4 +964,36 @@ func withAgentMode(envVars []corev1.EnvVar, production bool) []corev1.EnvVar {
 		out = append(out, e)
 	}
 	return append(out, corev1.EnvVar{Name: "ENV", Value: "production"})
+}
+
+// withAgentPlaintextAllow keeps production agent pods from failing the
+// plaintext-protocol startup check when the platform still speaks http
+// inside the cluster. Choice: inject IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal
+// (not force https) because in-cluster agents commonly reach the platform over
+// ClusterIP/http; operators who terminate TLS at the platform set protocol
+// https and then need no flag. A pool template that already sets the flag is
+// left alone; an invalid value is left for the agent to reject at startup.
+func withAgentPlaintextAllow(envVars []corev1.EnvVar, production bool) []corev1.EnvVar {
+	if !production {
+		return envVars
+	}
+	protocol := "http"
+	hasAllow := false
+	for _, e := range envVars {
+		switch e.Name {
+		case "IAC_AGENT_PROTOCOL":
+			if v := strings.TrimSpace(e.Value); v != "" {
+				protocol = strings.ToLower(v)
+			}
+		case tlstrust.EnvAgentAllowPlaintext:
+			hasAllow = true
+		}
+	}
+	if protocol != "http" || hasAllow {
+		return envVars
+	}
+	return append(envVars, corev1.EnvVar{
+		Name:  tlstrust.EnvAgentAllowPlaintext,
+		Value: tlstrust.AllowPlaintextClusterInternal,
+	})
 }
