@@ -133,6 +133,15 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
     - 数据库：迁移 `20261010_13_manifest_approval`（只增，可重复）：`manifest_runs.task_id integer`（唯一部分索引 `uq_manifest_runs_task`，外键 `fk_manifest_runs_task` → `workspace_tasks(id) ON DELETE SET NULL`）、`approved_bundle_hash`、`approved_plan_hash varchar(64)`、`approved_by varchar(20)`、`approved_at timestamptz`；`chk_manifest_runs_approval`：审批列要么全空，要么 `purpose='approval' AND runner='agent'`、全部非空、`approved_bundle_hash = bundle_hash`、`approved_plan_hash` 为 64 位小写十六进制——sandbox / preview run 无论经哪条路径写入都不能带审批（约束用 `pg_constraint` 守卫的 DO 块添加）。
     - 第 7 步之前已经处于 apply_pending 的 manifest 任务没有 run，确认时返回 `approval_run_required`，需重新 plan。
     - 任务详情（`GET /workspaces/{id}/tasks/{task_id}`，不含列表）在任务有 manifest run 时返回 `manifest_run`：`id`、`purpose`、`runner`、`status`、`bundle_hash`、`plan_out_hash`（plan.out 的 SHA-256 = `workspace_tasks.plan_hash`，审批绑定的值）、`redacted_plan_hash`（`manifest_runs.plan_hash`）、`approved_bundle_hash`、`approved_plan_hash`、`approved_by`、`approved_at`（未设置为 null）；没有 run 时不出现。只有哈希与身份，不含 plan 内容或 token；沿用任务详情原有的读权限。
+23. Git 来源（spec §3.5 / §9 第 8 步）：
+    - 创建时选 `source_type`（native / git，之后不可改）；git 需 `git_repo_url`（`<GITHUB_URL>/<owner>/<repo>`，无凭证）+ 本组织已登记、account 为仓库 owner 的 `github_installation_id`，可选 `git_subpath`（bundle 根）。git manifest 的草稿写接口 409 `git_source_read_only`。
+    - 发布 = 选 commit：`commit_sha` 必须是完整 SHA；平台在发布时拉取（`internal/gitsource.Fetcher`：临时 bare 仓库 depth 1 fetch 该 SHA，`ls-tree` + `cat-file` 读树，不 checkout；符号链接 / submodule → `git_symlink` / `git_submodule`），树走同一套发布规则（`ValidateForPublish`），存为 bundle，`source_ref = SHA`。run 永远不拉 git。
+    - token：GitHub App installation token 按操作现签，单仓库 + `contents:read`（返回权限更宽即撤销并拒绝），用完撤销；只经 `GIT_ASKPASS` 读 git 进程环境变量注入，不进 URL / argv / 日志 / 错误（git 错误输出去 token）。App 凭证经 `gitsource.CredentialsProvider`（`GITHUB_APP_ID`、`GITHUB_APP_PRIVATE_KEY[_FILE]`），缺失即禁用（503 `git_source_disabled`）。
+    - module source：git module 必须钉完整 SHA（`hcl_module_unpinned`，native 发布同样适用），钉了 SHA 的按 base 与平台 module 目录匹配；私有 module 必须 vendor（run 不注入 git 凭证）。
+    - IAM：创建 git manifest / 发布 / 列分支与 commit = MANIFESTS WRITE；installation 登记（`/organizations/{org_id}/github-app/installations`）= ORGANIZATION ADMIN，installation 全局只属一个组织。
+    - webhook `POST /api/v1/webhooks/github`：`X-Hub-Signature-256` 常量时间校验，无签名 401，未配置 secret 503；push 只写 `manifests.git_latest_*` 提示，不发布、不拉取。
+    - 数据库：迁移 `20261010_14_manifest_git_source`（只增）：`github_app_installations`、`manifests.git_latest_*` + `chk_manifests_git_latest`。
+    - 代码：backend/internal/gitsource/*、backend/internal/manifestbundle/{hcl,rules,source}.go、backend/internal/handlers/{manifest_git_handler,manifest_handler,manifest_versions_handler}.go、backend/internal/router/{router,router_manifest}.go、backend/internal/migration/manifest_git_source.go + backend/migrations/add_manifest_git_source.sql、backend/internal/models/{manifest,manifest_v2}.go。
 
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
@@ -198,7 +207,7 @@ backend/services/{manifest_approval,manifest_approval_check,run_token_service,ta
 
 **第 7 步** —— 已完成（第 22 条）。原始要求：审批只接受 `purpose=approval`、`runner=agent` 的 run；apply 之前 agent 要核对 `approved_bundle_hash` 和 `approved_plan_hash`；拒绝 NULL 哈希的版本。
 
-**第 8 步（git 来源）**
+**第 8 步（git 来源）** —— 已完成（第 23 条）。原始要求：
 - 私有 module 的 `ref` 必须是 commit SHA（或者 vendor 进来）。
 - git token 按 run 现签：GitHub App installation token，权限为单仓库 `contents:read`，有效期约 1 小时，不落库；通过 `GIT_ASKPASS` 注入，不能拼进 URL。
 - 发布时由平台拉取仓库，并固定到某个 SHA；webhook 要验签。

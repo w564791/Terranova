@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -50,8 +51,20 @@ func TestManifestSourceTypeDefaultsNativeAndIsImmutable(t *testing.T) {
 	r.PUT("/organizations/:org_id/manifests/:id", withCaller(valueobject.PermissionLevelAdmin), h.UpdateManifest)
 	r.GET("/organizations/:org_id/manifests/:id", withCaller(valueobject.PermissionLevelRead), h.GetManifest)
 
-	// create: always native, exposed in the response
-	w := doJSON(r, "POST", "/organizations/1/manifests", `{"name":"new-one","source_type":"git"}`)
+	// git without a configured GitHub App: disabled, nothing created
+	disableGitSource(t)
+	if w := doJSON(r, "POST", "/organizations/1/manifests", `{"name":"git-one","source_type":"git","git_repo_url":"https://github.com/acme/infra","github_installation_id":42}`); w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "git_source_disabled") {
+		t.Fatalf("git create without App: %d %s", w.Code, w.Body.String())
+	}
+	if w := doJSON(r, "POST", "/organizations/1/manifests", `{"name":"x","source_type":"svn"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown source_type: %d", w.Code)
+	}
+	if w := doJSON(r, "POST", "/organizations/1/manifests", `{"name":"x","git_repo_url":"https://github.com/acme/infra"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("git field on native: %d", w.Code)
+	}
+
+	// create: native by default, exposed in the response
+	w := doJSON(r, "POST", "/organizations/1/manifests", `{"name":"new-one"}`)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
@@ -60,9 +73,9 @@ func TestManifestSourceTypeDefaultsNativeAndIsImmutable(t *testing.T) {
 	if created["source_type"] != models.ManifestSourceNative {
 		t.Fatalf("created source_type = %v, want native", created["source_type"])
 	}
-	for _, hidden := range []string{"git_repo_url", "git_subpath", "github_installation_id"} {
+	for _, hidden := range []string{"git_repo_url", "git_subpath", "github_installation_id", "git_latest_sha"} {
 		if _, ok := created[hidden]; ok {
-			t.Fatalf("%s must not be exposed yet", hidden)
+			t.Fatalf("native manifest must not carry %s", hidden)
 		}
 	}
 
@@ -93,7 +106,7 @@ func TestPublishVersionRecordsBundleHash(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := openSQLiteWithNow(t)
 	for _, stmt := range []string{
-		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, source_type TEXT NOT NULL DEFAULT 'native', git_repo_url TEXT, git_subpath TEXT, github_installation_id INTEGER, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, source_type TEXT NOT NULL DEFAULT 'native', git_repo_url TEXT, git_subpath TEXT, github_installation_id INTEGER, git_latest_sha TEXT, git_latest_ref TEXT, git_latest_at DATETIME, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO manifests (id, organization_id, name, status, created_by) VALUES ('mf-1', 1, 'm1', 'draft', 'u1')`,
 		`CREATE TABLE manifest_versions (id TEXT PRIMARY KEY, manifest_id TEXT, version TEXT, variables TEXT, changelog TEXT, bundle_hash TEXT, bundle_invalid_reason TEXT, source_ref TEXT, created_by TEXT, created_at DATETIME)`,
 		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,

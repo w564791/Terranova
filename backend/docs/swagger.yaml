@@ -950,6 +950,13 @@ definitions:
       protocol:
         type: string
     type: object
+  handlers.RegisterGitHubInstallationRequest:
+    properties:
+      installation_id:
+        type: integer
+    required:
+    - installation_id
+    type: object
   handlers.ResetPasswordRequest:
     properties:
       current_password:
@@ -1440,8 +1447,22 @@ definitions:
       description:
         maxLength: 1024
         type: string
+      git_repo_url:
+        description: source_type=git 时必填:<GITHUB_URL>/<owner>/<repo>
+        maxLength: 1024
+        type: string
+      git_subpath:
+        description: source_type=git 时可选:仓库内作为 bundle 根的目录
+        maxLength: 512
+        type: string
+      github_installation_id:
+        description: source_type=git 时必填:本组织已登记的 GitHub App installation(账户须是仓库 owner)
+        type: integer
       name:
         maxLength: 255
+        type: string
+      source_type:
+        description: native(默认,平台内编辑)| git(GitHub App 只读,发布 = 选 commit)。创建后不可变。
         type: string
     required:
     - name
@@ -2000,6 +2021,21 @@ definitions:
         items:
           type: integer
         type: array
+    type: object
+  models.GitHubAppInstallation:
+    properties:
+      account_login:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: integer
+      installation_id:
+        type: integer
+      organization_id:
+        type: integer
     type: object
   models.InheritSkillRequest:
     properties:
@@ -2614,6 +2650,13 @@ definitions:
   models.PublishVersionRequest:
     properties:
       changelog:
+        description: 'git: defaults to the commit subject'
+        type: string
+      commit_sha:
+        description: |-
+          git manifests only (required there, refused for native): the full
+          commit SHA (40 / 64 lowercase hex) to publish; the platform fetches that
+          commit and pins the version to it (source_ref).
         type: string
       version:
         description: vMAJOR.MINOR.PATCH
@@ -15876,6 +15919,117 @@ paths:
       summary: Get available notification configurations
       tags:
       - Notifications
+  /api/v1/organizations/{org_id}/github-app/installations:
+    get:
+      description: GitHub App installations registered for the organization (installation_id,
+        account_login). Requires ORGANIZATION ADMIN.
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{installations: [models.GitHubAppInstallation]}'
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List GitHub App installations
+      tags:
+      - Manifest Git
+    post:
+      consumes:
+      - application/json
+      description: 'Register an installation of the platform''s GitHub App for the
+        organization; git manifests of the org can then use repositories of its account.
+        The installation is looked up with the App JWT (account_login comes from GitHub).
+        An installation belongs to one organization: 409 when another organization
+        registered it. Requires ORGANIZATION ADMIN. 503 git_source_disabled when the
+        App is not configured; 422 when GitHub does not know the installation.'
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Installation
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterGitHubInstallationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: already registered for this organization
+          schema:
+            $ref: '#/definitions/models.GitHubAppInstallation'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.GitHubAppInstallation'
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Register GitHub App installation
+      tags:
+      - Manifest Git
+  /api/v1/organizations/{org_id}/github-app/installations/{installation_id}:
+    delete:
+      description: Remove a registered installation. 409 while git manifests of the
+        organization use it. Does not uninstall the App on GitHub. Requires ORGANIZATION
+        ADMIN.
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: GitHub installation id
+        in: path
+        name: installation_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unregister GitHub App installation
+      tags:
+      - Manifest Git
   /api/v1/organizations/{org_id}/manifests:
     get:
       consumes:
@@ -15928,7 +16082,15 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new manifest in draft status under the organization
+      description: 'Create a new manifest in draft status under the organization.
+        source_type (immutable afterwards) is native (default: edited in the platform)
+        or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url
+        (<GITHUB_URL>/<owner>/<repo>, no credentials) and github_installation_id (registered
+        for this organization by an org admin, its account must own the repo); git_subpath
+        optionally selects the bundle root directory. The repository is checked with
+        a per-request installation token (single repo, contents:read). Errors: 400
+        invalid fields; 422 github_installation_not_registered / git_repo_not_accessible;
+        503 git_source_disabled (GitHub App not configured).'
       parameters:
       - description: Organization ID
         in: path
@@ -15959,8 +16121,18 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
           schema:
             additionalProperties: true
             type: object
@@ -16588,6 +16760,110 @@ paths:
       summary: Write manifest draft file
       tags:
       - Manifest Files
+  /api/v1/organizations/{org_id}/manifests/{id}/git/branches:
+    get:
+      description: Branches (name, head sha) of the repository of a git-sourced manifest,
+        read with a per-request GitHub App installation token (single repo, contents:read,
+        revoked after use). Requires MANIFESTS WRITE (commit picker of publish). 409
+        not_git_source for native manifests; 503 git_source_disabled when the GitHub
+        App is not configured; 422 git_repo_not_accessible.
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{branches: [{name, sha}]}'
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List git branches of a manifest
+      tags:
+      - Manifest Git
+  /api/v1/organizations/{org_id}/manifests/{id}/git/commits:
+    get:
+      description: Recent commits (sha, subject, author_name, author_date; newest
+        first) of a branch / ref of the repository of a git-sourced manifest, for
+        the publish commit picker. Same token and errors as the branch list. Requires
+        MANIFESTS WRITE.
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Branch, tag or commit (default: the repository default branch)'
+        in: query
+        name: ref
+        type: string
+      - description: 1..100, default 30
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{commits: [{sha, subject, author_name, author_date}]}'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List git commits of a manifest
+      tags:
+      - Manifest Git
   /api/v1/organizations/{org_id}/manifests/{id}/provider-schemas:
     get:
       consumes:
@@ -17072,18 +17348,26 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Snapshot the current user''s draft into a new published version
-        (vX.Y.Z). The draft is packed into an immutable bundle and the response includes
-        bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated;
-        each problem is {file, line?, rule, message} and never contains file content.
-        Besides the path / denylist / size / secret-scan rules, every Terraform configuration
-        file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically
-        checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner
-        block), hcl_external_data / hcl_http_data (data "external" / data "http",
-        or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source
-        (module source that is not a relative path inside the bundle nor an active
-        platform module catalog source). line is set for secret-scan and HCL problems
-        (1-based line of the hit / block / attribute).'
+      description: 'Snapshot the current user''s draft (native manifests) or the commit
+        commit_sha of the repository (git manifests: required there, refused for native;
+        the platform fetches that commit with a per-publish GitHub App installation
+        token, single repo contents:read, and the version records source_ref = the
+        SHA; symlinks and submodules are rejected as git_symlink / git_submodule problems;
+        changelog defaults to the commit subject) into a new published version (vX.Y.Z).
+        Git module sources in the bundle must pin a full commit SHA (?ref=<40-hex>)
+        or be vendored: hcl_module_unpinned. Git errors: 422 git_repo_not_accessible
+        / git_commit_not_found / git_subpath_not_found, 502 git_fetch_failed, 503
+        git_source_disabled. The draft is packed into an immutable bundle and the
+        response includes bundle_hash. A draft that breaks the bundle rules is rejected
+        with 422 bundle_rules_violated; each problem is {file, line?, rule, message}
+        and never contains file content. Besides the path / denylist / size / secret-scan
+        rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json],
+        *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner
+        (any provisioner block), hcl_external_data / hcl_http_data (data "external"
+        / data "http", or required_providers mapping hashicorp/external / hashicorp/http),
+        hcl_module_source (module source that is not a relative path inside the bundle
+        nor an active platform module catalog source). line is set for secret-scan
+        and HCL problems (1-based line of the hit / block / attribute).'
       parameters:
       - description: Organization ID
         in: path
@@ -19299,6 +19583,59 @@ paths:
       summary: Update variable set variable
       tags:
       - Variable Set
+  /api/v1/webhooks/github:
+    post:
+      consumes:
+      - application/json
+      description: Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256
+        (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned
+        or invalid => 401, no secret configured => 503. A push to a repository of
+        git manifests (matching installation and repository) records git_latest_sha
+        / git_latest_ref / git_latest_at on them as a "new commit available" hint.
+        It never publishes. Other events are acknowledged and ignored. No user authentication
+        (the signature is the authentication).
+      parameters:
+      - description: sha256=<hex HMAC>
+        in: header
+        name: X-Hub-Signature-256
+        required: true
+        type: string
+      - description: Event name
+        in: header
+        name: X-GitHub-Event
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "202":
+          description: '{matched: n}'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "413":
+          description: Request Entity Too Large
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      summary: GitHub App webhook
+      tags:
+      - Manifest Git
   /api/v1/workspaces:
     get:
       consumes:

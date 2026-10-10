@@ -77,7 +77,7 @@ func setupManifestRouterWithChecker(t *testing.T, checker service.PermissionChec
 		`CREATE TABLE users (user_id TEXT PRIMARY KEY, is_active INTEGER, is_system_admin INTEGER)`,
 		`CREATE TABLE login_sessions (session_id TEXT PRIMARY KEY, user_id TEXT, is_active INTEGER, expires_at DATETIME, last_used_at DATETIME)`,
 		`INSERT INTO users (user_id, is_active, is_system_admin) VALUES ('user-1', 1, 0)`,
-		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, git_latest_sha TEXT, git_latest_ref TEXT, git_latest_at DATETIME, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO manifests (id, organization_id, name, status, created_by) VALUES ('mf-1', 1, 'm1', 'published', 'user-1'), ('mf-b', 2, 'mb', 'published', 'user-1')`,
 		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO manifest_files (manifest_id, version_id, path, content, mime, size, is_binary, mode) VALUES ('mf-1', 'mfv-1', 'main.tf', X'00', 'text/plain', 1, 0, 420)`,
@@ -139,6 +139,9 @@ func TestManifestRoutesPermissionTable(t *testing.T) {
 		{"GET", base + "/mf-1/v2/versions/mfv-1/workdirs", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"GET", base + "/mf-1/v2/draft/diff", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"POST", base + "/mf-1/v2/versions/mfv-1/files/_export", "MANIFESTS", "ORGANIZATION", "READ"},
+		// git commit picker (mints a repo token): publishers only
+		{"GET", base + "/mf-1/git/branches", "MANIFESTS", "ORGANIZATION", "WRITE"},
+		{"GET", base + "/mf-1/git/commits", "MANIFESTS", "ORGANIZATION", "WRITE"},
 		// deployments: MANIFESTS READ at the route; workspace checks are in-handler
 		{"GET", base + "/mf-1/v2/deployments", "MANIFESTS", "ORGANIZATION", "READ"},
 		{"GET", base + "/mf-1/v2/deployments/mfd-1", "MANIFESTS", "ORGANIZATION", "READ"},
@@ -189,7 +192,7 @@ func TestManifestRoutesPermissionTable(t *testing.T) {
 // so a new route cannot silently ship without a reviewed permission.
 func TestManifestRoutesPermissionTableIsComplete(t *testing.T) {
 	r, _, _ := setupManifestRouterForPermissionTest(t)
-	if got := len(r.Routes()); got != 35 {
-		t.Fatalf("RegisterManifestRoutes registers %d routes; update TestManifestRoutesPermissionTable (35 covered)", got)
+	if got := len(r.Routes()); got != 37 {
+		t.Fatalf("RegisterManifestRoutes registers %d routes; update TestManifestRoutesPermissionTable (37 covered)", got)
 	}
 }

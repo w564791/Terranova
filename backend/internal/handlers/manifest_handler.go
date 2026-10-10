@@ -232,7 +232,7 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 
 // CreateManifest creates a new draft manifest
 // @Summary Create manifest
-// @Description Create a new manifest in draft status under the organization
+// @Description Create a new manifest in draft status under the organization. source_type (immutable afterwards) is native (default: edited in the platform) or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url (<GITHUB_URL>/<owner>/<repo>, no credentials) and github_installation_id (registered for this organization by an org admin, its account must own the repo); git_subpath optionally selects the bundle root directory. The repository is checked with a per-request installation token (single repo, contents:read). Errors: 400 invalid fields; 422 github_installation_not_registered / git_repo_not_accessible; 503 git_source_disabled (GitHub App not configured).
 // @Tags Manifest
 // @Accept json
 // @Produce json
@@ -241,7 +241,9 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 // @Success 201 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 409 {object} map[string]interface{}
+// @Failure 422 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/manifests [post]
 // @Security BearerAuth
 func (h *ManifestHandler) CreateManifest(c *gin.Context) {
@@ -272,8 +274,24 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 		Name:           req.Name,
 		Description:    req.Description,
 		Status:         models.ManifestStatusDraft,
-		SourceType:     models.ManifestSourceNative, // git 来源在 Git 步骤接入;创建后不可变
+		SourceType:     models.ManifestSourceNative, // 创建后不可变
 		CreatedBy:      userID,
+	}
+	switch req.SourceType {
+	case "", models.ManifestSourceNative:
+		if req.GitRepoURL != "" || req.GitSubpath != "" || req.GitHubInstallationID != 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "git_* fields require source_type git"})
+			return
+		}
+	case models.ManifestSourceGit:
+		// repo on the GitHub host, installation registered for this org and
+		// owning the repo, repo reachable with a scoped token
+		if !validateGitManifestCreate(c, h.db, orgID, &req, &manifest) {
+			return
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "source_type must be native or git"})
+		return
 	}
 
 	// 新模型: 不再创建初始 ManifestVersion (草稿走 manifest_files.version_id IS NULL,按需懒创建)
@@ -282,11 +300,17 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 		return
 	}
 
-	writeManifestAudit(h.db, auditResourceManifest, "manifest.create", userID, map[string]interface{}{
+	audit := map[string]interface{}{
 		"manifest_id":     manifest.ID,
 		"organization_id": orgID,
 		"name":            manifest.Name,
-	})
+		"source_type":     manifest.SourceType,
+	}
+	if manifest.GitRepoURL != nil {
+		audit["git_repo_url"] = *manifest.GitRepoURL
+		audit["github_installation_id"] = *manifest.GitHubInstallationID
+	}
+	writeManifestAudit(h.db, auditResourceManifest, "manifest.create", userID, audit)
 
 	c.JSON(http.StatusCreated, manifest)
 }

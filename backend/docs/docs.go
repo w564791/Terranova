@@ -15806,6 +15806,164 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/organizations/{org_id}/github-app/installations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "GitHub App installations registered for the organization (installation_id, account_login). Requires ORGANIZATION ADMIN.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "List GitHub App installations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{installations: [models.GitHubAppInstallation]}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Register an installation of the platform's GitHub App for the organization; git manifests of the org can then use repositories of its account. The installation is looked up with the App JWT (account_login comes from GitHub). An installation belongs to one organization: 409 when another organization registered it. Requires ORGANIZATION ADMIN. 503 git_source_disabled when the App is not configured; 422 when GitHub does not know the installation.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "Register GitHub App installation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Installation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RegisterGitHubInstallationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "already registered for this organization",
+                        "schema": {
+                            "$ref": "#/definitions/models.GitHubAppInstallation"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.GitHubAppInstallation"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/github-app/installations/{installation_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove a registered installation. 409 while git manifests of the organization use it. Does not uninstall the App on GitHub. Requires ORGANIZATION ADMIN.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "Unregister GitHub App installation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "GitHub installation id",
+                        "name": "installation_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/organizations/{org_id}/manifests": {
             "get": {
                 "security": [
@@ -15883,7 +16041,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new manifest in draft status under the organization",
+                "description": "Create a new manifest in draft status under the organization. source_type (immutable afterwards) is native (default: edited in the platform) or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url (\u003cGITHUB_URL\u003e/\u003cowner\u003e/\u003crepo\u003e, no credentials) and github_installation_id (registered for this organization by an org admin, its account must own the repo); git_subpath optionally selects the bundle root directory. The repository is checked with a per-request installation token (single repo, contents:read). Errors: 400 invalid fields; 422 github_installation_not_registered / git_repo_not_accessible; 503 git_source_disabled (GitHub App not configured).",
                 "consumes": [
                     "application/json"
                 ],
@@ -15934,8 +16092,22 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -16862,6 +17034,151 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/organizations/{org_id}/manifests/{id}/git/branches": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Branches (name, head sha) of the repository of a git-sourced manifest, read with a per-request GitHub App installation token (single repo, contents:read, revoked after use). Requires MANIFESTS WRITE (commit picker of publish). 409 not_git_source for native manifests; 503 git_source_disabled when the GitHub App is not configured; 422 git_repo_not_accessible.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "List git branches of a manifest",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{branches: [{name, sha}]}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/manifests/{id}/git/commits": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Recent commits (sha, subject, author_name, author_date; newest first) of a branch / ref of the repository of a git-sourced manifest, for the publish commit picker. Same token and errors as the branch list. Requires MANIFESTS WRITE.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "List git commits of a manifest",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Branch, tag or commit (default: the repository default branch)",
+                        "name": "ref",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1..100, default 30",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{commits: [{sha, subject, author_name, author_date}]}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/organizations/{org_id}/manifests/{id}/provider-schemas": {
             "get": {
                 "security": [
@@ -17580,7 +17897,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} and never contains file content. Besides the path / denylist / size / secret-scan rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner block), hcl_external_data / hcl_http_data (data \"external\" / data \"http\", or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source (module source that is not a relative path inside the bundle nor an active platform module catalog source). line is set for secret-scan and HCL problems (1-based line of the hit / block / attribute).",
+                "description": "Snapshot the current user's draft (native manifests) or the commit commit_sha of the repository (git manifests: required there, refused for native; the platform fetches that commit with a per-publish GitHub App installation token, single repo contents:read, and the version records source_ref = the SHA; symlinks and submodules are rejected as git_symlink / git_submodule problems; changelog defaults to the commit subject) into a new published version (vX.Y.Z). Git module sources in the bundle must pin a full commit SHA (?ref=\u003c40-hex\u003e) or be vendored: hcl_module_unpinned. Git errors: 422 git_repo_not_accessible / git_commit_not_found / git_subpath_not_found, 502 git_fetch_failed, 503 git_source_disabled. The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} and never contains file content. Besides the path / denylist / size / secret-scan rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner block), hcl_external_data / hcl_http_data (data \"external\" / data \"http\", or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source (module source that is not a relative path inside the bundle nor an active platform module catalog source). line is set for secret-scan and HCL problems (1-based line of the hit / block / attribute).",
                 "consumes": [
                     "application/json"
                 ],
@@ -20888,6 +21205,74 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/webhooks/github": {
+            "post": {
+                "description": "Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256 (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned or invalid =\u003e 401, no secret configured =\u003e 503. A push to a repository of git manifests (matching installation and repository) records git_latest_sha / git_latest_ref / git_latest_at on them as a \"new commit available\" hint. It never publishes. Other events are acknowledged and ignored. No user authentication (the signature is the authentication).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "GitHub App webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "sha256=\u003chex HMAC\u003e",
+                        "name": "X-Hub-Signature-256",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event name",
+                        "name": "X-GitHub-Event",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "202": {
+                        "description": "{matched: n}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -31388,6 +31773,17 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.RegisterGitHubInstallationRequest": {
+            "type": "object",
+            "required": [
+                "installation_id"
+            ],
+            "properties": {
+                "installation_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.ResetPasswordRequest": {
             "type": "object",
             "required": [
@@ -32154,9 +32550,27 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 1024
                 },
+                "git_repo_url": {
+                    "description": "source_type=git 时必填:\u003cGITHUB_URL\u003e/\u003cowner\u003e/\u003crepo\u003e",
+                    "type": "string",
+                    "maxLength": 1024
+                },
+                "git_subpath": {
+                    "description": "source_type=git 时可选:仓库内作为 bundle 根的目录",
+                    "type": "string",
+                    "maxLength": 512
+                },
+                "github_installation_id": {
+                    "description": "source_type=git 时必填:本组织已登记的 GitHub App installation(账户须是仓库 owner)",
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 255
+                },
+                "source_type": {
+                    "description": "native(默认,平台内编辑)| git(GitHub App 只读,发布 = 选 commit)。创建后不可变。",
+                    "type": "string"
                 }
             }
         },
@@ -32960,6 +33374,29 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "models.GitHubAppInstallation": {
+            "type": "object",
+            "properties": {
+                "account_login": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "installation_id": {
+                    "type": "integer"
+                },
+                "organization_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -33863,6 +34300,11 @@ const docTemplate = `{
             ],
             "properties": {
                 "changelog": {
+                    "description": "git: defaults to the commit subject",
+                    "type": "string"
+                },
+                "commit_sha": {
+                    "description": "git manifests only (required there, refused for native): the full\ncommit SHA (40 / 64 lowercase hex) to publish; the platform fetches that\ncommit and pins the version to it (source_ref).",
                     "type": "string"
                 },
                 "version": {

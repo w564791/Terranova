@@ -64,8 +64,12 @@ type ManifestFileTreeEntry struct {
 
 // PublishVersionRequest 发布版本请求
 type PublishVersionRequest struct {
-	Version   string `json:"version" binding:"required"`   // vMAJOR.MINOR.PATCH
-	Changelog string `json:"changelog"`
+	Version   string `json:"version" binding:"required"` // vMAJOR.MINOR.PATCH
+	Changelog string `json:"changelog"`                  // git: defaults to the commit subject
+	// git manifests only (required there, refused for native): the full
+	// commit SHA (40 / 64 lowercase hex) to publish; the platform fetches that
+	// commit and pins the version to it (source_ref).
+	CommitSHA string `json:"commit_sha,omitempty"`
 }
 
 // InstallDeploymentRequest install 请求
