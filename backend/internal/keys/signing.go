@@ -26,6 +26,9 @@ const (
 	PurposeAgent   Purpose = "agent"   // per-agent tokens
 	PurposeRun     Purpose = "run"     // manifest sandbox run tokens
 	PurposeRunTask Purpose = "runtask" // Run Task callback tokens
+	// PurposeGitHubAppState the signed state of the GitHub App installation
+	// flow (org, initiating user, nonce; 10 minutes, single use).
+	PurposeGitHubAppState Purpose = "ghapp-state"
 )
 
 // ErrLegacyTokenRejected a token without kid outside the legacy window.

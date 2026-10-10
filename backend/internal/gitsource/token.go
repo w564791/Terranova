@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -52,8 +53,9 @@ type TokenMinter interface {
 // Installation what GitHub says about an installation.
 type Installation struct {
 	ID           int64  `json:"id"`
+	AccountID    int64  `json:"account_id"`
 	AccountLogin string `json:"account_login"`
-	AccountType  string `json:"account_type"`
+	AccountType  string `json:"account_type"` // "Organization" or "User"
 }
 
 // InstallationLookup resolves an installation id with the App JWT (used when
@@ -230,6 +232,7 @@ func (a *GitHubApp) GetInstallation(ctx context.Context, installationID int64) (
 	var resp struct {
 		ID      int64 `json:"id"`
 		Account struct {
+			ID    int64  `json:"id"`
 			Login string `json:"login"`
 			Type  string `json:"type"`
 		} `json:"account"`
@@ -238,7 +241,113 @@ func (a *GitHubApp) GetInstallation(ctx context.Context, installationID int64) (
 		fmt.Sprintf("%s/app/installations/%d", a.Endpoints.APIURL, installationID), appTok, nil, &resp); err != nil {
 		return nil, err
 	}
-	return &Installation{ID: resp.ID, AccountLogin: resp.Account.Login, AccountType: resp.Account.Type}, nil
+	return &Installation{ID: resp.ID, AccountID: resp.Account.ID, AccountLogin: resp.Account.Login, AccountType: resp.Account.Type}, nil
+}
+
+// AppInfo the App itself (GET /app with the App JWT).
+type AppInfo struct {
+	Slug    string `json:"slug"`
+	HTMLURL string `json:"html_url"`
+}
+
+// GetApp GET /app (App JWT).
+func (a *GitHubApp) GetApp(ctx context.Context) (*AppInfo, error) {
+	appTok, err := a.appJWT()
+	if err != nil {
+		return nil, err
+	}
+	var info AppInfo
+	if err := a.do(ctx, "get app", http.MethodGet, a.Endpoints.APIURL+"/app", appTok, nil, &info); err != nil {
+		return nil, err
+	}
+	if info.HTMLURL == "" {
+		return nil, errors.New("github get app: invalid response")
+	}
+	return &info, nil
+}
+
+// InstallURL the page that installs the App, carrying state (GitHub hands it
+// back to the callback). The App's html_url must be on the web host.
+func InstallURL(info *AppInfo, e Endpoints, state string) (string, error) {
+	u, err := url.Parse(info.HTMLURL)
+	w, werr := url.Parse(e.WebURL)
+	if err != nil || werr != nil || u.Scheme != w.Scheme || !strings.EqualFold(u.Host, w.Host) || u.User != nil || u.RawQuery != "" {
+		return "", errors.New("github get app: html_url is not on the GitHub host")
+	}
+	return strings.TrimRight(info.HTMLURL, "/") + "/installations/new?state=" + url.QueryEscape(state), nil
+}
+
+// MintMetadataToken an installation token with only metadata:read (no
+// contents), used to list the installation's repositories. The response must
+// not grant more; revoke it right after use.
+func (a *GitHubApp) MintMetadataToken(ctx context.Context, installationID int64) (*Token, error) {
+	appTok, err := a.appJWT()
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Token       string            `json:"token"`
+		ExpiresAt   time.Time         `json:"expires_at"`
+		Permissions map[string]string `json:"permissions"`
+	}
+	err = a.do(ctx, "mint metadata token", http.MethodPost,
+		fmt.Sprintf("%s/app/installations/%d/access_tokens", a.Endpoints.APIURL, installationID), appTok,
+		map[string]any{"permissions": map[string]string{"metadata": "read"}}, &resp)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Token == "" {
+		return nil, errors.New("github mint metadata token: empty token")
+	}
+	tok := NewToken(resp.Token, resp.ExpiresAt)
+	for p, level := range resp.Permissions {
+		if p != "metadata" || level != "read" {
+			a.revoke(ctx, tok)
+			return nil, fmt.Errorf("github mint metadata token: unexpected permission %s:%s", p, level)
+		}
+	}
+	return tok, nil
+}
+
+// RepoInfo a repository of an installation. HTMLURL is built from the
+// configured GITHUB_URL, never taken from the API response.
+type RepoInfo struct {
+	FullName      string `json:"full_name"`
+	DefaultBranch string `json:"default_branch"`
+	Private       bool   `json:"private"`
+	HTMLURL       string `json:"html_url"`
+}
+
+// ListInstallationRepos GET /installation/repositories (installation token),
+// one page. Entries whose full_name is not a valid owner/name are dropped.
+func (a *GitHubApp) ListInstallationRepos(ctx context.Context, t *Token, page, perPage int) ([]RepoInfo, int, error) {
+	if perPage <= 0 || perPage > 100 {
+		perPage = 30
+	}
+	if page <= 0 {
+		page = 1
+	}
+	var resp struct {
+		TotalCount   int `json:"total_count"`
+		Repositories []struct {
+			FullName      string `json:"full_name"`
+			DefaultBranch string `json:"default_branch"`
+			Private       bool   `json:"private"`
+		} `json:"repositories"`
+	}
+	if err := a.do(ctx, "list installation repositories", http.MethodGet,
+		fmt.Sprintf("%s/installation/repositories?per_page=%d&page=%d", a.Endpoints.APIURL, perPage, page), t.Secret(), nil, &resp); err != nil {
+		return nil, 0, err
+	}
+	out := make([]RepoInfo, 0, len(resp.Repositories))
+	for _, r := range resp.Repositories {
+		repo, err := ParseRepoFullName(r.FullName)
+		if err != nil {
+			continue
+		}
+		out = append(out, RepoInfo{FullName: repo.FullName(), DefaultBranch: r.DefaultBranch, Private: r.Private, HTMLURL: repo.URL(a.Endpoints)})
+	}
+	return out, resp.TotalCount, nil
 }
 
 // Branch a branch head.

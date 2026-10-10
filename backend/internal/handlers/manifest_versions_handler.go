@@ -206,7 +206,7 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	// (network); runs never fetch git, they use the stored bundle.
 	var gitTree *gitsource.Tree
 	if isGit {
-		tree, err := fetchGitCommit(c.Request.Context(), &manifest, req.CommitSHA)
+		tree, err := fetchGitCommit(c.Request.Context(), h.db, &manifest, req.CommitSHA)
 		if err != nil {
 			respondGitError(c, "publish "+manifestID, err)
 			return
