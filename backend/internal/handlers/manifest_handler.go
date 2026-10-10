@@ -232,7 +232,7 @@ func (h *ManifestHandler) GetManifest(c *gin.Context) {
 
 // CreateManifest creates a new draft manifest
 // @Summary Create manifest
-// @Description Create a new manifest in draft status under the organization. source_type (immutable afterwards) is native (default: edited in the platform) or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url (<GITHUB_URL>/<owner>/<repo>, no credentials) and github_installation_id (registered for this organization by an org admin, its account must own the repo); git_subpath optionally selects the bundle root directory. The repository is checked with a per-request installation token (single repo, contents:read). Errors: 400 invalid fields; 422 github_installation_not_registered / git_repo_not_accessible; 503 git_source_disabled (GitHub App not configured).
+// @Description Create a new manifest in draft status under the organization. source_type (immutable afterwards) is native (default: edited in the platform) or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url (<GITHUB_URL>/<owner>/<repo>, no credentials) and github_installation_id (registered for this organization by an org admin, its account must own the repo); git_subpath optionally selects the bundle root directory (normalized: trimmed, trailing slashes removed; empty = repository root; validated with the bundle path rules: no leading slash, no ./.. or empty segments, no backslash, NFC; else 400 git_subpath_invalid; immutable afterwards). The repository is checked with a per-request installation token (single repo, contents:read). Errors: 400 invalid fields; 422 github_installation_not_registered / git_repo_not_accessible; 503 git_source_disabled (GitHub App not configured).
 // @Tags Manifest
 // @Accept json
 // @Produce json
@@ -317,7 +317,7 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 
 // UpdateManifest updates manifest metadata
 // @Summary Update manifest
-// @Description Update manifest name, description, or status
+// @Description Update manifest name, description, or status. source_type and the git source (git_repo_url, git_repo, git_subpath, github_installation_id) are immutable after creation: they may be echoed unchanged; a different value is 400 (source_type) or 409 git_source_immutable, an invalid git_subpath 400 git_subpath_invalid.
 // @Tags Manifest
 // @Accept json
 // @Produce json
@@ -354,6 +354,10 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	// source_type 创建后不可变(spec §1):只接受与当前值相同的回显
 	if req.SourceType != "" && req.SourceType != manifest.SourceType {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "source_type is immutable after creation"})
+		return
+	}
+
+	if !gitSourceUnchanged(c, &manifest, &req) {
 		return
 	}
 

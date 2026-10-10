@@ -15934,7 +15934,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the GitHub App install URL with a signed, single-use state (organization, initiating user, nonce; valid 10 minutes). Open it in the browser: after the installation GitHub redirects to the platform's setup callback, which binds the installation to the organization only after user-to-server OAuth proved that the installing GitHub user administers the installation's account. Requires ORGANIZATION ADMIN. 503 when the App, its OAuth client (GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET) or SIGNING_ROOT_KEY is not configured.",
+                "description": "Returns the GitHub App install URL with a signed, single-use state (organization, initiating user, nonce; valid 10 minutes). Open it in the browser: after the installation GitHub redirects to the platform's setup callback, which binds the installation to the organization only after user-to-server OAuth proved that the installing GitHub user administers the installation's account. github_url is the configured GITHUB_URL (platform config, never from the request) so the client can check the install_url host. Requires ORGANIZATION ADMIN. 503 when the App, its OAuth client (GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET) or SIGNING_ROOT_KEY is not configured.",
                 "produces": [
                     "application/json"
                 ],
@@ -15953,7 +15953,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "{install_url, expires_at}",
+                        "description": "{install_url, expires_at, github_url}",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -16096,7 +16096,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Repositories the installation can access (full_name, default_branch, private, html_url), one page. Uses a freshly minted installation token with only metadata:read, revoked right after. html_url is built from the configured GITHUB_URL. 404 for an installation not bound to the organization. Requires MANIFESTS WRITE.",
+                "description": "Repositories the installation can access (full_name, default_branch, private, html_url), one page. Uses a freshly minted installation token with only metadata:read, revoked right after. html_url is built from the configured GITHUB_URL. With q (trimmed, at most 100 characters, else 400 repo_query_too_long) the installation's repositories are filtered server-side by a case-insensitive substring of full_name: up to 1000 repositories are scanned (truncated=true when the installation has more), page/per_page page through the matches and total_count counts the matches. 404 for an installation not bound to the organization. Requires MANIFESTS WRITE.",
                 "produces": [
                     "application/json"
                 ],
@@ -16130,11 +16130,24 @@
                         "description": "1..100, default 30",
                         "name": "per_page",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter: case-insensitive substring of owner/name (max 100 characters)",
+                        "name": "q",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "{repositories: [...], total_count, page, per_page}",
+                        "description": "{repositories: [...], total_count, page, per_page, truncated, q?}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -16234,7 +16247,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new manifest in draft status under the organization. source_type (immutable afterwards) is native (default: edited in the platform) or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url (\u003cGITHUB_URL\u003e/\u003cowner\u003e/\u003crepo\u003e, no credentials) and github_installation_id (registered for this organization by an org admin, its account must own the repo); git_subpath optionally selects the bundle root directory. The repository is checked with a per-request installation token (single repo, contents:read). Errors: 400 invalid fields; 422 github_installation_not_registered / git_repo_not_accessible; 503 git_source_disabled (GitHub App not configured).",
+                "description": "Create a new manifest in draft status under the organization. source_type (immutable afterwards) is native (default: edited in the platform) or git (read-only GitHub source; publish = pick a commit). git requires git_repo_url (\u003cGITHUB_URL\u003e/\u003cowner\u003e/\u003crepo\u003e, no credentials) and github_installation_id (registered for this organization by an org admin, its account must own the repo); git_subpath optionally selects the bundle root directory (normalized: trimmed, trailing slashes removed; empty = repository root; validated with the bundle path rules: no leading slash, no ./.. or empty segments, no backslash, NFC; else 400 git_subpath_invalid; immutable afterwards). The repository is checked with a per-request installation token (single repo, contents:read). Errors: 400 invalid fields; 422 github_installation_not_registered / git_repo_not_accessible; 503 git_source_disabled (GitHub App not configured).",
                 "consumes": [
                     "application/json"
                 ],
@@ -16373,7 +16386,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update manifest name, description, or status",
+                "description": "Update manifest name, description, or status. source_type and the git source (git_repo_url, git_repo, git_subpath, github_installation_id) are immutable after creation: they may be echoed unchanged; a different value is 400 (source_type) or 409 git_source_immutable, an invalid git_subpath 400 git_subpath_invalid.",
                 "consumes": [
                     "application/json"
                 ],
@@ -35867,6 +35880,19 @@
                 "description": {
                     "type": "string",
                     "maxLength": 1024
+                },
+                "git_repo": {
+                    "type": "string"
+                },
+                "git_repo_url": {
+                    "description": "git 源字段创建后不可变:提供且(规范化后)与当前值不同 =\u003e 409 git_source_immutable;\n原样回显允许。git_subpath 无效 =\u003e 400 git_subpath_invalid。",
+                    "type": "string"
+                },
+                "git_subpath": {
+                    "type": "string"
+                },
+                "github_installation_id": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"

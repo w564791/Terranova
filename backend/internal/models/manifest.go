@@ -157,6 +157,12 @@ type UpdateManifestRequest struct {
 	Status      string `json:"status,omitempty"` // draft, published, archived
 	// source_type 创建后不可变:提供且与当前值不同 => 400
 	SourceType string `json:"source_type,omitempty"`
+	// git 源字段创建后不可变:提供且(规范化后)与当前值不同 => 409 git_source_immutable;
+	// 原样回显允许。git_subpath 无效 => 400 git_subpath_invalid。
+	GitRepoURL           *string `json:"git_repo_url,omitempty"`
+	GitRepo              *string `json:"git_repo,omitempty"`
+	GitSubpath           *string `json:"git_subpath,omitempty"`
+	GitHubInstallationID *int64  `json:"github_installation_id,omitempty"`
 }
 
 // PublishManifestVersionRequest 发布版本请求

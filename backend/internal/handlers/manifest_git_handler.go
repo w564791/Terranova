@@ -99,6 +99,8 @@ const (
 	gitCodeRepoNotAccessible  = "git_repo_not_accessible"
 	gitCodeCommitNotFound     = "git_commit_not_found"
 	gitCodeSubpathNotFound    = "git_subpath_not_found"
+	gitCodeSubpathInvalid     = "git_subpath_invalid"
+	gitCodeSourceImmutable    = "git_source_immutable"
 	gitCodeFetchFailed        = "git_fetch_failed"
 	gitCodeNotGitSource       = "not_git_source"
 	gitCodeReadOnly           = "git_source_read_only"
@@ -245,7 +247,7 @@ func validateGitManifestCreate(c *gin.Context, db *gorm.DB, orgID int, req *mode
 	}
 	subpath, err := gitsource.CleanSubpath(req.GitSubpath)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": gitCodeSubpathInvalid})
 		return false
 	}
 	if req.GitHubInstallationID <= 0 {
@@ -639,4 +641,56 @@ func (h *GitHubWebhookHandler) handleEvent(tx *gorm.DB, event string, body []byt
 		return http.StatusInternalServerError, gin.H{"error": "internal error"}
 	}
 	return http.StatusAccepted, gin.H{"matched": res.RowsAffected}
+}
+
+// gitSourceUnchanged enforces that the git source of a manifest (repository,
+// installation, git_subpath) is immutable after creation: a field may be
+// echoed unchanged; a different value is 409 git_source_immutable, an invalid
+// git_subpath 400 git_subpath_invalid. Native manifests have no git source,
+// so any non-empty value is a change. Writes the response and returns false
+// on refusal.
+func gitSourceUnchanged(c *gin.Context, m *models.Manifest, req *models.UpdateManifestRequest) bool {
+	deref := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	refuse := func(field string) bool {
+		c.JSON(http.StatusConflict, gin.H{"error": field + " is immutable after creation (create a new manifest for another repository or directory)", "code": gitCodeSourceImmutable})
+		return false
+	}
+	if req.GitSubpath != nil {
+		sub, err := gitsource.CleanSubpath(*req.GitSubpath)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": gitCodeSubpathInvalid})
+			return false
+		}
+		if sub != deref(m.GitSubpath) {
+			return refuse("git_subpath")
+		}
+	}
+	if req.GitRepoURL != nil && strings.TrimSpace(*req.GitRepoURL) != deref(m.GitRepoURL) {
+		return refuse("git_repo_url")
+	}
+	if req.GitRepo != nil {
+		want := strings.TrimSpace(*req.GitRepo)
+		cur := deref(m.GitRepoURL)
+		if want != "" || cur != "" {
+			r, err := gitsource.ParseRepoFullName(want)
+			if err != nil || cur == "" || !strings.HasSuffix(strings.ToLower(cur), "/"+strings.ToLower(r.FullName())) {
+				return refuse("git_repo")
+			}
+		}
+	}
+	if req.GitHubInstallationID != nil {
+		cur := int64(0)
+		if m.GitHubInstallationID != nil {
+			cur = *m.GitHubInstallationID
+		}
+		if *req.GitHubInstallationID != cur {
+			return refuse("github_installation_id")
+		}
+	}
+	return true
 }

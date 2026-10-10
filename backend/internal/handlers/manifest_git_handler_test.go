@@ -270,6 +270,7 @@ func gitRouter(db *gorm.DB) *gin.Engine {
 	gh := NewManifestGitHandler(db)
 	fh := NewManifestFilesHandler(db)
 	r.POST("/organizations/:org_id/manifests", withCaller(valueobject.PermissionLevelWrite), mh.CreateManifest)
+	r.PUT("/organizations/:org_id/manifests/:id", withCaller(valueobject.PermissionLevelWrite), mh.UpdateManifest)
 	r.POST("/organizations/:org_id/manifests/:id/v2/versions", withCaller(valueobject.PermissionLevelWrite), vh.PublishVersion)
 	r.GET("/organizations/:org_id/manifests/:id/git/branches", withCaller(valueobject.PermissionLevelWrite), gh.ListBranches)
 	r.GET("/organizations/:org_id/manifests/:id/git/commits", withCaller(valueobject.PermissionLevelWrite), gh.ListCommits)
