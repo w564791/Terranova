@@ -128,3 +128,133 @@ func redactStoredPlanJSON(ctx context.Context, db *gorm.DB, id uint) (backfillOu
 	}
 	return outcome, nil
 }
+
+// ResourceChangeBackfillResult what a resource-change backfill run did.
+type ResourceChangeBackfillResult struct {
+	Tasks, Rederived, Purged int // Rederived / Purged count rows
+}
+
+// BackfillResourceChangeRedaction rewrites historical
+// workspace_task_resource_changes rows (redaction_version NULL or lower than
+// ResourceChangesRedactionVersion), which older agents may have uploaded
+// with raw before/after values:
+//   - task has plan_json: before / after / after_unknown are re-derived from
+//     it, redacted again with RedactPlanJSON and the task's platform-side
+//     sensitive set (best effort, PlanSensitivityForTask), matched by
+//     resource address; apply status, resource id etc. are kept. A row whose
+//     address is not in the plan is purged as below.
+//   - no plan_json: before / after / after_unknown are set to NULL and
+//     details_purged = true (address / type / name / action kept).
+//
+// Batched by task_id (keyset). Safe to re-run and to run alongside new
+// writes: only unmarked rows are updated (each UPDATE re-checks the marker),
+// rows written by the platform derivation already carry the current version.
+func BackfillResourceChangeRedaction(ctx context.Context, db *gorm.DB, batchSize int) (ResourceChangeBackfillResult, error) {
+	var res ResourceChangeBackfillResult
+	if db == nil {
+		return res, nil
+	}
+	if batchSize <= 0 {
+		batchSize = 100
+	}
+	var lastTask uint
+	for {
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
+		var taskIDs []uint
+		if err := db.WithContext(ctx).Raw(`SELECT DISTINCT task_id FROM workspace_task_resource_changes
+			WHERE task_id > ? AND (redaction_version IS NULL OR redaction_version < ?)
+			ORDER BY task_id LIMIT ?`, lastTask, ResourceChangesRedactionVersion, batchSize).Scan(&taskIDs).Error; err != nil {
+			return res, fmt.Errorf("list resource change tasks: %w", err)
+		}
+		if len(taskIDs) == 0 {
+			return res, nil
+		}
+		for _, id := range taskIDs {
+			lastTask = id
+			res.Tasks++
+			re, pu, err := redactTaskResourceChanges(ctx, db, id)
+			if err != nil {
+				return res, err
+			}
+			res.Rederived += re
+			res.Purged += pu
+		}
+	}
+}
+
+func redactTaskResourceChanges(ctx context.Context, db *gorm.DB, taskID uint) (rederived, purged int, err error) {
+	db = db.WithContext(ctx)
+	var rows []models.WorkspaceTaskResourceChange
+	if err := db.Select("id", "resource_address").
+		Where("task_id = ? AND (redaction_version IS NULL OR redaction_version < ?)", taskID, ResourceChangesRedactionVersion).
+		Find(&rows).Error; err != nil {
+		return 0, 0, fmt.Errorf("load resource changes of task %d: %w", taskID, err)
+	}
+
+	derived := map[string]*models.WorkspaceTaskResourceChange{}
+	var task models.WorkspaceTask
+	err = db.Select("id", "workspace_id", "task_type", "plan_json", "variable_snapshot_id", "variable_overrides", "sensitive_keys").
+		First(&task, taskID).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return 0, 0, fmt.Errorf("load task %d: %w", taskID, err)
+	}
+	if err == nil && len(task.PlanJSON) > 0 {
+		ps, psErr := PlanSensitivityForTask(db, &task)
+		if psErr != nil {
+			log.Printf("[resource_changes backfill] task %d: platform sensitivity incomplete (HCL markers + overrides only): %v", taskID, psErr)
+		}
+		changes, perr := NewPlanParserService(db).parseResourceChanges(RedactPlanJSON(task.PlanJSON, ps), task.TaskType == models.TaskTypeDriftCheck)
+		if perr != nil {
+			return 0, 0, fmt.Errorf("derive resource changes of task %d: %w", taskID, perr)
+		}
+		for _, ch := range changes {
+			derived[ch.ResourceAddress] = ch
+		}
+	}
+
+	marker := "(redaction_version IS NULL OR redaction_version < ?)"
+	for _, row := range rows {
+		var q *gorm.DB
+		if d, ok := derived[row.ResourceAddress]; ok {
+			q = db.Model(&models.WorkspaceTaskResourceChange{}).
+				Where("id = ? AND "+marker, row.ID, ResourceChangesRedactionVersion).
+				Updates(map[string]interface{}{
+					"changes_before":    jsonbOrNull(d.ChangesBefore),
+					"changes_after":     jsonbOrNull(d.ChangesAfter),
+					"after_unknown":     jsonbOrNull(d.AfterUnknown),
+					"details_purged":    false,
+					"redaction_version": ResourceChangesRedactionVersion,
+				})
+			if q.Error == nil && q.RowsAffected > 0 {
+				rederived++
+			}
+		} else {
+			q = db.Model(&models.WorkspaceTaskResourceChange{}).
+				Where("id = ? AND "+marker, row.ID, ResourceChangesRedactionVersion).
+				Updates(map[string]interface{}{
+					"changes_before":    gorm.Expr("NULL"),
+					"changes_after":     gorm.Expr("NULL"),
+					"after_unknown":     gorm.Expr("NULL"),
+					"details_purged":    true,
+					"redaction_version": ResourceChangesRedactionVersion,
+				})
+			if q.Error == nil && q.RowsAffected > 0 {
+				purged++
+			}
+		}
+		if q.Error != nil {
+			return rederived, purged, fmt.Errorf("rewrite resource change %d of task %d: %w", row.ID, taskID, q.Error)
+		}
+	}
+	return rederived, purged, nil
+}
+
+// jsonbOrNull a JSONB value for a map update (SQL NULL for nil).
+func jsonbOrNull(v models.JSONB) interface{} {
+	if v == nil {
+		return gorm.Expr("NULL")
+	}
+	return v
+}

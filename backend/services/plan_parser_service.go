@@ -42,21 +42,12 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 	if task.PlanJSON != nil && len(task.PlanJSON) > 0 {
 		log.Printf("Using existing plan_json from database for task %d", taskID)
 
-		// 直接使用数据库中的plan_json
-		planJSON := map[string]interface{}(task.PlanJSON)
-
-		// 解析 resource_changes
-		resourceChanges, err := s.parseResourceChanges(planJSON, isDriftCheck)
+		// 与 agent 上传路径同一推导(再次按平台敏感集合脱敏,幂等)
+		n, err := s.StoreResourceChangesFromPlanJSON(&task)
 		if err != nil {
-			return fmt.Errorf("failed to parse resource changes: %w", err)
-		}
-
-		// 存储到数据库
-		if err := s.storeResourceChanges(task.WorkspaceID, taskID, resourceChanges); err != nil {
 			return fmt.Errorf("failed to store resource changes: %w", err)
 		}
-
-		log.Printf("Successfully parsed and stored %d resource changes for task %d", len(resourceChanges), taskID)
+		log.Printf("Successfully parsed and stored %d resource changes for task %d", n, taskID)
 		return nil
 	}
 
@@ -267,6 +258,70 @@ func (s *PlanParserService) determineAction(actions []interface{}) string {
 	return "unknown"
 }
 
+// ResourceChangesRedactionVersion the redaction rules of
+// workspace_task_resource_changes values (column redaction_version). Rows are
+// only ever derived by the platform from the redacted plan_json (or carry no
+// values at all); bump this when RedactPlanJSON gains rules and the backfill
+// (BackfillResourceChangeRedaction) re-derives every row.
+const ResourceChangesRedactionVersion int16 = 1
+
+// StoreResourceChangesFromPlanJSON replaces the task's resource changes with
+// the ones derived from its stored plan_json. The stored plan is redacted on
+// write; it is redacted again here (RedactPlanJSON is idempotent) with the
+// task's platform-side sensitive set, so a legacy row written before the
+// backfill never leaks either. Returns the number of rows stored.
+func (s *PlanParserService) StoreResourceChangesFromPlanJSON(task *models.WorkspaceTask) (int, error) {
+	if len(task.PlanJSON) == 0 {
+		return 0, fmt.Errorf("task %d has no plan_json", task.ID)
+	}
+	ps, psErr := PlanSensitivityForTask(s.db, task)
+	if psErr != nil {
+		log.Printf("[WARN] resource changes for task %d: platform sensitivity incomplete: %v", task.ID, psErr)
+	}
+	changes, err := s.parseResourceChanges(RedactPlanJSON(task.PlanJSON, ps), task.TaskType == models.TaskTypeDriftCheck)
+	if err != nil {
+		return 0, err
+	}
+	return len(changes), s.storeResourceChanges(task.WorkspaceID, task.ID, changes)
+}
+
+// ResourceChangeMeta identifies a resource change without its values.
+type ResourceChangeMeta struct {
+	ResourceAddress, ResourceType, ResourceName, ModuleAddress, Action string
+}
+
+// StoreResourceChangeMetadata replaces the task's resource changes with
+// address / type / name / module / action only: before, after and
+// after_unknown stay NULL. Used when no plan_json exists to derive values
+// from (an older agent whose plan upload failed): agent-sent values are never
+// stored, since they carry no before_sensitive / after_sensitive and provider
+// sensitive attributes could not be masked.
+func (s *PlanParserService) StoreResourceChangeMetadata(task *models.WorkspaceTask, metas []ResourceChangeMeta) (int, error) {
+	changes := make([]*models.WorkspaceTaskResourceChange, 0, len(metas))
+	for _, m := range metas {
+		if m.ResourceAddress == "" || m.Action == "" || m.Action == "no-op" {
+			continue
+		}
+		changes = append(changes, &models.WorkspaceTaskResourceChange{
+			ResourceAddress: clipRunes(m.ResourceAddress, 500),
+			ResourceType:    clipRunes(m.ResourceType, 100),
+			ResourceName:    clipRunes(m.ResourceName, 200),
+			ModuleAddress:   clipRunes(m.ModuleAddress, 500),
+			Action:          clipRunes(m.Action, 20),
+			ApplyStatus:     "pending",
+		})
+	}
+	return len(changes), s.storeResourceChanges(task.WorkspaceID, task.ID, changes)
+}
+
+func clipRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
 // storeResourceChanges 存储资源变更到数据库
 func (s *PlanParserService) storeResourceChanges(workspaceID string, taskID uint, changes []*models.WorkspaceTaskResourceChange) error {
 	// 使用事务
@@ -280,6 +335,8 @@ func (s *PlanParserService) storeResourceChanges(workspaceID string, taskID uint
 		for _, change := range changes {
 			change.WorkspaceID = workspaceID // workspaceID 现在是 string
 			change.TaskID = taskID
+			v := ResourceChangesRedactionVersion
+			change.RedactionVersion = &v
 			if err := tx.Create(change).Error; err != nil {
 				return fmt.Errorf("failed to create resource change: %w", err)
 			}

@@ -798,6 +798,17 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		return
 	}
 
+	// Only a running task changes state. Once the agent has ended it
+	// (RequireTaskAgent lets the task's agent report for a grace period), only
+	// a retry of that same final status is accepted.
+	if task.Status != models.TaskStatusRunning && req.Status != task.Status {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "task is no longer running, status update rejected",
+			"current_status": string(task.Status),
+		})
+		return
+	}
+
 	// Build updates map to avoid overwriting other fields (like plan_data, plan_json)
 	updates := map[string]interface{}{
 		"status": req.Status,
@@ -1294,7 +1305,7 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 
 // UploadPlanJSON handles plan JSON upload from agent
 // @Summary Upload plan JSON
-// @Description Upload plan JSON from agent after plan execution. Sensitive values are redacted (services.RedactPlanJSON) before the plan is stored.
+// @Description Upload plan JSON from agent after plan execution. Sensitive values are redacted (services.RedactPlanJSON) before the plan is stored, and the task's resource changes are derived from the redacted plan by the platform. Only the task's agent may call this, while the task is running (403 / 409 otherwise).
 // @Tags Agent Task
 // @Accept json
 // @Produce json
@@ -1348,11 +1359,21 @@ func (h *AgentHandler) UploadPlanJSON(c *gin.Context) {
 	if psErr != nil {
 		log.Printf("[WARN] plan redaction for task %d: platform sensitivity incomplete: %v", task.ID, psErr)
 	}
-	if err := h.db.Model(&task).Update("plan_json", services.RedactPlanJSON(req.PlanJSON, ps)).Error; err != nil {
+	redacted := services.RedactPlanJSON(req.PlanJSON, ps)
+	if err := h.db.Model(&task).Update("plan_json", models.JSONB(redacted)).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to save plan_json: " + err.Error(),
 		})
 		return
+	}
+
+	// Resource changes are derived here, by the platform, from the redacted
+	// plan (agents no longer upload them; see ParsePlanChanges).
+	task.PlanJSON = redacted
+	if n, err := services.NewPlanParserService(h.db).StoreResourceChangesFromPlanJSON(&task); err != nil {
+		log.Printf("[WARN] task %d: deriving resource changes from plan_json failed: %v", task.ID, err)
+	} else {
+		log.Printf("[UploadPlanJSON] task %d: derived %d resource changes from the redacted plan_json", task.ID, n)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1463,15 +1484,15 @@ func (h *AgentHandler) UnlockWorkspace(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "workspace unlocked"})
 }
 
-// ParsePlanChanges parses plan changes
-// @Summary Parse plan changes
-// @Description Receive parsed resource changes from agent and store in database
+// ParsePlanChanges derives the task's resource changes on the platform
+// @Summary Derive resource changes
+// @Description Resource changes are derived by the platform from the task's stored, redacted plan_json (the same plan parser path as local execution; also done when the plan JSON is uploaded). Any resource_changes in the body are accepted and discarded: agent-sent before/after values are never stored. When the task has no plan_json yet (an older agent whose plan upload failed), only address/type/name/module/action of the uploaded entries are stored, with before/after/after_unknown NULL. Only the task's agent may call this (403 otherwise; 409 when the task is not running or just ended).
 // @Tags Agent Task
 // @Accept json
 // @Produce json
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Parsed resource changes with resource_changes array"
+// @Param request body map[string]interface{} false "Ignored (older agents send resource_changes; their values are discarded)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -1479,40 +1500,32 @@ func (h *AgentHandler) UnlockWorkspace(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /api/v1/agents/tasks/{task_id}/parse-plan-changes [post]
 func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
-	taskIDStr := c.Param("task_id")
-	if taskIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
-		return
-	}
-
 	var taskID uint
-	if _, err := fmt.Sscanf(taskIDStr, "%d", &taskID); err != nil {
+	if _, err := fmt.Sscanf(c.Param("task_id"), "%d", &taskID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_id format"})
 		return
 	}
 
-	// Expect agent to send parsed resource changes
+	// Older agents upload their own parse; only the identifying fields are
+	// read (and used only when there is no plan_json), never the values.
 	var req struct {
 		ResourceChanges []struct {
-			ResourceAddress string                 `json:"resource_address"`
-			ResourceType    string                 `json:"resource_type"`
-			ResourceName    string                 `json:"resource_name"`
-			ModuleAddress   string                 `json:"module_address"`
-			Action          string                 `json:"action"`
-			ChangesBefore   map[string]interface{} `json:"changes_before"`
-			ChangesAfter    map[string]interface{} `json:"changes_after"`
-			AfterUnknown    map[string]interface{} `json:"after_unknown"`
+			ResourceAddress string `json:"resource_address"`
+			ResourceType    string `json:"resource_type"`
+			ResourceName    string `json:"resource_name"`
+			ModuleAddress   string `json:"module_address"`
+			Action          string `json:"action"`
 		} `json:"resource_changes"`
 	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
-		return
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
+			return
+		}
 	}
 
-	// Get task
 	var task models.WorkspaceTask
-	if err := h.db.First(&task, taskID).Error; err != nil {
+	if err := h.db.Omit("plan_data").First(&task, taskID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 			return
@@ -1521,36 +1534,38 @@ func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
 		return
 	}
 
-	// Delete old resource changes for this task
-	h.db.Where("task_id = ?", taskID).Delete(&models.WorkspaceTaskResourceChange{})
-
-	// Insert new resource changes
-	for _, rc := range req.ResourceChanges {
-		change := &models.WorkspaceTaskResourceChange{
-			TaskID:          taskID,
-			WorkspaceID:     task.WorkspaceID,
-			ResourceAddress: rc.ResourceAddress,
-			ResourceType:    rc.ResourceType,
-			ResourceName:    rc.ResourceName,
-			ModuleAddress:   rc.ModuleAddress,
-			Action:          rc.Action,
-			ChangesBefore:   rc.ChangesBefore,
-			ChangesAfter:    rc.ChangesAfter,
-			AfterUnknown:    rc.AfterUnknown,
-			ApplyStatus:     "pending",
-		}
-
-		if err := h.db.Create(change).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to save resource change: " + err.Error(),
-			})
+	parser := services.NewPlanParserService(h.db)
+	if len(task.PlanJSON) > 0 {
+		n, err := parser.StoreResourceChangesFromPlanJSON(&task)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to derive resource changes: " + err.Error()})
 			return
 		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":                    "resource changes derived from plan_json",
+			"source":                     "plan_json",
+			"count":                      n,
+			"uploaded_changes_discarded": len(req.ResourceChanges),
+		})
+		return
 	}
 
+	metas := make([]services.ResourceChangeMeta, 0, len(req.ResourceChanges))
+	for _, rc := range req.ResourceChanges {
+		metas = append(metas, services.ResourceChangeMeta{
+			ResourceAddress: rc.ResourceAddress, ResourceType: rc.ResourceType, ResourceName: rc.ResourceName,
+			ModuleAddress: rc.ModuleAddress, Action: rc.Action,
+		})
+	}
+	n, err := parser.StoreResourceChangeMetadata(&task, metas)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save resource changes: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": "resource changes saved",
-		"count":   len(req.ResourceChanges),
+		"message": "no plan_json: resource changes stored without values",
+		"source":  "metadata_only",
+		"count":   n,
 	})
 }
 

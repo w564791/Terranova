@@ -64,18 +64,32 @@ const (
 	// AgentCapabilityTaskDataOverridesV1 the agent applies the deployment
 	// variable overrides (and their sensitivity) from task data.
 	AgentCapabilityTaskDataOverridesV1 = "task_data_overrides_v1"
+	// AgentCapabilityIdentityHeaderV1 the agent sends its agent ID
+	// (AgentIDHeader) on every task / workspace API call. For an agent that
+	// reported it, a call without the header is refused; the header must
+	// equal the task's agent_id.
+	AgentCapabilityIdentityHeaderV1 = "agent_identity_header_v1"
 )
+
+// AgentIDHeader the HTTP header carrying the calling agent's ID on agent
+// task / workspace API calls (pool tokens are shared by all agents of a pool).
+const AgentIDHeader = "X-Agent-ID"
 
 // SupportedAgentCapabilities the capabilities of this build (sent by the
 // agent at registration, accepted by the platform).
 func SupportedAgentCapabilities() []string {
-	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1}
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityIdentityHeaderV1}
 }
 
 // ManifestAgentCapabilities what an agent needs to run a task of a
 // manifest-bound workspace (or a manifest Run task).
 func ManifestAgentCapabilities() []string {
-	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1}
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityIdentityHeaderV1}
+}
+
+// HasCapability reports whether the agent reported capability c.
+func (a *Agent) HasCapability(c string) bool {
+	return len(a.MissingCapabilities([]string{c})) == 0
 }
 
 // KnownAgentCapabilities filters reported capabilities to the known ones

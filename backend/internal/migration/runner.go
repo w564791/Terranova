@@ -84,6 +84,9 @@ func definitions() []definition {
 		// Keep semantics for already-recorded versions stable. Retry-safe fixes
 		// for a migration that failed before its record was written may remain in
 		// that migration; v5 reconciles databases that already recorded v1-v4.
+		// Keep semantics for already-recorded versions stable. Retry-safe fixes
+		// for a migration that failed before its record was written may remain in
+		// that migration; v5 reconciles databases that already recorded v1-v4.
 		{version: "20260717_01_iam_multitenant_hardening", contract: "tenant-boundary-v2", apply: applyIAMMultitenantHardening},
 		{version: "20260717_02_iam_role_data_transition", contract: "role-principal-transition-v1", apply: applyIAMRoleDataTransition},
 		{version: "20260717_03_iam_release_completeness", contract: "builtin-role-and-index-v1", apply: applyIAMReleaseCompleteness},
@@ -116,6 +119,9 @@ func definitions() []definition {
 		// Short machine reason next to error_code (workspace_tasks.error_reason).
 		// Additive only.
 		{version: "20261010_03_workspace_task_error_reason", contract: "workspace-task-error-reason-v1", apply: applyWorkspaceTaskErrorReason},
+		// marker of the resource-change redaction backfill (values re-derived
+		// from the redacted plan_json in the application)
+		{version: "20261010_04_workspace_task_resource_change_redaction", contract: "workspace-task-resource-change-redaction-marker-v1", apply: applyWorkspaceTaskResourceChangeRedaction},
 		// Per-row data encryption key version for variable values.
 		{version: "20261010_10_variable_key_version", contract: "variable-key-version-v1", apply: applyVariableKeyVersion},
 	}

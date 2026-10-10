@@ -581,6 +581,15 @@ type WorkspaceTaskResourceChange struct {
 	// Apply 时的代码版本号（resource_code_versions.version）
 	AppliedCodeVersion *int `json:"applied_code_version" gorm:"type:integer"` // apply 完成时回填
 
+	// RedactionVersion the redaction rules ChangesBefore / ChangesAfter were
+	// derived with (services.ResourceChangesRedactionVersion; NULL = legacy
+	// row, possibly agent-uploaded raw values, not yet backfilled).
+	RedactionVersion *int16 `json:"-" gorm:"column:redaction_version;type:smallint"`
+	// DetailsPurged before / after / after_unknown were removed by the
+	// redaction backfill because no plan_json existed to re-derive them from
+	// (legacy row with possibly raw agent-uploaded values). Set only there.
+	DetailsPurged bool `json:"details_purged" gorm:"column:details_purged;default:false"`
+
 	// 关联
 	Task      *WorkspaceTask `json:"task,omitempty" gorm:"foreignKey:TaskID"`
 	Workspace *Workspace     `json:"workspace,omitempty" gorm:"foreignKey:WorkspaceID"`
