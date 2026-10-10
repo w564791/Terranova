@@ -64,9 +64,9 @@ const REASON_TEXT: Record<string, string> = {
   invalid_bundle: '该版本 bundle 不合法',
   plan_data_expired: 'plan 数据已超过保留期',
   plan_data_missing: 'plan 数据已清理或缺失',
-  not_approved: '该 plan 未经审批',
-  bundle_changed: '审批后 bundle 已变化',
-  plan_changed: '审批后 plan 已变化',
+  not_approved: 'Manifest workspace 不能直接 apply，请先生成并审批 plan',
+  bundle_changed: '审批后 Manifest 版本内容已变化，请重新 plan',
+  plan_changed: 'plan 文件与审批时不一致，请重新 plan',
 }
 
 /** agent 能力(models.AgentCapability*)的可读说明 */
@@ -76,7 +76,7 @@ const AGENT_CAPABILITY_TEXT: Record<string, string> = {
   agent_token_v1: '使用按 agent 签发的 token',
 }
 
-function has(map: Record<string, string>, k: string): boolean {
+function has(map: Record<string, unknown>, k: string): boolean {
   return Object.prototype.hasOwnProperty.call(map, k)
 }
 
@@ -119,4 +119,58 @@ export function taskErrorInfo(
   const rawDetail = msg.startsWith(prefix) ? msg.slice(prefix.length).trim() : ''
   const detail = rawDetail && code === TASK_ERROR_BUNDLE_REPUBLISH_REQUIRED ? localizeBundleReason(rawDetail) : rawDetail
   return { ...def, code, detail, rawDetail }
+}
+
+// ===== 审批(confirm-apply)409 拒绝(后端 b69043a:{error, error_code, error_reason}) =====
+
+export interface ApprovalErrorInfo {
+  code: string
+  reason: string
+  message: string
+  /** 需要重新 plan(提供 New run 入口) */
+  rerunPlan: boolean
+  /** 状态已变化(如已审批),应刷新任务 */
+  refresh: boolean
+}
+
+const APPROVAL_ERROR_TEXT: Record<string, Omit<ApprovalErrorInfo, 'code' | 'reason'>> = {
+  run_not_approvable: { message: '预览 plan 不能审批，请在 Deploy 面板生成待审批的 plan', rerunPlan: false, refresh: false },
+  approval_run_required: { message: '该任务没有审批记录（升级前创建），请重新 plan', rerunPlan: true, refresh: false },
+  run_not_active: { message: '该任务的审批记录已结束，请重新 plan', rerunPlan: true, refresh: true },
+  already_approved: { message: '已经审批过', rerunPlan: false, refresh: true },
+}
+
+/**
+ * confirm-apply 等审批接口的结构化拒绝 => 中文提示;不是已知码时返回 null(调用方按原逻辑提示)。
+ * 读取 err.data(ApiError)或 err.response.data 的 error_code / code 与 error_reason / reason。
+ */
+export function approvalErrorInfo(err: unknown): ApprovalErrorInfo | null {
+  if (!err || typeof err !== 'object') return null
+  const e = err as { data?: unknown; response?: { data?: unknown } }
+  const raw = e.data ?? e.response?.data
+  if (!raw || typeof raw !== 'object') return null
+  const d = raw as Record<string, unknown>
+  const str = (v: unknown) => (typeof v === 'string' ? v : '')
+  const code = str(d.error_code) || str(d.code)
+  const reason = str(d.error_reason) || str(d.reason)
+  if (!code) return null
+  if (has(APPROVAL_ERROR_TEXT, code)) return { code, reason, ...APPROVAL_ERROR_TEXT[code] }
+  if (code === 'approval_hash_mismatch') {
+    const text = has(REASON_TEXT, reason) ? REASON_TEXT[reason] : TASK_ERROR_CODES.approval_hash_mismatch.title
+    return { code, reason, message: text, rerunPlan: reason !== 'not_approved', refresh: false }
+  }
+  if (code === 'plan_expired') {
+    return { code, reason, message: TASK_ERROR_CODES.plan_expired.title, rerunPlan: true, refresh: false }
+  }
+  if (code === TASK_ERROR_BUNDLE_REPUBLISH_REQUIRED) {
+    const detail = reason ? taskErrorReasonText(code, reason) : ''
+    return {
+      code,
+      reason,
+      message: TASK_ERROR_CODES[code].title + (detail ? `（${detail}）` : ''),
+      rerunPlan: false,
+      refresh: false,
+    }
+  }
+  return null
 }
