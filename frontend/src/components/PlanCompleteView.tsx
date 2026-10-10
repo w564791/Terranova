@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import styles from './PlanCompleteView.module.css';
+import SensitiveText from './SensitiveText';
 import api from '../services/api';
 import { softBadgeColors } from '../utils/contrast';
 import { colors } from '../styles/tokens';
@@ -267,7 +268,14 @@ const diffMarker = (kind: 'add' | 'remove' | 'modify') => {
 // 结构化值转 HCL,标量走 formatSimpleValue。
 const diffValue = (v: any, cls: string) => {
   const hcl = tryHcl(v);
-  return <span className={cls}>{hcl ?? formatSimpleValue(v)}</span>;
+  return <span className={cls}><SensitiveText text={hcl ?? formatSimpleValue(v)} /></span>;
+};
+
+// 后端已清理(不可恢复历史脱敏)的资源变更:before / after 均为空(null 或空对象)且无 after_unknown
+const changesUnavailable = (r: { changes_before?: unknown; changes_after?: unknown; after_unknown?: unknown }): boolean => {
+  const empty = (v: unknown) =>
+    v === null || v === undefined || (isPlainObj(v) && Object.keys(v as object).length === 0);
+  return empty(r.changes_before) && empty(r.changes_after) && empty(r.after_unknown);
 };
 
 // modified 标量/类型不同的内联比较:before -> after。
@@ -421,10 +429,10 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
     const hcl = tryHcl(value);
     if (hcl) {
       const hclClass = variant === 'delete' ? styles.jsonValueDelete : styles.jsonValue;
-      return <span className={hclClass}>{hcl}</span>;
+      return <span className={hclClass}><SensitiveText text={hcl} /></span>;
     }
 
-    return <span className={className}>{formatSimpleValue(value)}</span>;
+    return <span className={className}><SensitiveText text={formatSimpleValue(value)} /></span>;
   };
 
   // 渲染 CREATE 资源的属性
@@ -688,7 +696,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                   <div key={u.path} className={styles.unchangedRow}>
                     <span className={styles.unchangedKey}>{u.path}:</span>
                     <span className={styles.unchangedValue}>
-                      {tryHcl(u.value) ?? formatSimpleValue(u.value)}
+                      <SensitiveText text={tryHcl(u.value) ?? formatSimpleValue(u.value)} />
                     </span>
                   </div>
                 ))}
@@ -848,9 +856,16 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
 
               {isExpanded && (
                 <div className={styles.resourceBody}>
-                  {(resource.action === 'create' || resource.action === 'read') && renderCreateBody(resource)}
-                  {resource.action === 'delete' && renderDeleteBody(resource)}
-                  {(resource.action === 'update' || resource.action === 'replace') && renderUpdateBody(resource)}
+                  {changesUnavailable(resource) ? (
+                    // 历史 plan 已脱敏清理,before / after 均不可恢复:只保留 action / 地址
+                    <div className={styles.emptyMessage}>变更详情不可用（已脱敏清理）</div>
+                  ) : (
+                    <>
+                      {(resource.action === 'create' || resource.action === 'read') && renderCreateBody(resource)}
+                      {resource.action === 'delete' && renderDeleteBody(resource)}
+                      {(resource.action === 'update' || resource.action === 'replace') && renderUpdateBody(resource)}
+                    </>
+                  )}
                   
                   {/* 显示触发的 actions 详情 */}
                   {triggeredActions.length > 0 && (
@@ -989,7 +1004,7 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
                                 return (
                                   <div key={key} className={styles.simpleAttrRow}>
                                     <span className={styles.attrKey}>{key}:</span>
-                                    <span className={styles.actionConfigValue}>{tryHcl(value) ?? formatSimpleValue(value)}</span>
+                                    <span className={styles.actionConfigValue}><SensitiveText text={tryHcl(value) ?? formatSimpleValue(value)} /></span>
                                   </div>
                                 );
                               })}

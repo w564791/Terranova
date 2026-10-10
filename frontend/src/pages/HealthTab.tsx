@@ -3,6 +3,8 @@ import { useToast } from '../contexts/ToastContext';
 import { extractErrorMessage } from '../utils/errorHandler';
 import DriftConfig from '../components/DriftConfig';
 import * as driftService from '../services/drift';
+import SensitiveText from '../components/SensitiveText';
+import { isSensitivePlaceholder } from '../utils/sensitiveValue';
 import { apiFetch } from '../services/api';
 import styles from './HealthTab.module.css';
 
@@ -551,7 +553,13 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
                           const config = getChangeTypeConfig(child.action);
                           // 后端返回的变更详情在 changes 对象中，每个 key 包含 before/after
                           const changesObj = child.changes || {};
-                          const changesList = Object.entries(changesObj).map(([key, value]: [string, any]) => ({
+                          const changesList = Object.entries(changesObj)
+                            // 两侧都是脱敏占位符:无法判断是否变化,不当作变更展示
+                            .filter(([, value]) => {
+                              const v = value as { before?: unknown; after?: unknown } | null;
+                              return !(isSensitivePlaceholder(v?.before) && isSensitivePlaceholder(v?.after));
+                            })
+                            .map(([key, value]: [string, any]) => ({
                             key,
                             before: value?.before,
                             after: value?.after,
@@ -576,14 +584,14 @@ const HealthTab: React.FC<HealthTabProps> = ({ workspaceId }) => {
                                       </span>
                                       <span className={styles.changeKey}>{key} =</span>
                                       {type === 'add' ? (
-                                        <span className={styles.valueCreate}>{formatValue(after)}</span>
+                                        <span className={styles.valueCreate}><SensitiveText text={formatValue(after)} /></span>
                                       ) : type === 'remove' ? (
-                                        <span className={styles.valueDelete}>{formatValue(before)}</span>
+                                        <span className={styles.valueDelete}><SensitiveText text={formatValue(before)} /></span>
                                       ) : (
                                         <span className={styles.valueComparison}>
-                                          <span className={styles.valueBefore}>{formatValue(before)}</span>
+                                          <span className={styles.valueBefore}><SensitiveText text={formatValue(before)} /></span>
                                           <span className={styles.arrow}>→</span>
-                                          <span className={styles.valueAfter}>{formatValue(after)}</span>
+                                          <span className={styles.valueAfter}><SensitiveText text={formatValue(after)} /></span>
                                         </span>
                                       )}
                                     </div>

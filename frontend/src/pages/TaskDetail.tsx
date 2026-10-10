@@ -31,6 +31,8 @@ interface Task {
   error_message?: string;
   /** 结构化失败码(后端 c9f030f),如 bundle_republish_required */
   error_code?: string;
+  /** 短原因 token(规则名 / 能力名,后端 932b699) */
+  error_reason?: string;
   plan_json?: any;
   plan_output?: string;
   apply_output?: string;
@@ -600,6 +602,8 @@ const TaskDetail: React.FC = () => {
             workspaceId={workspaceId!}
             errorCode={task.error_code}
             errorMessage={task.error_message}
+            errorReason={task.error_reason}
+            onRerunPlan={() => setShowNewRunDialog(true)}
           />
         )}
 
