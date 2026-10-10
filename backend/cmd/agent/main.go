@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -87,6 +88,15 @@ func main() {
 			backoff = maxBackoff
 		}
 	}
+
+	// 3b. Keep the per-agent token fresh. If it is lost (revoked, agent
+	// deregistered, or renewal failed until expiry) the process exits so the
+	// supervisor restarts it and it registers again with the pool token.
+	apiClient.OnAgentTokenLost = func(err error) {
+		log.Printf("Agent token lost (%v); exiting to re-register", err)
+		os.Exit(1)
+	}
+	apiClient.StartAgentTokenRenewal(context.Background())
 
 	// 4. Fetch and generate HCP credentials file
 	log.Printf("Fetching HCP credentials for pool %s...", poolID)

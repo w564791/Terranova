@@ -2474,6 +2474,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/agent-pools/{pool_id}/agents/{agent_id}/revoke": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revoke the agent's per-agent token (and every run token it obtained): its next API call, renewal or C\u0026C check (within 30s) is refused. The agent row is kept with revoked_at set. The host can register again with the pool token as a new agent; revoke the pool token to stop it entirely. Platform administrators only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agent Pool"
+                ],
+                "summary": "Revoke an agent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Pool ID",
+                        "name": "pool_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Agent ID",
+                        "name": "agent_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/agent-pools/{pool_id}/allow-workspaces": {
             "post": {
                 "security": [
@@ -3265,6 +3328,9 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -3311,7 +3377,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Register a new agent instance with Pool Token authentication. The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting both, otherwise they fail with error_code agent_upgrade_required.",
+                "description": "Register a new agent instance with Pool Token authentication (the pool token is accepted here only; every later call uses the returned agent token). The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1, agent_token_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting all three, otherwise they fail with error_code agent_upgrade_required. The response carries agent_token (per-agent JWT, typ agent, claims agent_id / pool_id / gen, header kid; lifetime AGENT_TOKEN_TTL, default 15m) and agent_token_expires_at; renew it with POST /api/v1/agents/token before it expires. Deregistering or revoking the agent, or revoking the pool token it registered with, invalidates it immediately (checked against the database on every use).",
                 "consumes": [
                     "application/json"
                 ],
@@ -3368,6 +3434,9 @@ const docTemplate = `{
         "/api/v1/agents/tasks/{task_id}/data": {
             "get": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -3435,6 +3504,9 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -3493,6 +3565,9 @@ const docTemplate = `{
         "/api/v1/agents/tasks/{task_id}/logs/chunk": {
             "post": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -3570,6 +3645,9 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -3644,6 +3722,9 @@ const docTemplate = `{
         "/api/v1/agents/tasks/{task_id}/plan-data": {
             "post": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -3721,6 +3802,9 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -3797,6 +3881,9 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -3862,6 +3949,9 @@ const docTemplate = `{
         "/api/v1/agents/tasks/{task_id}/status": {
             "put": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -3946,6 +4036,9 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -3995,6 +4088,9 @@ const docTemplate = `{
         "/api/v1/agents/terraform-versions/{version}": {
             "get": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4058,9 +4154,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/agents/token": {
+            "post": {
+                "security": [
+                    {
+                        "AgentTokenAuth": []
+                    }
+                ],
+                "description": "Exchange a valid agent token (Authorization: Bearer \u003cagent token\u003e; pool tokens are refused) for a new one with a fresh expiry. Refused (401) once the agent was deregistered or revoked or its pool token revoked; the agent then registers again with the pool token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agent"
+                ],
+                "summary": "Renew the agent token",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/agents/workspaces/{workspace_id}/fields": {
             "patch": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4131,6 +4270,9 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -4200,6 +4342,9 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -4237,6 +4382,9 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -4270,6 +4418,9 @@ const docTemplate = `{
         "/api/v1/agents/workspaces/{workspace_id}/state/max-version": {
             "get": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4329,6 +4480,9 @@ const docTemplate = `{
         "/api/v1/agents/workspaces/{workspace_id}/state/promote": {
             "post": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4399,6 +4553,9 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -4466,6 +4623,9 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -4517,6 +4677,9 @@ const docTemplate = `{
         "/api/v1/agents/workspaces/{workspace_id}/terraform-lock-hcl": {
             "get": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4581,6 +4744,9 @@ const docTemplate = `{
             },
             "put": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4651,6 +4817,9 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
+                        "AgentTokenAuth": []
+                    },
+                    {
                         "PoolTokenAuth": []
                     }
                 ],
@@ -4709,6 +4878,9 @@ const docTemplate = `{
         "/api/v1/agents/{agent_id}": {
             "get": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -4772,6 +4944,9 @@ const docTemplate = `{
             },
             "delete": {
                 "security": [
+                    {
+                        "AgentTokenAuth": []
+                    },
                     {
                         "PoolTokenAuth": []
                     }
@@ -31653,6 +31828,10 @@ const docTemplate = `{
                 "registered_at": {
                     "type": "string"
                 },
+                "revoked_at": {
+                    "description": "RevokedAt set when the agent's tokens were revoked (agent tokens and\nits run tokens are refused from then on).",
+                    "type": "string"
+                },
                 "status": {
                     "type": "string"
                 },
@@ -37469,6 +37648,12 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
+        "AgentTokenAuth": {
+            "description": "Type \"Bearer\" followed by a space and the per-agent token (JWT typ agent) returned by POST /api/v1/agents/register and renewed with POST /api/v1/agents/token. Agents without the agent_token_v1 capability use the pool token (PoolTokenAuth) instead.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
         "BearerAuth": {
             "description": "Type \"Bearer\" followed by a space and JWT token.",
             "type": "apiKey",

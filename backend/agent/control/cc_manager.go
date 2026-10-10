@@ -172,8 +172,12 @@ func (m *CCManager) tryConnect() error {
 	// Connect with authentication header
 	log.Printf("[Connect] Connecting to C&C channel: %s", ccEndpoint)
 
-	// Add Authorization header using http.Header
-	token := os.Getenv("IAC_AGENT_TOKEN")
+	// Authenticate with the per-agent token (renewed as needed); falls back
+	// to the pool token only when the platform issued none (dev legacy mode)
+	token, err := m.apiClient.BearerToken()
+	if err != nil {
+		return fmt.Errorf("no agent token for C&C connection: %w", err)
+	}
 	headers := make(http.Header)
 	headers.Set("Authorization", "Bearer "+token)
 

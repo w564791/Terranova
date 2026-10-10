@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,6 +49,25 @@ func TestPushTaskToAgent_ManifestBound_OldAgentsOnly_Fails(t *testing.T) {
 	assert.Equal(t, models.TaskErrorCodeAgentUpgradeRequired, got.ErrorCode)
 	assert.Equal(t, models.AgentCapabilityManifestBundleV1, got.ErrorReason)
 	assert.Contains(t, got.ErrorMessage, "agent_upgrade_required:")
+}
+
+// An agent with the manifest capabilities but without per-agent tokens
+// (agent_token_v1) is still outdated for manifest-bound tasks.
+func TestPushTaskToAgent_ManifestBound_NoAgentToken_Fails(t *testing.T) {
+	db := setupTestDB(t)
+	pool := "pool-cap-tok"
+	createTestWorkspace(t, db, "ws-cap-tok", func(ws *testWorkspace) { ws.CurrentPoolID = &pool })
+	task := createTestTask(t, db, "ws-cap-tok", models.TaskTypePlan, models.TaskStatusPending)
+	createTestAgent(t, db, "agent-pooltok", pool)
+	setAgentCaps(t, db, "agent-pooltok", []string{models.AgentCapabilityManifestBundleV1, models.AgentCapabilityTaskDataOverridesV1})
+	h := &mockAgentCCHandler{connectedAgents: []string{"agent-pooltok"}}
+
+	require.NoError(t, newTestManager(db, h, nil).pushTaskToAgent(task, manifestWS("ws-cap-tok", pool)))
+	assert.Empty(t, h.getSentTasks())
+	var got models.WorkspaceTask
+	require.NoError(t, db.First(&got, task.ID).Error)
+	assert.Equal(t, models.TaskErrorCodeAgentUpgradeRequired, got.ErrorCode)
+	assert.Equal(t, models.AgentCapabilityAgentTokenV1, got.ErrorReason)
 }
 
 // A capable agent is chosen over an outdated one; a capable-but-busy agent
@@ -101,31 +121,83 @@ func TestRequiredAgentCapabilities(t *testing.T) {
 	assert.Equal(t, models.ManifestAgentCapabilities(), requiredAgentCapabilities(&models.WorkspaceTask{}, manifestWS("w", "p")))
 }
 
-// The agent reports its version and this build's capabilities at registration.
+// The agent reports its version and this build's capabilities at
+// registration (with the pool token), then uses the agent token it got back;
+// no X-Agent-ID header.
 func TestAgentAPIClient_RegisterReportsCapabilities(t *testing.T) {
 	var body map[string]interface{}
-	var lastAgentHeader string
+	var lastAuth, lastAgentHeader string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lastAgentHeader = r.Header.Get(models.AgentIDHeader)
-		json.NewDecoder(r.Body).Decode(&body)
+		lastAuth, lastAgentHeader = r.Header.Get("Authorization"), r.Header.Get("X-Agent-ID")
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"agent_id":"agent-1","pool_id":"pool-1"}`))
+		if r.URL.Path == "/api/v1/agents/register" {
+			json.NewDecoder(r.Body).Decode(&body)
+			w.Write([]byte(`{"agent_id":"agent-1","pool_id":"pool-1","agent_token":"a.b.c","agent_token_expires_at":"` + time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339) + `"}`))
+			return
+		}
+		w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
-	client := NewAgentAPIClient(srv.URL, "tok")
+	client := NewAgentAPIClient(srv.URL, "apt_pool")
 	id, pool, err := client.Register("a")
 	require.NoError(t, err)
-	assert.Empty(t, lastAgentHeader, "no agent id before registration")
+	assert.Equal(t, "Bearer apt_pool", lastAuth, "registration uses the pool token")
 	assert.Equal(t, "agent-1", id)
 	assert.Equal(t, "pool-1", pool)
 	caps, _ := body["capabilities"].([]interface{})
 	require.Len(t, caps, 3)
 	assert.Equal(t, models.AgentCapabilityManifestBundleV1, caps[0])
-	assert.Contains(t, caps, models.AgentCapabilityIdentityHeaderV1)
+	assert.Contains(t, caps, models.AgentCapabilityAgentTokenV1)
 	assert.NotEmpty(t, body["version"])
-	// every later call identifies the agent (task ownership checks)
 	_, _ = client.GetTaskData(7)
-	assert.Equal(t, "agent-1", lastAgentHeader)
+	assert.Equal(t, "Bearer a.b.c", lastAuth, "later calls use the agent token")
+	assert.Empty(t, lastAgentHeader)
+	// registration again (re-register) still uses the pool token
+	_, _, _ = client.Register("a")
+	assert.Equal(t, "Bearer apt_pool", lastAuth)
+}
+
+// The agent token is renewed when a third of its lifetime is left; a 401 on
+// renewal loses it at once (revoked agent) and calls OnAgentTokenLost.
+func TestAgentAPIClient_AgentTokenRenewal(t *testing.T) {
+	refuse := false
+	renewals := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/agents/token" {
+			renewals++
+			assert.Equal(t, "Bearer old.tok.en", r.Header.Get("Authorization"))
+			if refuse {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"error":"agent token revoked"}`))
+				return
+			}
+			w.Write([]byte(`{"agent_token":"new.tok.en","agent_token_expires_at":"` + time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339) + `"}`))
+			return
+		}
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	client := NewAgentAPIClient(srv.URL, "apt_pool")
+	set := func() {
+		client.setAgentToken("old.tok.en", time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339))
+		client.tokenMu.Lock()
+		client.agentTokenExp = time.Now().Add(2 * time.Minute) // < 1/3 of 15m left
+		client.tokenMu.Unlock()
+	}
+	set()
+	tok, err := client.BearerToken()
+	require.NoError(t, err)
+	assert.Equal(t, "new.tok.en", tok)
+	assert.Equal(t, 1, renewals)
+
+	set()
+	refuse = true
+	var lost error
+	client.OnAgentTokenLost = func(err error) { lost = err }
+	_, err = client.BearerToken()
+	assert.ErrorIs(t, err, ErrAgentTokenLost)
+	assert.Error(t, lost)
 }
 
 func TestAgentCapabilities_KnownAndMissing(t *testing.T) {
@@ -133,8 +205,10 @@ func TestAgentCapabilities_KnownAndMissing(t *testing.T) {
 	assert.Nil(t, models.KnownAgentCapabilities(nil))
 	s := `["manifest_bundle_v1"]`
 	a := &models.Agent{Capabilities: &s}
-	assert.Equal(t, []string{models.AgentCapabilityTaskDataOverridesV1, models.AgentCapabilityIdentityHeaderV1}, a.MissingCapabilities(models.ManifestAgentCapabilities()))
-	assert.False(t, a.HasCapability(models.AgentCapabilityIdentityHeaderV1))
+	assert.Equal(t, []string{models.AgentCapabilityTaskDataOverridesV1, models.AgentCapabilityAgentTokenV1}, a.MissingCapabilities(models.ManifestAgentCapabilities()))
+	assert.False(t, a.HasCapability(models.AgentCapabilityAgentTokenV1))
+	// the retired header capability is not known any more
+	assert.Nil(t, models.KnownAgentCapabilities([]string{"agent_identity_header_v1"}))
 	assert.True(t, a.HasCapability(models.AgentCapabilityManifestBundleV1))
 	assert.Equal(t, models.ManifestAgentCapabilities(), (&models.Agent{}).MissingCapabilities(models.ManifestAgentCapabilities()))
 }

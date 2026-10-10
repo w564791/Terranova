@@ -53,6 +53,11 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and the pool token.
 
+// @securityDefinitions.apikey AgentTokenAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and the per-agent token (JWT typ agent) returned by POST /api/v1/agents/register and renewed with POST /api/v1/agents/token. Agents without the agent_token_v1 capability use the pool token (PoolTokenAuth) instead.
+
 func main() {
 	log.Printf("[Server] Starting iac-platform (%s)", version.String())
 

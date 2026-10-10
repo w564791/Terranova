@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -81,6 +82,8 @@ type RawAgentConnection struct {
 	// ownedTasks task → time ownership was last verified (readMessages is
 	// the only user, no lock needed)
 	ownedTasks map[uint]time.Time
+	// agent-token binding (nil for pool-token connections of older agents)
+	tokenBinding *agentTokenBinding
 }
 
 // NewRawAgentCCHandler creates a new raw C&C handler
@@ -104,7 +107,7 @@ func NewRawAgentCCHandler(db *gorm.DB, streamManager *services.OutputStreamManag
 
 // ServeHTTP implements http.Handler interface for raw WebSocket handling
 func (h *RawAgentCCHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Validate Pool Token from Authorization header
+	// Step 1: Validate the agent token (or, for older agents, the pool token)
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 		log.Printf("[Raw] C&C connection rejected: missing or invalid Authorization header")
@@ -112,6 +115,38 @@ func (h *RawAgentCCHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// Per-agent token: the agent ID comes from the token; agent_id in the
+	// query, if sent, must match.
+	if services.LooksLikeJWT(token) {
+		claims, err := services.ParseAgentToken(token)
+		if err != nil {
+			http.Error(w, "Unauthorized: invalid agent token", http.StatusUnauthorized)
+			return
+		}
+		ident, err := services.CheckAgentActive(r.Context(), h.db, claims.AgentID, claims.PoolID, claims.Generation)
+		if err != nil {
+			if errors.Is(err, services.ErrAgentTokenRevoked) {
+				http.Error(w, "Unauthorized: agent token revoked", http.StatusUnauthorized)
+				return
+			}
+			log.Printf("[Raw] C&C connection rejected: agent token check failed: %v", err)
+			http.Error(w, "agent token could not be verified", http.StatusServiceUnavailable)
+			return
+		}
+		if q := r.URL.Query().Get("agent_id"); q != "" && q != ident.AgentID {
+			http.Error(w, "Forbidden: agent_id does not match the agent token", http.StatusForbidden)
+			return
+		}
+		var agent models.Agent
+		if err := h.db.Where("agent_id = ?", ident.AgentID).First(&agent).Error; err != nil {
+			http.Error(w, "Forbidden: agent not found", http.StatusForbidden)
+			return
+		}
+		log.Printf("[Raw] C&C connection authenticated by agent token: agent=%s, pool=%s", ident.AgentID, ident.PoolID)
+		h.acceptConnection(w, r, agent, &agentTokenBinding{poolID: ident.PoolID, generation: ident.Generation})
+		return
+	}
 
 	// Calculate token hash (using Base64 to match PoolTokenService)
 	hash := sha256.Sum256([]byte(token))
@@ -156,7 +191,27 @@ func (h *RawAgentCCHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[Raw] C&C connection authenticated: agent=%s, pool=%s", agentID, poolToken.PoolID)
+	// an agent with its own token never connects with the pool token
+	if agent.HasCapability(models.AgentCapabilityAgentTokenV1) {
+		log.Printf("[Raw] C&C connection rejected: agent %s must use its agent token", agentID)
+		http.Error(w, "Forbidden: this agent authenticates with its agent token", http.StatusForbidden)
+		return
+	}
+
+	log.Printf("[Raw] C&C connection authenticated (pool token, legacy agent): agent=%s, pool=%s", agentID, poolToken.PoolID)
+	h.acceptConnection(w, r, agent, nil)
+}
+
+// agentTokenBinding the agent token a C&C connection was opened with; the
+// connection is re-checked against it (revocation) while open.
+type agentTokenBinding struct {
+	poolID     string
+	generation int
+}
+
+// acceptConnection upgrades an authenticated C&C connection.
+func (h *RawAgentCCHandler) acceptConnection(w http.ResponseWriter, r *http.Request, agent models.Agent, binding *agentTokenBinding) {
+	agentID := agent.AgentID
 
 	// Upgrade to WebSocket
 	conn, err := h.upgrader.Upgrade(w, r, nil)
@@ -180,6 +235,7 @@ func (h *RawAgentCCHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Status: AgentStatus{
 			PlanLimit: 3,
 		},
+		tokenBinding: binding,
 	}
 
 	// Register connection
@@ -361,6 +417,17 @@ func (h *RawAgentCCHandler) monitorHealth(agentConn *RawAgentConnection) {
 				log.Printf("[Raw] Agent %s heartbeat timeout", agentConn.AgentID)
 				agentConn.cancel()
 				return
+			}
+			// agent-token connections end when the agent is revoked or
+			// deregistered (or its pool token revoked). A DB error does
+			// not drop the connection; the next tick checks again.
+			if b := agentConn.tokenBinding; b != nil {
+				_, err := services.CheckAgentActive(agentConn.ctx, h.db, agentConn.AgentID, b.poolID, b.generation)
+				if errors.Is(err, services.ErrAgentTokenRevoked) {
+					log.Printf("[Raw] Agent %s revoked, closing C&C connection", agentConn.AgentID)
+					agentConn.cancel()
+					return
+				}
 			}
 		}
 	}

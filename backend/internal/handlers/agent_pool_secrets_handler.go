@@ -31,6 +31,7 @@ func NewAgentPoolSecretsHandler(db *gorm.DB) *AgentPoolSecretsHandler {
 // @Tags Agent
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}

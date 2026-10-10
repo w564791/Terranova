@@ -921,3 +921,34 @@ func (h *AgentPoolHandler) ActivateOneTimeUnfreeze(c *gin.Context) {
 		"unfreeze_activated": now.Format(time.RFC3339),
 	})
 }
+
+// RevokeAgent revokes an agent's tokens
+// @Summary Revoke an agent
+// @Description Revoke the agent's per-agent token (and every run token it obtained): its next API call, renewal or C&C check (within 30s) is refused. The agent row is kept with revoked_at set. The host can register again with the pool token as a new agent; revoke the pool token to stop it entirely. Platform administrators only.
+// @Tags Agent Pool
+// @Produce json
+// @Security BearerAuth
+// @Param pool_id path string true "Pool ID"
+// @Param agent_id path string true "Agent ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/agent-pools/{pool_id}/agents/{agent_id}/revoke [post]
+func (h *AgentPoolHandler) RevokeAgent(c *gin.Context) {
+	poolID, agentID := c.Param("pool_id"), c.Param("agent_id")
+	var n int64
+	if err := h.db.Model(&models.Agent{}).Where("agent_id = ? AND pool_id = ?", agentID, poolID).Count(&n).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to look up agent"})
+		return
+	}
+	if n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found in this pool"})
+		return
+	}
+	if err := services.RevokeAgentTokens(c.Request.Context(), h.db, agentID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke agent"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"agent_id": agentID, "revoked": true})
+}

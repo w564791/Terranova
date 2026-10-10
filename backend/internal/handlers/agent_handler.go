@@ -12,6 +12,7 @@ import (
 
 	"iac-platform/internal/application/service"
 	"iac-platform/internal/manifestbundle"
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
@@ -27,9 +28,9 @@ type AgentHandler struct {
 	streamManager         *services.OutputStreamManager
 	hcpCredentialsService *services.HCPCredentialsService
 	metricsHub            *websocket.AgentMetricsHub
-	runTaskExecutor       *services.RunTaskExecutor    // Run Task 执行器
-	taskQueueManager      *services.TaskQueueManager   // 任务队列管理器（用于 CMDB 同步等 server 侧逻辑）
-	stateTokenService     *services.StateTokenService  // HTTP state backend token service
+	runTaskExecutor       *services.RunTaskExecutor   // Run Task 执行器
+	taskQueueManager      *services.TaskQueueManager  // 任务队列管理器（用于 CMDB 同步等 server 侧逻辑）
+	stateTokenService     *services.StateTokenService // HTTP state backend token service
 }
 
 // NewAgentHandler creates a new agent handler
@@ -73,7 +74,7 @@ func agentCapabilitiesJSON(reported []string) *string {
 
 // RegisterAgent handles agent registration
 // @Summary Register a new agent
-// @Description Register a new agent instance with Pool Token authentication. The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting both, otherwise they fail with error_code agent_upgrade_required.
+// @Description Register a new agent instance with Pool Token authentication (the pool token is accepted here only; every later call uses the returned agent token). The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1, agent_token_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting all three, otherwise they fail with error_code agent_upgrade_required. The response carries agent_token (per-agent JWT, typ agent, claims agent_id / pool_id / gen, header kid; lifetime AGENT_TOKEN_TTL, default 15m) and agent_token_expires_at; renew it with POST /api/v1/agents/token before it expires. Deregistering or revoking the agent, or revoking the pool token it registered with, invalidates it immediately (checked against the database on every use).
 // @Tags Agent
 // @Accept json
 // @Produce json
@@ -191,6 +192,14 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		// Capabilities (known ones only); older agents report none and
 		// are not dispatched tasks of manifest-bound workspaces
 		agent.Capabilities = agentCapabilitiesJSON(req.Capabilities)
+		// the pool token this agent registered with: its agent tokens die
+		// with it
+		if pt, ok := c.Get("pool_token"); ok {
+			if poolToken, ok := pt.(models.PoolToken); ok {
+				hash := poolToken.TokenHash
+				agent.PoolTokenHash = &hash
+			}
+		}
 
 		if err := tx.Create(agent).Error; err != nil {
 			return err
@@ -226,6 +235,26 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		"status":                    createdAgent.Status,
 		"registered_at":             createdAgent.RegisteredAt,
 		"hcp_credentials_generated": generated,
+	}
+	// Per-agent token. Without one (no SIGNING_ROOT_KEY in development
+	// legacy mode) the agent keeps using the pool token, so it must not be
+	// recorded as agent_token_v1 (pool-token calls on its tasks would be
+	// refused).
+	if tok, exp, err := services.IssueAgentToken(createdAgent.AgentID, poolIDStr, createdAgent.TokenGeneration); err == nil {
+		response["agent_token"] = tok
+		response["agent_token_expires_at"] = exp.UTC().Format(time.RFC3339)
+	} else {
+		log.Printf("[Agent] [WARN] no agent token for %s (%v); agent falls back to the pool token", createdAgent.AgentID, err)
+		if createdAgent.HasCapability(models.AgentCapabilityAgentTokenV1) {
+			var kept []string
+			for _, capability := range models.KnownAgentCapabilities(req.Capabilities) {
+				if capability != models.AgentCapabilityAgentTokenV1 {
+					kept = append(kept, capability)
+				}
+			}
+			h.db.Model(&models.Agent{}).Where("agent_id = ?", createdAgent.AgentID).
+				Update("capabilities", agentCapabilitiesJSON(kept))
+		}
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -313,6 +342,7 @@ func (h *AgentHandler) PingAgent(c *gin.Context) {
 // @Tags Agent
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param agent_id path string true "Agent ID"
 // @Success 200 {object} models.Agent
@@ -354,6 +384,7 @@ func (h *AgentHandler) GetAgent(c *gin.Context) {
 // @Tags Agent
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param agent_id path string true "Agent ID"
 // @Success 200 {object} map[string]interface{}
@@ -371,7 +402,8 @@ func (h *AgentHandler) UnregisterAgent(c *gin.Context) {
 		return
 	}
 
-	// Unregister agent
+	// Unregister agent (deleting the row invalidates its agent token: every
+	// use is checked against the agents row)
 	err := h.agentService.UnregisterAgent(agentID)
 	if err != nil {
 		if err.Error() == "agent not found" {
@@ -386,8 +418,44 @@ func (h *AgentHandler) UnregisterAgent(c *gin.Context) {
 		return
 	}
 
+	// its run tokens too (also refused because their issuing agent is gone)
+	if services.AgentRevocationHook != nil {
+		if err := services.AgentRevocationHook(c.Request.Context(), h.db, agentID); err != nil {
+			log.Printf("[Agent] revoking run tokens of unregistered agent %s: %v", agentID, err)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "agent unregistered successfully",
+	})
+}
+
+// RenewAgentToken issues a fresh agent token
+// @Summary Renew the agent token
+// @Description Exchange a valid agent token (Authorization: Bearer <agent token>; pool tokens are refused) for a new one with a fresh expiry. Refused (401) once the agent was deregistered or revoked or its pool token revoked; the agent then registers again with the pool token.
+// @Tags Agent
+// @Produce json
+// @Security AgentTokenAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /api/v1/agents/token [post]
+func (h *AgentHandler) RenewAgentToken(c *gin.Context) {
+	agentID := middleware.TokenAgentID(c)
+	if agentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "agent token required"})
+		return
+	}
+	tok, exp, err := services.IssueAgentToken(agentID, c.GetString("pool_id"), middleware.TokenAgentGeneration(c))
+	if err != nil {
+		log.Printf("[Agent] renew token for %s: %v", agentID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue agent token"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"agent_id":               agentID,
+		"agent_token":            tok,
+		"agent_token_expires_at": exp.UTC().Format(time.RFC3339),
 	})
 }
 
@@ -397,6 +465,7 @@ func (h *AgentHandler) UnregisterAgent(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
@@ -604,6 +673,7 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Param request body map[string]interface{} true "Log chunk data with phase, content, offset, checksum"
@@ -718,6 +788,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Param request body map[string]interface{} true "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc."
@@ -997,6 +1068,7 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
@@ -1187,6 +1259,7 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Param request body map[string]interface{} true "Plan data (base64 encoded in plan_data field)"
@@ -1309,6 +1382,7 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Param request body map[string]interface{} true "Plan JSON in plan_json field"
@@ -1387,6 +1461,7 @@ func (h *AgentHandler) UploadPlanJSON(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Param request body map[string]interface{} true "Lock request with user_id and optional reason"
@@ -1455,6 +1530,7 @@ func (h *AgentHandler) LockWorkspace(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
@@ -1490,6 +1566,7 @@ func (h *AgentHandler) UnlockWorkspace(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Param request body map[string]interface{} false "Ignored (older agents send resource_changes; their values are discarded)"
@@ -1575,6 +1652,7 @@ func (h *AgentHandler) ParsePlanChanges(c *gin.Context) {
 // @Tags Agent Task
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
 // @Success 200 {object} map[string]interface{}
@@ -1612,6 +1690,7 @@ func (h *AgentHandler) GetTaskLogs(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
@@ -1646,6 +1725,7 @@ func (h *AgentHandler) GetMaxStateVersion(c *gin.Context) {
 // @Tags Agent Terraform Version
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -1673,6 +1753,7 @@ func (h *AgentHandler) GetDefaultTerraformVersion(c *gin.Context) {
 // @Tags Agent Terraform Version
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param version path string true "Version string (e.g., 1.5.0)"
 // @Success 200 {object} map[string]interface{}
@@ -1708,6 +1789,7 @@ func (h *AgentHandler) GetTerraformVersionByVersion(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Param request body map[string]interface{} true "Fields to update (only whitelisted fields accepted)"
@@ -1770,6 +1852,7 @@ func (h *AgentHandler) UpdateWorkspaceFields(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
@@ -1808,6 +1891,7 @@ func (h *AgentHandler) GetTerraformLockHCL(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Param request body map[string]interface{} true "Lock HCL content with terraform_lock_hcl field"
@@ -1848,6 +1932,7 @@ func (h *AgentHandler) SaveTerraformLockHCL(c *gin.Context) {
 // @Summary Get manifest provider schema meta
 // @Tags Agent Workspace
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
@@ -1892,6 +1977,7 @@ func (h *AgentHandler) GetManifestProviderSchemaMeta(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}
@@ -1951,6 +2037,7 @@ func (h *AgentHandler) UpsertManifestProviderSchema(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Param request body map[string]interface{} true "Temp state data with content, checksum, size_bytes, version, task_id, created_by"
@@ -2003,6 +2090,7 @@ func (h *AgentHandler) UpsertTempState(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Param request body map[string]interface{} true "Promotion request with record_id"
@@ -2039,6 +2127,7 @@ func (h *AgentHandler) PromoteTempState(c *gin.Context) {
 // @Tags Agent Workspace
 // @Accept json
 // @Produce json
+// @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} map[string]interface{}

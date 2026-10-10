@@ -21,6 +21,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20261010_03_workspace_task_error_reason",
 		"20261010_04_workspace_task_resource_change_redaction",
 		"20261010_10_variable_key_version",
+		"20261010_11_agent_token",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("migration count = %d, want %d", len(definitions), len(want))

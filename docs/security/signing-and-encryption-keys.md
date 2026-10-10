@@ -44,8 +44,11 @@ environment provider is the default, a KMS provider can be installed instead
 Per-purpose keys: `HKDF-SHA256(SIGNING_ROOT_KEY, salt = none,
 info = "terranova/jwt/<purpose>")`, purposes `user` (login, user API and team
 API tokens), `state` (state backend), `runtask` (Run Task callbacks), and
-`agent` / `run` (reserved for per-agent and manifest run tokens). A token of one
-purpose never verifies as another.
+`agent` (per-agent tokens; see api-fix-tasks/14-manifest.md item 20) and
+`run` (reserved for manifest run tokens). A token of one purpose never
+verifies as another. `agent` tokens have no legacy (JWT_SECRET) scheme: without
+`SIGNING_ROOT_KEY` (development legacy mode) none are issued and agents keep
+using the pool token.
 
 Every new token is HS256 with header `kid = "<purpose>-v<version>"`, version
 from `SIGNING_ROOT_KEY_VERSION` (default 1).

@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// PoolTokenAuthMiddleware validates Pool Token for Agent authentication
+// PoolTokenAuthMiddleware validates a Pool Token (only; agent registration).
 // This is the basic version without workspace authorization check
 func PoolTokenAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -128,6 +128,7 @@ func PoolTokenAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 		// Store pool info in context
 		c.Set("pool_id", poolToken.PoolID)
 		c.Set("pool_token", poolToken)
+		c.Set(agentAuthKey, agentAuthPool)
 
 		c.Next()
 	}
@@ -137,8 +138,8 @@ func PoolTokenAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 // This middleware should be used for Agent API endpoints that access task-specific resources
 func PoolTokenAuthWithTaskCheck(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// First, perform standard Pool Token authentication
-		if !authenticatePoolToken(c, db) {
+		// Agent token (per-agent JWT) or pool token
+		if !authenticateAgentCaller(c, db) {
 			return
 		}
 
@@ -200,8 +201,8 @@ func PoolTokenAuthWithTaskCheck(db *gorm.DB) gin.HandlerFunc {
 // This middleware should be used for Agent API endpoints that access workspace-specific resources
 func PoolTokenAuthWithWorkspaceCheck(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// First, perform standard Pool Token authentication
-		if !authenticatePoolToken(c, db) {
+		// Agent token (per-agent JWT) or pool token
+		if !authenticateAgentCaller(c, db) {
 			return
 		}
 
@@ -241,7 +242,7 @@ func PoolTokenAuthWithWorkspaceCheck(db *gorm.DB) gin.HandlerFunc {
 // could read or unregister a guessed agent ID belonging to pool B.
 func PoolTokenAuthWithAgentCheck(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !authenticatePoolToken(c, db) {
+		if !authenticateAgentCaller(c, db) {
 			return
 		}
 
@@ -254,6 +255,11 @@ func PoolTokenAuthWithAgentCheck(db *gorm.DB) gin.HandlerFunc {
 		agentID := c.Param("agent_id")
 		if agentID == "" {
 			respondWithError(c, http.StatusBadRequest, "Agent ID is required")
+			return
+		}
+		// an agent token only acts on its own agent
+		if tokAgent := TokenAgentID(c); tokAgent != "" && tokAgent != agentID {
+			respondWithError(c, http.StatusNotFound, "Agent not found")
 			return
 		}
 
@@ -335,6 +341,7 @@ func authenticatePoolToken(c *gin.Context, db *gorm.DB) bool {
 	// Store pool info in context
 	c.Set("pool_id", poolToken.PoolID)
 	c.Set("pool_token", poolToken)
+	c.Set(agentAuthKey, agentAuthPool)
 
 	return true
 }

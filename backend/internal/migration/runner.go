@@ -117,6 +117,9 @@ func definitions() []definition {
 		{version: "20261010_04_workspace_task_resource_change_redaction", contract: "workspace-task-resource-change-redaction-marker-v1", apply: applyWorkspaceTaskResourceChangeRedaction},
 		// Per-row data encryption key version for variable values.
 		{version: "20261010_10_variable_key_version", contract: "variable-key-version-v1", apply: applyVariableKeyVersion},
+		// Per-agent JWT revocation state (token_generation, revoked_at,
+		// pool_token_hash on agents). Additive only.
+		{version: "20261010_11_agent_token", contract: "agent-token-revocation-v1", apply: applyAgentToken},
 	}
 }
 

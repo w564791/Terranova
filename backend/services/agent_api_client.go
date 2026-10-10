@@ -2,8 +2,10 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iac-platform/internal/models"
 	"iac-platform/internal/version"
@@ -11,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -34,14 +37,33 @@ var DefaultRetryConfig = RetryConfig{
 
 // AgentAPIClient handles HTTP communication with IAC Server
 type AgentAPIClient struct {
-	baseURL     string
+	baseURL string
+	// token the pool token (apt_…): registration only once an agent token
+	// was issued
 	token       string
 	httpClient  *http.Client
 	retryConfig RetryConfig
-	// agentID is sent as models.AgentIDHeader once registered (set by
-	// Register before any task call)
-	agentID string
+	agentID     string
+
+	// per-agent JWT returned by Register (models.AgentCapabilityAgentTokenV1);
+	// empty when the platform issued none (then the pool token is used)
+	tokenMu       sync.Mutex
+	agentToken    string
+	agentTokenExp time.Time
+	agentTokenTTL time.Duration
+	// OnAgentTokenLost called once when the agent token expired without a
+	// successful renewal (revoked agent, or platform unreachable for the whole
+	// renewal window). The agent must register again.
+	OnAgentTokenLost func(err error)
+	tokenLost        bool
 }
+
+// ErrAgentTokenLost the agent token expired and could not be renewed.
+var ErrAgentTokenLost = errors.New("agent token expired or revoked; the agent must register again")
+
+// errAgentTokenRefused the platform answered 401 to a renewal (agent revoked
+// or deregistered): the token is lost at once, not only at expiry.
+var errAgentTokenRefused = errors.New("agent token refused by the platform")
 
 // NewAgentAPIClient creates a new API client
 func NewAgentAPIClient(baseURL, token string) *AgentAPIClient {
@@ -91,8 +113,134 @@ func (c *AgentAPIClient) Register(agentName string) (string, string, error) {
 	agentID, _ := respBody["agent_id"].(string)
 	poolID, _ := respBody["pool_id"].(string)
 	c.agentID = agentID
+	if tok, _ := respBody["agent_token"].(string); tok != "" {
+		c.setAgentToken(tok, respBody["agent_token_expires_at"])
+	} else {
+		log.Printf("[AgentAPIClient] platform issued no agent token; using the pool token")
+	}
 
 	return agentID, poolID, nil
+}
+
+func (c *AgentAPIClient) setAgentToken(tok string, expRaw interface{}) {
+	exp := time.Now().Add(15 * time.Minute)
+	if s, ok := expRaw.(string); ok {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			exp = t
+		}
+	}
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+	c.agentToken = tok
+	c.agentTokenExp = exp
+	if ttl := time.Until(exp); ttl > 0 {
+		c.agentTokenTTL = ttl
+	}
+	c.tokenLost = false
+}
+
+// BearerToken the credential for every call after registration: the agent
+// token (renewed when less than a third of its lifetime is left), or the
+// pool token when the platform issued none.
+func (c *AgentAPIClient) BearerToken() (string, error) {
+	c.tokenMu.Lock()
+	tok, exp, ttl := c.agentToken, c.agentTokenExp, c.agentTokenTTL
+	c.tokenMu.Unlock()
+	if tok == "" {
+		return c.token, nil
+	}
+	if time.Until(exp) > ttl/3 {
+		return tok, nil
+	}
+	if err := c.RenewAgentToken(); err != nil {
+		if time.Now().Before(exp) && !errors.Is(err, errAgentTokenRefused) {
+			log.Printf("[AgentAPIClient] agent token renewal failed (still valid until %s): %v", exp.Format(time.RFC3339), err)
+			return tok, nil
+		}
+		c.agentTokenLost(err)
+		return "", ErrAgentTokenLost
+	}
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+	return c.agentToken, nil
+}
+
+func (c *AgentAPIClient) agentTokenLost(err error) {
+	c.tokenMu.Lock()
+	first := !c.tokenLost
+	c.tokenLost = true
+	cb := c.OnAgentTokenLost
+	c.tokenMu.Unlock()
+	if first {
+		log.Printf("[AgentAPIClient] agent token lost: %v", err)
+		if cb != nil {
+			cb(err)
+		}
+	}
+}
+
+// RenewAgentToken exchanges the current agent token for a fresh one.
+func (c *AgentAPIClient) RenewAgentToken() error {
+	c.tokenMu.Lock()
+	tok := c.agentToken
+	c.tokenMu.Unlock()
+	if tok == "" {
+		return nil
+	}
+	req, err := http.NewRequest("POST", c.baseURL+"/api/v1/agents/token", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("%w: %s", errAgentTokenRefused, string(data))
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("renew agent token: status %d: %s", resp.StatusCode, string(data))
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	newTok, _ := body["agent_token"].(string)
+	if newTok == "" {
+		return errors.New("renew agent token: empty token")
+	}
+	c.setAgentToken(newTok, body["agent_token_expires_at"])
+	return nil
+}
+
+// StartAgentTokenRenewal keeps the agent token fresh while idle (the C&C
+// connection only presents it when connecting); stops with ctx.
+func (c *AgentAPIClient) StartAgentTokenRenewal(ctx context.Context) {
+	go func() {
+		for {
+			c.tokenMu.Lock()
+			tok, exp, ttl := c.agentToken, c.agentTokenExp, c.agentTokenTTL
+			c.tokenMu.Unlock()
+			if tok == "" {
+				return
+			}
+			wait := time.Until(exp) - ttl/3
+			if wait < 10*time.Second {
+				wait = 10 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+			if _, err := c.BearerToken(); errors.Is(err, ErrAgentTokenLost) {
+				return
+			}
+		}
+	}()
 }
 
 // GetTaskData retrieves complete task execution data
@@ -168,10 +316,11 @@ func (c *AgentAPIClient) doRequest(method, path string, body interface{}) (map[s
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	if c.agentID != "" {
-		req.Header.Set(models.AgentIDHeader, c.agentID)
+	bearer, err := c.bearerFor(path)
+	if err != nil {
+		return nil, err
 	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
 
 	// Execute request
 	resp, err := c.httpClient.Do(req)
@@ -738,10 +887,11 @@ func (c *AgentAPIClient) doRequestWithRetry(method, path string, body interface{
 
 		// Set headers
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+c.token)
-		if c.agentID != "" {
-			req.Header.Set(models.AgentIDHeader, c.agentID)
+		bearer, err := c.bearerFor(path)
+		if err != nil {
+			return nil, err
 		}
+		req.Header.Set("Authorization", "Bearer "+bearer)
 
 		// Execute request
 		resp, err := c.httpClient.Do(req)
@@ -971,4 +1121,12 @@ func (c *AgentAPIClient) UploadPlanJSONWithRetry(taskID uint, planJSON map[strin
 	}
 
 	return nil
+}
+
+// bearerFor registration uses the pool token, everything else BearerToken.
+func (c *AgentAPIClient) bearerFor(path string) (string, error) {
+	if path == "/api/v1/agents/register" {
+		return c.token, nil
+	}
+	return c.BearerToken()
 }
