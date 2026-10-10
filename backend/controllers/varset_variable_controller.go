@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/reservedenv"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,10 @@ func (c *VarsetVariableController) Create(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if reservedenv.IsEnvironmentCategory(string(req.VariableType)) && reservedenv.Refuse(ctx, req.Key) {
 		return
 	}
 

@@ -163,6 +163,9 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 	// 权限检查API - 所有认证用户都可以调用（用于检查自己的权限）
 	protected.POST("/iam/permissions/check", permissionHandler.CheckPermission)
 
+	// Reserved env prefixes (read-only; any authenticated user; frontend must not hardcode)
+	protected.GET("/system/reserved-env-prefixes", handlers.NewReservedEnvHandler().ListReservedEnvPrefixes)
+
 	// MFA 设置路由 - 所有已认证用户都可以访问（不需要 IAM 权限）
 	{
 		mfaHandler := handlers.NewMFAHandler(db)

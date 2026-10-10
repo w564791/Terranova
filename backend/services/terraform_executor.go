@@ -20,6 +20,7 @@ import (
 
 	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
+	"iac-platform/internal/reservedenv"
 
 	"gorm.io/gorm"
 )
@@ -641,7 +642,7 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 ) []string {
 	// 进程环境里的插件缓存/lock 相关变量一律剔除(如 agent 池配置的共享
 	// TF_PLUGIN_CACHE_DIR):缓存只用按任务的私有目录(见 withPluginCache)。
-	env := append(sanitizeTerraformEnv(os.Environ()),
+	env := append(reservedenv.SanitizePairs(sanitizeTerraformEnv(os.Environ())),
 		"TF_IN_AUTOMATION=true",
 		"TF_INPUT=false",
 		// 设置 Registry 客户端超时为 60 秒（默认 10 秒对于慢速网络不够）
@@ -664,15 +665,10 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 			}
 		}
 
-		// 注入环境变量
+		// 注入环境变量(平台保留名一律剥离;平台稍后写入的值生效)
 		for _, v := range envVars {
-			// 跳过TF_CLI_ARGS，它会被特殊处理添加到命令参数中
-			if v.Key == "TF_CLI_ARGS" {
-				continue
-			}
-			// workspace 变量不能改插件缓存位置 / 放松 lock 校验 / 给 init 塞 -upgrade
-			if isProtectedTerraformEnvKey(v.Key) {
-				log.Printf("WARNING: ignoring protected environment variable %s for workspace %s", v.Key, workspace.WorkspaceID)
+			if hit := reservedenv.MatchKey(v.Key); hit != nil {
+				log.Printf("WARN audit: stripped reserved env var key=%s reserved_prefix=%s workspace=%s", v.Key, hit.ReservedPrefix, workspace.WorkspaceID)
 				continue
 			}
 			env = append(env, fmt.Sprintf("%s=%s", v.Key, v.Value))
@@ -726,29 +722,24 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 		}
 	}
 
-	return env
-}
-
-// getTFCLIArgs 获取TF_CLI_ARGS变量值并按空格分割为参数数组
-func (s *TerraformExecutor) getTFCLIArgs(workspaceID string) []string {
-	// 使用 DataAccessor 获取环境变量
-	envVars, err := s.dataAccessor.GetWorkspaceVariables(workspaceID, models.VariableTypeEnvironment)
-	if err != nil {
-		return []string{}
-	}
-
-	// 查找 TF_CLI_ARGS
-	for _, v := range envVars {
-		if v.Key == "TF_CLI_ARGS" {
-			// 如果值为空，返回空数组
-			if strings.TrimSpace(v.Value) == "" {
-				return []string{}
-			}
-			// 按空格分割参数
-			return strings.Fields(v.Value)
+	// Platform-level outbound proxy (users cannot set HTTP(S)_PROXY per workspace).
+	for _, kv := range []struct{ env, key string }{
+		{"IAC_EXEC_HTTP_PROXY", "HTTP_PROXY"},
+		{"IAC_EXEC_HTTPS_PROXY", "HTTPS_PROXY"},
+		{"IAC_EXEC_NO_PROXY", "NO_PROXY"},
+	} {
+		if v := strings.TrimSpace(os.Getenv(kv.env)); v != "" {
+			env = append(env, kv.key+"="+v)
 		}
 	}
 
+	return env
+}
+
+// getTFCLIArgs previously forwarded workspace TF_CLI_ARGS into terraform
+// argv. Those keys are platform-reserved (reservedenv); always return empty
+// so legacy rows cannot inject -upgrade / -backend-config / etc.
+func (s *TerraformExecutor) getTFCLIArgs(workspaceID string) []string {
 	return []string{}
 }
 

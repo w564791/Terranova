@@ -50,3 +50,25 @@ export const logError = (context: string, error: any) => {
     data: error.response?.data
   });
 };
+
+/** API problem codes (response.data.code) → short UI label. */
+export const API_ERROR_CODE_LABELS: Record<string, string> = {
+  reserved_env_var: '该环境变量名由平台保留，不可设置',
+  git_source_immutable: 'Git 源在创建后不可修改',
+}
+
+export const apiErrorCodeLabel = (code?: string | null): string | undefined => {
+  if (!code) return undefined
+  return API_ERROR_CODE_LABELS[code]
+}
+
+/** Prefer structured code label, then extractErrorMessage. */
+export const extractErrorMessageWithCode = (error: any): string => {
+  const code = error?.response?.data?.code ?? error?.data?.code
+  const label = apiErrorCodeLabel(typeof code === 'string' ? code : undefined)
+  if (label) {
+    const key = error?.response?.data?.details?.key ?? error?.data?.details?.key
+    return key ? `${label}（${key}）` : label
+  }
+  return extractErrorMessage(error)
+}
