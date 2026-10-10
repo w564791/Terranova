@@ -194,6 +194,10 @@ const GIT_ERROR_TEXT: Record<string, string> = {
   git_fetch_failed: '从仓库获取内容失败，请稍后重试',
   not_git_source: '该 Manifest 不是 Git 来源',
   github_installation_not_registered: '该 GitHub App 安装未登记到本组织，请联系组织管理员',
+  // 后端 9db6171
+  repo_query_too_long: '搜索关键字过长（最多 100 个字符）',
+  git_subpath_invalid: '子路径不合法：不能包含 ..、不能以 / 开头、不能包含反斜杠',
+  git_source_immutable: 'Git 来源创建后不可修改',
 }
 
 /** 错误响应中的 git 错误码;不是 git 错误时返回 '' */

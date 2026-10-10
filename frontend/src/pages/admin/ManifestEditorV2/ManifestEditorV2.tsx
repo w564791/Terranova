@@ -45,6 +45,7 @@ import {
   type PublishProblem,
   GIT_SOURCE_BANNER,
   GIT_SOURCE_READ_ONLY_MESSAGE,
+  gitErrorMessage,
   isGitSourceReadOnly,
 } from './bundleStatus'
 import QuickOpen from './QuickOpen'
@@ -82,7 +83,14 @@ import {
   type ManifestCompletedStep,
   type ConversationTurn,
 } from '../../../services/manifestAi'
-import { exportManifestZip, getManifest, gitRepoName, updateManifest, type Manifest } from '../../../services/manifestApi'
+import {
+  exportManifestZip,
+  getAvailableGitHubInstallation,
+  getManifest,
+  gitRepoName,
+  updateManifest,
+  type Manifest,
+} from '../../../services/manifestApi'
 import { AI_PANEL_WIDTH } from './manifestAiStyles'
 import styles from './ManifestEditorV2.module.css'
 
@@ -562,6 +570,22 @@ export default function ManifestEditorV2() {
   // git 来源(后端 6c28579):非空 = 只读编辑器,内容取最新已发布版本,发布 = 选 commit
   const [gitManifest, setGitManifest] = useState<Manifest | null>(null)
   const isGit = gitManifest !== null
+  // git 来源绑定的 GitHub 账户名(只读展示;取不到时显示 installation id)
+  const [gitAccount, setGitAccount] = useState<string>('')
+  useEffect(() => {
+    setGitAccount('')
+    const instId = gitManifest?.github_installation_id
+    if (!instId) return
+    let cancelled = false
+    getAvailableGitHubInstallation(String(orgId), instId)
+      .then((i) => {
+        if (!cancelled) setGitAccount(i?.account ?? '')
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [gitManifest, orgId])
   const isGitRef = useRef(false)
   isGitRef.current = isGit
   // git 来源时文件内容的版本 ref(最新已发布版本 id);native 为 undefined = 草稿
@@ -1882,7 +1906,7 @@ export default function ManifestEditorV2() {
     } catch (err) {
       if (field === 'name') setManifestName(prev)
       else setManifestDesc(prev)
-      const msg = typeof err === 'string' ? err : (err as Error)?.message
+      const msg = gitErrorMessage(err) ?? (typeof err === 'string' ? err : (err as Error)?.message)
       message.error(`更新失败: ${msg ?? '未知错误'}`)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3564,16 +3588,30 @@ export default function ManifestEditorV2() {
             <i className="codicon codicon-github" style={{ color: '#3794ff' }} />
             <span style={{ flex: 1 }}>
               {GIT_SOURCE_BANNER}
-              {gitManifest?.git_repo_url && (
-                <span style={{ color: '#858585', marginLeft: 8 }}>
-                  {gitRepoName(gitManifest.git_repo_url)}
-                  {gitManifest.git_subpath ? ` / ${gitManifest.git_subpath}` : ''}
-                  {versions[0]
-                    ? ` · 当前显示 ${versions[0].version}${versions[0].source_ref ? ` (${shortSha(versions[0].source_ref)})` : ''}`
-                    : ' · 尚未发布任何版本'}
-                </span>
-              )}
+              <span style={{ color: '#858585', marginLeft: 8 }}>
+                {versions[0]
+                  ? `当前显示 ${versions[0].version}${versions[0].source_ref ? ` (${shortSha(versions[0].source_ref)})` : ''}`
+                  : '尚未发布任何版本'}
+              </span>
             </span>
+            {/* git 来源(创建后不可修改):只读展示,不进入任何 PUT */}
+            <Tooltip title="创建后不可修改">
+              <span style={{ color: '#a0a0a0', display: 'inline-flex', gap: 10, flexShrink: 0 }}>
+                <span>
+                  账户 <b style={{ color: '#cccccc', fontWeight: 500 }}>{gitAccount || (gitManifest?.github_installation_id ? `#${gitManifest.github_installation_id}` : '-')}</b>
+                </span>
+                <span>
+                  仓库 <b style={{ color: '#cccccc', fontWeight: 500 }}>{gitRepoName(gitManifest?.git_repo_url) || '-'}</b>
+                </span>
+                <span>
+                  子路径 <b style={{ color: '#cccccc', fontWeight: 500 }}>{gitManifest?.git_subpath || '（仓库根目录）'}</b>
+                </span>
+                <span style={{ color: '#858585' }}>
+                  <i className="codicon codicon-lock" style={{ fontSize: 11, marginRight: 2 }} />
+                  创建后不可修改
+                </span>
+              </span>
+            </Tooltip>
           </div>
         )}
         <div className={styles.tabs}>
