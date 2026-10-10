@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -102,6 +103,11 @@ func (s *AgentService) RegisterAgent(app *entity.Application, req *models.AgentR
 
 	if req.Version != "" {
 		agent.Version = &req.Version
+	}
+	if caps := models.KnownAgentCapabilities(req.Capabilities); len(caps) > 0 {
+		b, _ := json.Marshal(caps)
+		s := string(b)
+		agent.Capabilities = &s
 	}
 
 	if err := s.db.Create(agent).Error; err != nil {

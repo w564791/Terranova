@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"iac-platform/internal/version"
 	"io"
 	"log"
 	"net"
@@ -66,8 +67,17 @@ func NewAgentAPIClient(baseURL, token string) *AgentAPIClient {
 
 // Register registers the agent with the server
 func (c *AgentAPIClient) Register(agentName string) (string, string, error) {
+	agentVersion := version.CommitHash
+	if len(agentVersion) > 50 {
+		agentVersion = agentVersion[:50]
+	}
 	reqBody := map[string]interface{}{
-		"name": agentName,
+		"name":    agentName,
+		"version": agentVersion,
+		// what this build does (manifest bundle hand-off, task-data overrides);
+		// the platform only dispatches manifest-bound tasks to agents that
+		// report them
+		"capabilities": models.SupportedAgentCapabilities(),
 	}
 
 	respBody, err := c.doRequest("POST", "/api/v1/agents/register", reqBody)

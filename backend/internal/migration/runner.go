@@ -109,6 +109,9 @@ func definitions() []definition {
 		// Marker column of the historical plan_json redaction backfill (the
 		// backfill runs in the application). Additive only.
 		{version: "20261010_02_workspace_task_plan_json_redaction", contract: "workspace-task-plan-json-redaction-marker-v1", apply: applyWorkspaceTaskPlanJSONRedaction},
+		// Short machine reason next to error_code (workspace_tasks.error_reason).
+		// Additive only.
+		{version: "20261010_03_workspace_task_error_reason", contract: "workspace-task-error-reason-v1", apply: applyWorkspaceTaskErrorReason},
 	}
 }
 

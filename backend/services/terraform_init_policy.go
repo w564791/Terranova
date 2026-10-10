@@ -115,23 +115,52 @@ func TaskErrorCode(err error) string {
 	if errors.As(err, &rr) {
 		return models.TaskErrorCodeBundleRepublishRequired
 	}
+	// executor-side (agent or local) hand-off integrity failure: the bundle
+	// received did not hash to bundle_hash (the platform verified the stored
+	// files before handing them out)
+	if errors.Is(err, manifestbundle.ErrIntegrity) {
+		return models.TaskErrorCodeBundleRepublishRequired
+	}
 	if errors.Is(err, crypto.ErrPlanDataExpired) || errors.Is(err, ErrPlanDataMissing) {
 		return models.TaskErrorCodePlanExpired
 	}
 	return ""
 }
 
-// classifyTaskFailure returns the structured code of a task failure and the
-// message to store. A bundle-gate failure has no Terraform output to extract
-// from, so its message is exactly "bundle_republish_required: <reason>".
-func classifyTaskFailure(err error, message string) (code, msg string) {
-	code = TaskErrorCode(err)
+// TaskErrorReason the short machine reason next to TaskErrorCode
+// (workspace_tasks.error_reason): a rule name only, "" when there is none.
+func TaskErrorReason(err error) string {
 	var rr *manifestbundle.RepublishRequiredError
 	if errors.As(err, &rr) {
-		return code, rr.Error()
+		return rr.Rule()
+	}
+	switch {
+	case errors.Is(err, manifestbundle.ErrIntegrity):
+		return manifestbundle.ReasonHashMismatch
+	case errors.Is(err, crypto.ErrPlanDataExpired):
+		return "plan_data_expired"
+	case errors.Is(err, ErrPlanDataMissing):
+		return "plan_data_missing"
+	}
+	return ""
+}
+
+// classifyTaskFailure returns the structured code and reason of a task
+// failure and the message to store. A bundle-gate failure has no Terraform
+// output to extract from, so its message is exactly
+// "bundle_republish_required: <reason>".
+func classifyTaskFailure(err error, message string) (code, reason, msg string) {
+	code = TaskErrorCode(err)
+	reason = TaskErrorReason(err)
+	var rr *manifestbundle.RepublishRequiredError
+	if errors.As(err, &rr) {
+		return code, reason, rr.Error()
+	}
+	if errors.Is(err, manifestbundle.ErrIntegrity) {
+		return code, reason, models.TaskErrorCodeBundleRepublishRequired + ": " + manifestbundle.ReasonHashMismatch + " (" + err.Error() + ")"
 	}
 	if code == models.TaskErrorCodePlanExpired {
-		return code, models.TaskErrorCodePlanExpired + ": " + err.Error()
+		return code, reason, models.TaskErrorCodePlanExpired + ": " + err.Error()
 	}
-	return code, message
+	return code, reason, message
 }

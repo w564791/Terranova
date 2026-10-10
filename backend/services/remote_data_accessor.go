@@ -282,6 +282,9 @@ func (a *RemoteDataAccessor) UpdateTask(task *models.WorkspaceTask) error {
 	if task.ErrorCode != "" {
 		updates["error_code"] = task.ErrorCode
 	}
+	if task.ErrorReason != "" {
+		updates["error_reason"] = task.ErrorReason
+	}
 
 	// Add completed_at if set
 	if task.CompletedAt != nil {

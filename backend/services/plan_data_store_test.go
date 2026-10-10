@@ -92,8 +92,8 @@ func TestPlanBytes_LocalRequiresEnvelope(t *testing.T) {
 		t.Fatalf("agent plan: %v", err)
 	}
 	_, err = agent.planBytes(&models.WorkspaceTask{ID: 5})
-	if code, msg := classifyTaskFailure(err, "x"); code != models.TaskErrorCodePlanExpired || msg == "x" {
-		t.Fatalf("missing plan: code=%q msg=%q", code, msg)
+	if code, reason, msg := classifyTaskFailure(err, "x"); code != models.TaskErrorCodePlanExpired || reason != "plan_data_missing" || msg == "x" {
+		t.Fatalf("missing plan: code=%q reason=%q msg=%q", code, reason, msg)
 	}
 	exp, _ := crypto.SealPlanData(5, plain, time.Now().Add(-time.Second))
 	_, err = local.planBytes(&models.WorkspaceTask{ID: 5, PlanData: exp})

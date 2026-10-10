@@ -320,6 +320,11 @@ const (
 	// TaskErrorCodePlanExpired the stored plan of a plan_and_apply task is
 	// gone (expired after PLAN_DATA_TTL, or never saved); re-run the plan.
 	TaskErrorCodePlanExpired = "plan_expired"
+	// TaskErrorCodeAgentUpgradeRequired the task belongs to a manifest-bound
+	// workspace (or is a manifest Run) and no agent of the pool reports the
+	// capabilities it needs (models.ManifestAgentCapabilities); error_reason
+	// names the first missing capability.
+	TaskErrorCodeAgentUpgradeRequired = "agent_upgrade_required"
 )
 
 // KnownTaskErrorCode reports codes an agent may report (status update).
@@ -385,6 +390,10 @@ type WorkspaceTask struct {
 	// ErrorCode 结构化失败码(与 ErrorMessage 并存,前端按 code 判断),见 TaskErrorCode*;
 	// 空 = 无结构化码。由执行器写入(agent 经状态上报,仅接受已知码)。
 	ErrorCode string `json:"error_code,omitempty" gorm:"type:varchar(64)"`
+	// ErrorReason short machine reason next to ErrorCode: a rule / capability
+	// name only (e.g. denylisted_file, hash_mismatch, manifest_bundle_v1),
+	// never paths or content. Empty when there is none.
+	ErrorReason string `json:"error_reason,omitempty" gorm:"type:varchar(64)"`
 
 	// 执行时间
 	StartedAt   *time.Time `json:"started_at"`

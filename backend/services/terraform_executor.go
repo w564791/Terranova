@@ -1935,7 +1935,7 @@ func (s *TerraformExecutor) saveTaskFailure(
 	// 更新task字段
 	task.Status = models.TaskStatusFailed
 	task.ErrorMessage = errorMessage // 使用提取的真实错误
-	task.ErrorCode, task.ErrorMessage = classifyTaskFailure(err, task.ErrorMessage)
+	task.ErrorCode, task.ErrorReason, task.ErrorMessage = classifyTaskFailure(err, task.ErrorMessage)
 	task.CompletedAt = timePtr(time.Now())
 
 	log.Printf("[DEBUG] saveTaskFailure: task.ErrorMessage set to: %s", task.ErrorMessage[:min(100, len(task.ErrorMessage))])

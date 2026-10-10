@@ -432,6 +432,57 @@ func (m *TaskQueueManager) scheduleRetry(workspaceID string, delay time.Duration
 // pushTaskToAgent pushes a task to an available agent via C&C channel
 // For K8s mode with slot management enabled, this will allocate a slot before sending the task
 // If no agents are available, it will trigger immediate scale-up for K8s pools
+// requiredAgentCapabilities what an agent must report to run task: tasks of
+// a manifest-bound workspace, manifest Run tasks (external_files) and tasks
+// carrying deployment overrides need models.ManifestAgentCapabilities (an
+// older agent ignores the bundle / override hand-off and would run the
+// unverified path). nil for everything else (non-manifest workspaces are
+// dispatched as before).
+func requiredAgentCapabilities(task *models.WorkspaceTask, ws *models.Workspace) []string {
+	manifestBound := ws != nil && ws.ManifestDeploymentID != nil && *ws.ManifestDeploymentID != ""
+	if manifestBound || taskUsesExternalFiles(task) || (task != nil && len(task.VariableOverrides) > 0) {
+		return models.ManifestAgentCapabilities()
+	}
+	return nil
+}
+
+// failAgentUpgradeRequired fails task (still queued: pending / apply_pending)
+// with error_code agent_upgrade_required, error_reason = the first missing
+// capability, then lets the workspace queue move on.
+func (m *TaskQueueManager) failAgentUpgradeRequired(task *models.WorkspaceTask, poolID string, missing []string) {
+	reason := "agent_capability_missing"
+	if len(missing) > 0 {
+		reason = missing[0]
+	}
+	msg := fmt.Sprintf("%s: no agent in pool %s supports %s; upgrade the agents of this pool",
+		models.TaskErrorCodeAgentUpgradeRequired, poolID, strings.Join(missing, ", "))
+	now := time.Now()
+	res := m.db.Model(&models.WorkspaceTask{}).
+		Where("id = ? AND status = ?", task.ID, task.Status).
+		Updates(map[string]interface{}{
+			"status":        models.TaskStatusFailed,
+			"error_code":    models.TaskErrorCodeAgentUpgradeRequired,
+			"error_reason":  reason,
+			"error_message": msg,
+			"completed_at":  now,
+		})
+	if res.Error != nil {
+		log.Printf("[TaskQueue] Failed to fail task %d (agent_upgrade_required): %v", task.ID, res.Error)
+		m.scheduleRetry(task.WorkspaceID, 10*time.Second)
+		return
+	}
+	if res.RowsAffected == 0 {
+		return // someone else changed the task
+	}
+	log.Printf("[TaskQueue] Task %d failed: %s", task.ID, msg)
+	task.Status = models.TaskStatusFailed
+	task.ErrorCode = models.TaskErrorCodeAgentUpgradeRequired
+	task.ErrorReason = reason
+	task.ErrorMessage = msg
+	task.CompletedAt = &now
+	m.scheduleRetry(task.WorkspaceID, time.Second)
+}
+
 func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace *models.Workspace) error {
 	// 0. CRITICAL SECURITY CHECK: Reject apply_pending tasks that weren't explicitly confirmed
 	// apply_pending tasks MUST only be executed through ConfirmApply API
@@ -446,6 +497,9 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 		log.Printf("[TaskQueue] ✓ Executing confirmed apply_pending task %d (confirmed by: %s at %v)",
 			task.ID, *task.ApplyConfirmedBy, task.ApplyConfirmedAt)
 	}
+
+	// capabilities an agent needs for this task (nil = any agent)
+	requiredCaps := requiredAgentCapabilities(task, workspace)
 
 	// 1. Check if Agent C&C handler is available
 	if m.agentCCHandler == nil {
@@ -630,6 +684,11 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 		// Load agent from DB — needed for both local and cross-replica dispatch
 		var agent models.Agent
 		if err := m.db.Where("agent_id = ?", selectedAgentID).First(&agent).Error; err == nil {
+			if missing := agent.MissingCapabilities(requiredCaps); len(missing) > 0 {
+				m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
+				m.failAgentUpgradeRequired(task, *workspace.CurrentPoolID, missing)
+				return nil
+			}
 			selectedAgent = &agent
 			if locallyConnected {
 				log.Printf("[TaskQueue] Using pre-selected agent %s from slot allocation (locally connected)", selectedAgentID)
@@ -648,6 +707,9 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 	}
 
 	// If no agent selected yet, find one from connected agents
+	var incapable []string   // pool agents lacking requiredCaps
+	var missingCaps []string // what the first of them lacks
+	capableInPool := false   // a capable pool agent exists (maybe busy)
 	if selectedAgent == nil {
 		for _, agentID := range connectedAgentIDs {
 			// Get agent from database to check pool
@@ -671,6 +733,19 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 
 			log.Printf("[TaskQueue] Agent %s belongs to target pool %s, checking availability", agentID, *workspace.CurrentPoolID)
 
+			// manifest-bound task: only agents that verify the bundle and
+			// apply overrides from task data (older agents would run the
+			// unverified / UI-workspace path)
+			if missing := agent.MissingCapabilities(requiredCaps); len(missing) > 0 {
+				log.Printf("[TaskQueue] Agent %s lacks capabilities %v for task %d (manifest-bound), skipping", agentID, missing, task.ID)
+				incapable = append(incapable, agentID)
+				if missingCaps == nil {
+					missingCaps = missing
+				}
+				continue
+			}
+			capableInPool = true
+
 			// Check if agent can accept this task type
 			if m.agentCCHandler.IsAgentAvailable(agentID, task.TaskType) {
 				selectedAgent = &agent
@@ -680,6 +755,15 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 				log.Printf("[TaskQueue] Agent %s is not available for task type %s", agentID, task.TaskType)
 			}
 		}
+	}
+
+	if selectedAgent == nil && len(incapable) > 0 && !capableInPool {
+		// only outdated agents in the pool: fail instead of waiting forever
+		if selectedPodName != "" {
+			m.k8sDeploymentSvc.podManager.ReleaseSlot(selectedPodName, selectedSlotID)
+		}
+		m.failAgentUpgradeRequired(task, *workspace.CurrentPoolID, missingCaps)
+		return nil
 	}
 
 	if selectedAgent == nil {

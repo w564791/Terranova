@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -403,6 +404,49 @@ func (e *RepublishRequiredError) Error() string {
 }
 
 func (e *RepublishRequiredError) Unwrap() error { return e.Invalid }
+
+// Rule the short machine reason of e (workspace_tasks.error_reason).
+func (e *RepublishRequiredError) Rule() string {
+	if e == nil || e.Invalid == nil {
+		return ReasonRule("")
+	}
+	return ReasonRule(e.Invalid.Reason)
+}
+
+// ReasonRule the rule name of a bundle_invalid_reason ("rule @ path; ..." /
+// "hash_mismatch"): the first rule only, no paths or content;
+// "no_valid_bundle" when there is none. Anything that is not a plain rule
+// token becomes "invalid_bundle".
+func ReasonRule(reason string) string {
+	r := strings.TrimSpace(reason)
+	if i := strings.Index(r, ";"); i >= 0 {
+		r = r[:i]
+	}
+	if i := strings.Index(r, " @ "); i >= 0 {
+		r = r[:i]
+	}
+	r = strings.TrimSpace(r)
+	if r == "" {
+		return "no_valid_bundle"
+	}
+	if !IsReasonToken(r) {
+		return "invalid_bundle"
+	}
+	return r
+}
+
+// IsReasonToken whether s is a short rule token ([a-z0-9_], 1..64).
+func IsReasonToken(s string) bool {
+	if len(s) == 0 || len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
 
 // RequireValidForRun is the runner hand-off gate: VerifyForUse (re-hash;
 // a mismatch is recorded and reported) and then RequireValid, so a version
