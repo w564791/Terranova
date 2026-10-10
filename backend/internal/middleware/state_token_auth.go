@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"iac-platform/services"
 	"log"
 	"net/http"
@@ -10,6 +11,11 @@ import (
 
 // StateTokenAuth validates the JWT token from Terraform HTTP backend's Basic Auth.
 // The password field carries the JWT token; username is ignored.
+//
+// Task tokens (typ task, or no typ): unchanged (cross-workspace GET allowed).
+// Run tokens (typ run): the run's workspace only; preview runs are read-only
+// (POST state / LOCK / UNLOCK / DELETE → 403); a failed database check
+// refuses (503).
 func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Debug: log all incoming requests to state backend
@@ -30,13 +36,38 @@ func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 		}
 		log.Printf("[StateTokenAuth] Token prefix: %s", tokenPrefix)
 
-		workspaceID, taskID, err := tokenService.ValidateToken(password)
+		caller, err := tokenService.Authenticate(c.Request.Context(), password)
 		if err != nil {
+			if errors.Is(err, services.ErrRunTokenUnavailable) {
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "token could not be verified"})
+				return
+			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or revoked token"})
 			return
 		}
-
+		workspaceID := caller.WorkspaceID
 		urlWorkspaceID := c.Param("workspace_id")
+
+		if caller.Type == services.StateTokenTypeRun {
+			// run tokens: the run's workspace only; preview runs read only
+			// (no state POST, LOCK, UNLOCK or DELETE)
+			if urlWorkspaceID != "" && urlWorkspaceID != workspaceID {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "run token is bound to another workspace"})
+				return
+			}
+			if caller.ReadOnly() && c.Request.Method != http.MethodGet {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "preview run tokens are read-only"})
+				return
+			}
+			c.Set("state_workspace_id", workspaceID)
+			c.Set("state_task_id", uint(0))
+			c.Set("state_run_id", caller.RunID)
+			c.Set("state_run_created_by", caller.CreatedBy)
+			c.Next()
+			return
+		}
+		taskID := caller.TaskID
+
 		if urlWorkspaceID != "" && urlWorkspaceID != workspaceID {
 			// Cross-workspace access: only GET (read state) is allowed.
 			// POST/LOCK/UNLOCK remain forbidden for cross-workspace requests.

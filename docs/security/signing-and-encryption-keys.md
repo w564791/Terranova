@@ -45,8 +45,10 @@ Per-purpose keys: `HKDF-SHA256(SIGNING_ROOT_KEY, salt = none,
 info = "terranova/jwt/<purpose>")`, purposes `user` (login, user API and team
 API tokens), `state` (state backend), `runtask` (Run Task callbacks), and
 `agent` (per-agent tokens; see api-fix-tasks/14-manifest.md item 20) and
-`run` (reserved for manifest run tokens). A token of one purpose never
-verifies as another. `agent` tokens have no legacy (JWT_SECRET) scheme: without
+`run` (manifest run tokens, item 21; the state backend picks the key by the
+`typ` claim, so a `typ=run` token signed with the `state` key, or the reverse,
+is refused). A token of one purpose never
+verifies as another. `agent` and `run` tokens have no legacy (JWT_SECRET) scheme: without
 `SIGNING_ROOT_KEY` (development legacy mode) none are issued and agents keep
 using the pool token.
 

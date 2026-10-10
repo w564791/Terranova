@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -241,6 +242,35 @@ func (c *AgentAPIClient) StartAgentTokenRenewal(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// ObtainRunToken exchanges the agent token for the token of a manifest run
+// assigned to this agent (state backend credential of that run only).
+func (c *AgentAPIClient) ObtainRunToken(runID string) (string, time.Time, error) {
+	if !c.agentTokenIssued() {
+		return "", time.Time{}, errors.New("run tokens require an agent token (platform issued none)")
+	}
+	body, err := c.doRequest("POST", "/api/v1/agents/runs/"+url.PathEscape(runID)+"/token", nil)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	tok, _ := body["run_token"].(string)
+	if tok == "" {
+		return "", time.Time{}, errors.New("empty run token")
+	}
+	exp := time.Now().Add(time.Hour)
+	if s, ok := body["expires_at"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			exp = t
+		}
+	}
+	return tok, exp, nil
+}
+
+func (c *AgentAPIClient) agentTokenIssued() bool {
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+	return c.agentToken != ""
 }
 
 // GetTaskData retrieves complete task execution data

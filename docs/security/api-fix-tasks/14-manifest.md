@@ -111,6 +111,17 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
     - 迁移 `20261010_11_agent_token`（`agents.token_generation integer DEFAULT 0 NOT NULL`、`revoked_at timestamptz`、`pool_token_hash varchar(64)`，只增列）。已有 agent 行没有 `pool_token_hash`，它们的 agent token 校验不通过，需重新注册（升级 agent 时本来就会重新注册）。
     - agent 客户端（`services.AgentAPIClient`）：注册用池令牌，之后所有请求与 C&C 连接用 `BearerToken()`；续期返回 401（被撤销 / 注销）立即视为丢失，`OnAgentTokenLost` 回调中 `cmd/agent` 退出进程，由编排重启后重新注册。
 
+21. 按 run 签发的 token（run token，spec §6.1 / §9 第 5 步）与执行端 bundle 哈希不符：
+    - `StateTokenService` 增加 run 路径。JWT 带 `typ`：task token 新签发带 `typ=task`（旧 token 无 typ 仍按 task 处理），task 路径行为不变（数据库出错仍退回只验 JWT、可跨 workspace GET）。`typ=run` 的 token 用 `run` 签名用途（kid `run-v<n>`，无 legacy 方案）验证，claims：`run_id`、`workspace_id`、`purpose`（preview|approval）、`session_id`（sandbox / session 内的 run）、`agent_id`（agent run）。按未验证的 typ 选验证路径，再用该路径的用途密钥验签，所以伪造 typ 无法跨路径（测试：run claims 用 state 密钥签 → 401；task claims 用 run 密钥签 → 401）。
+    - 校验（每次使用都查库，出错一律拒绝 → 503，不退回只验 JWT）：`run_tokens` 中按 SHA-256 找到行，未撤销、未过期、run_id / workspace / purpose / session 与 claims 一致；run 状态为 pending / running；有 session 时 session 未关闭、status=active、未过期；有 agent_id 时该 agent 存在、未撤销、注册用的池令牌仍有效。
+    - 过期时间 = min(run `created_at` + `MANIFEST_RUN_TIMEOUT`（默认 2h），session `expires_at`)；已超时的 run 不再签发。
+    - state backend 中间件：run token 只能访问 run 自己的 workspace（不允许跨 workspace，包括 GET）；`preview` 拒绝 POST state / LOCK / UNLOCK / DELETE（403），只能 GET。approval run 写入的 state 版本 `task_id` 为空，`created_by` = run 创建者。
+    - agent 获取：`POST /api/v1/agents/runs/{run_id}/token`，只接受 agent token；run 必须是 `runner=agent`、pending / running，且 `manifest_runs.agent_id` 等于调用 agent（未指派、别的 agent、sandbox run → 403）。签发的 token 记录 `run_tokens.agent_id`。agent 客户端：`AgentAPIClient.ObtainRunToken(runID)`。
+    - 撤销：`EndManifestRun`（run 进入 succeeded / failed / cancelled，同一事务只撤销该 run 的 token，session 继续）；`EndSandboxSession`（closed / expired：写 `closed_at`，按 `session_id` 批量写 `revoked_at`，然后调用 `SessionCredentials.RevokeSessionCredentials`——STS 回收挂钩，第 6 步接入 AgentCore 前为只记日志的占位实现）；`ExpireSandboxSessions` 由 leader 每分钟扫描过期 session（校验本身已拒绝过期 session 的 token，扫描负责落库撤销与 STS 回收）；agent 撤销 / 注销通过 `services.AgentRevocationHook = RevokeAgentRunTokens` 撤销该 agent 的全部 run token（另有校验时的 agent 存活检查兜底，覆盖过期清理直接删 agent 行的情况）。
+    - 迁移 `20261010_12_run_token_binding`：`manifest_runs.agent_id`、`run_tokens.agent_id varchar(50)`、部分索引 `idx_run_tokens_agent_active`（只增）。
+    - 尚未接入：创建 / 指派 manifest run（写 `manifest_runs.agent_id`）与 session 接口在第 6 / 7 步；run 结束时调用 `EndManifestRun` 的位置随之落地。
+    - 执行端 bundle 哈希不符：执行端（agent 或 local）解包后哈希与平台给出的 bundle_hash 不符（`manifestbundle.ErrIntegrity`）→ 任务 `error_code = bundle_hash_mismatch`、`error_reason = hash_mismatch`、`error_message = "bundle_hash_mismatch: hash_mismatch (...)"`（原为 `bundle_republish_required`，该码保留给版本本身无合法 bundle 的情况）。平台收到状态上报（新码，或旧 agent 的 `bundle_republish_required` + `hash_mismatch`，仅任务仍为 running 的首次上报）时：写审计 `version.bundle_hash_mismatch`（`source = agent`、agent_id、task_id、version_id、`version_marked = false`）+ WARN 安全日志，然后自己重算该版本已存储文件（`VerifyForUse`；版本 = Run 任务的 `external_files.manifest_version_id`，否则 workspace 当前部署版本；草稿 Run 无版本只审计）。只有平台自己的校验失败才把版本标记为 `hash_mismatch`（并由 `VerifyForUse` 写 `source = platform_recheck:...` 的审计）；agent 的上报本身从不标记版本。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
@@ -147,6 +158,7 @@ backend/internal/manifestbundle/hcl.go、backend/services/local_data_accessor.go
 backend/internal/manifestbundle/archive.go、backend/services/{runner,manifest_handoff,task_variables}.go、backend/internal/pglock/advisory_lock.go、backend/internal/handlers/agent_handler.go（第 12 条）
 backend/services/{plan_redaction,manifest_run_files}.go、backend/controllers/workspace_task_controller.go（第 13 条）
 backend/services/{agent_token_service,agent_api_client}.go、backend/internal/middleware/{agent_token_auth,pool_token_auth,agent_task_ownership}.go、backend/internal/handlers/{agent_handler,agent_pool_handler,agent_cc_handler_raw}.go、backend/internal/router/router_agent.go、backend/internal/migration/agent_token.go + backend/migrations/add_agent_token.sql、backend/agent/control/cc_manager.go、backend/cmd/agent/main.go（第 20 条）
+backend/services/{run_token_service,state_token_service,manifest_bundle_mismatch,terraform_init_policy}.go、backend/internal/middleware/state_token_auth.go、backend/internal/handlers/{agent_handler,tf_state_backend_handler}.go、backend/internal/migration/run_token_binding.go + backend/migrations/add_run_token_binding.sql、backend/internal/models/{manifest_run,workspace}.go、frontend/src/utils/taskErrorCode.ts（第 21 条）
 ```
 
 ### 未完成项（2026-10-04 暂停时记录，合并 `feat/manifest-sandbox` 前必须处理）
@@ -163,7 +175,7 @@ backend/services/{agent_token_service,agent_api_client}.go、backend/internal/mi
 - agent、本地、sandbox 三种 runner 共用一个 tfvars 生成函数，加一条测试保证输出逐字节一致。
 - 审批 run 要拿锁；plan 先脱敏再存储，然后计算 `plan_hash`。
 
-**第 5 步（run token）**
+**第 5 步（run token）** —— 已完成（第 20、21 条；run 的创建 / 指派与 session 接口随第 6 / 7 步）。原始要求：
 - `run_tokens` 带 `session_id`；token 过期时间取 run 超时和 session 过期里较早的那个。
 - JWT 加 `typ` claim（`task`/`run`）；`run` 路径在数据库校验出错时拒绝，`task` 路径保持现有行为。
 - `preview` token 拒绝 POST/LOCK/UNLOCK。

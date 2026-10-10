@@ -467,6 +467,8 @@ func main() {
 
 			// 6. Run Task Timeout Checker
 			go runTaskTimeoutChecker.Start(leaderCtx)
+			// Sandbox sessions past expiry: revoke their run tokens and STS
+			go services.StartSandboxSessionExpiry(leaderCtx, db, time.Minute)
 			log.Println("[Leader] Run Task timeout checker started (30 second interval)")
 
 			// 7. Embedding Worker (if configured)

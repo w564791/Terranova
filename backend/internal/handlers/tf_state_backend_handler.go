@@ -272,12 +272,17 @@ func (h *TFStateBackendHandler) UpdateState(c *gin.Context) {
 			SizeBytes:   len(body),
 			Lineage:     lineage,
 			Serial:      newSerial,
-			TaskID:      &taskIDUint,
 		}
 
-		var task models.WorkspaceTask
-		if tx.Select("created_by").First(&task, taskIDUint).Error == nil {
-			stateVersion.CreatedBy = task.CreatedBy
+		if taskIDUint != 0 {
+			stateVersion.TaskID = &taskIDUint
+			var task models.WorkspaceTask
+			if tx.Select("created_by").First(&task, taskIDUint).Error == nil {
+				stateVersion.CreatedBy = task.CreatedBy
+			}
+		} else if by := c.GetString("state_run_created_by"); by != "" {
+			// approval run token: no task; attributed to the run's creator
+			stateVersion.CreatedBy = &by
 		}
 
 		if err := tx.Create(stateVersion).Error; err != nil {

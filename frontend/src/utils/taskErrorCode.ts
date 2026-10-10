@@ -6,7 +6,8 @@
  *   "bundle_republish_required: <reason>",reason 为 `rule @ path; ...` 或 hash_mismatch。
  * - plan_expired:保存的 plan 超过保留期(PLAN_DATA_TTL)或已清理,apply 失败。
  * - agent_upgrade_required:池中没有支持 manifest 任务所需能力的 agent(error_reason = 缺少的能力)。
- * - bundle_hash_mismatch:预留。
+ * - bundle_hash_mismatch:执行端(agent / local)收到的 bundle 哈希与 bundle_hash 不符(error_reason = hash_mismatch);
+ *   平台记审计并复核存储文件，仅当平台自己的校验失败时才把版本标记为失效。
  *
  * error_reason(932b699):与 error_code 并存的短 token(规则名 / 能力名,绝无路径或内容),
  * 如 denylisted_file、hash_mismatch、no_valid_bundle、plan_data_expired、manifest_bundle_v1。
@@ -43,7 +44,7 @@ const TASK_ERROR_CODES: Record<string, TaskErrorCodeDef> = {
     tag: 'agent 过旧',
   },
   bundle_hash_mismatch: {
-    title: 'bundle 完整性校验失败',
+    title: '执行端收到的 bundle 完整性校验失败（平台已复核已发布文件）',
     tag: '完整性校验失败',
     action: 'upgrade_manifest',
   },
@@ -62,6 +63,7 @@ const REASON_TEXT: Record<string, string> = {
 const AGENT_CAPABILITY_TEXT: Record<string, string> = {
   manifest_bundle_v1: '解包并校验 Manifest bundle',
   task_data_overrides_v1: '应用部署变量覆盖',
+  agent_token_v1: '使用按 agent 签发的 token',
 }
 
 function has(map: Record<string, string>, k: string): boolean {

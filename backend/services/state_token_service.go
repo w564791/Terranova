@@ -13,6 +13,9 @@ import (
 )
 
 type StateTokenClaims struct {
+	// Type "task" (StateTokenTypeTask); empty in tokens issued before the typ
+	// claim existed. Run tokens (typ run) are RunTokenClaims.
+	Type        string `json:"typ,omitempty"`
 	WorkspaceID string `json:"workspace_id"`
 	TaskID      uint   `json:"task_id"`
 	jwt.RegisteredClaims
@@ -35,6 +38,7 @@ func NewStateTokenService(db *gorm.DB) *StateTokenService {
 func (s *StateTokenService) GenerateToken(workspaceID string, taskID uint) (string, error) {
 	now := time.Now()
 	claims := StateTokenClaims{
+		Type:        StateTokenTypeTask,
 		WorkspaceID: workspaceID,
 		TaskID:      taskID,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -80,6 +84,10 @@ func (s *StateTokenService) ValidateToken(tokenStr string) (string, uint, error)
 	if err != nil || !token.Valid {
 		log.Printf("[StateToken] JWT parse failed for task %d: %v", claims.TaskID, err)
 		return "", 0, fmt.Errorf("invalid state token: %w", err)
+	}
+
+	if claims.Type != "" && claims.Type != StateTokenTypeTask {
+		return "", 0, fmt.Errorf("invalid state token: typ %q on the task path", claims.Type)
 	}
 
 	log.Printf("[StateToken] JWT valid for task %d, workspace %s", claims.TaskID, claims.WorkspaceID)

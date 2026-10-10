@@ -212,3 +212,25 @@ func TestAgentCapabilities_KnownAndMissing(t *testing.T) {
 	assert.True(t, a.HasCapability(models.AgentCapabilityManifestBundleV1))
 	assert.Equal(t, models.ManifestAgentCapabilities(), (&models.Agent{}).MissingCapabilities(models.ManifestAgentCapabilities()))
 }
+
+// Run tokens are obtained with the agent token, bound to the run ID; without
+// an agent token (dev legacy mode) the client does not ask.
+func TestAgentAPIClient_ObtainRunToken(t *testing.T) {
+	var path, auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path, auth = r.URL.Path, r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"run_id":"mfr-1","run_token":"r.u.n","expires_at":"` + time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`))
+	}))
+	defer srv.Close()
+	client := NewAgentAPIClient(srv.URL, "apt_pool")
+	_, _, err := client.ObtainRunToken("mfr-1")
+	require.Error(t, err, "no agent token: no run token")
+	client.setAgentToken("a.g.t", time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339))
+	tok, exp, err := client.ObtainRunToken("mfr-1")
+	require.NoError(t, err)
+	assert.Equal(t, "r.u.n", tok)
+	assert.True(t, exp.After(time.Now()))
+	assert.Equal(t, "/api/v1/agents/runs/mfr-1/token", path)
+	assert.Equal(t, "Bearer a.g.t", auth)
+}

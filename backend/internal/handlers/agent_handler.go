@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -791,7 +792,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 // @Security AgentTokenAuth
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc."
+// @Param request body map[string]interface{} true "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required, plan_expired, bundle_hash_mismatch are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc. A bundle_hash_mismatch report (the bundle the executor received did not hash to bundle_hash) is audited as version.bundle_hash_mismatch with source agent; the platform re-verifies the stored files and marks the version hash_mismatch only if its own check fails."
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -895,16 +896,20 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		updates["error_code"] = req.ErrorCode
 		if manifestbundle.IsReasonToken(req.ErrorReason) {
 			updates["error_reason"] = req.ErrorReason
-			if req.ErrorReason == manifestbundle.ReasonHashMismatch {
-				// agent-side hand-off integrity failure. The agent is not trusted
-				// to mark the version; the platform re-verifies the stored files
-				// (VerifyForUse) on every hand-off.
-				agentID := ""
-				if task.AgentID != nil {
-					agentID = *task.AgentID
-				}
-				log.Printf("[WARN] [security] agent %q reported manifest bundle hash_mismatch for task %d (workspace %s)",
-					agentID, taskID, task.WorkspaceID)
+		}
+		// agent-side hand-off integrity failure (bundle_hash_mismatch; older
+		// agents: bundle_republish_required + hash_mismatch). The agent is not
+		// trusted to mark the version: audit (source agent) and re-verify the
+		// stored files; the version is marked only if that check fails. Only
+		// on the first report (not on status retries).
+		if task.Status == models.TaskStatusRunning && (req.ErrorCode == models.TaskErrorCodeBundleHashMismatch ||
+			(req.ErrorCode == models.TaskErrorCodeBundleRepublishRequired && req.ErrorReason == manifestbundle.ReasonHashMismatch)) {
+			agentID := middleware.TokenAgentID(c)
+			if agentID == "" && task.AgentID != nil {
+				agentID = *task.AgentID
+			}
+			if _, err := services.RecordAgentBundleHashMismatch(c.Request.Context(), h.db, &task, agentID); err != nil {
+				log.Printf("[UpdateTaskStatus] task %d: bundle mismatch re-check: %v", taskID, err)
 			}
 		}
 	}
@@ -2145,4 +2150,44 @@ func (h *AgentHandler) CleanupOrphanedTempStates(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "orphaned temp states cleaned up"})
+}
+
+// IssueRunToken gives the calling agent the token of a manifest run assigned to it
+// @Summary Obtain a manifest run token
+// @Description Agent token only (pool tokens are refused). Returns a run token (JWT typ run, signing purpose run; claims run_id, workspace_id, purpose, session_id, agent_id) for a runner=agent manifest run in pending/running state assigned to the calling agent. It authenticates the Terraform HTTP state backend of the run's workspace only; preview tokens are read-only (POST/LOCK/UNLOCK refused). Expiry = min(run created_at + MANIFEST_RUN_TIMEOUT, session expiry). Every use is checked against the database (refused on DB error). Revoked when the run ends, its session ends or expires, or the agent is revoked or deregistered.
+// @Tags Agent
+// @Produce json
+// @Security AgentTokenAuth
+// @Param run_id path string true "Manifest run ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 503 {object} map[string]interface{}
+// @Router /api/v1/agents/runs/{run_id}/token [post]
+func (h *AgentHandler) IssueRunToken(c *gin.Context) {
+	agentID := middleware.TokenAgentID(c)
+	if agentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "agent token required"})
+		return
+	}
+	if h.stateTokenService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "state token service not configured"})
+		return
+	}
+	runID := c.Param("run_id")
+	tok, exp, err := h.stateTokenService.IssueRunToken(c.Request.Context(), runID, agentID)
+	if err != nil {
+		if errors.Is(err, services.ErrRunNotAssigned) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		log.Printf("[Agent] run token for run %s (agent %s): %v", runID, agentID, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "run token could not be issued"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"run_id":     runID,
+		"run_token":  tok,
+		"expires_at": exp.UTC().Format(time.RFC3339),
+	})
 }

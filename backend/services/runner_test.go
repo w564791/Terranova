@@ -159,9 +159,9 @@ func TestUnpackManifestHandoff_ResetsAndVerifies(t *testing.T) {
 	bad.BundleHash = strings.Repeat("a", 64)
 	if _, err := unpackManifestHandoff(&bad, t.TempDir()); !errors.Is(err, manifestbundle.ErrIntegrity) {
 		t.Fatalf("hash mismatch: %v", err)
-	} else if code, reason, msg := classifyTaskFailure(err, "x"); code != models.TaskErrorCodeBundleRepublishRequired ||
-		reason != manifestbundle.ReasonHashMismatch || !strings.HasPrefix(msg, "bundle_republish_required: hash_mismatch") {
-		t.Fatalf("executor-side hash mismatch must be reported as bundle_republish_required/hash_mismatch: %q %q %q", code, reason, msg)
+	} else if code, reason, msg := classifyTaskFailure(err, "x"); code != models.TaskErrorCodeBundleHashMismatch ||
+		reason != manifestbundle.ReasonHashMismatch || !strings.HasPrefix(msg, "bundle_hash_mismatch: hash_mismatch") {
+		t.Fatalf("executor-side hash mismatch must be reported as bundle_hash_mismatch/hash_mismatch: %q %q %q", code, reason, msg)
 	}
 	null := *h
 	null.BundleHash = ""

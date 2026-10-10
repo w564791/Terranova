@@ -120,6 +120,9 @@ func definitions() []definition {
 		// Per-agent JWT revocation state (token_generation, revoked_at,
 		// pool_token_hash on agents). Additive only.
 		{version: "20261010_11_agent_token", contract: "agent-token-revocation-v1", apply: applyAgentToken},
+		// Run token binding (manifest_runs.agent_id, run_tokens.agent_id).
+		// Additive only.
+		{version: "20261010_12_run_token_binding", contract: "run-token-binding-v1", apply: applyRunTokenBinding},
 	}
 }
 
