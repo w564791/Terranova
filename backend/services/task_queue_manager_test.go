@@ -240,6 +240,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		variable_overrides TEXT,
 		sensitive_keys TEXT,
 		error_code TEXT,
+		error_reason TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)

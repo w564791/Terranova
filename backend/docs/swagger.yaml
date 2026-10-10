@@ -1317,6 +1317,14 @@ definitions:
     type: object
   models.AgentRegisterRequest:
     properties:
+      capabilities:
+        description: |-
+          Capabilities the agent build supports (AgentCapability*). Unknown
+          values are ignored; an agent that sends none (older builds) has none.
+        items:
+          type: string
+        maxItems: 32
+        type: array
       name:
         maxLength: 100
         type: string
@@ -4274,6 +4282,12 @@ definitions:
           空 = 无结构化码。由执行器写入(agent 经状态上报,仅接受已知码)。
         type: string
       error_message:
+        type: string
+      error_reason:
+        description: |-
+          ErrorReason short machine reason next to ErrorCode: a rule / capability
+          name only (e.g. denylisted_file, hash_mismatch, manifest_bundle_v1),
+          never paths or content. Empty when there is none.
         type: string
       execution_mode:
         allOf:
@@ -7758,7 +7772,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Register a new agent instance with Pool Token authentication
+      description: Register a new agent instance with Pool Token authentication. The
+        agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1);
+        tasks of manifest-bound workspaces are only dispatched to agents reporting
+        both, otherwise they fail with error_code agent_upgrade_required.
       parameters:
       - description: Registration request
         in: body
@@ -8148,8 +8165,8 @@ paths:
         required: true
         type: string
       - description: Status update with status, stage, error_message, error_code (only
-          known structured codes such as bundle_republish_required are stored), changes,
-          duration, etc.
+          known structured codes such as bundle_republish_required are stored), error_reason
+          (short rule name stored with a known error_code), changes, duration, etc.
         in: body
         name: request
         required: true
@@ -23232,8 +23249,9 @@ paths:
       consumes:
       - application/json
       description: Get workspace task list with pagination, search and filtering.
-        Each task carries error_code when its failure has a structured code (e.g.
-        "bundle_republish_required").
+        Each task carries error_code when its failure has a structured code (bundle_republish_required,
+        plan_expired, agent_upgrade_required) and error_reason, a short rule token
+        (e.g. denylisted_file, hash_mismatch), when known.
       parameters:
       - description: Workspace ID
         in: path
@@ -23302,9 +23320,12 @@ paths:
       consumes:
       - application/json
       description: 'Get task detail by ID. A failed task carries error_message and,
-        when the failure has a structured code, error_code (currently "bundle_republish_required":
-        the manifest version has no valid bundle; error_message is then "bundle_republish_required:
-        <reason>").'
+        when the failure has a structured code, error_code ("bundle_republish_required":
+        the manifest version has no valid bundle, error_message is then "bundle_republish_required:
+        <reason>"; "plan_expired": the stored plan expired or was purged before apply;
+        "agent_upgrade_required": no agent in the pool supports manifest-bound tasks),
+        plus error_reason, a short rule token next to error_code (e.g. denylisted_file,
+        hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).'
       parameters:
       - description: Workspace ID
         in: path

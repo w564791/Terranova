@@ -3311,7 +3311,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Register a new agent instance with Pool Token authentication",
+                "description": "Register a new agent instance with Pool Token authentication. The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting both, otherwise they fail with error_code agent_upgrade_required.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3887,7 +3887,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), changes, duration, etc.",
+                        "description": "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc.",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -26915,7 +26915,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get workspace task list with pagination, search and filtering. Each task carries error_code when its failure has a structured code (e.g. \"bundle_republish_required\").",
+                "description": "Get workspace task list with pagination, search and filtering. Each task carries error_code when its failure has a structured code (bundle_republish_required, plan_expired, agent_upgrade_required) and error_reason, a short rule token (e.g. denylisted_file, hash_mismatch), when known.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27105,7 +27105,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code (currently \"bundle_republish_required\": the manifest version has no valid bundle; error_message is then \"bundle_republish_required: <reason>\").",
+                "description": "Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code (\"bundle_republish_required\": the manifest version has no valid bundle, error_message is then \"bundle_republish_required: <reason>\"; \"plan_expired\": the stored plan expired or was purged before apply; \"agent_upgrade_required\": no agent in the pool supports manifest-bound tasks), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).",
                 "consumes": [
                     "application/json"
                 ],
@@ -31740,6 +31740,14 @@ const docTemplate = `{
         "models.AgentRegisterRequest": {
             "type": "object",
             "properties": {
+                "capabilities": {
+                    "description": "Capabilities the agent build supports (AgentCapability*). Unknown\nvalues are ignored; an agent that sends none (older builds) has none.",
+                    "type": "array",
+                    "maxItems": 32,
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 100
@@ -36032,6 +36040,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "error_message": {
+                    "type": "string"
+                },
+                "error_reason": {
+                    "description": "ErrorReason short machine reason next to ErrorCode: a rule / capability\nname only (e.g. denylisted_file, hash_mismatch, manifest_bundle_v1),\nnever paths or content. Empty when there is none.",
                     "type": "string"
                 },
                 "execution_mode": {

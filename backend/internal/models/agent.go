@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -49,6 +50,68 @@ func (a *Agent) IsOnline() bool {
 type AgentRegisterRequest struct {
 	Name    string `json:"name" binding:"omitempty,max=100"`
 	Version string `json:"version" binding:"omitempty,max=50"`
+	// Capabilities the agent build supports (AgentCapability*). Unknown
+	// values are ignored; an agent that sends none (older builds) has none.
+	Capabilities []string `json:"capabilities" binding:"omitempty,max=32,dive,max=64"`
+}
+
+// Agent capabilities (agents.capabilities, reported at registration).
+const (
+	// AgentCapabilityManifestBundleV1 the agent unpacks the verified manifest
+	// bundle / Run files from task data (manifest_bundle, external_files with
+	// bundle_hash) and re-checks the hash before terraform init.
+	AgentCapabilityManifestBundleV1 = "manifest_bundle_v1"
+	// AgentCapabilityTaskDataOverridesV1 the agent applies the deployment
+	// variable overrides (and their sensitivity) from task data.
+	AgentCapabilityTaskDataOverridesV1 = "task_data_overrides_v1"
+)
+
+// SupportedAgentCapabilities the capabilities of this build (sent by the
+// agent at registration, accepted by the platform).
+func SupportedAgentCapabilities() []string {
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1}
+}
+
+// ManifestAgentCapabilities what an agent needs to run a task of a
+// manifest-bound workspace (or a manifest Run task).
+func ManifestAgentCapabilities() []string {
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1}
+}
+
+// KnownAgentCapabilities filters reported capabilities to the known ones
+// (deduplicated, in SupportedAgentCapabilities order).
+func KnownAgentCapabilities(reported []string) []string {
+	have := make(map[string]bool, len(reported))
+	for _, c := range reported {
+		have[c] = true
+	}
+	var out []string
+	for _, c := range SupportedAgentCapabilities() {
+		if have[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// MissingCapabilities the capabilities of required the agent did not report.
+func (a *Agent) MissingCapabilities(required []string) []string {
+	have := map[string]bool{}
+	if a != nil && a.Capabilities != nil {
+		var caps []string
+		if err := json.Unmarshal([]byte(*a.Capabilities), &caps); err == nil {
+			for _, c := range caps {
+				have[c] = true
+			}
+		}
+	}
+	var missing []string
+	for _, c := range required {
+		if !have[c] {
+			missing = append(missing, c)
+		}
+	}
+	return missing
 }
 
 // AgentRegisterResponse represents the response for agent registration

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"iac-platform/internal/application/service"
+	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
 	"iac-platform/services"
@@ -58,9 +59,21 @@ func (h *AgentHandler) SetTaskQueueManager(qm *services.TaskQueueManager) {
 	h.taskQueueManager = qm
 }
 
+// agentCapabilitiesJSON the agents.capabilities value of reported capabilities
+// (known ones only, JSON array).
+func agentCapabilitiesJSON(reported []string) *string {
+	caps := models.KnownAgentCapabilities(reported)
+	if caps == nil {
+		caps = []string{}
+	}
+	b, _ := json.Marshal(caps)
+	s := string(b)
+	return &s
+}
+
 // RegisterAgent handles agent registration
 // @Summary Register a new agent
-// @Description Register a new agent instance with Pool Token authentication
+// @Description Register a new agent instance with Pool Token authentication. The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting both, otherwise they fail with error_code agent_upgrade_required.
 // @Tags Agent
 // @Accept json
 // @Produce json
@@ -175,6 +188,9 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		if req.Version != "" {
 			agent.Version = &req.Version
 		}
+		// Capabilities (known ones only); older agents report none and
+		// are not dispatched tasks of manifest-bound workspaces
+		agent.Capabilities = agentCapabilitiesJSON(req.Capabilities)
 
 		if err := tx.Create(agent).Error; err != nil {
 			return err
@@ -704,7 +720,7 @@ func (h *AgentHandler) UploadTaskLogChunk(c *gin.Context) {
 // @Produce json
 // @Security PoolTokenAuth
 // @Param task_id path string true "Task ID"
-// @Param request body map[string]interface{} true "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), changes, duration, etc."
+// @Param request body map[string]interface{} true "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc."
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
@@ -735,7 +751,8 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		Status         models.TaskStatus      `json:"status" binding:"required"`
 		Stage          string                 `json:"stage"`
 		ErrorMessage   string                 `json:"error_message"`
-		ErrorCode      string                 `json:"error_code"` // structured failure code; only models.KnownTaskErrorCode values are stored
+		ErrorCode      string                 `json:"error_code"`   // structured failure code; only models.KnownTaskErrorCode values are stored
+		ErrorReason    string                 `json:"error_reason"` // short rule name next to a known error_code (e.g. hash_mismatch); tokens only
 		ChangesAdd     int                    `json:"changes_add"`
 		ChangesChange  int                    `json:"changes_change"`
 		ChangesDestroy int                    `json:"changes_destroy"`
@@ -794,6 +811,20 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 	}
 	if models.KnownTaskErrorCode(req.ErrorCode) {
 		updates["error_code"] = req.ErrorCode
+		if manifestbundle.IsReasonToken(req.ErrorReason) {
+			updates["error_reason"] = req.ErrorReason
+			if req.ErrorReason == manifestbundle.ReasonHashMismatch {
+				// agent-side hand-off integrity failure. The agent is not trusted
+				// to mark the version; the platform re-verifies the stored files
+				// (VerifyForUse) on every hand-off.
+				agentID := ""
+				if task.AgentID != nil {
+					agentID = *task.AgentID
+				}
+				log.Printf("[WARN] [security] agent %q reported manifest bundle hash_mismatch for task %d (workspace %s)",
+					agentID, taskID, task.WorkspaceID)
+			}
+		}
 	}
 	if req.ChangesAdd > 0 || req.ChangesChange > 0 || req.ChangesDestroy > 0 {
 		updates["changes_add"] = req.ChangesAdd

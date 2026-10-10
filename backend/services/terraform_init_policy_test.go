@@ -182,12 +182,24 @@ func TestRestoreTerraformLockHCL_BundleLockWinsAndConfigChangeReResolves(t *test
 func TestClassifyTaskFailure_BundleRepublishRequired(t *testing.T) {
 	gate := &manifestbundle.RepublishRequiredError{Invalid: &manifestbundle.InvalidError{VersionID: "v", Reason: "denylisted_file @ prod.tfvars"}}
 	err := fmt.Errorf("failed to write manifest files: %w", fmt.Errorf("load manifest files: %w", gate))
-	code, msg := classifyTaskFailure(err, "extracted")
-	if code != models.TaskErrorCodeBundleRepublishRequired || msg != "bundle_republish_required: denylisted_file @ prod.tfvars" {
-		t.Fatalf("%q %q", code, msg)
+	code, reason, msg := classifyTaskFailure(err, "extracted")
+	if code != models.TaskErrorCodeBundleRepublishRequired || reason != "denylisted_file" || msg != "bundle_republish_required: denylisted_file @ prod.tfvars" {
+		t.Fatalf("%q %q %q", code, reason, msg)
 	}
-	if code, msg := classifyTaskFailure(errors.New("terraform plan failed"), "extracted"); code != "" || msg != "extracted" {
-		t.Fatalf("%q %q", code, msg)
+	if code, reason, msg := classifyTaskFailure(errors.New("terraform plan failed"), "extracted"); code != "" || reason != "" || msg != "extracted" {
+		t.Fatalf("%q %q %q", code, reason, msg)
+	}
+	// error_reason: rule name only, never paths / content
+	for in, want := range map[string]string{
+		"hash_mismatch": "hash_mismatch",
+		"":              "no_valid_bundle",
+		"secret_detected @ a/b.tf; denylisted_file @ x": "secret_detected",
+		"Weird Reason / path":                           "invalid_bundle",
+	} {
+		rr := &manifestbundle.RepublishRequiredError{Invalid: &manifestbundle.InvalidError{Reason: in}}
+		if got := TaskErrorReason(fmt.Errorf("wrap: %w", rr)); got != want {
+			t.Errorf("reason %q => %q, want %q", in, got, want)
+		}
 	}
 	if !models.KnownTaskErrorCode(models.TaskErrorCodeBundleRepublishRequired) || models.KnownTaskErrorCode("anything") {
 		t.Fatal("KnownTaskErrorCode")

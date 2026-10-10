@@ -607,6 +607,8 @@ install / upgrade 在 `WORKSPACE_RESOURCES` WRITE 之外，以下情况还要求
 - 版本列表 / 详情、编辑器读文件、导出、diff、workdirs 只读存储的 `bundle_hash` / `bundle_invalid_reason`，不重算、不写库。
 - upgrade 只检查目标版本：从无效版本升级到合法版本允许。uninstall 不检查。
 - publish 违规 → 422 `bundle_rules_violated`，`problems: [{file, line?, rule, message}]`。`line` 只出现在 secret-scan 命中（1 起行号），`message` 为固定文案，不含文件内容。
+- 执行期（执行器取 bundle）失败的任务：`error_code = bundle_republish_required`，`error_message` 为 `bundle_republish_required: <reason>`；另有 `error_reason`，只含规则名（如 `denylisted_file`、`hash_mismatch`；无 reason 时 `no_valid_bundle`），不含路径或内容，与 `error_code` 一起出现在任务列表与详情中。
+- manifest 绑定的任务只派发给上报能力 `manifest_bundle_v1` 与 `task_data_overrides_v1` 的 agent（agent 注册时上报 version / capabilities）。池中没有具备能力的 agent 时任务失败：`error_code = agent_upgrade_required`，`error_reason` 为缺失的第一个能力名；具备能力的 agent 忙时照常等待。非 manifest workspace 不受影响。
 
 #### 覆盖值（variable_overrides）的输入、存储与输出
 
