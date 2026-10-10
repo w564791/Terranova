@@ -173,3 +173,58 @@ func TestConfirmApply_ApprovesApprovalRun(t *testing.T) {
 		t.Fatalf("re-approval: want 409 already_approved, got %d %v", code, body)
 	}
 }
+
+func (e *confirmApplyEnv) detail(t *testing.T, taskID uint) map[string]interface{} {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Params = gin.Params{{Key: "id", Value: "ws-m"}, {Key: "task_id", Value: jsonUint(taskID)}}
+	e.ctrl.GetTask(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("detail: %d %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Task map[string]interface{} `json:"task"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	return body.Task
+}
+
+// Task detail exposes the approval binding (hashes / identities only).
+func TestGetTask_ManifestRunBinding(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	e := setupConfirmApplyEnv(t)
+	task := e.plannedTask(t, "agent", "approval")
+	var planHash string
+	e.db.Raw(`SELECT plan_hash FROM workspace_tasks WHERE id = ?`, task.ID).Scan(&planHash)
+
+	mr, ok := e.detail(t, task.ID)["manifest_run"].(map[string]interface{})
+	if !ok {
+		t.Fatal("manifest_run missing")
+	}
+	if mr["purpose"] != "approval" || mr["runner"] != "agent" || mr["status"] != "running" || mr["bundle_hash"] != e.hash ||
+		mr["plan_out_hash"] != planHash || mr["approved_plan_hash"] != nil || mr["approved_at"] != nil {
+		t.Fatalf("before approval: %v", mr)
+	}
+	if code, body := e.confirm(t, task.ID); code != http.StatusOK {
+		t.Fatalf("confirm: %d %v", code, body)
+	}
+	mr = e.detail(t, task.ID)["manifest_run"].(map[string]interface{})
+	if mr["approved_plan_hash"] != planHash || mr["approved_bundle_hash"] != e.hash || mr["approved_by"] != "u-approver" || mr["approved_at"] == nil {
+		t.Fatalf("after approval: %v", mr)
+	}
+	for _, k := range []string{"plan_redacted", "plan_data", "token"} {
+		if _, found := mr[k]; found {
+			t.Fatalf("manifest_run must not carry %s", k)
+		}
+	}
+
+	// no run: omitted
+	plain := e.plannedTask(t, "", "")
+	if _, found := e.detail(t, plain.ID)["manifest_run"]; found {
+		t.Fatal("manifest_run present for a task without a run")
+	}
+}

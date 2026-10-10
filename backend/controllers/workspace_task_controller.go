@@ -405,7 +405,7 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 
 // GetTask 获取任务详情
 // @Summary Get task detail
-// @Description Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code ("bundle_republish_required": the manifest version has no valid bundle, error_message is then "bundle_republish_required: <reason>"; "plan_expired": the stored plan expired or was purged before apply; "agent_upgrade_required": no agent in the pool supports manifest-bound tasks; "bundle_hash_mismatch": the manifest bundle the executor received did not hash to bundle_hash, message "bundle_hash_mismatch: hash_mismatch (...)"), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).
+// @Description Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code ("bundle_republish_required": the manifest version has no valid bundle, error_message is then "bundle_republish_required: <reason>"; "plan_expired": the stored plan expired or was purged before apply; "agent_upgrade_required": no agent in the pool supports manifest-bound tasks; "bundle_hash_mismatch": the manifest bundle the executor received did not hash to bundle_hash, message "bundle_hash_mismatch: hash_mismatch (...)"; "approval_hash_mismatch": a manifest apply refused because the bundle or plan is not what was approved), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1, not_approved, bundle_changed, plan_changed; never paths or content). A task with a manifest run carries manifest_run (services.TaskManifestRunView: id, purpose, runner, status, bundle_hash, plan_out_hash = SHA-256 of plan.out, the hash approval binds to; redacted_plan_hash = hash of the redacted plan JSON; approved_bundle_hash, approved_plan_hash, approved_by, approved_at; null when not set); omitted otherwise. Detail only, not in the task list.
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
@@ -514,6 +514,13 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 	if len(task.VariableOverrides) > 0 {
 		canRead := c.canReadVariableValues(ctx, task.WorkspaceID)
 		taskResponse["overrides"] = c.taskOverrides(ctx, task, &canRead)
+	}
+
+	// Manifest approval binding (detail only; hashes and identities only).
+	if view, err := services.ManifestRunViewForTask(ctx.Request.Context(), c.db, &task); err != nil {
+		log.Printf("[GetTask] manifest run of task %d: %v", task.ID, err)
+	} else if view != nil {
+		taskResponse["manifest_run"] = view
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{

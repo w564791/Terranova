@@ -132,6 +132,7 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
     - 新能力 `manifest_approval_v1`（manifest 任务必需，缺失 → `agent_upgrade_required`）：只有会做上述核对、使用 run token 的 agent 才能接 manifest 任务。
     - 数据库：迁移 `20261010_13_manifest_approval`（只增，可重复）：`manifest_runs.task_id integer`（唯一部分索引 `uq_manifest_runs_task`，外键 `fk_manifest_runs_task` → `workspace_tasks(id) ON DELETE SET NULL`）、`approved_bundle_hash`、`approved_plan_hash varchar(64)`、`approved_by varchar(20)`、`approved_at timestamptz`；`chk_manifest_runs_approval`：审批列要么全空，要么 `purpose='approval' AND runner='agent'`、全部非空、`approved_bundle_hash = bundle_hash`、`approved_plan_hash` 为 64 位小写十六进制——sandbox / preview run 无论经哪条路径写入都不能带审批（约束用 `pg_constraint` 守卫的 DO 块添加）。
     - 第 7 步之前已经处于 apply_pending 的 manifest 任务没有 run，确认时返回 `approval_run_required`，需重新 plan。
+    - 任务详情（`GET /workspaces/{id}/tasks/{task_id}`，不含列表）在任务有 manifest run 时返回 `manifest_run`：`id`、`purpose`、`runner`、`status`、`bundle_hash`、`plan_out_hash`（plan.out 的 SHA-256 = `workspace_tasks.plan_hash`，审批绑定的值）、`redacted_plan_hash`（`manifest_runs.plan_hash`）、`approved_bundle_hash`、`approved_plan_hash`、`approved_by`、`approved_at`（未设置为 null）；没有 run 时不出现。只有哈希与身份，不含 plan 内容或 token；沿用任务详情原有的读权限。
 
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
