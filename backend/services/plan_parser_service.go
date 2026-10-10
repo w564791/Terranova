@@ -80,7 +80,11 @@ func (s *PlanParserService) ParseAndStorePlanChanges(taskID uint) error {
 	if err != nil {
 		return fmt.Errorf("failed to execute terraform show: %w", err)
 	}
-	planJSON = RedactPlanJSON(planJSON)
+	ps, psErr := PlanSensitivityForTask(s.db, &task)
+	if psErr != nil {
+		log.Printf("[WARN] plan redaction for task %d: platform sensitivity incomplete: %v", taskID, psErr)
+	}
+	planJSON = RedactPlanJSON(planJSON, ps)
 
 	// 解析 resource_changes
 	resourceChanges, err := s.parseResourceChanges(planJSON, isDriftCheck)

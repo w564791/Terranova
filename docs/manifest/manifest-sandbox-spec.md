@@ -149,6 +149,8 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 
 **plan 脱敏**：`RedactPlanJSON` 按 plan 格式自带的敏感标记脱敏（`resource_changes` / `resource_drift` / `output_changes` 的 `before_sensitive` / `after_sensitive`，`planned_values` / `prior_state` 的 `sensitive_values` 与敏感 output，`configuration` 中声明 sensitive 的变量值与 default），并把 `configuration.provider_config` 里的常量全部替换（provider 块里的凭证 Terraform 不标记）。脱敏发生在 `terraform show -json` 之后、任何使用之前：变更统计、agent 上传的 resource changes、`plan_json` 入库（local 保存、agent 上传接口在平台侧再脱敏一次以兼容旧 agent、plan parser 的 plan_data 回退路径）都只见脱敏结果；run task 回调与 UI 读到的也是脱敏后的 plan。`RedactedPlanHash` / `RedactPlanForStorage` 在脱敏后的 plan 上算 `plan_hash`（`sha256("terranova-plan-v1" 0x00 规范 JSON)`），供 step 6/7 写 `manifest_runs.plan_redacted` / `plan_hash`；`workspace_tasks.plan_hash` 仍是 `plan.out` 二进制文件的哈希（apply 复用工作目录时校验文件用），语义不变。
 
+**平台侧敏感集合**：`RedactPlanJSON(plan, ps)` 在 HCL `sensitive = true` 之外再并上平台侧敏感集合 `PlanSensitivity`：workspace 敏感变量、varset 敏感变量（含 active deployment 的 varset，均来自任务变量快照）、deployment overrides 中 `sensitive_keys` 列出的键（NULL = 全部 override 敏感）。按变量名脱敏 `variables[name].value` 与 root module 的 `default`；按值把 plan 中任何等于（≥4 字符）或包含（≥8 字符）这些敏感值的字符串叶子整体替换（HCL 格式值取其字符串叶子），覆盖未在 HCL 中声明 sensitive 的变量流入资源属性 / output 的情况；派生值（编码、哈希、拼接拆分）无法识别，HCL 声明 sensitive 仍是可靠手段。执行器（local / agent）用与 tfvars 相同的变量来源（快照 + overrides）计算；平台侧（agent 上传 plan_json、plan parser 回退、历史回填）用 `PlanSensitivityForTask` 按任务的变量快照 + override 快照计算。脱敏标记统一为 `(sensitive value)`，与 Terraform CLI 及前端（PlanCompleteView / ApplyingView / StateResourceViewer）显示一致。
+
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。
 - `POST .../sandbox-sessions/:id/runs`：在 session 内发起 preview run。
