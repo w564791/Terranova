@@ -816,7 +816,7 @@ func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
 
 // ConfirmApply 确认执行Apply
 // @Summary Confirm apply
-// @Description Confirm the apply stage of a Plan+Apply task
+// @Description Confirm the apply stage of a Plan+Apply task. On a manifest-deployed workspace this is the approval: the task's manifest run must be a purpose=approval, runner=agent run (sandbox / preview runs can never be approved) and the approval binds approved_bundle_hash (the bundle the plan was computed from, still the deployment's current non-NULL bundle) and approved_plan_hash (SHA-256 of the binary plan.out, re-computed by the platform from the stored plan); the runner refuses to apply anything else (error_code approval_hash_mismatch). Refusals are 409 with error_code / error_reason: approval_run_required, run_not_approvable, run_not_active, already_approved, approval_hash_mismatch (bundle_changed / plan_changed), plan_expired, bundle_republish_required.
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
@@ -826,7 +826,8 @@ func (c *WorkspaceTaskController) GetTaskLogs(ctx *gin.Context) {
 // @Success 200 {object} map[string]interface{} "Apply queued"
 // @Failure 400 {object} map[string]interface{} "Invalid request or incorrect task status"
 // @Failure 404 {object} map[string]interface{} "Task not found"
-// @Failure 409 {object} map[string]interface{} "Resources changed since plan"
+// @Failure 403 {object} map[string]interface{} "Approver unknown (manifest deployment)"
+// @Failure 409 {object} map[string]interface{} "Resources changed since plan, or manifest approval refused (error_code, error_reason)"
 // @Failure 500 {object} map[string]interface{} "Update failed"
 // @Router /api/v1/workspaces/{id}/tasks/{task_id}/confirm-apply [post]
 // @Security BearerAuth
@@ -919,7 +920,27 @@ func (c *WorkspaceTaskController) ConfirmApply(ctx *gin.Context) {
 	// 设置 PlanTaskID 指向自己（plan_and_apply 任务的 plan 数据在自己身上）
 	task.PlanTaskID = &task.ID
 
-	if err := c.db.Omit("state_token_hash").Save(&task).Error; err != nil {
+	// Manifest deployments: the approval is recorded on the task's approval
+	// run (approved_bundle_hash / approved_plan_hash), in the same
+	// transaction as the confirmation. Only purpose=approval, runner=agent
+	// runs are accepted (409 otherwise).
+	approver := ""
+	if task.ApplyConfirmedBy != nil {
+		approver = *task.ApplyConfirmedBy
+	}
+	if err := c.db.Transaction(func(tx *gorm.DB) error {
+		if _, err := services.ApproveManifestRun(ctx.Request.Context(), tx, &task, workspace, approver); err != nil {
+			return err
+		}
+		return tx.Omit("state_token_hash").Save(&task).Error
+	}); err != nil {
+		var ae *services.ApprovalError
+		if errors.As(err, &ae) {
+			log.Printf("[ConfirmApply] Task %d approval refused: %v", task.ID, err)
+			ctx.JSON(ae.Status, gin.H{"error": ae.Message, "error_code": ae.Code, "error_reason": ae.Reason})
+			return
+		}
+		log.Printf("[ConfirmApply] Task %d: %v", task.ID, err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
 		return
 	}
@@ -1019,6 +1040,9 @@ func (c *WorkspaceTaskController) CancelPreviousTasks(ctx *gin.Context) {
 
 		if err := c.db.Omit("state_token_hash").Save(&task).Error; err == nil {
 			cancelledCount++
+			if err := services.EndApprovalRunPhase(ctx.Request.Context(), c.db, task.ID, task.Status); err != nil {
+				log.Printf("[CancelPrevious] end manifest run of task %d: %v", task.ID, err)
+			}
 			// 检查是否有 plan_and_apply 任务被取消，需要解锁 workspace
 			if task.TaskType == models.TaskTypePlanAndApply {
 				needUnlockWorkspace = true
@@ -1184,6 +1208,9 @@ func (c *WorkspaceTaskController) CancelTask(ctx *gin.Context) {
 	if err := c.db.Omit("state_token_hash").Save(&task).Error; err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel task"})
 		return
+	}
+	if err := services.EndApprovalRunPhase(ctx.Request.Context(), c.db, task.ID, task.Status); err != nil {
+		log.Printf("[CancelTask] end manifest run of task %d: %v", task.ID, err)
 	}
 
 	// 如果任务是 apply_pending 或 plan_completed 状态，需要解锁 Workspace

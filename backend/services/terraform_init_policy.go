@@ -111,6 +111,9 @@ func terraformInitArgs(noStateLock bool) []string {
 // TaskErrorCode maps a task failure to its structured code
 // (workspace_tasks.error_code), "" when there is none.
 func TaskErrorCode(err error) string {
+	if _, ok := isApprovalMismatch(err); ok {
+		return models.TaskErrorCodeApprovalHashMismatch
+	}
 	var rr *manifestbundle.RepublishRequiredError
 	if errors.As(err, &rr) {
 		return models.TaskErrorCodeBundleRepublishRequired
@@ -130,6 +133,9 @@ func TaskErrorCode(err error) string {
 // TaskErrorReason the short machine reason next to TaskErrorCode
 // (workspace_tasks.error_reason): a rule name only, "" when there is none.
 func TaskErrorReason(err error) string {
+	if am, ok := isApprovalMismatch(err); ok {
+		return am.Reason
+	}
 	var rr *manifestbundle.RepublishRequiredError
 	if errors.As(err, &rr) {
 		return rr.Rule()
@@ -152,6 +158,9 @@ func TaskErrorReason(err error) string {
 func classifyTaskFailure(err error, message string) (code, reason, msg string) {
 	code = TaskErrorCode(err)
 	reason = TaskErrorReason(err)
+	if am, ok := isApprovalMismatch(err); ok {
+		return code, reason, am.Error()
+	}
 	var rr *manifestbundle.RepublishRequiredError
 	if errors.As(err, &rr) {
 		return code, reason, rr.Error()

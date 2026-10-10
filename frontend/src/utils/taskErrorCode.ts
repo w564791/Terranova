@@ -8,6 +8,8 @@
  * - agent_upgrade_required:池中没有支持 manifest 任务所需能力的 agent(error_reason = 缺少的能力)。
  * - bundle_hash_mismatch:执行端(agent / local)收到的 bundle 哈希与 bundle_hash 不符(error_reason = hash_mismatch);
  *   平台记审计并复核存储文件，仅当平台自己的校验失败时才把版本标记为失效。
+ * - approval_hash_mismatch:manifest apply 前校验失败，要 apply 的内容不是审批过的内容
+ *   (error_reason = not_approved / bundle_changed / plan_changed)。
  *
  * error_reason(932b699):与 error_code 并存的短 token(规则名 / 能力名,绝无路径或内容),
  * 如 denylisted_file、hash_mismatch、no_valid_bundle、plan_data_expired、manifest_bundle_v1。
@@ -48,6 +50,11 @@ const TASK_ERROR_CODES: Record<string, TaskErrorCodeDef> = {
     tag: '完整性校验失败',
     action: 'upgrade_manifest',
   },
+  approval_hash_mismatch: {
+    title: '要 apply 的 bundle 或 plan 与审批时不一致，已拒绝 apply，请重新运行 plan 并审批',
+    tag: '与审批不一致',
+    action: 'rerun_plan',
+  },
 }
 
 /** 非 bundle 规则的 error_reason token */
@@ -57,6 +64,9 @@ const REASON_TEXT: Record<string, string> = {
   invalid_bundle: '该版本 bundle 不合法',
   plan_data_expired: 'plan 数据已超过保留期',
   plan_data_missing: 'plan 数据已清理或缺失',
+  not_approved: '该 plan 未经审批',
+  bundle_changed: '审批后 bundle 已变化',
+  plan_changed: '审批后 plan 已变化',
 }
 
 /** agent 能力(models.AgentCapability*)的可读说明 */

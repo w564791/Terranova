@@ -49,18 +49,28 @@ func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 		urlWorkspaceID := c.Param("workspace_id")
 
 		if caller.Type == services.StateTokenTypeRun {
-			// run tokens: the run's workspace only; preview runs read only
-			// (no state POST, LOCK, UNLOCK or DELETE)
-			if urlWorkspaceID != "" && urlWorkspaceID != workspaceID {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "run token is bound to another workspace"})
-				return
-			}
+			// run tokens: preview runs read only (no state POST, LOCK, UNLOCK
+			// or DELETE) and reach their own workspace only. Approval runs
+			// replace the task token of their plan_and_apply task: other
+			// workspaces' state is readable exactly as with a task token
+			// (GET only, filtered and authorized in getCrossWorkspaceState),
+			// state versions are attributed to the task.
 			if caller.ReadOnly() && c.Request.Method != http.MethodGet {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "preview run tokens are read-only"})
 				return
 			}
-			c.Set("state_workspace_id", workspaceID)
-			c.Set("state_task_id", uint(0))
+			target := workspaceID
+			if urlWorkspaceID != "" && urlWorkspaceID != workspaceID {
+				if caller.ReadOnly() || c.Request.Method != http.MethodGet {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "run token is bound to another workspace"})
+					return
+				}
+				c.Set("cross_workspace", true)
+				c.Set("requester_workspace_id", workspaceID)
+				target = urlWorkspaceID
+			}
+			c.Set("state_workspace_id", target)
+			c.Set("state_task_id", caller.TaskID)
 			c.Set("state_run_id", caller.RunID)
 			c.Set("state_run_created_by", caller.CreatedBy)
 			c.Next()

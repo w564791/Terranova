@@ -3377,7 +3377,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Register a new agent instance with Pool Token authentication (the pool token is accepted here only; every later call uses the returned agent token). The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1, agent_token_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting all three, otherwise they fail with error_code agent_upgrade_required. The response carries agent_token (per-agent JWT, typ agent, claims agent_id / pool_id / gen, header kid; lifetime AGENT_TOKEN_TTL, default 15m) and agent_token_expires_at; renew it with POST /api/v1/agents/token before it expires. Deregistering or revoking the agent, or revoking the pool token it registered with, invalidates it immediately (checked against the database on every use).",
+                "description": "Register a new agent instance with Pool Token authentication (the pool token is accepted here only; every later call uses the returned agent token). The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1, agent_token_v1, manifest_approval_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting all four, otherwise they fail with error_code agent_upgrade_required. The response carries agent_token (per-agent JWT, typ agent, claims agent_id / pool_id / gen, header kid; lifetime AGENT_TOKEN_TTL, default 15m) and agent_token_expires_at; renew it with POST /api/v1/agents/token before it expires. Deregistering or revoking the agent, or revoking the pool token it registered with, invalidates it immediately (checked against the database on every use).",
                 "consumes": [
                     "application/json"
                 ],
@@ -3497,7 +3497,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Get complete task data including workspace config (with manifest_deployment_id / manifest_active_tag / manifest_subpath), resources, variables, the task variable override snapshot (task.variable_overrides, task.override_sensitive_keys), Manifest Run files (task.external_files), the verified manifest bundle hand-off (manifest_bundle: archive_b64 + bundle_hash, or manifest_bundle_error when the version must be republished), and state",
+                "description": "Get complete task data including workspace config (with manifest_deployment_id / manifest_active_tag / manifest_subpath), resources, variables, the task variable override snapshot (task.variable_overrides, task.override_sensitive_keys), Manifest Run files (task.external_files), the verified manifest bundle hand-off (manifest_bundle: archive_b64 + bundle_hash, or manifest_bundle_error when the version must be republished), the approval binding of manifest plan_and_apply tasks (manifest_approval: run_id, bundle_hash, approved_bundle_hash, approved_plan_hash; their state_backend token is the approval run's run token, issued to the run's assigned agent, 403 otherwise), and state",
                 "consumes": [
                     "application/json"
                 ],
@@ -27846,7 +27846,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Confirm the apply stage of a Plan+Apply task",
+                "description": "Confirm the apply stage of a Plan+Apply task. On a manifest-deployed workspace this is the approval: the task's manifest run must be a purpose=approval, runner=agent run (sandbox / preview runs can never be approved) and the approval binds approved_bundle_hash (the bundle the plan was computed from, still the deployment's current non-NULL bundle) and approved_plan_hash (SHA-256 of the binary plan.out, re-computed by the platform from the stored plan); the runner refuses to apply anything else (error_code approval_hash_mismatch). Refusals are 409 with error_code / error_reason: approval_run_required, run_not_approvable, run_not_active, already_approved, approval_hash_mismatch (bundle_changed / plan_changed), plan_expired, bundle_republish_required.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27897,6 +27897,13 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "403": {
+                        "description": "Approver unknown (manifest deployment)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
                     "404": {
                         "description": "Task not found",
                         "schema": {
@@ -27905,7 +27912,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "Resources changed since plan",
+                        "description": "Resources changed since plan, or manifest approval refused (error_code, error_reason)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true

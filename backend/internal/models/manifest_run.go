@@ -47,9 +47,19 @@ type ManifestRun struct {
 	StateSerial  *int64          `json:"state_serial,omitempty"`                    // preview 基准 state serial
 	SessionID    *string         `json:"session_id,omitempty" gorm:"size:36;check:chk_manifest_runs_sandbox_session,runner <> 'sandbox' OR session_id IS NOT NULL"`
 	AgentID      *string         `json:"agent_id,omitempty" gorm:"size:50"` // runner=agent:被指派的 agent,只有它能用 agent token 换取 run token
-	CreatedBy    string          `json:"created_by" gorm:"size:20;not null"`
-	CreatedAt    time.Time       `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt    time.Time       `json:"updated_at" gorm:"autoUpdateTime"`
+	TaskID       *uint           `json:"task_id,omitempty"`                 // approval run 所属的 plan_and_apply 任务(每个任务至多一个 run)
+
+	// 审批绑定(chk_manifest_runs_approval:只有 purpose=approval、runner=agent 的 run 可写;
+	// approved_bundle_hash 必须等于 bundle_hash)。approved_plan_hash = plan.out 的 SHA-256,
+	// 即 apply 真正执行的二进制 plan;plan_hash 是脱敏 plan JSON 的哈希(用户看到的内容)。
+	ApprovedBundleHash *string    `json:"approved_bundle_hash,omitempty" gorm:"size:64"`
+	ApprovedPlanHash   *string    `json:"approved_plan_hash,omitempty" gorm:"size:64"`
+	ApprovedBy         *string    `json:"approved_by,omitempty" gorm:"size:20"`
+	ApprovedAt         *time.Time `json:"approved_at,omitempty"`
+
+	CreatedBy string    `json:"created_by" gorm:"size:20;not null"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (ManifestRun) TableName() string { return "manifest_runs" }

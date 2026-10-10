@@ -510,6 +510,12 @@ func (a *RemoteDataAccessor) GetManifestBundleByTag(deploymentID, tag string) (*
 	return manifestHandoffFromTaskData(a.taskData, deploymentID, tag)
 }
 
+// GetManifestApproval Agent 模式:GetTaskData "manifest_approval"(平台按 task 的
+// approval run 下发;没有则 nil)。
+func (a *RemoteDataAccessor) GetManifestApproval(taskID uint) (*ManifestApproval, error) {
+	return manifestApprovalFromTaskData(a.taskData), nil
+}
+
 // ============================================================================
 // Transaction 支持
 // ============================================================================

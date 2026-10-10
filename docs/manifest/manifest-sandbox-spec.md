@@ -18,6 +18,8 @@
 
 审批接口只接受 `purpose=approval` 的 run。apply 前 agent 校验 `approved_bundle_hash` 与 `approved_plan_hash`，任一不一致即拒绝。
 
+已落地（step 7，迁移 `20261010_13_manifest_approval`）：manifest 部署的每个 plan_and_apply 任务在 plan 派发前建一个 `purpose=approval`、`runner=agent` 的 run（`manifest_runs.task_id`；Local 执行也记为 agent runner，`agent_id` 为空），run token 取代 task state token。审批（confirm-apply）只接受这样的 run（`chk_manifest_runs_approval` 在数据库兜底），记录 `approved_bundle_hash` = run 的 bundle_hash、`approved_plan_hash` = plan.out（二进制 plan，`terraform apply` 实际执行的内容）的 SHA-256，由平台解密已存 plan 复算；`manifest_runs.plan_hash` 为脱敏 plan JSON 的哈希。执行端在 init 前与 `terraform apply` 前一刻核对部署 bundle、工作目录中的 bundle 文件与 plan.out，不符以 `approval_hash_mismatch`（`not_approved` / `bundle_changed` / `plan_changed`）拒绝。详见 `docs/security/api-fix-tasks/14-manifest.md` 第 22 条。
+
 ## 3. 数据模型
 - `manifests`：`source_type`（native|git，不可变）；git 另存 repo、subpath、GitHub App installation ID。
 - `manifest_versions`：`bundle_hash`、`source_ref`（git 为 SHA，native 为空）。存量回填为 native 并计算哈希。
@@ -32,7 +34,7 @@
 |---|---|---|
 | `manifests` | `source_type varchar(16) NOT NULL DEFAULT 'native'`、`git_repo_url varchar(1024)`、`git_subpath varchar(512)`、`github_installation_id bigint` | `chk_manifests_source_type`（native\|git）；`chk_manifests_git_fields`：native ⇒ 三个 git 字段全为 NULL，git ⇒ `git_repo_url` 非空。存量行经默认值成为 native。API 只输出 `source_type`；创建固定为 native（git 创建在 step 8），更新时传入不同值返回 400。git 字段不出 JSON。 |
 | `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填（step 2 为 v1；step 3 的迁移 `20261004_04` 校验后改写为 v2 并按 bundle 规则判定，见 §3.3）。`bundle_hash` 与 step 3 新增的 `bundle_invalid_reason` 出现在版本列表/详情 JSON；`source_ref` 不出 JSON。 |
-| `manifest_deployments` | `approved_bundle_hash`、`approved_plan_hash`（varchar(64)） | 审批接入前恒为 NULL（step 7 使用），不出 JSON。 |
+| `manifest_deployments` | `approved_bundle_hash`、`approved_plan_hash`（varchar(64)） | 最近一次审批的哈希（step 7 起由 confirm-apply 写入，权威记录在 `manifest_runs.approved_*`），不出 JSON。 |
 | `manifest_deployments` / `workspace_tasks` | `sensitive_keys jsonb`（可空、无默认值） | 覆盖值为敏感的 key 列表（任务行是部署覆盖快照的同一标记）。迁移不回填、不批量标记；NULL = 尚未计算，API 一律按全部敏感处理（不返回任何值）。由启动时的 Go 回填任务按部署时同一敏感判定写入（见设计文档 §8.4）。不出 JSON。 |
 | `sandbox_sessions`（新） | `id`、`user_id`、`workspace_id`、`provider`、`network_mode DEFAULT 'vpc'`、`status`、`expires_at`、`closed_at`、时间戳 | `chk_sandbox_sessions_network_mode`：只允许 `vpc`（§6.2 的数据库兜底）；`UNIQUE(id, workspace_id)` 供复合外键使用。 |
 | `manifest_runs`（新） | `manifest_id`（FK CASCADE）、`version_id`（FK SET NULL，草稿预览为空）、`bundle_hash NOT NULL`、`workspace_id`、`runner`、`purpose`、`status`、`plan_hash`、`plan_redacted jsonb`、`state_serial`、`session_id`、`created_by` | runner ∈ agent\|sandbox，purpose ∈ preview\|approval；sandbox ⇒ purpose=preview 且 session 非空；`bundle_hash` 64 位 hex；`(session_id, workspace_id)` 复合 FK → session，run 不能跨出其 session 的 workspace；`UNIQUE(id, workspace_id, purpose)`。 |
@@ -197,7 +199,7 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 4. Runner 接口 + K8s 实现（approval 必须加锁；先脱敏再算 `plan_hash`）
 5. 按 run 签发的 token：在现有 `StateTokenService` 上改。新表 `run_tokens`（`run_id`、`session_id`、`workspace_id`、`purpose`、`token_hash`、`expires_at`、`revoked_at`），`workspace_tasks` 旧字段不动；JWT 加 `typ` claim（`task`/`run`），`ValidateToken` 分支：`run` 路径数据库出错即拒绝（不退回只验 JWT），过期时间取 min(run 超时, session 过期)，`preview` 在中间件拒绝 POST/LOCK/UNLOCK；`task` 路径行为暂不变，另行评估。run 结束写 `revoked_at`（只撤销该 run 的 token，session 保留到自身过期或用户关闭，届时按 `session_id` 批量写 `revoked_at`）+ 只读 STS + 私有 module 的 installation token 注入（`GIT_ASKPASS`）
 6. AgentCore provider + session 接口（仅 VPC）
-7. 审批与 apply 双哈希校验
+7. 审批与 apply 双哈希校验（已完成，见 §2）
 8. Git 来源（平台侧按 SHA 拉取打包；module `ref` 必须是 SHA 或 vendor；webhook 验签）
 
 ## 10. AgentCore 上线前需实测

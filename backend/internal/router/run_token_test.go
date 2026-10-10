@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,7 +39,7 @@ func setupRunTokenEnv(t *testing.T) *runTokenEnv {
 	now := time.Now()
 	for _, stmt := range []string{
 		`CREATE TABLE sandbox_sessions (id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT, provider TEXT, network_mode TEXT DEFAULT 'vpc', status TEXT DEFAULT 'active', expires_at DATETIME, closed_at DATETIME, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE manifest_runs (id TEXT PRIMARY KEY, manifest_id TEXT, version_id TEXT, bundle_hash TEXT, workspace_id TEXT, runner TEXT, purpose TEXT, status TEXT, plan_hash TEXT, plan_redacted TEXT, state_serial INTEGER, session_id TEXT, agent_id TEXT, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE manifest_runs (id TEXT PRIMARY KEY, manifest_id TEXT, version_id TEXT, bundle_hash TEXT, workspace_id TEXT, runner TEXT, purpose TEXT, status TEXT, plan_hash TEXT, plan_redacted TEXT, state_serial INTEGER, session_id TEXT, agent_id TEXT, task_id INTEGER, approved_bundle_hash TEXT, approved_plan_hash TEXT, approved_by TEXT, approved_at DATETIME, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`ALTER TABLE workspace_tasks ADD COLUMN state_token_hash TEXT`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -160,8 +161,18 @@ func TestRunToken_StateAccess(t *testing.T) {
 			t.Errorf("preview %s %s: want %d, got %d", c[0], c[1], want, got)
 		}
 	}
-	if got := e.state("GET", "/api/v1/terraform/state/ws-2", appr); got != http.StatusForbidden {
-		t.Errorf("run token on another workspace: want 403, got %d", got)
+	// approval runs read other workspaces like the task token they replace
+	// (GET only; filtered / authorized by the handler); preview runs never
+	if got := e.state("GET", "/api/v1/terraform/state/ws-2", appr); got != http.StatusOK {
+		t.Errorf("approval run token GET on another workspace: want 200, got %d", got)
+	}
+	for _, c := range stateCalls[1:] {
+		if got := e.state(c[0], strings.Replace(c[1], "ws-1", "ws-2", 1), appr); got != http.StatusForbidden {
+			t.Errorf("approval run token %s on another workspace: want 403, got %d", c[0], got)
+		}
+	}
+	if got := e.state("GET", "/api/v1/terraform/state/ws-2", prev); got != http.StatusForbidden {
+		t.Errorf("preview run token on another workspace: want 403, got %d", got)
 	}
 }
 
@@ -309,4 +320,49 @@ func (r *recordingRevoker) RevokeSessionCredentials(_ context.Context, s *models
 func sha256Hex(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+// Approval runs of plan_and_apply tasks (step 7): the agent task data hands
+// the assigned agent the run's binding and a run token in place of the task
+// state token; another agent is refused; the token stops working as soon as
+// the task reaches a final status, and the run end revokes it.
+func TestRunToken_ApprovalRunTaskData(t *testing.T) {
+	e := setupRunTokenEnv(t)
+	ctx := context.Background()
+	e.db.Exec(`UPDATE manifest_runs SET task_id = 10, created_at = ? WHERE id = 'mfr-appr'`, time.Now())
+
+	approval, tok, err := e.svc.ApprovalRunTaskData(ctx, 10, "agent-b")
+	if err != nil || approval == nil || approval.RunID != "mfr-appr" || tok == "" || approval.Approved() {
+		t.Fatalf("task data: %+v %v", approval, err)
+	}
+	for _, c := range stateCalls[:4] {
+		if got := e.state(c[0], c[1], tok); got != http.StatusOK {
+			t.Errorf("approval run token %s %s: want 200, got %d", c[0], c[1], got)
+		}
+	}
+	if _, _, err := e.svc.ApprovalRunTaskData(ctx, 10, "agent-a"); !errors.Is(err, services.ErrRunNotAssigned) {
+		t.Fatalf("other agent: want ErrRunNotAssigned, got %v", err)
+	}
+	if _, _, err := e.svc.ApprovalRunTaskData(ctx, 10, ""); !errors.Is(err, services.ErrRunNotAssigned) {
+		t.Fatalf("pool-token caller on an assigned run: want ErrRunNotAssigned, got %v", err)
+	}
+	if a, tok, err := e.svc.ApprovalRunTaskData(ctx, 12, "agent-b"); a != nil || tok != "" || err != nil {
+		t.Fatalf("task without a run: %+v %q %v", a, tok, err)
+	}
+
+	// task finished by any path: the token is refused at once
+	e.db.Exec(`UPDATE workspace_tasks SET status = 'cancelled' WHERE id = 10`)
+	if got := e.state("GET", "/api/v1/terraform/state/ws-1", tok); got != http.StatusUnauthorized {
+		t.Fatalf("token of a finished task: want 401, got %d", got)
+	}
+	if err := services.EndApprovalRunPhase(ctx, e.db, 10, models.TaskStatusCancelled); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	e.db.Raw(`SELECT status FROM manifest_runs WHERE id = 'mfr-appr'`).Scan(&status)
+	var active int64
+	e.db.Raw(`SELECT count(*) FROM run_tokens WHERE run_id = 'mfr-appr' AND revoked_at IS NULL`).Scan(&active)
+	if status != models.ManifestRunStatusCancelled || active != 0 {
+		t.Fatalf("run end: status %s, %d active tokens", status, active)
+	}
 }

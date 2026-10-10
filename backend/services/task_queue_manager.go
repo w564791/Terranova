@@ -332,6 +332,15 @@ func (m *TaskQueueManager) TryExecuteNextTask(workspaceID string) error {
 	if task.Status == models.TaskStatusApplyPending {
 		action = "apply"
 	}
+	// Manifest plan_and_apply: the plan phase runs as an approval run
+	// (created once, bound to the deployed bundle).
+	if action == "plan" {
+		if _, err := EnsureApprovalRun(context.Background(), m.db, task, &workspace); err != nil {
+			log.Printf("[TaskQueue] Task %d: %v, will retry", task.ID, err)
+			m.scheduleRetry(workspaceID, 10*time.Second)
+			return nil
+		}
+	}
 	runner := m.runnerFor(&workspace)
 	log.Printf("[TaskQueue] Starting task %d (type: %s, status: %s, purpose: %s) for workspace %s via %s runner",
 		task.ID, task.TaskType, task.Status, PurposeOfTask(task), workspaceID, runner.Kind())
@@ -821,6 +830,14 @@ func (m *TaskQueueManager) pushTaskToAgent(task *models.WorkspaceTask, workspace
 		return nil
 	}
 
+	// approval run: only the agent this phase is pushed to obtains its run
+	// token (GetTaskData)
+	if task.TaskType == models.TaskTypePlanAndApply && TaskRequiresManifestApproval(task, workspace) {
+		if err := AssignApprovalRunAgent(context.Background(), m.db, task.ID, selectedAgent.AgentID); err != nil {
+			log.Printf("[TaskQueue] Failed to assign the manifest run of task %d to agent %s: %v", task.ID, selectedAgent.AgentID, err)
+		}
+	}
+
 	log.Printf("[TaskQueue] Task %d status updated to running and agent_id set to %s (saved to DB)", task.ID, selectedAgent.AgentID)
 
 	// 发送任务开始执行通知
@@ -984,9 +1001,37 @@ func (m *TaskQueueManager) executeTask(task *models.WorkspaceTask, action string
 	// Create per-task executor clone to avoid concurrent goroutines overwriting shared state
 	executor := m.executor.ForTask()
 
+	// Manifest approval run: its run token (issued in process; Local runs
+	// have no agent assigned) replaces the task state token, and every phase
+	// end is reported to the run (final status ends it; the plan phase end
+	// revokes its tokens).
+	approvalRun, approvalRunErr := ApprovalRunForTask(context.Background(), m.db, task.ID)
+	if approvalRunErr != nil {
+		log.Printf("[TaskQueue] WARNING: load approval run of task %d: %v", task.ID, approvalRunErr)
+	}
+	if approvalRun != nil {
+		runTaskID := task.ID
+		defer func() {
+			var cur models.WorkspaceTask
+			if err := m.db.Select("status").First(&cur, runTaskID).Error; err != nil {
+				log.Printf("[TaskQueue] WARNING: task %d status for manifest run end: %v", runTaskID, err)
+				return
+			}
+			if err := EndApprovalRunPhase(context.Background(), m.db, runTaskID, cur.Status); err != nil {
+				log.Printf("[TaskQueue] WARNING: end manifest run phase of task %d: %v", runTaskID, err)
+			}
+		}()
+	}
+
 	// Generate state token and set up HTTP state backend URL
 	if m.stateTokenService != nil {
-		token, tokenErr := m.stateTokenService.GenerateToken(task.WorkspaceID, task.ID)
+		var token string
+		var tokenErr error
+		if approvalRun != nil {
+			token, _, tokenErr = m.stateTokenService.IssueRunToken(context.Background(), approvalRun.ID, "")
+		} else {
+			token, tokenErr = m.stateTokenService.GenerateToken(task.WorkspaceID, task.ID)
+		}
 		if tokenErr != nil {
 			log.Printf("[TaskQueue] WARNING: Failed to generate state token for task %d: %v", task.ID, tokenErr)
 		} else {
