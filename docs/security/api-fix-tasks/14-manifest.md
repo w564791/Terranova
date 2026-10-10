@@ -87,6 +87,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 13. plan 脱敏与编辑器 Run 校验（step 4）：`plan_json` 入库前脱敏（`RedactPlanJSON`，按 plan 自带的敏感标记 + provider 配置常量），local 保存、agent 上传（平台侧再脱敏）、plan parser 回退路径一致；脱敏后的 plan 的哈希由 `RedactedPlanHash` 计算（供 `manifest_runs.plan_hash`）。历史 `plan_json` 未回填脱敏，`plan_data`（apply 需要的二进制 plan）仍含明文敏感值。编辑器 Run 的 `external_files` 建任务时校验：草稿走发布规则（422），带 `manifest_version_id` 时校验版本并比对 `bundle_hash`（409），固化 `bundle_hash` 后执行时复核。细节见 sandbox spec §3.4。
 
+14. 变量值文件注入（tfvars）：原 `variables.tfvars` 只转义 `"` 与换行，`\"` 可闭合字符串注入其它赋值，`${` / `%{` 会被当模板，HCL 格式值原样写入（可带第二个赋值）。现所有 runner 共用 `RenderTFVars` 生成 `terranova.auto.tfvars.json`（`encoding/json`，Terraform 自动加载，去掉 `-var-file`）：JSON 变量文件无求值上下文，字符串一律字面量；HCL 格式的 object / list / bool / number 用 hclsyntax 解析为单个表达式、无上下文求值（与 Terraform 读 .tfvars 相同：不允许变量与函数）后转为 JSON 值，否则拒绝（`ErrInvalidTFVar`，报错只含变量名）；变量名必须是标识符，重复、非法 UTF-8 拒绝。HCL object / list 变量在 `variables.tf.json` 声明为 `any`（原先声明 `string` 导致此类值本来就无法使用）。日志按值脱敏（`RenderTFVarsMasked`）。用户 bundle 禁止 `*.tfvars(.json)`，自动加载不会与用户文件冲突。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。

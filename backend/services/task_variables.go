@@ -2,9 +2,15 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	ctyjson "github.com/zclconf/go-cty/cty/json"
 
 	"iac-platform/internal/models"
 )
@@ -97,34 +103,137 @@ func terraformVariables(vars []models.WorkspaceVariable) []models.WorkspaceVaria
 	return out
 }
 
-// RenderTFVars is the one variables.tfvars generator of every runner (local
+// TFVarsFileName the variable values file every runner writes into the run
+// directory. Terraform loads *.auto.tfvars.json automatically; the bundle
+// rules reject user-supplied *.tfvars / *.tfvars.json, so it is the only
+// variable file in the root module.
+const TFVarsFileName = "terranova.auto.tfvars.json"
+
+// TFVarsSensitiveMask the value written for sensitive variables by
+// RenderTFVarsMasked (logs only).
+const TFVarsSensitiveMask = "***SENSITIVE***"
+
+// ErrInvalidTFVar a variable that cannot be handed to Terraform: the key is
+// not an HCL identifier or is duplicated, the value is not valid UTF-8, or an
+// HCL-format value is not one literal HCL expression. Messages name the key
+// only, never the value (it may be sensitive).
+var ErrInvalidTFVar = errors.New("invalid terraform variable")
+
+// RenderTFVars is the one variable-values generator of every runner (local
 // plan, agent / K8s plan, apply-from-snapshot, and the step-6 sandbox): same
-// input variables => byte-identical output. Only Terraform variables are
-// written, sorted by key. String escaping is unchanged from the previous
-// per-path generators (only '"' and newlines are escaped).
-func RenderTFVars(vars []models.WorkspaceVariable) string {
-	var b strings.Builder
-	for _, v := range terraformVariables(vars) {
-		if v.ValueFormat == models.ValueFormatHCL {
-			trimmed := strings.TrimSpace(v.Value)
-			needsQuotes := !strings.HasPrefix(trimmed, "{") &&
-				!strings.HasPrefix(trimmed, "[") &&
-				trimmed != "true" &&
-				trimmed != "false" &&
-				!isNumeric(trimmed)
-			if !needsQuotes {
-				fmt.Fprintf(&b, "%s = %s\n", v.Key, v.Value)
-				continue
-			}
-		}
-		fmt.Fprintf(&b, "%s = \"%s\"\n", v.Key, escapeTFVarString(v.Value))
-	}
-	return b.String()
+// input variables => byte-identical output. It renders TFVarsFileName, a JSON
+// object of the Terraform variables (keys sorted, encoding/json).
+//
+// Terraform evaluates a JSON variables file without an evaluation context, so
+// a JSON string is always the literal string: "${...}" / "%{...}" are not
+// templates, and JSON escaping makes '\', '"', newlines and control
+// characters unable to end the value. Values by format:
+//   - string format, and HCL format values that are not an object / list /
+//     bool / number (the historical heuristic): a JSON string;
+//   - HCL format objects / lists / bools / numbers: parsed as one standalone
+//     HCL expression (hclsyntax) and evaluated with a nil context — exactly
+//     how Terraform evaluates a .tfvars attribute, so no variables and no
+//     functions — then converted to the equivalent JSON value. Anything else
+//     (a second assignment after the value, references, function calls) is
+//     rejected with ErrInvalidTFVar instead of reaching Terraform.
+func RenderTFVars(vars []models.WorkspaceVariable) ([]byte, error) {
+	return renderTFVars(vars, false)
 }
 
-func escapeTFVarString(s string) string {
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	return strings.ReplaceAll(s, "\n", "\\n")
+// RenderTFVarsMasked RenderTFVars with every sensitive value replaced by
+// TFVarsSensitiveMask, for logs (masks values, not rendered text).
+func RenderTFVarsMasked(vars []models.WorkspaceVariable) ([]byte, error) {
+	return renderTFVars(vars, true)
+}
+
+func renderTFVars(vars []models.WorkspaceVariable, mask bool) ([]byte, error) {
+	doc := make(map[string]json.RawMessage)
+	for _, v := range terraformVariables(vars) {
+		if !hclsyntax.ValidIdentifier(v.Key) {
+			return nil, fmt.Errorf("%w: variable name %q is not a valid identifier", ErrInvalidTFVar, v.Key)
+		}
+		if _, dup := doc[v.Key]; dup {
+			return nil, fmt.Errorf("%w: variable %s is defined more than once", ErrInvalidTFVar, v.Key)
+		}
+		raw, err := tfvarJSONValue(v)
+		if err != nil {
+			return nil, err
+		}
+		if mask && v.Sensitive {
+			raw, _ = json.Marshal(TFVarsSensitiveMask)
+		}
+		doc[v.Key] = raw
+	}
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
+// tfvarJSONValue the JSON value Terraform must see for v.
+func tfvarJSONValue(v models.WorkspaceVariable) (json.RawMessage, error) {
+	if !utf8.ValidString(v.Value) {
+		return nil, fmt.Errorf("%w: variable %s: value is not valid UTF-8", ErrInvalidTFVar, v.Key)
+	}
+	if !isHCLTypedValue(v) {
+		return json.Marshal(v.Value)
+	}
+	expr, diags := hclsyntax.ParseExpression([]byte(v.Value), "value of "+v.Key, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("%w: variable %s: value is not a single HCL expression (%s)", ErrInvalidTFVar, v.Key, firstDiag(diags))
+	}
+	val, diags := expr.Value(nil) // no variables, no functions: same as a .tfvars file
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("%w: variable %s: value must be a literal (%s)", ErrInvalidTFVar, v.Key, firstDiag(diags))
+	}
+	if !val.IsWhollyKnown() {
+		return nil, fmt.Errorf("%w: variable %s: value must be a literal", ErrInvalidTFVar, v.Key)
+	}
+	raw, err := ctyjson.Marshal(val, val.Type())
+	if err != nil {
+		return nil, fmt.Errorf("%w: variable %s: value cannot be represented as JSON", ErrInvalidTFVar, v.Key)
+	}
+	return raw, nil
+}
+
+// isHCLTypedValue the historical rule for HCL-format values: objects, lists,
+// bools and numbers are HCL; any other HCL-format value is a plain string.
+func isHCLTypedValue(v models.WorkspaceVariable) bool {
+	if v.ValueFormat != models.ValueFormatHCL {
+		return false
+	}
+	trimmed := strings.TrimSpace(v.Value)
+	return strings.HasPrefix(trimmed, "{") ||
+		strings.HasPrefix(trimmed, "[") ||
+		trimmed == "true" ||
+		trimmed == "false" ||
+		isNumeric(trimmed)
+}
+
+// isComplexHCLValue an HCL-format object / list value: declared `any` (a
+// string declaration cannot hold it).
+func isComplexHCLValue(v models.WorkspaceVariable) bool {
+	if v.ValueFormat != models.ValueFormatHCL {
+		return false
+	}
+	trimmed := strings.TrimSpace(v.Value)
+	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+}
+
+// firstDiag summary + position of the first error (details / snippets may
+// quote the value, so they are left out).
+func firstDiag(diags hcl.Diagnostics) string {
+	for _, d := range diags {
+		if d.Severity != hcl.DiagError {
+			continue
+		}
+		if d.Subject != nil {
+			return fmt.Sprintf("%s at line %d, column %d", d.Summary, d.Subject.Start.Line, d.Subject.Start.Column)
+		}
+		return d.Summary
+	}
+	return "invalid"
 }
 
 // VariablesTFJSON the variables.tf.json document declaring vars (Terraform
@@ -136,7 +245,14 @@ func VariablesTFJSON(vars []models.WorkspaceVariable) map[string]interface{} {
 	}
 	decl := make(map[string]interface{}, len(tv))
 	for _, v := range tv {
-		d := map[string]interface{}{"type": "string"}
+		// string unless the value is an HCL object / list (a string
+		// declaration cannot hold it; bools / numbers keep converting to
+		// string as before)
+		typ := "string"
+		if isComplexHCLValue(v) {
+			typ = "any"
+		}
+		d := map[string]interface{}{"type": typ}
 		if v.Description != "" {
 			d["description"] = v.Description
 		}

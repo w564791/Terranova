@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"iac-platform/internal/models"
@@ -70,14 +71,26 @@ func TestApplyVariableOverrides_SensitivityAndFormat(t *testing.T) {
 }
 
 func TestRenderTFVars_TerraformOnlySortedStable(t *testing.T) {
-	got := RenderTFVars(overrideTestVars())
-	want := "count = 3\n" +
-		"db_password = \"s3cr\\\"et\\nline2\"\n" +
-		"name_hcl = \"plain\"\n" +
-		"region = \"us-east-1\"\n" +
-		"tags = { team = \"infra\" }\n"
-	if got != want {
+	got, err := RenderTFVars(overrideTestVars())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{
+  "count": 3,
+  "db_password": "s3cr\"et\nline2",
+  "name_hcl": "plain",
+  "region": "us-east-1",
+  "tags": {
+    "team": "infra"
+  }
+}
+`
+	if string(got) != want {
 		t.Fatalf("tfvars:\n%s\nwant:\n%s", got, want)
+	}
+	masked, _ := RenderTFVarsMasked(overrideTestVars())
+	if strings.Contains(string(masked), "s3cr") || !strings.Contains(string(masked), `"db_password": "***SENSITIVE***"`) {
+		t.Fatalf("masked render leaks: %s", masked)
 	}
 }
 
@@ -134,21 +147,26 @@ func TestTFVars_AgentAndLocalByteIdentical(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range []string{"variables.tfvars", "variables.tf.json"} {
+	for _, name := range []string{TFVarsFileName, "variables.tf.json"} {
 		lb, _ := os.ReadFile(filepath.Join(ld, name))
 		ab, _ := os.ReadFile(filepath.Join(ad, name))
 		if string(lb) != string(ab) {
 			t.Fatalf("%s differs:\nlocal:\n%s\nagent:\n%s", name, lb, ab)
 		}
 	}
-	tfvars, _ := os.ReadFile(filepath.Join(ld, "variables.tfvars"))
-	want := "api_token = \"tok-123\"\n" +
-		"count = 3\n" +
-		"db_password = \"s3cr\\\"et\\nline2\"\n" +
-		"name_hcl = \"plain\"\n" +
-		"region = \"eu-west-1\"\n" +
-		"replicas = \"5\"\n" +
-		"tags = { team = \"infra\" }\n"
+	tfvars, _ := os.ReadFile(filepath.Join(ld, TFVarsFileName))
+	want := `{
+  "api_token": "tok-123",
+  "count": 3,
+  "db_password": "s3cr\"et\nline2",
+  "name_hcl": "plain",
+  "region": "eu-west-1",
+  "replicas": "5",
+  "tags": {
+    "team": "infra"
+  }
+}
+`
 	if string(tfvars) != want {
 		t.Fatalf("tfvars:\n%s\nwant:\n%s", tfvars, want)
 	}
@@ -169,7 +187,7 @@ func TestTFVars_AgentAndLocalByteIdentical(t *testing.T) {
 
 	// the apply-from-snapshot generator renders the same bytes
 	snap := ApplyVariableOverrides(vars, models.VariableTypeTerraform, TaskVariableOverrides(task))
-	if RenderTFVars(snap) != want {
+	if got, err := RenderTFVars(snap); err != nil || string(got) != want {
 		t.Fatal("snapshot generator differs")
 	}
 }
