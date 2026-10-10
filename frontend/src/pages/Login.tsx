@@ -5,6 +5,7 @@ import type { RootState } from '../store';
 import { loginStart, loginSuccess, loginFailure } from '../store/slices/authSlice';
 import { authService, setupService } from '../services/auth';
 import { ssoService, type SSOProvider } from '../services/ssoService';
+import { safeRedirectPath } from '../utils/safeRedirect';
 import styles from './Login.module.css';
 
 const Login: React.FC = () => {
@@ -14,9 +15,9 @@ const Login: React.FC = () => {
   const { loading, isAuthenticated } = useSelector((state: RootState) => state.auth);
   
   // Get target path from URL params before login
+  // ?redirect=(401 会话过期跳转)或旧的 ?returnUrl=(ProtectedRoute);只允许同源相对路径
   const searchParams = new URLSearchParams(location.search);
-  const returnUrl = searchParams.get('returnUrl');
-  const from = returnUrl ? decodeURIComponent(returnUrl) : '/';
+  const from = safeRedirectPath(searchParams.get('redirect') ?? searchParams.get('returnUrl'));
   
   const [ssoProviders, setSsoProviders] = useState<SSOProvider[]>([]);
   const [ssoLoading, setSsoLoading] = useState<string>(''); // 正在加载的 provider key
