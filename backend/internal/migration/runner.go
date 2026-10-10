@@ -132,6 +132,9 @@ func definitions() []definition {
 		// GitHub App binding via setup callback (verified_* columns, unique
 		// constraint, setup nonces, webhook deliveries). Additive only.
 		{version: "20261010_15_github_app_binding", contract: "github-app-binding-v1", apply: applyGitHubAppBinding},
+		// Git source immutability (BEFORE UPDATE trigger on manifests).
+		// Additive/idempotent.
+		{version: "20261010_16_manifest_git_source_immutable", contract: "manifest-git-source-immutable-v1", apply: applyManifestGitSourceImmutable},
 	}
 }
 

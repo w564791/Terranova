@@ -694,3 +694,13 @@ func gitSourceUnchanged(c *gin.Context, m *models.Manifest, req *models.UpdateMa
 	}
 	return true
 }
+
+// isGitSourceImmutableDBError reports whether err is the BEFORE UPDATE trigger
+// that guards git source columns (migration 20261010_16).
+func isGitSourceImmutableDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "git_source_immutable")
+}

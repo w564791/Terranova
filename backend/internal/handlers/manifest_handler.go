@@ -391,6 +391,13 @@ func (h *ManifestHandler) UpdateManifest(c *gin.Context) {
 	}
 
 	if err := h.db.Save(&manifest).Error; err != nil {
+		if isGitSourceImmutableDBError(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "git source fields are immutable after creation (create a new manifest for another repository or directory)",
+				"code":  gitCodeSourceImmutable,
+			})
+			return
+		}
 		_ = c.Error(fmt.Errorf("update failed: %w", err))
 		return
 	}

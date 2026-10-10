@@ -26,6 +26,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20261010_13_manifest_approval",
 		"20261010_14_manifest_git_source",
 		"20261010_15_github_app_binding",
+		"20261010_16_manifest_git_source_immutable",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("migration count = %d, want %d", len(definitions), len(want))
