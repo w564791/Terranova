@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Tag } from 'antd';
+import { Alert, Button, Tag } from 'antd';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { WarningOutlined } from '@ant-design/icons';
 import NewRunDialog from '../components/NewRunDialog';
@@ -8,6 +8,8 @@ import TaskComments from '../components/TaskComments';
 import CommentInput from '../components/CommentInput';
 import AIErrorAnalysis from '../components/AIErrorAnalysis';
 import TaskErrorCodeAlert from '../components/TaskErrorCodeAlert';
+import ManifestRunHashLine, { type TaskManifestRun } from '../components/ManifestRunHashLine';
+import { approvalErrorInfo, type ApprovalErrorInfo } from '../utils/taskErrorCode';
 import TaskTimeline from '../components/TaskTimeline';
 import SmartLogViewer from '../components/SmartLogViewer';
 import { useNotificationContext } from '../contexts/NotificationContext';
@@ -46,6 +48,8 @@ interface Task {
   // Apply confirmation fields
   apply_confirmed_by?: string;
   apply_confirmed_at?: string;
+  /** Manifest 审批绑定(仅详情、仅 manifest plan_and_apply 任务;后端可能尚未返回) */
+  manifest_run?: TaskManifestRun | null;
 }
 
 const TaskDetail: React.FC = () => {
@@ -57,6 +61,8 @@ const TaskDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewRunDialog, setShowNewRunDialog] = useState(false);
+  // confirm-apply 被结构化拒绝(409 error_code)时的提示
+  const [approvalError, setApprovalError] = useState<ApprovalErrorInfo | null>(null);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [commentAction, setCommentAction] = useState<'comment' | 'confirm_apply' | 'cancel' | 'cancel_previous' | 'override'>('comment');
   const [submittingAction, setSubmittingAction] = useState(false);
@@ -397,6 +403,7 @@ const TaskDetail: React.FC = () => {
       }
 
       if (commentAction === 'confirm_apply') {
+        setApprovalError(null);
         showSuccess('Apply 已确认，任务开始执行');
       } else if (commentAction === 'cancel') {
         showSuccess('任务已取消');
@@ -416,6 +423,17 @@ const TaskDetail: React.FC = () => {
         }
       }, 300);
     } catch (err: any) {
+      // 审批拒绝(409 error_code / error_reason):中文提示;需要重新 plan 时页面上给 New run 入口
+      const approval = commentAction === 'confirm_apply' ? approvalErrorInfo(err) : null;
+      if (approval) {
+        showError(approval.message);
+        setApprovalError(approval);
+        if (approval.refresh) {
+          setShowCommentInput(false);
+          fetchTask();
+        }
+        return;
+      }
       const message = err.response?.data?.error || err.message || 'Failed to perform action';
       showError(`操作失败: ${message}`);
     } finally {
@@ -595,6 +613,28 @@ const TaskDetail: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Manifest 审批绑定的哈希(将审批 / 已审批) */}
+        <ManifestRunHashLine run={task.manifest_run} />
+
+        {/* 审批(confirm-apply)被拒绝 */}
+        {approvalError && (
+          <Alert
+            type={approvalError.code === 'already_approved' ? 'info' : 'error'}
+            showIcon
+            closable
+            onClose={() => setApprovalError(null)}
+            style={{ marginBottom: 12 }}
+            message={approvalError.message}
+            action={
+              approvalError.rerunPlan ? (
+                <Button size="small" type="primary" onClick={() => setShowNewRunDialog(true)}>
+                  重新 Plan
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
 
         {/* 结构化失败码提示(如 Manifest 版本已失效 => 去升级) */}
         {task.error_code && (
