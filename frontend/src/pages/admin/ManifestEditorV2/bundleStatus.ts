@@ -182,8 +182,11 @@ export function parsePublishProblems(err: unknown): PublishProblem[] | null {
 /**
  * git 来源 manifest 的错误码(后端 6c28579 响应 JSON 的 code)-> 中文提示。
  */
+export const GIT_SOURCE_READ_ONLY_MESSAGE = 'Git 来源的 Manifest 不能在线编辑'
+export const GIT_SOURCE_BANNER = 'Git 来源：内容来自仓库，在此只读。发布时选择 commit。'
+
 const GIT_ERROR_TEXT: Record<string, string> = {
-  git_source_read_only: 'Git 来源的 Manifest 不能在线编辑',
+  git_source_read_only: GIT_SOURCE_READ_ONLY_MESSAGE,
   git_source_disabled: '平台未配置 GitHub App，暂不能使用 Git 来源',
   git_repo_not_accessible: 'GitHub App 无法访问该仓库（请确认仓库属于已连接的 GitHub 账户，且 App 已授权该仓库）',
   git_commit_not_found: '仓库中找不到该 commit',

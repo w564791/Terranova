@@ -184,6 +184,8 @@ export interface ManifestVersion {
   bundle_hash?: string | null
   /** 无合法 bundle 的原因(规则名 + 路径,如 `secret_scan:aws_access_key @ main.tf`,或 `hash_mismatch`) */
   bundle_invalid_reason?: string | null
+  /** git 来源:该版本钉住的完整 commit SHA(native 为空) */
+  source_ref?: string | null
   created_by: string
   created_at: string
 }
@@ -216,7 +218,45 @@ export interface ManifestDeployment {
 
 export interface PublishVersionRequest {
   version: string
+  /** git 来源留空时后端用 commit 标题 */
   changelog?: string
+  /** 仅 git 来源(必填):完整 commit SHA(40 / 64 位小写十六进制) */
+  commit_sha?: string
+}
+
+// ===== git 来源 commit 选择器(后端 6c28579,需要 MANIFESTS WRITE)=====
+
+export interface GitBranch {
+  name: string
+  sha: string
+}
+
+export interface GitCommit {
+  sha: string
+  subject: string
+  author_name: string
+  author_date: string
+}
+
+/** 完整 commit SHA(SHA-1 40 位 / SHA-256 64 位,小写),与后端 gitsource.IsCommitSHA 一致 */
+export const FULL_COMMIT_SHA_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+
+/** commit SHA 的短形式(7 位,展示用) */
+export function shortSha(sha: string | null | undefined): string {
+  return sha ? sha.slice(0, 7) : ''
+}
+
+export async function listGitBranches(ctx: ManifestEditorContext): Promise<GitBranch[]> {
+  const data = (await api.get(`${basePath(ctx)}/git/branches`)) as { branches?: GitBranch[] }
+  return data.branches ?? []
+}
+
+/** ref 省略 = 仓库默认分支;最新在前 */
+export async function listGitCommits(ctx: ManifestEditorContext, ref?: string, perPage = 30): Promise<GitCommit[]> {
+  const params: Record<string, string | number> = { per_page: perPage }
+  if (ref) params.ref = ref
+  const data = (await api.get(`${basePath(ctx)}/git/commits`, { params })) as { commits?: GitCommit[] }
+  return data.commits ?? []
 }
 
 export async function listVersions(ctx: ManifestEditorContext): Promise<ManifestVersion[]> {
