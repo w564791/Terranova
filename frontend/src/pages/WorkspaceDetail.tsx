@@ -19,6 +19,7 @@ import DateRangePicker from '../components/DateRangePicker';
 import { useTaskAutoRefresh } from '../hooks/useTaskAutoRefresh';
 import { useWorkspaceManifestSummary } from '../hooks/useWorkspaceManifestSummary';
 import { getTaskStatusLabel, getTaskStatusCategory } from '../utils/taskStatus';
+import { taskErrorInfo } from '../utils/taskErrorCode';
 import styles from './WorkspaceDetail.module.css';
 
 interface Workspace {
@@ -874,6 +875,8 @@ interface Run {
   changes_change?: number;
   changes_destroy?: number;
   output?: string;
+  /** 结构化失败码(后端 c9f030f;列表不含 error_message) */
+  error_code?: string;
 }
 
 type FilterType = 'all' | 'needs_attention' | 'errored' | 'running' | 'on_hold' | 'success' | 'cancelled';
@@ -1434,6 +1437,14 @@ const RunsTab: React.FC<{ workspaceId: string; latestRun: any; onLatestRunChange
                     {index === 0 && filter === 'all' && page === 1 && (
                       <span className={styles.currentBadge}>CURRENT</span>
                     )}
+                    {(() => {
+                      const ec = taskErrorInfo(run.error_code);
+                      return ec ? (
+                        <span className={styles.errorCodeBadge} title={ec.title}>
+                          {ec.tag}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   
                   {/* 第二行：元信息 */}
