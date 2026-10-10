@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { Button, Modal, Tag } from 'antd';
+import type { RootState } from '../../store';
 import { agentPoolAPI, poolAuthorizationAPI, poolTokenAPI, type AgentPool, type Agent, type PoolAllowedWorkspace, type PoolToken, type PoolTokenCreateResponse } from '../../services/agent';
 import { workspaceService, type Workspace } from '../../services/workspaces';
 import { useToast } from '../../contexts/ToastContext';
@@ -29,6 +32,8 @@ const AgentPoolDetail: React.FC = () => {
   const { poolId } = useParams<{ poolId: string }>();
   const [pool, setPool] = useState<AgentPool | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  // 撤销 agent 的后端路由要求平台管理员(RequireSystemAdmin)
+  const isSystemAdmin = useSelector((state: RootState) => !!state.auth.user?.is_system_admin);
   const [allowedWorkspaces, setAllowedWorkspaces] = useState<PoolAllowedWorkspace[]>([]);
   const [allWorkspaces, setAllWorkspaces] = useState<Workspace[]>([]);
   const [showAddWorkspaceDialog, setShowAddWorkspaceDialog] = useState(false);
@@ -226,6 +231,29 @@ const AgentPoolDetail: React.FC = () => {
       }
     };
   }, [poolId]);
+
+  const handleRevokeAgent = (agent: Agent) => {
+    if (!poolId) return;
+    Modal.confirm({
+      title: `撤销 agent「${agent.name || agent.agent_id}」？`,
+      content:
+        '撤销后该 agent 的凭证和名下所有 run token 立即失效。该主机如果仍持有 pool token，可以重新注册；要彻底封禁，请同时撤销 pool token。',
+      okText: '撤销',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await agentPoolAPI.revokeAgent(poolId, agent.agent_id);
+          showToast('Agent 已撤销', 'success');
+          loadPoolDetail();
+        } catch (error: unknown) {
+          const e = error as { response?: { data?: { error?: string } }; message?: string };
+          showToast(e.response?.data?.error || e.message || '撤销失败', 'error');
+          throw error;
+        }
+      },
+    });
+  };
 
   const loadPoolDetail = async () => {
     if (!poolId) return;
@@ -838,6 +866,7 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                   <th style={{ minWidth: '200px' }}>CPU使用率</th>
                   <th style={{ minWidth: '200px' }}>内存使用率</th>
                   <th>运行任务</th>
+                  {isSystemAdmin && <th>操作</th>}
                 </tr>
               </thead>
               <tbody>
@@ -848,7 +877,14 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                     <tr key={agent.agent_id}>
                       <td className={styles.agentName}>{agent.name}</td>
                       <td className={styles.agentId}>{agent.agent_id}</td>
-                      <td>{getStatusBadge(agent.status)}</td>
+                      <td>
+                        {getStatusBadge(agent.status)}
+                        {agent.revoked_at && (
+                          <Tag color="red" style={{ marginLeft: 6 }} title={new Date(agent.revoked_at).toLocaleString()}>
+                            已撤销
+                          </Tag>
+                        )}
+                      </td>
                       <td>{agent.version || '-'}</td>
                       <td>{agent.ip_address || '-'}</td>
                       <td>
@@ -894,6 +930,17 @@ ${saLine}  restartPolicy: Never  # One-time execution pod
                           <span style={{ color: 'var(--ink-3)' }}>-</span>
                         )}
                       </td>
+                      {isSystemAdmin && (
+                        <td>
+                          {agent.revoked_at ? (
+                            <span style={{ color: 'var(--ink-3)' }}>-</span>
+                          ) : (
+                            <Button size="small" danger onClick={() => handleRevokeAgent(agent)}>
+                              撤销
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
