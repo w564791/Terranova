@@ -204,3 +204,14 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 - Code Interpreter 能否自带 terraform 与 provider 二进制（或改用 AgentCore Runtime 自定义镜像）。
 - 单个 session 最长运行时间是否覆盖大 workspace 的 plan。
 - VPC 模式下到 provider mirror 与目标云 API 的路径（VPC 端点 / NAT + 白名单）。
+
+## 11. 实现中的变更（2026-10-10）
+1. **uninstall 不跑 destroy**：只解除 workspace 与 manifest 的绑定，资源由用户在 workspace 上自行 Plan + Apply 删除。哈希为 NULL 的版本（违反规则或 `hash_mismatch`）在执行器上一律不能运行（plan/apply/drift），返回 `error_code=bundle_republish_required`，没有例外。原定的净化后 destroy、`untrusted_bundle_confirm_required` 确认流程不做；以后若加 destroy 任务类型再启用。
+2. **`plan_data` 保留期**：信封加密，`PLAN_DATA_TTL` 默认 7 天，apply 成功、任务终态或过期即删除；过期后 apply 返回 `plan_expired`。
+3. **agent 能力门槛**：绑定 manifest 的 workspace、带外部文件或 override 的任务，只派给上报了 bundle 校验等能力位的 agent；没有就返回 `agent_upgrade_required`（`error_reason` 写缺少的能力名）。
+4. **tfvars** 统一由 `encoding/json` 生成 `terranova.auto.tfvars.json`，三种 runner 共用。
+5. **插件缓存** 每个任务一份，`init` 不带 `-upgrade`，强制 lock 校验；sandbox 不挂宿主机缓存。
+6. **资源变更** 由平台从脱敏后的 `plan_json` 解析，不信任 agent 上传；agent 访问任务的接口统一校验 `task.agent_id` 与任务状态。
+
+## 12. 待定：provider mirror
+第 6 步依赖它：AgentCore 只允许 VPC 模式，VPC 默认无公网，sandbox 的 `init` 需要内部 `network_mirror`（否则就得开 NAT 放行 registry，等于放宽出网）。平台 CLI 配置的 `provider_installation` 只配 `network_mirror`、不留 `direct`。
