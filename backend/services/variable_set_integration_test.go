@@ -116,7 +116,8 @@ func TestMain(m *testing.M) {
 			is_deleted BOOLEAN DEFAULT false,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			created_by VARCHAR(20)
+			created_by VARCHAR(20),
+			key_version SMALLINT NOT NULL DEFAULT 0
 		)`)
 		testDB.Exec(`CREATE TABLE IF NOT EXISTS workspace_project_relations (
 			id SERIAL PRIMARY KEY,

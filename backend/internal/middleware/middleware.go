@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"iac-platform/internal/config"
+	"iac-platform/internal/keys"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -138,14 +139,11 @@ func JWTAuth() gin.HandlerFunc {
 			}
 		}
 
-		// 使用统一的JWT密钥解析token，显式验证签名算法
-		jwtSecret := config.GetJWTSecret()
-		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-			}
-			return []byte(jwtSecret), nil
-		}, jwt.WithValidMethods([]string{"HS256"}))
+		// User-purpose signing key selected by kid (SIGNING_ROOT_KEY, current
+		// or previous); tokens without kid only within the legacy window.
+		token, err := jwt.Parse(tokenString,
+			keys.Keyfunc(keys.PurposeUser, keys.LegacySecret(config.GetJWTSecret())),
+			jwt.WithValidMethods([]string{"HS256"}))
 
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{

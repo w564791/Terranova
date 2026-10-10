@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"iac-platform/internal/keys"
 	"log"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,13 +19,15 @@ type StateTokenClaims struct {
 }
 
 type StateTokenService struct {
-	db     *gorm.DB
-	secret []byte
+	db *gorm.DB
+	// legacy "state:" + JWT_SECRET: verifies state tokens without kid during
+	// the legacy window (and signs in development legacy mode). New tokens are
+	// signed with the state-purpose key (keys.PurposeState).
+	legacy []byte
 }
 
 func NewStateTokenService(db *gorm.DB) *StateTokenService {
-	secret := "state:" + os.Getenv("JWT_SECRET")
-	return &StateTokenService{db: db, secret: []byte(secret)}
+	return &StateTokenService{db: db, legacy: keys.LegacyStateSecret()}
 }
 
 // GenerateToken creates a JWT for a task, stores SHA256(token) in workspace_tasks.state_token_hash.
@@ -42,8 +44,7 @@ func (s *StateTokenService) GenerateToken(workspaceID string, taskID uint) (stri
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, err := token.SignedString(s.secret)
+	tokenStr, err := keys.Sign(keys.PurposeState, claims, s.legacy)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign state token: %w", err)
 	}
@@ -74,12 +75,8 @@ func (s *StateTokenService) GenerateToken(workspaceID string, taskID uint) (stri
 // Falls back to JWT-only validation if DB is temporarily unavailable.
 func (s *StateTokenService) ValidateToken(tokenStr string) (string, uint, error) {
 	claims := &StateTokenClaims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return s.secret, nil
-	})
+	token, err := jwt.ParseWithClaims(tokenStr, claims, keys.Keyfunc(keys.PurposeState, s.legacy),
+		jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil || !token.Valid {
 		log.Printf("[StateToken] JWT parse failed for task %d: %v", claims.TaskID, err)
 		return "", 0, fmt.Errorf("invalid state token: %w", err)

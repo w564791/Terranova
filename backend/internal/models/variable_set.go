@@ -47,6 +47,7 @@ type VarsetVariable struct {
 	VarsetID     string       `json:"varset_id" gorm:"column:varset_id;type:varchar(30);not null;index"`
 	Key          string       `json:"key" gorm:"not null;size:100"`
 	Value        string       `json:"value,omitempty" gorm:"type:text"`
+	KeyVersion   int16        `json:"-" gorm:"column:key_version;not null;default:0"` // DATA_ENCRYPTION_KEY version of an encrypted Value (0 = legacy JWT_SECRET key / not encrypted)
 	VariableType VariableType `json:"variable_type" gorm:"not null;default:terraform;size:20"`
 	ValueFormat  ValueFormat  `json:"value_format" gorm:"not null;default:string;size:20"`
 	Sensitive    bool         `json:"sensitive" gorm:"default:false"`
@@ -81,6 +82,7 @@ func (v *VarsetVariable) BeforeCreate(tx *gorm.DB) error {
 		}
 		v.Value = encrypted
 	}
+	v.KeyVersion = VariableKeyVersion(v.Sensitive, v.Value)
 	return nil
 }
 
@@ -93,13 +95,14 @@ func (v *VarsetVariable) BeforeSave(tx *gorm.DB) error {
 		}
 		v.Value = encrypted
 	}
+	v.KeyVersion = VariableKeyVersion(v.Sensitive, v.Value)
 	return nil
 }
 
 // AfterFind 查询后解密敏感变量
 func (v *VarsetVariable) AfterFind(tx *gorm.DB) error {
 	if v.Sensitive && v.Value != "" && crypto.IsEncrypted(v.Value) {
-		decrypted, err := crypto.DecryptValue(v.Value)
+		decrypted, err := crypto.DecryptValueWithVersion(v.Value, v.KeyVersion)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt variable: %w", err)
 		}

@@ -53,6 +53,11 @@ services:
       DB_PORT: "5432"
       DB_SSLMODE: disable
       JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-secret-key}
+      # Required with ENV=production: generate each with `openssl rand -base64 32`
+      # and keep them (see docs/security/signing-and-encryption-keys.md).
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?set DATA_ENCRYPTION_KEY (openssl rand -base64 32)}
+      SIGNING_ROOT_KEY: ${SIGNING_ROOT_KEY:?set SIGNING_ROOT_KEY (openssl rand -base64 32)}
+      LEGACY_TOKEN_CUTOFF: ${LEGACY_TOKEN_CUTOFF:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE} 
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY} ## value form https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html
     ports:

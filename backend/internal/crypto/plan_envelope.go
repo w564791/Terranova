@@ -58,7 +58,7 @@ var (
 )
 
 func planDataKEK() []byte {
-	m := hmac.New(sha256.New, getEncryptionKey())
+	m := hmac.New(sha256.New, legacyKey())
 	m.Write([]byte("terranova/plan-data/kek/v1"))
 	return m.Sum(nil)
 }

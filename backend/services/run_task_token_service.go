@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"iac-platform/internal/keys"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -59,8 +60,8 @@ func (s *RunTaskTokenService) GenerateAccessToken(resultID string, taskID uint, 
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(s.secretKey)
+	// runtask-purpose key; s.secretKey is the legacy key (JWT_SECRET)
+	tokenString, err := keys.Sign(keys.PurposeRunTask, claims, s.secretKey)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("failed to sign token: %w", err)
 	}
@@ -70,12 +71,8 @@ func (s *RunTaskTokenService) GenerateAccessToken(resultID string, taskID uint, 
 
 // ValidateAccessToken validates the access token and returns claims
 func (s *RunTaskTokenService) ValidateAccessToken(tokenString string) (*RunTaskTokenClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &RunTaskTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return s.secretKey, nil
-	})
+	token, err := jwt.ParseWithClaims(tokenString, &RunTaskTokenClaims{},
+		keys.Keyfunc(keys.PurposeRunTask, s.secretKey), jwt.WithValidMethods([]string{"HS256"}))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)

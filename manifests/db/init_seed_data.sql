@@ -6266,7 +6266,8 @@ CREATE TABLE public.varset_variables (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     created_by character varying(20),
-    version integer DEFAULT 1 NOT NULL
+    version integer DEFAULT 1 NOT NULL,
+    key_version smallint DEFAULT 0 NOT NULL
 );
 
 
@@ -7573,7 +7574,8 @@ CREATE TABLE public.workspace_variables (
     is_deleted boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    created_by character varying(20)
+    created_by character varying(20),
+    key_version smallint DEFAULT 0 NOT NULL
 );
 
 

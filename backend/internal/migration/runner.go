@@ -115,6 +115,8 @@ func definitions() []definition {
 		// marker of the resource-change redaction backfill (values re-derived
 		// from the redacted plan_json in the application)
 		{version: "20261010_04_workspace_task_resource_change_redaction", contract: "workspace-task-resource-change-redaction-marker-v1", apply: applyWorkspaceTaskResourceChangeRedaction},
+		// Per-row data encryption key version for variable values.
+		{version: "20261010_10_variable_key_version", contract: "variable-key-version-v1", apply: applyVariableKeyVersion},
 	}
 }
 
