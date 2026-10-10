@@ -72,3 +72,7 @@ func CheckStartup() (warnings []string, err error) {
 	}
 	return warnings, errors.Join(errs...)
 }
+
+// IsProduction reports ENV=production, the single mode switch for the
+// startup checks (keys, TLS trust).
+func IsProduction() bool { return isProduction() }

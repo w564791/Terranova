@@ -49,7 +49,34 @@ public: treat the key as compromised. Remove it from the tree, generate a new
 key pair, replace every certificate issued for the old key, and (if required)
 rewrite history separately.
 
-The mkcert localhost / `*.iac-platform.com` key that used to live in
-`manifests/tls/certs/localhost-key.pem` and `manifests/tls/secret-gateway-tls.yaml`
-is such a key: every environment that used it must run `make dev-certs` (or
-install its own certificate) and redeploy `iac-gateway-tls`.
+### Leaked: mkcert gateway certificate (removed in 93aaba2)
+
+`manifests/tls/certs/localhost-key.pem` and the base64 `tls.key` in
+`manifests/tls/secret-gateway-tls.yaml` held the private key of:
+
+| | |
+|---|---|
+| Subject | `O=mkcert development certificate, OU=ken@kens-MacBook-Pro.local` |
+| Issuer | `mkcert ken@kens-MacBook-Pro.local` (mkcert development CA) |
+| SANs | `iac-platform.com`, `www.iac-platform.com`, `api.iac-platform.com` |
+| Valid | 2026-02-10 to 2028-05-10 (04:47:36 UTC) |
+| Serial | `0AAD8EB0AEF0A674DE3E9509F2EC52AD` |
+| SHA-256 fingerprint | `01:5F:23:22:92:D1:82:E3:BA:C7:1F:B8:95:74:FB:2F:75:CF:76:AB:4B:DD:C0:C5:7A:EE:DC:74:C8:3D:1E:7E` |
+
+It is in the public history, so anyone can present it. Every environment that used it:
+
+1. Replace the gateway certificate: `make dev-certs` (local) or your own
+   certificate in `manifests/tls/certs/tls.crt` / `tls.key`, then redeploy
+   `iac-gateway-tls`.
+2. Remove trust in it: clients that trusted this leaf certificate or the
+   `mkcert ken@kens-MacBook-Pro.local` CA (browsers, `IAC_CA_FILE`,
+   `_TERRANOVA_CA_CERT`, OS trust stores) must stop trusting it. Only the
+   leaf key leaked, not the CA key, but the leaf alone is enough to
+   impersonate the three hostnames until 2028-05-10.
+3. After the replacement, rotate the agent pool tokens (and any other
+   credentials sent to those hostnames, e.g. run task/HMAC secrets and user
+   sessions): traffic to an endpoint presenting this certificate may have
+   been intercepted.
+
+Agents verify certificates and refuse bypass options in production (see
+`docs/security/tls-verification.md`); private CAs go in `IAC_CA_FILE`.

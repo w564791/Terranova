@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"iac-platform/internal/tlstrust"
 	"iac-platform/services"
 
 	"github.com/gorilla/websocket"
@@ -178,8 +179,13 @@ func (m *CCManager) tryConnect() error {
 	headers.Set("Authorization", "Bearer "+token)
 
 	// Create a NEW dialer instance with pointer
+	tlsCfg, err := tlstrust.ClientConfig()
+	if err != nil {
+		return fmt.Errorf("TLS configuration: %w", err)
+	}
 	dialer := &websocket.Dialer{
 		EnableCompression: false,
+		TLSClientConfig:   tlsCfg, // verification always on; IAC_CA_FILE adds a private CA
 	}
 
 	log.Printf("[Connect] Dialing WebSocket...")

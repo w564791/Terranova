@@ -2,10 +2,12 @@ package services
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"iac-platform/internal/models"
+	"iac-platform/internal/tlstrust"
 	"io"
 	"log"
 	"net"
@@ -47,6 +49,9 @@ func NewAgentAPIClient(baseURL, token string) *AgentAPIClient {
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  false,
+		// Verification always on; IAC_CA_FILE / AGENT_CA_FILE add a private CA
+		// (validated at agent startup by tlstrust.CheckStartup).
+		TLSClientConfig: agentTLSConfig(),
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -967,4 +972,16 @@ func (c *AgentAPIClient) UploadPlanJSONWithRetry(taskID uint, planJSON map[strin
 	}
 
 	return nil
+}
+
+// agentTLSConfig returns the TLS client configuration for agent -> platform
+// connections. The CA bundle was validated at startup; should reading it fail
+// later, fall back to the system roots (verification stays on).
+func agentTLSConfig() *tls.Config {
+	cfg, err := tlstrust.ClientConfig()
+	if err != nil {
+		log.Printf("[TLS] WARNING: %v; using system roots", err)
+		return &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return cfg
 }

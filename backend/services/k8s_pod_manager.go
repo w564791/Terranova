@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"iac-platform/internal/keys"
 	"iac-platform/internal/models"
 
 	corev1 "k8s.io/api/core/v1"
@@ -787,6 +788,7 @@ func (m *K8sPodManager) buildPodSpec(podName, namespace, poolID string, config *
 	for key, value := range config.Env {
 		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
 	}
+	envVars = withAgentMode(envVars, keys.IsProduction())
 
 	// Build resource requirements
 	resources := corev1.ResourceRequirements{
@@ -937,4 +939,26 @@ func (m *K8sPodManager) FindPodByTaskID(taskID uint) (*ManagedPod, int, error) {
 	}
 
 	return nil, -1, fmt.Errorf("task %d not found in any pod", taskID)
+}
+
+// withAgentMode propagates the platform's mode switch to agent pods: a
+// production platform runs its agents with ENV=production, so the agent's
+// startup checks (e.g. refusing TLS verification bypass options) apply. A
+// pool template cannot downgrade it; outside production the template's
+// value (if any) is kept.
+func withAgentMode(envVars []corev1.EnvVar, production bool) []corev1.EnvVar {
+	if !production {
+		return envVars
+	}
+	out := envVars[:0:0]
+	for _, e := range envVars {
+		if e.Name == "ENV" {
+			if e.Value != "production" {
+				log.Printf("[PodManager] Ignoring pool template ENV=%q: platform runs in production", e.Value)
+			}
+			continue
+		}
+		out = append(out, e)
+	}
+	return append(out, corev1.EnvVar{Name: "ENV", Value: "production"})
 }

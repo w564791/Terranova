@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/tlstrust"
 
 	"gorm.io/gorm"
 )
@@ -851,7 +852,17 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 
 		// CA cert injection for self-signed certs (Agent/K8s mode)
 		// TF_HTTP_CLIENT_CA_CERTIFICATE_PEM accepts PEM content directly, not a file path
-		if caCert := os.Getenv("_TERRANOVA_CA_CERT"); caCert != "" {
+		// Without _TERRANOVA_CA_CERT, IAC_CA_FILE / AGENT_CA_FILE (plus the system
+		// roots, since this setting replaces them) are used.
+		caCert := os.Getenv("_TERRANOVA_CA_CERT")
+		if caCert == "" {
+			bundle, err := tlstrust.CABundlePEM()
+			if err != nil {
+				log.Printf("[TLS] WARNING: CA bundle for the state backend: %v", err)
+			}
+			caCert = bundle
+		}
+		if caCert != "" {
 			hasCACert := false
 			for _, v := range envVars {
 				if strings.HasPrefix(v.Key, "TF_HTTP_CLIENT_CA_CERTIFICATE_PEM") {

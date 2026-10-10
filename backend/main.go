@@ -21,6 +21,7 @@ import (
 	"iac-platform/internal/router"
 	"iac-platform/internal/websocket"
 	"iac-platform/internal/keys"
+	"iac-platform/internal/tlstrust"
 	"iac-platform/internal/leaderelection"
 	"iac-platform/internal/pgpubsub"
 	"iac-platform/internal/version"
@@ -75,6 +76,19 @@ func main() {
 	}
 	if keyErr != nil {
 		log.Fatalf("[Keys] refusing to start: %v", keyErr)
+	}
+
+	// TLS trust: no verification bypass in production; IAC_CA_FILE adds a
+	// private CA to every outbound client (run tasks, notifications, SSO, ...).
+	tlsWarnings, tlsErr := tlstrust.CheckStartup("server")
+	for _, w := range tlsWarnings {
+		log.Printf("[TLS] WARNING: %s", w)
+	}
+	if tlsErr != nil {
+		log.Fatalf("[TLS] refusing to start: %v", tlsErr)
+	}
+	if err := tlstrust.InstallDefaults(); err != nil {
+		log.Fatalf("[TLS] refusing to start: %v", err)
 	}
 
 	// 加载配置

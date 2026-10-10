@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"iac-platform/agent/control"
+	"iac-platform/internal/keys"
+	"iac-platform/internal/tlstrust"
 	"iac-platform/internal/version"
 	"iac-platform/services"
 )
@@ -22,6 +24,20 @@ func main() {
 	agentToken := os.Getenv("IAC_AGENT_TOKEN")
 	agentName := os.Getenv("IAC_AGENT_NAME")
 	protocol := os.Getenv("IAC_AGENT_PROTOCOL")
+
+	// TLS trust: refuse verification-bypass options in production (ENV=production,
+	// injected by the platform for K8s pools); IAC_CA_FILE / AGENT_CA_FILE add
+	// a private CA for the API, C&C WebSocket and Terraform state backend.
+	tlsWarnings, tlsErr := tlstrust.CheckStartup("agent")
+	for _, w := range tlsWarnings {
+		log.Printf("[TLS] WARNING: %s", w)
+	}
+	if tlsErr != nil {
+		log.Fatalf("[TLS] refusing to start: %v", tlsErr)
+	}
+	if err := tlstrust.InstallDefaults(); err != nil {
+		log.Fatalf("[TLS] refusing to start: %v", err)
+	}
 
 	// Validate required variables
 	if apiEndpoint == "" || agentToken == "" || agentName == "" {
@@ -42,6 +58,10 @@ func main() {
 	serverPort := "8080"
 	if port := os.Getenv("SERVER_PORT"); port != "" {
 		serverPort = port
+	}
+
+	if protocol == "http" && keys.IsProduction() {
+		log.Printf("[TLS] WARNING: IAC_AGENT_PROTOCOL=http in production: the agent token, variables and state travel unencrypted; use https")
 	}
 
 	log.Printf("Configuration:")
