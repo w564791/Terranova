@@ -45,6 +45,7 @@ func setupAgentOwnershipRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	for _, stmt := range []string{
 		`CREATE TABLE pool_tokens (token_hash TEXT PRIMARY KEY, token_name TEXT, token_type TEXT, pool_id TEXT, is_active INTEGER, expires_at DATETIME, last_used_at DATETIME, k8s_namespace TEXT)`,
 		`CREATE TABLE pool_allowed_workspaces (id INTEGER PRIMARY KEY AUTOINCREMENT, pool_id TEXT, workspace_id TEXT, status TEXT)`,
+		`CREATE TABLE run_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, session_id TEXT, workspace_id TEXT, purpose TEXT, token_hash TEXT, expires_at DATETIME, revoked_at DATETIME, agent_id TEXT, created_at DATETIME)`,
 		`CREATE TABLE agents (agent_id TEXT PRIMARY KEY, pool_id TEXT, capabilities TEXT, token_generation INTEGER NOT NULL DEFAULT 0, revoked_at DATETIME, pool_token_hash TEXT, status TEXT, updated_at DATETIME)`,
 		`CREATE TABLE workspace_tasks (id INTEGER PRIMARY KEY, workspace_id TEXT, agent_id TEXT, status TEXT, completed_at DATETIME, updated_at DATETIME)`,
 		`INSERT INTO pool_allowed_workspaces (pool_id, workspace_id, status) VALUES ('pool-1','ws-1','active'),('pool-2','ws-1','active'),('pool-1','ws-2','active')`,

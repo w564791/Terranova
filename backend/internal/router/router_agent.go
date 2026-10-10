@@ -40,6 +40,8 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 		agents.POST("/register", middleware.PoolTokenAuthMiddleware(db), agentHandler.RegisterAgent)
 		// Agent token renewal (agent token only)
 		agents.POST("/token", middleware.RequireAgentToken(db), agentHandler.RenewAgentToken)
+		// Manifest run token for a run assigned to the calling agent
+		agents.POST("/runs/:run_id/token", middleware.RequireAgentToken(db), agentHandler.IssueRunToken)
 
 		// Get pool HCP secrets (for generating credentials.tfrc.json on agent side)
 		agents.GET("/pool/secrets", middleware.AgentOrPoolTokenAuth(db), agentPoolSecretsHandler.GetPoolSecrets)

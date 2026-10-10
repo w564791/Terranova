@@ -325,12 +325,19 @@ const (
 	// capabilities it needs (models.ManifestAgentCapabilities); error_reason
 	// names the first missing capability.
 	TaskErrorCodeAgentUpgradeRequired = "agent_upgrade_required"
+	// TaskErrorCodeBundleHashMismatch the executor (agent or local) received
+	// a manifest bundle that did not hash to the bundle_hash the platform
+	// handed out (error_reason hash_mismatch). Reported by the executor; the
+	// platform audits it (version.bundle_hash_mismatch, source agent) and
+	// re-verifies the stored files, marking the version only when its own
+	// check fails.
+	TaskErrorCodeBundleHashMismatch = "bundle_hash_mismatch"
 )
 
 // KnownTaskErrorCode reports codes an agent may report (status update).
 func KnownTaskErrorCode(code string) bool {
 	switch code {
-	case TaskErrorCodeBundleRepublishRequired, TaskErrorCodePlanExpired:
+	case TaskErrorCodeBundleRepublishRequired, TaskErrorCodePlanExpired, TaskErrorCodeBundleHashMismatch:
 		return true
 	}
 	return false

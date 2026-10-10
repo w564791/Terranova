@@ -119,7 +119,7 @@ func TaskErrorCode(err error) string {
 	// received did not hash to bundle_hash (the platform verified the stored
 	// files before handing them out)
 	if errors.Is(err, manifestbundle.ErrIntegrity) {
-		return models.TaskErrorCodeBundleRepublishRequired
+		return models.TaskErrorCodeBundleHashMismatch
 	}
 	if errors.Is(err, crypto.ErrPlanDataExpired) || errors.Is(err, ErrPlanDataMissing) {
 		return models.TaskErrorCodePlanExpired
@@ -157,7 +157,7 @@ func classifyTaskFailure(err error, message string) (code, reason, msg string) {
 		return code, reason, rr.Error()
 	}
 	if errors.Is(err, manifestbundle.ErrIntegrity) {
-		return code, reason, models.TaskErrorCodeBundleRepublishRequired + ": " + manifestbundle.ReasonHashMismatch + " (" + err.Error() + ")"
+		return code, reason, models.TaskErrorCodeBundleHashMismatch + ": " + manifestbundle.ReasonHashMismatch + " (" + err.Error() + ")"
 	}
 	if code == models.TaskErrorCodePlanExpired {
 		return code, reason, models.TaskErrorCodePlanExpired + ": " + err.Error()

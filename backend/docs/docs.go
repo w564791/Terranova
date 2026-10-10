@@ -3431,6 +3431,62 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/agents/runs/{run_id}/token": {
+            "post": {
+                "security": [
+                    {
+                        "AgentTokenAuth": []
+                    }
+                ],
+                "description": "Agent token only (pool tokens are refused). Returns a run token (JWT typ run, signing purpose run; claims run_id, workspace_id, purpose, session_id, agent_id) for a runner=agent manifest run in pending/running state assigned to the calling agent. It authenticates the Terraform HTTP state backend of the run's workspace only; preview tokens are read-only (POST/LOCK/UNLOCK refused). Expiry = min(run created_at + MANIFEST_RUN_TIMEOUT, session expiry). Every use is checked against the database (refused on DB error). Revoked when the run ends, its session ends or expires, or the agent is revoked or deregistered.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Agent"
+                ],
+                "summary": "Obtain a manifest run token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Manifest run ID",
+                        "name": "run_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/agents/tasks/{task_id}/data": {
             "get": {
                 "security": [
@@ -3976,7 +4032,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc.",
+                        "description": "Status update with status, stage, error_message, error_code (only known structured codes such as bundle_republish_required, plan_expired, bundle_hash_mismatch are stored), error_reason (short rule name stored with a known error_code), changes, duration, etc. A bundle_hash_mismatch report (the bundle the executor received did not hash to bundle_hash) is audited as version.bundle_hash_mismatch with source agent; the platform re-verifies the stored files and marks the version hash_mismatch only if its own check fails.",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -27089,7 +27145,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get workspace task list with pagination, search and filtering. Each task carries error_code when its failure has a structured code (bundle_republish_required, plan_expired, agent_upgrade_required) and error_reason, a short rule token (e.g. denylisted_file, hash_mismatch), when known.",
+                "description": "Get workspace task list with pagination, search and filtering. Each task carries error_code when its failure has a structured code (bundle_republish_required, plan_expired, agent_upgrade_required, bundle_hash_mismatch) and error_reason, a short rule token (e.g. denylisted_file, hash_mismatch), when known.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27279,7 +27335,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code (\"bundle_republish_required\": the manifest version has no valid bundle, error_message is then \"bundle_republish_required: <reason>\"; \"plan_expired\": the stored plan expired or was purged before apply; \"agent_upgrade_required\": no agent in the pool supports manifest-bound tasks), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).",
+                "description": "Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code (\"bundle_republish_required\": the manifest version has no valid bundle, error_message is then \"bundle_republish_required: <reason>\"; \"plan_expired\": the stored plan expired or was purged before apply; \"agent_upgrade_required\": no agent in the pool supports manifest-bound tasks; \"bundle_hash_mismatch\": the manifest bundle the executor received did not hash to bundle_hash, message \"bundle_hash_mismatch: hash_mismatch (...)\"), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).",
                 "consumes": [
                     "application/json"
                 ],

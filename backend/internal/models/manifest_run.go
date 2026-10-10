@@ -46,6 +46,7 @@ type ManifestRun struct {
 	PlanRedacted json.RawMessage `json:"plan_redacted,omitempty" gorm:"type:jsonb"` // 脱敏后的 plan JSON
 	StateSerial  *int64          `json:"state_serial,omitempty"`                    // preview 基准 state serial
 	SessionID    *string         `json:"session_id,omitempty" gorm:"size:36;check:chk_manifest_runs_sandbox_session,runner <> 'sandbox' OR session_id IS NOT NULL"`
+	AgentID      *string         `json:"agent_id,omitempty" gorm:"size:50"` // runner=agent:被指派的 agent,只有它能用 agent token 换取 run token
 	CreatedBy    string          `json:"created_by" gorm:"size:20;not null"`
 	CreatedAt    time.Time       `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt    time.Time       `json:"updated_at" gorm:"autoUpdateTime"`
@@ -80,6 +81,7 @@ type RunToken struct {
 	TokenHash   string     `json:"-" gorm:"size:64;not null;uniqueIndex:uq_run_tokens_token_hash"`
 	ExpiresAt   time.Time  `json:"expires_at" gorm:"not null"`
 	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	AgentID     *string    `json:"agent_id,omitempty" gorm:"size:50"` // 换取该 token 的 agent;agent 撤销时一并撤销
 	CreatedAt   time.Time  `json:"created_at" gorm:"autoCreateTime"`
 }
 

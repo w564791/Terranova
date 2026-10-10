@@ -32,6 +32,7 @@ func TestRawCC_AgentTokenAuth(t *testing.T) {
 	const pool = "apt_pool-1_secret"
 	for _, s := range []string{
 		`CREATE TABLE pool_tokens (token_hash TEXT PRIMARY KEY, token_name TEXT, token_type TEXT, pool_id TEXT, is_active INTEGER, expires_at DATETIME, last_used_at DATETIME, k8s_namespace TEXT, revoked_at DATETIME, created_at DATETIME, created_by TEXT, revoked_by TEXT, k8s_config TEXT)`,
+		`CREATE TABLE run_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, session_id TEXT, workspace_id TEXT, purpose TEXT, token_hash TEXT, expires_at DATETIME, revoked_at DATETIME, agent_id TEXT, created_at DATETIME)`,
 		`CREATE TABLE agents (agent_id TEXT PRIMARY KEY, pool_id TEXT, name TEXT, capabilities TEXT, token_generation INTEGER NOT NULL DEFAULT 0, revoked_at DATETIME, pool_token_hash TEXT, status TEXT, updated_at DATETIME)`,
 	} {
 		if err := db.Exec(s).Error; err != nil {

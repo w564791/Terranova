@@ -405,7 +405,7 @@ func (c *WorkspaceTaskController) CreatePlanTask(ctx *gin.Context) {
 
 // GetTask 获取任务详情
 // @Summary Get task detail
-// @Description Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code ("bundle_republish_required": the manifest version has no valid bundle, error_message is then "bundle_republish_required: <reason>"; "plan_expired": the stored plan expired or was purged before apply; "agent_upgrade_required": no agent in the pool supports manifest-bound tasks), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).
+// @Description Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code ("bundle_republish_required": the manifest version has no valid bundle, error_message is then "bundle_republish_required: <reason>"; "plan_expired": the stored plan expired or was purged before apply; "agent_upgrade_required": no agent in the pool supports manifest-bound tasks; "bundle_hash_mismatch": the manifest bundle the executor received did not hash to bundle_hash, message "bundle_hash_mismatch: hash_mismatch (...)"), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1; never paths or content).
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
@@ -523,7 +523,7 @@ func (c *WorkspaceTaskController) GetTask(ctx *gin.Context) {
 
 // GetTasks 获取任务列表
 // @Summary Get task list
-// @Description Get workspace task list with pagination, search and filtering. Each task carries error_code when its failure has a structured code (bundle_republish_required, plan_expired, agent_upgrade_required) and error_reason, a short rule token (e.g. denylisted_file, hash_mismatch), when known.
+// @Description Get workspace task list with pagination, search and filtering. Each task carries error_code when its failure has a structured code (bundle_republish_required, plan_expired, agent_upgrade_required, bundle_hash_mismatch) and error_reason, a short rule token (e.g. denylisted_file, hash_mismatch), when known.
 // @Tags Workspace Task
 // @Accept json
 // @Produce json
