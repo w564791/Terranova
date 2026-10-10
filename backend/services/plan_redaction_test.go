@@ -53,7 +53,7 @@ func samplePlan() map[string]interface{} {
 func TestRedactPlanJSON_AllSensitivePlaces(t *testing.T) {
 	plan := samplePlan()
 	before, _ := json.Marshal(plan)
-	red := RedactPlanJSON(plan)
+	red := RedactPlanJSON(plan, nil)
 	b, _ := json.Marshal(red)
 	if strings.Contains(string(b), redactionSecret) {
 		t.Fatalf("secret survived redaction:\n%s", b)
@@ -71,13 +71,13 @@ func TestRedactPlanJSON_AllSensitivePlaces(t *testing.T) {
 		t.Error("non-sensitive output redacted")
 	}
 	// idempotent, and the hash is over the redacted form
-	again := RedactPlanJSON(red)
+	again := RedactPlanJSON(red, nil)
 	h1, _ := RedactedPlanHash(red)
 	h2, _ := RedactedPlanHash(again)
 	if h1 != h2 || len(h1) != 64 {
 		t.Fatalf("hash not stable: %s %s", h1, h2)
 	}
-	stored, h3, err := RedactPlanForStorage(plan)
+	stored, h3, err := RedactPlanForStorage(plan, nil)
 	if err != nil || h3 != h1 {
 		t.Fatalf("RedactPlanForStorage hash %s != %s (%v)", h3, h1, err)
 	}
@@ -88,10 +88,10 @@ func TestRedactPlanJSON_AllSensitivePlaces(t *testing.T) {
 	// hash never encodes secret material)
 	other := samplePlan()
 	other["variables"].(map[string]interface{})["db_password"].(map[string]interface{})["value"] = "another"
-	if h4, _ := RedactedPlanHash(RedactPlanJSON(other)); h4 != h1 {
+	if h4, _ := RedactedPlanHash(RedactPlanJSON(other, nil)); h4 != h1 {
 		t.Fatal("plan_hash depends on a sensitive value")
 	}
-	if RedactPlanJSON(nil) != nil {
+	if RedactPlanJSON(nil, nil) != nil {
 		t.Fatal("nil plan")
 	}
 }
@@ -151,7 +151,7 @@ output "p" {
 	if err := json.Unmarshal(raw, &plan); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := json.Marshal(RedactPlanJSON(plan))
+	b, _ := json.Marshal(RedactPlanJSON(plan, nil))
 	if strings.Contains(string(b), redactionSecret) {
 		t.Fatalf("secret survived redaction of a real plan:\n%s", b)
 	}

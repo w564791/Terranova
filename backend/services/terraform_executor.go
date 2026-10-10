@@ -1268,7 +1268,7 @@ func (s *TerraformExecutor) ExecutePlan(
 		logger.Warn("Failed to generate plan JSON: %v", err)
 	} else {
 		// 先脱敏:之后的统计、resource changes 上传、入库都只见脱敏后的 plan
-		planJSON = RedactPlanJSON(planJSON)
+		planJSON = RedactPlanJSON(planJSON, s.planSensitivity(workspace.WorkspaceID))
 		logger.Info("✓ Generated plan.json (%.1f KB, sensitive values redacted)", float64(len(fmt.Sprintf("%v", planJSON)))/1024)
 	}
 
@@ -1619,6 +1619,21 @@ func (s *TerraformExecutor) GeneratePlanJSON(
 	return planJSON, nil
 }
 
+// planSensitivity 平台侧敏感集合(快照 + overrides,同 tfvars 的变量来源),
+// Local / Agent 一致。取不到变量时退回 nil(只按 HCL 标记脱敏;agent 上传时
+// 平台侧会按任务再脱敏一次)。
+func (s *TerraformExecutor) planSensitivity(workspaceID string) *PlanSensitivity {
+	if s.dataAccessor == nil {
+		return nil
+	}
+	vars, err := s.dataAccessor.GetWorkspaceVariables(workspaceID, models.VariableTypeTerraform)
+	if err != nil {
+		log.Printf("[WARN] plan redaction: variables unavailable, HCL markers only: %v", err)
+		return nil
+	}
+	return PlanSensitivityFromVariables(vars)
+}
+
 // SavePlanData 保存Plan数据（带重试，不阻塞）
 func (s *TerraformExecutor) SavePlanData(
 	task *models.WorkspaceTask,
@@ -1631,7 +1646,7 @@ func (s *TerraformExecutor) SavePlanData(
 		return
 	}
 
-	planJSON = RedactPlanJSON(planJSON) // 只存脱敏后的 plan(幂等)
+	planJSON = RedactPlanJSON(planJSON, s.planSensitivity(task.WorkspaceID)) // 只存脱敏后的 plan(幂等)
 
 	// 带简单重试
 	maxRetries := 3
@@ -4381,7 +4396,7 @@ func (s *TerraformExecutor) SavePlanDataWithLogging(
 	defer s.signalManager.ExitCriticalSection("saving_plan")
 
 	// 设置 plan data(plan_json 只存脱敏后的形式,幂等)
-	planJSON = RedactPlanJSON(planJSON)
+	planJSON = RedactPlanJSON(planJSON, s.planSensitivity(task.WorkspaceID))
 	task.PlanData = planData
 	task.PlanJSON = planJSON
 	log.Printf("[CRITICAL] Set task.PlanData (len=%d) and task.PlanJSON (exists=%v) for task %d",

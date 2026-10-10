@@ -1295,7 +1295,12 @@ func (h *AgentHandler) UploadPlanJSON(c *gin.Context) {
 
 	// Store the plan_json — redacted on the platform side as well, so an agent
 	// that uploads a raw plan (older build) never gets sensitive values stored
-	if err := h.db.Model(&task).Update("plan_json", services.RedactPlanJSON(req.PlanJSON)).Error; err != nil {
+	// with the platform-side sensitive set of this task (snapshot + overrides)
+	ps, psErr := services.PlanSensitivityForTask(h.db, &task)
+	if psErr != nil {
+		log.Printf("[WARN] plan redaction for task %d: platform sensitivity incomplete: %v", task.ID, psErr)
+	}
+	if err := h.db.Model(&task).Update("plan_json", services.RedactPlanJSON(req.PlanJSON, ps)).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to save plan_json: " + err.Error(),
 		})

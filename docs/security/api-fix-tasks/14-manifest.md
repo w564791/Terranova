@@ -89,6 +89,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 14. 变量值文件注入（tfvars）：原 `variables.tfvars` 只转义 `"` 与换行，`\"` 可闭合字符串注入其它赋值，`${` / `%{` 会被当模板，HCL 格式值原样写入（可带第二个赋值）。现所有 runner 共用 `RenderTFVars` 生成 `terranova.auto.tfvars.json`（`encoding/json`，Terraform 自动加载，去掉 `-var-file`）：JSON 变量文件无求值上下文，字符串一律字面量；HCL 格式的 object / list / bool / number 用 hclsyntax 解析为单个表达式、无上下文求值（与 Terraform 读 .tfvars 相同：不允许变量与函数）后转为 JSON 值，否则拒绝（`ErrInvalidTFVar`，报错只含变量名）；变量名必须是标识符，重复、非法 UTF-8 拒绝。HCL object / list 变量在 `variables.tf.json` 声明为 `any`（原先声明 `string` 导致此类值本来就无法使用）。日志按值脱敏（`RenderTFVarsMasked`）。用户 bundle 禁止 `*.tfvars(.json)`，自动加载不会与用户文件冲突。
 
+15. plan 脱敏并上平台侧敏感集合（`PlanSensitivity`：workspace / varset 敏感变量、deployment override 的 `sensitive_keys`，NULL = 全部敏感）：按变量名脱敏 `variables` 与默认值，按值替换 plan 中等于 / 包含敏感值的字符串叶子；执行器与 agent 上传（`PlanSensitivityForTask`）使用同一集合。标记统一 `(sensitive value)`。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
