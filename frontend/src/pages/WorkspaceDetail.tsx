@@ -877,6 +877,8 @@ interface Run {
   output?: string;
   /** 结构化失败码(后端 c9f030f;列表不含 error_message) */
   error_code?: string;
+  /** 短原因 token(规则名 / 能力名,后端 932b699) */
+  error_reason?: string;
 }
 
 type FilterType = 'all' | 'needs_attention' | 'errored' | 'running' | 'on_hold' | 'success' | 'cancelled';
@@ -1438,9 +1440,9 @@ const RunsTab: React.FC<{ workspaceId: string; latestRun: any; onLatestRunChange
                       <span className={styles.currentBadge}>CURRENT</span>
                     )}
                     {(() => {
-                      const ec = taskErrorInfo(run.error_code);
+                      const ec = taskErrorInfo(run.error_code, undefined, run.error_reason);
                       return ec ? (
-                        <span className={styles.errorCodeBadge} title={ec.title}>
+                        <span className={styles.errorCodeBadge} title={ec.detail ? `${ec.title}\n原因：${ec.detail}` : ec.title}>
                           {ec.tag}
                         </span>
                       ) : null;
