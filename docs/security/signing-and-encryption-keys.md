@@ -16,7 +16,12 @@ It is now split into two independent roots, neither derived from `JWT_SECRET`:
 | `SIGNING_ROOT_KEY` | HKDF-SHA256 root of every JWT signing key | >= 32 bytes, base64 or hex |
 | `JWT_SECRET` | legacy only (see below) | unchanged |
 
-Generate each with `openssl rand -base64 32`. Both are read through
+Generate `DATA_ENCRYPTION_KEY` with `openssl rand -base64 32` (exactly 32
+bytes) and `SIGNING_ROOT_KEY` with `openssl rand -base64 48`. Keys are never
+committed: the Kubernetes manifests generate the `iac-jwt` Secret from the
+gitignored `manifests/base/keys.env` (template `keys.env.example`), docker
+compose and the Makefile read them from the gitignored `.env`
+(`make generate-secret`). Both are read through
 `internal/keys.KeyProvider` (`keys.DataKeys`, `keys.SigningRoots`); the
 environment provider is the default, a KMS provider can be installed instead
 (`internal/keys/kms.go`).
@@ -132,4 +137,35 @@ Then:
    and `LEGACY_TOKEN_CUTOFF` / `LEGACY_TOKEN_ISSUED_BEFORE`.
 2. Remove `JWT_SECRET` from the deployment and rotate it out of any secret
    store (the shipped manifests generated it predictably from
-   time/PID/hostname).
+   time/PID/hostname, or used the committed value, see below).
+
+## Environments that used a committed or default JWT_SECRET
+
+This repository is public. `manifests/base/kustomization.yaml` contained a
+literal `JWT_SECRET` from commit `3b140f8` until it was replaced by the
+gitignored `keys.env`; `docker-compose*.yml` defaulted to
+`change-me-to-a-random-secret-key` and the Makefile dev targets to
+`dev-secret-key-change-in-production`. Any environment that ever ran with one of
+those values (or with the README's time/PID/hostname value, which is
+guessable) must assume that anyone can forge tokens without `kid` (login,
+user / team API, state, Run Task) and can decrypt every legacy value
+(`key_version = 0` rows and unprefixed `internal/crypto` values) from a
+database dump or backup. For those environments the rollout of this change is:
+
+1. Set `LEGACY_TOKEN_CUTOFF` to the **deploy time** (no legacy token window;
+   leaving it unset is equivalent). Every no-kid token is rejected from the
+   first start: users log in again, user / team API tokens are reissued,
+   tasks in flight at deploy time lose their state token. Do **not** use a
+   window: during it the public secret would still mint valid tokens.
+2. Set `DATA_ENCRYPTION_KEY` and `SIGNING_ROOT_KEY` (never derived from, or
+   equal to, the old value). In development legacy mode (no
+   `SIGNING_ROOT_KEY`) tokens are still signed with `JWT_SECRET`; do not run
+   an exposed environment in that mode.
+3. Rotate `JWT_SECRET` now: after step 1 its only remaining use is decrypting
+   legacy data, so keep the old value only for the re-encryption pass
+   (`legacy rows remaining=0`, and the other `internal/crypto` columns checked
+   as described above), then remove it from the deployment and every secret
+   store in the same rollout. Never reuse it anywhere.
+4. Treat every secret that was stored legacy-encrypted as disclosed and rotate
+   it at its source (cloud credentials in sensitive variables, MFA enrolments,
+   SSO / notification / CMDB source / Run Task credentials).

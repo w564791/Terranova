@@ -16,7 +16,7 @@ func Connect() (*gorm.DB, error) {
 	host := getEnv("DB_HOST", "localhost")
 	port := getEnv("DB_PORT", "5432")
 	user := getEnv("DB_USER", "postgres")
-	password := getEnv("DB_PASSWORD", "postgres")
+	password := os.Getenv("DB_PASSWORD") // no default credential
 	dbname := getEnv("DB_NAME", "iac_platform")
 	sslmode := getEnv("DB_SSLMODE", "require")
 	sslrootcert := getEnv("DB_SSLROOTCERT", "")

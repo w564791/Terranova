@@ -13,11 +13,16 @@
 # 默认变量（可通过 .env 文件或环境变量覆盖）
 DB_PORT ?= 5432
 DB_USER ?= postgres
-DB_PASSWORD ?= postgres123
+# DB_PASSWORD / JWT_SECRET / DATA_ENCRYPTION_KEY / SIGNING_ROOT_KEY 没有默认值：
+# 由 `make generate-secret` 写入 .env（gitignored），本地运行时从 .env 加载。
 DB_NAME ?= iac_platform
 SERVER_PORT ?= 8080
 CC_SERVER_PORT ?= 8090
 DB_HOST ?= localhost
+
+# 在 recipe 的 shell 中加载 .env（make generate-secret 生成，含 DB_PASSWORD 与各密钥）。
+# 在 backend/ 目录下执行，故路径为 ../.env。
+LOAD_ENV = { [ -f ../.env ] || { echo "缺少 .env，请先运行 make generate-secret" >&2; exit 1; }; } && set -a && . ../.env && set +a
 
 # Docker 镜像配置
 DOCKER_REPO ?= w564791
@@ -53,9 +58,10 @@ dev-up: ## 启动开发环境（仅数据库容器 + 本地后端 + 本地前端
 	@echo "  [OK] 数据库就绪"
 	@echo ""
 	@echo "2. 启动后端..."
-	@cd backend && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) \
+	@cd backend && $(LOAD_ENV) && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_NAME=$(DB_NAME) \
+		DB_PASSWORD=$${DB_PASSWORD:?run make generate-secret} \
 		DB_SSLMODE=disable SERVER_PORT=$(SERVER_PORT) CC_SERVER_PORT=$(CC_SERVER_PORT) SERVER_HOST=0.0.0.0 \
-		JWT_SECRET=$${JWT_SECRET:-dev-secret-key-change-in-production} ENV=development \
+		ENV=development \
 		go run main.go &
 	@sleep 2
 	@echo "  [OK] 后端启动: http://localhost:$(SERVER_PORT)"
@@ -282,7 +288,7 @@ run-server: build-server ## 在Docker容器中运行服务器
 		-e DB_HOST=$(DB_HOST) \
 		-e DB_PORT=$(DB_PORT) \
 		-e DB_USER=$(DB_USER) \
-		-e DB_PASSWORD=$(DB_PASSWORD) \
+		--env-file .env \
 		-e DB_NAME=$(DB_NAME) \
 		-e DB_SSLMODE=disable \
 		-e SERVER_PORT=$(SERVER_PORT) \
@@ -316,9 +322,10 @@ run-agent: build-agent ## 在Docker容器中运行Agent（需要设置环境变�
 
 local-server: ## 本地运行后端（自动加载数据库配置）
 	@echo "启动后端服务器..."
-	cd backend && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) \
+	cd backend && $(LOAD_ENV) && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_NAME=$(DB_NAME) \
+		DB_PASSWORD=$${DB_PASSWORD:?run make generate-secret} \
 		DB_SSLMODE=disable SERVER_PORT=$(SERVER_PORT) CC_SERVER_PORT=$(CC_SERVER_PORT) SERVER_HOST=0.0.0.0 \
-		JWT_SECRET=$${JWT_SECRET:-dev-secret-key-change-in-production} ENV=development \
+		ENV=development \
 		go run main.go
 
 local-frontend: ## 本地运行前端（Vite dev server）
@@ -338,7 +345,7 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 	@if [ -f .env ] && grep -q "^JWT_SECRET=" .env 2>/dev/null; then \
 		echo "[OK] .env 文件已存在，跳过生成"; \
 	else \
-		JWT_KEY=$$(openssl rand -base64 48 | tr -d '\n/+=' | head -c 64); \
+		JWT_KEY=$$(openssl rand -base64 48 | tr -d '\n'); \
 		echo "# IaC Platform 环境变量配置" > .env; \
 		echo "# 自动生成，请勿提交到版本控制" >> .env; \
 		echo "" >> .env; \
@@ -346,14 +353,14 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "JWT_SECRET=$$JWT_KEY" >> .env; \
 		echo "# 数据加密密钥 / 签名根密钥（相互独立，生产环境必填）" >> .env; \
 		echo "DATA_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
-		echo "SIGNING_ROOT_KEY=$$(openssl rand -base64 32)" >> .env; \
+		echo "SIGNING_ROOT_KEY=$$(openssl rand -base64 48 | tr -d '\n')" >> .env; \
 		echo "" >> .env; \
 		echo "# 数据库配置" >> .env; \
 		echo "DB_HOST=localhost" >> .env; \
 		echo "DB_PORT=5432" >> .env; \
 		echo "DB_NAME=iac_platform" >> .env; \
 		echo "DB_USER=postgres" >> .env; \
-		echo "DB_PASSWORD=postgres123" >> .env; \
+		echo "DB_PASSWORD=$$(openssl rand -base64 48 | tr -d '\n/+=')" >> .env; \
 		echo "" >> .env; \
 		echo "# 服务端口" >> .env; \
 		echo "SERVER_PORT=8080" >> .env; \
@@ -361,7 +368,8 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "FRONTEND_PORT=5173" >> .env; \
 		echo ""; \
 		echo "[OK] .env 配置文件已生成"; \
-		echo "  JWT_SECRET: 64 字符随机密钥"; \
+		echo "  JWT_SECRET / SIGNING_ROOT_KEY: openssl rand -base64 48"; \
+		echo "  DB_PASSWORD: 随机生成（已有 postgres 数据卷时需与其中密码一致）"; \
 		echo "  DB_PORT: 15433"; \
 		echo "  SERVER_PORT: 8080"; \
 		echo "  [WARN] 请妥善保管 DATA_ENCRYPTION_KEY / SIGNING_ROOT_KEY，不按轮换流程更换将导致："; \

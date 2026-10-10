@@ -82,3 +82,7 @@ coverage/
 ehthumbs.db
 Thumbs.db
 docker-compose.yml
+
+# Kustomize secretGenerator inputs (real secrets; only *.env.example is committed)
+manifests/base/*.env
+!manifests/base/*.env.example

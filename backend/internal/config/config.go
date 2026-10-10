@@ -64,12 +64,14 @@ func Load() *Config {
 // schema upgrades must not be coupled to runtime-only requirements such as a
 // JWT signing key or third-party API configuration.
 func LoadDatabase() DatabaseConfig {
+	// DB_PASSWORD has no default: a committed default password is a public
+	// credential (this repository is public).
 	return DatabaseConfig{
 		Host:        getEnv("DB_HOST", "localhost"),
 		Port:        getEnv("DB_PORT", "15433"),
 		Name:        getEnv("DB_NAME", "iac_platform"),
 		User:        getEnv("DB_USER", "postgres"),
-		Password:    getEnv("DB_PASSWORD", "postgres123"),
+		Password:    os.Getenv("DB_PASSWORD"),
 		SSLMode:     getEnv("DB_SSLMODE", "require"),
 		SSLRootCert: getEnv("DB_SSLROOTCERT", ""),
 	}

@@ -118,7 +118,8 @@ manifests/
 │   ├── kustomization.yaml
 │   ├── namespace.yaml              # Namespace: terraform
 │   ├── configmap.yaml              # Non-sensitive config (DB_HOST, DB_SSLMODE, ports, etc.)
-│   ├── secret.yaml                 # Sensitive config (DB credentials, JWT secret)
+│   ├── db.env.example              # Template for gitignored db.env (DB credentials)
+│   ├── keys.env.example            # Template for gitignored keys.env (keys, legacy JWT_SECRET)
 │   ├── ha-rbac.yaml                # ServiceAccount, Role, RoleBinding
 │   ├── deployment-backend.yaml     # Backend (2 replicas, HTTPS)
 │   ├── deployment-frontend.yaml    # Frontend nginx (2 replicas, HTTPS)
@@ -166,27 +167,39 @@ manifests/
 
 ## Quick Deploy
 
+Secrets are **not** stored in this (public) repository. `base/kustomization.yaml`
+generates the `iac-platform` (DB credentials) and `iac-jwt` (keys) Secrets from
+the gitignored files `base/db.env` and `base/keys.env`; create them from the
+committed `*.env.example` templates first (kustomize fails if they are missing).
 
 ```bash
 cd manifests
 
-# 基于当前时间+PID+主机名自动生成 JWT_SECRET（每次部署不同）
-JWT_KEY=$(echo -n "$(date +%s)-$$-$(hostname)" | openssl dgst -sha256 -binary | base64 | tr -d '\n')
+# 1. DB credentials (gitignored base/db.env)
+cp base/db.env.example base/db.env
+sed -i.bak "s|^DB_PASSWORD=.*|DB_PASSWORD=$(openssl rand -base64 48 | tr -d '\n/+=')|" base/db.env
 
-sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=${JWT_KEY}|" base/kustomization.yaml
-
-# Independent data-encryption and signing root keys (required in production).
-# Generate ONCE and keep them: changing DATA_ENCRYPTION_KEY without the
-# rotation procedure makes encrypted data unreadable.
-sed -i '' "s|DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)|" base/kustomization.yaml
-sed -i '' "s|SIGNING_ROOT_KEY=.*|SIGNING_ROOT_KEY=$(openssl rand -base64 32)|" base/kustomization.yaml
+# 2. Keys (gitignored base/keys.env). Generate ONCE and keep them (back them up
+#    outside the cluster): changing DATA_ENCRYPTION_KEY without the rotation
+#    procedure makes encrypted data unreadable.
+cp base/keys.env.example base/keys.env
+sed -i.bak "s|^DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)|" base/keys.env  # exactly 32 bytes
+sed -i.bak "s|^SIGNING_ROOT_KEY=.*|SIGNING_ROOT_KEY=$(openssl rand -base64 48 | tr -d '\n')|" base/keys.env
+# JWT_SECRET stays empty on new installs (legacy only). When legacy development
+# mode needs one: openssl rand -base64 48
+rm -f base/*.env.bak
 
 kubectl kustomize | kubectl create -f -
 
 kubectl -n terraform wait --for=condition=complete job/iac-db-init --timeout=120s
 ```
 
-> `JWT_SECRET` 每次部署时基于 `时间戳(秒) + PID + 主机名` 经 SHA-256 生成 256-bit 密钥，通过 `sed` 直接写入 `base/kustomization.yaml`。
+> Upgrading an existing installation: put the environment's *current*
+> `JWT_SECRET` into `base/keys.env` only until the re-encryption job reports zero
+> legacy rows. Any environment that used the `JWT_SECRET` value formerly
+> committed to `base/kustomization.yaml` must treat it as public: set
+> `LEGACY_TOKEN_CUTOFF` to the deploy time (no legacy token window) and rotate
+> it now, see `docs/security/signing-and-encryption-keys.md`.
 
 ## Configuration
 
@@ -201,18 +214,18 @@ Before deploying, update the following values to match your environment:
 | `DB_SSLMODE` | PostgreSQL SSL mode | `require` |
 | `TZ` | Timezone | `Asia/Singapore` |
 
-**`base/secret.yaml`**
+**`base/db.env`** (gitignored; template `base/db.env.example`) → Secret `iac-platform`
 | Key | Description | Default |
 |-----|-------------|---------|
 | `DB_USER` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | `postgres123` |
+| `DB_PASSWORD` | Database password | none, generate: `openssl rand -base64 48` |
 
-**`base/kustomization.yaml` — secretGenerator**
+**`base/keys.env`** (gitignored; template `base/keys.env.example`) → Secret `iac-jwt`
 | Key | Description | 生成方式 |
 |-----|-------------|---------|
-| `JWT_SECRET` | Legacy only: verifies tokens without `kid` until `LEGACY_TOKEN_CUTOFF`, decrypts legacy (key_version 0) data | 部署时基于 `时间戳 + 主机名` 经 SHA-256 自动生成（可预测，仅为兼容保留；窗口结束后退役） |
+| `JWT_SECRET` | Legacy only: verifies tokens without `kid` until `LEGACY_TOKEN_CUTOFF`, decrypts legacy (key_version 0) data | empty on new installs; upgrades keep the current value until re-encryption finishes, then retire (`openssl rand -base64 48` when legacy dev mode needs one) |
 | `DATA_ENCRYPTION_KEY` | AES-256 data encryption key (variables etc.), 32 bytes base64/hex; `_VERSION`, `_PREVIOUS`, `_PREVIOUS_VERSION` for rotation | `openssl rand -base64 32`; required when `ENV=production` |
-| `SIGNING_ROOT_KEY` | HKDF root of all JWT signing keys (user/state/agent/run/runtask), >= 32 bytes; same rotation variables | `openssl rand -base64 32`; required when `ENV=production` |
+| `SIGNING_ROOT_KEY` | HKDF root of all JWT signing keys (user/state/agent/run/runtask), >= 32 bytes; same rotation variables | `openssl rand -base64 48`; required when `ENV=production` |
 | `LEGACY_TOKEN_CUTOFF` | RFC3339 hard cutoff for tokens without `kid` = deploy time + longest legacy token lifetime; unset = none accepted | optional |
 | `LEGACY_TOKEN_ISSUED_BEFORE` | RFC3339 deploy time; no-kid tokens with a later `iat` are rejected (defaults to process start) | optional |
 

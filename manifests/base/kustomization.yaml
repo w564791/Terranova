@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - ha-rbac.yaml
   - service-backend.yaml
   - service-frontend.yaml
@@ -11,21 +10,26 @@ resources:
   - deployment-frontend.yaml
   - pdb.yaml
   - networkpolicy.yaml
+# Secrets are generated from gitignored env files that never enter the repo
+# (this repository is public). Create them from the committed *.env.example
+# templates before running kustomize; kustomize fails if they are missing.
+# See manifests/README.md "Quick Deploy".
 secretGenerator:
+  # DB credentials (consumed by the backend and the postgres statefulset).
+  - name: iac-platform
+    namespace: terraform
+    envs:
+      - db.env
+    options:
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/name: iac-platform
+  # DATA_ENCRYPTION_KEY, SIGNING_ROOT_KEY, legacy JWT_SECRET and the legacy
+  # token cutoff (docs/security/signing-and-encryption-keys.md).
   - name: iac-jwt
     namespace: terraform
-    literals:
-      # Legacy only: verifies tokens without kid until LEGACY_TOKEN_CUTOFF and
-      # decrypts key_version 0 data. Retire after the window (docs/security/
-      # signing-and-encryption-keys.md): only after the re-encryption job
-      # reports zero legacy rows AND the cutoff has passed.
-      - JWT_SECRET=Q29P7oZt7MoYbAZezyb/AvFqkpRJJK98hcXsnp7v+M4=
-      # Required with ENV=production (the backend refuses to start without
-      # them). Generate each with: openssl rand -base64 32
-      - DATA_ENCRYPTION_KEY=CHANGE-ME!openssl-rand-base64-32
-      - SIGNING_ROOT_KEY=CHANGE-ME!openssl-rand-base64-32
-      # RFC3339, deploy time + longest legacy token lifetime; unset = tokens
-      # without kid are rejected. Example: LEGACY_TOKEN_CUTOFF=2026-10-17T12:00:00Z
+    envs:
+      - keys.env
     options:
       disableNameSuffixHash: true
       labels:
