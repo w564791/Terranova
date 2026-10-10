@@ -123,6 +123,9 @@ func definitions() []definition {
 		// Run token binding (manifest_runs.agent_id, run_tokens.agent_id).
 		// Additive only.
 		{version: "20261010_12_run_token_binding", contract: "run-token-binding-v1", apply: applyRunTokenBinding},
+		// Approval binding (manifest_runs.task_id, approved_* columns,
+		// chk_manifest_runs_approval). Additive only.
+		{version: "20261010_13_manifest_approval", contract: "manifest-approval-v1", apply: applyManifestApproval},
 	}
 }
 

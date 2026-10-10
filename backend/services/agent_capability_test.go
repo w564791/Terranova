@@ -145,9 +145,10 @@ func TestAgentAPIClient_RegisterReportsCapabilities(t *testing.T) {
 	assert.Equal(t, "agent-1", id)
 	assert.Equal(t, "pool-1", pool)
 	caps, _ := body["capabilities"].([]interface{})
-	require.Len(t, caps, 3)
+	require.Len(t, caps, 4)
 	assert.Equal(t, models.AgentCapabilityManifestBundleV1, caps[0])
 	assert.Contains(t, caps, models.AgentCapabilityAgentTokenV1)
+	assert.Contains(t, caps, models.AgentCapabilityManifestApprovalV1)
 	assert.NotEmpty(t, body["version"])
 	_, _ = client.GetTaskData(7)
 	assert.Equal(t, "Bearer a.b.c", lastAuth, "later calls use the agent token")
@@ -205,7 +206,7 @@ func TestAgentCapabilities_KnownAndMissing(t *testing.T) {
 	assert.Nil(t, models.KnownAgentCapabilities(nil))
 	s := `["manifest_bundle_v1"]`
 	a := &models.Agent{Capabilities: &s}
-	assert.Equal(t, []string{models.AgentCapabilityTaskDataOverridesV1, models.AgentCapabilityAgentTokenV1}, a.MissingCapabilities(models.ManifestAgentCapabilities()))
+	assert.Equal(t, []string{models.AgentCapabilityTaskDataOverridesV1, models.AgentCapabilityAgentTokenV1, models.AgentCapabilityManifestApprovalV1}, a.MissingCapabilities(models.ManifestAgentCapabilities()))
 	assert.False(t, a.HasCapability(models.AgentCapabilityAgentTokenV1))
 	// the retired header capability is not known any more
 	assert.Nil(t, models.KnownAgentCapabilities([]string{"agent_identity_header_v1"}))

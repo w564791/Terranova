@@ -686,6 +686,11 @@ func (a *LocalDataAccessor) GetManifestBundleByTag(deploymentID, tag string) (*M
 	return LoadRunnableManifestBundle(context.Background(), a.getDB(), a.db, deploymentID, tag)
 }
 
+// GetManifestApproval 见 DataAccessor。
+func (a *LocalDataAccessor) GetManifestApproval(taskID uint) (*ManifestApproval, error) {
+	return ManifestApprovalForTask(context.Background(), a.getDB(), taskID)
+}
+
 // ============================================================================
 // Transaction 支持
 // ============================================================================

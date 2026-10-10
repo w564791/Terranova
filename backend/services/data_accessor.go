@@ -65,6 +65,8 @@ type DataAccessor interface {
 	// 归档 + bundle_hash),executor 用 manifestbundle.Unpack 落盘并在 init 前复核哈希。
 	// deployment/tag 不再解析到版本时返回 (nil, nil)。
 	GetManifestBundleByTag(deploymentID, tag string) (*ManifestBundleHandoff, error)
+	// 审批绑定(spec §9 第 7 步):task 的 approval run(无则 nil)。
+	GetManifestApproval(taskID uint) (*ManifestApproval, error)
 
 	// Transaction 支持
 	BeginTransaction() (DataAccessor, error)

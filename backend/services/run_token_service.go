@@ -94,7 +94,8 @@ func sessionOpen(s *models.SandboxSession, now time.Time) bool {
 
 // IssueRunToken issues a token for run. agentID is the calling agent for
 // agent runs (the run must be a runner=agent run assigned to it); "" when the
-// platform issues it itself (sandbox runs, step 6).
+// platform issues it itself (sandbox runs, step 6; approval runs executed in
+// process by the Local runner, which have no agent assigned).
 func (s *StateTokenService) IssueRunToken(ctx context.Context, runID, agentID string) (string, time.Time, error) {
 	db := s.db.WithContext(ctx)
 	var run models.ManifestRun
@@ -111,11 +112,20 @@ func (s *StateTokenService) IssueRunToken(ctx context.Context, runID, agentID st
 		if run.Runner != models.ManifestRunRunnerAgent || run.AgentID == nil || *run.AgentID != agentID {
 			return "", time.Time{}, ErrRunNotAssigned
 		}
-	} else if run.Runner == models.ManifestRunRunnerAgent {
-		return "", time.Time{}, fmt.Errorf("agent runs obtain their token with the agent token")
+	} else if run.Runner == models.ManifestRunRunnerAgent && run.AgentID != nil {
+		// assigned to an agent: only that agent, with its agent token
+		return "", time.Time{}, fmt.Errorf("%w: agent runs obtain their token with the agent token", ErrRunNotAssigned)
 	}
+	// ("" on an unassigned runner=agent run: the platform executes it in
+	// process, Local mode.)
 	now := time.Now()
-	exp := run.CreatedAt.Add(ManifestRunTimeout())
+	// The run timeout counts from creation, and again from approval: the
+	// apply phase of an approval run starts when it is approved.
+	base := run.CreatedAt
+	if run.ApprovedAt != nil && run.ApprovedAt.After(base) {
+		base = *run.ApprovedAt
+	}
+	exp := base.Add(ManifestRunTimeout())
 	if run.SessionID != nil {
 		var sess models.SandboxSession
 		if err := db.Where("id = ?", *run.SessionID).Take(&sess).Error; err != nil {
@@ -170,7 +180,7 @@ func (s *StateTokenService) IssueRunToken(ctx context.Context, runID, agentID st
 type StateCaller struct {
 	Type        string // StateTokenTypeTask or StateTokenTypeRun
 	WorkspaceID string
-	TaskID      uint   // task tokens
+	TaskID      uint   // task tokens; run tokens: the approval run's task (0 if none)
 	RunID       string // run tokens
 	Purpose     string // run tokens: preview | approval
 	SessionID   string
@@ -217,6 +227,8 @@ type runTokenRow struct {
 	AgentID       *string
 	RunStatus     string
 	RunCreatedBy  string
+	RunTaskID     *uint
+	TaskStatus    *string
 	SessClosedAt  *time.Time
 	SessStatus    *string
 	SessExpiresAt *time.Time
@@ -232,10 +244,11 @@ func (s *StateTokenService) validateRunToken(ctx context.Context, tok string) (*
 	var row runTokenRow
 	err = s.db.WithContext(ctx).Table("run_tokens AS rt").
 		Select(`rt.run_id, rt.session_id, rt.workspace_id, rt.purpose, rt.expires_at, rt.revoked_at, rt.agent_id,
-			r.status AS run_status, r.created_by AS run_created_by,
+			r.status AS run_status, r.created_by AS run_created_by, r.task_id AS run_task_id, wt.status AS task_status,
 			ss.closed_at AS sess_closed_at, ss.status AS sess_status, ss.expires_at AS sess_expires_at`).
 		Joins("JOIN manifest_runs r ON r.id = rt.run_id").
 		Joins("LEFT JOIN sandbox_sessions ss ON ss.id = rt.session_id").
+		Joins("LEFT JOIN workspace_tasks wt ON wt.id = r.task_id").
 		Where("rt.token_hash = ?", sha256Hash(tok)).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -255,6 +268,10 @@ func (s *StateTokenService) validateRunToken(ctx context.Context, tok string) (*
 		return nil, ErrRunTokenInvalid
 	case row.RevokedAt != nil || !row.ExpiresAt.After(now) || !runActive(row.RunStatus):
 		return nil, ErrRunTokenRevoked
+	case row.TaskStatus != nil && (&models.WorkspaceTask{Status: models.TaskStatus(*row.TaskStatus)}).IsTerminal():
+		// the approval run's task ended (whatever path ended it, before the
+		// run was moved to its final status)
+		return nil, ErrRunTokenRevoked
 	case row.SessionID != nil && (row.SessClosedAt != nil || row.SessStatus == nil || *row.SessStatus != models.SandboxSessionStatusActive ||
 		row.SessExpiresAt == nil || !row.SessExpiresAt.After(now)):
 		return nil, ErrRunTokenRevoked
@@ -272,10 +289,14 @@ func (s *StateTokenService) validateRunToken(ctx context.Context, tok string) (*
 			return nil, ErrRunTokenRevoked
 		}
 	}
-	return &StateCaller{
+	caller := &StateCaller{
 		Type: StateTokenTypeRun, WorkspaceID: row.WorkspaceID, RunID: row.RunID, Purpose: row.Purpose,
 		SessionID: sessionID, CreatedBy: row.RunCreatedBy,
-	}, nil
+	}
+	if row.RunTaskID != nil {
+		caller.TaskID = *row.RunTaskID
+	}
+	return caller, nil
 }
 
 // agentActive the agent exists, is not revoked, and the pool token it
@@ -388,9 +409,10 @@ func ExpireSandboxSessions(ctx context.Context, db *gorm.DB, now time.Time) (int
 	return n, nil
 }
 
-// StartSandboxSessionExpiry runs ExpireSandboxSessions every interval until
-// ctx ends (leader only). Validation already refuses tokens of expired
-// sessions; this revokes them and the session's STS credentials.
+// StartSandboxSessionExpiry runs ExpireSandboxSessions (and
+// EndFinishedApprovalRuns) every interval until ctx ends (leader only).
+// Validation already refuses tokens of expired sessions and finished tasks;
+// this revokes them, the sessions' STS credentials and ends the runs.
 func StartSandboxSessionExpiry(ctx context.Context, db *gorm.DB, interval time.Duration) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -403,6 +425,11 @@ func StartSandboxSessionExpiry(ctx context.Context, db *gorm.DB, interval time.D
 				log.Printf("[SandboxSession] expiry sweep: %v", err)
 			} else if n > 0 {
 				log.Printf("[SandboxSession] expired %d session(s)", n)
+			}
+			if n, err := EndFinishedApprovalRuns(ctx, db); err != nil {
+				log.Printf("[ManifestRun] approval run sweep: %v", err)
+			} else if n > 0 {
+				log.Printf("[ManifestRun] ended %d approval run(s) of finished tasks", n)
 			}
 		}
 	}

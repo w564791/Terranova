@@ -1010,6 +1010,25 @@ func (s *TerraformExecutor) ExecutePlan(
 		return err
 	}
 
+	// 1.7.1 Manifest approval run: the plan must be computed from the run's
+	// bundle (bundle_hash bound when the run was created), and the files in
+	// the work directory must be that bundle (spec §9 step 7).
+	if s.workspaceUsesManifest(workspace) && !taskUsesExternalFiles(task) {
+		approval, aerr := s.dataAccessor.GetManifestApproval(task.ID)
+		if aerr == nil && approval != nil {
+			aerr = s.verifyManifestBundleBinding(workspace, workDir, approval.BundleHash)
+			if aerr == nil {
+				logger.Info("✓ Manifest bundle matches approval run %s (bundle_hash=%s)", approval.RunID, approval.BundleHash)
+			}
+		}
+		if aerr != nil {
+			logger.LogError("fetching", aerr, map[string]interface{}{"workspace_id": workspace.WorkspaceID}, nil)
+			logger.StageEnd("fetching")
+			s.saveTaskFailure(task, logger, aerr, "plan")
+			return aerr
+		}
+	}
+
 	// 1.8 准备State文件
 	logger.Info("Preparing state file...")
 	if err := s.PrepareStateFileWithLogging(workspace, workDir, logger); err != nil {
@@ -2327,6 +2346,29 @@ func (s *TerraformExecutor) ExecuteApply(
 	workspace.TerraformVersion = workspaceInfo.TerraformVersion
 	workspace.SystemVariables = workspaceInfo.SystemVariables
 
+	// Manifest deployment: the apply needs a recorded approval (spec §9
+	// step 7) and runs the deployed bundle in its subpath (also when the
+	// work directory is rebuilt).
+	var manifestApproval *ManifestApproval
+	if TaskRequiresManifestApproval(task, workspaceInfo) {
+		workspace.ManifestDeploymentID = workspaceInfo.ManifestDeploymentID
+		workspace.ManifestActiveTag = workspaceInfo.ManifestActiveTag
+		workspace.ManifestSubpath = workspaceInfo.ManifestSubpath
+		approval, aerr := s.dataAccessor.GetManifestApproval(task.ID)
+		if aerr == nil && !approval.Approved() {
+			aerr = &ApprovalMismatchError{Reason: ApprovalReasonNotApproved, Detail: "the manifest plan was not approved"}
+		}
+		if aerr != nil {
+			logger.LogError("fetching", aerr, map[string]interface{}{"task_id": task.ID, "workspace_id": task.WorkspaceID}, nil)
+			logger.StageEnd("fetching")
+			s.saveTaskFailure(task, logger, aerr, "apply")
+			return aerr
+		}
+		manifestApproval = approval
+		logger.Info("✓ Manifest approval run %s: approved bundle %s, plan %s",
+			approval.RunID, approval.ApprovedBundleHash, approval.ApprovedPlanHash)
+	}
+
 	logger.Info("✓ Workspace configuration reconstructed from snapshot")
 	logger.Info("  - Name: %s", workspace.Name)
 	logger.Info("  - Execution mode: %s", workspace.ExecutionMode)
@@ -2425,6 +2467,18 @@ func (s *TerraformExecutor) ExecuteApply(
 		// 1.8 恢复 .terraform.lock.hcl（加速 init 并确保 provider 版本一致）。lock 落 runDir(=subpath)。
 		logger.Info("Restoring terraform lock file...")
 		s.restoreTerraformLockHCL(s.ResolveRunDir(workspace, workDir), workspace, logger)
+	}
+
+	// Manifest: the bundle in the work directory (preserved from the plan
+	// or rebuilt) is the approved bundle, before anything reads it.
+	if manifestApproval != nil {
+		if err := s.verifyManifestBundleBinding(workspace, workDir, manifestApproval.ApprovedBundleHash); err != nil {
+			logger.LogError("fetching", err, map[string]interface{}{"task_id": task.ID, "work_dir": workDir}, nil)
+			logger.StageEnd("fetching")
+			s.saveTaskFailure(task, logger, err, "apply")
+			return err
+		}
+		logger.Info("✓ Work directory bundle matches the approved bundle")
 	}
 
 	logger.Info("Configuration fetch completed successfully")
@@ -2639,6 +2693,19 @@ func (s *TerraformExecutor) ExecuteApply(
 
 	terraformCmd := binaryPath
 	logger.Info("Using downloaded terraform binary: %s", terraformCmd)
+
+	// Manifest: last check right before apply - the bundle on disk and the
+	// plan.out about to be applied are exactly what was approved.
+	if manifestApproval != nil {
+		if err := s.verifyManifestApply(workspace, workDir, planFile, manifestApproval); err != nil {
+			logger.Error("Refusing to apply: %v", err)
+			logger.LogError("applying", err, map[string]interface{}{"task_id": task.ID, "plan_file": planFile}, nil)
+			logger.StageEnd("applying")
+			s.saveTaskFailure(task, logger, err, "apply")
+			return err
+		}
+		logger.Info("✓ Plan and bundle match the approval (plan %s)", manifestApproval.ApprovedPlanHash)
+	}
 
 	args := []string{"apply", "-no-color", "-auto-approve", planFile}
 	logger.Info("Executing: %s apply -no-color -auto-approve plan.out", terraformCmd)

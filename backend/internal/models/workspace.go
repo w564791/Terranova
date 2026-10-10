@@ -332,12 +332,22 @@ const (
 	// re-verifies the stored files, marking the version only when its own
 	// check fails.
 	TaskErrorCodeBundleHashMismatch = "bundle_hash_mismatch"
+	// TaskErrorCodeApprovalHashMismatch a manifest apply refused because what
+	// it would apply is not what was approved: error_reason not_approved (no
+	// approval recorded on the task's approval run), bundle_changed (the
+	// deployment's bundle or the files in the work directory no longer hash
+	// to approved_bundle_hash) or plan_changed (the plan.out about to be
+	// applied does not hash to approved_plan_hash). Also returned (409) by
+	// the approval endpoint when the stored plan / bundle no longer match
+	// what the plan run produced.
+	TaskErrorCodeApprovalHashMismatch = "approval_hash_mismatch"
 )
 
 // KnownTaskErrorCode reports codes an agent may report (status update).
 func KnownTaskErrorCode(code string) bool {
 	switch code {
-	case TaskErrorCodeBundleRepublishRequired, TaskErrorCodePlanExpired, TaskErrorCodeBundleHashMismatch:
+	case TaskErrorCodeBundleRepublishRequired, TaskErrorCodePlanExpired, TaskErrorCodeBundleHashMismatch,
+		TaskErrorCodeApprovalHashMismatch:
 		return true
 	}
 	return false

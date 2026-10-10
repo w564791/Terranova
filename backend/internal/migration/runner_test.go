@@ -23,6 +23,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20261010_10_variable_key_version",
 		"20261010_11_agent_token",
 		"20261010_12_run_token_binding",
+		"20261010_13_manifest_approval",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("migration count = %d, want %d", len(definitions), len(want))

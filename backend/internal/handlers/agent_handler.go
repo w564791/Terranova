@@ -75,7 +75,7 @@ func agentCapabilitiesJSON(reported []string) *string {
 
 // RegisterAgent handles agent registration
 // @Summary Register a new agent
-// @Description Register a new agent instance with Pool Token authentication (the pool token is accepted here only; every later call uses the returned agent token). The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1, agent_token_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting all three, otherwise they fail with error_code agent_upgrade_required. The response carries agent_token (per-agent JWT, typ agent, claims agent_id / pool_id / gen, header kid; lifetime AGENT_TOKEN_TTL, default 15m) and agent_token_expires_at; renew it with POST /api/v1/agents/token before it expires. Deregistering or revoking the agent, or revoking the pool token it registered with, invalidates it immediately (checked against the database on every use).
+// @Description Register a new agent instance with Pool Token authentication (the pool token is accepted here only; every later call uses the returned agent token). The agent reports its version and capabilities (manifest_bundle_v1, task_data_overrides_v1, agent_token_v1, manifest_approval_v1); tasks of manifest-bound workspaces are only dispatched to agents reporting all four, otherwise they fail with error_code agent_upgrade_required. The response carries agent_token (per-agent JWT, typ agent, claims agent_id / pool_id / gen, header kid; lifetime AGENT_TOKEN_TTL, default 15m) and agent_token_expires_at; renew it with POST /api/v1/agents/token before it expires. Deregistering or revoking the agent, or revoking the pool token it registered with, invalidates it immediately (checked against the database on every use).
 // @Tags Agent
 // @Accept json
 // @Produce json
@@ -462,7 +462,7 @@ func (h *AgentHandler) RenewAgentToken(c *gin.Context) {
 
 // GetTaskData retrieves all data needed for task execution
 // @Summary Get task execution data
-// @Description Get complete task data including workspace config (with manifest_deployment_id / manifest_active_tag / manifest_subpath), resources, variables, the task variable override snapshot (task.variable_overrides, task.override_sensitive_keys), Manifest Run files (task.external_files), the verified manifest bundle hand-off (manifest_bundle: archive_b64 + bundle_hash, or manifest_bundle_error when the version must be republished), and state
+// @Description Get complete task data including workspace config (with manifest_deployment_id / manifest_active_tag / manifest_subpath), resources, variables, the task variable override snapshot (task.variable_overrides, task.override_sensitive_keys), Manifest Run files (task.external_files), the verified manifest bundle hand-off (manifest_bundle: archive_b64 + bundle_hash, or manifest_bundle_error when the version must be republished), the approval binding of manifest plan_and_apply tasks (manifest_approval: run_id, bundle_hash, approved_bundle_hash, approved_plan_hash; their state_backend token is the approval run's run token, issued to the run's assigned agent, 403 otherwise), and state
 // @Tags Agent Task
 // @Accept json
 // @Produce json
@@ -647,6 +647,33 @@ func (h *AgentHandler) GetTaskData(c *gin.Context) {
 			"content":  stateVersion.Content,
 			"checksum": stateVersion.Checksum,
 			"size":     stateVersion.SizeBytes,
+		}
+	}
+
+	// Manifest approval run (spec §9 step 7): the executor checks the apply
+	// against manifest_approval, and the run token (issued to the calling
+	// agent, the run's assigned agent) replaces the task's state token.
+	if h.stateTokenService != nil {
+		approval, runToken, runErr := h.stateTokenService.ApprovalRunTaskData(c.Request.Context(), task.ID, middleware.TokenAgentID(c))
+		if runErr != nil {
+			log.Printf("[Agent] task %d: manifest run token refused: %v", task.ID, runErr)
+			if errors.Is(runErr, services.ErrRunNotAssigned) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "manifest run token refused: run not active or not assigned to this agent"})
+			} else {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "failed to load the task's manifest run"})
+			}
+			return
+		}
+		if approval != nil {
+			response[services.TaskDataManifestApproval] = approval.TaskDataPayload()
+			serverURL := services.NewPlatformConfigService(h.db).GetBaseURL()
+			response["state_backend"] = gin.H{
+				"url":    fmt.Sprintf("%s/api/v1/terraform/state/%s", serverURL, workspace.WorkspaceID),
+				"token":  runToken,
+				"run_id": approval.RunID,
+			}
+			c.JSON(http.StatusOK, response)
+			return
 		}
 	}
 
@@ -980,6 +1007,11 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 		if err := h.stateTokenService.RevokeToken(task.ID); err != nil {
 			log.Printf("WARNING: Failed to revoke state token for task %d: %v", task.ID, err)
 		}
+	}
+	// approval run: a final status ends the run, the end of the plan phase
+	// revokes its tokens (both revoke the run tokens)
+	if err := services.EndApprovalRunPhase(c.Request.Context(), h.db, task.ID, req.Status); err != nil {
+		log.Printf("WARNING: Failed to end the manifest run phase of task %d: %v", task.ID, err)
 	}
 
 	// 注意：post_plan Run Tasks 在 UploadPlanData 中执行（Plan 完成后）

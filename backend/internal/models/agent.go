@@ -79,18 +79,26 @@ const (
 	// (Replaces the X-Agent-ID header of agent_identity_header_v1, which is
 	// no longer trusted or known.)
 	AgentCapabilityAgentTokenV1 = "agent_token_v1"
+	// AgentCapabilityManifestApprovalV1 the agent checks a manifest apply
+	// against its approval (task data "manifest_approval": bundle on disk ==
+	// approved_bundle_hash, plan.out == approved_plan_hash) and fails it with
+	// error_code approval_hash_mismatch otherwise; its state token is the
+	// approval run's token.
+	AgentCapabilityManifestApprovalV1 = "manifest_approval_v1"
 )
 
 // SupportedAgentCapabilities the capabilities of this build (sent by the
 // agent at registration, accepted by the platform).
 func SupportedAgentCapabilities() []string {
-	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityAgentTokenV1}
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityAgentTokenV1,
+		AgentCapabilityManifestApprovalV1}
 }
 
 // ManifestAgentCapabilities what an agent needs to run a task of a
 // manifest-bound workspace (or a manifest Run task).
 func ManifestAgentCapabilities() []string {
-	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityAgentTokenV1}
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityAgentTokenV1,
+		AgentCapabilityManifestApprovalV1}
 }
 
 // HasCapability reports whether the agent reported capability c.
