@@ -97,9 +97,14 @@ func TestPack_ReportsProblemsAndStoresNothing(t *testing.T) {
 	}
 }
 
-func TestGitCommitSourceNotImplemented(t *testing.T) {
-	if _, _, err := Pack(context.Background(), GitCommit{}); !errors.Is(err, ErrGitSourceNotImplemented) {
-		t.Fatalf("want ErrGitSourceNotImplemented, got %v", err)
+func TestGitCommitSource(t *testing.T) {
+	files := []File{{Path: "main.tf", Content: []byte("# x\n"), Mode: ModeRegular}}
+	b, probs, err := Pack(context.Background(), GitCommit{SHA: "0123456789abcdef0123456789abcdef01234567", Files: files})
+	if err != nil || len(probs) != 0 {
+		t.Fatalf("pack: %v %v", err, probs)
+	}
+	if want, _ := Hash(files); b.Hash != want {
+		t.Fatalf("hash = %s, want %s", b.Hash, want)
 	}
 }
 

@@ -53,19 +53,18 @@ func (s nativeVersion) ReadFiles(ctx context.Context) ([]File, error) {
 	return readFileRows(q)
 }
 
-// ErrGitSourceNotImplemented git sources arrive in step 8.
-var ErrGitSourceNotImplemented = errors.New("git manifest source is not implemented yet")
-
-// GitCommit is the git source (repo tree at a pinned commit SHA). Stub until
-// step 8: publish will pack it through the same Pack / Store path.
+// GitCommit is the git source: the regular files of one pinned commit
+// (under the manifest's git_subpath), fetched platform-side at publish by
+// gitsource.Fetcher (which also reports symlinks / submodules / oversize
+// entries it did not read). Publish packs it through the same
+// ValidateForPublish / Store path as a native draft. Runs never read git.
 type GitCommit struct {
-	RepoURL string
-	Subpath string
-	SHA     string
+	SHA   string
+	Files []File
 }
 
-func (GitCommit) ReadFiles(context.Context) ([]File, error) {
-	return nil, ErrGitSourceNotImplemented
+func (g GitCommit) ReadFiles(context.Context) ([]File, error) {
+	return g.Files, nil
 }
 
 func readFileRows(q *gorm.DB) ([]File, error) {

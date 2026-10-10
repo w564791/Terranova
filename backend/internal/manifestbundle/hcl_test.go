@@ -170,10 +170,14 @@ module "nosrc" {
 }
 `)
 	probs := mustCheck(t, files, nil) // local only
-	for _, line := range []int{8, 11, 15, 18, 21, 23} {
+	for _, line := range []int{8, 11, 15, 21, 23} {
 		if !hasProblem(probs, "envs/prod/main.tf", RuleHCLModuleSource, line) {
 			t.Fatalf("local-only: missing module_source at %d: %+v", line, probs)
 		}
+	}
+	// a git source on a branch is unpinned whatever the policy
+	if !hasProblem(probs, "envs/prod/main.tf", RuleHCLModuleUnpinned, 18) {
+		t.Fatalf("local-only: missing module_unpinned at 18: %+v", probs)
 	}
 	if len(probs) != 6 {
 		t.Fatalf("local-only: %+v", probs)
@@ -186,8 +190,8 @@ module "nosrc" {
 		t.Fatalf("allowlist: %+v", probs)
 	}
 	probs = mustCheck(t, files, ModuleSourceAllowlist([]string{"git::https://github.com/acme/mods.git"}))
-	if hasProblem(probs, "envs/prod/main.tf", RuleHCLModuleSource, 18) {
-		t.Fatalf("allowlisted git subdir flagged: %+v", probs)
+	if hasProblem(probs, "envs/prod/main.tf", RuleHCLModuleSource, 18) || !hasProblem(probs, "envs/prod/main.tf", RuleHCLModuleUnpinned, 18) {
+		t.Fatalf("allowlisted unpinned git subdir: %+v", probs)
 	}
 	boom := errors.New("db down")
 	if _, err := CheckHCL(files, func(string) (bool, error) { return false, boom }); !errors.Is(err, boom) {
@@ -254,5 +258,38 @@ func TestValidateForPublish_MergesRules(t *testing.T) {
 	b, probs, err := PackFilesForPublish(hclFiles("main.tf", `module "m" { source = "./m" }`, "m/main.tf", `resource "null_resource" "a" {}`), nil)
 	if err != nil || len(probs) != 0 || b == nil || b.Hash == "" {
 		t.Fatalf("clean publish: %v %+v %v", b, probs, err)
+	}
+}
+
+func TestCheckHCL_GitModuleSourcesMustPinSHA(t *testing.T) {
+	sha := "0123456789abcdef0123456789abcdef01234567"
+	src := func(s string) []File {
+		return hclFiles("main.tf", "module \"m\" {\n  source = \""+s+"\"\n}\n")
+	}
+	allow := ModuleSourceAllowlist([]string{"git::https://github.com/acme/mods.git"})
+	for _, tc := range []struct {
+		source string
+		rule   string // "" = allowed
+	}{
+		{"git::https://github.com/acme/mods.git//net?ref=" + sha, ""},
+		{"git::https://github.com/acme/mods.git//net?ref=" + sha + "&depth=1", ""},
+		{"git::https://github.com/acme/mods.git//net", RuleHCLModuleUnpinned},
+		{"git::https://github.com/acme/mods.git//net?ref=v1.2.0", RuleHCLModuleUnpinned},
+		{"git::https://github.com/acme/mods.git//net?ref=main", RuleHCLModuleUnpinned},
+		{"git::https://github.com/acme/mods.git//net?ref=" + sha[:12], RuleHCLModuleUnpinned},
+		{"git::https://github.com/acme/mods.git//net?ref=" + strings.ToUpper(sha), RuleHCLModuleUnpinned},
+		{"git::https://github.com/acme/mods.git//net?ref=" + sha + "&sshkey=abc", RuleHCLModuleUnpinned},
+		{"github.com/acme/mods?ref=main", RuleHCLModuleUnpinned},
+		{"git@github.com:acme/mods.git", RuleHCLModuleUnpinned},
+		{"bitbucket.org/acme/mods", RuleHCLModuleUnpinned},
+		{"git::https://github.com/other/mods.git//net?ref=" + sha, RuleHCLModuleSource}, // pinned, not allowlisted
+	} {
+		probs := mustCheck(t, src(tc.source), allow)
+		if tc.rule == "" && len(probs) != 0 {
+			t.Fatalf("%s: %+v", tc.source, probs)
+		}
+		if tc.rule != "" && !hasProblem(probs, "main.tf", tc.rule, 2) {
+			t.Fatalf("%s: want %s, got %+v", tc.source, tc.rule, probs)
+		}
 	}
 }

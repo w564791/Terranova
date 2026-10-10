@@ -3,7 +3,9 @@ package manifestbundle
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +24,8 @@ const (
 	RuleHCLExternalData = "hcl_external_data"
 	RuleHCLHTTPData     = "hcl_http_data"
 	RuleHCLModuleSource = "hcl_module_source"
+	// a git module source that does not pin a full commit SHA (?ref=<sha>)
+	RuleHCLModuleUnpinned = "hcl_module_unpinned"
 )
 
 func hclRuleMessage(rule string) string {
@@ -36,6 +40,8 @@ func hclRuleMessage(rule string) string {
 		return `the "http" data source / hashicorp/http provider is not allowed`
 	case RuleHCLModuleSource:
 		return "module source is not allowed: use a relative path inside the bundle or a module registered in the platform module catalog"
+	case RuleHCLModuleUnpinned:
+		return "git module source must pin a full commit SHA (?ref=<40-hex commit>) or be vendored into the bundle"
 	}
 	return rule
 }
@@ -100,15 +106,23 @@ func allowlisted(set map[string]bool, source string) bool {
 	return false
 }
 
-// PublishModuleSourcePolicy is THE module-source allowlist of native publish
-// (single place; step 8 git sources extend it here). Besides relative local
-// paths (handled by CheckHCL) a module source is allowed when it is the
-// module_source of an active module of the platform module catalog
-// (modules.module_source, or a module_versions.module_source of an active
-// module): exactly the sources the manifest editor offers. The repo has no
-// other module-source / registry allowlist configuration. The catalog is
-// loaded lazily on the first non-local source, so bundles with only local
-// modules never touch the database.
+// PublishModuleSourcePolicy is THE module-source allowlist of publish (native
+// and git manifests; single place). Besides relative local paths (handled by
+// CheckHCL) a module source is allowed when it is the module_source of an
+// active module of the platform module catalog (modules.module_source, or a
+// module_versions.module_source of an active module): exactly the sources
+// the manifest editor offers. The repo has no other module-source / registry
+// allowlist configuration. The catalog is loaded lazily on the first
+// non-local source, so bundles with only local modules never touch the
+// database.
+//
+// Git module sources (IsGitModuleSource: git::, github.com/, bitbucket.org/,
+// git@) must in addition pin a full commit SHA (PinnedGitModuleSource:
+// ?ref=<40|64 hex>, no other query parameter than depth): a branch or tag
+// is mutable, so the bundle would no longer identify what runs. A pinned
+// source is allowed when its catalog entry matches with or without the ref
+// (the catalog may list a repo unpinned or at a tag; the bundle must pin).
+// Anything else must be vendored into the bundle (local path).
 func PublishModuleSourcePolicy(ctx context.Context, db *gorm.DB) ModuleSourcePolicy {
 	var (
 		once sync.Once
@@ -139,8 +153,78 @@ func PublishModuleSourcePolicy(ctx context.Context, db *gorm.DB) ModuleSourcePol
 		if err != nil {
 			return false, err
 		}
+		if IsGitModuleSource(source) {
+			base, ok := PinnedGitModuleSource(source)
+			if !ok {
+				return false, nil
+			}
+			if allowlisted(set, source) || allowlisted(set, base) {
+				return true, nil
+			}
+			for entry := range set {
+				if IsGitModuleSource(entry) && gitSourceBase(entry) == base {
+					return true, nil
+				}
+			}
+			// "<catalog base>//<subdir>"
+			for entry := range set {
+				if IsGitModuleSource(entry) && strings.HasPrefix(base, gitSourceBase(entry)+"//") {
+					return true, nil
+				}
+			}
+			return false, nil
+		}
 		return allowlisted(set, source), nil
 	}
+}
+
+var commitSHARe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// IsGitModuleSource whether Terraform fetches source with its git getter:
+// forced "git::", the GitHub / Bitbucket shorthands and scp-like git@host:.
+func IsGitModuleSource(source string) bool {
+	s := strings.ToLower(strings.TrimSpace(source))
+	for _, p := range []string{"git::", "github.com/", "bitbucket.org/", "git@"} {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// gitSourceBase source without its query string.
+func gitSourceBase(source string) string {
+	base, _, _ := strings.Cut(source, "?")
+	return base
+}
+
+// PinnedGitModuleSource reports whether a git module source pins a full
+// commit SHA (?ref=<40|64 lowercase hex>; depth is the only other parameter
+// allowed, e.g. no sshkey=) and returns the source without its query.
+func PinnedGitModuleSource(source string) (base string, ok bool) {
+	base, query, hasQuery := strings.Cut(source, "?")
+	if !hasQuery {
+		return base, false
+	}
+	vals, err := url.ParseQuery(query)
+	if err != nil {
+		return base, false
+	}
+	for k, v := range vals {
+		switch k {
+		case "ref":
+			if len(v) != 1 || !commitSHARe.MatchString(v[0]) {
+				return base, false
+			}
+		case "depth":
+			if len(v) != 1 {
+				return base, false
+			}
+		default:
+			return base, false
+		}
+	}
+	return base, len(vals["ref"]) == 1
 }
 
 // localModuleSource reports a Terraform local path source ("./x", "../x")
@@ -326,6 +410,12 @@ func checkModuleSource(file string, b *hcl.Block, policy ModuleSourcePolicy, add
 			add(RuleHCLModuleSource, file, line)
 		}
 		return nil
+	}
+	if IsGitModuleSource(source) {
+		if _, pinned := PinnedGitModuleSource(source); !pinned {
+			add(RuleHCLModuleUnpinned, file, line)
+			return nil
+		}
 	}
 	if policy == nil {
 		add(RuleHCLModuleSource, file, line)

