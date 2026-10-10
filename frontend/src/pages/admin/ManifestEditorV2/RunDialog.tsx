@@ -61,6 +61,8 @@ interface Props {
   onRunRejected?: (problems: PublishProblem[]) => void
   onClose: () => void
   panelWidth?: number
+  /** false = 没有可运行的草稿(git 来源),只能选已发布版本;默认 true */
+  allowDraft?: boolean
 }
 
 interface RunTarget {
@@ -408,6 +410,7 @@ export default function RunDialog({
   onRunRejected,
   onClose,
   panelWidth,
+  allowDraft = true,
 }: Props) {
   const navigate = useNavigate()
   const [targets, setTargets] = useState<RunTarget[]>([])
@@ -420,6 +423,13 @@ export default function RunDialog({
   const [submitError, setSubmitError] = useState<string | null>(null)
   // 运行来源:'' = 当前草稿;否则为已发布版本 id(请求带 manifest_version_id)
   const [sourceVersionId, setSourceVersionId] = useState<string>('')
+  // git 来源没有草稿:默认选最新的有效版本
+  useEffect(() => {
+    if (allowDraft || sourceVersionId) return
+    const first = versions.find((v) => !versionNeedsRepublish(v))
+    if (first) setSourceVersionId(first.id)
+  }, [allowDraft, versions, sourceVersionId])
+  const noRunnableSource = !allowDraft && !sourceVersionId
 
   // viewLast 变化时自动跳到上次任务
   useEffect(() => {
@@ -625,7 +635,7 @@ export default function RunDialog({
                   onChange={(e) => setSourceVersionId(e.target.value)}
                   disabled={loading || submitting}
                 >
-                  <option value="">当前草稿</option>
+                  {allowDraft ? <option value="">当前草稿</option> : !sourceVersionId && <option value="">（没有可运行的已发布版本）</option>}
                   {versions.map((v) => {
                     const status = bundleStatusLabel(v)
                     return (
@@ -643,8 +653,8 @@ export default function RunDialog({
 
             <div style={{ marginTop: 'auto', paddingTop: 12 }}>
               <button
-                style={!selected || loading || submitting || targets.length === 0 ? btnPrimaryDisabledStyle : btnPrimaryStyle}
-                disabled={!selected || loading || submitting || targets.length === 0}
+                style={!selected || loading || submitting || targets.length === 0 || noRunnableSource ? btnPrimaryDisabledStyle : btnPrimaryStyle}
+                disabled={!selected || loading || submitting || targets.length === 0 || noRunnableSource}
                 onClick={() => void handleRun()}
               >
                 {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}

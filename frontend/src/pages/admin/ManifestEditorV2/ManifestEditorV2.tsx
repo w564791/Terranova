@@ -12,7 +12,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import * as monaco from 'monaco-editor'
 import 'monaco-editor/esm/vs/editor/editor.all.js'
 import '@vscode/codicons/dist/codicon.css'
-import { Tag, message } from 'antd'
+import { Tag, Tooltip, message } from 'antd'
 import { getAuthOrgId } from '../../../services/api'
 import { ensureVscodeServicesReady } from './initServices'
 import { registerHclLanguage } from './hclLanguage'
@@ -43,6 +43,9 @@ import {
   deploymentVersionStale,
   STALE_DEPLOYMENT_MESSAGE,
   type PublishProblem,
+  GIT_SOURCE_BANNER,
+  GIT_SOURCE_READ_ONLY_MESSAGE,
+  isGitSourceReadOnly,
 } from './bundleStatus'
 import QuickOpen from './QuickOpen'
 import TreeContextMenu, { type ContextMenuItem } from './TreeContextMenu'
@@ -51,6 +54,7 @@ import { buildBlockIndex, findExternalRefs, locateBlock } from './hclBlockIndex'
 import {
   listFiles,
   listVersionFiles,
+  shortSha,
   readFile,
   putFile,
   putFileB64,
@@ -78,7 +82,7 @@ import {
   type ManifestCompletedStep,
   type ConversationTurn,
 } from '../../../services/manifestAi'
-import { exportManifestZip, getManifest, updateManifest } from '../../../services/manifestApi'
+import { exportManifestZip, getManifest, gitRepoName, updateManifest, type Manifest } from '../../../services/manifestApi'
 import { AI_PANEL_WIDTH } from './manifestAiStyles'
 import styles from './ManifestEditorV2.module.css'
 
@@ -201,6 +205,11 @@ function isHclBlockHeader(line: string): boolean {
 
 function firstNonEmptyLine(text: string): string {
   return text.split('\n').find((line) => line.trim()) ?? ''
+}
+
+/** git 来源 manifest 的写操作提示(只读) */
+function notifyGitReadOnly(): void {
+  message.warning({ content: GIT_SOURCE_READ_ONLY_MESSAGE, key: 'git-source-read-only' })
 }
 
 export default function ManifestEditorV2() {
@@ -550,6 +559,14 @@ export default function ManifestEditorV2() {
   const [manifestDesc, setManifestDesc] = useState<string>('')
   // 调用者能力(复用挂载时 getManifest 返回的 can_write / can_deploy);undefined=未知,不隐藏入口
   const [manifestCaps, setManifestCaps] = useState<{ can_write?: boolean; can_deploy?: boolean }>({})
+  // git 来源(后端 6c28579):非空 = 只读编辑器,内容取最新已发布版本,发布 = 选 commit
+  const [gitManifest, setGitManifest] = useState<Manifest | null>(null)
+  const isGit = gitManifest !== null
+  const isGitRef = useRef(false)
+  isGitRef.current = isGit
+  // git 来源时文件内容的版本 ref(最新已发布版本 id);native 为 undefined = 草稿
+  const contentRefRef = useRef<string | undefined>(undefined)
+
   // 顶栏就地编辑:'name' | 'desc' | null
   const [editingMeta, setEditingMeta] = useState<'name' | 'desc' | null>(null)
   const [metaDraft, setMetaDraft] = useState('')
@@ -633,6 +650,9 @@ export default function ManifestEditorV2() {
           autoClosingBrackets: 'languageDefined', // 括号/引号自动闭合(规则来自 hclLanguage 配置)
           tabSize: 2,
           insertSpaces: true, // 与 DEFAULT_USER_CONFIG 一致,双保险
+          // git 来源只读(manifest 元信息可能晚于编辑器创建到达,下方 effect 再同步一次)
+          readOnly: isGitRef.current,
+          readOnlyMessage: { value: GIT_SOURCE_READ_ONLY_MESSAGE },
         })
         editorRef.current.onDidChangeCursorPosition((e) => {
           setCursor({ line: e.position.lineNumber, col: e.position.column })
@@ -874,7 +894,7 @@ export default function ManifestEditorV2() {
         let content = fileContentCache.current.get(path)
         if (content === undefined) {
           try {
-            const f = await readFile(ctx, path)
+            const f = await readFile(ctx, path, contentRefRef.current)
             // 列表元信息没标 binary 但后端读出来是 binary 时兜底
             if (f.is_binary) {
               setBinaryView({ path, size: f.size, mime: f.mime })
@@ -1208,6 +1228,7 @@ export default function ManifestEditorV2() {
     const path = currentFileRef.current
     const ed = editorRef.current
     if (!path || !ed) return
+    if (isGitRef.current) return // git 来源只读,不写草稿
     // dirty 才需要写;非 dirty 的 flush 直接跳过,省一次 PUT
     if (!dirtyFilesRef.current.has(path)) return
     const value = ed.getModel()?.getValue() ?? ''
@@ -1235,6 +1256,7 @@ export default function ManifestEditorV2() {
       // eslint-disable-next-line no-console
       console.error('[ManifestEditorV2] save failed', err)
       setSaveStatus('error')
+      if (isGitSourceReadOnly(err)) notifyGitReadOnly()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, manifestId])
@@ -1421,7 +1443,7 @@ export default function ManifestEditorV2() {
         const model = modelCache.current.get(f.path)
         if (model) return { path: f.path, content: model.getValue() }
         try {
-          const r = await readFile(ctx, f.path)
+          const r = await readFile(ctx, f.path, contentRefRef.current)
           return { path: f.path, content: r.is_binary ? '' : r.content ?? '' }
         } catch {
           return { path: f.path, content: '' }
@@ -1722,14 +1744,59 @@ export default function ManifestEditorV2() {
         setManifestName(m.name ?? '')
         setManifestDesc(m.description ?? '')
         setManifestCaps({ can_write: m.can_write, can_deploy: m.can_deploy })
+        setGitManifest(m.source_type === 'git' ? m : null)
       })
       .catch(() => {
         setManifestName('')
         setManifestDesc('')
         setManifestCaps({})
+        setGitManifest(null)
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifestId, orgId])
+
+  // git 来源:编辑器只读(编辑器创建时已按 isGitRef 设置;元信息晚到时在此同步)
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly: isGit })
+  }, [isGit])
+
+  // git 来源:没有可编辑草稿,文件树与内容取最新已发布版本(只读);未发布过则为空。
+  // 发布新版本后(versions 变化)切到新版本内容。
+  const gitContentVersionId = isGit ? versions[0]?.id : undefined
+  useEffect(() => {
+    contentRefRef.current = gitContentVersionId
+    if (!isGit) return
+    let cancelled = false
+    // 丢弃旧内容(草稿 / 上一版本)的 model 与缓存
+    editorRef.current?.setModel(null)
+    for (const path of Array.from(modelCache.current.keys())) disposeFileResources(path)
+    fileContentCache.current.clear()
+    originalContentRef.current.clear()
+    setOpenTabs([])
+    setCurrentFile(null)
+    setDirtyFiles(new Set())
+    if (!gitContentVersionId) {
+      setFiles([])
+      return
+    }
+    listVersionFiles(ctx, gitContentVersionId)
+      .then((items) => {
+        if (cancelled) return
+        setManifestMissing(false)
+        setFiles(items)
+        originalFilesRef.current = new Set(items.map((f) => f.path))
+        if (hasDeepLinkRef.current) return
+        const first = items.find((f) => f.type === 'file' && f.path.endsWith('.tf')) ?? items.find((f) => f.type === 'file')
+        if (first) void openFile(first.path)
+      })
+      .catch(() => {
+        if (!cancelled) setFiles([])
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGit, gitContentVersionId, ctx])
 
   // 拉取 post_init 落库的 provider 类型目录(默认根 subpath;部署 workspace 的 subpath 优先)。
   // 不在挂载时跑:首次补全请求时由 ensureProviderSchemaRef 触发一次(manifest 切换后重置)。
@@ -1948,6 +2015,7 @@ export default function ManifestEditorV2() {
   //   changed → 用 base 内容覆盖草稿;added → 删草稿该文件;removed → 从 base 恢复到草稿。
   const discardDraftFile = useCallback(
     async (f: DiffEntry, baseRef: string) => {
+      if (isGitRef.current) return notifyGitReadOnly()
       try {
         if (f.state === 'added') {
           // base 没有 → 删掉草稿里这个新增文件
@@ -2099,6 +2167,7 @@ export default function ManifestEditorV2() {
   }, [creating, ghostDir, ctx, validatePath])
 
   const startCreateFile = useCallback(() => {
+    if (isGitRef.current) return notifyGitReadOnly()
     setRenamingPath(null)
     setCreatingDir(null)
     setInlineError(null)
@@ -2108,6 +2177,7 @@ export default function ManifestEditorV2() {
 
   // 在指定目录下新建文件(目录行 hover 按钮 / 右键菜单):复用 ghostDir 机制
   const startCreateFileIn = useCallback((dir: string) => {
+    if (isGitRef.current) return notifyGitReadOnly()
     setRenamingPath(null)
     setCreatingDir(null)
     setInlineError(null)
@@ -2124,6 +2194,7 @@ export default function ManifestEditorV2() {
   // createDirParentRef: 新建子目录时的父前缀(空=根)。在 commitCreateDir 里拼接。
   const createDirParentRef = useRef<string>('')
   const startCreateDir = useCallback(() => {
+    if (isGitRef.current) return notifyGitReadOnly()
     setRenamingPath(null)
     setCreating(null)
     setInlineError(null)
@@ -2133,6 +2204,7 @@ export default function ManifestEditorV2() {
 
   // 在指定目录下新建子目录
   const startCreateDirIn = useCallback((parent: string) => {
+    if (isGitRef.current) return notifyGitReadOnly()
     setRenamingPath(null)
     setCreating(null)
     setInlineError(null)
@@ -2198,6 +2270,7 @@ export default function ManifestEditorV2() {
   )
 
   const confirmDelete = useCallback(async () => {
+    if (isGitRef.current) return notifyGitReadOnly()
     const target = pendingDelete
     if (!target) return
     try {
@@ -2221,6 +2294,7 @@ export default function ManifestEditorV2() {
   }, [pendingDelete, ctx, forgetPaths])
 
   const startRename = useCallback((path: string) => {
+    if (isGitRef.current) return notifyGitReadOnly()
     setCreating(null)
     setInlineError(null)
     setRenameValue(path)
@@ -2320,6 +2394,7 @@ export default function ManifestEditorV2() {
   // 粘贴到目录 dir('' = 根)
   const pasteInto = useCallback(
     async (dir: string) => {
+      if (isGitRef.current) return notifyGitReadOnly()
       const cb = clipboardRef.current
       if (!cb) return
       const base = cb.path.split('/').pop() || cb.path
@@ -2351,6 +2426,7 @@ export default function ManifestEditorV2() {
   // ========== 拖拽移动文件/文件夹到目标目录 ==========
   const moveNodeTo = useCallback(
     async (src: { path: string; isDir: boolean }, destDir: string) => {
+      if (isGitRef.current) return notifyGitReadOnly()
       const base = src.path.split('/').pop() || src.path
       const srcParent = src.path.includes('/') ? src.path.slice(0, src.path.lastIndexOf('/')) : ''
       // 非法/无效目标:原位、目录拖进自身或子目录
@@ -2400,6 +2476,16 @@ export default function ManifestEditorV2() {
     (target: { kind: 'file' | 'dir' | 'blank'; path: string }): ContextMenuItem[] => {
       const cb = clipboardRef.current
       const items: ContextMenuItem[] = []
+      if (isGitRef.current) {
+        // git 来源只读:不提供新建 / 重命名 / 删除 / 剪切 / 粘贴
+        if (target.kind === 'file') {
+          items.push({ label: '打开', icon: 'go-to-file', onClick: () => void openFile(target.path) })
+        }
+        if (target.kind !== 'blank') {
+          items.push({ label: '复制路径', icon: 'link', onClick: () => void navigator.clipboard?.writeText(target.path) })
+        }
+        return items
+      }
       if (target.kind === 'file') {
         const dir = target.path.includes('/') ? target.path.slice(0, target.path.lastIndexOf('/')) : ''
         items.push({ label: '打开', icon: 'go-to-file', onClick: () => void openFile(target.path) })
@@ -2573,7 +2659,7 @@ export default function ManifestEditorV2() {
           break
         case 'Delete':
         case 'Backspace':
-          if (node) { e.preventDefault(); setPendingDelete({ path: node.path, isDir: node.isDir }) }
+          if (node && !isGitRef.current) { e.preventDefault(); setPendingDelete({ path: node.path, isDir: node.isDir }) }
           break
       }
     },
@@ -2583,6 +2669,7 @@ export default function ManifestEditorV2() {
   // ========== 上传遍历后的文件列表(拖拽/粘贴共用)==========
   const uploadTraversedFiles = useCallback(
     async (traversed: TraversedFile[], destDir: string) => {
+      if (isGitRef.current) return notifyGitReadOnly()
       const total = traversed.length
       let ok = 0
       let skipped = 0
@@ -2636,6 +2723,7 @@ export default function ManifestEditorV2() {
   const handleDropFiles = useCallback(
     async (collected: (FileSystemEntry | File)[]) => {
       setDragOver(false)
+      if (isGitRef.current) return notifyGitReadOnly()
       const traversed = await traverseCollectedEntries(collected)
       if (traversed.length === 0) return
       await uploadTraversedFiles(traversed, '')
@@ -2646,6 +2734,7 @@ export default function ManifestEditorV2() {
   // ========== 从系统剪贴板粘贴文件(Cmd+V 或右键粘贴,支持文件夹)==========
   const handlePasteFiles = useCallback(
     async (collected: (FileSystemEntry | File)[]) => {
+      if (isGitRef.current) return notifyGitReadOnly()
       const traversed = await traverseCollectedEntries(collected)
       if (traversed.length === 0) return
       // 粘贴到当前聚焦的目录,无焦点则到根
@@ -3012,7 +3101,7 @@ export default function ManifestEditorV2() {
             }}
           />
           <button
-            title="对当前草稿在已部署 workspace 跑 plan-only 检测"
+            title={isGit ? '对已发布版本在已部署 workspace 跑 plan-only 检测' : '对当前草稿在已部署 workspace 跑 plan-only 检测'}
             disabled={manifestMissing}
             onClick={() => {
               setRunViewLast(false)
@@ -3022,7 +3111,13 @@ export default function ManifestEditorV2() {
             <i className="codicon codicon-play" /> Run
           </button>
           <button
-            title={manifestCaps.can_write === false ? '需要 MANIFESTS 写权限' : '把当前草稿固化为新的不可变版本'}
+            title={
+              manifestCaps.can_write === false
+                ? '需要 MANIFESTS 写权限'
+                : isGit
+                  ? '选择仓库 commit 发布为新的不可变版本'
+                  : '把当前草稿固化为新的不可变版本'
+            }
             disabled={manifestMissing || manifestCaps.can_write === false}
             onClick={() => setPublishOpen(true)}
           >
@@ -3096,7 +3191,7 @@ export default function ManifestEditorV2() {
         {activeView === 'search' && (
           <SearchPanel
             ctx={ctx}
-            showReplace={searchShowReplace}
+            showReplace={searchShowReplace && !isGit}
             onOpenAt={(p, line, col, endCol) => void openAt(p, line, col, endCol)}
             onAfterReplace={(changed) => refreshAfterReplace(changed)}
           />
@@ -3112,16 +3207,20 @@ export default function ManifestEditorV2() {
         <div className={styles.header}>
           <span>资源管理器</span>
           <span className={styles.actions}>
-            <i
-              className="codicon codicon-new-file"
-              title="新建文件"
-              onClick={startCreateFile}
-            />
-            <i
-              className="codicon codicon-new-folder"
-              title="新建文件夹"
-              onClick={startCreateDir}
-            />
+            {!isGit && (
+              <>
+                <i
+                  className="codicon codicon-new-file"
+                  title="新建文件"
+                  onClick={startCreateFile}
+                />
+                <i
+                  className="codicon codicon-new-folder"
+                  title="新建文件夹"
+                  onClick={startCreateDir}
+                />
+              </>
+            )}
             <i
               className="codicon codicon-collapse-all"
               title="折叠全部目录"
@@ -3144,7 +3243,9 @@ export default function ManifestEditorV2() {
               className="codicon codicon-refresh"
               title="刷新"
               onClick={() => {
-                listFiles(ctx)
+                const ref = contentRefRef.current
+                if (isGitRef.current && !ref) return
+                ;(ref ? listVersionFiles(ctx, ref) : listFiles(ctx))
                   .then((items) => {
                     setManifestMissing(false)
                     setFiles(items)
@@ -3346,16 +3447,20 @@ export default function ManifestEditorV2() {
               </span>
             </div>
             <div className={styles.tree}>
-              {/* 未提交更改:草稿 vs 最新已发布版本 */}
-              <div className={styles.changesHeader}>
-                未提交更改{draftDiff.files.length > 0 ? ` (${draftDiff.files.length})` : ''}
-              </div>
-              {draftDiff.files.length === 0 && (
-                <div style={{ padding: '4px 12px 8px', color: '#858585', fontSize: 12 }}>
-                  草稿与最新版本一致,无未提交更改。
-                </div>
+              {/* 未提交更改:草稿 vs 最新已发布版本(git 来源没有草稿,不显示) */}
+              {!isGit && (
+                <>
+                  <div className={styles.changesHeader}>
+                    未提交更改{draftDiff.files.length > 0 ? ` (${draftDiff.files.length})` : ''}
+                  </div>
+                  {draftDiff.files.length === 0 && (
+                    <div style={{ padding: '4px 12px 8px', color: '#858585', fontSize: 12 }}>
+                      草稿与最新版本一致,无未提交更改。
+                    </div>
+                  )}
+                  {draftDiff.files.map((f) => renderChangeRow(f, 'draft', draftDiff.baseVersionId))}
+                </>
               )}
-              {draftDiff.files.map((f) => renderChangeRow(f, 'draft', draftDiff.baseVersionId))}
 
               {/* 已发布版本 */}
               <div className={styles.changesHeader}>已发布版本</div>
@@ -3366,7 +3471,7 @@ export default function ManifestEditorV2() {
                 <div style={{ padding: '8px 12px', color: '#858585', fontSize: 12, lineHeight: 1.5 }}>
                   还没有已发布版本。
                   <br />
-                  点顶栏「发布版本」把当前草稿固化为 vX.Y.Z。
+                  {isGit ? '点顶栏「发布版本」选择仓库 commit 发布为 vX.Y.Z。' : '点顶栏「发布版本」把当前草稿固化为 vX.Y.Z。'}
                 </div>
               )}
               {!versionsLoading &&
@@ -3384,6 +3489,25 @@ export default function ManifestEditorV2() {
                         <i className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ color: '#858585' }} />
                         <i className="codicon codicon-tag" style={{ color: '#4ec9b0' }} />
                         <span className={styles.versionTag}>{v.version}</span>
+                        {v.source_ref && (
+                          <Tooltip title={`commit ${v.source_ref}（点击复制）`}>
+                            <span
+                              role="button"
+                              style={{ fontFamily: 'Menlo, Monaco, Consolas, monospace', fontSize: 11, color: '#4ec9b0', cursor: 'copy' }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const sha = v.source_ref ?? ''
+                                void navigator.clipboard
+                                  ?.writeText(sha)
+                                  .then(() => message.success('已复制 commit SHA'))
+                                  .catch(() => undefined)
+                              }}
+                            >
+                              <i className="codicon codicon-git-commit" style={{ fontSize: 11, marginRight: 2 }} />
+                              {shortSha(v.source_ref)}
+                            </span>
+                          </Tooltip>
+                        )}
                         <BundleStatusTag version={v} />
                         <i
                           className={`codicon codicon-cloud-download ${styles.versionExport}`}
@@ -3423,6 +3547,35 @@ export default function ManifestEditorV2() {
       </div>
 
       <div className={styles.editorArea} style={{ marginRight: activeRightPanel ? rightPanelWidth : 0 }}>
+        {isGit && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              background: 'rgba(55,148,255,0.12)',
+              borderBottom: '1px solid rgba(55,148,255,0.35)',
+              color: '#cccccc',
+              fontSize: 12,
+              flexShrink: 0,
+            }}
+          >
+            <i className="codicon codicon-github" style={{ color: '#3794ff' }} />
+            <span style={{ flex: 1 }}>
+              {GIT_SOURCE_BANNER}
+              {gitManifest?.git_repo_url && (
+                <span style={{ color: '#858585', marginLeft: 8 }}>
+                  {gitRepoName(gitManifest.git_repo_url)}
+                  {gitManifest.git_subpath ? ` / ${gitManifest.git_subpath}` : ''}
+                  {versions[0]
+                    ? ` · 当前显示 ${versions[0].version}${versions[0].source_ref ? ` (${shortSha(versions[0].source_ref)})` : ''}`
+                    : ' · 尚未发布任何版本'}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
         <div className={styles.tabs}>
           {openTabs.map((path) => (
             <div
@@ -3615,6 +3768,7 @@ export default function ManifestEditorV2() {
           lastRunTask={lastRunTask}
           viewLast={runViewLast}
           versions={versions}
+          allowDraft={!isGit}
           onRunTaskCreated={(taskId, workspaceId) => setLastRunTask({ taskId, workspaceId })}
           onRunAttempt={() => setPublishProblems([])}
           onRunRejected={(list) => showBundleProblems(list, 'run')}
@@ -3654,6 +3808,16 @@ export default function ManifestEditorV2() {
         onClose={() => setPublishOpen(false)}
         onPublishAttempt={() => setPublishProblems([])}
         onPublishRejected={(list: PublishProblem[]) => showBundleProblems(list, 'publish')}
+        gitSource={
+          gitManifest
+            ? {
+                repoName: gitRepoName(gitManifest.git_repo_url),
+                latestSha: gitManifest.git_latest_sha,
+                latestRef: gitManifest.git_latest_ref,
+                latestAt: gitManifest.git_latest_at,
+              }
+            : null
+        }
         onPublished={(v, meta) => {
           setPublishProblems([])
           // 发布成功提示放在父组件(对话框 portal 已关,antd message 更稳定)

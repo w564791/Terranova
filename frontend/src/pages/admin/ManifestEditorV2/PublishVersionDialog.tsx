@@ -8,6 +8,9 @@
  * 未选中的不会更新 / trigger。
  *
  * 接 POST /manifests/:id/v2/versions
+ *
+ * git 来源(gitSource 非空):没有草稿,改为选择 commit(GitCommitPicker)并带 commit_sha 发布;
+ * 不要求发布前检查(检查针对草稿)。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -18,13 +21,15 @@ import {
   getDeploymentUpgradeContext,
   upgradeDeployment,
   triggerWorkspacePlanApply,
+  shortSha,
   type ManifestEditorContext,
   type ManifestVersion,
   type ManifestDeployment,
 } from './manifestApi'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import type { ManifestIssue } from '../../../services/manifestAi'
-import { parsePublishProblems, type PublishProblem } from './bundleStatus'
+import { gitErrorMessage, parsePublishProblems, type PublishProblem } from './bundleStatus'
+import GitCommitPicker from './GitCommitPicker'
 
 export interface PublishCheckSummary {
   done: boolean
@@ -48,6 +53,17 @@ interface Props {
    * problems 只含规则名 / 路径,不含文件内容。对话框随后关闭以便点击问题定位。
    */
   onPublishRejected?: (problems: PublishProblem[]) => void
+  /** git 来源 manifest:发布 = 选 commit */
+  gitSource?: GitSourceInfo | null
+}
+
+/** git 来源信息(manifest 的 git_* 字段) */
+export interface GitSourceInfo {
+  repoName: string
+  /** webhook 记录的仓库最新 push(仅提示) */
+  latestSha?: string
+  latestRef?: string
+  latestAt?: string
 }
 
 const SEMVER_RE = /^v\d+\.\d+\.\d+$/
@@ -241,7 +257,11 @@ export default function PublishVersionDialog({
   onPublished,
   onPublishAttempt,
   onPublishRejected,
+  gitSource,
 }: Props) {
+  const isGit = !!gitSource
+  const [commitSha, setCommitSha] = useState('')
+  const [publishedVersions, setPublishedVersions] = useState<ManifestVersion[]>([])
   const { orgId, manifestId } = ctx
   const [version, setVersion] = useState('v1.0.0')
   const [changelog, setChangelog] = useState('')
@@ -256,7 +276,22 @@ export default function PublishVersionDialog({
   // 选中的 deployment id 集合(未选中的不会 update / trigger)
   const [selectedDepIds, setSelectedDepIds] = useState<Set<string>>(() => new Set())
 
-  const publishReady = !!checkSummary?.done || !!checkSummary?.skipped
+  // git 来源没有草稿可检查,直接可发布(规则检查在发布时由后端对 commit 执行)
+  const publishReady = isGit || !!checkSummary?.done || !!checkSummary?.skipped
+  const publishedShas = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const v of publishedVersions) if (v.source_ref) m.set(v.source_ref, v.version)
+    return m
+  }, [publishedVersions])
+  // webhook 报告的最新 push 比最新已发布版本新,且尚未发布过 => 提示"仓库有新提交"
+  const latestPublished = publishedVersions[0]
+  const newCommitHint =
+    isGit &&
+    !!gitSource?.latestSha &&
+    !publishedShas.has(gitSource.latestSha) &&
+    (!latestPublished ||
+      !gitSource.latestAt ||
+      new Date(gitSource.latestAt).getTime() > new Date(latestPublished.created_at).getTime())
 
   useEffect(() => {
     if (!open) return
@@ -264,10 +299,17 @@ export default function PublishVersionDialog({
     setSubmitError(null)
     setProgress(null)
     setChangelog('')
+    setCommitSha('')
     setSelectedDepIds(new Set())
     listVersions({ orgId, manifestId })
-      .then((vs) => setVersion(suggestNextVersion(vs)))
-      .catch(() => setVersion('v1.0.0'))
+      .then((vs) => {
+        setVersion(suggestNextVersion(vs))
+        setPublishedVersions(vs)
+      })
+      .catch(() => {
+        setVersion('v1.0.0')
+        setPublishedVersions([])
+      })
   }, [open, orgId, manifestId])
 
   // 加载 active deployments + workspace 名称 + 当前版本标签
@@ -349,14 +391,18 @@ export default function PublishVersionDialog({
       setVersionError('格式必须为 vMAJOR.MINOR.PATCH (如 v1.2.0)')
       return
     }
+    if (isGit && !commitSha) {
+      setSubmitError('请选择要发布的 commit')
+      return
+    }
     setVersionError(null)
     setSubmitError(null)
     setProgress(null)
     onPublishAttempt?.()
     try {
       setSubmitting(true)
-      setProgress('正在发布版本…')
-      const v = await publishVersion(ctx, { version, changelog })
+      setProgress(isGit ? '正在从仓库获取 commit 并发布…' : '正在发布版本…')
+      const v = await publishVersion(ctx, isGit ? { version, changelog, commit_sha: commitSha } : { version, changelog })
 
       // 发布成功即收工:立刻关对话框并通知父组件展示提示;
       // workspace 更新/trigger 后台 best-effort,结果不影响发布
@@ -400,6 +446,11 @@ export default function PublishVersionDialog({
         } else {
           setSubmitError(summary)
         }
+        return
+      }
+      const gitMsg = gitErrorMessage(err)
+      if (gitMsg) {
+        setSubmitError(`发布失败：${gitMsg}`)
         return
       }
       // 仅发布本身失败才展示错误
@@ -483,8 +534,52 @@ export default function PublishVersionDialog({
           {/* 发布表单 */}
           <div style={{ opacity: publishReady ? 1 : 0.4, pointerEvents: publishReady ? 'auto' : 'none' }}>
             <p style={{ color: '#999', margin: '0 0 10px', fontSize: 12 }}>
-              把当前草稿快照成不可变版本,后续可被部署到 Workspace。
+              {isGit
+                ? `从仓库 ${gitSource?.repoName ?? ''} 选择一个 commit 固化为不可变版本,后续可被部署到 Workspace。`
+                : '把当前草稿快照成不可变版本,后续可被部署到 Workspace。'}
             </p>
+            {isGit && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={labelStyle}>Commit</label>
+                {newCommitHint && gitSource?.latestSha && (
+                  <div
+                    style={{
+                      ...sectionBoxStyle,
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 12,
+                    }}
+                  >
+                    <i className="codicon codicon-git-commit" style={{ color: '#3794ff' }} />
+                    <span style={{ flex: 1 }}>
+                      仓库有新提交：
+                      <span style={{ fontFamily: 'monospace', color: '#4ec9b0' }} title={gitSource.latestSha}>
+                        {shortSha(gitSource.latestSha)}
+                      </span>
+                      {gitSource.latestRef ? ` (${gitSource.latestRef.replace(/^refs\/heads\//, '')})` : ''}
+                      {gitSource.latestAt ? ` · ${new Date(gitSource.latestAt).toLocaleString()}` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      style={btnLinkStyle}
+                      disabled={submitting}
+                      onClick={() => setCommitSha(gitSource.latestSha ?? '')}
+                    >
+                      使用该 commit
+                    </button>
+                  </div>
+                )}
+                <GitCommitPicker
+                  ctx={ctx}
+                  value={commitSha}
+                  onChange={setCommitSha}
+                  disabled={submitting}
+                  publishedShas={publishedShas}
+                />
+              </div>
+            )}
             <div style={{ marginBottom: 10 }}>
               <label style={labelStyle}>版本号</label>
               <input
@@ -510,7 +605,7 @@ export default function PublishVersionDialog({
                 value={changelog}
                 onChange={(e) => setChangelog(e.target.value)}
                 rows={3}
-                placeholder="例如: 增加 NAT Gateway 配置"
+                placeholder={isGit ? '留空则使用 commit 标题' : '例如: 增加 NAT Gateway 配置'}
                 disabled={submitting}
               />
             </div>
@@ -604,8 +699,8 @@ export default function PublishVersionDialog({
         <div style={footerStyle}>
           <button style={btnSecondaryStyle} onClick={onClose} disabled={submitting}>取消</button>
           <button
-            style={!publishReady || submitting ? btnPrimaryDisabledStyle : btnPrimaryStyle}
-            disabled={!publishReady || submitting}
+            style={!publishReady || submitting || (isGit && !commitSha) ? btnPrimaryDisabledStyle : btnPrimaryStyle}
+            disabled={!publishReady || submitting || (isGit && !commitSha)}
             onClick={() => void handleOk()}
           >
             {submitting && <i className="codicon codicon-loading codicon-modifier-spin" />}
