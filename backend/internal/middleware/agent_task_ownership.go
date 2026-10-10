@@ -14,15 +14,15 @@ import (
 
 // Agent task ownership (agent-facing task and workspace API).
 //
-// Pool tokens are shared by every agent of a pool, so the strongest identity
-// the platform can verify is the pool; the agent ID is carried in
-// models.AgentIDHeader. A task call is allowed only when
-//   - the task is assigned (agent_id) to an agent registered in the calling
-//     token's pool,
-//   - the header, when sent, equals the task's agent_id (an agent that
-//     reported models.AgentCapabilityIdentityHeaderV1 must send it; older
-//     agents without the header are bound by pool only), and
-//   - the task is in a state in which its agent may use it (policy).
+// The caller is an agent (per-agent token: the agent ID comes from the
+// token) or, for older agents, a pool (pool token, shared by every agent of
+// the pool; see agent_auth.go). A task call is allowed only when
+//   - agent token: the task's agent_id is the token's agent;
+//   - pool token: the task is assigned to an agent of the calling pool that
+//     does NOT have models.AgentCapabilityAgentTokenV1 (such an agent always
+//     uses its token, so a pool token cannot act on its tasks);
+//   - and the task is in a state in which its agent may use it (policy).
+// The X-Agent-ID header of the previous scheme is not read.
 //
 // Ownership mismatch → 403 (the task-check middleware before this one already
 // answers 403 for a task outside the pool's workspaces, so existence is not
@@ -94,12 +94,14 @@ func AgentMayUseTask(policy AgentTaskPolicy, status models.TaskStatus, completed
 // errAgentNotOwner the calling agent is not the task's agent.
 var errAgentNotOwner = errors.New("task is not assigned to the calling agent")
 
-// verifyTaskAgent checks that agentID (the task's agent) belongs to poolID
-// and matches the identity header rules.
+// verifyTaskAgent checks that agentID (the task's agent) is the calling
+// agent (agent token) or an older agent of the calling pool (pool token).
 func verifyTaskAgent(db *gorm.DB, c *gin.Context, poolID, agentID string) error {
-	header := c.GetHeader(models.AgentIDHeader)
-	if header != "" && header != agentID {
-		return errAgentNotOwner
+	if tokAgent := TokenAgentID(c); tokAgent != "" {
+		if tokAgent != agentID {
+			return errAgentNotOwner
+		}
+		return nil // agent row (pool, revocation) checked at authentication
 	}
 	var agent models.Agent
 	err := db.WithContext(c.Request.Context()).Select("agent_id", "pool_id", "capabilities").
@@ -110,8 +112,8 @@ func verifyTaskAgent(db *gorm.DB, c *gin.Context, poolID, agentID string) error 
 	if err != nil {
 		return err
 	}
-	if header == "" && agent.HasCapability(models.AgentCapabilityIdentityHeaderV1) {
-		return errAgentNotOwner // this agent always identifies itself
+	if agent.HasCapability(models.AgentCapabilityAgentTokenV1) {
+		return errAgentNotOwner // this agent authenticates with its own token
 	}
 	return nil
 }
@@ -143,8 +145,8 @@ func RequireTaskAgent(db *gorm.DB, policy AgentTaskPolicy) gin.HandlerFunc {
 		}
 		if err := verifyTaskAgent(db, c, poolID, *task.AgentID); err != nil {
 			if errors.Is(err, errAgentNotOwner) {
-				log.Printf("[AgentAuth] [WARN] pool %s agent %q denied task %d (assigned to %s)",
-					poolID, c.GetHeader(models.AgentIDHeader), task.ID, *task.AgentID)
+				log.Printf("[AgentAuth] [WARN] pool %s caller %q denied task %d (assigned to %s)",
+					poolID, TokenAgentID(c), task.ID, *task.AgentID)
 				respondWithError(c, http.StatusForbidden, errAgentNotOwner.Error())
 				return
 			}
@@ -163,7 +165,7 @@ func RequireTaskAgent(db *gorm.DB, policy AgentTaskPolicy) gin.HandlerFunc {
 // RequireWorkspaceAgentTask binds a workspace route (after
 // PoolTokenAuthWithWorkspaceCheck) to an agent of the calling pool that is
 // executing (or, within the grace, has just ended) a task on that workspace.
-// With the identity header the task must be that agent's.
+// With an agent token the task must be that agent's.
 func RequireWorkspaceAgentTask(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		poolID := c.GetString("pool_id")
@@ -179,8 +181,8 @@ func RequireWorkspaceAgentTask(db *gorm.DB) gin.HandlerFunc {
 			Where("t.workspace_id = ? AND a.pool_id = ?", workspaceID, poolID).
 			Where("(t.status = ? OR (t.status IN ? AND COALESCE(t.completed_at, t.updated_at) >= ?))",
 				models.TaskStatusRunning, agentReportStatuses, now.Add(-AgentTaskReportGrace))
-		if h := c.GetHeader(models.AgentIDHeader); h != "" {
-			q = q.Where("t.agent_id = ?", h)
+		if tokAgent := TokenAgentID(c); tokAgent != "" {
+			q = q.Where("t.agent_id = ?", tokAgent)
 		}
 		var tasks []agentTaskRow
 		if err := q.Order("t.id DESC").Limit(20).Find(&tasks).Error; err != nil {
@@ -204,8 +206,8 @@ func RequireWorkspaceAgentTask(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 		}
-		log.Printf("[AgentAuth] [WARN] pool %s agent %q has no active task on workspace %s",
-			poolID, c.GetHeader(models.AgentIDHeader), workspaceID)
+		log.Printf("[AgentAuth] [WARN] pool %s caller %q has no active task on workspace %s",
+			poolID, TokenAgentID(c), workspaceID)
 		respondWithError(c, http.StatusForbidden, "no active task of the calling agent on this workspace")
 	}
 }

@@ -35,11 +35,14 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 	// ===== Agent Management Routes (with Pool Token auth for v3.2) =====
 	agents := api.Group("/agents")
 	{
-		// Agent registration and management (requires Pool Token)
+		// Agent registration: the only route that takes the pool token alone;
+		// it returns the per-agent token used by every other agent route
 		agents.POST("/register", middleware.PoolTokenAuthMiddleware(db), agentHandler.RegisterAgent)
+		// Agent token renewal (agent token only)
+		agents.POST("/token", middleware.RequireAgentToken(db), agentHandler.RenewAgentToken)
 
 		// Get pool HCP secrets (for generating credentials.tfrc.json on agent side)
-		agents.GET("/pool/secrets", middleware.PoolTokenAuthMiddleware(db), agentPoolSecretsHandler.GetPoolSecrets)
+		agents.GET("/pool/secrets", middleware.AgentOrPoolTokenAuth(db), agentPoolSecretsHandler.GetPoolSecrets)
 		// agents.POST("/:agent_id/ping", middleware.PoolTokenAuthWithAgentCheck(db), agentHandler.PingAgent)
 		// A pool token may only inspect or unregister agents registered by the
 		// same pool. Basic token authentication alone proves the caller owns *a*
@@ -69,7 +72,9 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 	// tasks from workspaces they are authorized to access
 	// Every task route is also bound to the task's agent and an allowed task
 	// state (middleware.RequireTaskAgent): another agent, even of the same
-	// pool, gets 403; a task in the wrong state 409.
+	// pool, gets 403; a task in the wrong state 409. The caller is identified
+	// by its agent token (older agents: pool token, pool binding only; see
+	// middleware/agent_token_auth.go).
 	agentTasks := api.Group("/agents/tasks")
 	{
 		// Get task execution data
@@ -126,10 +131,10 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 	agentTerraformVersions := api.Group("/agents/terraform-versions")
 	{
 		// Get default terraform version
-		agentTerraformVersions.GET("/default", middleware.PoolTokenAuthMiddleware(db), agentHandler.GetDefaultTerraformVersion)
+		agentTerraformVersions.GET("/default", middleware.AgentOrPoolTokenAuth(db), agentHandler.GetDefaultTerraformVersion)
 
 		// Get specific terraform version by version string
-		agentTerraformVersions.GET("/:version", middleware.PoolTokenAuthMiddleware(db), agentHandler.GetTerraformVersionByVersion)
+		agentTerraformVersions.GET("/:version", middleware.AgentOrPoolTokenAuth(db), agentHandler.GetTerraformVersionByVersion)
 	}
 }
 
@@ -160,6 +165,9 @@ func setupAgentPoolRoutes(adminProtected *gin.RouterGroup, db *gorm.DB, _ *middl
 
 		// Delete agent pool
 		agentPools.DELETE("/:pool_id", agentPoolHandler.DeleteAgentPool)
+
+		// Revoke an agent: its agent token and run tokens stop working at once
+		agentPools.POST("/:pool_id/agents/:agent_id/revoke", agentPoolHandler.RevokeAgent)
 
 		// Pool authorization - Pool side
 		agentPools.POST("/:pool_id/allow-workspaces", poolAuthHandler.AllowWorkspaces)

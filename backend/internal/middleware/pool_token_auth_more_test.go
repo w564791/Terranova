@@ -43,7 +43,8 @@ CREATE TABLE pool_allowed_workspaces (
 );
 CREATE TABLE agents (
   agent_id TEXT PRIMARY KEY,
-  pool_id TEXT
+  pool_id TEXT,
+  capabilities TEXT
 );`)
 	return db
 }

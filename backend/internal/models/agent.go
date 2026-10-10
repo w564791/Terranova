@@ -24,6 +24,14 @@ type Agent struct {
 	UpdatedBy     *string    `gorm:"column:updated_by;type:varchar(50)" json:"updated_by,omitempty"`
 	CreatedAt     time.Time  `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt     time.Time  `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	// TokenGeneration agent tokens carry it (gen claim); revocation bumps it.
+	TokenGeneration int `gorm:"column:token_generation;not null;default:0" json:"-"`
+	// RevokedAt set when the agent's tokens were revoked (agent tokens and
+	// its run tokens are refused from then on).
+	RevokedAt *time.Time `gorm:"column:revoked_at" json:"revoked_at,omitempty"`
+	// PoolTokenHash the pool token the agent registered with; its agent
+	// tokens are valid only while that pool token is active.
+	PoolTokenHash *string `gorm:"column:pool_token_hash;type:varchar(64)" json:"-"`
 }
 
 // TableName specifies the table name for Agent model
@@ -64,27 +72,25 @@ const (
 	// AgentCapabilityTaskDataOverridesV1 the agent applies the deployment
 	// variable overrides (and their sensitivity) from task data.
 	AgentCapabilityTaskDataOverridesV1 = "task_data_overrides_v1"
-	// AgentCapabilityIdentityHeaderV1 the agent sends its agent ID
-	// (AgentIDHeader) on every task / workspace API call. For an agent that
-	// reported it, a call without the header is refused; the header must
-	// equal the task's agent_id.
-	AgentCapabilityIdentityHeaderV1 = "agent_identity_header_v1"
+	// AgentCapabilityAgentTokenV1 the agent authenticates every call after
+	// registration (task / workspace API, C&C WebSocket) with its per-agent
+	// JWT (typ agent) and renews it; the agent ID comes from the token. The
+	// platform refuses pool-token calls on the tasks of such an agent.
+	// (Replaces the X-Agent-ID header of agent_identity_header_v1, which is
+	// no longer trusted or known.)
+	AgentCapabilityAgentTokenV1 = "agent_token_v1"
 )
-
-// AgentIDHeader the HTTP header carrying the calling agent's ID on agent
-// task / workspace API calls (pool tokens are shared by all agents of a pool).
-const AgentIDHeader = "X-Agent-ID"
 
 // SupportedAgentCapabilities the capabilities of this build (sent by the
 // agent at registration, accepted by the platform).
 func SupportedAgentCapabilities() []string {
-	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityIdentityHeaderV1}
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityAgentTokenV1}
 }
 
 // ManifestAgentCapabilities what an agent needs to run a task of a
 // manifest-bound workspace (or a manifest Run task).
 func ManifestAgentCapabilities() []string {
-	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityIdentityHeaderV1}
+	return []string{AgentCapabilityManifestBundleV1, AgentCapabilityTaskDataOverridesV1, AgentCapabilityAgentTokenV1}
 }
 
 // HasCapability reports whether the agent reported capability c.

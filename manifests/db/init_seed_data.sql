@@ -16105,6 +16105,19 @@ ALTER TABLE public.workspace_task_resource_changes ADD COLUMN IF NOT EXISTS reda
 ALTER TABLE public.workspace_task_resource_changes ADD COLUMN IF NOT EXISTS details_purged boolean DEFAULT false;
 -- <<< migrations/add_workspace_task_resource_change_redaction.sql <<<
 
+-- >>> migrations/add_agent_token.sql >>>
+-- Per-agent JWT revocation state (kept in sync with versioned migration
+-- 20261010_11_agent_token). Additive and idempotent.
+--   token_generation: carried in agent tokens (gen claim); revocation bumps it
+--   revoked_at:       agent tokens (and the agent's run tokens) refused
+--   pool_token_hash:  the pool token the agent registered with; its agent
+--                     tokens are valid only while that pool token is active
+
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS token_generation integer DEFAULT 0 NOT NULL;
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS revoked_at timestamp with time zone;
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS pool_token_hash character varying(64);
+-- <<< migrations/add_agent_token.sql <<<
+
 -- PostgreSQL database dump complete
 --
 
