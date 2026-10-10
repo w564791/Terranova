@@ -19,38 +19,35 @@
 
 ### Local Access
 
-#### 生成本地信任证书（可选,macOS）
+#### 生成 Gateway TLS 证书（必需）
 
-使用 [mkcert](https://github.com/FiloSottile/mkcert) 生成本地信任的 TLS 证书，浏览器访问时不会报不安全连接：
+Gateway 对外证书和私钥 **不提交到仓库**：`tls/kustomization.yaml` 通过 `secretGenerator`
+从 gitignored 的 `tls/certs/tls.crt`、`tls/certs/tls.key` 生成 Secret `iac-gateway-tls`，
+文件缺失时 `kubectl kustomize` 会直接失败。
+
+本地 / 开发环境，在仓库根目录运行：
 
 ```bash
-# 安装 mkcert
+# 可选（macOS）：安装 mkcert 并信任本地 CA，浏览器不再提示不安全连接
 brew install mkcert
 brew install nss   # Firefox 需要，Safari / Chrome 可跳过
-
-# 将 mkcert CA 安装到系统信任链
 mkcert -install
 
-# 为平台域名生成证书
-mkcert \
-  www.iac-platform.com \
-  iac-platform.com \
-  api.iac-platform.com
-
-# 生成的文件：
-#   www.iac-platform.com+2.pem     (证书)
-#   www.iac-platform.com+2-key.pem (私钥)
+# 生成证书（有 mkcert 用 mkcert，否则回退 openssl 自签名）
+make dev-certs
+# 写入（均已 gitignore）：
+#   certs/localhost.pem, certs/localhost-key.pem      Vite / 本地后端 HTTPS
+#   manifests/tls/certs/tls.crt, tls.key              Secret iac-gateway-tls
+# 证书覆盖 localhost、127.0.0.1、::1、www/api.iac-platform.com、iac-platform.com；
+# 已存在则跳过，FORCE=1 重新生成，DEV_CERT_HOSTS="..." 自定义域名。
 ```
 
-将生成的证书和私钥替换到 `tls/secret-gateway-tls.yaml` 中：
+生产 / 共享环境：将自己的证书链和私钥放到 `tls/certs/tls.crt`、`tls/certs/tls.key`
+（不要提交），或改用 cert-manager / 外部 Secret 管理 `iac-gateway-tls` 并删除该 generator。
 
-```bash
-# base64 编码后替换 secret-gateway-tls.yaml 中的 tls.crt 和 tls.key
-kubectl -n terraform create secret tls iac-gateway-tls \
-  --cert=www.iac-platform.com+2.pem \
-  --key=www.iac-platform.com+2-key.pem \
-  --dry-run=client -o yaml > tls/secret-gateway-tls.yaml
-```
+> 仓库曾提交过 `tls/certs/localhost-key.pem` 及 `tls/secret-gateway-tls.yaml` 中的私钥
+> （mkcert 生成，`*.iac-platform.com`）。该私钥已公开，凡使用过它的环境都应重新生成证书。
+> CI 会拒绝任何包含私钥的提交，见 `docs/security/private-keys.md`。
 
 #### 配置 hosts
 
@@ -128,10 +125,7 @@ manifests/
 ├── tls/                            # TLS certificates
 │   ├── kustomization.yaml
 │   ├── certificate.yaml            # cert-manager internal CA chain + service certs (incl. postgres)
-│   ├── secret-gateway-tls.yaml     # Gateway external TLS certificate
-│   └── certs/                      # mkcert certificate files (for local dev)
-│       ├── localhost.pem
-│       └── localhost-key.pem
+│   └── certs/                      # gitignored: tls.crt / tls.key for Secret iac-gateway-tls (make dev-certs)
 ├── db/                             # Database
 │   ├── kustomization.yaml
 │   ├── statefulset-postgres.yaml   # PostgreSQL StatefulSet + Service (conditional SSL)
@@ -171,6 +165,9 @@ Secrets are **not** stored in this (public) repository. `base/kustomization.yaml
 generates the `iac-platform` (DB credentials) and `iac-jwt` (keys) Secrets from
 the gitignored files `base/db.env` and `base/keys.env`; create them from the
 committed `*.env.example` templates first (kustomize fails if they are missing).
+The Gateway TLS Secret is likewise generated from gitignored `tls/certs/tls.crt`
+and `tls/certs/tls.key` (`make dev-certs` from the repo root, or your own
+certificate); see "生成 Gateway TLS 证书" above.
 
 ```bash
 cd manifests
@@ -231,8 +228,8 @@ Before deploying, update the following values to match your environment:
 
 See `docs/security/signing-and-encryption-keys.md`.
 
-**`tls/secret-gateway-tls.yaml`**
-- Replace with your own TLS certificate for external access (current: mkcert self-signed for `*.iac-platform.com`)
+**`tls/certs/tls.crt`, `tls/certs/tls.key`** (gitignored) → Secret `iac-gateway-tls`
+- Gateway external TLS certificate and key. `make dev-certs` for local use; your own certificate for real environments. Never commit them.
 
 
 ### 访问平台

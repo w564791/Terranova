@@ -8,7 +8,7 @@
 	docker-push-arm64 docker-push-frontend-arm64 docker-push-frontend-amd64 \
 	docker-push-agent-arm64 docker-push-db-init-arm64 docker-push-all-arm64 \
 	run-server run-agent local-server local-frontend local-agent \
-	generate-secret deploy-local export-seed-data clean
+	generate-secret dev-certs check-private-keys deploy-local export-seed-data clean
 
 # 默认变量（可通过 .env 文件或环境变量覆盖）
 DB_PORT ?= 5432
@@ -376,6 +376,46 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "     - 所有已登录用户的 Token 失效 (SIGNING_ROOT_KEY)"; \
 		echo "     - 所有已加密的变量无法解密 (DATA_ENCRYPTION_KEY)"; \
 	fi
+
+# 本地开发 TLS 证书（不提交到仓库）：
+#   certs/localhost.pem, certs/localhost-key.pem  -> Vite / 本地后端 HTTPS（文件存在即启用）
+#   manifests/tls/certs/tls.crt, tls.key          -> kustomize 生成 Secret iac-gateway-tls
+# 优先使用 mkcert（本地 CA 受信任）；未安装时回退到 openssl 自签名证书（浏览器会提示不受信任）。
+# 已存在则跳过，FORCE=1 重新生成。
+DEV_CERT_DIR ?= certs
+DEV_CERT_K8S_DIR ?= manifests/tls/certs
+DEV_CERT_HOSTS ?= localhost 127.0.0.1 ::1 www.iac-platform.com iac-platform.com api.iac-platform.com
+DEV_CERT_DAYS ?= 825
+
+dev-certs: ## 生成本地开发 TLS 证书（mkcert，缺失时回退 openssl 自签名），写入 gitignored 的 certs/ 与 manifests/tls/certs/
+	@set -e; \
+	crt=$(DEV_CERT_DIR)/localhost.pem; key=$(DEV_CERT_DIR)/localhost-key.pem; \
+	if [ -f "$$crt" ] && [ -f "$$key" ] && [ "$(FORCE)" != "1" ]; then \
+		echo "[OK] $$crt 已存在，跳过生成（FORCE=1 重新生成）"; \
+	else \
+		mkdir -p $(DEV_CERT_DIR); rm -f "$$crt" "$$key"; \
+		if command -v mkcert >/dev/null 2>&1; then \
+			mkcert -cert-file "$$crt" -key-file "$$key" $(DEV_CERT_HOSTS); \
+		else \
+			echo "[WARN] 未找到 mkcert，使用 openssl 生成自签名证书（浏览器不信任）"; \
+			san=""; for h in $(DEV_CERT_HOSTS); do \
+				case "$$h" in *:*|[0-9]*.[0-9]*.[0-9]*.[0-9]*) san="$$san,IP:$$h";; *) san="$$san,DNS:$$h";; esac; \
+			done; \
+			(umask 077; openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days $(DEV_CERT_DAYS) \
+				-subj "/CN=localhost/O=Terranova local development" \
+				-addext "subjectAltName=$${san#,}" \
+				-keyout "$$key" -out "$$crt" 2>/dev/null); \
+		fi; \
+		chmod 600 "$$key"; chmod 644 "$$crt"; \
+		echo "[OK] 已生成 $$crt / $$key"; \
+	fi; \
+	mkdir -p $(DEV_CERT_K8S_DIR); \
+	cp "$$crt" $(DEV_CERT_K8S_DIR)/tls.crt; \
+	(umask 077; cp "$$key" $(DEV_CERT_K8S_DIR)/tls.key); \
+	echo "[OK] 已复制到 $(DEV_CERT_K8S_DIR)/tls.crt, tls.key（kustomize Secret iac-gateway-tls）"
+
+check-private-keys: ## 检查已跟踪文件中是否包含私钥（CI 同款检查）
+	@scripts/check-private-keys.sh
 
 # =============================================================================
 # 部署
