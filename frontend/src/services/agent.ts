@@ -14,6 +14,8 @@ export interface Agent {
   registered_at: string;
   created_at: string;
   updated_at: string;
+  /** 已撤销时间(后端 cbcf755):凭证与 run token 已失效 */
+  revoked_at?: string | null;
 }
 
 export interface AgentPool {
@@ -141,6 +143,11 @@ export const agentPoolAPI = {
   // Delete agent pool
   delete: async (poolId: string): Promise<void> => {
     await api.delete(`/agent-pools/${poolId}`);
+  },
+
+  // Revoke an agent: its agent token and all run tokens stop working at once (platform admin only)
+  revokeAgent: async (poolId: string, agentId: string): Promise<void> => {
+    await api.post(`/agent-pools/${encodeURIComponent(poolId)}/agents/${encodeURIComponent(agentId)}/revoke`);
   },
 };
 
