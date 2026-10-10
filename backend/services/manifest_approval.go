@@ -494,3 +494,39 @@ func EndFinishedApprovalRuns(ctx context.Context, db *gorm.DB) (int, error) {
 	}
 	return n, nil
 }
+
+// TaskManifestRunView the approval binding of a task, as shown in the task
+// detail (manifest_run). Hashes and identities only, never plan content or
+// tokens. Absent values are null.
+type TaskManifestRunView struct {
+	ID                 string     `json:"id"`
+	Purpose            string     `json:"purpose"`
+	Runner             string     `json:"runner"`
+	Status             string     `json:"status"`
+	BundleHash         string     `json:"bundle_hash"`
+	PlanOutHash        *string    `json:"plan_out_hash"`      // SHA-256 of plan.out (workspace_tasks.plan_hash): what approval binds to
+	RedactedPlanHash   *string    `json:"redacted_plan_hash"` // manifest_runs.plan_hash: hash of the redacted plan JSON shown to the approver
+	ApprovedBundleHash *string    `json:"approved_bundle_hash"`
+	ApprovedPlanHash   *string    `json:"approved_plan_hash"`
+	ApprovedBy         *string    `json:"approved_by"`
+	ApprovedAt         *time.Time `json:"approved_at"`
+}
+
+// ManifestRunViewForTask the manifest_run object of a task detail; nil when
+// the task has no manifest run.
+func ManifestRunViewForTask(ctx context.Context, db *gorm.DB, task *models.WorkspaceTask) (*TaskManifestRunView, error) {
+	run, err := ApprovalRunForTask(ctx, db, task.ID)
+	if err != nil || run == nil {
+		return nil, err
+	}
+	v := &TaskManifestRunView{
+		ID: run.ID, Purpose: run.Purpose, Runner: run.Runner, Status: run.Status, BundleHash: run.BundleHash,
+		RedactedPlanHash: run.PlanHash, ApprovedBundleHash: run.ApprovedBundleHash, ApprovedPlanHash: run.ApprovedPlanHash,
+		ApprovedBy: run.ApprovedBy, ApprovedAt: run.ApprovedAt,
+	}
+	if task.PlanHash != "" {
+		h := task.PlanHash
+		v.PlanOutHash = &h
+	}
+	return v, nil
+}
