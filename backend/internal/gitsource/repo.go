@@ -54,6 +54,24 @@ func ParseRepoURL(raw string, e Endpoints) (Repo, error) {
 	return Repo{Owner: owner, Name: name}, nil
 }
 
+// ErrInvalidRepoName the repo is not "<owner>/<name>".
+var ErrInvalidRepoName = errors.New("git_repo must be <owner>/<repo> (a repository of the configured GitHub host)")
+
+// ParseRepoFullName "<owner>/<name>" of a repository on the configured host.
+// A host, scheme, port or extra path segment is rejected: the host always
+// comes from GITHUB_URL / GITHUB_API_URL, never from a request.
+func ParseRepoFullName(s string) (Repo, error) {
+	parts := strings.Split(strings.TrimSpace(s), "/")
+	if len(parts) != 2 {
+		return Repo{}, ErrInvalidRepoName
+	}
+	owner, name := parts[0], parts[1]
+	if !ownerRe.MatchString(owner) || !nameRe.MatchString(name) || name == "." || name == ".." || strings.HasSuffix(name, ".git") {
+		return Repo{}, ErrInvalidRepoName
+	}
+	return Repo{Owner: owner, Name: name}, nil
+}
+
 // IsCommitSHA a full lowercase SHA-1 / SHA-256 commit id.
 func IsCommitSHA(s string) bool { return shaRe.MatchString(s) }
 

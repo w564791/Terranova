@@ -59,9 +59,15 @@ services:
       SIGNING_ROOT_KEY: ${SIGNING_ROOT_KEY:?set SIGNING_ROOT_KEY (openssl rand -base64 32)}
       LEGACY_TOKEN_CUTOFF: ${LEGACY_TOKEN_CUTOFF:-}
       # Git-sourced manifests (optional; disabled when unset). GitHub App with
-      # Repository permissions "Contents: read" (and "Metadata: read"), push webhook.
+      # Repository permissions "Contents: read" and "Metadata: read",
+      # Organization permission "Members: read", push webhook, Callback URL
+      # <platform>/api/v1/github-app/setup/callback and "Request user
+      # authorization (OAuth) during installation" (see
+      # docs/manifest/manifest-sandbox-spec.md §3.5).
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY_FILE: ${GITHUB_APP_PRIVATE_KEY_FILE:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
       GITHUB_URL: ${GITHUB_URL:-https://github.com}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE} 

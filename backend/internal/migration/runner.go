@@ -129,6 +129,9 @@ func definitions() []definition {
 		// Git source (github_app_installations, manifests.git_latest_*).
 		// Additive only.
 		{version: "20261010_14_manifest_git_source", contract: "manifest-git-source-v1", apply: applyManifestGitSource},
+		// GitHub App binding via setup callback (verified_* columns, unique
+		// constraint, setup nonces, webhook deliveries). Additive only.
+		{version: "20261010_15_github_app_binding", contract: "github-app-binding-v1", apply: applyGitHubAppBinding},
 	}
 }
 

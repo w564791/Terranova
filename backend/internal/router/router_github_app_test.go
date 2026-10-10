@@ -19,10 +19,14 @@ func TestGitHubAppRoutesPermissions(t *testing.T) {
 	_, db, token := setupManifestRouterWithChecker(t, checker)
 	r := newEngineForGitHubApp(db, checker)
 
-	for _, tc := range []struct{ method, path string }{
-		{"GET", "/api/v1/organizations/1/github-app/installations"},
-		{"POST", "/api/v1/organizations/1/github-app/installations"},
-		{"DELETE", "/api/v1/organizations/1/github-app/installations/42"},
+	for _, tc := range []struct{ method, path, resource, level string }{
+		{"GET", "/api/v1/organizations/1/github-app/installations", "ORGANIZATION", "ADMIN"},
+		{"POST", "/api/v1/organizations/1/github-app/installations", "ORGANIZATION", "ADMIN"},
+		{"DELETE", "/api/v1/organizations/1/github-app/installations/42", "ORGANIZATION", "ADMIN"},
+		{"POST", "/api/v1/organizations/1/github-app/connect", "ORGANIZATION", "ADMIN"},
+		{"GET", "/api/v1/organizations/1/github-app/available-installations", "MANIFESTS", "WRITE"},
+		{"GET", "/api/v1/organizations/1/github-app/available-installations/42", "MANIFESTS", "WRITE"},
+		{"GET", "/api/v1/organizations/1/github-app/installations/42/repositories", "MANIFESTS", "WRITE"},
 	} {
 		checker.reset()
 		w := httptest.NewRecorder()
@@ -34,8 +38,8 @@ func TestGitHubAppRoutesPermissions(t *testing.T) {
 			t.Fatalf("%s %s: %d", tc.method, tc.path, w.Code)
 		}
 		reqs := checker.reset()
-		if len(reqs) == 0 || reqs[0].ResourceType != "ORGANIZATION" || reqs[0].ScopeType != "ORGANIZATION" || reqs[0].RequiredLevel.String() != "ADMIN" {
-			t.Fatalf("%s %s: checks %+v, want ORGANIZATION/ORGANIZATION/ADMIN", tc.method, tc.path, reqs)
+		if len(reqs) == 0 || string(reqs[0].ResourceType) != tc.resource || reqs[0].ScopeType != "ORGANIZATION" || reqs[0].RequiredLevel.String() != tc.level {
+			t.Fatalf("%s %s: checks %+v, want %s/ORGANIZATION/%s", tc.method, tc.path, reqs, tc.resource, tc.level)
 		}
 		// without a login token: 401 from JWTAuth
 		w = httptest.NewRecorder()
@@ -52,6 +56,17 @@ func TestGitHubAppRoutesPermissions(t *testing.T) {
 		r.ServeHTTP(w, req)
 		return w.Code
 	}
+	// the setup callback is public (signed state), never evaluates IAM for
+	// the caller, and refuses a missing state
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/github-app/setup/callback?installation_id=1&code=x", nil))
+	if w.Code != http.StatusFound || !strings.Contains(w.Header().Get("Location"), "reason=state_invalid") {
+		t.Fatalf("callback without state: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	if len(checker.reset()) != 0 {
+		t.Fatal("callback without a valid state must not evaluate IAM")
+	}
+
 	t.Setenv("GITHUB_WEBHOOK_SECRET", "")
 	if code := webhook(); code != http.StatusServiceUnavailable {
 		t.Fatalf("webhook without secret: %d", code)

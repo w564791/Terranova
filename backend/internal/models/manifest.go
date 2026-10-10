@@ -139,7 +139,10 @@ type CreateManifestRequest struct {
 	Description string `json:"description" binding:"max=1024"`
 	// native(默认,平台内编辑)| git(GitHub App 只读,发布 = 选 commit)。创建后不可变。
 	SourceType string `json:"source_type,omitempty"`
-	// source_type=git 时必填:<GITHUB_URL>/<owner>/<repo>
+	// source_type=git 时必填其一(推荐 git_repo):仓库 full name "<owner>/<repo>",
+	// 主机始终取平台配置 GITHUB_URL
+	GitRepo string `json:"git_repo,omitempty" binding:"max=140"`
+	// 兼容旧客户端:<GITHUB_URL>/<owner>/<repo>(必须是配置的主机)
 	GitRepoURL string `json:"git_repo_url,omitempty" binding:"max=1024"`
 	// source_type=git 时可选:仓库内作为 bundle 根的目录
 	GitSubpath string `json:"git_subpath,omitempty" binding:"max=512"`
@@ -258,16 +261,46 @@ const (
 	LinkStatusMismatch = "mismatch"
 )
 
-// GitHubAppInstallation a GitHub App installation registered for an
-// organization by an org ADMIN (github_app_installations). An installation
-// belongs to at most one organization.
+// GitHubAppInstallation a GitHub App installation bound to an organization
+// (github_app_installations). Bindings are created only by the App's setup
+// callback, after user-to-server OAuth proved that the installing GitHub user
+// administers the installation's account (VerifiedAt set); rows without
+// VerifiedAt (manual registrations of earlier builds) are not usable. An
+// installation belongs to at most one organization (unique installation_id).
+// The GitHub user token used for the proof is never stored.
 type GitHubAppInstallation struct {
-	ID             int64     `json:"id" gorm:"primaryKey"`
-	OrganizationID int       `json:"organization_id" gorm:"not null"`
-	InstallationID int64     `json:"installation_id" gorm:"not null"`
-	AccountLogin   string    `json:"account_login" gorm:"size:255;not null"`
-	CreatedBy      string    `json:"created_by" gorm:"size:20;not null"`
-	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
+	ID                   int64      `json:"id" gorm:"primaryKey"`
+	OrganizationID       int        `json:"organization_id" gorm:"not null"`
+	InstallationID       int64      `json:"installation_id" gorm:"not null"`
+	AccountLogin         string     `json:"account_login" gorm:"size:255;not null"`
+	AccountID            *int64     `json:"account_id,omitempty"`
+	AccountType          *string    `json:"account_type,omitempty" gorm:"size:20"`
+	VerifiedGitHubUserID *int64     `json:"verified_github_user_id,omitempty" gorm:"column:verified_github_user_id"`
+	VerifiedGitHubLogin  *string    `json:"verified_github_login,omitempty" gorm:"column:verified_github_login;size:255"`
+	VerifiedAt           *time.Time `json:"verified_at,omitempty"`
+	CreatedBy            string     `json:"created_by" gorm:"size:20;not null"`
+	CreatedAt            time.Time  `json:"created_at" gorm:"autoCreateTime"`
 }
 
 func (GitHubAppInstallation) TableName() string { return "github_app_installations" }
+
+// GitHubAppSetupNonce a consumed setup-state nonce (single use).
+type GitHubAppSetupNonce struct {
+	Nonce          string    `gorm:"primaryKey;size:64"`
+	OrganizationID int       `gorm:"not null"`
+	UserID         string    `gorm:"size:20;not null"`
+	ExpiresAt      time.Time `gorm:"not null"`
+	ConsumedAt     time.Time `gorm:"not null"`
+}
+
+func (GitHubAppSetupNonce) TableName() string { return "github_app_setup_nonces" }
+
+// GitHubWebhookDelivery an X-GitHub-Delivery id already processed (replay
+// protection, kept 72h).
+type GitHubWebhookDelivery struct {
+	DeliveryID string    `gorm:"primaryKey;size:64"`
+	Event      string    `gorm:"size:64;not null"`
+	ReceivedAt time.Time `gorm:"not null"`
+}
+
+func (GitHubWebhookDelivery) TableName() string { return "github_webhook_deliveries" }

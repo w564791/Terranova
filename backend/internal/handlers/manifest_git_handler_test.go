@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/cgi"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -40,6 +42,7 @@ func disableGitSource(t *testing.T) {
 		Fetcher:       func() (*gitsource.Fetcher, error) { return nil, gitsource.ErrDisabled },
 		Endpoints:     func() (gitsource.Endpoints, error) { return gitsource.Endpoints{WebURL: "https://github.com"}, nil },
 		WebhookSecret: func() ([]byte, error) { return nil, gitsource.ErrWebhookDisabled },
+		OAuth:         func() (GitHubOAuth, error) { return nil, gitsource.ErrOAuthDisabled },
 	}
 }
 
@@ -49,7 +52,9 @@ type fakeGitApp struct {
 	minted   []string // "installation repo"
 	revoked  int
 	accounts map[int64]string
-	repos    map[string]bool // full names the installation can read
+	types    map[int64]string // account type, default "Organization"
+	repos    map[string]bool  // full names the installation can read
+	htmlURL  string           // GET /app html_url
 }
 
 func (f *fakeGitApp) MintRepoToken(_ context.Context, inst int64, repo gitsource.Repo) (*gitsource.Token, error) {
@@ -65,7 +70,53 @@ func (f *fakeGitApp) GetInstallation(_ context.Context, inst int64) (*gitsource.
 	if f.accounts[inst] == "" {
 		return nil, gitsource.ErrNotFound
 	}
-	return &gitsource.Installation{ID: inst, AccountLogin: f.accounts[inst]}, nil
+	typ := f.types[inst]
+	if typ == "" {
+		typ = "Organization"
+	}
+	return &gitsource.Installation{ID: inst, AccountID: fakeAccountID(inst), AccountLogin: f.accounts[inst], AccountType: typ}, nil
+}
+
+// fakeAccountID the GitHub account id of an installation's account.
+func fakeAccountID(inst int64) int64 { return inst * 1000 }
+
+const fakeMetadataToken = "ghs_FakeMetadataToken_0123456789abcdefXYZ"
+
+func (f *fakeGitApp) MintMetadataToken(_ context.Context, inst int64) (*gitsource.Token, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.minted = append(f.minted, sprintInt(inst)+" metadata")
+	if f.accounts[inst] == "" {
+		return nil, gitsource.ErrNotFound
+	}
+	return gitsource.NewToken(fakeMetadataToken, time.Now().Add(time.Hour)), nil
+}
+
+// ListInstallationRepos the repos of f.repos (sorted) owned by nobody in
+// particular; html_url from the configured endpoints like the real client.
+func (f *fakeGitApp) ListInstallationRepos(_ context.Context, t *gitsource.Token, page, perPage int) ([]gitsource.RepoInfo, int, error) {
+	if t.Secret() != fakeMetadataToken {
+		return nil, 0, gitsource.ErrAuth
+	}
+	var names []string
+	for n := range f.repos {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	e, _ := gitDeps.Endpoints()
+	var out []gitsource.RepoInfo
+	for i, n := range names {
+		if i < (page-1)*perPage || i >= page*perPage {
+			continue
+		}
+		r, _ := gitsource.ParseRepoFullName(n)
+		out = append(out, gitsource.RepoInfo{FullName: n, DefaultBranch: "main", Private: true, HTMLURL: r.URL(e)})
+	}
+	return out, len(names), nil
+}
+
+func (f *fakeGitApp) GetApp(context.Context) (*gitsource.AppInfo, error) {
+	return &gitsource.AppInfo{Slug: "terranova-test", HTMLURL: f.htmlURL}, nil
 }
 func (f *fakeGitApp) ListBranches(_ context.Context, _ gitsource.Repo, t *gitsource.Token) ([]gitsource.Branch, error) {
 	if t.Secret() != fakeRepoToken {
@@ -171,7 +222,9 @@ func useGitFixture(t *testing.T, app *fakeGitApp, fx *gitFixture, secret string)
 	prev := gitDeps
 	t.Cleanup(func() { gitDeps = prev })
 	e := gitsource.Endpoints{WebURL: fx.srvURL, APIURL: fx.srvURL + "/api"}
+	app.htmlURL = e.WebURL + "/apps/terranova-test"
 	gitDeps = GitSourceDeps{
+		OAuth:     func() (GitHubOAuth, error) { return nil, gitsource.ErrOAuthDisabled },
 		App:       func() (GitApp, error) { return app, nil },
 		Fetcher:   func() (*gitsource.Fetcher, error) { return &gitsource.Fetcher{Endpoints: e, Timeout: time.Minute}, nil },
 		Endpoints: func() (gitsource.Endpoints, error) { return e, nil },
@@ -192,11 +245,14 @@ func setupGitDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE manifests (id TEXT PRIMARY KEY, organization_id INTEGER, name TEXT, description TEXT, status TEXT, source_type TEXT NOT NULL DEFAULT 'native', git_repo_url TEXT, git_subpath TEXT, github_installation_id INTEGER, git_latest_sha TEXT, git_latest_ref TEXT, git_latest_at DATETIME, created_by TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE manifest_versions (id TEXT PRIMARY KEY, manifest_id TEXT, version TEXT, variables TEXT, changelog TEXT, bundle_hash TEXT, bundle_invalid_reason TEXT, source_ref TEXT, created_by TEXT, created_at DATETIME)`,
 		`CREATE TABLE manifest_files (id INTEGER PRIMARY KEY AUTOINCREMENT, manifest_id TEXT, version_id TEXT, owner_user_id TEXT, path TEXT, content BLOB, mime TEXT, size INTEGER, is_binary INTEGER, mode INTEGER, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE github_app_installations (id INTEGER PRIMARY KEY AUTOINCREMENT, organization_id INTEGER NOT NULL, installation_id INTEGER NOT NULL UNIQUE, account_login TEXT NOT NULL, created_by TEXT NOT NULL, created_at DATETIME)`,
+		`CREATE TABLE github_app_installations (id INTEGER PRIMARY KEY AUTOINCREMENT, organization_id INTEGER NOT NULL, installation_id INTEGER NOT NULL UNIQUE, account_login TEXT NOT NULL, account_id INTEGER, account_type TEXT, verified_github_user_id INTEGER, verified_github_login TEXT, verified_at DATETIME, created_by TEXT NOT NULL, created_at DATETIME)`,
+		`CREATE TABLE github_app_setup_nonces (nonce TEXT PRIMARY KEY, organization_id INTEGER NOT NULL, user_id TEXT NOT NULL, expires_at DATETIME NOT NULL, consumed_at DATETIME NOT NULL)`,
+		`CREATE TABLE github_webhook_deliveries (delivery_id TEXT PRIMARY KEY, event TEXT NOT NULL, received_at DATETIME NOT NULL)`,
+		`CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT, resource_type TEXT, resource_id INTEGER, old_values TEXT, new_values TEXT, ip_address TEXT, user_agent TEXT, created_at DATETIME)`,
 		`CREATE TABLE modules (id INTEGER PRIMARY KEY, status TEXT, module_source TEXT)`,
 		`CREATE TABLE module_versions (id INTEGER PRIMARY KEY, module_id INTEGER, module_source TEXT)`,
 		`INSERT INTO modules (id, status, module_source) VALUES (1, 'active', 'git::https://github.com/acme/mods.git')`,
-		`INSERT INTO github_app_installations (organization_id, installation_id, account_login, created_by) VALUES (1, 42, 'acme', 'admin'), (2, 77, 'other', 'admin')`,
+		`INSERT INTO github_app_installations (organization_id, installation_id, account_login, account_id, account_type, verified_github_user_id, verified_github_login, verified_at, created_by) VALUES (1, 42, 'acme', 42000, 'Organization', 900, 'acme-admin', CURRENT_TIMESTAMP, 'admin'), (2, 77, 'other', 77000, 'Organization', 901, 'other-admin', CURRENT_TIMESTAMP, 'admin')`,
 		`INSERT INTO manifests (id, organization_id, name, status, created_by) VALUES ('mf-native', 1, 'native', 'draft', 'u1')`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -429,15 +485,23 @@ func TestGitHubWebhook(t *testing.T) {
 
 	newSHA := strings.Repeat("d", 40)
 	push := []byte(`{"ref":"refs/heads/main","after":"` + newSHA + `","repository":{"html_url":"` + e.WebURL + `/acme/infra"},"installation":{"id":42}}`)
-	send := func(body []byte, sig, event string) *httptest.ResponseRecorder {
+	deliveries := 0
+	sendWith := func(body []byte, sig, event, delivery string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/webhooks/github", bytes.NewReader(body))
 		if sig != "" {
 			req.Header.Set("X-Hub-Signature-256", sig)
 		}
 		req.Header.Set("X-GitHub-Event", event)
+		if delivery != "" {
+			req.Header.Set("X-GitHub-Delivery", delivery)
+		}
 		r.ServeHTTP(w, req)
 		return w
+	}
+	send := func(body []byte, sig, event string) *httptest.ResponseRecorder {
+		deliveries++
+		return sendWith(body, sig, event, fmt.Sprintf("00000000-0000-0000-0000-%012d", deliveries))
 	}
 	if w := send(push, "", "push"); w.Code != http.StatusUnauthorized {
 		t.Fatalf("unsigned: %d", w.Code)
@@ -472,6 +536,44 @@ func TestGitHubWebhook(t *testing.T) {
 		t.Fatalf("other installation: %s", w.Body.String())
 	}
 
+	// replayed delivery (same X-GitHub-Delivery, valid signature): 200 no-op
+	const replayID = "72d3162e-cc78-11e3-81ab-4c9367dc0958"
+	first := bytes.Replace(push, []byte(newSHA), []byte(strings.Repeat("e", 40)), 1)
+	if w := sendWith(first, signBody("whsec", first), "push", replayID); w.Code != http.StatusAccepted || !strings.Contains(w.Body.String(), `"matched":1`) {
+		t.Fatalf("first delivery: %d %s", w.Code, w.Body.String())
+	}
+	db.Model(&models.Manifest{}).Where("id = ?", id).Updates(map[string]interface{}{"git_latest_sha": newSHA})
+	if w := sendWith(first, signBody("whsec", first), "push", replayID); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"duplicate":true`) {
+		t.Fatalf("replayed delivery: %d %s", w.Code, w.Body.String())
+	}
+	db.First(&m, "id = ?", id)
+	if *m.GitLatestSHA != newSHA {
+		t.Fatalf("replayed delivery changed the manifest: %s", *m.GitLatestSHA)
+	}
+	var stored int64
+	db.Model(&models.GitHubWebhookDelivery{}).Where("delivery_id = ?", replayID).Count(&stored)
+	if stored != 1 {
+		t.Fatalf("delivery rows: %d", stored)
+	}
+	// missing / malformed delivery id
+	if w := sendWith(push, signBody("whsec", push), "push", ""); w.Code != http.StatusBadRequest {
+		t.Fatalf("missing delivery id: %d", w.Code)
+	}
+	if w := sendWith(push, signBody("whsec", push), "push", "bad id;drop"); w.Code != http.StatusBadRequest {
+		t.Fatalf("malformed delivery id: %d", w.Code)
+	}
+	// TTL: deliveries older than 72h are removed (then the id is new again)
+	db.Model(&models.GitHubWebhookDelivery{}).Where("delivery_id = ?", replayID).Update("received_at", time.Now().Add(-73*time.Hour))
+	if err := cleanupGitHubEphemera(db, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	db.Model(&models.GitHubWebhookDelivery{}).Where("delivery_id = ?", replayID).Count(&stored)
+	var kept int64
+	db.Model(&models.GitHubWebhookDelivery{}).Count(&kept)
+	if stored != 0 || kept == 0 {
+		t.Fatalf("cleanup: replay row %d, recent rows %d", stored, kept)
+	}
+
 	// no secret configured: refused
 	useGitFixture(t, app, fx, "")
 	if w := send(push, signBody("whsec", push), "push"); w.Code != http.StatusServiceUnavailable {
@@ -492,17 +594,16 @@ func TestGitHubAppInstallations(t *testing.T) {
 	r.POST("/organizations/:org_id/github-app/installations", withCaller(valueobject.PermissionLevelAdmin), h.RegisterInstallation)
 	r.DELETE("/organizations/:org_id/github-app/installations/:installation_id", withCaller(valueobject.PermissionLevelAdmin), h.DeleteInstallation)
 
-	if w := doJSON(r, "POST", "/organizations/1/github-app/installations", `{"installation_id":55}`); w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), `"account_login":"newco"`) {
-		t.Fatalf("register: %d %s", w.Code, w.Body.String())
+	// manual registration is gone, whatever the id
+	for _, body := range []string{`{"installation_id":55}`, `{"installation_id":77}`, `{}`} {
+		if w := doJSON(r, "POST", "/organizations/1/github-app/installations", body); w.Code != http.StatusGone {
+			t.Fatalf("manual register %s: %d %s", body, w.Code, w.Body.String())
+		}
 	}
-	if w := doJSON(r, "POST", "/organizations/1/github-app/installations", `{"installation_id":55}`); w.Code != http.StatusOK {
-		t.Fatalf("re-register: %d", w.Code)
-	}
-	if w := doJSON(r, "POST", "/organizations/1/github-app/installations", `{"installation_id":77}`); w.Code != http.StatusConflict {
-		t.Fatalf("another org's installation: %d %s", w.Code, w.Body.String())
-	}
-	if w := doJSON(r, "POST", "/organizations/1/github-app/installations", `{"installation_id":999}`); w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("unknown installation: %d", w.Code)
+	var n int64
+	db.Model(&models.GitHubAppInstallation{}).Where("installation_id = 55").Count(&n)
+	if n != 0 {
+		t.Fatal("manual registration wrote a row")
 	}
 	if w := doJSON(r, "GET", "/organizations/1/github-app/installations", ""); !strings.Contains(w.Body.String(), `"installation_id":42`) || strings.Contains(w.Body.String(), `"installation_id":77`) {
 		t.Fatalf("list: %s", w.Body.String())
@@ -510,6 +611,7 @@ func TestGitHubAppInstallations(t *testing.T) {
 	if w := doJSON(r, "DELETE", "/organizations/1/github-app/installations/42", ""); w.Code != http.StatusConflict {
 		t.Fatalf("delete in use: %d", w.Code)
 	}
+	db.Exec(`INSERT INTO github_app_installations (organization_id, installation_id, account_login, created_by) VALUES (1, 55, 'newco', 'admin')`)
 	if w := doJSON(r, "DELETE", "/organizations/1/github-app/installations/55", ""); w.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d", w.Code)
 	}

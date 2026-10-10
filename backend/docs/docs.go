@@ -8187,6 +8187,47 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/github-app/setup/callback": {
+            "get": {
+                "description": "Callback URL of the GitHub App (with \"Request user authorization (OAuth) during installation\"). Verifies the signed state (purpose ghapp-state, 10 minutes, single use), re-checks that the initiating user is ORGANIZATION ADMIN, exchanges code for a user access token, and binds installation_id to the state's organization only if that GitHub user administers the installation's account (active org admin membership for organizations, the same user for user accounts; the installation is looked up with the App JWT). The user token is revoked, never stored. An installation verified for another organization is refused. Redirects (302) to /admin/manifests?github_app=connected|requested|error\u0026reason=... . No platform login (the state is the authentication).",
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "GitHub App setup callback",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Signed state from connect",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth code (user authorization during installation)",
+                        "name": "code",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Installation id",
+                        "name": "installation_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "install, update or request",
+                        "name": "setup_action",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
         "/api/v1/global/settings/ai-config/inference-profiles": {
             "get": {
                 "security": [
@@ -15806,6 +15847,131 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/organizations/{org_id}/github-app/available-installations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Installations bound (verified) to the organization, for the git manifest create form: only id (installation id) and account. Requires MANIFESTS WRITE.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "List usable GitHub App installations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{installations: [{id, account}]}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/github-app/available-installations/{installation_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "id and account of an installation bound to the organization; 404 for unknown, unverified or another organization's installations. Requires MANIFESTS WRITE.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "Get a usable GitHub App installation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "GitHub installation id",
+                        "name": "installation_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UsableInstallation"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/github-app/connect": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the GitHub App install URL with a signed, single-use state (organization, initiating user, nonce; valid 10 minutes). Open it in the browser: after the installation GitHub redirects to the platform's setup callback, which binds the installation to the organization only after user-to-server OAuth proved that the installing GitHub user administers the installation's account. Requires ORGANIZATION ADMIN. 503 when the App, its OAuth client (GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET) or SIGNING_ROOT_KEY is not configured.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "Connect a GitHub App installation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{install_url, expires_at}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/organizations/{org_id}/github-app/installations": {
             "get": {
                 "security": [
@@ -15813,7 +15979,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "GitHub App installations registered for the organization (installation_id, account_login). Requires ORGANIZATION ADMIN.",
+                "description": "GitHub App installations of the organization (installation_id, account_login, account_type, verified_github_login, verified_at). Only rows with verified_at (bound through the setup callback) are usable by git manifests; rows without it were registered manually by an earlier build and must be connected again. Requires ORGANIZATION ADMIN.",
                 "produces": [
                     "application/json"
                 ],
@@ -15846,17 +16012,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Register an installation of the platform's GitHub App for the organization; git manifests of the org can then use repositories of its account. The installation is looked up with the App JWT (account_login comes from GitHub). An installation belongs to one organization: 409 when another organization registered it. Requires ORGANIZATION ADMIN. 503 git_source_disabled when the App is not configured; 422 when GitHub does not know the installation.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Removed: an installation id alone proves nothing about who controls it. Installations are bound only through the GitHub App setup callback (POST /organizations/{org_id}/github-app/connect). Always 410. Requires ORGANIZATION ADMIN.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Manifest Git"
                 ],
-                "summary": "Register GitHub App installation",
+                "summary": "Register GitHub App installation (removed)",
                 "parameters": [
                     {
                         "type": "string",
@@ -15864,46 +16027,11 @@ const docTemplate = `{
                         "name": "org_id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Installation",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.RegisterGitHubInstallationRequest"
-                        }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "already registered for this organization",
-                        "schema": {
-                            "$ref": "#/definitions/models.GitHubAppInstallation"
-                        }
-                    },
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.GitHubAppInstallation"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "503": {
-                        "description": "Service Unavailable",
+                    "410": {
+                        "description": "Gone",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -15956,6 +16084,74 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/organizations/{org_id}/github-app/installations/{installation_id}/repositories": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Repositories the installation can access (full_name, default_branch, private, html_url), one page. Uses a freshly minted installation token with only metadata:read, revoked right after. html_url is built from the configured GITHUB_URL. 404 for an installation not bound to the organization. Requires MANIFESTS WRITE.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Git"
+                ],
+                "summary": "List repositories of a GitHub App installation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "GitHub installation id",
+                        "name": "installation_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1..100, default 30",
+                        "name": "per_page",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "{repositories: [...], total_count, page, per_page}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -21215,7 +21411,7 @@ const docTemplate = `{
         },
         "/api/v1/webhooks/github": {
             "post": {
-                "description": "Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256 (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned or invalid =\u003e 401, no secret configured =\u003e 503. A push to a repository of git manifests (matching installation and repository) records git_latest_sha / git_latest_ref / git_latest_at on them as a \"new commit available\" hint. It never publishes. Other events are acknowledged and ignored. No user authentication (the signature is the authentication).",
+                "description": "Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256 (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned or invalid =\u003e 401, no secret configured =\u003e 503. A push to a repository of git manifests (matching installation and repository) records git_latest_sha / git_latest_ref / git_latest_at on them as a \"new commit available\" hint. It never publishes. Other events are acknowledged and ignored. Each X-GitHub-Delivery is processed once (recorded for 72h): a replayed delivery is a 200 no-op ({duplicate: true}); a missing / malformed delivery id is 400. No user authentication (the signature is the authentication).",
                 "consumes": [
                     "application/json"
                 ],
@@ -21240,6 +21436,13 @@ const docTemplate = `{
                         "name": "X-GitHub-Event",
                         "in": "header",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Delivery GUID (replay protection)",
+                        "name": "X-GitHub-Delivery",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -21252,6 +21455,13 @@ const docTemplate = `{
                     },
                     "202": {
                         "description": "{matched: n}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -31773,17 +31983,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.RegisterGitHubInstallationRequest": {
-            "type": "object",
-            "required": [
-                "installation_id"
-            ],
-            "properties": {
-                "installation_id": {
-                    "type": "integer"
-                }
-            }
-        },
         "handlers.ResetPasswordRequest": {
             "type": "object",
             "required": [
@@ -32045,6 +32244,17 @@ const docTemplate = `{
                 },
                 "is_active": {
                     "type": "boolean"
+                }
+            }
+        },
+        "handlers.UsableInstallation": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
                 }
             }
         },
@@ -32550,8 +32760,13 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 1024
                 },
+                "git_repo": {
+                    "description": "source_type=git 时必填其一(推荐 git_repo):仓库 full name \"\u003cowner\u003e/\u003crepo\u003e\",\n主机始终取平台配置 GITHUB_URL",
+                    "type": "string",
+                    "maxLength": 140
+                },
                 "git_repo_url": {
-                    "description": "source_type=git 时必填:\u003cGITHUB_URL\u003e/\u003cowner\u003e/\u003crepo\u003e",
+                    "description": "兼容旧客户端:\u003cGITHUB_URL\u003e/\u003cowner\u003e/\u003crepo\u003e(必须是配置的主机)",
                     "type": "string",
                     "maxLength": 1024
                 },
@@ -33374,29 +33589,6 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
-                }
-            }
-        },
-        "models.GitHubAppInstallation": {
-            "type": "object",
-            "properties": {
-                "account_login": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "installation_id": {
-                    "type": "integer"
-                },
-                "organization_id": {
-                    "type": "integer"
                 }
             }
         },

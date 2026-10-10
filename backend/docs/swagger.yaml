@@ -950,13 +950,6 @@ definitions:
       protocol:
         type: string
     type: object
-  handlers.RegisterGitHubInstallationRequest:
-    properties:
-      installation_id:
-        type: integer
-    required:
-    - installation_id
-    type: object
   handlers.ResetPasswordRequest:
     properties:
       current_password:
@@ -1131,6 +1124,13 @@ definitions:
         type: string
       is_active:
         type: boolean
+    type: object
+  handlers.UsableInstallation:
+    properties:
+      account:
+        type: string
+      id:
+        type: integer
     type: object
   handlers.VerifyMFARequest:
     properties:
@@ -1447,8 +1447,14 @@ definitions:
       description:
         maxLength: 1024
         type: string
+      git_repo:
+        description: |-
+          source_type=git 时必填其一(推荐 git_repo):仓库 full name "<owner>/<repo>",
+          主机始终取平台配置 GITHUB_URL
+        maxLength: 140
+        type: string
       git_repo_url:
-        description: source_type=git 时必填:<GITHUB_URL>/<owner>/<repo>
+        description: 兼容旧客户端:<GITHUB_URL>/<owner>/<repo>(必须是配置的主机)
         maxLength: 1024
         type: string
       git_subpath:
@@ -2021,21 +2027,6 @@ definitions:
         items:
           type: integer
         type: array
-    type: object
-  models.GitHubAppInstallation:
-    properties:
-      account_login:
-        type: string
-      created_at:
-        type: string
-      created_by:
-        type: string
-      id:
-        type: integer
-      installation_id:
-        type: integer
-      organization_id:
-        type: integer
     type: object
   models.InheritSkillRequest:
     properties:
@@ -10981,6 +10972,42 @@ paths:
       summary: 获取Demo版本列表
       tags:
       - Module Demo
+  /api/v1/github-app/setup/callback:
+    get:
+      description: Callback URL of the GitHub App (with "Request user authorization
+        (OAuth) during installation"). Verifies the signed state (purpose ghapp-state,
+        10 minutes, single use), re-checks that the initiating user is ORGANIZATION
+        ADMIN, exchanges code for a user access token, and binds installation_id to
+        the state's organization only if that GitHub user administers the installation's
+        account (active org admin membership for organizations, the same user for
+        user accounts; the installation is looked up with the App JWT). The user token
+        is revoked, never stored. An installation verified for another organization
+        is refused. Redirects (302) to /admin/manifests?github_app=connected|requested|error&reason=...
+        . No platform login (the state is the authentication).
+      parameters:
+      - description: Signed state from connect
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: OAuth code (user authorization during installation)
+        in: query
+        name: code
+        type: string
+      - description: Installation id
+        in: query
+        name: installation_id
+        type: integer
+      - description: install, update or request
+        in: query
+        name: setup_action
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: GitHub App setup callback
+      tags:
+      - Manifest Git
   /api/v1/global/settings/ai-config/inference-profiles:
     get:
       consumes:
@@ -15919,10 +15946,103 @@ paths:
       summary: Get available notification configurations
       tags:
       - Notifications
+  /api/v1/organizations/{org_id}/github-app/available-installations:
+    get:
+      description: 'Installations bound (verified) to the organization, for the git
+        manifest create form: only id (installation id) and account. Requires MANIFESTS
+        WRITE.'
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{installations: [{id, account}]}'
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List usable GitHub App installations
+      tags:
+      - Manifest Git
+  /api/v1/organizations/{org_id}/github-app/available-installations/{installation_id}:
+    get:
+      description: id and account of an installation bound to the organization; 404
+        for unknown, unverified or another organization's installations. Requires
+        MANIFESTS WRITE.
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: GitHub installation id
+        in: path
+        name: installation_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UsableInstallation'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a usable GitHub App installation
+      tags:
+      - Manifest Git
+  /api/v1/organizations/{org_id}/github-app/connect:
+    post:
+      description: 'Returns the GitHub App install URL with a signed, single-use state
+        (organization, initiating user, nonce; valid 10 minutes). Open it in the browser:
+        after the installation GitHub redirects to the platform''s setup callback,
+        which binds the installation to the organization only after user-to-server
+        OAuth proved that the installing GitHub user administers the installation''s
+        account. Requires ORGANIZATION ADMIN. 503 when the App, its OAuth client (GITHUB_APP_CLIENT_ID
+        / GITHUB_APP_CLIENT_SECRET) or SIGNING_ROOT_KEY is not configured.'
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{install_url, expires_at}'
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Connect a GitHub App installation
+      tags:
+      - Manifest Git
   /api/v1/organizations/{org_id}/github-app/installations:
     get:
-      description: GitHub App installations registered for the organization (installation_id,
-        account_login). Requires ORGANIZATION ADMIN.
+      description: GitHub App installations of the organization (installation_id,
+        account_login, account_type, verified_github_login, verified_at). Only rows
+        with verified_at (bound through the setup callback) are usable by git manifests;
+        rows without it were registered manually by an earlier build and must be connected
+        again. Requires ORGANIZATION ADMIN.
       parameters:
       - description: Organization ID
         in: path
@@ -15943,55 +16063,27 @@ paths:
       tags:
       - Manifest Git
     post:
-      consumes:
-      - application/json
-      description: 'Register an installation of the platform''s GitHub App for the
-        organization; git manifests of the org can then use repositories of its account.
-        The installation is looked up with the App JWT (account_login comes from GitHub).
-        An installation belongs to one organization: 409 when another organization
-        registered it. Requires ORGANIZATION ADMIN. 503 git_source_disabled when the
-        App is not configured; 422 when GitHub does not know the installation.'
+      description: 'Removed: an installation id alone proves nothing about who controls
+        it. Installations are bound only through the GitHub App setup callback (POST
+        /organizations/{org_id}/github-app/connect). Always 410. Requires ORGANIZATION
+        ADMIN.'
       parameters:
       - description: Organization ID
         in: path
         name: org_id
         required: true
         type: string
-      - description: Installation
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.RegisterGitHubInstallationRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: already registered for this organization
-          schema:
-            $ref: '#/definitions/models.GitHubAppInstallation'
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.GitHubAppInstallation'
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties: true
-            type: object
-        "422":
-          description: Unprocessable Entity
-          schema:
-            additionalProperties: true
-            type: object
-        "503":
-          description: Service Unavailable
+        "410":
+          description: Gone
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: Register GitHub App installation
+      summary: Register GitHub App installation (removed)
       tags:
       - Manifest Git
   /api/v1/organizations/{org_id}/github-app/installations/{installation_id}:
@@ -16028,6 +16120,55 @@ paths:
       security:
       - BearerAuth: []
       summary: Unregister GitHub App installation
+      tags:
+      - Manifest Git
+  /api/v1/organizations/{org_id}/github-app/installations/{installation_id}/repositories:
+    get:
+      description: Repositories the installation can access (full_name, default_branch,
+        private, html_url), one page. Uses a freshly minted installation token with
+        only metadata:read, revoked right after. html_url is built from the configured
+        GITHUB_URL. 404 for an installation not bound to the organization. Requires
+        MANIFESTS WRITE.
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: GitHub installation id
+        in: path
+        name: installation_id
+        required: true
+        type: integer
+      - description: Page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: 1..100, default 30
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{repositories: [...], total_count, page, per_page}'
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List repositories of a GitHub App installation
       tags:
       - Manifest Git
   /api/v1/organizations/{org_id}/manifests:
@@ -19587,13 +19728,15 @@ paths:
     post:
       consumes:
       - application/json
-      description: Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256
-        (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned
-        or invalid => 401, no secret configured => 503. A push to a repository of
-        git manifests (matching installation and repository) records git_latest_sha
-        / git_latest_ref / git_latest_at on them as a "new commit available" hint.
-        It never publishes. Other events are acknowledged and ignored. No user authentication
-        (the signature is the authentication).
+      description: 'Receives GitHub App webhooks. The raw body must carry a valid
+        X-Hub-Signature-256 (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time
+        compare); unsigned or invalid => 401, no secret configured => 503. A push
+        to a repository of git manifests (matching installation and repository) records
+        git_latest_sha / git_latest_ref / git_latest_at on them as a "new commit available"
+        hint. It never publishes. Other events are acknowledged and ignored. Each
+        X-GitHub-Delivery is processed once (recorded for 72h): a replayed delivery
+        is a 200 no-op ({duplicate: true}); a missing / malformed delivery id is 400.
+        No user authentication (the signature is the authentication).'
       parameters:
       - description: sha256=<hex HMAC>
         in: header
@@ -19603,6 +19746,11 @@ paths:
       - description: Event name
         in: header
         name: X-GitHub-Event
+        required: true
+        type: string
+      - description: Delivery GUID (replay protection)
+        in: header
+        name: X-GitHub-Delivery
         required: true
         type: string
       produces:
@@ -19615,6 +19763,11 @@ paths:
             type: object
         "202":
           description: '{matched: n}'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
           schema:
             additionalProperties: true
             type: object

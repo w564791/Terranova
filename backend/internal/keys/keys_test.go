@@ -175,7 +175,7 @@ func TestKeysDerivedFromJWTSecretRejected(t *testing.T) {
 	now := time.Now()
 	t.Setenv("LEGACY_TOKEN_ISSUED_BEFORE", now.UTC().Format(time.RFC3339))
 	t.Setenv("LEGACY_TOKEN_CUTOFF", now.Add(time.Hour).UTC().Format(time.RFC3339))
-	for _, p := range []Purpose{PurposeUser, PurposeState, PurposeAgent, PurposeRun, PurposeRunTask} {
+	for _, p := range []Purpose{PurposeUser, PurposeState, PurposeAgent, PurposeRun, PurposeRunTask, PurposeGitHubAppState} {
 		derived := DeriveSigningKey([]byte(oldJWTSecret), p)
 		for _, kid := range []string{Kid(p, 1), ""} {
 			tok := signRaw(t, derived, kid, claims(now.Add(-time.Minute), time.Hour))

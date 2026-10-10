@@ -37,6 +37,10 @@ func NewIAMPermissionMiddlewareWithChecker(checker service.PermissionChecker) *I
 	return &IAMPermissionMiddleware{permissionChecker: checker}
 }
 
+// Checker the permission checker (handlers that re-check a permission
+// outside a request of that principal, e.g. a signed callback).
+func (m *IAMPermissionMiddleware) Checker() service.PermissionChecker { return m.permissionChecker }
+
 // WithWorkspaceListAccess sets the workspace list resolver (custom wiring /
 // tests outside this package). Returns the receiver for chaining.
 func (m *IAMPermissionMiddleware) WithWorkspaceListAccess(resolver service.WorkspaceListAccessResolver) *IAMPermissionMiddleware {

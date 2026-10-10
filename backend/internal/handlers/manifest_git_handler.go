@@ -15,7 +15,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
+	"iac-platform/internal/application/service"
 	"iac-platform/internal/gitsource"
 	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/middleware"
@@ -30,6 +32,18 @@ type GitApp interface {
 	ListBranches(ctx context.Context, repo gitsource.Repo, t *gitsource.Token) ([]gitsource.Branch, error)
 	ListCommits(ctx context.Context, repo gitsource.Repo, ref string, perPage int, t *gitsource.Token) ([]gitsource.Commit, error)
 	Revoke(ctx context.Context, t *gitsource.Token)
+	GetApp(ctx context.Context) (*gitsource.AppInfo, error)
+	MintMetadataToken(ctx context.Context, installationID int64) (*gitsource.Token, error)
+	ListInstallationRepos(ctx context.Context, t *gitsource.Token, page, perPage int) ([]gitsource.RepoInfo, int, error)
+}
+
+// GitHubOAuth the user-to-server OAuth calls of the setup callback
+// (*gitsource.OAuthApp; a fake in tests). The user token is used for the
+// proof only, revoked, never stored.
+type GitHubOAuth interface {
+	gitsource.UserAPI
+	ExchangeCode(ctx context.Context, code string) (*gitsource.Token, error)
+	RevokeUserToken(ctx context.Context, t *gitsource.Token)
 }
 
 // GitSourceDeps resolves the GitHub App, the git fetcher, the endpoints and
@@ -40,6 +54,9 @@ type GitSourceDeps struct {
 	Fetcher       func() (*gitsource.Fetcher, error)
 	Endpoints     func() (gitsource.Endpoints, error)
 	WebhookSecret func() ([]byte, error)
+	// OAuth the App's OAuth client (GITHUB_APP_CLIENT_ID / _SECRET);
+	// gitsource.ErrOAuthDisabled when not configured.
+	OAuth func() (GitHubOAuth, error)
 }
 
 // gitDeps is replaced in tests (fake GitHub API / local git server).
@@ -63,7 +80,18 @@ var gitDeps = GitSourceDeps{
 	},
 	Endpoints:     gitsource.EndpointsFromEnv,
 	WebhookSecret: func() ([]byte, error) { return gitsource.Credentials.WebhookSecret() },
+	OAuth: func() (GitHubOAuth, error) {
+		o, err := gitsource.NewOAuthApp()
+		if err != nil {
+			return nil, err
+		}
+		return o, nil
+	},
 }
+
+// errInstallationNotBound the manifest's installation is no longer bound
+// (verified) to the manifest's organization.
+var errInstallationNotBound = errors.New("the GitHub App installation is not connected to this organization")
 
 // Git-source error codes (JSON "code").
 const (
@@ -77,6 +105,17 @@ const (
 	gitCodeInstallationNotReg = "github_installation_not_registered"
 )
 
+// installationBound whether installationID is bound to orgID through the
+// setup callback (verified). Unverified (manually registered) rows do not
+// count.
+func installationBound(db *gorm.DB, orgID int, installationID int64) (bool, error) {
+	var n int64
+	err := db.Model(&models.GitHubAppInstallation{}).
+		Where("organization_id = ? AND installation_id = ? AND verified_at IS NOT NULL", orgID, installationID).
+		Count(&n).Error
+	return n > 0, err
+}
+
 // respondGitError maps git-source errors to HTTP. Details from git are
 // already token-scrubbed; they are logged, never returned.
 func respondGitError(c *gin.Context, op string, err error) {
@@ -84,6 +123,8 @@ func respondGitError(c *gin.Context, op string, err error) {
 	switch {
 	case errors.Is(err, gitsource.ErrDisabled):
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error(), "code": gitCodeDisabled})
+	case errors.Is(err, errInstallationNotBound):
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error() + " (an organization admin connects it through the GitHub App setup)", "code": gitCodeInstallationNotReg})
 	case errors.Is(err, gitsource.ErrNotFound), errors.Is(err, gitsource.ErrAuth),
 		errors.As(err, &apiErr) && (apiErr.Status == http.StatusUnauthorized || apiErr.Status == http.StatusForbidden || apiErr.Status == http.StatusUnprocessableEntity):
 		log.Printf("[manifest-git] %s: %v", op, err)
@@ -112,11 +153,19 @@ func gitManifestRepo(m *models.Manifest) (gitsource.Repo, gitsource.Endpoints, e
 }
 
 // withRepoToken mints a token for the manifest's repo (single repo,
-// contents:read), runs fn and revokes the token.
-func withRepoToken(ctx context.Context, m *models.Manifest, fn func(app GitApp, repo gitsource.Repo, tok *gitsource.Token) error) error {
+// contents:read), runs fn and revokes the token. The installation must still
+// be bound (verified) to the manifest's organization.
+func withRepoToken(ctx context.Context, db *gorm.DB, m *models.Manifest, fn func(app GitApp, repo gitsource.Repo, tok *gitsource.Token) error) error {
 	repo, _, err := gitManifestRepo(m)
 	if err != nil {
 		return err
+	}
+	bound, err := installationBound(db.WithContext(ctx), m.OrganizationID, *m.GitHubInstallationID)
+	if err != nil {
+		return err
+	}
+	if !bound {
+		return errInstallationNotBound
 	}
 	app, err := gitDeps.App()
 	if err != nil {
@@ -131,7 +180,7 @@ func withRepoToken(ctx context.Context, m *models.Manifest, fn func(app GitApp, 
 }
 
 // fetchGitCommit fetches the pinned commit of a git manifest (publish).
-func fetchGitCommit(ctx context.Context, m *models.Manifest, sha string) (*gitsource.Tree, error) {
+func fetchGitCommit(ctx context.Context, db *gorm.DB, m *models.Manifest, sha string) (*gitsource.Tree, error) {
 	fetcher, err := gitDeps.Fetcher()
 	if err != nil {
 		return nil, err
@@ -141,7 +190,7 @@ func fetchGitCommit(ctx context.Context, m *models.Manifest, sha string) (*gitso
 		subpath = *m.GitSubpath
 	}
 	var tree *gitsource.Tree
-	err = withRepoToken(ctx, m, func(_ GitApp, repo gitsource.Repo, tok *gitsource.Token) error {
+	err = withRepoToken(ctx, db, m, func(_ GitApp, repo gitsource.Repo, tok *gitsource.Token) error {
 		var ferr error
 		tree, ferr = fetcher.Fetch(ctx, repo, sha, subpath, tok)
 		return ferr
@@ -177,7 +226,19 @@ func validateGitManifestCreate(c *gin.Context, db *gorm.DB, orgID int, req *mode
 		respondGitError(c, "app", err)
 		return false
 	}
-	repo, err := gitsource.ParseRepoURL(req.GitRepoURL, e)
+	// git_repo (owner/name) is preferred; git_repo_url is kept for
+	// compatibility and must be on the configured host. Either way the host
+	// comes from GITHUB_URL, never from the request.
+	var repo gitsource.Repo
+	switch {
+	case req.GitRepo != "" && req.GitRepoURL != "":
+		c.JSON(http.StatusBadRequest, gin.H{"error": "give git_repo or git_repo_url, not both"})
+		return false
+	case req.GitRepo != "":
+		repo, err = gitsource.ParseRepoFullName(req.GitRepo)
+	default:
+		repo, err = gitsource.ParseRepoURL(req.GitRepoURL, e)
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return false
@@ -192,9 +253,9 @@ func validateGitManifestCreate(c *gin.Context, db *gorm.DB, orgID int, req *mode
 		return false
 	}
 	var inst models.GitHubAppInstallation
-	if err := db.Where("organization_id = ? AND installation_id = ?", orgID, req.GitHubInstallationID).Take(&inst).Error; err != nil {
+	if err := db.Where("organization_id = ? AND installation_id = ? AND verified_at IS NOT NULL", orgID, req.GitHubInstallationID).Take(&inst).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "the GitHub App installation is not registered for this organization (an organization admin registers it)", "code": gitCodeInstallationNotReg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "the GitHub App installation is not connected to this organization (an organization admin connects it through the GitHub App setup)", "code": gitCodeInstallationNotReg})
 		} else {
 			_ = c.Error(err)
 		}
@@ -213,7 +274,7 @@ func validateGitManifestCreate(c *gin.Context, db *gorm.DB, orgID int, req *mode
 		m.GitSubpath = &subpath
 	}
 	// the repo must be reachable with a token scoped to it
-	if err := withRepoToken(c.Request.Context(), m, func(GitApp, gitsource.Repo, *gitsource.Token) error { return nil }); err != nil {
+	if err := withRepoToken(c.Request.Context(), db, m, func(GitApp, gitsource.Repo, *gitsource.Token) error { return nil }); err != nil {
 		respondGitError(c, "verify repository", err)
 		return false
 	}
@@ -286,7 +347,7 @@ func (h *ManifestGitHandler) ListBranches(c *gin.Context) {
 		return
 	}
 	var branches []gitsource.Branch
-	err := withRepoToken(c.Request.Context(), m, func(app GitApp, repo gitsource.Repo, tok *gitsource.Token) error {
+	err := withRepoToken(c.Request.Context(), h.db, m, func(app GitApp, repo gitsource.Repo, tok *gitsource.Token) error {
 		var err error
 		branches, err = app.ListBranches(c.Request.Context(), repo, tok)
 		return err
@@ -326,7 +387,7 @@ func (h *ManifestGitHandler) ListCommits(c *gin.Context) {
 		return
 	}
 	var commits []gitsource.Commit
-	err := withRepoToken(c.Request.Context(), m, func(app GitApp, repo gitsource.Repo, tok *gitsource.Token) error {
+	err := withRepoToken(c.Request.Context(), h.db, m, func(app GitApp, repo gitsource.Repo, tok *gitsource.Token) error {
 		var err error
 		commits, err = app.ListCommits(c.Request.Context(), repo, ref, perPage, tok)
 		return err
@@ -340,19 +401,18 @@ func (h *ManifestGitHandler) ListCommits(c *gin.Context) {
 
 const auditResourceGitHubInstallation = "GITHUB_APP_INSTALLATION"
 
-// GitHubAppHandler org-level GitHub App installation registry (org ADMIN).
-type GitHubAppHandler struct{ db *gorm.DB }
+// GitHubAppHandler org-level GitHub App installations (org ADMIN) and the
+// App's setup callback (github_app_setup.go).
+type GitHubAppHandler struct {
+	db   *gorm.DB
+	perm service.PermissionChecker
+}
 
 func NewGitHubAppHandler(db *gorm.DB) *GitHubAppHandler { return &GitHubAppHandler{db: db} }
 
-// RegisterGitHubInstallationRequest body of POST .../github-app/installations.
-type RegisterGitHubInstallationRequest struct {
-	InstallationID int64 `json:"installation_id" binding:"required"`
-}
-
 // ListInstallations GitHub App installations of the organization
 // @Summary List GitHub App installations
-// @Description GitHub App installations registered for the organization (installation_id, account_login). Requires ORGANIZATION ADMIN.
+// @Description GitHub App installations of the organization (installation_id, account_login, account_type, verified_github_login, verified_at). Only rows with verified_at (bound through the setup callback) are usable by git manifests; rows without it were registered manually by an earlier build and must be connected again. Requires ORGANIZATION ADMIN.
 // @Tags Manifest Git
 // @Produce json
 // @Param org_id path string true "Organization ID"
@@ -376,72 +436,20 @@ func (h *GitHubAppHandler) ListInstallations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"installations": rows})
 }
 
-// RegisterInstallation registers a GitHub App installation for the org
-// @Summary Register GitHub App installation
-// @Description Register an installation of the platform's GitHub App for the organization; git manifests of the org can then use repositories of its account. The installation is looked up with the App JWT (account_login comes from GitHub). An installation belongs to one organization: 409 when another organization registered it. Requires ORGANIZATION ADMIN. 503 git_source_disabled when the App is not configured; 422 when GitHub does not know the installation.
+// RegisterInstallation manual registration is disabled
+// @Summary Register GitHub App installation (removed)
+// @Description Removed: an installation id alone proves nothing about who controls it. Installations are bound only through the GitHub App setup callback (POST /organizations/{org_id}/github-app/connect). Always 410. Requires ORGANIZATION ADMIN.
 // @Tags Manifest Git
-// @Accept json
 // @Produce json
 // @Param org_id path string true "Organization ID"
-// @Param request body handlers.RegisterGitHubInstallationRequest true "Installation"
-// @Success 201 {object} models.GitHubAppInstallation
-// @Success 200 {object} models.GitHubAppInstallation "already registered for this organization"
-// @Failure 409 {object} map[string]interface{}
-// @Failure 422 {object} map[string]interface{}
-// @Failure 503 {object} map[string]interface{}
+// @Failure 410 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/github-app/installations [post]
 // @Security BearerAuth
 func (h *GitHubAppHandler) RegisterInstallation(c *gin.Context) {
-	orgID, ok := middleware.AuthOrgID(c)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
-		return
-	}
-	var req RegisterGitHubInstallationRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.InstallationID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "installation_id must be a positive integer"})
-		return
-	}
-	var existing models.GitHubAppInstallation
-	err := h.db.Where("installation_id = ?", req.InstallationID).Take(&existing).Error
-	if err == nil {
-		if existing.OrganizationID == int(orgID) {
-			c.JSON(http.StatusOK, existing)
-		} else {
-			c.JSON(http.StatusConflict, gin.H{"error": "the installation is registered to another organization"})
-		}
-		return
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		_ = c.Error(err)
-		return
-	}
-	app, err := gitDeps.App()
-	if err != nil {
-		respondGitError(c, "app", err)
-		return
-	}
-	inst, err := app.GetInstallation(c.Request.Context(), req.InstallationID)
-	if err != nil {
-		if errors.Is(err, gitsource.ErrNotFound) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "GitHub App installation not found"})
-			return
-		}
-		respondGitError(c, "get installation", err)
-		return
-	}
-	row := models.GitHubAppInstallation{
-		OrganizationID: int(orgID), InstallationID: req.InstallationID, AccountLogin: inst.AccountLogin,
-		CreatedBy: c.GetString("user_id"), CreatedAt: time.Now(),
-	}
-	if err := h.db.Create(&row).Error; err != nil {
-		// lost a race on uq_github_app_installations_installation
-		c.JSON(http.StatusConflict, gin.H{"error": "the installation is already registered"})
-		return
-	}
-	writeManifestAudit(h.db, auditResourceGitHubInstallation, "github_installation.register", c.GetString("user_id"), map[string]interface{}{
-		"organization_id": orgID, "installation_id": row.InstallationID, "account_login": row.AccountLogin,
+	c.JSON(http.StatusGone, gin.H{
+		"error": "manual installation registration is disabled; use POST /organizations/{org_id}/github-app/connect",
+		"code":  "github_installation_manual_registration_removed",
 	})
-	c.JSON(http.StatusCreated, row)
 }
 
 // DeleteInstallation unregisters a GitHub App installation
@@ -514,14 +522,16 @@ type githubPushEvent struct {
 
 // Receive GitHub App webhook (push => "new commit available")
 // @Summary GitHub App webhook
-// @Description Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256 (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned or invalid => 401, no secret configured => 503. A push to a repository of git manifests (matching installation and repository) records git_latest_sha / git_latest_ref / git_latest_at on them as a "new commit available" hint. It never publishes. Other events are acknowledged and ignored. No user authentication (the signature is the authentication).
+// @Description Receives GitHub App webhooks. The raw body must carry a valid X-Hub-Signature-256 (HMAC-SHA256 with GITHUB_WEBHOOK_SECRET, constant-time compare); unsigned or invalid => 401, no secret configured => 503. A push to a repository of git manifests (matching installation and repository) records git_latest_sha / git_latest_ref / git_latest_at on them as a "new commit available" hint. It never publishes. Other events are acknowledged and ignored. Each X-GitHub-Delivery is processed once (recorded for 72h): a replayed delivery is a 200 no-op ({duplicate: true}); a missing / malformed delivery id is 400. No user authentication (the signature is the authentication).
 // @Tags Manifest Git
 // @Accept json
 // @Produce json
 // @Param X-Hub-Signature-256 header string true "sha256=<hex HMAC>"
 // @Param X-GitHub-Event header string true "Event name"
+// @Param X-GitHub-Delivery header string true "Delivery GUID (replay protection)"
 // @Success 200 {object} map[string]interface{}
 // @Success 202 {object} map[string]interface{} "{matched: n}"
+// @Failure 400 {object} map[string]interface{}
 // @Failure 401 {object} map[string]interface{}
 // @Failure 413 {object} map[string]interface{}
 // @Failure 503 {object} map[string]interface{}
@@ -541,42 +551,92 @@ func (h *GitHubWebhookHandler) Receive(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing signature"})
 		return
 	}
-	switch c.GetHeader("X-GitHub-Event") {
-	case "ping":
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-		return
-	case "push":
-	default:
-		c.JSON(http.StatusAccepted, gin.H{"ignored": true})
-		return
-	}
-	var ev githubPushEvent
-	if err := json.Unmarshal(body, &ev); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid push payload"})
+	// replay protection: each X-GitHub-Delivery is processed once. The id is
+	// recorded in the same transaction as the effect, so a delivery that
+	// failed here (5xx) can be redelivered.
+	delivery := strings.TrimSpace(c.GetHeader("X-GitHub-Delivery"))
+	if !validDeliveryID(delivery) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid X-GitHub-Delivery"})
 		return
 	}
-	if ev.Deleted || !gitsource.IsCommitSHA(ev.After) || ev.Installation.ID <= 0 || len(ev.Ref) > 255 || !strings.HasPrefix(ev.Ref, "refs/") {
-		c.JSON(http.StatusAccepted, gin.H{"ignored": true})
-		return
+	event := c.GetHeader("X-GitHub-Event")
+	if len(event) > 64 {
+		event = event[:64]
 	}
-	e, err := gitDeps.Endpoints()
-	if err != nil {
+	maybeCleanupGitHubEphemera(h.db)
+	status, resp := http.StatusOK, gin.H{}
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		ins := tx.Clauses(clause.OnConflict{DoNothing: true}).
+			Create(&models.GitHubWebhookDelivery{DeliveryID: delivery, Event: event, ReceivedAt: time.Now()})
+		if ins.Error != nil {
+			return ins.Error
+		}
+		if ins.RowsAffected == 0 {
+			status, resp = http.StatusOK, gin.H{"duplicate": true}
+			return nil
+		}
+		status, resp = h.handleEvent(tx, event, body)
+		if status >= 500 {
+			return errWebhookFailed
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, errWebhookFailed) {
 		_ = c.Error(err)
 		return
 	}
+	c.JSON(status, resp)
+}
+
+var errWebhookFailed = errors.New("webhook processing failed")
+
+// validDeliveryID X-GitHub-Delivery is a GUID; accept 1..64 of [A-Za-z0-9-].
+func validDeliveryID(s string) bool {
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	for _, r := range s {
+		if !(r == '-' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
+			return false
+		}
+	}
+	return true
+}
+
+// handleEvent the effect of one (new) verified delivery, inside the
+// delivery's transaction.
+func (h *GitHubWebhookHandler) handleEvent(tx *gorm.DB, event string, body []byte) (int, gin.H) {
+	switch event {
+	case "ping":
+		return http.StatusOK, gin.H{"ok": true}
+	case "push":
+	default:
+		return http.StatusAccepted, gin.H{"ignored": true}
+	}
+	var ev githubPushEvent
+	if err := json.Unmarshal(body, &ev); err != nil {
+		return http.StatusBadRequest, gin.H{"error": "invalid push payload"}
+	}
+	if ev.Deleted || !gitsource.IsCommitSHA(ev.After) || ev.Installation.ID <= 0 || len(ev.Ref) > 255 || !strings.HasPrefix(ev.Ref, "refs/") {
+		return http.StatusAccepted, gin.H{"ignored": true}
+	}
+	e, err := gitDeps.Endpoints()
+	if err != nil {
+		log.Printf("[manifest-git] webhook endpoints: %v", err)
+		return http.StatusInternalServerError, gin.H{"error": "internal error"}
+	}
 	repo, err := gitsource.ParseRepoURL(ev.Repository.HTMLURL, e)
 	if err != nil {
-		c.JSON(http.StatusAccepted, gin.H{"ignored": true})
-		return
+		return http.StatusAccepted, gin.H{"ignored": true}
 	}
 	// hint only: never publishes, never fetches
-	res := h.db.Model(&models.Manifest{}).
+	res := tx.Model(&models.Manifest{}).
 		Where("source_type = ? AND github_installation_id = ? AND LOWER(git_repo_url) = LOWER(?)",
 			models.ManifestSourceGit, ev.Installation.ID, repo.URL(e)).
 		Updates(map[string]interface{}{"git_latest_sha": ev.After, "git_latest_ref": ev.Ref, "git_latest_at": time.Now()})
 	if res.Error != nil {
-		_ = c.Error(res.Error)
-		return
+		log.Printf("[manifest-git] webhook update: %v", res.Error)
+		return http.StatusInternalServerError, gin.H{"error": "internal error"}
 	}
-	c.JSON(http.StatusAccepted, gin.H{"matched": res.RowsAffected})
+	return http.StatusAccepted, gin.H{"matched": res.RowsAffected}
 }

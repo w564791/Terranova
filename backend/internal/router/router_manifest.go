@@ -272,15 +272,28 @@ func manifestRouteChain(orgGuard gin.HandlerFunc) func(perm gin.HandlerFunc, res
 	}
 }
 
-// RegisterGitHubAppRoutes GitHub App installation registry (org ADMIN) and
-// the GitHub webhook (public; authenticated by X-Hub-Signature-256 only).
+// RegisterGitHubAppRoutes GitHub App installations (org ADMIN: list,
+// connect, delete; manual registration is gone; MANIFESTS WRITE: read-only
+// usable list and repositories), the App's setup callback
+// (public; authenticated by its signed single-use state plus user-to-server
+// OAuth proof) and the GitHub webhook (public; X-Hub-Signature-256).
 func RegisterGitHubAppRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
-	appH := handlers.NewGitHubAppHandler(db)
-	inst := protected.Group("/organizations/:org_id/github-app/installations") // protected carries JWTAuth
+	appH := handlers.NewGitHubAppHandler(db).WithPermissionChecker(iamMiddleware.Checker())
+	orgAdmin := iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN")
+	manifestsWrite := iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE")
+	ghApp := protected.Group("/organizations/:org_id/github-app") // protected carries JWTAuth
 	{
-		inst.GET("", iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN"), appH.ListInstallations)
-		inst.POST("", iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN"), appH.RegisterInstallation)
-		inst.DELETE("/:installation_id", iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN"), appH.DeleteInstallation)
+		// read-only for manifest authors: bound installations of the org
+		// (id + account) and their repositories (metadata:read token)
+		ghApp.GET("/available-installations", manifestsWrite, appH.ListUsableInstallations)
+		ghApp.GET("/available-installations/:installation_id", manifestsWrite, appH.GetUsableInstallation)
+		ghApp.GET("/installations/:installation_id/repositories", manifestsWrite, appH.ListInstallationRepositories)
+		// org ADMIN
+		ghApp.POST("/connect", orgAdmin, appH.Connect)
+		ghApp.GET("/installations", orgAdmin, appH.ListInstallations)
+		ghApp.POST("/installations", orgAdmin, appH.RegisterInstallation) // 410: removed
+		ghApp.DELETE("/installations/:installation_id", orgAdmin, appH.DeleteInstallation)
 	}
+	api.GET("/github-app/setup/callback", appH.SetupCallback)
 	api.POST("/webhooks/github", handlers.NewGitHubWebhookHandler(db).Receive)
 }

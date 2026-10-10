@@ -279,7 +279,7 @@ func (h *ManifestHandler) CreateManifest(c *gin.Context) {
 	}
 	switch req.SourceType {
 	case "", models.ManifestSourceNative:
-		if req.GitRepoURL != "" || req.GitSubpath != "" || req.GitHubInstallationID != 0 {
+		if req.GitRepoURL != "" || req.GitRepo != "" || req.GitSubpath != "" || req.GitHubInstallationID != 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "git_* fields require source_type git"})
 			return
 		}
