@@ -10,6 +10,7 @@ import (
 
 	"iac-platform/internal/config"
 	"iac-platform/internal/infrastructure"
+	"iac-platform/internal/keys"
 	"iac-platform/internal/models"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -116,8 +117,7 @@ func (s *UserTokenService) GenerateToken(ctx context.Context, userID string, tok
 		RegisteredClaims: registeredClaims,
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.jwtSecret))
+	tokenString, err := keys.Sign(keys.PurposeUser, claims, keys.LegacySecret(s.jwtSecret))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign token: %w", err)
 	}
@@ -196,13 +196,9 @@ func (s *UserTokenService) RevokeToken(ctx context.Context, userID string, token
 // ValidateToken 验证token
 func (s *UserTokenService) ValidateToken(ctx context.Context, tokenString string) (*UserTokenClaims, error) {
 	// 解析JWT token
-	token, err := jwt.ParseWithClaims(tokenString, &UserTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// 验证签名方法
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(s.jwtSecret), nil
-	})
+	token, err := jwt.ParseWithClaims(tokenString, &UserTokenClaims{},
+		keys.Keyfunc(keys.PurposeUser, keys.LegacySecret(s.jwtSecret)),
+		jwt.WithValidMethods([]string{"HS256"}))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)

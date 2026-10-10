@@ -175,6 +175,12 @@ JWT_KEY=$(echo -n "$(date +%s)-$$-$(hostname)" | openssl dgst -sha256 -binary | 
 
 sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=${JWT_KEY}|" base/kustomization.yaml
 
+# Independent data-encryption and signing root keys (required in production).
+# Generate ONCE and keep them: changing DATA_ENCRYPTION_KEY without the
+# rotation procedure makes encrypted data unreadable.
+sed -i '' "s|DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)|" base/kustomization.yaml
+sed -i '' "s|SIGNING_ROOT_KEY=.*|SIGNING_ROOT_KEY=$(openssl rand -base64 32)|" base/kustomization.yaml
+
 kubectl kustomize | kubectl create -f -
 
 kubectl -n terraform wait --for=condition=complete job/iac-db-init --timeout=120s
@@ -204,7 +210,13 @@ Before deploying, update the following values to match your environment:
 **`base/kustomization.yaml` — secretGenerator**
 | Key | Description | 生成方式 |
 |-----|-------------|---------|
-| `JWT_SECRET` | JWT signing key | 部署时基于 `时间戳 + 主机名` 经 SHA-256 自动生成 256-bit 密钥，无需手动配置 |
+| `JWT_SECRET` | Legacy only: verifies tokens without `kid` until `LEGACY_TOKEN_CUTOFF`, decrypts legacy (key_version 0) data | 部署时基于 `时间戳 + 主机名` 经 SHA-256 自动生成（可预测，仅为兼容保留；窗口结束后退役） |
+| `DATA_ENCRYPTION_KEY` | AES-256 data encryption key (variables etc.), 32 bytes base64/hex; `_VERSION`, `_PREVIOUS`, `_PREVIOUS_VERSION` for rotation | `openssl rand -base64 32`; required when `ENV=production` |
+| `SIGNING_ROOT_KEY` | HKDF root of all JWT signing keys (user/state/agent/run/runtask), >= 32 bytes; same rotation variables | `openssl rand -base64 32`; required when `ENV=production` |
+| `LEGACY_TOKEN_CUTOFF` | RFC3339 hard cutoff for tokens without `kid` = deploy time + longest legacy token lifetime; unset = none accepted | optional |
+| `LEGACY_TOKEN_ISSUED_BEFORE` | RFC3339 deploy time; no-kid tokens with a later `iat` are rejected (defaults to process start) | optional |
+
+See `docs/security/signing-and-encryption-keys.md`.
 
 **`tls/secret-gateway-tls.yaml`**
 - Replace with your own TLS certificate for external access (current: mkcert self-signed for `*.iac-platform.com`)

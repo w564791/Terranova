@@ -342,8 +342,11 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "# IaC Platform 环境变量配置" > .env; \
 		echo "# 自动生成，请勿提交到版本控制" >> .env; \
 		echo "" >> .env; \
-		echo "# 平台私钥（用于 JWT 签名和变量加密）" >> .env; \
+		echo "# 旧版私钥（仅用于验证无 kid 的旧 token / 解密旧数据）" >> .env; \
 		echo "JWT_SECRET=$$JWT_KEY" >> .env; \
+		echo "# 数据加密密钥 / 签名根密钥（相互独立，生产环境必填）" >> .env; \
+		echo "DATA_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
+		echo "SIGNING_ROOT_KEY=$$(openssl rand -base64 32)" >> .env; \
 		echo "" >> .env; \
 		echo "# 数据库配置" >> .env; \
 		echo "DB_HOST=localhost" >> .env; \
@@ -361,9 +364,9 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "  JWT_SECRET: 64 字符随机密钥"; \
 		echo "  DB_PORT: 15433"; \
 		echo "  SERVER_PORT: 8080"; \
-		echo "  [WARN] 请妥善保管 JWT_SECRET，更换将导致："; \
-		echo "     - 所有已登录用户的 Token 失效"; \
-		echo "     - 所有已加密的变量无法解密"; \
+		echo "  [WARN] 请妥善保管 DATA_ENCRYPTION_KEY / SIGNING_ROOT_KEY，不按轮换流程更换将导致："; \
+		echo "     - 所有已登录用户的 Token 失效 (SIGNING_ROOT_KEY)"; \
+		echo "     - 所有已加密的变量无法解密 (DATA_ENCRYPTION_KEY)"; \
 	fi
 
 # =============================================================================

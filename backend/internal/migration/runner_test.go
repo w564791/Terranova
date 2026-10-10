@@ -13,6 +13,7 @@ func TestDefinitionsAreOrderedAndVersioned(t *testing.T) {
 		"20260717_03_iam_release_completeness",
 		"20260717_04_iam_application_role_transition",
 		"20260717_05_iam_role_tenant_reconciliation",
+		"20261010_10_variable_key_version",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("migration count = %d, want %d", len(definitions), len(want))

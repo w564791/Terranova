@@ -20,6 +20,7 @@ import (
 	"iac-platform/internal/observability/tracing"
 	"iac-platform/internal/router"
 	"iac-platform/internal/websocket"
+	"iac-platform/internal/keys"
 	"iac-platform/internal/leaderelection"
 	"iac-platform/internal/pgpubsub"
 	"iac-platform/internal/version"
@@ -64,6 +65,18 @@ func main() {
 		log.Println("Timezone set to Asia/Singapore (UTC+8)")
 	}
 
+	// Signing / encryption keys: refuse to start in production without
+	// DATA_ENCRYPTION_KEY and SIGNING_ROOT_KEY (or with malformed key /
+	// LEGACY_TOKEN_CUTOFF settings); development falls back to the legacy
+	// JWT_SECRET scheme with a warning.
+	keyWarnings, keyErr := keys.CheckStartup()
+	for _, w := range keyWarnings {
+		log.Printf("[Keys] WARNING: %s", w)
+	}
+	if keyErr != nil {
+		log.Fatalf("[Keys] refusing to start: %v", keyErr)
+	}
+
 	// 加载配置
 	cfg := config.Load()
 
@@ -71,6 +84,13 @@ func main() {
 	db, err := database.Initialize(cfg.Database)
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
+	}
+
+	// Legacy-encrypted rows (key_version 0) can only be read with JWT_SECRET:
+	// refuse to start without it while any remain (independent of
+	// LEGACY_TOKEN_CUTOFF).
+	if err := services.CheckLegacyKeyAvailable(context.Background(), db); err != nil {
+		log.Fatalf("[Keys] refusing to start: %v", err)
 	}
 
 	// 创建可被 shutdown 信号取消的顶层 context
@@ -462,6 +482,10 @@ func main() {
 					log.Println("[Leader] Resource summary compensation completed")
 				}
 			}()
+
+			// Re-encrypt sensitive variables still on the legacy (JWT_SECRET
+			// derived) key with DATA_ENCRYPTION_KEY; idempotent, one pass.
+			go services.RunVariableReencryption(leaderCtx, db)
 
 			// 9. Background cleanup goroutine (lock/draft cleanup)
 			go func() {
