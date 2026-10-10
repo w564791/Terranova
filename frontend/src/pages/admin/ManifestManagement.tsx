@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
@@ -32,7 +32,6 @@ import type {
   ManifestCapabilities,
   ManifestSourceType,
   AvailableGitHubInstallation,
-  GitHubRepoInfo,
 } from '../../services/manifestApi';
 import {
   listManifests,
@@ -42,9 +41,9 @@ import {
   listAvailableGitHubInstallations,
   checkOrgAdmin,
   gitRepoName,
-  urlHost,
+  normalizeGitSubpath,
 } from '../../services/manifestApi';
-import { gitErrorMessage } from './ManifestEditorV2/bundleStatus';
+import { gitErrorCode, gitErrorMessage } from './ManifestEditorV2/bundleStatus';
 import { GitHubAppConnectButton, GitHubRepoSelect } from './manifestGit/GitHubAppControls';
 import { GITHUB_APP_CALLBACK_PARAMS, githubAppCallbackNotice } from './manifestGit/githubAppCallback';
 import { iamService, setAuthOrgId } from '../../services/iam';
@@ -130,8 +129,6 @@ const ManifestManagement: React.FC = () => {
   // "连接 GitHub App" 仅组织 ADMIN 可见(后端 connect 路由 RequirePermission(ORGANIZATION, ORGANIZATION, ADMIN))
   const [isOrgAdmin, setIsOrgAdmin] = useState(false);
   const selectedInstallationId = Form.useWatch('github_installation_id', createForm);
-  // 平台 GitHub 主机(GitHub Enterprise 时放行安装地址):来自已有 git manifest 与仓库 html_url
-  const [repoHosts, setRepoHosts] = useState<string[]>([]);
 
   const openCreate = () => {
     createForm.resetFields();
@@ -158,19 +155,6 @@ const ManifestManagement: React.FC = () => {
       setInstallationsLoading(false);
     }
   }, [orgId]);
-
-  const knownGitHosts = useMemo(() => {
-    const hosts = new Set(repoHosts);
-    for (const m of manifests) {
-      const h = urlHost(m.git_repo_url);
-      if (h) hosts.add(h);
-    }
-    return Array.from(hosts);
-  }, [manifests, repoHosts]);
-  const onReposLoaded = useCallback((repos: GitHubRepoInfo[]) => {
-    const hosts = Array.from(new Set(repos.map(r => urlHost(r.html_url)).filter(Boolean)));
-    setRepoHosts(prev => (hosts.every(h => prev.includes(h)) ? prev : Array.from(new Set([...prev, ...hosts]))));
-  }, []);
 
   // GitHub App setup callback 回跳(?github_app=connected|requested|error&reason=...):提示一次后去掉参数
   const [searchParams, setSearchParams] = useSearchParams();
@@ -266,7 +250,8 @@ const ManifestManagement: React.FC = () => {
               source_type: 'git',
               github_installation_id: values.github_installation_id,
               git_repo: values.git_repo,
-              git_subpath: (values.git_subpath ?? '').trim().replace(/^\/+|\/+$/g, '') || undefined,
+              // git 来源字段只在创建时发送(创建后不可变)
+              git_subpath: normalizeGitSubpath(values.git_subpath).value || undefined,
             }
           : { name: values.name, description: values.description ?? '', source_type: 'native' }
       );
@@ -280,6 +265,11 @@ const ManifestManagement: React.FC = () => {
       if (err?.errorFields) return;
       const gitMsg = gitErrorMessage(err);
       if (gitMsg) {
+        // 子路径不合法:就地显示在子路径字段上
+        if (gitErrorCode(err) === 'git_subpath_invalid') {
+          createForm.setFields([{ name: 'git_subpath', errors: [gitMsg] }]);
+          return;
+        }
         message.error('创建失败：' + gitMsg);
         return;
       }
@@ -751,7 +741,7 @@ const ManifestManagement: React.FC = () => {
                       : '尚未连接 GitHub App，请联系组织管理员'
                 }
               >
-                {isOrgAdmin && <GitHubAppConnectButton orgId={orgId} knownHosts={knownGitHosts} type="primary" />}
+                {isOrgAdmin && <GitHubAppConnectButton orgId={orgId} type="primary" />}
               </Empty>
             ) : (
               <Form
@@ -797,29 +787,26 @@ const ManifestManagement: React.FC = () => {
                             onChange={() => createForm.setFieldValue('git_repo', undefined)}
                           />
                         </Form.Item>
-                        {isOrgAdmin && <GitHubAppConnectButton orgId={orgId} knownHosts={knownGitHosts} />}
+                        {isOrgAdmin && <GitHubAppConnectButton orgId={orgId} />}
                       </div>
                     </Form.Item>
                     <Form.Item label="仓库" name="git_repo" rules={[{ required: true, message: '请选择仓库' }]}>
                       <GitHubRepoSelect
                         orgId={orgId}
                         installationId={selectedInstallationId}
-                        onReposLoaded={onReposLoaded}
                       />
                     </Form.Item>
                     <Form.Item
                       label="子目录 (可选)"
                       name="git_subpath"
-                      extra="仓库内作为 bundle 根的目录；留空表示仓库根目录"
+                      extra="仓库内作为 bundle 根的目录；留空表示仓库根目录。创建后不可修改"
                       rules={[
                         { max: 512, message: '不超过 512 字符' },
                         {
+                          // 与后端 CleanSubpath + ValidatePath 一致;空 = 仓库根
                           validator: async (_, value?: string) => {
-                            const v = (value ?? '').trim().replace(/^\/+|\/+$/g, '');
-                            if (!v) return;
-                            if (v.split('/').some(seg => !seg || seg === '.' || seg === '..') || v.includes('\\')) {
-                              throw new Error('须为相对目录，不能含空段、"." 或 ".."');
-                            }
+                            const { error } = normalizeGitSubpath(value);
+                            if (error) throw new Error(error);
                           },
                         },
                       ]}
