@@ -506,6 +506,41 @@ export default function ManifestEditorV2() {
   const [deployments, setDeployments] = useState<ManifestDeployment[]>([])
   // 从部署列表"升级"失效部署时,部署面板预选的 workspace
   const [deployTargetWsId, setDeployTargetWsId] = useState<string | undefined>()
+
+  // 深链 ?deploy=<workspace_id>(任务详情"去升级"):切到部署视图并打开部署面板预选该 workspace
+  const deployParam = searchParams.get('deploy')
+  useEffect(() => {
+    if (!deployParam) return
+    setActiveView('deploy')
+    setDeployTargetWsId(deployParam)
+    setActiveRightPanel('deploy')
+  }, [deployParam])
+
+  // 发布 / Run 被 bundle 规则拒绝(422 bundle_rules_violated)的问题 => Problems 面板
+  // {file, line?, rule, message},不含文件内容;点击复用 openAt 定位
+  // (无 line 打开文件停在第 1 行;file 为空 = bundle 级问题,不可跳转)
+  const showBundleProblems = useCallback((list: PublishProblem[], source: 'publish' | 'run') => {
+    setPublishProblems(
+      list.map((p) => {
+        const line = p.line ?? 1
+        return {
+          path: p.file,
+          severity: monaco.MarkerSeverity.Error,
+          // 按 rule 显示中文(未知规则回退后端英文 message);悬停保留规则码与英文原文
+          message: publishProblemText(p),
+          detail: p.message === p.rule ? p.rule : `${p.rule}: ${p.message}`,
+          startLineNumber: line,
+          startColumn: 1,
+          endLineNumber: line,
+          endColumn: 1,
+          owner: source,
+          source,
+        }
+      }),
+    )
+    setActiveView('problems')
+    message.error(`${source === 'run' ? '运行' : '发布'}被拒绝：${list.length} 个问题`, 6)
+  }, [])
   const [wsNameById, setWsNameById] = useState<Record<string, string>>({})
   const [deployLoading, setDeployLoading] = useState(false)
   // post_init 落库的 provider schema 版本(状态栏);无缓存为 —
@@ -3579,7 +3614,10 @@ export default function ManifestEditorV2() {
           ctx={ctx}
           lastRunTask={lastRunTask}
           viewLast={runViewLast}
+          versions={versions}
           onRunTaskCreated={(taskId, workspaceId) => setLastRunTask({ taskId, workspaceId })}
+          onRunAttempt={() => setPublishProblems([])}
+          onRunRejected={(list) => showBundleProblems(list, 'run')}
           onClose={() => {
             setActiveRightPanel((prev) => (prev === 'run' ? null : prev))
             setRunViewLast(false)
@@ -3615,30 +3653,7 @@ export default function ManifestEditorV2() {
         onSkipCheck={() => setPublishCheckSummary({ done: false, skipped: true, issues: [] })}
         onClose={() => setPublishOpen(false)}
         onPublishAttempt={() => setPublishProblems([])}
-        onPublishRejected={(list: PublishProblem[]) => {
-          // {file, line?, rule, message},不含文件内容;点击复用 openAt 定位
-          // (无 line 打开文件停在第 1 行;file 为空 = bundle 级问题,不可跳转)
-          setPublishProblems(
-            list.map((p) => {
-              const line = p.line ?? 1
-              return {
-                path: p.file,
-                severity: monaco.MarkerSeverity.Error,
-                // 按 rule 显示中文(未知规则回退后端英文 message);悬停保留规则码与英文原文
-                message: publishProblemText(p),
-                detail: p.message === p.rule ? p.rule : `${p.rule}: ${p.message}`,
-                startLineNumber: line,
-                startColumn: 1,
-                endLineNumber: line,
-                endColumn: 1,
-                owner: 'publish',
-                source: 'publish',
-              }
-            }),
-          )
-          setActiveView('problems')
-          message.error(`发布被拒绝：${list.length} 个问题`, 6)
-        }}
+        onPublishRejected={(list: PublishProblem[]) => showBundleProblems(list, 'publish')}
         onPublished={(v, meta) => {
           setPublishProblems([])
           // 发布成功提示放在父组件(对话框 portal 已关,antd message 更稳定)

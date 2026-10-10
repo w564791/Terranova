@@ -1,0 +1,57 @@
+/**
+ * 任务结构化失败码提示(任务详情页):按 error_code 显示红色 Alert + 原因;
+ * bundle_republish_required 带"去升级"(打开 manifest 编辑器的部署面板并预选该 workspace)。
+ * manifest id 取自 workspace 的 manifest 摘要(GET /workspaces/:id/manifest-summary);
+ * 取不到(未绑定 / 已卸载 / 无权限)时退回 workspace 概览页(顶部有 manifest 摘要)。
+ */
+import { Alert, Button } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { taskErrorInfo } from '../utils/taskErrorCode';
+import { useWorkspaceManifestSummary } from '../hooks/useWorkspaceManifestSummary';
+
+interface Props {
+  workspaceId: string;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+export default function TaskErrorCodeAlert({ workspaceId, errorCode, errorMessage }: Props) {
+  const navigate = useNavigate();
+  const info = taskErrorInfo(errorCode, errorMessage);
+  // 只有需要升级入口时才拉 manifest 摘要
+  const { summary, loading } = useWorkspaceManifestSummary(info?.upgradeManifest ? workspaceId : undefined);
+  if (!info) return null;
+
+  let upgradeTarget: string | null = null;
+  if (info.upgradeManifest) {
+    if (summary?.has_manifest && summary.manifest_id && summary.org_id != null) {
+      const params = new URLSearchParams({ org: String(summary.org_id), deploy: workspaceId });
+      upgradeTarget = `/admin/manifests-v2/${summary.manifest_id}/edit?${params.toString()}`;
+    } else {
+      upgradeTarget = `/workspaces/${workspaceId}`;
+    }
+  }
+
+  return (
+    <Alert
+      type="error"
+      showIcon
+      style={{ marginBottom: 12 }}
+      message={info.title}
+      description={
+        info.detail ? (
+          <span style={{ whiteSpace: 'pre-line' }} title={info.rawDetail !== info.detail ? info.rawDetail : undefined}>
+            {info.detail}
+          </span>
+        ) : undefined
+      }
+      action={
+        upgradeTarget ? (
+          <Button size="small" type="primary" danger loading={loading} onClick={() => navigate(upgradeTarget!)}>
+            去升级
+          </Button>
+        ) : undefined
+      }
+    />
+  );
+}

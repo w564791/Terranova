@@ -3,8 +3,10 @@
  *
  * 行为:
  *  1. 列出已装本 manifest 的 workspaces (deployments status='active')
- *  2. 用户选一个,前端把当前草稿全量打包成 external_files
- *  3. 调 POST /workspaces/:id/tasks/plan 带 external_files
+ *  2. 用户选一个,并选运行来源(默认当前草稿,或某个已发布版本),前端把文件全量打包成 external_files
+ *  3. 调 POST /workspaces/:id/tasks/plan 带 external_files(已发布版本另带 manifest_version_id)
+ *     - 草稿按发布规则校验:422 bundle_rules_violated + problems => 复用发布问题流程(Problems 面板)
+ *     - 已发布版本:409 bundle_republish_required(版本失效)/ bundle_hash_mismatch(文件与 bundle_hash 不符)
  *  4. 提交后不跳转,面板内通过 WebSocket 实时展示任务输出日志
  *  5. 任务完成/WebSocket 关闭后,自动 HTTP 轮询兜底获取 plan_output
  *  6. 关闭面板后保留上次任务,重新打开可查看历史日志
@@ -18,10 +20,21 @@ import {
   listFiles,
   readFile,
   listDeployments,
+  listVersionFiles,
   runPlanWithDraft,
   type ManifestEditorContext,
   type ManifestDeployment,
+  type ManifestVersion,
 } from './manifestApi'
+import {
+  bundleStatusLabel,
+  isBundleHashMismatch,
+  isBundleRepublishRequired,
+  parsePublishProblems,
+  republishRequiredMessage,
+  versionNeedsRepublish,
+  type PublishProblem,
+} from './bundleStatus'
 import { workspaceService, type Workspace } from '../../../services/workspaces'
 import api from '../../../services/api'
 import { useTerraformOutput } from '../../../hooks/useTerraformOutput'
@@ -39,7 +52,13 @@ interface Props {
   ctx: ManifestEditorContext
   lastRunTask: { taskId: number; workspaceId: string } | null
   viewLast: boolean
+  /** 已发布版本列表(运行来源可选某个版本;失效版本禁用) */
+  versions?: ManifestVersion[]
   onRunTaskCreated: (taskId: number, workspaceId: string) => void
+  /** 每次提交前调用(清空上次被拒问题) */
+  onRunAttempt?: () => void
+  /** 422 bundle_rules_violated:问题交给父组件(Problems 面板) */
+  onRunRejected?: (problems: PublishProblem[]) => void
   onClose: () => void
   panelWidth?: number
 }
@@ -383,7 +402,10 @@ export default function RunDialog({
   ctx,
   lastRunTask,
   viewLast,
+  versions = [],
   onRunTaskCreated,
+  onRunAttempt,
+  onRunRejected,
   onClose,
   panelWidth,
 }: Props) {
@@ -396,6 +418,8 @@ export default function RunDialog({
   const [viewingTaskId, setViewingTaskId] = useState<number | null>(null)
   const [viewingWorkspaceId, setViewingWorkspaceId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // 运行来源:'' = 当前草稿;否则为已发布版本 id(请求带 manifest_version_id)
+  const [sourceVersionId, setSourceVersionId] = useState<string>('')
 
   // viewLast 变化时自动跳到上次任务
   useEffect(() => {
@@ -464,11 +488,15 @@ export default function RunDialog({
     if (!selected) return
     setSubmitting(true)
     setSubmitError(null)
+    onRunAttempt?.()
+    const versionId = sourceVersionId || undefined
     try {
-      const fileList = await listFiles(ctx)
+      const fileList = versionId
+        ? (await listVersionFiles(ctx, versionId)).filter((f) => f.type === 'file')
+        : await listFiles(ctx)
       const fileContents = await Promise.all(
         fileList.map(async (f) => {
-          const file = await readFile(ctx, f.path)
+          const file = await readFile(ctx, f.path, versionId)
           let b64: string
           if (file.content_b64) {
             b64 = file.content_b64
@@ -479,13 +507,14 @@ export default function RunDialog({
         }),
       )
       if (fileContents.length === 0) {
-        setSubmitError('草稿为空,无文件可 run')
+        setSubmitError(versionId ? '该版本没有文件,无法 run' : '草稿为空,无文件可 run')
         setSubmitting(false)
         return
       }
       const resp = (await runPlanWithDraft({
         workspace_id: selected,
         external_files: fileContents,
+        ...(versionId ? { manifest_version_id: versionId } : {}),
       })) as { task?: { id?: number | string }; task_id?: number | string; id?: number | string }
       const tid = Number(resp.task?.id ?? resp.task_id ?? resp.id)
       if (tid) {
@@ -497,12 +526,27 @@ export default function RunDialog({
         setSubmitError('提交成功但未返回 task_id,请前往 workspace 查看')
       }
     } catch (err) {
+      // 422 草稿违反 bundle 规则:复用发布问题流程(Problems 面板 + 中文规则说明)
+      const problems = parsePublishProblems(err)
+      if (problems) {
+        setSubmitError(`运行被拒绝：${problems.length} 个问题，详见问题面板`)
+        onRunRejected?.(problems)
+        return
+      }
+      if (isBundleRepublishRequired(err)) {
+        setSubmitError(`Run 失败: ${republishRequiredMessage(err)}`)
+        return
+      }
+      if (isBundleHashMismatch(err)) {
+        setSubmitError('Run 失败: 提交的文件与该已发布版本不一致(bundle 完整性校验失败),请刷新后重试或重新发布')
+        return
+      }
       const msg = typeof err === 'string' ? err : (err as Error)?.message
       setSubmitError(`Run 失败: ${msg ?? '未知错误'}`)
     } finally {
       setSubmitting(false)
     }
-  }, [selected, ctx, onRunTaskCreated])
+  }, [selected, ctx, onRunTaskCreated, sourceVersionId, onRunAttempt, onRunRejected])
 
   if (!open) return null
 
@@ -528,7 +572,7 @@ export default function RunDialog({
           <>
             <div style={hintStyle}>
               <i className="codicon codicon-info" />
-              <span>Plan-only 模式,仅检测草稿不会变更云端</span>
+              <span>Plan-only 模式,只做检测不会变更云端</span>
             </div>
 
             {/* 上次运行结果入口 */}
@@ -564,6 +608,30 @@ export default function RunDialog({
                     return (
                       <option key={wsId} value={wsId}>
                         {t.workspace.name} ({wsId})
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+            )}
+
+            {/* 运行来源:当前草稿(按发布规则校验)或某个已发布版本(校验版本 bundle) */}
+            {targets.length > 0 && (
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>运行来源</label>
+                <select
+                  style={selectStyle}
+                  value={sourceVersionId}
+                  onChange={(e) => setSourceVersionId(e.target.value)}
+                  disabled={loading || submitting}
+                >
+                  <option value="">当前草稿</option>
+                  {versions.map((v) => {
+                    const status = bundleStatusLabel(v)
+                    return (
+                      <option key={v.id} value={v.id} disabled={versionNeedsRepublish(v)} title={status?.tooltip}>
+                        已发布版本 {v.version}
+                        {status ? ` (${status.label})` : ''}
                       </option>
                     )
                   })}

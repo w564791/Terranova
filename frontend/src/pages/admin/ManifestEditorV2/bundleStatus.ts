@@ -85,6 +85,23 @@ export function localizeInvalidReason(reason: string): string {
     .join('\n')
 }
 
+/**
+ * 失效原因(bundle_invalid_reason / 任务 error_message 前缀后的 reason)本地化:
+ * hash_mismatch => 完整性校验失败,其余按 `rule @ path; ...` 逐条翻译(未知规则原样保留)。
+ */
+export function localizeBundleReason(reason: string): string {
+  const r = reason.trim()
+  if (!r) return ''
+  if (r === HASH_MISMATCH_REASON) return '完整性校验失败（已发布内容与哈希不符）'
+  return localizeInvalidReason(r)
+}
+
+/** 409 bundle_hash_mismatch(编辑器 Run 已发布版本时,提交的文件与该版本 bundle_hash 不符) */
+export function isBundleHashMismatch(err: unknown): boolean {
+  if (getHttpStatus(err) !== 409) return false
+  return errorData(err)?.code === 'bundle_hash_mismatch'
+}
+
 /** 已部署版本失效(需重新发布 / 完整性校验失败)时的提示 */
 export const STALE_DEPLOYMENT_MESSAGE = '当前版本已失效，workspace 上的 plan/apply/drift 会失败，请升级到有效版本'
 

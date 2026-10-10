@@ -2130,6 +2130,19 @@ a.stateRow {
   text-transform: uppercase;
 }
 
+/* 任务结构化失败码(error_code)小标签 */
+.errorCodeBadge {
+  background: #fff1f0;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
 .stateDownloadLink {
   font-size: 14px;
   color: var(--ink);

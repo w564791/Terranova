@@ -7,6 +7,7 @@ import NewRunDialog from '../components/NewRunDialog';
 import TaskComments from '../components/TaskComments';
 import CommentInput from '../components/CommentInput';
 import AIErrorAnalysis from '../components/AIErrorAnalysis';
+import TaskErrorCodeAlert from '../components/TaskErrorCodeAlert';
 import TaskTimeline from '../components/TaskTimeline';
 import SmartLogViewer from '../components/SmartLogViewer';
 import { useNotificationContext } from '../contexts/NotificationContext';
@@ -28,6 +29,8 @@ interface Task {
   completed_at?: string;
   duration?: number;
   error_message?: string;
+  /** 结构化失败码(后端 c9f030f),如 bundle_republish_required */
+  error_code?: string;
   plan_json?: any;
   plan_output?: string;
   apply_output?: string;
@@ -590,6 +593,15 @@ const TaskDetail: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* 结构化失败码提示(如 Manifest 版本已失效 => 去升级) */}
+        {task.error_code && (
+          <TaskErrorCodeAlert
+            workspaceId={workspaceId!}
+            errorCode={task.error_code}
+            errorMessage={task.error_message}
+          />
+        )}
 
         {/* Content based on view mode */}
         {viewMode === 'structured' ? (

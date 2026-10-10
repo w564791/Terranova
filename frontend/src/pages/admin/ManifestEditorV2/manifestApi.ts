@@ -446,14 +446,17 @@ export async function uninstallDeployment(
 export interface RunPlanRequest {
   workspace_id: string
   external_files: { path: string; content_b64: string }[]
+  /** external_files 为某已发布版本的内容时给出(后端 1aed72a:校验版本并比对 bundle_hash) */
+  manifest_version_id?: string
 }
 
 export async function runPlanWithDraft(req: RunPlanRequest) {
   // 注意路径: 用 workspace 现有的 task 创建路径,不在 manifest namespace 下
   return await api.post(`/workspaces/${req.workspace_id}/tasks/plan`, {
-    description: 'Manifest Run (草稿预览)',
+    description: req.manifest_version_id ? 'Manifest Run (已发布版本预览)' : 'Manifest Run (草稿预览)',
     run_type: 'plan',
     external_files: req.external_files,
+    ...(req.manifest_version_id ? { manifest_version_id: req.manifest_version_id } : {}),
   })
 }
 
