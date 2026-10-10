@@ -26,6 +26,28 @@ export interface Manifest {
   can_write?: boolean;
   can_admin?: boolean;
   can_deploy?: boolean;
+  // 来源(后端 6c28579;创建后不可变):native = 平台内编辑;git = GitHub 仓库只读,发布 = 选 commit
+  source_type?: ManifestSourceType;
+  // 仅 git 来源返回
+  git_repo_url?: string;
+  git_subpath?: string;
+  github_installation_id?: number;
+  // 经验签 webhook 记录的仓库最新 push(仅提示,不会自动发布)
+  git_latest_sha?: string;
+  git_latest_ref?: string;
+  git_latest_at?: string;
+}
+
+export type ManifestSourceType = 'native' | 'git';
+
+/** 仓库 URL 的 owner/repo 部分(展示用);解析失败返回原值 */
+export function gitRepoName(url: string | undefined | null): string {
+  if (!url) return '';
+  try {
+    return new URL(url).pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
+  } catch {
+    return url;
+  }
 }
 
 // 调用者在本组织 manifest 目录上的能力(列表响应顶层;列表为空时也返回)
@@ -52,6 +74,24 @@ export interface ManifestVersion {
 export interface CreateManifestRequest {
   name: string;
   description?: string;
+  /** 默认 native;创建后不可更改 */
+  source_type?: ManifestSourceType;
+  /** git 必填:<GITHUB_URL>/<owner>/<repo>(无凭证) */
+  git_repo_url?: string;
+  /** git 可选:仓库内作为 bundle 根的目录 */
+  git_subpath?: string;
+  /** git 必填:本组织已登记的 GitHub App installation(其账户须是仓库 owner) */
+  github_installation_id?: number;
+}
+
+/** 本组织已登记的 GitHub App installation(后端 6c28579,列表需要组织 ADMIN) */
+export interface GitHubAppInstallation {
+  id: number;
+  organization_id: number;
+  installation_id: number;
+  account_login: string;
+  created_by: string;
+  created_at: string;
 }
 
 export interface UpdateManifestRequest {
@@ -84,6 +124,13 @@ export const createManifest = async (
   data: CreateManifestRequest
 ): Promise<Manifest> => {
   return api.post(`/organizations/${orgId}/manifests`, data);
+};
+
+export const listGitHubInstallations = async (orgId: string): Promise<GitHubAppInstallation[]> => {
+  const res: { installations?: GitHubAppInstallation[] } = await api.get(
+    `/organizations/${orgId}/github-app/installations`
+  );
+  return res?.installations ?? [];
 };
 
 export const getManifest = async (orgId: string, id: string): Promise<Manifest> => {
