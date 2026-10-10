@@ -48,6 +48,10 @@ const RULE_TEXT: Record<string, string> = {
   hcl_external_data: '不允许使用 "external" 数据源 / hashicorp/external provider',
   hcl_http_data: '不允许使用 "http" 数据源 / hashicorp/http provider',
   hcl_module_source: 'module source 不被允许：请使用 bundle 内的相对路径或平台模块目录中已注册的模块',
+  // git 来源(后端 c9d7b3c / 6c28579)
+  hcl_module_unpinned: 'git module 的 source 必须用 ?ref=<40 位 commit SHA> 固定',
+  git_symlink: '仓库中包含符号链接，不允许发布',
+  git_submodule: '仓库中包含 submodule，不允许发布',
 }
 const SECRET_SCAN_PREFIX = 'secret_scan:'
 
@@ -173,4 +177,35 @@ export function parsePublishProblems(err: unknown): PublishProblem[] | null {
     out.push({ file, line, rule, message })
   }
   return out
+}
+
+/**
+ * git 来源 manifest 的错误码(后端 6c28579 响应 JSON 的 code)-> 中文提示。
+ */
+const GIT_ERROR_TEXT: Record<string, string> = {
+  git_source_read_only: 'Git 来源的 Manifest 不能在线编辑',
+  git_source_disabled: '平台未配置 GitHub App，暂不能使用 Git 来源',
+  git_repo_not_accessible: 'GitHub App 无法访问该仓库（请确认仓库属于已连接的 GitHub 账户，且 App 已授权该仓库）',
+  git_commit_not_found: '仓库中找不到该 commit',
+  git_subpath_not_found: '该 commit 中不存在配置的子目录',
+  git_fetch_failed: '从仓库获取内容失败，请稍后重试',
+  not_git_source: '该 Manifest 不是 Git 来源',
+  github_installation_not_registered: '该 GitHub App 安装未登记到本组织，请联系组织管理员',
+}
+
+/** 错误响应中的 git 错误码;不是 git 错误时返回 '' */
+export function gitErrorCode(err: unknown): string {
+  const code = errorData(err)?.code
+  return typeof code === 'string' && Object.prototype.hasOwnProperty.call(GIT_ERROR_TEXT, code) ? code : ''
+}
+
+/** git 错误的中文提示;不是已知 git 错误码时返回 null(调用方按原逻辑提示) */
+export function gitErrorMessage(err: unknown): string | null {
+  const code = gitErrorCode(err)
+  return code ? GIT_ERROR_TEXT[code] : null
+}
+
+/** 409 git_source_read_only:git 来源 manifest 的草稿写入被拒 */
+export function isGitSourceReadOnly(err: unknown): boolean {
+  return getHttpStatus(err) === 409 && gitErrorCode(err) === 'git_source_read_only'
 }

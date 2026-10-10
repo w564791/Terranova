@@ -10,6 +10,10 @@ import {
   Modal,
   Form,
   message,
+  Radio,
+  Tag,
+  Empty,
+  Spin,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -20,9 +24,20 @@ import {
   ExportOutlined,
   MoreOutlined,
   SearchOutlined,
+  EditFilled,
+  GithubOutlined,
 } from '@ant-design/icons';
-import type { Manifest, ManifestCapabilities } from '../../services/manifestApi';
-import { listManifests, deleteManifest, exportManifestZip, createManifest } from '../../services/manifestApi';
+import type { Manifest, ManifestCapabilities, ManifestSourceType, GitHubAppInstallation } from '../../services/manifestApi';
+import {
+  listManifests,
+  deleteManifest,
+  exportManifestZip,
+  createManifest,
+  listGitHubInstallations,
+  gitRepoName,
+} from '../../services/manifestApi';
+import { getHttpStatus } from '../../services/api';
+import { gitErrorMessage } from './ManifestEditorV2/bundleStatus';
 import { iamService, setAuthOrgId } from '../../services/iam';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -35,6 +50,45 @@ interface Organization {
 }
 
 type FilterType = 'all' | 'draft' | 'published' | 'archived';
+
+interface CreateFormValues {
+  name: string;
+  description?: string;
+  github_installation_id?: number;
+  git_repo_url?: string;
+  git_subpath?: string;
+}
+
+/** 列表行的来源标记:Native / Git(悬停显示仓库) */
+function SourceBadge({ manifest }: { manifest: Manifest }) {
+  if (manifest.source_type === 'git') {
+    const repo = gitRepoName(manifest.git_repo_url);
+    const title = repo
+      ? `Git 仓库：${repo}${manifest.git_subpath ? `（目录 ${manifest.git_subpath}）` : ''}`
+      : 'Git 仓库';
+    return (
+      <Tooltip title={title}>
+        <Tag icon={<GithubOutlined />} color="geekblue" style={{ marginInlineEnd: 0 }}>
+          Git
+        </Tag>
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip title="在线编辑">
+      <Tag style={{ marginInlineEnd: 0 }}>Native</Tag>
+    </Tooltip>
+  );
+}
+
+const sourceCardStyle = (active: boolean): React.CSSProperties => ({
+  flex: 1,
+  height: 'auto',
+  padding: '14px 16px',
+  borderRadius: 8,
+  lineHeight: 1.5,
+  border: active ? '1px solid var(--brand, #1677ff)' : undefined,
+});
 
 const ManifestManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -54,7 +108,38 @@ const ManifestManagement: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createForm] = Form.useForm<{ name: string; description?: string }>();
+  const orgId = selectedOrgId?.toString() || '';
+  const [createForm] = Form.useForm<CreateFormValues>();
+  // 新建第一步:选择来源(创建后不可更改)
+  const [createStep, setCreateStep] = useState<0 | 1>(0);
+  const [createSource, setCreateSource] = useState<ManifestSourceType>('native');
+  // git 来源:本组织已登记的 GitHub App installation(列表接口需要组织 ADMIN;403 / 空 => 空状态)
+  const [installations, setInstallations] = useState<GitHubAppInstallation[] | null>(null);
+  const [installationsLoading, setInstallationsLoading] = useState(false);
+  const selectedInstallationId = Form.useWatch('github_installation_id', createForm);
+  const selectedInstallation = installations?.find(i => i.installation_id === selectedInstallationId);
+
+  const openCreate = () => {
+    createForm.resetFields();
+    setCreateStep(0);
+    setCreateSource('native');
+    setCreateOpen(true);
+  };
+
+  const loadInstallations = useCallback(async () => {
+    if (!orgId) return;
+    setInstallationsLoading(true);
+    try {
+      const rows = await listGitHubInstallations(orgId);
+      setInstallations(rows);
+    } catch (err) {
+      // 无权限查看(非组织管理员)与未连接同样处理:显示空状态,不提供手工录入
+      if (getHttpStatus(err) !== 403) console.error('加载 GitHub App 安装失败:', err);
+      setInstallations([]);
+    } finally {
+      setInstallationsLoading(false);
+    }
+  }, [orgId]);
 
   // 加载组织列表
   useEffect(() => {
@@ -72,7 +157,6 @@ const ManifestManagement: React.FC = () => {
     loadOrganizations();
   }, []);
 
-  const orgId = selectedOrgId?.toString() || '';
 
   const fetchManifests = useCallback(async () => {
     if (!orgId) return;
@@ -126,10 +210,19 @@ const ManifestManagement: React.FC = () => {
     try {
       const values = await createForm.validateFields();
       setCreating(true);
-      const m = await createManifest(orgId, {
-        name: values.name,
-        description: values.description ?? '',
-      });
+      const m = await createManifest(
+        orgId,
+        createSource === 'git'
+          ? {
+              name: values.name,
+              description: values.description ?? '',
+              source_type: 'git',
+              github_installation_id: values.github_installation_id,
+              git_repo_url: (values.git_repo_url ?? '').trim(),
+              git_subpath: (values.git_subpath ?? '').trim().replace(/^\/+|\/+$/g, '') || undefined,
+            }
+          : { name: values.name, description: values.description ?? '', source_type: 'native' }
+      );
       message.success('已创建,正在跳转编辑器');
       setCreateOpen(false);
       createForm.resetFields();
@@ -138,6 +231,11 @@ const ManifestManagement: React.FC = () => {
       const msg = typeof err === 'string' ? err : err?.message;
       // form validation 错误有 errorFields 字段, 不弹 message
       if (err?.errorFields) return;
+      const gitMsg = gitErrorMessage(err);
+      if (gitMsg) {
+        message.error('创建失败：' + gitMsg);
+        return;
+      }
       if (msg) message.error('创建失败: ' + msg);
     } finally {
       setCreating(false);
@@ -239,10 +337,7 @@ const ManifestManagement: React.FC = () => {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => {
-                createForm.resetFields();
-                setCreateOpen(true);
-              }}
+              onClick={openCreate}
               disabled={!selectedOrgId}
             >
               New Manifest
@@ -306,10 +401,7 @@ const ManifestManagement: React.FC = () => {
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => {
-                  createForm.resetFields();
-                  setCreateOpen(true);
-                }}
+                onClick={openCreate}
                 disabled={!selectedOrgId}
               >
                 Create Manifest
@@ -332,6 +424,7 @@ const ManifestManagement: React.FC = () => {
                   {/* 第一行：名称 */}
                   <div className={styles.manifestTitleRow}>
                     <span className={styles.manifestName}>{manifest.name}</span>
+                    <SourceBadge manifest={manifest} />
                     {manifest.deployment_count && manifest.deployment_count > 0 && (
                       <span className={styles.deploymentBadge}>
                         {manifest.deployment_count} deployments
@@ -523,39 +616,194 @@ const ManifestManagement: React.FC = () => {
           setDeletingManifest(null);
         }}
       />
-      {/* 创建 Manifest 弹窗 */}
+      {/* 创建 Manifest 弹窗:第一步选来源,第二步填写 */}
       <Modal
         title="新建 Manifest"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
-        onOk={handleCreate}
-        confirmLoading={creating}
-        okText="创建"
-        cancelText="取消"
         destroyOnClose
+        footer={
+          createStep === 0
+            ? [
+                <Button key="cancel" onClick={() => setCreateOpen(false)}>
+                  取消
+                </Button>,
+                <Button
+                  key="next"
+                  type="primary"
+                  onClick={() => {
+                    setCreateStep(1);
+                    if (createSource === 'git') loadInstallations();
+                  }}
+                >
+                  下一步
+                </Button>,
+              ]
+            : [
+                <Button key="back" onClick={() => setCreateStep(0)}>
+                  上一步
+                </Button>,
+                <Button
+                  key="ok"
+                  type="primary"
+                  loading={creating}
+                  disabled={createSource === 'git' && (installationsLoading || !installations?.length)}
+                  onClick={handleCreate}
+                >
+                  创建
+                </Button>,
+              ]
+        }
       >
-        <p style={{ color: 'var(--ink-3)', marginBottom: 16 }}>
-          创建后会自动跳转到 VS Code Web 编辑器,你可以在那里写 .tf 文件、发布版本、部署到 workspace。
-        </p>
-        <Form form={createForm} layout="vertical" preserve={false}>
-          <Form.Item
-            label="名称"
-            name="name"
-            rules={[
-              { required: true, message: '请输入名称' },
-              { max: 255, message: '不超过 255 字符' },
-            ]}
-          >
-            <Input placeholder="例如: aws-vpc-stack" autoFocus />
-          </Form.Item>
-          <Form.Item
-            label="描述 (可选)"
-            name="description"
-            rules={[{ max: 1024, message: '不超过 1024 字符' }]}
-          >
-            <Input.TextArea rows={3} maxLength={1024} showCount placeholder="这个 manifest 的用途简介" />
-          </Form.Item>
-        </Form>
+        {createStep === 0 ? (
+          <>
+            <p style={{ color: 'var(--ink-3)', marginBottom: 12 }}>选择内容来源（创建后不可更改）：</p>
+            <Radio.Group
+              value={createSource}
+              onChange={(e) => setCreateSource(e.target.value)}
+              style={{ display: 'flex', gap: 12, width: '100%' }}
+            >
+              <Radio.Button value="native" style={sourceCardStyle(createSource === 'native')}>
+                <div style={{ fontWeight: 600 }}>
+                  <EditFilled /> 在线编辑（native）
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'normal' }}>
+                  在平台的 VS Code Web 编辑器里编写 .tf 文件并发布版本
+                </div>
+              </Radio.Button>
+              <Radio.Button value="git" style={sourceCardStyle(createSource === 'git')}>
+                <div style={{ fontWeight: 600 }}>
+                  <GithubOutlined /> Git 仓库
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'normal' }}>
+                  内容来自 GitHub 仓库（只读），发布时选择 commit
+                </div>
+              </Radio.Button>
+            </Radio.Group>
+          </>
+        ) : (
+          <>
+            <p style={{ color: 'var(--ink-3)', marginBottom: 16 }}>
+              来源：{createSource === 'git' ? 'Git 仓库' : '在线编辑（native）'}（创建后不可更改）。
+              {createSource === 'git'
+                ? '创建后可在编辑器中只读浏览仓库内容，发布时选择 commit。'
+                : '创建后会自动跳转到 VS Code Web 编辑器,你可以在那里写 .tf 文件、发布版本、部署到 workspace。'}
+            </p>
+            {createSource === 'git' && installationsLoading ? (
+              <div style={{ textAlign: 'center', padding: 24 }}>
+                <Spin />
+              </div>
+            ) : createSource === 'git' && !installations?.length ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未连接 GitHub App，请联系组织管理员" />
+            ) : (
+              <Form
+                form={createForm}
+                layout="vertical"
+                preserve={false}
+                initialValues={
+                  createSource === 'git' && installations?.length === 1
+                    ? { github_installation_id: installations[0].installation_id }
+                    : undefined
+                }
+              >
+                <Form.Item
+                  label="名称"
+                  name="name"
+                  rules={[
+                    { required: true, message: '请输入名称' },
+                    { max: 255, message: '不超过 255 字符' },
+                  ]}
+                >
+                  <Input placeholder="例如: aws-vpc-stack" autoFocus />
+                </Form.Item>
+                <Form.Item
+                  label="描述 (可选)"
+                  name="description"
+                  rules={[{ max: 1024, message: '不超过 1024 字符' }]}
+                >
+                  <Input.TextArea rows={3} maxLength={1024} showCount placeholder="这个 manifest 的用途简介" />
+                </Form.Item>
+                {createSource === 'git' && (
+                  <>
+                    <Form.Item
+                      label="GitHub 账户"
+                      name="github_installation_id"
+                      rules={[{ required: true, message: '请选择 GitHub 账户' }]}
+                      extra="仓库必须属于该账户，且 GitHub App 已授权访问该仓库"
+                    >
+                      <Select
+                        placeholder="选择已连接的 GitHub 账户"
+                        options={(installations ?? []).map(i => ({
+                          value: i.installation_id,
+                          label: i.account_login,
+                        }))}
+                        onChange={() => {
+                          if (createForm.getFieldValue('git_repo_url')) createForm.validateFields(['git_repo_url']);
+                        }}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="仓库 URL"
+                      name="git_repo_url"
+                      rules={[
+                        { required: true, message: '请输入仓库 URL' },
+                        { max: 1024, message: '不超过 1024 字符' },
+                        {
+                          validator: async (_, value?: string) => {
+                            const v = (value ?? '').trim();
+                            if (!v) return;
+                            let u: URL;
+                            try {
+                              u = new URL(v);
+                            } catch {
+                              throw new Error('请输入完整的 https 仓库 URL');
+                            }
+                            if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) {
+                              throw new Error('仓库 URL 须为 https，且不能包含凭证、查询参数或锚点');
+                            }
+                            const parts = u.pathname.replace(/^\/+|\/+$/g, '').split('/');
+                            if (parts.length !== 2 || !parts[0] || !parts[1]) {
+                              throw new Error('格式应为 https://<GitHub 地址>/<owner>/<repo>');
+                            }
+                            if (
+                              selectedInstallation &&
+                              parts[0].toLowerCase() !== selectedInstallation.account_login.toLowerCase()
+                            ) {
+                              throw new Error(`仓库须属于所选账户 ${selectedInstallation.account_login}`);
+                            }
+                          },
+                        },
+                      ]}
+                    >
+                      <Input
+                        placeholder={`https://github.com/${selectedInstallation?.account_login ?? '<owner>'}/<repo>`}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="子目录 (可选)"
+                      name="git_subpath"
+                      extra="仓库内作为 bundle 根的目录；留空表示仓库根目录"
+                      rules={[
+                        { max: 512, message: '不超过 512 字符' },
+                        {
+                          validator: async (_, value?: string) => {
+                            const v = (value ?? '').trim().replace(/^\/+|\/+$/g, '');
+                            if (!v) return;
+                            if (v.split('/').some(seg => !seg || seg === '.' || seg === '..') || v.includes('\\')) {
+                              throw new Error('须为相对目录，不能含空段、"." 或 ".."');
+                            }
+                          },
+                        },
+                      ]}
+                    >
+                      <Input placeholder="例如: stacks/vpc" />
+                    </Form.Item>
+                  </>
+                )}
+              </Form>
+            )}
+          </>
+        )}
       </Modal>
     </div>
   );
