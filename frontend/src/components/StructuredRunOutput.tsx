@@ -25,11 +25,13 @@ interface ResourceChange {
   resource_name: string;
   module_address: string;
   action: string;
-  changes_before: Record<string, any>;
-  changes_after: Record<string, any>;
-  after_unknown: Record<string, any>;
+  changes_before: Record<string, any> | null;
+  changes_after: Record<string, any> | null;
+  after_unknown: Record<string, any> | null;
   apply_status: string;
   resource_id?: string;
+  /** 历史脱敏回填已删除变更详情(后端 29acb14) */
+  details_purged?: boolean;
 }
 
 interface OutputChange {

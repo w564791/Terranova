@@ -38,10 +38,13 @@ interface ResourceChange {
   resource_name: string;
   module_address: string;
   action: string;
-  changes_before: Record<string, any>;
-  changes_after: Record<string, any>;
-  after_unknown: Record<string, any>;
+  // 旧 agent 无 plan_json 的行、或已脱敏清理的行可能为 null
+  changes_before: Record<string, any> | null;
+  changes_after: Record<string, any> | null;
+  after_unknown: Record<string, any> | null;
   apply_status: string;
+  /** 后端 29acb14:历史脱敏回填时无 plan_json 可重算,before/after/after_unknown 已删除(仅此路径为 true) */
+  details_purged?: boolean;
 }
 
 interface OutputChange {
@@ -271,8 +274,9 @@ const diffValue = (v: any, cls: string) => {
   return <span className={cls}><SensitiveText text={hcl ?? formatSimpleValue(v)} /></span>;
 };
 
-// 后端已清理(不可恢复历史脱敏)的资源变更:before / after 均为空(null 或空对象)且无 after_unknown
-const changesUnavailable = (r: { changes_before?: unknown; changes_after?: unknown; after_unknown?: unknown }): boolean => {
+// 没有任何变更详情(before / after / after_unknown 均为 null 或空对象),如旧 agent 无 plan_json 的行:
+// 只显示 action / 地址 + "无变更详情",不渲染空 diff。是否"已脱敏清理"只看后端 details_purged。
+const hasNoDetails = (r: { changes_before?: unknown; changes_after?: unknown; after_unknown?: unknown }): boolean => {
   const empty = (v: unknown) =>
     v === null || v === undefined || (isPlainObj(v) && Object.keys(v as object).length === 0);
   return empty(r.changes_before) && empty(r.changes_after) && empty(r.after_unknown);
@@ -856,9 +860,11 @@ const PlanCompleteView: React.FC<Props> = ({ resources, outputChanges = [], acti
 
               {isExpanded && (
                 <div className={styles.resourceBody}>
-                  {changesUnavailable(resource) ? (
+                  {resource.details_purged === true ? (
                     // 历史 plan 已脱敏清理,before / after 均不可恢复:只保留 action / 地址
                     <div className={styles.emptyMessage}>变更详情不可用（已脱敏清理）</div>
+                  ) : hasNoDetails(resource) ? (
+                    <div className={styles.emptyMessage}>无变更详情</div>
                   ) : (
                     <>
                       {(resource.action === 'create' || resource.action === 'read') && renderCreateBody(resource)}
