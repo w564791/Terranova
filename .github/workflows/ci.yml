@@ -10,6 +10,15 @@ env:
   NODE_VERSION: "22"
 
 jobs:
+  secrets-guard:
+    name: No committed private keys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tracked files for private keys
+        run: scripts/check-private-keys.sh
+
   backend:
     name: Backend build
     runs-on: ubuntu-latest
