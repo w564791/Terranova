@@ -537,7 +537,7 @@ func main() {
 			if res, err := services.CleanupPlanData(leaderCtx, db); err != nil {
 				log.Printf("[Leader] plan_data cleanup failed: %v", err)
 			} else {
-				log.Printf("[Leader] plan_data cleanup: sealed=%d purged=%d", res.Sealed, res.Purged)
+				log.Printf("[Leader] plan_data cleanup: sealed=%d purged=%d reencrypted=%d", res.Sealed, res.Purged, res.Reencrypted)
 			}
 			go func() {
 				ticker := time.NewTicker(10 * time.Minute)
@@ -550,7 +550,7 @@ func main() {
 						if res, err := services.CleanupPlanData(leaderCtx, db); err != nil {
 							log.Printf("[Leader] plan_data cleanup failed: %v", err)
 						} else if res.Sealed+res.Purged > 0 {
-							log.Printf("[Leader] plan_data cleanup: sealed=%d purged=%d", res.Sealed, res.Purged)
+							log.Printf("[Leader] plan_data cleanup: sealed=%d purged=%d reencrypted=%d", res.Sealed, res.Purged, res.Reencrypted)
 						}
 					}
 				}

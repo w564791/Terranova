@@ -132,6 +132,13 @@ func RunVariableReencryption(ctx context.Context, db *gorm.DB) {
 	for _, n := range remaining {
 		left += n
 	}
+	if n, err := CountLegacyPlanDataRows(ctx, db); err == nil {
+		if remaining == nil {
+			remaining = map[string]int64{}
+		}
+		remaining["workspace_tasks.plan_data"] = n
+		left += n
+	}
 	log.Printf("[Keys] variable re-encryption: reencrypted=%d encrypted=%d relabelled=%d undecryptable(left)=%d; legacy rows remaining=%d %v",
 		res.Reencrypted, res.Encrypted, res.Relabelled, res.Undecryptable, left, remaining)
 }
@@ -152,7 +159,8 @@ func CountLegacyVariableRows(ctx context.Context, db *gorm.DB) (map[string]int64
 	return out, nil
 }
 
-// CheckLegacyKeyAvailable refuses startup when encrypted rows still carry the
+// CheckLegacyKeyAvailable refuses startup when encrypted rows (variables,
+// workspace_tasks.plan_data envelopes) still carry the
 // legacy key version but JWT_SECRET (their only key) is not set. This does
 // not depend on LEGACY_TOKEN_CUTOFF: data stays legacy until the
 // re-encryption job has rewritten it, however late that is.
@@ -169,6 +177,13 @@ func CheckLegacyKeyAvailable(ctx context.Context, db *gorm.DB) error {
 		if counts[table] > 0 {
 			parts = append(parts, fmt.Sprintf("%s=%d", table, counts[table]))
 		}
+	}
+	planData, err := CountLegacyPlanDataRows(ctx, db)
+	if err != nil {
+		return fmt.Errorf("cannot check for legacy-encrypted plan_data: %w", err)
+	}
+	if planData > 0 {
+		parts = append(parts, fmt.Sprintf("workspace_tasks.plan_data=%d", planData))
 	}
 	if len(parts) > 0 {
 		return fmt.Errorf("JWT_SECRET is not set but legacy-encrypted rows (key_version 0) remain (%s); "+

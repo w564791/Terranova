@@ -11,12 +11,13 @@ import (
 	"gorm.io/gorm"
 
 	"iac-platform/internal/crypto"
+	"iac-platform/internal/keys"
 	"iac-platform/internal/models"
 )
 
 // plan_data (the binary plan.out apply needs) holds every value of the plan
 // in clear, sensitive ones included. At rest it is only ever an envelope
-// (crypto.SealPlanData: per-plan data key wrapped by the master-derived KEK,
+// (crypto.SealPlanData: per-plan data key wrapped by a KEK derived from DATA_ENCRYPTION_KEY,
 // bound to the task ID, with an expiry). Only execution decrypts it: the
 // local executor (apply restore), the plan parser fallback (terraform show),
 // and the agent plan-task endpoint, which hands the plan to the agent that
@@ -83,6 +84,9 @@ func ClearPlanData(db *gorm.DB, taskIDs ...uint) error {
 // PlanDataCleanupResult what one cleanup pass did.
 type PlanDataCleanupResult struct {
 	Sealed, Purged int
+	// Reencrypted legacy (key version 0, JWT_SECRET-rooted) envelopes
+	// re-sealed under DATA_ENCRYPTION_KEY
+	Reencrypted int
 }
 
 // CleanupPlanData one pass over stored plans (idempotent; run at startup
@@ -91,8 +95,12 @@ type PlanDataCleanupResult struct {
 //   - expired envelopes: deleted;
 //   - legacy plaintext of a task that may still apply: sealed in place
 //     (expiry = now + TTL). This is the data migration of existing rows: the
-//     master key lives in the application, so SQL cannot do it; terminal
-//     rows are deleted rather than encrypted because nothing reads them.
+//     data key lives in the application, so SQL cannot do it; terminal
+//     rows are deleted rather than encrypted because nothing reads them;
+//   - legacy envelopes (key version 0): re-sealed under the current
+//     DATA_ENCRYPTION_KEY with the same expiry (compare-and-set on the old
+//     bytes, so idempotent and safe concurrently; only key-version-0 rows are
+//     touched). Not in development legacy mode.
 func CleanupPlanData(ctx context.Context, db *gorm.DB) (PlanDataCleanupResult, error) {
 	var res PlanDataCleanupResult
 	if db == nil {
@@ -127,6 +135,14 @@ func CleanupPlanData(ctx context.Context, db *gorm.DB) (PlanDataCleanupResult, e
 					return res, fmt.Errorf("purge expired plan_data of task %d: %w", r.ID, q.Error)
 				}
 				res.Purged += int(q.RowsAffected)
+				continue
+			}
+			if kv, _ := crypto.PlanDataKeyVersion(r.Prefix); kv == 0 && !keys.LegacyEncryptionMode() {
+				n, err := reencryptPlanDataRow(db, r.ID, now)
+				if err != nil {
+					return res, err
+				}
+				res.Reencrypted += n
 			}
 			continue
 		}
@@ -151,4 +167,40 @@ func CleanupPlanData(ctx context.Context, db *gorm.DB) (PlanDataCleanupResult, e
 		res.Sealed += int(q.RowsAffected)
 	}
 	return res, nil
+}
+
+// reencryptPlanDataRow re-seals task id's legacy envelope (compare-and-set).
+// An envelope that does not open with the legacy key is left alone (logged):
+// it expires and is purged like any other.
+func reencryptPlanDataRow(db *gorm.DB, id uint, now time.Time) (int, error) {
+	var blob []byte
+	if err := db.Raw(`SELECT plan_data FROM workspace_tasks WHERE id = ?`, id).Row().Scan(&blob); err != nil {
+		return 0, fmt.Errorf("read plan_data of task %d: %w", id, err)
+	}
+	if kv, ok := crypto.PlanDataKeyVersion(blob); !ok || kv != 0 {
+		return 0, nil // changed concurrently
+	}
+	sealed, err := crypto.ReencryptPlanData(id, blob, now)
+	if errors.Is(err, crypto.ErrPlanDataExpired) {
+		return 0, nil
+	}
+	if err != nil {
+		log.Printf("[PlanData] task %d: legacy envelope not re-encrypted: %v", id, err)
+		return 0, nil
+	}
+	q := db.Model(&models.WorkspaceTask{}).Where("id = ? AND plan_data = ?", id, blob).UpdateColumn("plan_data", sealed)
+	if q.Error != nil {
+		return 0, fmt.Errorf("re-encrypt plan_data of task %d: %w", id, q.Error)
+	}
+	return int(q.RowsAffected), nil
+}
+
+// CountLegacyPlanDataRows tasks whose plan_data is a legacy (key version 0,
+// JWT_SECRET-rooted) envelope.
+func CountLegacyPlanDataRows(ctx context.Context, db *gorm.DB) (int64, error) {
+	var n int64
+	err := db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM workspace_tasks
+		WHERE plan_data IS NOT NULL AND length(plan_data) > 4
+		  AND substr(plan_data, 1, 4) = 'TNPD'::bytea AND get_byte(plan_data, 4) = 1`).Scan(&n).Error
+	return n, err
 }
