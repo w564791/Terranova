@@ -5,6 +5,7 @@ import (
 	"iac-platform/internal/crypto"
 	"iac-platform/internal/infrastructure"
 	"iac-platform/internal/models"
+	"iac-platform/internal/reservedenv"
 
 	"gorm.io/gorm"
 )
@@ -193,12 +194,12 @@ func (s *WorkspaceVariableService) ListVariables(workspaceID string, variableTyp
 	// 然后在主查询中过滤 is_deleted = false
 	subQuery := s.db.Table("workspace_variables").
 		Select("variable_id, MAX(version) as max_version").
-		Where("workspace_id = ?", workspaceID).  // 不过滤 is_deleted
+		Where("workspace_id = ?", workspaceID). // 不过滤 is_deleted
 		Group("variable_id")
 
 	query := s.db.Table("workspace_variables").
 		Joins("INNER JOIN (?) AS latest ON workspace_variables.variable_id = latest.variable_id AND workspace_variables.version = latest.max_version", subQuery).
-		Where("workspace_variables.workspace_id = ? AND workspace_variables.is_deleted = ?", workspaceID, false)  // 在这里过滤
+		Where("workspace_variables.workspace_id = ? AND workspace_variables.is_deleted = ?", workspaceID, false) // 在这里过滤
 
 	// 如果指定了类型，添加类型过滤
 	if variableType != "" && variableType != "all" {
@@ -215,10 +216,10 @@ func (s *WorkspaceVariableService) ListVariables(workspaceID string, variableTyp
 
 // VariableUpdateResult 变量更新结果
 type VariableUpdateResult struct {
-	VariableID   string `json:"variable_id"`
-	OldVersion   int    `json:"old_version"`
-	NewVersion   int    `json:"new_version"`
-	NewVariable  *models.WorkspaceVariable `json:"-"` // 不序列化到JSON，仅内部使用
+	VariableID  string                    `json:"variable_id"`
+	OldVersion  int                       `json:"old_version"`
+	NewVersion  int                       `json:"new_version"`
+	NewVariable *models.WorkspaceVariable `json:"-"` // 不序列化到JSON，仅内部使用
 }
 
 // UpdateVariable 更新变量（创建新版本，带乐观锁版本检查）
@@ -260,7 +261,7 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 	// 创建新版本 - 明确构造新对象而不是复制
 	newVersion := models.WorkspaceVariable{
 		// ID 不设置，让数据库自动生成
-		VariableID:   current.VariableID,  // 保持不变
+		VariableID:   current.VariableID, // 保持不变
 		WorkspaceID:  current.WorkspaceID,
 		Key:          current.Key,
 		Value:        current.Value,
@@ -321,7 +322,7 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12)
 		RETURNING id
 	`
-	
+
 	var newID uint
 	if err := s.db.Raw(sql,
 		newVersion.VariableID,
@@ -339,7 +340,7 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 	).Scan(&newID).Error; err != nil {
 		return nil, fmt.Errorf("创建新版本失败: %w", err)
 	}
-	
+
 	newVersion.ID = newID
 
 	// 返回更新结果
@@ -420,7 +421,7 @@ func (s *WorkspaceVariableService) DeleteVariable(id uint) error {
 			is_deleted, created_at, updated_at, created_by, key_version
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12)
 	`
-	
+
 	if err := s.db.Exec(sql,
 		deleteVersion.VariableID,
 		deleteVersion.WorkspaceID,
@@ -500,6 +501,15 @@ func (s *WorkspaceVariableService) GetEnvironmentVariables(workspaceID uint) (ma
 
 // BulkCreateVariables 批量创建变量
 func (s *WorkspaceVariableService) BulkCreateVariables(variables []*models.WorkspaceVariable) error {
+	var keys []string
+	for _, v := range variables {
+		if v != nil && reservedenv.IsEnvironmentCategory(string(v.VariableType)) {
+			keys = append(keys, v.Key)
+		}
+	}
+	if hits := reservedenv.FindHits(keys); len(hits) > 0 {
+		return fmt.Errorf("%s: %s (prefix %s)", reservedenv.ErrorCode, hits[0].Key, hits[0].ReservedPrefix)
+	}
 	// 检查workspace是否存在（使用workspace_id字段）
 	if len(variables) > 0 {
 		var workspace models.Workspace

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"iac-platform/internal/models"
+	"iac-platform/internal/reservedenv"
 	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
@@ -101,6 +102,10 @@ func (vc *WorkspaceVariableController) CreateVariable(c *gin.Context) {
 			"error":     err.Error(),
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
+		return
+	}
+
+	if reservedenv.IsEnvironmentCategory(string(req.VariableType)) && reservedenv.Refuse(c, req.Key) {
 		return
 	}
 
@@ -324,6 +329,22 @@ func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 		return
 	}
 
+	// Reserved env keys: refuse when the resulting row would be environment-category.
+	var existing models.WorkspaceVariable
+	if err := vc.variableService.GetDB().Where("workspace_id = ? AND (variable_id = ? OR id::text = ?) AND is_deleted = false", wsSemantic, varIDParam, varIDParam).First(&existing).Error; err == nil {
+		key := existing.Key
+		if req.Key != nil {
+			key = *req.Key
+		}
+		vt := existing.VariableType
+		if req.VariableType != nil {
+			vt = *req.VariableType
+		}
+		if reservedenv.IsEnvironmentCategory(string(vt)) && reservedenv.Refuse(c, key) {
+			return
+		}
+	}
+
 	// 构建更新map
 	updates := make(map[string]interface{})
 	if req.Key != nil {
@@ -364,7 +385,7 @@ func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 	} else {
 		result, err = vc.variableService.UpdateVariableByVariableIDInWorkspace(wsSemantic, varIDParam, req.Version, updates)
 	}
-	
+
 	if err != nil {
 		// 检查是否是版本冲突错误
 		if len(err.Error()) >= 4 && err.Error()[:4] == "版本冲突" {
@@ -486,13 +507,13 @@ func (vc *WorkspaceVariableController) GetVariableVersions(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// 转换为响应格式
 	responses := make([]*models.WorkspaceVariableResponse, len(versions))
 	for i, v := range versions {
 		responses[i] = v.ToResponse()
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":      200,
 		"data":      responses,
@@ -569,7 +590,7 @@ func (vc *WorkspaceVariableController) GetVariableVersion(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":      200,
 		"data":      variable.ToResponse(),

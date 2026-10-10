@@ -215,3 +215,13 @@ backend/services/{manifest_approval,manifest_approval_check,run_token_service,ta
 **其他**
 - `variable_sets` 表加 `org_id` 列，改为直接按列绑定组织。
 - 跑过已删除迁移 `20261004_03_manifest_bundle_rules` 的开发库和测试库需要重建（`20261004_04` 不会修复它们）。
+
+
+### Reserved env vars / git source immutability
+
+- **422 `reserved_env_var`**: environment-category variable key is platform-reserved
+  (`internal/reservedenv`). See `GET /api/v1/system/reserved-env-prefixes`.
+- **409 `git_source_immutable`**: also enforced by DB trigger
+  `manifests_git_source_immutable` (migration `20261010_16`).
+- Platform proxy for exec: `IAC_EXEC_HTTP_PROXY` / `IAC_EXEC_HTTPS_PROXY` /
+  `IAC_EXEC_NO_PROXY` (users cannot set `HTTP(S)_PROXY` per workspace).

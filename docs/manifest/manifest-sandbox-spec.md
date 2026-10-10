@@ -255,3 +255,26 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 
 ## 12. 待定：provider mirror
 第 6 步依赖它：AgentCore 只允许 VPC 模式，VPC 默认无公网，sandbox 的 `init` 需要内部 `network_mirror`（否则就得开 NAT 放行 registry，等于放宽出网）。平台 CLI 配置的 `provider_installation` 只配 `network_mirror`、不留 `direct`。
+
+
+## Reserved environment variables (platform-controlled)
+
+Workspace / variable-set **environment** variables may not set names reserved by
+the platform (Terraform CLI/install/backend, TLS/proxy/git surfaces, `_TERRANOVA_*`,
+`IAC_*`, `TF_IN_AUTOMATION` / `TF_INPUT`). Single source of truth:
+`backend/internal/reservedenv`. Writes return **422 `reserved_env_var`** with
+`details.key` / `details.reserved_prefix` (and `details.reserved` for all hits).
+At execution time the executor strips reserved keys from user variables (WARN
+audit, never logs values); platform-set values win. Read-only list:
+`GET /api/v1/system/reserved-env-prefixes` → `{prefixes: string[]}`.
+
+Outbound HTTP(S) proxy for runs is platform-level only:
+`IAC_EXEC_HTTP_PROXY` / `IAC_EXEC_HTTPS_PROXY` / `IAC_EXEC_NO_PROXY`.
+
+## Git source immutability (DB)
+
+`source_type`, `git_repo_url`, `git_subpath`, `github_installation_id` are
+immutable after INSERT. Enforced in the handler and by a PostgreSQL BEFORE
+UPDATE trigger (`manifests_git_source_immutable`). Direct UPDATEs raise
+`git_source_immutable` (mapped to **409** when surfaced). `git_latest_*` remain
+updatable (webhook hints). `git_repo` is an API input alias only (not a column).
