@@ -16,10 +16,9 @@ import (
 
 // VariableReencryptionResult counts of one ReencryptLegacyVariables pass.
 type VariableReencryptionResult struct {
-	Reencrypted   int // legacy ciphertexts rewritten with DATA_ENCRYPTION_KEY
-	Encrypted     int // sensitive rows that held plaintext, now encrypted
-	Relabelled    int // already-versioned values whose key_version column was 0
-	Undecryptable int // base64 values that do not decrypt with the legacy key (left untouched)
+	Reencrypted int // legacy ciphertexts rewritten with DATA_ENCRYPTION_KEY
+	Encrypted   int // sensitive rows that held plaintext, now encrypted
+	Relabelled  int // already-versioned values whose key_version column was 0
 }
 
 // reencryptTables the tables holding encrypted variable values.
@@ -34,10 +33,18 @@ var reencryptTables = []string{"workspace_variables", "varset_variables"}
 // next pass and a finished row is never touched again. Rows written by the new
 // code already carry key_version >= 1 and are skipped.
 //
-// A base64 value that the legacy key cannot open is ambiguous (a plaintext
-// that happens to be base64, or a ciphertext under a different JWT_SECRET);
-// it is counted as Undecryptable and left as is rather than risk wrapping a
-// ciphertext as if it were plaintext.
+// Classification of a key_version 0 row uses explicit markers only, never the
+// shape of the value:
+//   - "tnk<v>:" prefix: already encrypted, only the column is set (Relabelled);
+//   - authenticates (AES-GCM) under the legacy key SHA-256(JWT_SECRET): legacy
+//     ciphertext, decrypted and re-encrypted (Reencrypted);
+//   - anything else, including values that are valid base64: plaintext that
+//     was stored unencrypted, encrypted now (Encrypted).
+//
+// JWT_SECRET must therefore be the environment's real legacy secret: with a
+// wrong one, legacy ciphertexts would be classified as plaintext and wrapped
+// (still recoverable by decrypting and opening them with the right key). The
+// job refuses to classify unprefixed rows when JWT_SECRET is not set.
 //
 // No-op in legacy encryption mode (no DATA_ENCRYPTION_KEY).
 func ReencryptLegacyVariables(ctx context.Context, db *gorm.DB, batchSize int) (VariableReencryptionResult, error) {
@@ -80,6 +87,8 @@ func ReencryptLegacyVariables(ctx context.Context, db *gorm.DB, batchSize int) (
 				switch {
 				case crypto.CiphertextKeyVersion(r.Value) > 0:
 					newValue, newVersion, counter = r.Value, crypto.CiphertextKeyVersion(r.Value), &res.Relabelled
+				case os.Getenv("JWT_SECRET") == "":
+					return res, fmt.Errorf("%s id %d: JWT_SECRET is required to tell legacy ciphertexts from plaintext", table, r.ID)
 				case crypto.IsLegacyCiphertext(r.Value):
 					pt, err := crypto.DecryptValueWithVersion(r.Value, crypto.LegacyKeyVersion)
 					if err != nil {
@@ -89,15 +98,12 @@ func ReencryptLegacyVariables(ctx context.Context, db *gorm.DB, batchSize int) (
 						return res, err
 					}
 					counter = &res.Reencrypted
-				case !crypto.IsEncrypted(r.Value):
+				default: // plaintext (failed authentication), whatever its shape
 					var err error
 					if newValue, newVersion, err = crypto.EncryptValueVersioned(r.Value); err != nil {
 						return res, err
 					}
 					counter = &res.Encrypted
-				default:
-					res.Undecryptable++
-					continue
 				}
 				if newVersion < 1 {
 					return res, errors.New("re-encryption produced a legacy value")
@@ -132,12 +138,13 @@ func RunVariableReencryption(ctx context.Context, db *gorm.DB) {
 	for _, n := range remaining {
 		left += n
 	}
-	log.Printf("[Keys] variable re-encryption: reencrypted=%d encrypted=%d relabelled=%d undecryptable(left)=%d; legacy rows remaining=%d %v",
-		res.Reencrypted, res.Encrypted, res.Relabelled, res.Undecryptable, left, remaining)
+	log.Printf("[Keys] variable re-encryption: reencrypted=%d encrypted(plaintext)=%d relabelled=%d; legacy rows remaining=%d %v",
+		res.Reencrypted, res.Encrypted, res.Relabelled, left, remaining)
 }
 
-// CountLegacyVariableRows sensitive variable rows still on the legacy key
-// (key_version = 0, non-empty value), per table.
+// CountLegacyVariableRows sensitive variable rows not yet on a data key
+// (key_version = 0, non-empty value), per table: legacy ciphertexts and
+// plaintext sensitive values alike (telling them apart needs JWT_SECRET).
 func CountLegacyVariableRows(ctx context.Context, db *gorm.DB) (map[string]int64, error) {
 	out := make(map[string]int64, len(reencryptTables))
 	for _, table := range reencryptTables {
@@ -152,8 +159,10 @@ func CountLegacyVariableRows(ctx context.Context, db *gorm.DB) (map[string]int64
 	return out, nil
 }
 
-// CheckLegacyKeyAvailable refuses startup when encrypted rows still carry the
-// legacy key version but JWT_SECRET (their only key) is not set. This does
+// CheckLegacyKeyAvailable refuses startup when sensitive rows with
+// key_version 0 remain (legacy ciphertexts, or plaintext not yet encrypted)
+// but JWT_SECRET is not set: without it a legacy ciphertext cannot be told
+// from plaintext, so neither can be read correctly nor re-encrypted. This does
 // not depend on LEGACY_TOKEN_CUTOFF: data stays legacy until the
 // re-encryption job has rewritten it, however late that is.
 func CheckLegacyKeyAvailable(ctx context.Context, db *gorm.DB) error {
@@ -171,7 +180,7 @@ func CheckLegacyKeyAvailable(ctx context.Context, db *gorm.DB) error {
 		}
 	}
 	if len(parts) > 0 {
-		return fmt.Errorf("JWT_SECRET is not set but legacy-encrypted rows (key_version 0) remain (%s); "+
+		return fmt.Errorf("JWT_SECRET is not set but sensitive rows with key_version 0 (legacy ciphertext or plaintext) remain (%s); "+
 			"set JWT_SECRET until the re-encryption job reports zero legacy rows", strings.Join(parts, ", "))
 	}
 	return nil

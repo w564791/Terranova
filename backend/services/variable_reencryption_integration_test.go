@@ -88,7 +88,17 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	t.Cleanup(func() { db.Exec(`DELETE FROM workspace_variables WHERE workspace_id = ?`, ws) })
 	idLegacy := ins(1, legacyCT, true, 0)
 	idPlain := ins(2, "plain text secret!", true, 0) // sensitive but never encrypted
-	idAmbiguous := ins(3, base64.StdEncoding.EncodeToString([]byte("not-a-ciphertext-xyz")), true, 0)
+	// plaintext secrets that are valid base64, one shaped exactly like a
+	// legacy ciphertext (random bytes, longer than nonce + tag): not
+	// authenticated under the legacy key, so plaintext, and encrypted.
+	b64Plain := base64.StdEncoding.EncodeToString([]byte("not-a-ciphertext-xyz"))
+	idAmbiguous := ins(3, b64Plain, true, 0)
+	rnd := make([]byte, 48)
+	if _, err := rand.Read(rnd); err != nil {
+		t.Fatal(err)
+	}
+	b64Random := base64.StdEncoding.EncodeToString(rnd)
+	idB64Random := ins(7, b64Random, true, 0)
 	idNonSensitive := ins(4, "public", false, 0)
 	idV1 := ins(5, v1CT, true, 1)
 	idRelabel := ins(6, v1CT, true, 0) // versioned value, column not set
@@ -110,6 +120,13 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	if err := CheckLegacyKeyAvailable(ctx, db); err == nil || !strings.Contains(err.Error(), "workspace_variables=") {
 		t.Fatalf("startup check with legacy rows and no JWT_SECRET: %v", err)
 	}
+	// the job refuses to classify unprefixed rows without JWT_SECRET
+	if _, err := ReencryptLegacyVariables(ctx, db, 2); err == nil || !strings.Contains(err.Error(), "JWT_SECRET is required") {
+		t.Fatalf("re-encryption without JWT_SECRET: %v", err)
+	}
+	if r := reencLoad(t, db, "workspace_variables", idLegacy); r.Value != legacyCT || r.KeyVersion != 0 {
+		t.Fatalf("legacy row touched without JWT_SECRET: %+v", r)
+	}
 	t.Setenv("JWT_SECRET", "reenc-legacy-jwt-secret")
 	if err := CheckLegacyKeyAvailable(ctx, db); err != nil {
 		t.Fatal(err)
@@ -119,11 +136,11 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Reencrypted != 2 || res.Encrypted != 1 || res.Relabelled != 1 || res.Undecryptable != 1 {
+	if res.Reencrypted != 2 || res.Encrypted != 3 || res.Relabelled != 1 {
 		t.Fatalf("first pass: %+v", res)
 	}
 	after := map[uint]reencRow{}
-	for _, id := range []uint{idLegacy, idPlain, idAmbiguous, idNonSensitive, idV1, idRelabel} {
+	for _, id := range []uint{idLegacy, idPlain, idAmbiguous, idB64Random, idNonSensitive, idV1, idRelabel} {
 		after[id] = reencLoad(t, db, "workspace_variables", id)
 	}
 	if r := after[idLegacy]; r.KeyVersion != 1 || !strings.HasPrefix(r.Value, "tnk1:") {
@@ -132,8 +149,10 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	if r := after[idPlain]; r.KeyVersion != 1 || !strings.HasPrefix(r.Value, "tnk1:") {
 		t.Fatalf("plaintext sensitive row not encrypted: %+v", r)
 	}
-	if r := after[idAmbiguous]; r.KeyVersion != 0 {
-		t.Fatalf("ambiguous row touched: %+v", r)
+	for _, id := range []uint{idAmbiguous, idB64Random} {
+		if r := after[id]; r.KeyVersion != 1 || !strings.HasPrefix(r.Value, "tnk1:") {
+			t.Fatalf("base64-looking plaintext row not encrypted: %+v", r)
+		}
 	}
 	if r := after[idNonSensitive]; r.KeyVersion != 0 || r.Value != "public" {
 		t.Fatalf("non-sensitive row touched: %+v", r)
@@ -180,17 +199,22 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	if v.Value != "legacy-plain" || v.KeyVersion != 1 {
 		t.Fatalf("model read: %q v%d", v.Value, v.KeyVersion)
 	}
+	for id, want := range map[uint]string{idAmbiguous: b64Plain, idB64Random: b64Random, idPlain: "plain text secret!"} {
+		var pv models.WorkspaceVariable
+		if err := db.First(&pv, id).Error; err != nil || pv.Value != want {
+			t.Fatalf("plaintext row %d read back %q (%v), want %q", id, pv.Value, err, want)
+		}
+	}
 	var vv models.VarsetVariable
 	if err := db.First(&vv, idVarset).Error; err != nil || vv.Value != "legacy-plain" {
 		t.Fatalf("varset model read: %q %v", vv.Value, err)
 	}
 
-	// only the ambiguous row is still legacy
+	// no key_version 0 sensitive rows remain: JWT_SECRET can go
 	counts, err := CountLegacyVariableRows(ctx, db)
-	if err != nil || counts["workspace_variables"] != 1 || counts["varset_variables"] != 0 {
+	if err != nil || counts["workspace_variables"] != 0 || counts["varset_variables"] != 0 {
 		t.Fatalf("remaining legacy rows: %v %v", counts, err)
 	}
-	db.Exec(`DELETE FROM workspace_variables WHERE id = ?`, idAmbiguous)
 	t.Setenv("JWT_SECRET", "")
 	if err := CheckLegacyKeyAvailable(ctx, db); err != nil {
 		t.Fatalf("no legacy rows left, JWT_SECRET unset: %v", err)
@@ -203,5 +227,14 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	}
 	if r := reencLoad(t, db, "workspace_variables", nv.ID); r.KeyVersion != 1 || !strings.HasPrefix(r.Value, "tnk1:") {
 		t.Fatalf("new model write: %+v", r)
+	}
+	// a new sensitive value that is valid base64 is encrypted too (it used to
+	// be stored as is, taken for a ciphertext)
+	b64 := models.WorkspaceVariable{WorkspaceID: ws, Key: "k-b64", Value: b64Random, Sensitive: true, Version: 1}
+	if err := db.Create(&b64).Error; err != nil {
+		t.Fatal(err)
+	}
+	if r := reencLoad(t, db, "workspace_variables", b64.ID); r.KeyVersion != 1 || !strings.HasPrefix(r.Value, "tnk1:") || strings.Contains(r.Value, b64Random) {
+		t.Fatalf("base64 plaintext stored unencrypted: %+v", r)
 	}
 }

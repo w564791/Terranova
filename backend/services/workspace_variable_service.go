@@ -63,7 +63,7 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 	variable.IsDeleted = false
 
 	// 手动处理加密
-	if variable.Sensitive && variable.Value != "" && !crypto.IsEncrypted(variable.Value) {
+	if variable.Sensitive && variable.Value != "" && !crypto.IsCiphertext(variable.Value) {
 		encrypted, err := crypto.EncryptValue(variable.Value)
 		if err != nil {
 			return fmt.Errorf("加密失败: %w", err)
@@ -304,7 +304,7 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 	newVersion.Version = maxVersion + 1
 
 	// 手动处理加密（因为要使用原生 SQL）
-	if newVersion.Sensitive && newVersion.Value != "" && !crypto.IsEncrypted(newVersion.Value) {
+	if newVersion.Sensitive && newVersion.Value != "" && !crypto.IsCiphertext(newVersion.Value) {
 		encrypted, err := crypto.EncryptValue(newVersion.Value)
 		if err != nil {
 			return nil, fmt.Errorf("加密失败: %w", err)
@@ -404,7 +404,7 @@ func (s *WorkspaceVariableService) DeleteVariable(id uint) error {
 	}
 
 	// 手动处理加密
-	if deleteVersion.Sensitive && deleteVersion.Value != "" && !crypto.IsEncrypted(deleteVersion.Value) {
+	if deleteVersion.Sensitive && deleteVersion.Value != "" && !crypto.IsCiphertext(deleteVersion.Value) {
 		encrypted, err := crypto.EncryptValue(deleteVersion.Value)
 		if err != nil {
 			return fmt.Errorf("加密失败: %w", err)

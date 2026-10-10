@@ -74,7 +74,7 @@ func (v *WorkspaceVariable) BeforeCreate(tx *gorm.DB) error {
 	}
 	
 	// 加密敏感变量
-	if v.Sensitive && v.Value != "" && !crypto.IsEncrypted(v.Value) {
+	if v.Sensitive && v.Value != "" && !crypto.IsCiphertext(v.Value) {
 		encrypted, err := crypto.EncryptValue(v.Value)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt variable: %w", err)
@@ -87,7 +87,7 @@ func (v *WorkspaceVariable) BeforeCreate(tx *gorm.DB) error {
 
 // BeforeSave 保存前加密敏感变量
 func (v *WorkspaceVariable) BeforeSave(tx *gorm.DB) error {
-	if v.Sensitive && v.Value != "" && !crypto.IsEncrypted(v.Value) {
+	if v.Sensitive && v.Value != "" && !crypto.IsCiphertext(v.Value) {
 		encrypted, err := crypto.EncryptValue(v.Value)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt variable: %w", err)
@@ -100,7 +100,9 @@ func (v *WorkspaceVariable) BeforeSave(tx *gorm.DB) error {
 
 // AfterFind 查询后解密敏感变量
 func (v *WorkspaceVariable) AfterFind(tx *gorm.DB) error {
-	if v.Sensitive && v.Value != "" && crypto.IsEncrypted(v.Value) {
+	// key_version / tnk prefix decide; an unprefixed key_version 0 value is
+	// a legacy ciphertext only if it authenticates, else plaintext.
+	if v.Sensitive && v.Value != "" {
 		decrypted, err := crypto.DecryptValueWithVersion(v.Value, v.KeyVersion)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt variable: %w", err)

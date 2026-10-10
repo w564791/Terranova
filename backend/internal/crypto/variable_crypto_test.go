@@ -102,3 +102,72 @@ func TestProductionWithoutDataKeyRefusesToEncrypt(t *testing.T) {
 		t.Fatal("encrypted without DATA_ENCRYPTION_KEY in production")
 	}
 }
+
+// Encrypted-ness is decided by explicit markers only: a plaintext that is
+// valid base64 (even shaped exactly like a legacy ciphertext) is plaintext.
+func TestBase64PlaintextIsNotCiphertext(t *testing.T) {
+	setDataKey(t)
+	rnd := make([]byte, 48)
+	if _, err := rand.Read(rnd); err != nil {
+		t.Fatal(err)
+	}
+	for _, plain := range []string{
+		base64.StdEncoding.EncodeToString(rnd),                      // nonce+ciphertext-shaped
+		base64.StdEncoding.EncodeToString([]byte("secret-key-xyz")), // short base64
+		"wJalrXUtnFEMIK7MDENGbPxRfiCYzzzzzzzzzzzz",                  // AWS-secret-shaped, valid base64
+	} {
+		if _, err := base64.StdEncoding.DecodeString(plain); err != nil {
+			t.Fatalf("test value %q is not base64: %v", plain, err)
+		}
+		if IsCiphertext(plain) || IsLegacyCiphertext(plain) || IsVersionedCiphertext(plain) {
+			t.Fatalf("base64 plaintext %q classified as ciphertext", plain)
+		}
+		// key_version 0 read path: fails authentication -> plaintext
+		if pt, err := DecryptValueWithVersion(plain, LegacyKeyVersion); err != nil || pt != plain {
+			t.Fatalf("legacy read of plaintext %q: %q %v", plain, pt, err)
+		}
+		// write path encrypts it, and it round-trips
+		ct, ver, err := EncryptValueVersioned(plain)
+		if err != nil || ver != 1 || !IsCiphertext(ct) {
+			t.Fatalf("encrypt %q: %q %d %v", plain, ct, ver, err)
+		}
+		if pt, err := DecryptValueWithVersion(ct, ver); err != nil || pt != plain {
+			t.Fatalf("round trip %q: %q %v", plain, pt, err)
+		}
+	}
+}
+
+func TestLegacyCiphertextNeedsAuthenticationUnderLegacyKey(t *testing.T) {
+	setDataKey(t)
+	t.Setenv("DATA_ENCRYPTION_KEY", "")
+	t.Setenv("ENV", "development")
+	legacy, _, err := EncryptValueVersioned("old-value") // under jwt-secret-a
+	if err != nil {
+		t.Fatal(err)
+	}
+	setDataKey(t)
+	if !IsCiphertext(legacy) || !IsLegacyCiphertext(legacy) {
+		t.Fatal("legacy ciphertext not recognised")
+	}
+	// another legacy key: does not authenticate -> plaintext
+	t.Setenv("JWT_SECRET", "jwt-secret-b")
+	if IsCiphertext(legacy) {
+		t.Fatal("ciphertext under another JWT_SECRET classified as legacy ciphertext")
+	}
+	// no JWT_SECRET: nothing is a legacy ciphertext (SHA-256("") is public)
+	t.Setenv("JWT_SECRET", "")
+	if IsLegacyCiphertext(legacy) {
+		t.Fatal("legacy classification without JWT_SECRET")
+	}
+	// tampered legacy ciphertext fails authentication -> plaintext
+	t.Setenv("JWT_SECRET", "jwt-secret-a")
+	raw, _ := base64.StdEncoding.DecodeString(legacy)
+	raw[len(raw)-1] ^= 1
+	tampered := base64.StdEncoding.EncodeToString(raw)
+	if IsCiphertext(tampered) {
+		t.Fatal("tampered legacy ciphertext classified as ciphertext")
+	}
+	if pt, err := DecryptValueWithVersion(tampered, LegacyKeyVersion); err != nil || pt != tampered {
+		t.Fatalf("tampered legacy read: %q %v", pt, err)
+	}
+}

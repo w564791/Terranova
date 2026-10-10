@@ -36,7 +36,8 @@ environment provider is the default, a KMS provider can be installed instead
   `LEGACY_TOKEN_CUTOFF` / `LEGACY_TOKEN_ISSUED_BEFORE`, refuses to start in
   every mode.
 * `JWT_SECRET` is required in legacy signing / encryption mode, and whenever
-  any sensitive variable row still has `key_version = 0` (legacy-encrypted):
+  any sensitive variable row still has `key_version = 0` (legacy ciphertext,
+  or plaintext not yet encrypted; only `JWT_SECRET` can tell them apart):
   after connecting to the database the server counts such rows in
   `workspace_variables` and `varset_variables` and refuses to start without
   `JWT_SECRET` if any remain, naming the tables and counts. This does not
@@ -76,9 +77,30 @@ Re-encryption: the leader runs `services.ReencryptLegacyVariables` once at
 startup. It reads only sensitive rows with `key_version = 0` and rewrites each
 with a compare-and-set on `(id, key_version = 0, value)`, so it is idempotent
 and safe to run concurrently or repeatedly; rows already on a data key are
-never touched. Each pass logs `legacy rows remaining=<n>` per table. A base64 value that the legacy key cannot open is left alone and
-counted (`undecryptable`) rather than risk encrypting a ciphertext as if it were
-plaintext.
+never touched. Each pass logs `legacy rows remaining=<n>` per table.
+
+Whether a value is encrypted is decided by explicit markers only, never by
+its shape (a plaintext secret can be valid base64, e.g. most cloud secret
+keys):
+
+* a `tnk<version>:` prefix (and the row's `key_version`, where recorded) is a
+  ciphertext under that data-key version;
+* an unprefixed value in a `key_version = 0` row is a legacy ciphertext only
+  if it **authenticates** (AES-256-GCM) under `SHA-256(JWT_SECRET)`;
+* everything else is plaintext. Reads return it as is; writes encrypt it.
+
+The job therefore rewrites three kinds of `key_version = 0` sensitive rows:
+prefixed values (column relabelled), legacy ciphertexts (re-encrypted) and
+plaintext values that were stored unencrypted, including base64-looking ones
+that older code mistook for ciphertexts (encrypted). Without `JWT_SECRET` a
+legacy ciphertext cannot be told from plaintext, so the job refuses to
+classify unprefixed rows and the server refuses to start while any
+`key_version = 0` sensitive row remains. `JWT_SECRET` must be the
+environment's real legacy secret: with a wrong one, legacy ciphertexts fail
+authentication and are wrapped as plaintext (recoverable by decrypting the
+wrapped value and opening it with the right key, but the application would use
+the wrong value until then). Check `reencrypted=` vs `encrypted(plaintext)=` in
+the log of the first pass.
 
 Other encrypted columns (MFA, SSO, notification, CMDB source, Run Task access
 tokens) are self-describing (`tnk<v>:` prefix): they are written with the data

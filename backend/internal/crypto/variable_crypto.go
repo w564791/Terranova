@@ -28,6 +28,13 @@ import (
 // DATA_ENCRYPTION_KEY is set; the re-encryption job rewrites legacy variable
 // rows. In development without DATA_ENCRYPTION_KEY (legacy mode) values are
 // still written in the legacy format.
+//
+// Whether a value is encrypted is decided ONLY by an explicit marker, never by
+// its shape (a plaintext secret can perfectly well be valid base64):
+//   - "tnk<version>:" prefix (and the row's key_version, where recorded);
+//   - legacy: an unprefixed value that authenticates (AES-GCM) under the
+//     legacy key. A value that fails authentication is plaintext.
+// See IsCiphertext.
 
 // LegacyKeyVersion the key version of legacy (JWT_SECRET-derived) ciphertexts.
 const LegacyKeyVersion int16 = 0
@@ -37,6 +44,11 @@ const versionedPrefix = "tnk"
 // ErrDecrypt a versioned ciphertext did not decrypt (wrong / missing key or
 // tampered data). Legacy ciphertexts keep the historical lenient behaviour.
 var ErrDecrypt = errors.New("value decryption failed")
+
+// legacyKeyAvailable whether JWT_SECRET (the legacy key material) is set.
+// Without it no value is classified as a legacy ciphertext: SHA-256("") is a
+// public key, a value that authenticates under it proves nothing.
+func legacyKeyAvailable() bool { return os.Getenv("JWT_SECRET") != "" }
 
 // legacyKey SHA-256(JWT_SECRET): decrypt-only once DATA_ENCRYPTION_KEY is set.
 func legacyKey() []byte {
@@ -164,56 +176,59 @@ func DecryptValueWithVersion(ciphertext string, keyVersion int16) (string, error
 	return decryptLegacy(ciphertext)
 }
 
-// decryptLegacy the historical behaviour: values that are not valid legacy
-// ciphertexts are returned unchanged (plaintext rows).
-func decryptLegacy(ciphertext string) (string, error) {
-	data, err := base64.StdEncoding.DecodeString(ciphertext)
+// decryptLegacy a key_version 0 value without prefix: the legacy plaintext
+// when it authenticates under the legacy key, else the value itself (it is
+// plaintext, whatever it looks like).
+func decryptLegacy(value string) (string, error) {
+	if pt, ok := openLegacy(value); ok {
+		return pt, nil
+	}
+	return value, nil
+}
+
+// openLegacy authenticated decryption under the legacy key; ok only when the
+// GCM tag verifies.
+func openLegacy(value string) (string, bool) {
+	if value == "" || !legacyKeyAvailable() {
+		return "", false
+	}
+	if _, _, ok := parseVersioned(value); ok {
+		return "", false
+	}
+	data, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {
-		return ciphertext, nil
+		return "", false
 	}
 	gcm, err := gcmFor(legacyKey())
-	if err != nil {
-		return "", err
-	}
-	if len(data) < gcm.NonceSize() {
-		return ciphertext, nil
+	if err != nil || len(data) < gcm.NonceSize()+gcm.Overhead() {
+		return "", false
 	}
 	pt, err := gcm.Open(nil, data[:gcm.NonceSize()], data[gcm.NonceSize():], nil)
 	if err != nil {
-		return ciphertext, nil
+		return "", false
 	}
-	return string(pt), nil
+	return string(pt), true
 }
 
-// IsLegacyCiphertext whether value decrypts under the legacy key.
+// IsLegacyCiphertext whether value is a legacy (key version 0) ciphertext:
+// unprefixed and authenticating under the legacy key. False when JWT_SECRET
+// is not set.
 func IsLegacyCiphertext(value string) bool {
-	if _, _, ok := parseVersioned(value); ok || value == "" {
-		return false
-	}
-	data, err := base64.StdEncoding.DecodeString(value)
-	if err != nil {
-		return false
-	}
-	gcm, err := gcmFor(legacyKey())
-	if err != nil || len(data) < gcm.NonceSize() {
-		return false
-	}
-	_, err = gcm.Open(nil, data[:gcm.NonceSize()], data[gcm.NonceSize():], nil)
-	return err == nil
+	_, ok := openLegacy(value)
+	return ok
 }
 
-// IsEncrypted reports whether value looks encrypted: a versioned value, or
-// (historical heuristic) base64 at least one nonce long.
-func IsEncrypted(value string) bool {
-	if value == "" {
-		return false
-	}
-	if _, _, ok := parseVersioned(value); ok {
-		return true
-	}
-	data, err := base64.StdEncoding.DecodeString(value)
-	if err != nil {
-		return false
-	}
-	return len(data) >= 12
+// IsVersionedCiphertext whether value carries the explicit "tnk<version>:"
+// marker.
+func IsVersionedCiphertext(value string) bool {
+	_, _, ok := parseVersioned(value)
+	return ok
+}
+
+// IsCiphertext whether value is already encrypted: it carries the explicit
+// "tnk<version>:" marker, or it is a legacy ciphertext (authenticates under
+// the legacy key). Everything else is plaintext and must be encrypted before
+// it is stored, including values that happen to be valid base64.
+func IsCiphertext(value string) bool {
+	return IsVersionedCiphertext(value) || IsLegacyCiphertext(value)
 }
