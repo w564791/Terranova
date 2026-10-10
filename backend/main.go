@@ -532,6 +532,17 @@ func main() {
 				}
 			}()
 
+			// 9b. Historical plan_json redaction backfill (background, batched,
+			// idempotent; services.BackfillPlanJSONRedaction)
+			go func() {
+				res, err := services.BackfillPlanJSONRedaction(leaderCtx, db, 100)
+				if err != nil {
+					log.Printf("[Leader] plan_json redaction backfill stopped: %v (%+v)", err, res)
+					return
+				}
+				log.Printf("[Leader] plan_json redaction backfill done: %+v", res)
+			}()
+
 			// 9. Recover pending tasks (one-time, must run after AgentCCHandler init)
 			if err := queueManager.RecoverPendingTasks(); err != nil {
 				log.Printf("Warning: Failed to recover pending tasks: %v", err)

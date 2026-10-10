@@ -106,6 +106,9 @@ func definitions() []definition {
 		// Structured task failure code (workspace_tasks.error_code, e.g.
 		// bundle_republish_required). Additive only.
 		{version: "20261010_01_workspace_task_error_code", contract: "workspace-task-error-code-v1", apply: applyWorkspaceTaskErrorCode},
+		// Marker column of the historical plan_json redaction backfill (the
+		// backfill runs in the application). Additive only.
+		{version: "20261010_02_workspace_task_plan_json_redaction", contract: "workspace-task-plan-json-redaction-marker-v1", apply: applyWorkspaceTaskPlanJSONRedaction},
 	}
 }
 
