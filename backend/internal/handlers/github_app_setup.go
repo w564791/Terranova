@@ -5,12 +5,15 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -160,11 +163,11 @@ func (h *GitHubAppHandler) WithPermissionChecker(pc service.PermissionChecker) *
 
 // Connect starts binding a GitHub App installation
 // @Summary Connect a GitHub App installation
-// @Description Returns the GitHub App install URL with a signed, single-use state (organization, initiating user, nonce; valid 10 minutes). Open it in the browser: after the installation GitHub redirects to the platform's setup callback, which binds the installation to the organization only after user-to-server OAuth proved that the installing GitHub user administers the installation's account. Requires ORGANIZATION ADMIN. 503 when the App, its OAuth client (GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET) or SIGNING_ROOT_KEY is not configured.
+// @Description Returns the GitHub App install URL with a signed, single-use state (organization, initiating user, nonce; valid 10 minutes). Open it in the browser: after the installation GitHub redirects to the platform's setup callback, which binds the installation to the organization only after user-to-server OAuth proved that the installing GitHub user administers the installation's account. github_url is the configured GITHUB_URL (platform config, never from the request) so the client can check the install_url host. Requires ORGANIZATION ADMIN. 503 when the App, its OAuth client (GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET) or SIGNING_ROOT_KEY is not configured.
 // @Tags Manifest Git
 // @Produce json
 // @Param org_id path string true "Organization ID"
-// @Success 200 {object} map[string]interface{} "{install_url, expires_at}"
+// @Success 200 {object} map[string]interface{} "{install_url, expires_at, github_url}"
 // @Failure 503 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/github-app/connect [post]
 // @Security BearerAuth
@@ -207,7 +210,9 @@ func (h *GitHubAppHandler) Connect(c *gin.Context) {
 	}
 	maybeCleanupGitHubEphemera(h.db)
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, gin.H{"install_url": installURL, "expires_at": exp.UTC()})
+	// github_url comes from GITHUB_URL (platform config), never from the request:
+	// the frontend uses its host to check install_url before navigating.
+	c.JSON(http.StatusOK, gin.H{"install_url": installURL, "expires_at": exp.UTC(), "github_url": e.WebURL})
 }
 
 // setup callback outcomes (?github_app=<result>&reason=<code> on the frontend
@@ -515,14 +520,16 @@ func (h *GitHubAppHandler) GetUsableInstallation(c *gin.Context) {
 
 // ListInstallationRepositories repositories of a bound installation
 // @Summary List repositories of a GitHub App installation
-// @Description Repositories the installation can access (full_name, default_branch, private, html_url), one page. Uses a freshly minted installation token with only metadata:read, revoked right after. html_url is built from the configured GITHUB_URL. 404 for an installation not bound to the organization. Requires MANIFESTS WRITE.
+// @Description Repositories the installation can access (full_name, default_branch, private, html_url), one page. Uses a freshly minted installation token with only metadata:read, revoked right after. html_url is built from the configured GITHUB_URL. With q (trimmed, at most 100 characters, else 400 repo_query_too_long) the installation's repositories are filtered server-side by a case-insensitive substring of full_name: up to 1000 repositories are scanned (truncated=true when the installation has more), page/per_page page through the matches and total_count counts the matches. 404 for an installation not bound to the organization. Requires MANIFESTS WRITE.
 // @Tags Manifest Git
 // @Produce json
 // @Param org_id path string true "Organization ID"
 // @Param installation_id path int true "GitHub installation id"
 // @Param page query int false "Page (default 1)"
 // @Param per_page query int false "1..100, default 30"
-// @Success 200 {object} map[string]interface{} "{repositories: [...], total_count, page, per_page}"
+// @Param q query string false "Filter: case-insensitive substring of owner/name (max 100 characters)"
+// @Success 200 {object} map[string]interface{} "{repositories: [...], total_count, page, per_page, truncated, q?}"
+// @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 503 {object} map[string]interface{}
 // @Router /api/v1/organizations/{org_id}/github-app/installations/{installation_id}/repositories [get]
@@ -540,6 +547,11 @@ func (h *GitHubAppHandler) ListInstallationRepositories(c *gin.Context) {
 	if perPage < 1 || perPage > 100 {
 		perPage = 30
 	}
+	q := strings.TrimSpace(c.Query("q"))
+	if utf8.RuneCountInString(q) > repoSearchMaxLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("q must be at most %d characters", repoSearchMaxLen), "code": "repo_query_too_long"})
+		return
+	}
 	app, err := gitDeps.App()
 	if err != nil {
 		respondGitError(c, "app", err)
@@ -551,14 +563,78 @@ func (h *GitHubAppHandler) ListInstallationRepositories(c *gin.Context) {
 		respondGitError(c, "mint metadata token", err)
 		return
 	}
-	repos, total, err := app.ListInstallationRepos(ctx, tok, page, perPage)
-	app.Revoke(ctx, tok)
-	if err != nil {
-		respondGitError(c, "list installation repositories", err)
+	defer app.Revoke(context.WithoutCancel(ctx), tok)
+
+	if q == "" {
+		repos, total, err := app.ListInstallationRepos(ctx, tok, page, perPage)
+		if err != nil {
+			respondGitError(c, "list installation repositories", err)
+			return
+		}
+		if repos == nil {
+			repos = []gitsource.RepoInfo{}
+		}
+		c.JSON(http.StatusOK, gin.H{"repositories": repos, "total_count": total, "page": page, "per_page": perPage, "truncated": false})
 		return
 	}
-	if repos == nil {
-		repos = []gitsource.RepoInfo{}
+
+	matches, truncated, err := searchInstallationRepos(ctx, app, tok, q)
+	if err != nil {
+		respondGitError(c, "search installation repositories", err)
+		return
 	}
-	c.JSON(http.StatusOK, gin.H{"repositories": repos, "total_count": total, "page": page, "per_page": perPage})
+	start := (page - 1) * perPage
+	if start > len(matches) {
+		start = len(matches)
+	}
+	end := start + perPage
+	if end > len(matches) {
+		end = len(matches)
+	}
+	c.JSON(http.StatusOK, gin.H{"repositories": matches[start:end], "total_count": len(matches), "page": page, "per_page": perPage, "q": q, "truncated": truncated})
+}
+
+// Repository search (q) limits.
+const (
+	repoSearchMaxLen  = 100  // characters, after trimming
+	repoSearchMaxScan = 1000 // repositories scanned per search (10 GitHub pages of 100)
+	repoSearchPage    = 100  // GitHub's maximum per_page
+)
+
+// searchInstallationRepos filters the installation's repositories by a
+// case-insensitive substring of full_name.
+//
+// GitHub's /installation/repositories has no search parameter. The search
+// API (/search/repositories with user:/org:<account>) was rejected: it also
+// returns public repositories of the account that the installation was NOT
+// granted (selected-repositories installs), so results would not match what
+// create/publish accept; it is rate limited to 30 requests/minute, its index
+// lags behind new repositories, and q would have to be sanitized against
+// search qualifiers (org:other ...). Filtering the installation's own list
+// with the same metadata:read token gives exactly the repositories the
+// installation can access. At most repoSearchMaxScan repositories are
+// scanned (truncated=true when the installation has more); page/per_page
+// then page through the matches, and total_count is the number of matches.
+func searchInstallationRepos(ctx context.Context, app GitApp, tok *gitsource.Token, q string) ([]gitsource.RepoInfo, bool, error) {
+	needle := strings.ToLower(q)
+	matches := []gitsource.RepoInfo{}
+	scanned := 0
+	for p := 1; ; p++ {
+		repos, total, err := app.ListInstallationRepos(ctx, tok, p, repoSearchPage)
+		if err != nil {
+			return nil, false, err
+		}
+		scanned += len(repos)
+		for _, r := range repos {
+			if strings.Contains(strings.ToLower(r.FullName), needle) {
+				matches = append(matches, r)
+			}
+		}
+		if len(repos) < repoSearchPage || scanned >= total {
+			return matches, false, nil
+		}
+		if scanned >= repoSearchMaxScan {
+			return matches, true, nil
+		}
+	}
 }

@@ -2,10 +2,13 @@ package gitsource
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"path"
 	"regexp"
 	"strings"
+
+	"iac-platform/internal/manifestbundle"
 )
 
 // Repo one GitHub repository on the configured host.
@@ -76,28 +79,32 @@ func ParseRepoFullName(s string) (Repo, error) {
 func IsCommitSHA(s string) bool { return shaRe.MatchString(s) }
 
 // ErrInvalidSubpath the subpath is not a clean relative directory.
-var ErrInvalidSubpath = errors.New("git_subpath must be a relative directory without '.', '..' or empty segments")
+var ErrInvalidSubpath = errors.New("git_subpath must be a relative directory (no leading '/', no '.', '..' or empty segments, no backslash, NFC)")
 
-// CleanSubpath "" (repo root) or a clean relative POSIX directory.
+// CleanSubpath normalizes git_subpath and validates it with the bundle path
+// rules (manifestbundle.ValidatePath): surrounding whitespace and trailing
+// slashes are removed; "" (or ".") is the repository root. A leading '/',
+// backslashes, '.' / '..' / empty segments, control characters and non-NFC
+// names are refused (not rewritten: the directory must exist as written in
+// the git tree).
 func CleanSubpath(s string) (string, error) {
-	s = strings.TrimRight(strings.TrimSpace(s), "/")
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "/") {
+		return "", fmt.Errorf("%w: %s", ErrInvalidSubpath, manifestbundle.RulePathInvalid)
+	}
+	s = strings.TrimRight(s, "/")
 	if s == "" || s == "." {
 		return "", nil
 	}
-	if strings.HasPrefix(s, "/") {
-		return "", ErrInvalidSubpath
+	if rule := manifestbundle.ValidatePath(s); rule != "" {
+		return "", fmt.Errorf("%w: %s", ErrInvalidSubpath, rule)
 	}
-	if len(s) > 512 || strings.ContainsAny(s, "\\\x00:") || path.Clean(s) != s {
+	if len(s) > 512 || strings.ContainsAny(s, "\x00:") || path.Clean(s) != s {
 		return "", ErrInvalidSubpath
 	}
 	for _, seg := range strings.Split(s, "/") {
-		if seg == "" || seg == "." || seg == ".." || strings.HasPrefix(seg, "-") {
+		if strings.HasPrefix(seg, "-") {
 			return "", ErrInvalidSubpath
-		}
-		for _, c := range seg {
-			if c < 0x20 || c == 0x7f {
-				return "", ErrInvalidSubpath
-			}
 		}
 	}
 	return s, nil
