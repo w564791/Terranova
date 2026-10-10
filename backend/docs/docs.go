@@ -3649,7 +3649,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Upload base64-encoded plan data from agent after plan execution. Triggers post_plan Run Tasks.",
+                "description": "Upload base64-encoded plan data from agent after plan execution; stored encrypted at rest (envelope, per-plan key) and deleted after apply / on expiry. Triggers post_plan Run Tasks.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3801,7 +3801,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Get plan task information for agent execution, including plan_data for apply tasks and snapshot resources/variables",
+                "description": "Get plan task information for agent execution, including plan_data for apply tasks (decrypted for the executing agent only; omitted when expired) and snapshot resources/variables",
                 "consumes": [
                     "application/json"
                 ],

@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 
+	"iac-platform/internal/crypto"
 	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 
@@ -114,6 +115,9 @@ func TaskErrorCode(err error) string {
 	if errors.As(err, &rr) {
 		return models.TaskErrorCodeBundleRepublishRequired
 	}
+	if errors.Is(err, crypto.ErrPlanDataExpired) || errors.Is(err, ErrPlanDataMissing) {
+		return models.TaskErrorCodePlanExpired
+	}
 	return ""
 }
 
@@ -125,6 +129,9 @@ func classifyTaskFailure(err error, message string) (code, msg string) {
 	var rr *manifestbundle.RepublishRequiredError
 	if errors.As(err, &rr) {
 		return code, rr.Error()
+	}
+	if code == models.TaskErrorCodePlanExpired {
+		return code, models.TaskErrorCodePlanExpired + ": " + err.Error()
 	}
 	return code, message
 }

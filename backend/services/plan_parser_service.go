@@ -111,7 +111,12 @@ func (s *PlanParserService) restorePlanFile(task *models.WorkspaceTask) (string,
 
 	// 写入plan文件
 	planFile := filepath.Join(tmpDir, "plan.out")
-	if err := os.WriteFile(planFile, task.PlanData, 0644); err != nil {
+	planBytes, err := OpenTaskPlanData(task)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", fmt.Errorf("plan data unavailable: %w", err)
+	}
+	if err := os.WriteFile(planFile, planBytes, 0600); err != nil {
 		return "", fmt.Errorf("failed to write plan file: %w", err)
 	}
 
