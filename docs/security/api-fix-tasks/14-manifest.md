@@ -91,6 +91,8 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
 
 15. plan 脱敏并上平台侧敏感集合（`PlanSensitivity`：workspace / varset 敏感变量、deployment override 的 `sensitive_keys`，NULL = 全部敏感）：按变量名脱敏 `variables` 与默认值，按值替换 plan 中等于 / 包含敏感值的字符串叶子；执行器与 agent 上传（`PlanSensitivityForTask`）使用同一集合。标记统一 `(sensitive value)`。
 
+16. `plan_data`（apply 用的二进制 plan，含明文敏感值）静态加密：信封加密（`internal/crypto` `SealPlanData`：每个 plan 随机 256 位数据密钥 AES-256-GCM，数据密钥由主密钥（变量加密所用、由 `JWT_SECRET` 派生）经 HMAC 派生的 KEK 包裹；头部与任务 ID 作为 AAD，换任务 / 改过期时间均无法解开）。只有执行路径解密：local 执行器 apply 恢复 plan、plan parser 回退、agent plan-task 接口（交给执行该任务的 agent）；`WorkspaceTask.PlanData` 为 `json:"-"`，其余接口不返回（`TestPlanData_NeverSerialized`）。生命周期：apply 成功立即删除（local 执行器；agent 在终态上报时由平台删除），任何终态删除，过期删除（`PLAN_DATA_TTL`，默认 7 天，过期头部经认证；过期后 apply 失败，`error_code = plan_expired`，需重新 plan）。清理任务 `CleanupPlanData` 在 leader 启动时（恢复 pending 任务之前）执行一次、之后每 10 分钟：终态与过期删除，仍可能 apply 的旧明文行原地加密（需要应用内主密钥，SQL 迁移做不到；终态旧行无人读取，直接删除而非加密）。
+
 ### 遗留
 - variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
   - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。

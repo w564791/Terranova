@@ -507,6 +507,31 @@ func main() {
 				}
 			}()
 
+			// 9a. plan_data at rest: delete plans of terminal / expired tasks and
+			// seal legacy plaintext before any pending apply is recovered, then
+			// repeat every 10 minutes (services.CleanupPlanData).
+			if res, err := services.CleanupPlanData(leaderCtx, db); err != nil {
+				log.Printf("[Leader] plan_data cleanup failed: %v", err)
+			} else {
+				log.Printf("[Leader] plan_data cleanup: sealed=%d purged=%d", res.Sealed, res.Purged)
+			}
+			go func() {
+				ticker := time.NewTicker(10 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-leaderCtx.Done():
+						return
+					case <-ticker.C:
+						if res, err := services.CleanupPlanData(leaderCtx, db); err != nil {
+							log.Printf("[Leader] plan_data cleanup failed: %v", err)
+						} else if res.Sealed+res.Purged > 0 {
+							log.Printf("[Leader] plan_data cleanup: sealed=%d purged=%d", res.Sealed, res.Purged)
+						}
+					}
+				}
+			}()
+
 			// 9. Recover pending tasks (one-time, must run after AgentCCHandler init)
 			if err := queueManager.RecoverPendingTasks(); err != nil {
 				log.Printf("Warning: Failed to recover pending tasks: %v", err)

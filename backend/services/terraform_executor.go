@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"iac-platform/internal/crypto"
 	"iac-platform/internal/models"
 
 	"gorm.io/gorm"
@@ -1634,6 +1635,22 @@ func (s *TerraformExecutor) planSensitivity(workspaceID string) *PlanSensitivity
 	return PlanSensitivityFromVariables(vars)
 }
 
+// planBytes the plan.out bytes of planTask for apply. Local mode reads the
+// stored envelope and decrypts it; an agent receives the plan already
+// decrypted by the platform over its authenticated task channel.
+func (s *TerraformExecutor) planBytes(planTask *models.WorkspaceTask) ([]byte, error) {
+	if planTask == nil || len(planTask.PlanData) == 0 {
+		return nil, ErrPlanDataMissing
+	}
+	if sealed, _ := crypto.IsSealedPlanData(planTask.PlanData); sealed {
+		return OpenTaskPlanData(planTask)
+	}
+	if s.db == nil {
+		return planTask.PlanData, nil
+	}
+	return nil, crypto.ErrPlanDataNotSealed
+}
+
 // SavePlanData 保存Plan数据（带重试，不阻塞）
 func (s *TerraformExecutor) SavePlanData(
 	task *models.WorkspaceTask,
@@ -1648,12 +1665,19 @@ func (s *TerraformExecutor) SavePlanData(
 
 	planJSON = RedactPlanJSON(planJSON, s.planSensitivity(task.WorkspaceID)) // 只存脱敏后的 plan(幂等)
 
+	// plan_data 只以信封加密形式落库(SealTaskPlanData)
+	sealed, err := SealTaskPlanData(task.ID, planData)
+	if err != nil {
+		log.Printf("ERROR: Failed to encrypt plan data for task %d: %v", task.ID, err)
+		return
+	}
+
 	// 带简单重试
 	maxRetries := 3
 	var saveErr error
 
 	for i := 0; i < maxRetries; i++ {
-		task.PlanData = planData
+		task.PlanData = sealed
 		task.PlanJSON = planJSON
 
 		saveErr = s.db.Omit("state_token_hash").Save(task).Error
@@ -2521,19 +2545,20 @@ func (s *TerraformExecutor) ExecuteApply(
 		logger.Info("Restoring plan file from plan task #%d...", planTask.ID)
 		logger.Info("  - Plan data size: %.1f KB", float64(len(planTask.PlanData))/1024)
 
-		if len(planTask.PlanData) == 0 {
-			logger.Error("Plan data is empty")
-			logger.LogError("restoring_plan", fmt.Errorf("plan data is empty"), map[string]interface{}{
+		planBytes, perr := s.planBytes(planTask)
+		if perr != nil {
+			logger.Error("Plan data unavailable: %v", perr)
+			logger.LogError("restoring_plan", perr, map[string]interface{}{
 				"plan_task_id": planTask.ID,
 			}, nil)
 			logger.StageEnd("restoring_plan")
 
-			// 保存失败信息
-			s.saveTaskFailure(task, logger, fmt.Errorf("plan data is empty"), "apply")
-			return fmt.Errorf("plan data is empty")
+			// 保存失败信息(过期 / 缺失 => error_code plan_expired)
+			s.saveTaskFailure(task, logger, perr, "apply")
+			return fmt.Errorf("plan data unavailable: %w", perr)
 		}
 
-		if err := os.WriteFile(planFile, planTask.PlanData, 0644); err != nil {
+		if err := os.WriteFile(planFile, planBytes, 0600); err != nil {
 			logger.Error("Failed to write plan file: %v", err)
 			logger.LogError("restoring_plan", err, map[string]interface{}{
 				"plan_file": planFile,
@@ -2898,6 +2923,13 @@ func (s *TerraformExecutor) ExecuteApply(
 		return fmt.Errorf("failed to update task: %w", err)
 	}
 
+	// apply 成功即删除 plan_data(Local;Agent 由平台在终态上报时删除)
+	if s.db != nil {
+		if err := ClearPlanData(s.db, planTask.ID, task.ID); err != nil {
+			logger.Warn("Failed to delete plan data after apply: %v", err)
+		}
+	}
+
 	// 更新所有剩余pending状态的资源为completed
 	// 这对于Agent模式特别重要，因为实时更新可能没有写入数据库
 	if s.db != nil {
@@ -3009,12 +3041,13 @@ func (s *TerraformExecutor) RestorePlanFile(
 		return "", fmt.Errorf("failed to get plan task: %w", err)
 	}
 
-	if len(planTask.PlanData) == 0 {
-		return "", fmt.Errorf("plan data is empty")
+	planBytes, err := s.planBytes(&planTask)
+	if err != nil {
+		return "", err
 	}
 
 	planFile := filepath.Join(workDir, "plan.out")
-	if err := os.WriteFile(planFile, planTask.PlanData, 0644); err != nil {
+	if err := os.WriteFile(planFile, planBytes, 0600); err != nil {
 		return "", fmt.Errorf("failed to write plan file: %w", err)
 	}
 
@@ -4397,7 +4430,17 @@ func (s *TerraformExecutor) SavePlanDataWithLogging(
 
 	// 设置 plan data(plan_json 只存脱敏后的形式,幂等)
 	planJSON = RedactPlanJSON(planJSON, s.planSensitivity(task.WorkspaceID))
-	task.PlanData = planData
+	// Local:plan_data 只以信封加密形式落库;Agent:明文经 API 上传,平台侧加密
+	storedPlanData := planData
+	if s.db != nil {
+		sealed, sealErr := SealTaskPlanData(task.ID, planData)
+		if sealErr != nil {
+			logger.Error("Failed to encrypt plan data: %v", sealErr)
+			return
+		}
+		storedPlanData = sealed
+	}
+	task.PlanData = storedPlanData
 	task.PlanJSON = planJSON
 	log.Printf("[CRITICAL] Set task.PlanData (len=%d) and task.PlanJSON (exists=%v) for task %d",
 		len(task.PlanData), task.PlanJSON != nil, task.ID)
@@ -4413,7 +4456,7 @@ func (s *TerraformExecutor) SavePlanDataWithLogging(
 			log.Printf("[CRITICAL] Task %d: Attempting to save plan_data (len=%d) and plan_json (exists=%v) using Updates",
 				task.ID, len(planData), planJSON != nil)
 			updates := map[string]interface{}{
-				"plan_data": planData,
+				"plan_data": storedPlanData,
 				"plan_json": planJSON,
 			}
 			saveErr = s.db.Model(&models.WorkspaceTask{}).Where("id = ?", task.ID).Updates(updates).Error

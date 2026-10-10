@@ -317,12 +317,15 @@ const (
 	// bundle (bundle_hash NULL: bundle rules or hash_mismatch); the message is
 	// "bundle_republish_required: <reason>".
 	TaskErrorCodeBundleRepublishRequired = "bundle_republish_required"
+	// TaskErrorCodePlanExpired the stored plan of a plan_and_apply task is
+	// gone (expired after PLAN_DATA_TTL, or never saved); re-run the plan.
+	TaskErrorCodePlanExpired = "plan_expired"
 )
 
 // KnownTaskErrorCode reports codes an agent may report (status update).
 func KnownTaskErrorCode(code string) bool {
 	switch code {
-	case TaskErrorCodeBundleRepublishRequired:
+	case TaskErrorCodeBundleRepublishRequired, TaskErrorCodePlanExpired:
 		return true
 	}
 	return false

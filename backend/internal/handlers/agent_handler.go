@@ -851,6 +851,13 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 
 	// Revoke state token on terminal status
 	task.Status = req.Status
+	if task.IsTerminal() {
+		// a terminal task never applies its plan: delete plan_data now
+		// (after a successful apply in particular)
+		if err := services.ClearPlanData(h.db, task.ID); err != nil {
+			log.Printf("WARNING: Failed to delete plan_data of task %d: %v", task.ID, err)
+		}
+	}
 	if task.IsTerminal() && h.stateTokenService != nil {
 		if err := h.stateTokenService.RevokeToken(task.ID); err != nil {
 			log.Printf("WARNING: Failed to revoke state token for task %d: %v", task.ID, err)
@@ -944,7 +951,7 @@ func (h *AgentHandler) UpdateTaskStatus(c *gin.Context) {
 
 // GetPlanTask retrieves a plan task by ID
 // @Summary Get plan task
-// @Description Get plan task information for agent execution, including plan_data for apply tasks and snapshot resources/variables
+// @Description Get plan task information for agent execution, including plan_data for apply tasks (decrypted for the executing agent only; omitted when expired) and snapshot resources/variables
 // @Tags Agent Task
 // @Accept json
 // @Produce json
@@ -1116,12 +1123,17 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 		"snapshot_resources": snapshotResources, // 【新增】返回快照资源的完整数据
 	}
 
-	// Include plan_data if it exists
-	// IMPORTANT: Encode binary data to base64 for API transmission
-	// Database stores binary, API transmits base64
+	// Include plan_data if it exists. At rest it is an envelope
+	// (services.SealTaskPlanData); it is decrypted only here, for the agent
+	// executing this task (pool token + task check), and sent base64.
+	// Expired / undecryptable plans are omitted: the agent's apply then fails
+	// with "plan data is empty" (plan_expired).
 	if len(task.PlanData) > 0 {
-		encodedData := base64.StdEncoding.EncodeToString(task.PlanData)
-		response["plan_data"] = encodedData
+		if plain, err := services.OpenTaskPlanData(&task); err != nil {
+			log.Printf("[WARN] Task %d: plan_data not handed to agent: %v", task.ID, err)
+		} else {
+			response["plan_data"] = base64.StdEncoding.EncodeToString(plain)
+		}
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -1129,7 +1141,7 @@ func (h *AgentHandler) GetPlanTask(c *gin.Context) {
 
 // UploadPlanData handles plan data upload from agent
 // @Summary Upload plan data
-// @Description Upload base64-encoded plan data from agent after plan execution. Triggers post_plan Run Tasks.
+// @Description Upload base64-encoded plan data from agent after plan execution; stored encrypted at rest (envelope, per-plan key) and deleted after apply / on expiry. Triggers post_plan Run Tasks.
 // @Tags Agent Task
 // @Accept json
 // @Produce json
@@ -1187,8 +1199,13 @@ func (h *AgentHandler) UploadPlanData(c *gin.Context) {
 		return
 	}
 
-	// Store the decoded binary data (same as Local mode)
-	if err := h.db.Model(&task).Update("plan_data", decodedData).Error; err != nil {
+	// Store the plan encrypted at rest (same envelope as Local mode)
+	sealed, err := services.SealTaskPlanData(task.ID, decodedData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt plan_data"})
+		return
+	}
+	if err := h.db.Model(&task).UpdateColumn("plan_data", sealed).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to save plan_data: " + err.Error(),
 		})
