@@ -112,6 +112,9 @@ func definitions() []definition {
 		// Short machine reason next to error_code (workspace_tasks.error_reason).
 		// Additive only.
 		{version: "20261010_03_workspace_task_error_reason", contract: "workspace-task-error-reason-v1", apply: applyWorkspaceTaskErrorReason},
+		// marker of the resource-change redaction backfill (values re-derived
+		// from the redacted plan_json in the application)
+		{version: "20261010_04_workspace_task_resource_change_redaction", contract: "workspace-task-resource-change-redaction-marker-v1", apply: applyWorkspaceTaskResourceChangeRedaction},
 	}
 }
 

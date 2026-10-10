@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
 	"iac-platform/internal/websocket"
 	"iac-platform/internal/pgpubsub"
@@ -77,6 +78,9 @@ type RawAgentConnection struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	done       chan struct{}
+	// ownedTasks task → time ownership was last verified (readMessages is
+	// the only user, no lock needed)
+	ownedTasks map[uint]time.Time
 }
 
 // NewRawAgentCCHandler creates a new raw C&C handler
@@ -321,12 +325,19 @@ func (h *RawAgentCCHandler) readMessages(agentConn *RawAgentConnection) {
 		switch msg.Type {
 		case "heartbeat":
 			h.handleHeartbeat(agentConn, msg.Payload)
-		case "task_completed":
-			h.handleTaskCompleted(agentConn, msg.Payload)
-		case "task_failed":
-			h.handleTaskFailed(agentConn, msg.Payload)
-		case "log_stream":
-			h.handleLogStream(agentConn, msg.Payload)
+		case "task_completed", "task_failed", "log_stream":
+			// task messages: only for a task assigned to this agent
+			if !h.agentOwnsTaskMessage(agentConn, msg.Type, msg.Payload) {
+				continue
+			}
+			switch msg.Type {
+			case "task_completed":
+				h.handleTaskCompleted(agentConn, msg.Payload)
+			case "task_failed":
+				h.handleTaskFailed(agentConn, msg.Payload)
+			default:
+				h.handleLogStream(agentConn, msg.Payload)
+			}
 		default:
 			log.Printf("[Raw] Unknown message type from agent %s: %s", agentConn.AgentID, msg.Type)
 		}
@@ -928,6 +939,46 @@ func (h *RawAgentCCHandler) handleLogStream(agentConn *RawAgentConnection, paylo
 	if err := pgpubsub.Notify(h.db, LogStreamForwardChannel, forwardMsg); err != nil {
 		log.Printf("[LogStream] Failed to forward log via PG NOTIFY for task %d: %v", uint(taskID), err)
 	}
+}
+
+// ccOwnershipCacheTTL how long a verified task ownership is trusted for
+// log_stream lines (one DB check per task per TTL, not per line).
+const ccOwnershipCacheTTL = 30 * time.Second
+
+// agentOwnsTaskMessage whether a C&C task message (task_completed /
+// task_failed / log_stream) is for a task assigned to this connection's agent
+// (the connection is bound to agent + pool at connect), in a state its agent
+// may still report on (running, or just ended: middleware.AgentTaskReporting).
+// Other messages are dropped with a WARN, the same rule as the HTTP task API.
+func (h *RawAgentCCHandler) agentOwnsTaskMessage(agentConn *RawAgentConnection, msgType string, payload map[string]interface{}) bool {
+	f, ok := payload["task_id"].(float64)
+	if !ok || f <= 0 {
+		return true // the handlers log and ignore an invalid task_id
+	}
+	taskID := uint(f)
+	now := time.Now()
+	if at, ok := agentConn.ownedTasks[taskID]; ok && now.Sub(at) < ccOwnershipCacheTTL {
+		return true
+	}
+	var t struct {
+		AgentID     *string
+		Status      models.TaskStatus
+		CompletedAt *time.Time
+		UpdatedAt   time.Time
+	}
+	err := h.db.Table("workspace_tasks").Select("agent_id, status, completed_at, updated_at").
+		Where("id = ?", taskID).Take(&t).Error
+	if err != nil || t.AgentID == nil || *t.AgentID != agentConn.AgentID ||
+		!middleware.AgentMayUseTask(middleware.AgentTaskReporting, t.Status, t.CompletedAt, t.UpdatedAt, now) {
+		log.Printf("[Raw] [WARN] dropped %s for task %d from agent %s: task not assigned to it or not active (err=%v)",
+			msgType, taskID, agentConn.AgentID, err)
+		return false
+	}
+	if agentConn.ownedTasks == nil {
+		agentConn.ownedTasks = map[uint]time.Time{}
+	}
+	agentConn.ownedTasks[taskID] = now
+	return true
 }
 
 // handleResourceStatusUpdate updates resource status in database (Agent mode)

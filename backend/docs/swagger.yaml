@@ -4425,6 +4425,12 @@ definitions:
         description: before 数据（完整）
       created_at:
         type: string
+      details_purged:
+        description: |-
+          DetailsPurged before / after / after_unknown were removed by the
+          redaction backfill because no plan_json existed to re-derive them from
+          (legacy row with possibly raw agent-uploaded values). Set only there.
+        type: boolean
       id:
         description: 基础字段
         type: integer
@@ -7954,17 +7960,24 @@ paths:
     post:
       consumes:
       - application/json
-      description: Receive parsed resource changes from agent and store in database
+      description: 'Resource changes are derived by the platform from the task''s
+        stored, redacted plan_json (the same plan parser path as local execution;
+        also done when the plan JSON is uploaded). Any resource_changes in the body
+        are accepted and discarded: agent-sent before/after values are never stored.
+        When the task has no plan_json yet (an older agent whose plan upload failed),
+        only address/type/name/module/action of the uploaded entries are stored, with
+        before/after/after_unknown NULL. Only the task''s agent may call this (403
+        otherwise; 409 when the task is not running or just ended).'
       parameters:
       - description: Task ID
         in: path
         name: task_id
         required: true
         type: string
-      - description: Parsed resource changes with resource_changes array
+      - description: Ignored (older agents send resource_changes; their values are
+          discarded)
         in: body
         name: request
-        required: true
         schema:
           additionalProperties: true
           type: object
@@ -7998,7 +8011,7 @@ paths:
             type: object
       security:
       - PoolTokenAuth: []
-      summary: Parse plan changes
+      summary: Derive resource changes
       tags:
       - Agent Task
   /api/v1/agents/tasks/{task_id}/plan-data:
@@ -8059,7 +8072,10 @@ paths:
       consumes:
       - application/json
       description: Upload plan JSON from agent after plan execution. Sensitive values
-        are redacted (services.RedactPlanJSON) before the plan is stored.
+        are redacted (services.RedactPlanJSON) before the plan is stored, and the
+        task's resource changes are derived from the redacted plan by the platform.
+        Only the task's agent may call this, while the task is running (403 / 409
+        otherwise).
       parameters:
       - description: Task ID
         in: path

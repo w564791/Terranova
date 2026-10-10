@@ -67,53 +67,58 @@ func setupAgentAPIRoutes(api *gin.RouterGroup, db *gorm.DB, streamManager *servi
 	// ===== Agent Task API Routes (for Agent v3.2) =====
 	// These routes now include workspace authorization check to ensure agents can only access
 	// tasks from workspaces they are authorized to access
+	// Every task route is also bound to the task's agent and an allowed task
+	// state (middleware.RequireTaskAgent): another agent, even of the same
+	// pool, gets 403; a task in the wrong state 409.
 	agentTasks := api.Group("/agents/tasks")
 	{
 		// Get task execution data
-		agentTasks.GET("/:task_id/data", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.GetTaskData)
+		agentTasks.GET("/:task_id/data", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskExecuting), agentHandler.GetTaskData)
 
 		// Upload log chunk
-		agentTasks.POST("/:task_id/logs/chunk", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.UploadTaskLogChunk)
+		agentTasks.POST("/:task_id/logs/chunk", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskReporting), agentHandler.UploadTaskLogChunk)
 
 		// Update task status
-		agentTasks.PUT("/:task_id/status", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.UpdateTaskStatus)
+		agentTasks.PUT("/:task_id/status", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskReporting), agentHandler.UpdateTaskStatus)
 
 		// SaveTaskState removed - state is now managed via HTTP state backend
 
 		// New endpoints for Agent Mode refactoring
-		agentTasks.GET("/:task_id/plan-task", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.GetPlanTask)
-		agentTasks.POST("/:task_id/plan-data", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.UploadPlanData)
-		agentTasks.POST("/:task_id/plan-json", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.UploadPlanJSON)
-		agentTasks.POST("/:task_id/parse-plan-changes", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.ParsePlanChanges)
-		agentTasks.GET("/:task_id/logs", middleware.PoolTokenAuthWithTaskCheck(db), agentHandler.GetTaskLogs)
+		agentTasks.GET("/:task_id/plan-task", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskExecuting), agentHandler.GetPlanTask)
+		agentTasks.POST("/:task_id/plan-data", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskExecuting), agentHandler.UploadPlanData)
+		agentTasks.POST("/:task_id/plan-json", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskExecuting), agentHandler.UploadPlanJSON)
+		agentTasks.POST("/:task_id/parse-plan-changes", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskReporting), agentHandler.ParsePlanChanges)
+		agentTasks.GET("/:task_id/logs", middleware.PoolTokenAuthWithTaskCheck(db), middleware.RequireTaskAgent(db, middleware.AgentTaskExecuting), agentHandler.GetTaskLogs)
 	}
 
 	// ===== Agent Workspace API Routes (for Agent v3.2) =====
 	// These routes now include workspace authorization check
 	agentWorkspaces := api.Group("/agents/workspaces")
+	// only an agent executing (or just ending) a task on the workspace
+	agentWorkspaceTask := middleware.RequireWorkspaceAgentTask(db)
 	{
 		// Workspace locking
-		agentWorkspaces.POST("/:workspace_id/lock", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.LockWorkspace)
-		agentWorkspaces.POST("/:workspace_id/unlock", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UnlockWorkspace)
+		agentWorkspaces.POST("/:workspace_id/lock", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.LockWorkspace)
+		agentWorkspaces.POST("/:workspace_id/unlock", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.UnlockWorkspace)
 
 		// State version management
-		agentWorkspaces.GET("/:workspace_id/state/max-version", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.GetMaxStateVersion)
+		agentWorkspaces.GET("/:workspace_id/state/max-version", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.GetMaxStateVersion)
 
 		// Temp state management (for state file watcher)
-		agentWorkspaces.PUT("/:workspace_id/state/temp", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UpsertTempState)
-		agentWorkspaces.POST("/:workspace_id/state/promote", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.PromoteTempState)
-		agentWorkspaces.DELETE("/:workspace_id/state/temp", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.CleanupOrphanedTempStates)
+		agentWorkspaces.PUT("/:workspace_id/state/temp", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.UpsertTempState)
+		agentWorkspaces.POST("/:workspace_id/state/promote", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.PromoteTempState)
+		agentWorkspaces.DELETE("/:workspace_id/state/temp", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.CleanupOrphanedTempStates)
 
 		// Update workspace fields (for init optimization - last_init_hash, etc.)
-		agentWorkspaces.PATCH("/:workspace_id/fields", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UpdateWorkspaceFields)
+		agentWorkspaces.PATCH("/:workspace_id/fields", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.UpdateWorkspaceFields)
 
 		// Terraform lock hcl management (for init optimization - .terraform.lock.hcl)
-		agentWorkspaces.GET("/:workspace_id/terraform-lock-hcl", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.GetTerraformLockHCL)
-		agentWorkspaces.PUT("/:workspace_id/terraform-lock-hcl", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.SaveTerraformLockHCL)
+		agentWorkspaces.GET("/:workspace_id/terraform-lock-hcl", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.GetTerraformLockHCL)
+		agentWorkspaces.PUT("/:workspace_id/terraform-lock-hcl", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.SaveTerraformLockHCL)
 
 		// Manifest provider schema (post_init capture; keyed by manifest+subpath on server)
-		agentWorkspaces.GET("/:workspace_id/manifest-provider-schema/meta", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.GetManifestProviderSchemaMeta)
-		agentWorkspaces.PUT("/:workspace_id/manifest-provider-schema", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentHandler.UpsertManifestProviderSchema)
+		agentWorkspaces.GET("/:workspace_id/manifest-provider-schema/meta", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.GetManifestProviderSchemaMeta)
+		agentWorkspaces.PUT("/:workspace_id/manifest-provider-schema", middleware.PoolTokenAuthWithWorkspaceCheck(db), agentWorkspaceTask, agentHandler.UpsertManifestProviderSchema)
 	}
 
 	// ===== Agent Terraform Version API Routes =====

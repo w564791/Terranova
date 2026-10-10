@@ -104,20 +104,28 @@ func TestRequiredAgentCapabilities(t *testing.T) {
 // The agent reports its version and this build's capabilities at registration.
 func TestAgentAPIClient_RegisterReportsCapabilities(t *testing.T) {
 	var body map[string]interface{}
+	var lastAgentHeader string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastAgentHeader = r.Header.Get(models.AgentIDHeader)
 		json.NewDecoder(r.Body).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"agent_id":"agent-1","pool_id":"pool-1"}`))
 	}))
 	defer srv.Close()
-	id, pool, err := NewAgentAPIClient(srv.URL, "tok").Register("a")
+	client := NewAgentAPIClient(srv.URL, "tok")
+	id, pool, err := client.Register("a")
 	require.NoError(t, err)
+	assert.Empty(t, lastAgentHeader, "no agent id before registration")
 	assert.Equal(t, "agent-1", id)
 	assert.Equal(t, "pool-1", pool)
 	caps, _ := body["capabilities"].([]interface{})
-	require.Len(t, caps, 2)
+	require.Len(t, caps, 3)
 	assert.Equal(t, models.AgentCapabilityManifestBundleV1, caps[0])
+	assert.Contains(t, caps, models.AgentCapabilityIdentityHeaderV1)
 	assert.NotEmpty(t, body["version"])
+	// every later call identifies the agent (task ownership checks)
+	_, _ = client.GetTaskData(7)
+	assert.Equal(t, "agent-1", lastAgentHeader)
 }
 
 func TestAgentCapabilities_KnownAndMissing(t *testing.T) {
@@ -125,6 +133,8 @@ func TestAgentCapabilities_KnownAndMissing(t *testing.T) {
 	assert.Nil(t, models.KnownAgentCapabilities(nil))
 	s := `["manifest_bundle_v1"]`
 	a := &models.Agent{Capabilities: &s}
-	assert.Equal(t, []string{models.AgentCapabilityTaskDataOverridesV1}, a.MissingCapabilities(models.ManifestAgentCapabilities()))
+	assert.Equal(t, []string{models.AgentCapabilityTaskDataOverridesV1, models.AgentCapabilityIdentityHeaderV1}, a.MissingCapabilities(models.ManifestAgentCapabilities()))
+	assert.False(t, a.HasCapability(models.AgentCapabilityIdentityHeaderV1))
+	assert.True(t, a.HasCapability(models.AgentCapabilityManifestBundleV1))
 	assert.Equal(t, models.ManifestAgentCapabilities(), (&models.Agent{}).MissingCapabilities(models.ManifestAgentCapabilities()))
 }

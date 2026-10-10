@@ -3573,7 +3573,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Receive parsed resource changes from agent and store in database",
+                "description": "Resource changes are derived by the platform from the task's stored, redacted plan_json (the same plan parser path as local execution; also done when the plan JSON is uploaded). Any resource_changes in the body are accepted and discarded: agent-sent before/after values are never stored. When the task has no plan_json yet (an older agent whose plan upload failed), only address/type/name/module/action of the uploaded entries are stored, with before/after/after_unknown NULL. Only the task's agent may call this (403 otherwise; 409 when the task is not running or just ended).",
                 "consumes": [
                     "application/json"
                 ],
@@ -3583,7 +3583,7 @@ const docTemplate = `{
                 "tags": [
                     "Agent Task"
                 ],
-                "summary": "Parse plan changes",
+                "summary": "Derive resource changes",
                 "parameters": [
                     {
                         "type": "string",
@@ -3593,10 +3593,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Parsed resource changes with resource_changes array",
+                        "description": "Ignored (older agents send resource_changes; their values are discarded)",
                         "name": "request",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -3725,7 +3724,7 @@ const docTemplate = `{
                         "PoolTokenAuth": []
                     }
                 ],
-                "description": "Upload plan JSON from agent after plan execution. Sensitive values are redacted (services.RedactPlanJSON) before the plan is stored.",
+                "description": "Upload plan JSON from agent after plan execution. Sensitive values are redacted (services.RedactPlanJSON) before the plan is stored, and the task's resource changes are derived from the redacted plan by the platform. Only the task's agent may call this, while the task is running (403 / 409 otherwise).",
                 "consumes": [
                     "application/json"
                 ],
@@ -36256,6 +36255,10 @@ const docTemplate = `{
                 },
                 "created_at": {
                     "type": "string"
+                },
+                "details_purged": {
+                    "description": "DetailsPurged before / after / after_unknown were removed by the\nredaction backfill because no plan_json existed to re-derive them from\n(legacy row with possibly raw agent-uploaded values). Set only there.",
+                    "type": "boolean"
                 },
                 "id": {
                     "description": "基础字段",

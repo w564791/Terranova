@@ -1304,22 +1304,9 @@ func (s *TerraformExecutor) ExecutePlan(
 			} else {
 				log.Printf("Successfully parsed and stored resource changes for task %d", task.ID)
 			}
-		} else {
-			// Agent 模式：在本地解析 plan_json，然后通过 API 上传解析结果
-			if planJSON != nil {
-				// 解析 resource_changes
-				resourceChanges := s.parseResourceChangesFromPlanJSON(planJSON, task.TaskType == models.TaskTypeDriftCheck)
-
-				// 通过 API 上传解析结果
-				if err := s.uploadResourceChanges(task.ID, resourceChanges); err != nil {
-					log.Printf("Warning: failed to upload resource changes in Agent mode for task %d: %v", task.ID, err)
-				} else {
-					log.Printf("Successfully uploaded %d resource changes in Agent mode for task %d", len(resourceChanges), task.ID)
-				}
-			} else {
-				log.Printf("Warning: no plan_json available for task %d in Agent mode", task.ID)
-			}
 		}
+		// Agent 模式：资源变更由平台在 plan_json 上传时从脱敏后的 plan_json 推导
+		// (UploadPlanJSON → PlanParserService)；agent 不再上传自己的解析结果。
 	}()
 
 	// 快照只在任务创建时创建一次，不在Plan完成后更新
@@ -4691,129 +4678,6 @@ func (s *TerraformExecutor) extractTerraformOutputs(
 // ============================================================================
 // Agent 模式资源变更解析
 // ============================================================================
-
-// parseResourceChangesFromPlanJSON 从 plan_json 解析资源变更
-// isDriftCheck: only drift_check tasks should fall back to resource_drift (TFE behavior).
-func (s *TerraformExecutor) parseResourceChangesFromPlanJSON(planJSON map[string]interface{}, isDriftCheck bool) []map[string]interface{} {
-	var resourceChanges []map[string]interface{}
-
-	changes, _ := planJSON["resource_changes"].([]interface{})
-
-	// For refresh-only plans (drift check), resource_changes is all no-op.
-	// Only fall back to resource_drift for drift_check tasks.
-	// For plan/plan_and_apply, resource_drift is informational — not included (TFE behavior).
-	if isDriftCheck {
-		hasRealChanges := false
-		for _, item := range changes {
-			if rc, ok := item.(map[string]interface{}); ok {
-				if ch, ok := rc["change"].(map[string]interface{}); ok {
-					if acts, ok := ch["actions"].([]interface{}); ok {
-						for _, a := range acts {
-							if actionStr, ok := a.(string); ok && actionStr != "no-op" && actionStr != "read" {
-								hasRealChanges = true
-								break
-							}
-						}
-					}
-				}
-			}
-			if hasRealChanges {
-				break
-			}
-		}
-		if !hasRealChanges {
-			if driftChanges, ok := planJSON["resource_drift"].([]interface{}); ok && len(driftChanges) > 0 {
-				changes = driftChanges
-			}
-		}
-	}
-
-	for _, item := range changes {
-		rc, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		change, ok := rc["change"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		actions, ok := change["actions"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		// 忽略 no-op
-		if len(actions) == 1 {
-			if actionStr, ok := actions[0].(string); ok && actionStr == "no-op" {
-				continue
-			}
-		}
-
-		// 判断操作类型
-		action := s.determineAction(actions)
-
-		// 构造资源变更对象
-		// 直接获取字符串值，避免函数名冲突
-		getStr := func(m map[string]interface{}, key string) string {
-			if val, ok := m[key]; ok {
-				if str, ok := val.(string); ok {
-					return str
-				}
-			}
-			return ""
-		}
-
-		resourceChange := map[string]interface{}{
-			"resource_address": getStr(rc, "address"),
-			"resource_type":    getStr(rc, "type"),
-			"resource_name":    getStr(rc, "name"),
-			"module_address":   getStr(rc, "module_address"),
-			"action":           action,
-			"changes_before":   change["before"],
-			"changes_after":    change["after"],
-			"after_unknown":    change["after_unknown"],
-		}
-
-		resourceChanges = append(resourceChanges, resourceChange)
-	}
-
-	return resourceChanges
-}
-
-// determineAction 判断操作类型
-func (s *TerraformExecutor) determineAction(actions []interface{}) string {
-	if len(actions) == 1 {
-		if action, ok := actions[0].(string); ok {
-			return action
-		}
-	}
-
-	// ["delete", "create"] = replace
-	if len(actions) == 2 {
-		action0, ok0 := actions[0].(string)
-		action1, ok1 := actions[1].(string)
-		if ok0 && ok1 && action0 == "delete" && action1 == "create" {
-			return "replace"
-		}
-	}
-
-	return "unknown"
-}
-
-// uploadResourceChanges 上传资源变更到服务器（Agent 模式）
-func (s *TerraformExecutor) uploadResourceChanges(taskID uint, resourceChanges []map[string]interface{}) error {
-	log.Printf("[Agent Mode] Uploading %d resource changes for task %d", len(resourceChanges), taskID)
-
-	// 通过 dataAccessor 调用 API
-	if remoteAccessor, ok := s.dataAccessor.(*RemoteDataAccessor); ok {
-		// 调用 AgentAPIClient 的 UploadResourceChanges 方法
-		return remoteAccessor.apiClient.UploadResourceChanges(taskID, resourceChanges)
-	}
-
-	return fmt.Errorf("not in agent mode")
-}
 
 // uploadPlanData 上传 plan_data 到服务器（Agent 模式）
 func (s *TerraformExecutor) uploadPlanData(taskID uint, planData []byte) error {

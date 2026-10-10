@@ -532,8 +532,8 @@ func main() {
 				}
 			}()
 
-			// 9b. Historical plan_json redaction backfill (background, batched,
-			// idempotent; services.BackfillPlanJSONRedaction)
+			// 9b. Historical plan_json, then resource change redaction backfill
+			// (background, batched, idempotent)
 			go func() {
 				res, err := services.BackfillPlanJSONRedaction(leaderCtx, db, 100)
 				if err != nil {
@@ -541,6 +541,14 @@ func main() {
 					return
 				}
 				log.Printf("[Leader] plan_json redaction backfill done: %+v", res)
+				// then the resource changes (re-derived from the redacted
+				// plan_json, or purged; services.BackfillResourceChangeRedaction)
+				rc, err := services.BackfillResourceChangeRedaction(leaderCtx, db, 100)
+				if err != nil {
+					log.Printf("[Leader] resource change redaction backfill stopped: %v (%+v)", err, rc)
+					return
+				}
+				log.Printf("[Leader] resource change redaction backfill done: %+v", rc)
 			}()
 
 			// 9. Recover pending tasks (one-time, must run after AgentCCHandler init)

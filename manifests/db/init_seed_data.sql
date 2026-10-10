@@ -16090,6 +16090,19 @@ ALTER TABLE public.workspace_tasks ADD COLUMN IF NOT EXISTS plan_json_redaction_
 ALTER TABLE public.workspace_tasks ADD COLUMN IF NOT EXISTS error_reason character varying(64);
 -- <<< migrations/add_workspace_task_error_reason.sql <<<
 
+-- >>> migrations/add_workspace_task_resource_change_redaction.sql >>>
+-- Marker of the resource-change redaction backfill (kept in sync with
+-- versioned migration 20261010_04_workspace_task_resource_change_redaction).
+-- Additive and idempotent: existing rows get redaction_version NULL and
+-- details_purged false until the application backfill
+-- (services.BackfillResourceChangeRedaction) re-derives their before/after
+-- from the redacted plan_json, or nulls before/after/after_unknown and sets
+-- details_purged when no plan_json exists.
+
+ALTER TABLE public.workspace_task_resource_changes ADD COLUMN IF NOT EXISTS redaction_version smallint;
+ALTER TABLE public.workspace_task_resource_changes ADD COLUMN IF NOT EXISTS details_purged boolean DEFAULT false;
+-- <<< migrations/add_workspace_task_resource_change_redaction.sql <<<
+
 -- PostgreSQL database dump complete
 --
 

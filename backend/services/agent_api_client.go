@@ -38,6 +38,9 @@ type AgentAPIClient struct {
 	token       string
 	httpClient  *http.Client
 	retryConfig RetryConfig
+	// agentID is sent as models.AgentIDHeader once registered (set by
+	// Register before any task call)
+	agentID string
 }
 
 // NewAgentAPIClient creates a new API client
@@ -87,6 +90,7 @@ func (c *AgentAPIClient) Register(agentName string) (string, string, error) {
 
 	agentID, _ := respBody["agent_id"].(string)
 	poolID, _ := respBody["pool_id"].(string)
+	c.agentID = agentID
 
 	return agentID, poolID, nil
 }
@@ -165,6 +169,9 @@ func (c *AgentAPIClient) doRequest(method, path string, body interface{}) (map[s
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.agentID != "" {
+		req.Header.Set(models.AgentIDHeader, c.agentID)
+	}
 
 	// Execute request
 	resp, err := c.httpClient.Do(req)
@@ -474,22 +481,6 @@ func (c *AgentAPIClient) UploadPlanData(taskID uint, encodedData string) error {
 	return nil
 }
 
-// UploadResourceChanges uploads parsed resource changes to server
-func (c *AgentAPIClient) UploadResourceChanges(taskID uint, resourceChanges []map[string]interface{}) error {
-	path := fmt.Sprintf("/api/v1/agents/tasks/%d/parse-plan-changes", taskID)
-
-	reqBody := map[string]interface{}{
-		"resource_changes": resourceChanges,
-	}
-
-	_, err := c.doRequest("POST", path, reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to upload resource changes: %w", err)
-	}
-
-	return nil
-}
-
 // UploadPlanJSON uploads plan_json to server
 func (c *AgentAPIClient) UploadPlanJSON(taskID uint, planJSON map[string]interface{}) error {
 	path := fmt.Sprintf("/api/v1/agents/tasks/%d/plan-json", taskID)
@@ -748,6 +739,9 @@ func (c *AgentAPIClient) doRequestWithRetry(method, path string, body interface{
 		// Set headers
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+c.token)
+		if c.agentID != "" {
+			req.Header.Set(models.AgentIDHeader, c.agentID)
+		}
 
 		// Execute request
 		resp, err := c.httpClient.Do(req)
