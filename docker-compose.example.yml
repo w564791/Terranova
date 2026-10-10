@@ -58,6 +58,12 @@ services:
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?set DATA_ENCRYPTION_KEY (openssl rand -base64 32)}
       SIGNING_ROOT_KEY: ${SIGNING_ROOT_KEY:?set SIGNING_ROOT_KEY (openssl rand -base64 32)}
       LEGACY_TOKEN_CUTOFF: ${LEGACY_TOKEN_CUTOFF:-}
+      # Git-sourced manifests (optional; disabled when unset). GitHub App with
+      # Repository permissions "Contents: read" (and "Metadata: read"), push webhook.
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY_FILE: ${GITHUB_APP_PRIVATE_KEY_FILE:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      GITHUB_URL: ${GITHUB_URL:-https://github.com}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE} 
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY} ## value form https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-envvars.html
     ports:

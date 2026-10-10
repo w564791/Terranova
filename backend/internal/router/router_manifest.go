@@ -82,6 +82,9 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 	// 本组 handler 只按 manifest_id 查询:每条路由在 RequirePermission(写入 auth_org_id)
 	// 之后挂 ManifestInAuthOrg,path manifest 不属于该 org / 不存在 => 404。
 	inOrg := manifestRouteChain(handlers.ManifestInAuthOrg(db))
+	// git manifests: the editor is read-only (changes go through git)
+	nativeOnly := handlers.ManifestNativeOnly(db)
+	gitH := handlers.NewManifestGitHandler(db)
 	{
 		// === post_init 落库的 provider 类型目录（编辑器补全）===
 		g.GET("/provider-schemas", inOrg(
@@ -101,26 +104,32 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 		g.PUT("/files/*path", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
 			middleware.LimitRequestBodySize(handlers.ManifestMaxFileSize),
+			nativeOnly,
 			filesH.PutFile,
 		)...)
 		g.DELETE("/files/*path", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			nativeOnly,
 			filesH.DeleteFile,
 		)...)
 		g.POST("/files/_move", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			nativeOnly,
 			filesH.MoveFile,
 		)...)
 		g.POST("/files/_move_dir", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			nativeOnly,
 			filesH.MoveDir,
 		)...)
 		g.POST("/files/_delete_dir", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			nativeOnly,
 			filesH.DeleteDir,
 		)...)
 		g.POST("/draft/_reset_from", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			nativeOnly,
 			filesH.ResetDraftFromVersion,
 		)...)
 		g.POST("/draft/_export", inOrg(
@@ -156,6 +165,17 @@ func registerManifestV2Routes(r *gin.RouterGroup, db *gorm.DB, iamMiddleware *mi
 		g.POST("/v2/versions/:version_id/files/_export", inOrg(
 			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "READ"),
 			versionsH.ExportVersion,
+		)...)
+
+		// === git 来源:发布用的 commit 选择器(按请求现签单仓库 contents:read token)===
+		// WRITE:读私有仓库元信息只给能发布的人
+		g.GET("/git/branches", inOrg(
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			gitH.ListBranches,
+		)...)
+		g.GET("/git/commits", inOrg(
+			iamMiddleware.RequirePermission("MANIFESTS", "ORGANIZATION", "WRITE"),
+			gitH.ListCommits,
 		)...)
 
 		// === 部署(新设计 install/upgrade/uninstall,纯元信息) ===
@@ -250,4 +270,17 @@ func manifestRouteChain(orgGuard gin.HandlerFunc) func(perm gin.HandlerFunc, res
 	return func(perm gin.HandlerFunc, rest ...gin.HandlerFunc) []gin.HandlerFunc {
 		return append([]gin.HandlerFunc{perm, orgGuard}, rest...)
 	}
+}
+
+// RegisterGitHubAppRoutes GitHub App installation registry (org ADMIN) and
+// the GitHub webhook (public; authenticated by X-Hub-Signature-256 only).
+func RegisterGitHubAppRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, db *gorm.DB, iamMiddleware *middleware.IAMPermissionMiddleware) {
+	appH := handlers.NewGitHubAppHandler(db)
+	inst := protected.Group("/organizations/:org_id/github-app/installations") // protected carries JWTAuth
+	{
+		inst.GET("", iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN"), appH.ListInstallations)
+		inst.POST("", iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN"), appH.RegisterInstallation)
+		inst.DELETE("/:installation_id", iamMiddleware.RequirePermission("ORGANIZATION", "ORGANIZATION", "ADMIN"), appH.DeleteInstallation)
+	}
+	api.POST("/webhooks/github", handlers.NewGitHubWebhookHandler(db).Receive)
 }

@@ -59,10 +59,10 @@ func manifestV2GroupRoutes(t *testing.T, r *gin.Engine, org, manifest string) []
 		).Replace(ri.Path)
 		out = append(out, gin.RouteInfo{Method: ri.Method, Path: p})
 	}
-	// 24 routes of registerManifestV2Routes + GET /:id/export-zip of the CRUD
+	// 26 routes of registerManifestV2Routes + GET /:id/export-zip of the CRUD
 	// group (whose handler filters by organization_id itself).
-	if len(out) != 25 {
-		t.Fatalf("manifest /:id/* has %d routes, want 25; review org binding for new routes", len(out))
+	if len(out) != 27 {
+		t.Fatalf("manifest /:id/* has %d routes, want 27; review org binding for new routes", len(out))
 	}
 	return out
 }

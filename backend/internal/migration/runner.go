@@ -126,6 +126,9 @@ func definitions() []definition {
 		// Approval binding (manifest_runs.task_id, approved_* columns,
 		// chk_manifest_runs_approval). Additive only.
 		{version: "20261010_13_manifest_approval", contract: "manifest-approval-v1", apply: applyManifestApproval},
+		// Git source (github_app_installations, manifests.git_latest_*).
+		// Additive only.
+		{version: "20261010_14_manifest_git_source", contract: "manifest-git-source-v1", apply: applyManifestGitSource},
 	}
 }
 

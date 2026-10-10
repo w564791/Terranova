@@ -15,13 +15,18 @@ type Manifest struct {
 	// 来源(创建时确定,不可修改;UpdateManifest 拒绝变更):native | git
 	SourceType string `json:"source_type" gorm:"size:16;not null;default:native"`
 	// git 来源字段(source_type=git 时 repo 必填;native 时全部为 NULL,DB CHECK 保证)。
-	// 暂不在 API 输出,Git 来源步骤接入时再开放。
-	GitRepoURL           *string   `json:"-" gorm:"column:git_repo_url;size:1024"`
-	GitSubpath           *string   `json:"-" gorm:"column:git_subpath;size:512"`
-	GitHubInstallationID *int64    `json:"-" gorm:"column:github_installation_id"`
-	CreatedBy            string    `json:"created_by" gorm:"size:20;not null"` // 创建者
-	CreatedAt            time.Time `json:"created_at" gorm:"autoCreateTime"`   // 创建时间
-	UpdatedAt            time.Time `json:"updated_at" gorm:"autoUpdateTime"`   // 更新时间
+	// git_repo_url = <GITHUB_URL>/<owner>/<repo>(无凭证);git_subpath = bundle 根目录
+	// (空 = 仓库根);github_installation_id 必须是本组织已登记的 GitHub App installation。
+	GitRepoURL           *string `json:"git_repo_url,omitempty" gorm:"column:git_repo_url;size:1024"`
+	GitSubpath           *string `json:"git_subpath,omitempty" gorm:"column:git_subpath;size:512"`
+	GitHubInstallationID *int64  `json:"github_installation_id,omitempty" gorm:"column:github_installation_id"`
+	// 经验签 webhook 报告的仓库最新 push("有新 commit 可发布"),只提示,从不自动发布。
+	GitLatestSHA *string    `json:"git_latest_sha,omitempty" gorm:"column:git_latest_sha;size:64"`
+	GitLatestRef *string    `json:"git_latest_ref,omitempty" gorm:"column:git_latest_ref;size:255"`
+	GitLatestAt  *time.Time `json:"git_latest_at,omitempty" gorm:"column:git_latest_at"`
+	CreatedBy    string     `json:"created_by" gorm:"size:20;not null"` // 创建者
+	CreatedAt    time.Time  `json:"created_at" gorm:"autoCreateTime"`   // 创建时间
+	UpdatedAt    time.Time  `json:"updated_at" gorm:"autoUpdateTime"`   // 更新时间
 
 	// 关联
 	Versions    []ManifestVersion    `json:"versions,omitempty" gorm:"foreignKey:ManifestID"`
@@ -62,8 +67,8 @@ type ManifestVersion struct {
 	// hash_mismatch),install / upgrade / 预览拒绝,需重新发布。读接口只返回存储值,不重算。
 	BundleHash          *string `json:"bundle_hash" gorm:"column:bundle_hash;size:64"`
 	BundleInvalidReason *string `json:"bundle_invalid_reason" gorm:"column:bundle_invalid_reason;type:text"`
-	// git commit SHA(native 为 NULL),git 来源(step 8)接入时再开放。
-	SourceRef *string   `json:"-" gorm:"column:source_ref;size:64"`
+	// git 来源:bundle 所钉的 commit SHA(native 为 NULL)。
+	SourceRef *string   `json:"source_ref,omitempty" gorm:"column:source_ref;size:64"`
 	CreatedBy string    `json:"created_by" gorm:"size:20;not null"` // 创建者
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`   // 创建时间
 
@@ -132,6 +137,14 @@ func (ManifestDeploymentResource) TableName() string {
 type CreateManifestRequest struct {
 	Name        string `json:"name" binding:"required,max=255"`
 	Description string `json:"description" binding:"max=1024"`
+	// native(默认,平台内编辑)| git(GitHub App 只读,发布 = 选 commit)。创建后不可变。
+	SourceType string `json:"source_type,omitempty"`
+	// source_type=git 时必填:<GITHUB_URL>/<owner>/<repo>
+	GitRepoURL string `json:"git_repo_url,omitempty" binding:"max=1024"`
+	// source_type=git 时可选:仓库内作为 bundle 根的目录
+	GitSubpath string `json:"git_subpath,omitempty" binding:"max=512"`
+	// source_type=git 时必填:本组织已登记的 GitHub App installation(账户须是仓库 owner)
+	GitHubInstallationID int64 `json:"github_installation_id,omitempty"`
 }
 
 // UpdateManifestRequest 更新 Manifest 请求
@@ -244,3 +257,17 @@ const (
 	LinkStatusUnlinked = "unlinked"
 	LinkStatusMismatch = "mismatch"
 )
+
+// GitHubAppInstallation a GitHub App installation registered for an
+// organization by an org ADMIN (github_app_installations). An installation
+// belongs to at most one organization.
+type GitHubAppInstallation struct {
+	ID             int64     `json:"id" gorm:"primaryKey"`
+	OrganizationID int       `json:"organization_id" gorm:"not null"`
+	InstallationID int64     `json:"installation_id" gorm:"not null"`
+	AccountLogin   string    `json:"account_login" gorm:"size:255;not null"`
+	CreatedBy      string    `json:"created_by" gorm:"size:20;not null"`
+	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
+}
+
+func (GitHubAppInstallation) TableName() string { return "github_app_installations" }

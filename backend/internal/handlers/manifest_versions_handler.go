@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"iac-platform/internal/gitsource"
 	"iac-platform/internal/manifestbundle"
 	"iac-platform/internal/models"
 	"iac-platform/services"
@@ -136,7 +137,7 @@ func (h *ManifestVersionsHandler) ListWorkdirs(c *gin.Context) {
 
 // PublishVersion 把当前用户草稿快照为新版本
 // @Summary Publish manifest version
-// @Description Snapshot the current user's draft into a new published version (vX.Y.Z). The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} and never contains file content. Besides the path / denylist / size / secret-scan rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner block), hcl_external_data / hcl_http_data (data "external" / data "http", or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source (module source that is not a relative path inside the bundle nor an active platform module catalog source). line is set for secret-scan and HCL problems (1-based line of the hit / block / attribute).
+// @Description Snapshot the current user's draft (native manifests) or the commit commit_sha of the repository (git manifests: required there, refused for native; the platform fetches that commit with a per-publish GitHub App installation token, single repo contents:read, and the version records source_ref = the SHA; symlinks and submodules are rejected as git_symlink / git_submodule problems; changelog defaults to the commit subject) into a new published version (vX.Y.Z). Git module sources in the bundle must pin a full commit SHA (?ref=<40-hex>) or be vendored: hcl_module_unpinned. Git errors: 422 git_repo_not_accessible / git_commit_not_found / git_subpath_not_found, 502 git_fetch_failed, 503 git_source_disabled. The draft is packed into an immutable bundle and the response includes bundle_hash. A draft that breaks the bundle rules is rejected with 422 bundle_rules_violated; each problem is {file, line?, rule, message} and never contains file content. Besides the path / denylist / size / secret-scan rules, every Terraform configuration file (*.tf, *.tf.json, *_override.tf[.json], *.tofu[.json]) is statically checked: hcl_parse_error (unparsable file), hcl_provisioner (any provisioner block), hcl_external_data / hcl_http_data (data "external" / data "http", or required_providers mapping hashicorp/external / hashicorp/http), hcl_module_source (module source that is not a relative path inside the bundle nor an active platform module catalog source). line is set for secret-scan and HCL problems (1-based line of the hit / block / attribute).
 // @Tags Manifest Versions
 // @Accept json
 // @Produce json
@@ -171,10 +172,22 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	}
 
 	// 校验 manifest 存在
-	var n int64
-	h.db.Model(&models.Manifest{}).Where("id = ?", manifestID).Count(&n)
-	if n == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "manifest not found"})
+	var manifest models.Manifest
+	if err := h.db.Where("id = ?", manifestID).Take(&manifest).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "manifest not found"})
+		} else {
+			_ = c.Error(err)
+		}
+		return
+	}
+	isGit := manifest.SourceType == models.ManifestSourceGit
+	switch {
+	case isGit && !gitsource.IsCommitSHA(req.CommitSHA):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "commit_sha (full lowercase 40 or 64 hex commit id) is required to publish a git manifest"})
+		return
+	case !isGit && req.CommitSHA != "":
+		c.JSON(http.StatusBadRequest, gin.H{"error": "commit_sha is only accepted for git manifests"})
 		return
 	}
 
@@ -189,6 +202,21 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 
 	newVersionID := generateManifestVersionID()
 
+	// git: fetch the pinned commit platform-side, outside the transaction
+	// (network); runs never fetch git, they use the stored bundle.
+	var gitTree *gitsource.Tree
+	if isGit {
+		tree, err := fetchGitCommit(c.Request.Context(), &manifest, req.CommitSHA)
+		if err != nil {
+			respondGitError(c, "publish "+manifestID, err)
+			return
+		}
+		gitTree = tree
+		if req.Changelog == "" {
+			req.Changelog = tree.Subject
+		}
+	}
+
 	// 发布 = 把当前用户草稿打包成不可变 bundle(manifestbundle.Pack:规则校验 + Hash),
 	// 在同一事务里读草稿、写版本行、存 bundle(manifest_files 版本快照行)并写 bundle_hash。
 	// 变量元信息也从同一份文件集提取,与 bundle 内容一致。
@@ -201,7 +229,11 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	errRejected := errors.New("publish rejected")
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		ctx := c.Request.Context()
-		files, err := manifestbundle.NativeDraft{DB: tx, ManifestID: manifestID, OwnerUserID: userID}.ReadFiles(ctx)
+		var src manifestbundle.Source = manifestbundle.NativeDraft{DB: tx, ManifestID: manifestID, OwnerUserID: userID}
+		if gitTree != nil {
+			src = manifestbundle.GitCommit{SHA: gitTree.SHA, Files: gitTree.Files}
+		}
+		files, err := src.ReadFiles(ctx)
 		if err != nil {
 			return err
 		}
@@ -215,6 +247,10 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		bundle, probs, err := manifestbundle.PackFilesForPublish(files, manifestbundle.PublishModuleSourcePolicy(ctx, tx))
 		if err != nil {
 			return err
+		}
+		if gitTree != nil {
+			// symlinks / submodules / oversize entries the fetcher did not read
+			probs = gitCommitProblems(gitTree, probs)
 		}
 		if len(probs) > 0 {
 			problems = probs
@@ -235,6 +271,10 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 			CreatedBy:  userID,
 			CreatedAt:  time.Now(),
 		}
+		if gitTree != nil {
+			sha := gitTree.SHA
+			v.SourceRef = &sha // the version is pinned to this commit
+		}
 		if err := tx.Create(&v).Error; err != nil {
 			return err
 		}
@@ -249,13 +289,20 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 	})
 
 	switch {
+	case noTF && isGit:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "the commit has no .tf file under git_subpath"})
+		return
 	case noTF:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "draft must contain at least one .tf file before publishing"})
 		return
 	case len(problems) > 0:
+		msg := "draft violates the bundle rules"
+		if isGit {
+			msg = "commit violates the bundle rules"
+		}
 		// 422 problems: 每项只有规则名与路径,不含文件内容或命中文本
 		c.JSON(http.StatusUnprocessableEntity, BundleRulesViolatedResponse{
-			Error:    "draft violates the bundle rules",
+			Error:    msg,
 			Code:     "bundle_rules_violated",
 			Problems: problems,
 		})
@@ -265,12 +312,17 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		return
 	}
 
-	writeManifestAudit(h.db, auditResourceManifestVersion, "version.publish", userID, map[string]interface{}{
+	audit := map[string]interface{}{
 		"manifest_id": manifestID,
 		"version_id":  newVersionID,
 		"version":     req.Version,
 		"changelog":   req.Changelog,
-	})
+		"bundle_hash": bundleHash,
+	}
+	if gitTree != nil {
+		audit["source_ref"] = gitTree.SHA
+	}
+	writeManifestAudit(h.db, auditResourceManifestVersion, "version.publish", userID, audit)
 
 	resp := gin.H{
 		"id":         newVersionID,
@@ -279,6 +331,9 @@ func (h *ManifestVersionsHandler) PublishVersion(c *gin.Context) {
 		"created_by":  userID,
 		"created_at":  time.Now(),
 		"bundle_hash": bundleHash,
+	}
+	if gitTree != nil {
+		resp["source_ref"] = gitTree.SHA
 	}
 	if hclParseFailed {
 		resp["warning"] = "HCL parse failed, variables metadata not extracted"

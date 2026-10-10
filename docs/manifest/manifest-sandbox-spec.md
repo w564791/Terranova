@@ -32,8 +32,8 @@
 
 | 表 | 新增 | 约束 / 说明 |
 |---|---|---|
-| `manifests` | `source_type varchar(16) NOT NULL DEFAULT 'native'`、`git_repo_url varchar(1024)`、`git_subpath varchar(512)`、`github_installation_id bigint` | `chk_manifests_source_type`（native\|git）；`chk_manifests_git_fields`：native ⇒ 三个 git 字段全为 NULL，git ⇒ `git_repo_url` 非空。存量行经默认值成为 native。API 只输出 `source_type`；创建固定为 native（git 创建在 step 8），更新时传入不同值返回 400。git 字段不出 JSON。 |
-| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填（step 2 为 v1；step 3 的迁移 `20261004_04` 校验后改写为 v2 并按 bundle 规则判定，见 §3.3）。`bundle_hash` 与 step 3 新增的 `bundle_invalid_reason` 出现在版本列表/详情 JSON；`source_ref` 不出 JSON。 |
+| `manifests` | `source_type varchar(16) NOT NULL DEFAULT 'native'`、`git_repo_url varchar(1024)`、`git_subpath varchar(512)`、`github_installation_id bigint` | `chk_manifests_source_type`（native\|git）；`chk_manifests_git_fields`：native ⇒ 三个 git 字段全为 NULL，git ⇒ `git_repo_url` 非空。存量行经默认值成为 native。创建时选 `source_type`（step 8 起可选 git，见 §3.5），更新时传入不同值返回 400。git 字段（`git_repo_url`、`git_subpath`、`github_installation_id`，以及 step 8 的 `git_latest_*`）只在 git manifest 上出现在 JSON。 |
+| `manifest_versions` | `bundle_hash varchar(64)`、`source_ref varchar(64)` | `bundle_hash` 为 NULL 或 64 位小写 hex；`source_ref` 为 NULL 或 40/64 位小写 hex（git SHA-1/SHA-256）。`bundle_hash` 保持可空，便于新旧版本混跑时滚动上线；发布（PublishVersion）在同一事务内写入，存量由迁移回填（step 2 为 v1；step 3 的迁移 `20261004_04` 校验后改写为 v2 并按 bundle 规则判定，见 §3.3）。`bundle_hash` 与 step 3 新增的 `bundle_invalid_reason` 出现在版本列表/详情 JSON；`source_ref`（git 版本所钉的 commit SHA）step 8 起也出现在 JSON（native 为空，不输出）。 |
 | `manifest_deployments` | `approved_bundle_hash`、`approved_plan_hash`（varchar(64)） | 最近一次审批的哈希（step 7 起由 confirm-apply 写入，权威记录在 `manifest_runs.approved_*`），不出 JSON。 |
 | `manifest_deployments` / `workspace_tasks` | `sensitive_keys jsonb`（可空、无默认值） | 覆盖值为敏感的 key 列表（任务行是部署覆盖快照的同一标记）。迁移不回填、不批量标记；NULL = 尚未计算，API 一律按全部敏感处理（不返回任何值）。由启动时的 Go 回填任务按部署时同一敏感判定写入（见设计文档 §8.4）。不出 JSON。 |
 | `sandbox_sessions`（新） | `id`、`user_id`、`workspace_id`、`provider`、`network_mode DEFAULT 'vpc'`、`status`、`expires_at`、`closed_at`、时间戳 | `chk_sandbox_sessions_network_mode`：只允许 `vpc`（§6.2 的数据库兜底）；`UNIQUE(id, workspace_id)` 供复合外键使用。 |
@@ -58,7 +58,7 @@ sha256( "terranova-bundle-v2" 0x00
 **存储**：复用 `manifest_files` 的版本行（`version_id = 版本 id`、`owner_user_id IS NULL`），按 `manifest_versions.bundle_hash` 内容寻址（部分索引 `idx_manifest_versions_bundle_hash`）。不引入新存储，也不做跨版本去重；同一文件集在不同版本里各存一份，哈希相同。哈希编码见 §3.2（v2，含文件 mode）。
 
 **`internal/manifestbundle`**
-- `Source` 接口（`ReadFiles`）：`NativeDraft`（调用者的草稿）、版本快照（包内）、`GitCommit`（占位，返回 `ErrGitSourceNotImplemented`，step 8 实现）。
+- `Source` 接口（`ReadFiles`）：`NativeDraft`（调用者的草稿）、版本快照（包内）、`GitCommit`（step 8：`gitsource.Fetcher` 在平台侧取回的某个 commit 的文件，见 §3.5）。
 - `Pack` / `PackFiles`：校验规则（`Validate`）并计算哈希；有违规时不产出 bundle。
 - `Store`：在发布事务内写版本行，再用 `VersionHash` 重算并与打包哈希比对（不一致 → `ErrIntegrity`），最后写 `bundle_hash`、清空 `bundle_invalid_reason`。
 - `OpenVersion`（按版本）/ `OpenBundle`（按哈希）：只读存储的文件、`bundle_hash`、`bundle_invalid_reason`，**不重算、不写库**。
@@ -87,6 +87,7 @@ sha256( "terranova-bundle-v2" 0x00
 | `file_too_large` / `bundle_too_large` | 单文件超过 1 MB / 内容总和超过 50 MB |
 | `too_many_files` | 文件数超过 `MaxFiles` = 2000。在任何逐文件检查之前判定，命中即只返回这一条（`file` 为空串、无 `line`），不再做路径 / 内容扫描 |
 | `secret_scan:<kind>` | 内容命中高置信度凭证格式：`aws_access_key`、`private_key`、`github_token`、`slack_token`（新写的最小扫描器，代码库原先没有） |
+| `git_symlink` / `git_submodule` | 仅 git 来源（step 8）：commit 树里的符号链接（`120000`）/ submodule（`160000`）条目。由 fetcher 在读内容前判定，不读其内容 |
 
 **HCL 静态检查（仅发布，`manifestbundle.CheckHCL` / `ValidateForPublish`）**：对 Terraform 会加载的每个配置文件（任意深度，本地 module 也会被加载）：`*.tf`、`*.tf.json`（含 `override.tf`、`*_override.tf` 及其 `.json`）、OpenTofu 的 `*.tofu`、`*.tofu.json`，不区分大小写，连 Terraform 自己忽略的 `.`/`#` 开头、`~` 结尾的文件也检查（宁多勿少）。用 `hclparse`（原生 `ParseHCL`、JSON `ParseJSON`）解析，按 body schema 检查块，不用正则。problem 带 `file` 与命中块 / 属性的 1 起 `line`。
 
@@ -97,8 +98,9 @@ sha256( "terranova-bundle-v2" 0x00
 | `hcl_external_data` | `data "external"`（顶层或 `check` 块内的嵌套 data）；`required_providers` 把 `hashicorp/external` 映射到任意本地名 |
 | `hcl_http_data` | `data "http"`（同上）；`required_providers` 映射 `hashicorp/http` |
 | `hcl_module_source` | `module` 的 `source` 不是静态字符串、缺失，或既不是留在 bundle 内的相对路径（`./`、`../`，相对声明文件所在目录解析后不越出 bundle 根），也不在白名单内 |
+| `hcl_module_unpinned` | step 8：git module source（`git::`、`github.com/`、`bitbucket.org/`、`git@`）没有钉完整 commit SHA（`?ref=<40/64 位小写 hex>`，除 `depth` 外不许其他参数，如 `sshkey`）。不论策略如何都先判；钉了 SHA 的仍须在白名单内 |
 
-module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`（step 8 在此扩展）：仓库里没有独立的 module source / registry 白名单配置，因此白名单 = 平台 module 目录中 `status='active'` 的 module 的 `modules.module_source` 及其 `module_versions.module_source`（即编辑器可选的 module；`modules.source` 是导入方式标识，不算）。精确匹配，另允许 `<条目>//<子目录>` 形式。目录只在遇到第一个非本地 source 时才查询。HCL 检查只在发布时执行：迁移与存量重判仍只用 `Validate`，不会让已有合法哈希的版本因新规则失效。`manifestbundle.LocalModulesOnly`（nil 策略）只允许本地路径，供以后检查不可信 bundle 使用。
+module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`（step 8 已在此扩展：git module source 必须钉 SHA，钉了 SHA 的按去掉 `?query` 后的 base 与目录条目（条目本身带不带 ref 都行）匹配，含 `//子目录`）：仓库里没有独立的 module source / registry 白名单配置，因此白名单 = 平台 module 目录中 `status='active'` 的 module 的 `modules.module_source` 及其 `module_versions.module_source`（即编辑器可选的 module；`modules.source` 是导入方式标识，不算）。精确匹配，另允许 `<条目>//<子目录>` 形式。目录只在遇到第一个非本地 source 时才查询。HCL 检查只在发布时执行：迁移与存量重判仍只用 `Validate`，不会让已有合法哈希的版本因新规则失效。`manifestbundle.LocalModulesOnly`（nil 策略）只允许本地路径，供以后检查不可信 bundle 使用。
 
 **发布**：在同一事务内依次执行：
 1. 读调用者的草稿；没有 `.tf` 文件则返回 400。
@@ -153,6 +155,30 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 
 **平台侧敏感集合**：`RedactPlanJSON(plan, ps)` 在 HCL `sensitive = true` 之外再并上平台侧敏感集合 `PlanSensitivity`：workspace 敏感变量、varset 敏感变量（含 active deployment 的 varset，均来自任务变量快照）、deployment overrides 中 `sensitive_keys` 列出的键（NULL = 全部 override 敏感）。按变量名脱敏 `variables[name].value` 与 root module 的 `default`；按值把 plan 中任何等于（≥4 字符）或包含（≥8 字符）这些敏感值的字符串叶子整体替换（HCL 格式值取其字符串叶子），覆盖未在 HCL 中声明 sensitive 的变量流入资源属性 / output 的情况；派生值（编码、哈希、拼接拆分）无法识别，HCL 声明 sensitive 仍是可靠手段。执行器（local / agent）用与 tfvars 相同的变量来源（快照 + overrides）计算；平台侧（agent 上传 plan_json、plan parser 回退、历史回填）用 `PlanSensitivityForTask` 按任务的变量快照 + override 快照计算。脱敏标记统一为 `(sensitive value)`，与 Terraform CLI 及前端（PlanCompleteView / ApplyingView / StateResourceViewer）显示一致。
 
+### 3.5 Git 来源（step 8，迁移 `20261010_14_manifest_git_source`）
+
+**原则**：只在发布时由平台拉取，钉到一个完整 commit SHA；拉到的树走与 native 草稿完全相同的发布规则（`ValidateForPublish`：路径 / 黑名单 / 大小 / secret scan / HCL 检查 / module source 白名单），存为不可变 bundle（`bundle_hash`，`source_ref = SHA`）。run、部署、审批、apply 只用存储的 bundle，永远不拉 git、不需要 git 凭证。
+
+**创建**（`POST /organizations/{org_id}/manifests`，MANIFESTS WRITE）：`source_type: "git"` + `git_repo_url`（必须是 `<GITHUB_URL>/<owner>/<repo>[.git]`，https、无凭证 / query / fragment，存为规范形式）+ `github_installation_id`（必须已由本组织 ADMIN 登记，且其 account 就是仓库 owner）+ 可选 `git_subpath`（bundle 根目录，空 = 仓库根；不能有 `.` / `..` / 空段 / 开头 `/` / 开头 `-`）。创建时用单仓库 token 验证仓库可访问。之后不可改来源。GitHub App 未配置 → 503 `git_source_disabled`。
+
+**编辑器只读**：git manifest 的草稿写接口（PUT / DELETE 文件、move、delete_dir、reset_from）→ 409 `git_source_read_only`（`ManifestNativeOnly` 中间件）。
+
+**发布**（`POST .../v2/versions`）：git manifest 必须给 `commit_sha`（40/64 位小写 hex；分支名、短 SHA 都拒绝），native 给了则 400。流程：事务外签 token、拉取（`gitsource.Fetcher`）→ 事务内与 native 相同的 `PackFilesForPublish` + fetcher 报告的树级 problem 合并 → 建版本（`source_ref = SHA`，`changelog` 默认取 commit 标题）→ `Store`。错误：422 `git_repo_not_accessible` / `git_commit_not_found` / `git_subpath_not_found`，502 `git_fetch_failed`（git 输出只记日志，已去除 token），422 `bundle_rules_violated`（`error: "commit violates the bundle rules"`）。
+
+**拉取**（`internal/gitsource.Fetcher`，git CLI）：临时 bare 仓库 `fetch --depth=1 --no-tags --no-recurse-submodules <clone URL> <sha>`，`rev-parse <sha>^{commit}` 必须等于 SHA；不 checkout：`ls-tree -r -z -l` 列树、`cat-file --batch` 读 blob，所以 hooks、过滤器（LFS smudge）、符号链接、submodule 都不会落盘。符号链接 / submodule / 超过 `MaxFileSize` 的条目直接记 problem 且不读内容；条目数 > `MaxFiles`、总大小 > `MaxBundleSize` 同样提前拒绝。git 进程：`credential.helper=` 清空、`core.hooksPath=/dev/null`、`http.followRedirects=false`、只允许 https（配置的 `GITHUB_URL` 是 http 时只允许 http，供测试）、`GIT_CONFIG_NOSYSTEM`、`GIT_CONFIG_GLOBAL=/dev/null`、`HOME` 指向临时目录、默认 2 分钟超时。
+
+**凭证**：GitHub App installation token，每次操作（创建校验、发布、列分支 / commit）现签：`POST /app/installations/{id}/access_tokens`，`repositories = [该仓库]`、`permissions = {contents: read}`；返回的权限若超出 `contents`/`metadata` 的 read 或不止一个仓库即撤销并拒绝；用完 `DELETE /installation/token` 撤销（约 1 小时自然过期）。token 只在内存：不落库、不记日志；只经 `GIT_ASKPASS`（临时目录里的脚本，打印 git 进程环境变量 `TERRANOVA_GIT_TOKEN`）交给 git，从不进 URL 或 argv；git 的错误输出先去掉 token 再返回；`gitsource.Token` 用任何格式化动词打印都是 `***`。App 凭证：`GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`（PEM 或其 base64）/ `GITHUB_APP_PRIVATE_KEY_FILE`，经 `gitsource.CredentialsProvider`（默认读环境变量，同 `keys.KeyProvider` 模式，可换成 KMS 实现）；`GITHUB_URL`（默认 `https://github.com`）、`GITHUB_API_URL`（默认 `https://api.github.com`，GHES 为 `<GITHUB_URL>/api/v3`）。未配置 → git 来源整体禁用（`git_source_disabled`）。
+
+**installation 登记**（组织 ADMIN，`ORGANIZATION` 资源）：`GET/POST /organizations/{org_id}/github-app/installations`、`DELETE .../{installation_id}`。登记时用 App JWT 查询 installation，`account_login` 以 GitHub 返回为准；一个 installation 只能属于一个组织（全局唯一，别的组织已登记 → 409）；有 git manifest 在用时不能删除（409）。表 `github_app_installations`（FK organizations ON DELETE CASCADE）。
+
+**commit 选择器**（MANIFESTS WRITE，只给能发布的人）：`GET .../manifests/{id}/git/branches`、`GET .../git/commits?ref=&per_page=`（GitHub REST，token 在 `Authorization` 头）。
+
+**webhook**（`POST /api/v1/webhooks/github`，无登录，签名即认证）：`X-Hub-Signature-256` 用 `GITHUB_WEBHOOK_SECRET` 做 HMAC-SHA256、`hmac.Equal` 比较；无签名 / 错误 → 401，未配置 secret → 503，body 上限 5 MB。`ping` → 200；`push`：installation 与规范化仓库 URL 都匹配的 git manifest 写 `git_latest_sha` / `git_latest_ref` / `git_latest_at`（「有新 commit 可发布」提示），**从不自动发布、也不拉取**；其他事件 202 忽略。
+
+**module source**：bundle 内的 git module 必须钉 SHA（`hcl_module_unpinned`，native 与 git 发布都适用；仅发布时检查，已有版本不受影响），且仍须在平台 module 目录白名单内；否则 vendor 进 bundle（本地相对路径）。run 不注入任何 git 凭证，因此私有仓库的 module 必须 vendor（钉 SHA 的公共 module 在 `init` 时照常下载）。
+
+**数据库**：迁移 `20261010_14_manifest_git_source`（只增，可重复）：`github_app_installations`（`installation_id bigint` 全局唯一、`> 0`，`account_login`，`created_by`）；`manifests.git_latest_sha varchar(64)`、`git_latest_ref varchar(255)`、`git_latest_at timestamptz`，`chk_manifests_git_latest`：三列全空，或 `source_type='git'`、SHA 为 40/64 位小写 hex 且时间非空。
+
 ## 4. 接口
 - `POST/DELETE .../sandbox-sessions`：创建校验目标 workspace `WORKSPACE_STATE` READ + plan 权限；session 不可换 workspace。
 - `POST .../sandbox-sessions/:id/runs`：在 session 内发起 preview run。
@@ -200,7 +226,7 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 5. 按 run 签发的 token：在现有 `StateTokenService` 上改。新表 `run_tokens`（`run_id`、`session_id`、`workspace_id`、`purpose`、`token_hash`、`expires_at`、`revoked_at`），`workspace_tasks` 旧字段不动；JWT 加 `typ` claim（`task`/`run`），`ValidateToken` 分支：`run` 路径数据库出错即拒绝（不退回只验 JWT），过期时间取 min(run 超时, session 过期)，`preview` 在中间件拒绝 POST/LOCK/UNLOCK；`task` 路径行为暂不变，另行评估。run 结束写 `revoked_at`（只撤销该 run 的 token，session 保留到自身过期或用户关闭，届时按 `session_id` 批量写 `revoked_at`）+ 只读 STS + 私有 module 的 installation token 注入（`GIT_ASKPASS`）
 6. AgentCore provider + session 接口（仅 VPC）
 7. 审批与 apply 双哈希校验（已完成，见 §2）
-8. Git 来源（平台侧按 SHA 拉取打包；module `ref` 必须是 SHA 或 vendor；webhook 验签）
+8. Git 来源（平台侧按 SHA 拉取打包；module `ref` 必须是 SHA 或 vendor；webhook 验签）—— 已完成，见 §3.5
 
 ## 10. AgentCore 上线前需实测
 - Code Interpreter 能否自带 terraform 与 provider 二进制（或改用 AgentCore Runtime 自定义镜像）。
