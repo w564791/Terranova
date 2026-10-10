@@ -53,3 +53,84 @@ func TestPlanDataEnvelope(t *testing.T) {
 		t.Fatalf("plaintext: %v", err)
 	}
 }
+
+func TestPlanEnvelope_DataKeyVersioned(t *testing.T) {
+	t.Setenv("ENV", "production")
+	t.Setenv("JWT_SECRET", "jwt-a")
+	old := dataKey(t)
+	t.Setenv("DATA_ENCRYPTION_KEY", old)
+	t.Setenv("DATA_ENCRYPTION_KEY_VERSION", "1")
+	t.Setenv("DATA_ENCRYPTION_KEY_PREVIOUS", "")
+	plan := []byte("PK\x03\x04plan")
+	exp := time.Now().Add(time.Hour)
+	blob, err := SealPlanData(7, plan, exp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kv, ok := PlanDataKeyVersion(blob); !ok || kv != 1 {
+		t.Fatalf("key version %d %v", kv, ok)
+	}
+	// JWT_SECRET is irrelevant
+	t.Setenv("JWT_SECRET", "jwt-b")
+	if got, err := OpenPlanData(7, blob, time.Now()); err != nil || string(got) != string(plan) {
+		t.Fatalf("open after JWT_SECRET change: %v", err)
+	}
+	// header key version is authenticated
+	tampered := append([]byte(nil), blob...)
+	tampered[6] = 2
+	t.Setenv("DATA_ENCRYPTION_KEY_PREVIOUS", dataKey(t))
+	t.Setenv("DATA_ENCRYPTION_KEY_PREVIOUS_VERSION", "2")
+	if _, err := OpenPlanData(7, tampered, time.Now()); err == nil {
+		t.Fatal("tampered key version opened")
+	}
+	// rotation: v1 kept as previous still opens
+	t.Setenv("DATA_ENCRYPTION_KEY", dataKey(t))
+	t.Setenv("DATA_ENCRYPTION_KEY_VERSION", "3")
+	t.Setenv("DATA_ENCRYPTION_KEY_PREVIOUS", old)
+	t.Setenv("DATA_ENCRYPTION_KEY_PREVIOUS_VERSION", "1")
+	if _, err := OpenPlanData(7, blob, time.Now()); err != nil {
+		t.Fatalf("previous key: %v", err)
+	}
+	re, err := ReencryptPlanData(7, blob, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kv, _ := PlanDataKeyVersion(re); kv != 3 {
+		t.Fatalf("re-encrypted to %d", kv)
+	}
+	if _, e := ParsePlanDataHeader(re); e.Unix() != exp.Unix() {
+		t.Fatal("expiry not kept")
+	}
+}
+
+func TestPlanEnvelope_LegacyV1OpensAndReencrypts(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("JWT_SECRET", "jwt-legacy")
+	t.Setenv("DATA_ENCRYPTION_KEY", "")
+	plan := []byte("PK\x03\x04legacy")
+	blob, err := SealPlanData(9, plan, time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kv, ok := PlanDataKeyVersion(blob); !ok || kv != 0 || blob[4] != 1 {
+		t.Fatalf("legacy envelope: kv=%d ok=%v ver=%d", kv, ok, blob[4])
+	}
+	t.Setenv("ENV", "production")
+	t.Setenv("DATA_ENCRYPTION_KEY", dataKey(t))
+	t.Setenv("DATA_ENCRYPTION_KEY_VERSION", "")
+	t.Setenv("DATA_ENCRYPTION_KEY_PREVIOUS", "")
+	if got, err := OpenPlanData(9, blob, time.Now()); err != nil || string(got) != string(plan) {
+		t.Fatalf("legacy open: %v", err)
+	}
+	if _, err := ReencryptPlanData(9, blob, time.Now().Add(2*time.Hour)); !errors.Is(err, ErrPlanDataExpired) {
+		t.Fatalf("expired re-encrypt: %v", err)
+	}
+	re, err := ReencryptPlanData(9, blob, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JWT_SECRET", "")
+	if got, err := OpenPlanData(9, re, time.Now()); err != nil || string(got) != string(plan) {
+		t.Fatalf("re-encrypted open without JWT_SECRET: %v", err)
+	}
+}

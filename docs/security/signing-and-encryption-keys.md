@@ -39,7 +39,8 @@ environment provider is the default, a KMS provider can be installed instead
   any sensitive variable row still has `key_version = 0` (legacy ciphertext,
   or plaintext not yet encrypted; only `JWT_SECRET` can tell them apart):
   after connecting to the database the server counts such rows in
-  `workspace_variables` and `varset_variables` and refuses to start without
+  `workspace_variables` and `varset_variables` (and legacy `plan_data`
+  envelopes) and refuses to start without
   `JWT_SECRET` if any remain, naming the tables and counts. This does not
   depend on `LEGACY_TOKEN_CUTOFF`: data stays legacy until it is re-encrypted,
   however long that takes.
@@ -102,6 +103,18 @@ wrapped value and opening it with the right key, but the application would use
 the wrong value until then). Check `reencrypted=` vs `encrypted(plaintext)=` in
 the log of the first pass.
 
+Binary plans (`workspace_tasks.plan_data`, envelope encryption, see
+`internal/crypto/plan_envelope.go`): envelope version 2 wraps the per-plan
+data key with a KEK derived from `DATA_ENCRYPTION_KEY` and records its
+`key_version` in the authenticated header (`"TNPD" | 0x02 | key_version |
+expires_at`); version 1 envelopes are the legacy ones (key version 0, KEK from
+`JWT_SECRET`), decrypt only. `CleanupPlanData` (leader, startup and periodic)
+re-seals version 1 envelopes under the current data key with the same expiry,
+compare-and-set on the old bytes (idempotent; only version 1 rows). The key
+version is in the header rather than a column because plan_data has several
+writers and SQL can still find legacy rows (`get_byte(plan_data, 4) = 1`);
+the startup check counts them too.
+
 Other encrypted columns (MFA, SSO, notification, CMDB source, Run Task access
 tokens) are self-describing (`tnk<v>:` prefix): they are written with the data
 key from now on and legacy values still decrypt with `JWT_SECRET`; they are
@@ -145,7 +158,7 @@ issued, so they are accepted without the cutoff.
 `JWT_SECRET` can be removed only when **both** hold:
 
 * the re-encryption job reports **zero legacy rows** (`[Keys] variable
-  re-encryption: ... legacy rows remaining=0`); otherwise the server refuses to
+  re-encryption: ... legacy rows remaining=0`, plan_data included); otherwise the server refuses to
   start without it. The other `internal/crypto` columns (MFA, SSO,
   notification, CMDB source, Run Task access tokens) have no `key_version`
   column and are not covered by that check or job yet: confirm none of them
