@@ -86,7 +86,7 @@
 | 1.4 获取 Workspace Variables | 获取 terraform 变量，区分普通/敏感变量 |
 | 1.5 获取 Provider 配置 | 获取 Provider 配置（如 AWS region） |
 | 1.6 获取最新 State Version | 获取最新状态版本，处理首次运行（无 state）场景 |
-| 1.7 生成配置文件 | 生成 `main.tf.json`, `provider.tf.json`, `variables.tf.json`, `variables.tfvars`, `outputs.tf.json`, `remote_data.tf.json` |
+| 1.7 生成配置文件 | 生成 `main.tf.json`, `provider.tf.json`, `variables.tf.json`, `terranova.auto.tfvars.json`, `outputs.tf.json`, `remote_data.tf.json` |
 | 1.8 准备 State 文件 | 恢复 state 到工作目录 |
 | 1.9 恢复 Lock 文件 | 恢复 `.terraform.lock.hcl` 确保 provider 版本一致 |
 
@@ -102,7 +102,7 @@
 
 ### Stage 3: `planning`
 
-执行 `terraform plan -out=plan.out -no-color -var-file=variables.tfvars`
+执行 `terraform plan -out=plan.out -no-color`（变量值由 `terranova.auto.tfvars.json` 自动加载）
 
 特殊处理:
 

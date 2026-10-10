@@ -319,7 +319,7 @@ func (s *TerraformExecutor) GenerateConfigFiles(
 //     (Run 草稿预览也走 subpath:清 deployment/tag 但保留 subpath)
 //   - manifest_files / ExternalFiles 按 path 字段落盘到 workDir 顶层 (保留 subpath/main.tf
 //     结构,方便 ../../modules/shared 这类相对引用)
-//   - 辅助文件 (provider.tf.json / variables.tf.json / variables.tfvars /
+//   - 辅助文件 (provider.tf.json / variables.tf.json / terranova.auto.tfvars.json /
 //     outputs.tf.json / remote_data.tf.json / backend.tf.json / main.tf.json)
 //     落盘到 runDir,这样 terraform 在 runDir 跑时能看到
 func (s *TerraformExecutor) GenerateConfigFilesForTask(
@@ -379,9 +379,9 @@ func (s *TerraformExecutor) GenerateConfigFilesForTask(
 		return fmt.Errorf("failed to write variables.tf.json: %w", err)
 	}
 
-	// 4. 生成 variables.tfvars
+	// 4. 生成 terranova.auto.tfvars.json
 	if err := s.generateVariablesTFVars(workspace, runDir); err != nil {
-		return fmt.Errorf("failed to write variables.tfvars: %w", err)
+		return fmt.Errorf("failed to write %s: %w", TFVarsFileName, err)
 	}
 
 	// 5. 生成 outputs.tf.json（如果有配置outputs）
@@ -418,8 +418,8 @@ func (s *TerraformExecutor) generateVariablesTFJSON(
 	return s.writeJSONFile(workDir, "variables.tf.json", config)
 }
 
-// generateVariablesTFVars 生成variables.tfvars (共用 RenderTFVars:Local / Agent / K8s /
-// 快照 apply 同一生成器,同输入同字节)
+// generateVariablesTFVars 生成 TFVarsFileName (terranova.auto.tfvars.json,共用
+// RenderTFVars:Local / Agent / K8s / 快照 apply 同一生成器,同输入同字节)
 func (s *TerraformExecutor) generateVariablesTFVars(
 	workspace *models.Workspace,
 	workDir string,
@@ -428,9 +428,13 @@ func (s *TerraformExecutor) generateVariablesTFVars(
 	workspaceVars, err := s.dataAccessor.GetWorkspaceVariables(workspace.WorkspaceID, models.VariableTypeTerraform)
 	if err != nil {
 		log.Printf("Warning: failed to get variables: %v", err)
-		return s.writeFile(workDir, "variables.tfvars", "")
+		return s.writeFile(workDir, TFVarsFileName, "{}\n")
 	}
-	return s.writeFile(workDir, "variables.tfvars", RenderTFVars(workspaceVars))
+	content, err := RenderTFVars(workspaceVars)
+	if err != nil {
+		return err
+	}
+	return s.writeFile(workDir, TFVarsFileName, string(content))
 }
 
 // isNumeric 检查字符串是否为数字
@@ -1075,7 +1079,8 @@ func (s *TerraformExecutor) ExecutePlan(
 	logger.StageBegin("planning")
 
 	planFile := filepath.Join(workDir, "plan.out")
-	args := []string{"plan", "-out=" + planFile, "-no-color", "-var-file=variables.tfvars"}
+	// 变量值在 terranova.auto.tfvars.json(Terraform 自动加载,无需 -var-file)
+	args := []string{"plan", "-out=" + planFile, "-no-color"}
 
 	// HTTP backend mode: preview runs (plan / drift_check) don't modify state,
 	// skip locking so they can run concurrently. Approval runs
@@ -4003,21 +4008,18 @@ func (s *TerraformExecutor) GenerateConfigFilesForTaskWithLogging(
 	logger.Trace("%s", string(varsTFData))
 	logger.Trace("===============================================")
 
-	// 4. 生成 variables.tfvars
+	// 4. 生成 terranova.auto.tfvars.json
 	if err := s.generateVariablesTFVars(workspace, runDir); err != nil {
-		return fmt.Errorf("failed to write variables.tfvars: %w", err)
+		return fmt.Errorf("failed to write %s: %w", TFVarsFileName, err)
 	}
-	logger.Info("✓ Generated variables.tfvars (%d assignments, %d sensitive)", varCount, sensitiveCount)
-	varsTFVarsData, _ := os.ReadFile(filepath.Join(runDir, "variables.tfvars"))
-	if s.db != nil {
-		maskedContent := s.maskSensitiveVariables(string(varsTFVarsData), workspace.WorkspaceID)
-		logger.Trace("========== variables.tfvars Content (sensitive values masked) ==========")
-		logger.Trace("%s", maskedContent)
-		logger.Trace("=========================================================================")
-	} else {
-		logger.Trace("========== variables.tfvars Content ==========")
-		logger.Trace("%s", string(varsTFVarsData))
-		logger.Trace("==============================================")
+	logger.Info("✓ Generated %s (%d assignments, %d sensitive)", TFVarsFileName, varCount, sensitiveCount)
+	// 日志打印按值脱敏的渲染结果(敏感变量整值替换)
+	if err == nil {
+		if masked, merr := RenderTFVarsMasked(variables); merr == nil {
+			logger.Trace("========== %s Content (sensitive values masked) ==========", TFVarsFileName)
+			logger.Trace("%s", string(masked))
+			logger.Trace("==========================================================")
+		}
 	}
 
 	// 5. 生成 outputs.tf.json（如果有配置outputs）
@@ -4038,47 +4040,6 @@ func (s *TerraformExecutor) GenerateConfigFilesForTaskWithLogging(
 	}
 
 	return nil
-}
-
-// maskSensitiveVariables 脱敏处理敏感变量
-func (s *TerraformExecutor) maskSensitiveVariables(content string, workspaceID string) string {
-	// 使用 DataAccessor 获取所有敏感变量
-	allVars, err := s.dataAccessor.GetWorkspaceVariables(workspaceID, models.VariableTypeTerraform)
-	if err != nil {
-		log.Printf("Warning: failed to get variables for masking: %v", err)
-		return content
-	}
-
-	// 过滤出敏感变量
-	var sensitiveVars []models.WorkspaceVariable
-	for _, v := range allVars {
-		if v.Sensitive {
-			sensitiveVars = append(sensitiveVars, v)
-		}
-	}
-
-	// 如果没有敏感变量，直接返回
-	if len(sensitiveVars) == 0 {
-		return content
-	}
-
-	// 对每个敏感变量进行脱敏
-	maskedContent := content
-	for _, v := range sensitiveVars {
-		// 匹配 key = "value" 或 key = value 格式
-		// 使用正则表达式替换值部分为 ***SENSITIVE***
-		lines := strings.Split(maskedContent, "\n")
-		for i, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, v.Key+" =") {
-				// 找到敏感变量行，替换值部分
-				lines[i] = v.Key + " = \"***SENSITIVE***\""
-			}
-		}
-		maskedContent = strings.Join(lines, "\n")
-	}
-
-	return maskedContent
 }
 
 // PrepareStateFileWithLogging 准备State文件（带详细日志）
@@ -5588,18 +5549,22 @@ func (s *TerraformExecutor) GenerateConfigFilesFromSnapshot(
 		logger.Info("No terraform variables in snapshot, skipping variables.tf.json generation")
 	}
 
-	// 4. 生成 variables.tfvars（从快照的变量;共用 RenderTFVars）
+	// 4. 生成 terranova.auto.tfvars.json（从快照的变量;共用 RenderTFVars）
 	sensitiveCount := 0
 	for _, v := range snapshotVariables {
 		if v.Sensitive {
 			sensitiveCount++
 		}
 	}
-	if err := s.writeFile(runDir, "variables.tfvars", RenderTFVars(snapshotVariables)); err != nil {
-		return fmt.Errorf("failed to write variables.tfvars: %w", err)
+	tfvars, err := RenderTFVars(snapshotVariables)
+	if err != nil {
+		return fmt.Errorf("failed to write %s: %w", TFVarsFileName, err)
 	}
-	logger.Info("✓ Generated variables.tfvars from snapshot (%d assignments, %d sensitive)",
-		len(snapshotVariables), sensitiveCount)
+	if err := s.writeFile(runDir, TFVarsFileName, string(tfvars)); err != nil {
+		return fmt.Errorf("failed to write %s: %w", TFVarsFileName, err)
+	}
+	logger.Info("✓ Generated %s from snapshot (%d assignments, %d sensitive)",
+		TFVarsFileName, len(snapshotVariables), sensitiveCount)
 
 	logger.Debug("All config files generated successfully from snapshot")
 	return nil

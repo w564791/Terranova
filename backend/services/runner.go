@@ -23,7 +23,7 @@ import (
 //
 // Every runner receives a manifest bundle the same way (ManifestBundleHandoff
 // unpacked by manifestbundle.Unpack, hash checked before init) and renders
-// variables with the same RenderTFVars / VariablesTFJSON.
+// variables with the same RenderTFVars (terranova.auto.tfvars.json) / VariablesTFJSON.
 type Runner interface {
 	Kind() RunnerKind
 	// Supports reports whether the runner may execute runs of purpose p.
