@@ -39,6 +39,9 @@ const (
 	RuleBundleTooLarge    = "bundle_too_large"
 	RuleTooManyFiles      = "too_many_files"
 	RuleSecretScanPrefix  = "secret_scan:"
+	// git tree entries that are not regular files (git sources, step 8)
+	RuleGitSymlink   = "git_symlink"
+	RuleGitSubmodule = "git_submodule"
 )
 
 // Problem one rule violation, the 422 publish shape {file, line?, rule,
@@ -92,6 +95,10 @@ func ruleMessage(rule string) string {
 		return fmt.Sprintf("bundle is larger than %d MB", MaxBundleSize/(1024*1024))
 	case RuleTooManyFiles:
 		return fmt.Sprintf("bundle has more than %d files", MaxFiles)
+	case RuleGitSymlink:
+		return "symbolic links are not allowed in a bundle; commit the file itself"
+	case RuleGitSubmodule:
+		return "git submodules are not allowed in a bundle; vendor the code or use a pinned module source"
 	}
 	if kind, ok := strings.CutPrefix(rule, RuleSecretScanPrefix); ok {
 		name := secretKindNames[kind]
@@ -221,6 +228,34 @@ var secretPatterns = []struct {
 	{"private_key", regexp.MustCompile(`-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----`)},
 	{"github_token", regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82})\b`)},
 	{"slack_token", regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}`)},
+}
+
+// NewProblem the Problem of rule at file with the rule's fixed message (for
+// checks outside Validate, e.g. git tree entries rejected before their
+// content is read).
+func NewProblem(file, rule string) Problem {
+	return Problem{File: file, Rule: rule, Message: ruleMessage(rule)}
+}
+
+// SortProblems the canonical order (file, then rule), duplicates removed.
+func SortProblems(ps []Problem) []Problem {
+	sort.SliceStable(ps, func(i, j int) bool {
+		if ps[i].File != ps[j].File {
+			return ps[i].File < ps[j].File
+		}
+		if ps[i].Rule != ps[j].Rule {
+			return ps[i].Rule < ps[j].Rule
+		}
+		return ps[i].Line < ps[j].Line
+	})
+	var out []Problem
+	for i, p := range ps {
+		if i > 0 && ps[i-1] == p {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // Validate applies every bundle rule and returns the problems sorted by
