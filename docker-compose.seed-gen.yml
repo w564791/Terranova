@@ -24,7 +24,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123
     ports:
-      - "25432:5432"
+      - "127.0.0.1:25432:5432"
     volumes:
       - seed_pg_data:/var/lib/postgresql
       - ./manifests/db/init_seed_data.sql:/docker-entrypoint-initdb.d/01-init-seed.sql

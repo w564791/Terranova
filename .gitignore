@@ -82,3 +82,14 @@ coverage/
 ehthumbs.db
 Thumbs.db
 docker-compose.yml
+
+# Kustomize secretGenerator inputs (real secrets; only *.env.example is committed)
+manifests/base/*.env
+!manifests/base/*.env.example
+
+# TLS certificates and private keys are generated locally (make dev-certs) or
+# supplied per environment; never commit them.
+/certs/
+/manifests/tls/certs/
+*.key
+*-key.pem

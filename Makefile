@@ -8,16 +8,21 @@
 	docker-push-arm64 docker-push-frontend-arm64 docker-push-frontend-amd64 \
 	docker-push-agent-arm64 docker-push-db-init-arm64 docker-push-all-arm64 \
 	run-server run-agent local-server local-frontend local-agent \
-	generate-secret deploy-local export-seed-data clean
+	generate-secret dev-certs check-private-keys deploy-local export-seed-data clean
 
 # 默认变量（可通过 .env 文件或环境变量覆盖）
 DB_PORT ?= 5432
 DB_USER ?= postgres
-DB_PASSWORD ?= postgres123
+# DB_PASSWORD / JWT_SECRET / DATA_ENCRYPTION_KEY / SIGNING_ROOT_KEY 没有默认值：
+# 由 `make generate-secret` 写入 .env（gitignored），本地运行时从 .env 加载。
 DB_NAME ?= iac_platform
 SERVER_PORT ?= 8080
 CC_SERVER_PORT ?= 8090
 DB_HOST ?= localhost
+
+# 在 recipe 的 shell 中加载 .env（make generate-secret 生成，含 DB_PASSWORD 与各密钥）。
+# 在 backend/ 目录下执行，故路径为 ../.env。
+LOAD_ENV = { [ -f ../.env ] || { echo "缺少 .env，请先运行 make generate-secret" >&2; exit 1; }; } && set -a && . ../.env && set +a
 
 # Docker 镜像配置
 DOCKER_REPO ?= w564791
@@ -53,9 +58,10 @@ dev-up: ## 启动开发环境（仅数据库容器 + 本地后端 + 本地前端
 	@echo "  [OK] 数据库就绪"
 	@echo ""
 	@echo "2. 启动后端..."
-	@cd backend && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) \
+	@cd backend && $(LOAD_ENV) && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_NAME=$(DB_NAME) \
+		DB_PASSWORD=$${DB_PASSWORD:?run make generate-secret} \
 		DB_SSLMODE=disable SERVER_PORT=$(SERVER_PORT) CC_SERVER_PORT=$(CC_SERVER_PORT) SERVER_HOST=0.0.0.0 \
-		JWT_SECRET=$${JWT_SECRET:-dev-secret-key-change-in-production} ENV=development \
+		ENV=development \
 		go run main.go &
 	@sleep 2
 	@echo "  [OK] 后端启动: http://localhost:$(SERVER_PORT)"
@@ -282,7 +288,7 @@ run-server: build-server ## 在Docker容器中运行服务器
 		-e DB_HOST=$(DB_HOST) \
 		-e DB_PORT=$(DB_PORT) \
 		-e DB_USER=$(DB_USER) \
-		-e DB_PASSWORD=$(DB_PASSWORD) \
+		--env-file .env \
 		-e DB_NAME=$(DB_NAME) \
 		-e DB_SSLMODE=disable \
 		-e SERVER_PORT=$(SERVER_PORT) \
@@ -316,9 +322,10 @@ run-agent: build-agent ## 在Docker容器中运行Agent（需要设置环境变�
 
 local-server: ## 本地运行后端（自动加载数据库配置）
 	@echo "启动后端服务器..."
-	cd backend && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_PASSWORD=$(DB_PASSWORD) DB_NAME=$(DB_NAME) \
+	cd backend && $(LOAD_ENV) && DB_HOST=localhost DB_PORT=$(DB_PORT) DB_USER=$(DB_USER) DB_NAME=$(DB_NAME) \
+		DB_PASSWORD=$${DB_PASSWORD:?run make generate-secret} \
 		DB_SSLMODE=disable SERVER_PORT=$(SERVER_PORT) CC_SERVER_PORT=$(CC_SERVER_PORT) SERVER_HOST=0.0.0.0 \
-		JWT_SECRET=$${JWT_SECRET:-dev-secret-key-change-in-production} ENV=development \
+		ENV=development \
 		go run main.go
 
 local-frontend: ## 本地运行前端（Vite dev server）
@@ -338,19 +345,22 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 	@if [ -f .env ] && grep -q "^JWT_SECRET=" .env 2>/dev/null; then \
 		echo "[OK] .env 文件已存在，跳过生成"; \
 	else \
-		JWT_KEY=$$(openssl rand -base64 48 | tr -d '\n/+=' | head -c 64); \
+		JWT_KEY=$$(openssl rand -base64 48 | tr -d '\n'); \
 		echo "# IaC Platform 环境变量配置" > .env; \
 		echo "# 自动生成，请勿提交到版本控制" >> .env; \
 		echo "" >> .env; \
-		echo "# 平台私钥（用于 JWT 签名和变量加密）" >> .env; \
+		echo "# 旧版私钥（仅用于验证无 kid 的旧 token / 解密旧数据）" >> .env; \
 		echo "JWT_SECRET=$$JWT_KEY" >> .env; \
+		echo "# 数据加密密钥 / 签名根密钥（相互独立，生产环境必填）" >> .env; \
+		echo "DATA_ENCRYPTION_KEY=$$(openssl rand -base64 32)" >> .env; \
+		echo "SIGNING_ROOT_KEY=$$(openssl rand -base64 48 | tr -d '\n')" >> .env; \
 		echo "" >> .env; \
 		echo "# 数据库配置" >> .env; \
 		echo "DB_HOST=localhost" >> .env; \
 		echo "DB_PORT=5432" >> .env; \
 		echo "DB_NAME=iac_platform" >> .env; \
 		echo "DB_USER=postgres" >> .env; \
-		echo "DB_PASSWORD=postgres123" >> .env; \
+		echo "DB_PASSWORD=$$(openssl rand -base64 48 | tr -d '\n/+=')" >> .env; \
 		echo "" >> .env; \
 		echo "# 服务端口" >> .env; \
 		echo "SERVER_PORT=8080" >> .env; \
@@ -358,13 +368,54 @@ generate-secret: ## 生成平台私钥和 .env 配置文件
 		echo "FRONTEND_PORT=5173" >> .env; \
 		echo ""; \
 		echo "[OK] .env 配置文件已生成"; \
-		echo "  JWT_SECRET: 64 字符随机密钥"; \
+		echo "  JWT_SECRET / SIGNING_ROOT_KEY: openssl rand -base64 48"; \
+		echo "  DB_PASSWORD: 随机生成（已有 postgres 数据卷时需与其中密码一致）"; \
 		echo "  DB_PORT: 15433"; \
 		echo "  SERVER_PORT: 8080"; \
-		echo "  [WARN] 请妥善保管 JWT_SECRET，更换将导致："; \
-		echo "     - 所有已登录用户的 Token 失效"; \
-		echo "     - 所有已加密的变量无法解密"; \
+		echo "  [WARN] 请妥善保管 DATA_ENCRYPTION_KEY / SIGNING_ROOT_KEY，不按轮换流程更换将导致："; \
+		echo "     - 所有已登录用户的 Token 失效 (SIGNING_ROOT_KEY)"; \
+		echo "     - 所有已加密的变量无法解密 (DATA_ENCRYPTION_KEY)"; \
 	fi
+
+# 本地开发 TLS 证书（不提交到仓库）：
+#   certs/localhost.pem, certs/localhost-key.pem  -> Vite / 本地后端 HTTPS（文件存在即启用）
+#   manifests/tls/certs/tls.crt, tls.key          -> kustomize 生成 Secret iac-gateway-tls
+# 优先使用 mkcert（本地 CA 受信任）；未安装时回退到 openssl 自签名证书（浏览器会提示不受信任）。
+# 已存在则跳过，FORCE=1 重新生成。
+DEV_CERT_DIR ?= certs
+DEV_CERT_K8S_DIR ?= manifests/tls/certs
+DEV_CERT_HOSTS ?= localhost 127.0.0.1 ::1 www.iac-platform.com iac-platform.com api.iac-platform.com
+DEV_CERT_DAYS ?= 825
+
+dev-certs: ## 生成本地开发 TLS 证书（mkcert，缺失时回退 openssl 自签名），写入 gitignored 的 certs/ 与 manifests/tls/certs/
+	@set -e; \
+	crt=$(DEV_CERT_DIR)/localhost.pem; key=$(DEV_CERT_DIR)/localhost-key.pem; \
+	if [ -f "$$crt" ] && [ -f "$$key" ] && [ "$(FORCE)" != "1" ]; then \
+		echo "[OK] $$crt 已存在，跳过生成（FORCE=1 重新生成）"; \
+	else \
+		mkdir -p $(DEV_CERT_DIR); rm -f "$$crt" "$$key"; \
+		if command -v mkcert >/dev/null 2>&1; then \
+			mkcert -cert-file "$$crt" -key-file "$$key" $(DEV_CERT_HOSTS); \
+		else \
+			echo "[WARN] 未找到 mkcert，使用 openssl 生成自签名证书（浏览器不信任）"; \
+			san=""; for h in $(DEV_CERT_HOSTS); do \
+				case "$$h" in *:*|[0-9]*.[0-9]*.[0-9]*.[0-9]*) san="$$san,IP:$$h";; *) san="$$san,DNS:$$h";; esac; \
+			done; \
+			(umask 077; openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days $(DEV_CERT_DAYS) \
+				-subj "/CN=localhost/O=Terranova local development" \
+				-addext "subjectAltName=$${san#,}" \
+				-keyout "$$key" -out "$$crt" 2>/dev/null); \
+		fi; \
+		chmod 600 "$$key"; chmod 644 "$$crt"; \
+		echo "[OK] 已生成 $$crt / $$key"; \
+	fi; \
+	mkdir -p $(DEV_CERT_K8S_DIR); \
+	cp "$$crt" $(DEV_CERT_K8S_DIR)/tls.crt; \
+	(umask 077; cp "$$key" $(DEV_CERT_K8S_DIR)/tls.key); \
+	echo "[OK] 已复制到 $(DEV_CERT_K8S_DIR)/tls.crt, tls.key（kustomize Secret iac-gateway-tls）"
+
+check-private-keys: ## 检查已跟踪文件中是否包含私钥（CI 同款检查）
+	@scripts/check-private-keys.sh
 
 # =============================================================================
 # 部署

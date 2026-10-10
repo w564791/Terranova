@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"iac-platform/internal/application/service"
+	"iac-platform/internal/keys"
 	"iac-platform/internal/models"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -616,6 +617,8 @@ func (s *K8sDeploymentService) buildDeployment(deploymentName, namespace string,
 	for key, value := range config.Env {
 		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
 	}
+	envVars = withAgentMode(envVars, keys.IsProduction())
+	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction())
 
 	// Build resource requirements
 	resources := corev1.ResourceRequirements{

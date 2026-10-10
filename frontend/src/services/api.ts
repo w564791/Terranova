@@ -5,6 +5,7 @@ import {
   isTrustedApiRequestUrl,
   resolveApiRequestUrl,
 } from './apiRequestPolicy';
+import { handleSessionExpired, isAuthEndpoint } from './sessionExpiry';
 
 // 自动根据当前访问的域名/IP构建 API 地址
 // 如果设置了环境变量，则使用环境变量
@@ -216,11 +217,9 @@ api.interceptors.response.use(
       window.location.pathname.includes('/setup') || 
       window.location.pathname.includes('/mfa');
     
-    if (error.response?.status === 401 && !shouldNotRedirect) {
-      console.log('[api.ts] 401 error, redirecting to login');
-      localStorage.removeItem('token');
-      clearAuthOrgId();
-      window.location.href = '/login';
+    if (error.response?.status === 401 && !shouldNotRedirect && !isAuthEndpoint(error.config?.url)) {
+      // 统一会话过期处理:清登录态、提示一次、带 ?redirect= 跳登录页(已在认证页不跳)
+      handleSessionExpired();
     }
     // 提取错误消息：优先使用 error.response.data.error，其次使用 error.message
     const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || '未知错误';

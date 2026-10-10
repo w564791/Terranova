@@ -92,6 +92,8 @@ func definitions() []definition {
 		// the tenant-boundary rules were complete.  Keep this separate so their
 		// historical checksums remain valid.
 		{version: "20260717_05_iam_role_tenant_reconciliation", contract: "role-quarantine-and-application-tenant-v1", apply: applyIAMRoleTenantReconciliation},
+		// Per-row data encryption key version for variable values.
+		{version: "20261010_10_variable_key_version", contract: "variable-key-version-v1", apply: applyVariableKeyVersion},
 	}
 }
 

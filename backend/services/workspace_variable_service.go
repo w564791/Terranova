@@ -63,7 +63,7 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 	variable.IsDeleted = false
 
 	// 手动处理加密
-	if variable.Sensitive && variable.Value != "" && !crypto.IsEncrypted(variable.Value) {
+	if variable.Sensitive && variable.Value != "" && !crypto.IsCiphertext(variable.Value) {
 		encrypted, err := crypto.EncryptValue(variable.Value)
 		if err != nil {
 			return fmt.Errorf("加密失败: %w", err)
@@ -76,8 +76,8 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 		INSERT INTO workspace_variables (
 			variable_id, workspace_id, key, version, value,
 			variable_type, value_format, sensitive, description,
-			is_deleted, created_at, updated_at, created_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11)
+			is_deleted, created_at, updated_at, created_by, key_version
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12)
 		RETURNING id
 	`
 
@@ -94,6 +94,7 @@ func (s *WorkspaceVariableService) CreateVariable(variable *models.WorkspaceVari
 		variable.Description,
 		variable.IsDeleted,
 		variable.CreatedBy,
+		models.VariableKeyVersion(variable.Sensitive, variable.Value),
 	).Scan(&newID).Error; err != nil {
 		return fmt.Errorf("创建变量失败: %w", err)
 	}
@@ -303,7 +304,7 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 	newVersion.Version = maxVersion + 1
 
 	// 手动处理加密（因为要使用原生 SQL）
-	if newVersion.Sensitive && newVersion.Value != "" && !crypto.IsEncrypted(newVersion.Value) {
+	if newVersion.Sensitive && newVersion.Value != "" && !crypto.IsCiphertext(newVersion.Value) {
 		encrypted, err := crypto.EncryptValue(newVersion.Value)
 		if err != nil {
 			return nil, fmt.Errorf("加密失败: %w", err)
@@ -316,8 +317,8 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 		INSERT INTO workspace_variables (
 			variable_id, workspace_id, key, version, value,
 			variable_type, value_format, sensitive, description,
-			is_deleted, created_at, updated_at, created_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11)
+			is_deleted, created_at, updated_at, created_by, key_version
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12)
 		RETURNING id
 	`
 	
@@ -334,6 +335,7 @@ func (s *WorkspaceVariableService) UpdateVariable(id uint, expectedVersion int, 
 		newVersion.Description,
 		newVersion.IsDeleted,
 		newVersion.CreatedBy,
+		models.VariableKeyVersion(newVersion.Sensitive, newVersion.Value),
 	).Scan(&newID).Error; err != nil {
 		return nil, fmt.Errorf("创建新版本失败: %w", err)
 	}
@@ -402,7 +404,7 @@ func (s *WorkspaceVariableService) DeleteVariable(id uint) error {
 	}
 
 	// 手动处理加密
-	if deleteVersion.Sensitive && deleteVersion.Value != "" && !crypto.IsEncrypted(deleteVersion.Value) {
+	if deleteVersion.Sensitive && deleteVersion.Value != "" && !crypto.IsCiphertext(deleteVersion.Value) {
 		encrypted, err := crypto.EncryptValue(deleteVersion.Value)
 		if err != nil {
 			return fmt.Errorf("加密失败: %w", err)
@@ -415,8 +417,8 @@ func (s *WorkspaceVariableService) DeleteVariable(id uint) error {
 		INSERT INTO workspace_variables (
 			variable_id, workspace_id, key, version, value,
 			variable_type, value_format, sensitive, description,
-			is_deleted, created_at, updated_at, created_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11)
+			is_deleted, created_at, updated_at, created_by, key_version
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $12)
 	`
 	
 	if err := s.db.Exec(sql,
@@ -431,6 +433,7 @@ func (s *WorkspaceVariableService) DeleteVariable(id uint) error {
 		deleteVersion.Description,
 		deleteVersion.IsDeleted,
 		deleteVersion.CreatedBy,
+		models.VariableKeyVersion(deleteVersion.Sensitive, deleteVersion.Value),
 	).Error; err != nil {
 		return fmt.Errorf("创建删除版本失败: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"iac-platform/internal/config"
+	"iac-platform/internal/keys"
 	"iac-platform/internal/models"
 	"iac-platform/internal/observability/metrics"
 	"iac-platform/internal/services"
@@ -582,8 +583,7 @@ func generateJWTWithSession(userID string, username, sessionID string) (string, 
 		"iat":        time.Now().Unix(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.GetJWTSecret()))
+	return keys.Sign(keys.PurposeUser, claims, keys.LegacySecret(config.GetJWTSecret()))
 }
 
 // revokeAllLoginSessions 吊销用户全部登录会话（改密/重置密码后强制重登）

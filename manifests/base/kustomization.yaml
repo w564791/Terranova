@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - ha-rbac.yaml
   - service-backend.yaml
   - service-frontend.yaml
@@ -11,11 +10,26 @@ resources:
   - deployment-frontend.yaml
   - pdb.yaml
   - networkpolicy.yaml
+# Secrets are generated from gitignored env files that never enter the repo
+# (this repository is public). Create them from the committed *.env.example
+# templates before running kustomize; kustomize fails if they are missing.
+# See manifests/README.md "Quick Deploy".
 secretGenerator:
+  # DB credentials (consumed by the backend and the postgres statefulset).
+  - name: iac-platform
+    namespace: terraform
+    envs:
+      - db.env
+    options:
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/name: iac-platform
+  # DATA_ENCRYPTION_KEY, SIGNING_ROOT_KEY, legacy JWT_SECRET and the legacy
+  # token cutoff (docs/security/signing-and-encryption-keys.md).
   - name: iac-jwt
     namespace: terraform
-    literals:
-      - JWT_SECRET=Q29P7oZt7MoYbAZezyb/AvFqkpRJJK98hcXsnp7v+M4=
+    envs:
+      - keys.env
     options:
       disableNameSuffixHash: true
       labels:

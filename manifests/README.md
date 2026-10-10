@@ -19,38 +19,35 @@
 
 ### Local Access
 
-#### 生成本地信任证书（可选,macOS）
+#### 生成 Gateway TLS 证书（必需）
 
-使用 [mkcert](https://github.com/FiloSottile/mkcert) 生成本地信任的 TLS 证书，浏览器访问时不会报不安全连接：
+Gateway 对外证书和私钥 **不提交到仓库**：`tls/kustomization.yaml` 通过 `secretGenerator`
+从 gitignored 的 `tls/certs/tls.crt`、`tls/certs/tls.key` 生成 Secret `iac-gateway-tls`，
+文件缺失时 `kubectl kustomize` 会直接失败。
+
+本地 / 开发环境，在仓库根目录运行：
 
 ```bash
-# 安装 mkcert
+# 可选（macOS）：安装 mkcert 并信任本地 CA，浏览器不再提示不安全连接
 brew install mkcert
 brew install nss   # Firefox 需要，Safari / Chrome 可跳过
-
-# 将 mkcert CA 安装到系统信任链
 mkcert -install
 
-# 为平台域名生成证书
-mkcert \
-  www.iac-platform.com \
-  iac-platform.com \
-  api.iac-platform.com
-
-# 生成的文件：
-#   www.iac-platform.com+2.pem     (证书)
-#   www.iac-platform.com+2-key.pem (私钥)
+# 生成证书（有 mkcert 用 mkcert，否则回退 openssl 自签名）
+make dev-certs
+# 写入（均已 gitignore）：
+#   certs/localhost.pem, certs/localhost-key.pem      Vite / 本地后端 HTTPS
+#   manifests/tls/certs/tls.crt, tls.key              Secret iac-gateway-tls
+# 证书覆盖 localhost、127.0.0.1、::1、www/api.iac-platform.com、iac-platform.com；
+# 已存在则跳过，FORCE=1 重新生成，DEV_CERT_HOSTS="..." 自定义域名。
 ```
 
-将生成的证书和私钥替换到 `tls/secret-gateway-tls.yaml` 中：
+生产 / 共享环境：将自己的证书链和私钥放到 `tls/certs/tls.crt`、`tls/certs/tls.key`
+（不要提交），或改用 cert-manager / 外部 Secret 管理 `iac-gateway-tls` 并删除该 generator。
 
-```bash
-# base64 编码后替换 secret-gateway-tls.yaml 中的 tls.crt 和 tls.key
-kubectl -n terraform create secret tls iac-gateway-tls \
-  --cert=www.iac-platform.com+2.pem \
-  --key=www.iac-platform.com+2-key.pem \
-  --dry-run=client -o yaml > tls/secret-gateway-tls.yaml
-```
+> 仓库曾提交过 `tls/certs/localhost-key.pem` 及 `tls/secret-gateway-tls.yaml` 中的私钥
+> （mkcert 生成，`*.iac-platform.com`）。该私钥已公开，凡使用过它的环境都应重新生成证书。
+> CI 会拒绝任何包含私钥的提交，见 `docs/security/private-keys.md`。
 
 #### 配置 hosts
 
@@ -118,7 +115,8 @@ manifests/
 │   ├── kustomization.yaml
 │   ├── namespace.yaml              # Namespace: terraform
 │   ├── configmap.yaml              # Non-sensitive config (DB_HOST, DB_SSLMODE, ports, etc.)
-│   ├── secret.yaml                 # Sensitive config (DB credentials, JWT secret)
+│   ├── db.env.example              # Template for gitignored db.env (DB credentials)
+│   ├── keys.env.example            # Template for gitignored keys.env (keys, legacy JWT_SECRET)
 │   ├── ha-rbac.yaml                # ServiceAccount, Role, RoleBinding
 │   ├── deployment-backend.yaml     # Backend (2 replicas, HTTPS)
 │   ├── deployment-frontend.yaml    # Frontend nginx (2 replicas, HTTPS)
@@ -127,10 +125,7 @@ manifests/
 ├── tls/                            # TLS certificates
 │   ├── kustomization.yaml
 │   ├── certificate.yaml            # cert-manager internal CA chain + service certs (incl. postgres)
-│   ├── secret-gateway-tls.yaml     # Gateway external TLS certificate
-│   └── certs/                      # mkcert certificate files (for local dev)
-│       ├── localhost.pem
-│       └── localhost-key.pem
+│   └── certs/                      # gitignored: tls.crt / tls.key for Secret iac-gateway-tls (make dev-certs)
 ├── db/                             # Database
 │   ├── kustomization.yaml
 │   ├── statefulset-postgres.yaml   # PostgreSQL StatefulSet + Service (conditional SSL)
@@ -166,21 +161,42 @@ manifests/
 
 ## Quick Deploy
 
+Secrets are **not** stored in this (public) repository. `base/kustomization.yaml`
+generates the `iac-platform` (DB credentials) and `iac-jwt` (keys) Secrets from
+the gitignored files `base/db.env` and `base/keys.env`; create them from the
+committed `*.env.example` templates first (kustomize fails if they are missing).
+The Gateway TLS Secret is likewise generated from gitignored `tls/certs/tls.crt`
+and `tls/certs/tls.key` (`make dev-certs` from the repo root, or your own
+certificate); see "生成 Gateway TLS 证书" above.
 
 ```bash
 cd manifests
 
-# 基于当前时间+PID+主机名自动生成 JWT_SECRET（每次部署不同）
-JWT_KEY=$(echo -n "$(date +%s)-$$-$(hostname)" | openssl dgst -sha256 -binary | base64 | tr -d '\n')
+# 1. DB credentials (gitignored base/db.env)
+cp base/db.env.example base/db.env
+sed -i.bak "s|^DB_PASSWORD=.*|DB_PASSWORD=$(openssl rand -base64 48 | tr -d '\n/+=')|" base/db.env
 
-sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=${JWT_KEY}|" base/kustomization.yaml
+# 2. Keys (gitignored base/keys.env). Generate ONCE and keep them (back them up
+#    outside the cluster): changing DATA_ENCRYPTION_KEY without the rotation
+#    procedure makes encrypted data unreadable.
+cp base/keys.env.example base/keys.env
+sed -i.bak "s|^DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)|" base/keys.env  # exactly 32 bytes
+sed -i.bak "s|^SIGNING_ROOT_KEY=.*|SIGNING_ROOT_KEY=$(openssl rand -base64 48 | tr -d '\n')|" base/keys.env
+# JWT_SECRET stays empty on new installs (legacy only). When legacy development
+# mode needs one: openssl rand -base64 48
+rm -f base/*.env.bak
 
 kubectl kustomize | kubectl create -f -
 
 kubectl -n terraform wait --for=condition=complete job/iac-db-init --timeout=120s
 ```
 
-> `JWT_SECRET` 每次部署时基于 `时间戳(秒) + PID + 主机名` 经 SHA-256 生成 256-bit 密钥，通过 `sed` 直接写入 `base/kustomization.yaml`。
+> Upgrading an existing installation: put the environment's *current*
+> `JWT_SECRET` into `base/keys.env` only until the re-encryption job reports zero
+> legacy rows. Any environment that used the `JWT_SECRET` value formerly
+> committed to `base/kustomization.yaml` must treat it as public: set
+> `LEGACY_TOKEN_CUTOFF` to the deploy time (no legacy token window) and rotate
+> it now, see `docs/security/signing-and-encryption-keys.md`.
 
 ## Configuration
 
@@ -195,19 +211,25 @@ Before deploying, update the following values to match your environment:
 | `DB_SSLMODE` | PostgreSQL SSL mode | `require` |
 | `TZ` | Timezone | `Asia/Singapore` |
 
-**`base/secret.yaml`**
+**`base/db.env`** (gitignored; template `base/db.env.example`) → Secret `iac-platform`
 | Key | Description | Default |
 |-----|-------------|---------|
 | `DB_USER` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | `postgres123` |
+| `DB_PASSWORD` | Database password | none, generate: `openssl rand -base64 48` |
 
-**`base/kustomization.yaml` — secretGenerator**
+**`base/keys.env`** (gitignored; template `base/keys.env.example`) → Secret `iac-jwt`
 | Key | Description | 生成方式 |
 |-----|-------------|---------|
-| `JWT_SECRET` | JWT signing key | 部署时基于 `时间戳 + 主机名` 经 SHA-256 自动生成 256-bit 密钥，无需手动配置 |
+| `JWT_SECRET` | Legacy only: verifies tokens without `kid` until `LEGACY_TOKEN_CUTOFF`, decrypts legacy (key_version 0) data | empty on new installs; upgrades keep the current value until re-encryption finishes, then retire (`openssl rand -base64 48` when legacy dev mode needs one) |
+| `DATA_ENCRYPTION_KEY` | AES-256 data encryption key (variables etc.), 32 bytes base64/hex; `_VERSION`, `_PREVIOUS`, `_PREVIOUS_VERSION` for rotation | `openssl rand -base64 32`; required when `ENV=production` |
+| `SIGNING_ROOT_KEY` | HKDF root of all JWT signing keys (user/state/agent/run/runtask), >= 32 bytes; same rotation variables | `openssl rand -base64 48`; required when `ENV=production` |
+| `LEGACY_TOKEN_CUTOFF` | RFC3339 hard cutoff for tokens without `kid` = deploy time + longest legacy token lifetime; unset = none accepted | optional |
+| `LEGACY_TOKEN_ISSUED_BEFORE` | RFC3339 deploy time; no-kid tokens with a later `iat` are rejected (defaults to process start) | optional |
 
-**`tls/secret-gateway-tls.yaml`**
-- Replace with your own TLS certificate for external access (current: mkcert self-signed for `*.iac-platform.com`)
+See `docs/security/signing-and-encryption-keys.md`.
+
+**`tls/certs/tls.crt`, `tls/certs/tls.key`** (gitignored) → Secret `iac-gateway-tls`
+- Gateway external TLS certificate and key. `make dev-certs` for local use; your own certificate for real environments. Never commit them.
 
 
 ### 访问平台

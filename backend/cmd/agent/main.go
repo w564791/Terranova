@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"iac-platform/agent/control"
+	"iac-platform/internal/tlstrust"
 	"iac-platform/internal/version"
 	"iac-platform/services"
 )
@@ -23,19 +24,36 @@ func main() {
 	agentName := os.Getenv("IAC_AGENT_NAME")
 	protocol := os.Getenv("IAC_AGENT_PROTOCOL")
 
+	// TLS trust: refuse verification-bypass options in production (ENV=production,
+	// injected by the platform for K8s pools); IAC_CA_FILE / AGENT_CA_FILE add
+	// a private CA for the API, C&C WebSocket and Terraform state backend.
+	tlsWarnings, tlsErr := tlstrust.CheckStartup("agent")
+	for _, w := range tlsWarnings {
+		log.Printf("[TLS] WARNING: %s", w)
+	}
+	if tlsErr != nil {
+		log.Fatalf("[TLS] refusing to start: %v", tlsErr)
+	}
+	if err := tlstrust.InstallDefaults(); err != nil {
+		log.Fatalf("[TLS] refusing to start: %v", err)
+	}
+
 	// Validate required variables
 	if apiEndpoint == "" || agentToken == "" || agentName == "" {
 		log.Fatal("Required environment variables not set: IAC_API_ENDPOINT, IAC_AGENT_TOKEN, IAC_AGENT_NAME")
 	}
 
-	// Default protocol to http if not specified
-	if protocol == "" {
-		protocol = "http"
+	var err error
+	protocol, err = tlstrust.ResolveAgentProtocol(protocol)
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
-
-	// Validate protocol
-	if protocol != "http" && protocol != "https" {
-		log.Fatalf("Invalid IAC_AGENT_PROTOCOL: %s (must be 'http' or 'https')", protocol)
+	if w, err := tlstrust.CheckAgentPlaintext(protocol); err != nil {
+		log.Fatalf("[TLS] refusing to start: %v", err)
+	} else {
+		for _, msg := range w {
+			log.Printf("[TLS] WARNING: %s", msg)
+		}
 	}
 
 	// Get API server port (default: 8080)
@@ -58,7 +76,6 @@ func main() {
 	// 3. Register agent with retry logic
 	log.Printf("Registering agent (with exponential backoff: 2s, 4s, 8s, 16s, then 60s)...")
 	var agentID, poolID string
-	var err error
 
 	backoff := 2 * time.Second
 	maxBackoff := 60 * time.Second

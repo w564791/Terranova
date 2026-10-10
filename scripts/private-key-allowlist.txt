@@ -1,0 +1,6 @@
+# Paths excluded from scripts/check-private-keys.sh, one per line.
+# Only clearly fake, test-only fixtures belong here, each with a comment saying
+# why. Prefer generating test keys at runtime (crypto/rsa, crypto/ecdsa,
+# openssl in a test setup step) so nothing needs to be listed.
+#
+# (currently empty)

@@ -345,9 +345,16 @@ Agent 启动只需要通过环境变量配置，无需配置文件：
 
 ```bash
 # 必需的环境变量
-export IAC_API_ENDPOINT="https://iac-platform.example.com"  # API 端点
-export IAC_AGENT_TOKEN="pool-token-xxx"                      # Agent Token (Pool Token)
+export IAC_API_ENDPOINT="iac-platform.example.com"           # 平台主机名（不含协议和端口）
+export IAC_AGENT_TOKEN="<pool token>"                        # Agent Token (Pool Token)
 export IAC_AGENT_NAME="agent-01"                             # Agent 名称
+
+# 传输与 TLS
+export IAC_AGENT_PROTOCOL="https"                            # http | https（生产默认拒绝 http；集群内明文需 IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal）
+# export IAC_AGENT_ALLOW_PLAINTEXT="cluster-internal"           # 仅当生产环境必须用 http/ws（集群内）时设置
+export SERVER_PORT="8080"; export CC_SERVER_PORT="8090"      # API / C&C 端口
+export ENV="production"                                      # 生产模式：拒绝任何 TLS 校验绕过选项
+export IAC_CA_FILE="/etc/terranova-ca/ca.crt"                # 可选：私有 CA（PEM，追加到系统根证书；别名 AGENT_CA_FILE）
 
 # 可选的环境变量
 export IAC_POOL_ID="pool-prod"                               # Pool ID (可从 Token 自动获取)
@@ -360,6 +367,11 @@ export IAC_LOG_FILE="/var/log/iac-agent.log"                 # 日志文件 (默
 ```
 
 Agent 启动流程：
+0. TLS 检查（`internal/tlstrust`）：证书校验始终开启，没有跳过校验的选项。`ENV=production` 时，若设置了
+   `TLS_INSECURE`、`SKIP_TLS_VERIFY`、`GIT_SSL_NO_VERIFY`、`NODE_TLS_REJECT_UNAUTHORIZED=0` 等绕过选项则拒绝启动；
+   非生产环境启动但打印醒目的 WARN 并列出选项名。`IAC_CA_FILE` 无效（不可读 / 无证书 / 含私钥）时任何模式都拒绝启动。
+   K8s Pool 创建的 Agent Pod 由生产平台自动注入 `ENV=production`（模板无法覆盖）；手动部署的 Static Agent 需自行设置。
+   详见 `docs/security/tls-verification.md`。
 1. 读取环境变量 `IAC_API_ENDPOINT`、`IAC_AGENT_TOKEN`、`IAC_AGENT_NAME`
 2. 使用 Token 向 API 端点注册
 3. 建立 C&C WebSocket 连接

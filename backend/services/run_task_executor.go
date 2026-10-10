@@ -34,7 +34,8 @@ type RunTaskExecutor struct {
 
 // NewRunTaskExecutor creates a new run task executor
 func NewRunTaskExecutor(db *gorm.DB, baseURL string) *RunTaskExecutor {
-	// Reuse the platform JWT_SECRET for RunTask token signing
+	// RunTask tokens are signed with the runtask-purpose key derived from
+	// SIGNING_ROOT_KEY; JWT_SECRET is only the legacy (no-kid) key.
 	tokenSecret := config.GetJWTSecret()
 
 	return &RunTaskExecutor{

@@ -2,4 +2,20 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - certificate.yaml
-  - secret-gateway-tls.yaml
+
+# Gateway external TLS certificate. The certificate and private key are NOT
+# committed: they are read from the gitignored certs/ directory next to this
+# file. `make dev-certs` writes a local development pair there; for real
+# environments copy your own certificate chain and key to certs/tls.crt and
+# certs/tls.key (or manage iac-gateway-tls with cert-manager / an external
+# secret store and drop this generator). kustomize fails if the files are
+# missing.
+secretGenerator:
+  - name: iac-gateway-tls
+    namespace: terraform
+    type: kubernetes.io/tls
+    files:
+      - tls.crt=certs/tls.crt
+      - tls.key=certs/tls.key
+    options:
+      disableNameSuffixHash: true
