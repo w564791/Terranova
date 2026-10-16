@@ -114,10 +114,13 @@ func TestWithAgentMode(t *testing.T) {
 
 func TestWithAgentPlaintextAllow(t *testing.T) {
 	base := []corev1.EnvVar{{Name: "IAC_AGENT_PROTOCOL", Value: "http"}}
-	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, base...), false); len(got) != 1 {
+	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, base...), false, true); len(got) != 1 {
 		t.Fatalf("non-production must not inject: %+v", got)
 	}
-	got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, base...), true)
+	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, base...), true, false); len(got) != 1 {
+		t.Fatalf("external/VM / non-in-cluster must not inject: %+v", got)
+	}
+	got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, base...), true, true)
 	found := false
 	for _, e := range got {
 		if e.Name == "IAC_AGENT_ALLOW_PLAINTEXT" {
@@ -128,17 +131,17 @@ func TestWithAgentPlaintextAllow(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("production http must inject allow flag: %+v", got)
+		t.Fatalf("production in-cluster http must inject allow flag: %+v", got)
 	}
 	https := []corev1.EnvVar{{Name: "IAC_AGENT_PROTOCOL", Value: "https"}}
-	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, https...), true); len(got) != 1 {
+	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, https...), true, true); len(got) != 1 {
 		t.Fatalf("https must not inject: %+v", got)
 	}
 	preset := []corev1.EnvVar{
 		{Name: "IAC_AGENT_PROTOCOL", Value: "http"},
 		{Name: "IAC_AGENT_ALLOW_PLAINTEXT", Value: "cluster-internal"},
 	}
-	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, preset...), true); len(got) != 2 {
+	if got := withAgentPlaintextAllow(append([]corev1.EnvVar{}, preset...), true, true); len(got) != 2 {
 		t.Fatalf("must not duplicate: %+v", got)
 	}
 }

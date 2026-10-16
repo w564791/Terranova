@@ -203,7 +203,7 @@ func (s *K8sJobService) buildJob(jobName, namespace string, task *models.Workspa
 		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
 	}
 	envVars = withAgentMode(envVars, keys.IsProduction())
-	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction())
+	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction(), true /* in-cluster K8s */)
 
 	// Build resource requirements
 	resources := corev1.ResourceRequirements{}

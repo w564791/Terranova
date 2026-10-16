@@ -791,7 +791,7 @@ func (m *K8sPodManager) buildPodSpec(podName, namespace, poolID string, config *
 		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
 	}
 	envVars = withAgentMode(envVars, keys.IsProduction())
-	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction())
+	envVars = withAgentPlaintextAllow(envVars, keys.IsProduction(), true /* in-cluster K8s pod */)
 
 	// Build resource requirements
 	resources := corev1.ResourceRequirements{
@@ -966,15 +966,20 @@ func withAgentMode(envVars []corev1.EnvVar, production bool) []corev1.EnvVar {
 	return append(out, corev1.EnvVar{Name: "ENV", Value: "production"})
 }
 
-// withAgentPlaintextAllow keeps production agent pods from failing the
-// plaintext-protocol startup check when the platform still speaks http
-// inside the cluster. Choice: inject IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal
-// (not force https) because in-cluster agents commonly reach the platform over
-// ClusterIP/http; operators who terminate TLS at the platform set protocol
-// https and then need no flag. A pool template that already sets the flag is
-// left alone; an invalid value is left for the agent to reject at startup.
-func withAgentPlaintextAllow(envVars []corev1.EnvVar, production bool) []corev1.EnvVar {
-	if !production {
+// withAgentPlaintextAllow keeps production in-cluster agent pods from failing
+// the plaintext-protocol startup check when the platform still speaks http
+// inside the cluster. Inject IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal only
+// for platform-launched in-cluster pods/deployments/jobs (ClusterIP path);
+// never for external/VM / manually registered agents (callers pass
+// inCluster=false, or do not call this helper). Choice: opt-in the
+// cluster-internal flag rather than force https, because ClusterIP traffic is
+// commonly plaintext today. When the platform moves agent protocol to https,
+// stop auto-injecting this flag (callers will pass protocol=https and this
+// becomes a no-op, or remove the inject path). A pool template that already
+// sets the flag is left alone; an invalid value is left for the agent to
+// reject at startup.
+func withAgentPlaintextAllow(envVars []corev1.EnvVar, production bool, inCluster bool) []corev1.EnvVar {
+	if !production || !inCluster {
 		return envVars
 	}
 	protocol := "http"

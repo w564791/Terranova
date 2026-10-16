@@ -257,6 +257,14 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 第 6 步依赖它：AgentCore 只允许 VPC 模式，VPC 默认无公网，sandbox 的 `init` 需要内部 `network_mirror`（否则就得开 NAT 放行 registry，等于放宽出网）。平台 CLI 配置的 `provider_installation` 只配 `network_mirror`、不留 `direct`。
 
 
+## 13. SIGNING_ROOT_KEY independence
+
+`SIGNING_ROOT_KEY` is an independent signing root (HKDF per JWT purpose). It is
+**not** derived from `JWT_SECRET`. Data at rest uses a separate
+`DATA_ENCRYPTION_KEY` (variable `key_version` column / plan_data envelope
+`key_version` in the authenticated header). See
+`docs/security/signing-and-encryption-keys.md`.
+
 ## Reserved environment variables (platform-controlled)
 
 Workspace / variable-set **environment** variables may not set names reserved by

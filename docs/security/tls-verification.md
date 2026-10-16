@@ -61,14 +61,19 @@ unless `IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal` is set exactly; any other
 value of that variable is a startup error. With the flag set it starts with a
 loud warning. Outside production, plaintext still starts with a warning.
 
-Platform-created K8s agent pods/deployments/jobs: a production platform that
-still speaks `http` to in-cluster agents injects
-`IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal` so existing pools do not break.
-Choice: opt-in the cluster-internal flag rather than force `https`, because
-ClusterIP traffic is commonly plaintext today; operators who terminate TLS on
-the platform set protocol `https` (or `PLATFORM_PROTOCOL=https`) and need no
-flag. External / static agents must set `IAC_AGENT_PROTOCOL=https` (or the
-exact allow flag if they intentionally use plaintext inside a trusted network).
+Platform-created **in-cluster** K8s agent pods/deployments/jobs only: a
+production platform that still speaks `http` to ClusterIP agents injects
+`IAC_AGENT_ALLOW_PLAINTEXT=cluster-internal` so existing pools do not break
+(`withAgentPlaintextAllow(..., inCluster=true)`). External / VM / manually
+registered agents are **not** auto-injected; they must set
+`IAC_AGENT_PROTOCOL=https` (or the exact allow flag themselves if they
+intentionally use plaintext on a trusted network). Choice: opt-in the
+cluster-internal flag rather than force `https`, because ClusterIP traffic is
+commonly plaintext today; operators who terminate TLS on the platform set
+protocol `https` (or `PLATFORM_PROTOCOL=https`) and need no flag. **When the
+platform moves the agent protocol to `https`, stop auto-injecting this flag**
+(the inject becomes a no-op once protocol is https, and the call sites should
+be removed).
 
 ## Not covered
 
