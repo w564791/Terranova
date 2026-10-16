@@ -15,7 +15,6 @@ import (
 
 func uintPtr(v uint) *uint { return &v }
 
-
 const (
 	testDBName    = "iac_platform_test"
 	defaultDSN    = "host=localhost user=postgres password=postgres123 port=5432 sslmode=disable"

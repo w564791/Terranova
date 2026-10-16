@@ -111,7 +111,7 @@ func TestCrossOrgNotVisibleOrWritable(t *testing.T) {
 	if err != nil || ok {
 		t.Fatalf("visible in other org = %v, %v; want false", ok, err)
 	}
-	w, err := svc.VarsetWritableInOrg(vs.VarsetID, 1, "u1", false)
+	w, _, err := svc.VarsetWritableInOrg(vs.VarsetID, 1, "u1", false)
 	if err != nil || w {
 		t.Fatalf("writable in other org = %v, %v; want false", w, err)
 	}

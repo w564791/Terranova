@@ -144,6 +144,8 @@ func definitions() []definition {
 		{version: "20261010_16_manifest_git_source_immutable", contract: "manifest-git-source-immutable-v1", apply: applyManifestGitSourceImmutable},
 		// variable_sets.org_id column + backfill. Additive/idempotent.
 		{version: "20261016_01_variable_set_org_id", contract: "variable-set-org-id-v1", apply: applyVariableSetOrgID},
+		// specific ⇒ org_id NOT NULL as NOT VALID check (orphans healed on write).
+		{version: "20261016_02_variable_set_org_required", contract: "variable-set-org-required-not-valid-v1", apply: applyVariableSetOrgRequired},
 	}
 }
 

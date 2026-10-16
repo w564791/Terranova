@@ -15,13 +15,29 @@ import (
 
 // VarsetVariableController 变量集变量控制器
 type VarsetVariableController struct {
-	service *services.VarsetVariableService
+	service   *services.VarsetVariableService
+	vsService *services.VariableSetService
+}
+
+// healOrphan binds a legacy orphan varset to the caller org before a variable
+// write (the write guard only lets its creator through). false = 404 written.
+func (c *VarsetVariableController) healOrphan(ctx *gin.Context, varsetID string) bool {
+	o := healOrg(ctx)
+	if o == nil {
+		return true
+	}
+	if err := c.vsService.HealOrphan(varsetID, *o, ctx.GetString("user_id")); err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "variable set not found"})
+		return false
+	}
+	return true
 }
 
 // NewVarsetVariableController 创建变量集变量控制器实例
 func NewVarsetVariableController(db *gorm.DB) *VarsetVariableController {
 	return &VarsetVariableController{
-		service: services.NewVarsetVariableService(db),
+		service:   services.NewVarsetVariableService(db),
+		vsService: services.NewVariableSetService(db),
 	}
 }
 
@@ -72,6 +88,9 @@ func (c *VarsetVariableController) Create(ctx *gin.Context) {
 	}
 	userID := uid.(string)
 
+	if !c.healOrphan(ctx, varsetID) {
+		return
+	}
 	v, err := c.service.Create(varsetID, req.Key, req.Value, req.Description, req.VariableType, req.ValueFormat, req.Sensitive, &userID)
 	if err != nil {
 		errMsg := err.Error()
@@ -175,6 +194,9 @@ func (c *VarsetVariableController) Update(ctx *gin.Context) {
 		return
 	}
 
+	if !c.healOrphan(ctx, varsetID) {
+		return
+	}
 	v, err := c.service.Update(varsetID, varID, req.Value, req.Description, req.Sensitive)
 	if err != nil {
 		errMsg := err.Error()
@@ -209,6 +231,9 @@ func (c *VarsetVariableController) Delete(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 	varID := ctx.Param("var_id")
 
+	if !c.healOrphan(ctx, varsetID) {
+		return
+	}
 	if err := c.service.Delete(varsetID, varID); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {

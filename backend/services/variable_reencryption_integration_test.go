@@ -104,7 +104,8 @@ func TestReencryptLegacyVariables_PG(t *testing.T) {
 	idRelabel := ins(6, v1CT, true, 0) // versioned value, column not set
 
 	// varset row
-	vs := models.VariableSet{VarsetID: "varset-" + ws[len(ws)-8:], Name: "reenc " + ws}
+	vsOrg := uint(1)
+	vs := models.VariableSet{VarsetID: "varset-" + ws[len(ws)-8:], Name: "reenc " + ws, Scope: "specific", OrgID: &vsOrg}
 	if err := db.Create(&vs).Error; err != nil {
 		t.Fatal(err)
 	}

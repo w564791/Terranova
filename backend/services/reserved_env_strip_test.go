@@ -90,7 +90,6 @@ func TestBuildEnvironmentVariables_PlatformCAAfterReservedStrip(t *testing.T) {
 	}
 }
 
-
 func TestGetTFCLIArgs_AlwaysEmptyDespiteUserVars(t *testing.T) {
 	s := &TerraformExecutor{
 		dataAccessor: stripEnvAccessor{vars: []models.WorkspaceVariable{

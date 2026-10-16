@@ -51,11 +51,20 @@ func (c *VariableSetController) VarsetInAuthOrg(write bool) gin.HandlerFunc {
 			return
 		}
 		if write {
-			writable, err := c.service.VarsetWritableInOrg(varsetID, orgID, userID, isSystemAdmin(ctx))
+			writable, orphan, err := c.service.VarsetWritableInOrg(varsetID, orgID, userID, isSystemAdmin(ctx))
 			if err != nil {
 				_ = ctx.Error(fmt.Errorf("varset org binding: %w", err))
 				ctx.Abort()
 				return
+			}
+			if orphan {
+				// Legacy orphan (specific, org_id NULL): only its creator may
+				// write, and the write binds org_id to this org; others 404.
+				if !writable {
+					ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "variable set not found"})
+					return
+				}
+				ctx.Set(VarsetHealOrgKey, orgID)
 			}
 			if !writable {
 				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "variable set is read-only in this organization"})
@@ -64,6 +73,19 @@ func (c *VariableSetController) VarsetInAuthOrg(write bool) gin.HandlerFunc {
 		}
 		ctx.Next()
 	}
+}
+
+// VarsetHealOrgKey is set by the write guard when the target varset is a
+// legacy orphan written by its creator: the write must set org_id to it.
+const VarsetHealOrgKey = "varset_heal_org_id"
+
+func healOrg(ctx *gin.Context) *uint {
+	if v, ok := ctx.Get(VarsetHealOrgKey); ok {
+		if o, ok := v.(uint); ok && o > 0 {
+			return &o
+		}
+	}
+	return nil
 }
 
 func isSystemAdmin(ctx *gin.Context) bool {
@@ -291,7 +313,7 @@ func (c *VariableSetController) Update(ctx *gin.Context) {
 		return
 	}
 
-	varset, err := c.service.Update(varsetID, req.Name, req.Description)
+	varset, err := c.service.Update(varsetID, req.Name, req.Description, healOrg(ctx))
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
@@ -376,7 +398,7 @@ func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 func (c *VariableSetController) Delete(ctx *gin.Context) {
 	varsetID := ctx.Param("varset_id")
 
-	if err := c.service.Delete(varsetID); err != nil {
+	if err := c.service.Delete(varsetID, healOrg(ctx)); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
@@ -507,6 +529,12 @@ func (c *VariableSetController) DeleteAssignment(ctx *gin.Context) {
 	}
 	if !c.authorizeTarget(ctx, existing.ScopeType, existing.ProjectID, existing.WorkspaceID) {
 		return
+	}
+	if o := healOrg(ctx); o != nil {
+		if err := c.service.HealOrphan(varsetID, *o, ctx.GetString("user_id")); err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "variable set not found"})
+			return
+		}
 	}
 	if err := c.service.DeleteAssignment(varsetID, uint(assignmentID)); err != nil {
 		errMsg := err.Error()

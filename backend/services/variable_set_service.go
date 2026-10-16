@@ -159,37 +159,56 @@ func (s *VariableSetService) VarsetVisibleInOrg(varsetID string, orgID uint, cal
 // 调用前应先确认可见(不可见由调用方返回 404)。
 //   - global → 仅平台超管;
 //   - org_id = orgID → 可写;
-//   - org_id IS NULL (compat): 分配全部在本组织,或未分配且由调用者创建。
-func (s *VariableSetService) VarsetWritableInOrg(varsetID string, orgID uint, callerID string, isSystemAdmin bool) (bool, error) {
+//   - specific + org_id IS NULL (legacy orphan) → 仅创建者可写,且本次写入须
+//     把 org_id 设为调用者 auth org(heal-on-write, orphan=true);其他人 404。
+func (s *VariableSetService) VarsetWritableInOrg(varsetID string, orgID uint, callerID string, isSystemAdmin bool) (writable bool, orphan bool, err error) {
 	if orgID == 0 || varsetID == "" {
-		return false, nil
+		return false, false, nil
 	}
 	var vs models.VariableSet
 	if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return false, nil
+			return false, false, nil
 		}
-		return false, fmt.Errorf("load variable set: %w", err)
+		return false, false, fmt.Errorf("load variable set: %w", err)
 	}
 	if vs.Scope == "global" {
-		return isSystemAdmin, nil
+		return isSystemAdmin, false, nil
 	}
 	if vs.OrgID != nil {
-		return *vs.OrgID == orgID, nil
+		return *vs.OrgID == orgID, false, nil
 	}
-	// Compat: org_id IS NULL — reuse assignment/creator rules.
-	var total, inOrg int64
-	if err := s.db.Model(&models.VarsetAssignment{}).Where("varset_id = ?", varsetID).Count(&total).Error; err != nil {
-		return false, fmt.Errorf("count assignments: %w", err)
+	return callerID != "" && vs.CreatedBy != nil && *vs.CreatedBy == callerID, true, nil
+}
+
+// HealOrphan binds a legacy orphan (specific, org_id NULL) to orgID in one
+// conditional UPDATE, only when callerID is its creator. Used by write paths
+// that do not otherwise update the variable_sets row (variables, unmount).
+// No-op when the row already has an org_id.
+func (s *VariableSetService) HealOrphan(varsetID string, orgID uint, callerID string) error {
+	if orgID == 0 || callerID == "" {
+		return fmt.Errorf("variable set not found")
 	}
-	if total == 0 {
-		return callerID != "" && vs.CreatedBy != nil && *vs.CreatedBy == callerID, nil
+	var vs models.VariableSet
+	if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err != nil {
+		return fmt.Errorf("variable set not found")
 	}
-	if err := s.db.Model(&models.VarsetAssignment{}).Where("varset_id = ?", varsetID).
-		Where(s.orgAssignmentCond(orgID)).Count(&inOrg).Error; err != nil {
-		return false, fmt.Errorf("count org assignments: %w", err)
+	if vs.OrgID != nil {
+		return nil
 	}
-	return inOrg == total, nil
+	if err := s.ensureNameUnique(vs.Name, &orgID, varsetID); err != nil {
+		return err
+	}
+	res := s.db.Model(&models.VariableSet{}).
+		Where("varset_id = ? AND scope = ? AND org_id IS NULL AND created_by = ?", varsetID, "specific", callerID).
+		Updates(map[string]interface{}{"org_id": orgID, "updated_at": time.Now()})
+	if res.Error != nil {
+		return fmt.Errorf("heal variable set org_id: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("variable set not found")
+	}
+	return nil
 }
 
 // GetAssignment 读取属于 varsetID 的分配(删除分配前校验其目标)。
@@ -267,7 +286,7 @@ func (s *VariableSetService) GetByVarsetID(varsetID string) (*models.VariableSet
 }
 
 // Update 更新变量集
-func (s *VariableSetService) Update(varsetID string, name, description *string) (*models.VariableSet, error) {
+func (s *VariableSetService) Update(varsetID string, name, description *string, healOrg *uint) (*models.VariableSet, error) {
 	varset, err := s.GetByVarsetID(varsetID)
 	if err != nil {
 		return nil, err
@@ -277,13 +296,21 @@ func (s *VariableSetService) Update(varsetID string, name, description *string) 
 		"updated_at": time.Now(),
 	}
 
+	targetOrg := varset.OrgID
+	if varset.OrgID == nil && varset.Scope == "specific" && healOrg != nil {
+		// Heal orphan in the same UPDATE as the edit.
+		targetOrg = healOrg
+		updates["org_id"] = *healOrg
+	}
+	newName := varset.Name
 	if name != nil {
-		if *name != varset.Name {
-			if err := s.ensureNameUnique(*name, varset.OrgID, varsetID); err != nil {
-				return nil, err
-			}
-		}
+		newName = *name
 		updates["name"] = *name
+	}
+	if newName != varset.Name || targetOrg != varset.OrgID {
+		if err := s.ensureNameUnique(newName, targetOrg, varsetID); err != nil {
+			return nil, err
+		}
 	}
 
 	if description != nil {
@@ -292,6 +319,10 @@ func (s *VariableSetService) Update(varsetID string, name, description *string) 
 
 	if err := s.db.Model(varset).Updates(updates).Error; err != nil {
 		return nil, fmt.Errorf("failed to update variable set: %w", err)
+	}
+	if v, ok := updates["org_id"]; ok {
+		o := v.(uint)
+		varset.OrgID = &o
 	}
 
 	return varset, nil
@@ -353,13 +384,22 @@ func (s *VariableSetService) UpdateScope(varsetID, newScope string, authOrgID ui
 }
 
 // Delete 软删除变量集
-func (s *VariableSetService) Delete(varsetID string) error {
-	result := s.db.Model(&models.VariableSet{}).
-		Where("varset_id = ? AND is_deleted = ?", varsetID, false).
-		Updates(map[string]interface{}{
-			"is_deleted": true,
-			"updated_at": time.Now(),
-		})
+func (s *VariableSetService) Delete(varsetID string, healOrg *uint) error {
+	updates := map[string]interface{}{
+		"is_deleted": true,
+		"updated_at": time.Now(),
+	}
+	q := s.db.Model(&models.VariableSet{}).Where("varset_id = ? AND is_deleted = ?", varsetID, false)
+	if healOrg != nil {
+		// Orphan: bind org in the same UPDATE (deleted rows are out of the
+		// unique indexes, so no name check is needed).
+		var vs models.VariableSet
+		if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err == nil &&
+			vs.Scope == "specific" && vs.OrgID == nil {
+			updates["org_id"] = *healOrg
+		}
+	}
+	result := q.Updates(updates)
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete variable set: %w", result.Error)

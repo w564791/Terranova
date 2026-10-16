@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -152,8 +154,9 @@ func TestVarsetGlobalWritableOnlyBySystemAdmin(t *testing.T) {
 	}
 }
 
-// A varset assigned to this org and another one is readable here but read-only.
-func TestVarsetAssignedToOtherOrgIsReadOnly(t *testing.T) {
+// A legacy orphan (org_id NULL) mounted here is readable (compat), but only
+// its creator may write it; anyone else gets 404 on writes.
+func TestVarsetOrphanNonCreatorWrite404(t *testing.T) {
 	r := setupVarsetOrgRouter(t, &denyChecker{}, false)
 	for _, p := range []string{"/api/v1/variable-sets/vs-mixed", "/api/v1/variable-sets/vs-mixed/assignments"} {
 		if w := doVarsetReq(r, "GET", p, ""); w.Code != http.StatusOK {
@@ -167,8 +170,8 @@ func TestVarsetAssignedToOtherOrgIsReadOnly(t *testing.T) {
 		{"POST", "/api/v1/variable-sets/vs-mixed/assignments", `{"scope_type":"workspace","workspace_id":"ws-b"}`},
 		{"DELETE", "/api/v1/variable-sets/vs-mixed/assignments/102", ""},
 	} {
-		if w := doVarsetReq(r, tc.method, tc.path, tc.body); w.Code != http.StatusForbidden {
-			t.Errorf("%s %s = %d, want 403; %s", tc.method, tc.path, w.Code, w.Body.String())
+		if w := doVarsetReq(r, tc.method, tc.path, tc.body); w.Code != http.StatusNotFound {
+			t.Errorf("%s %s = %d, want 404; %s", tc.method, tc.path, w.Code, w.Body.String())
 		}
 	}
 }
@@ -304,5 +307,58 @@ func TestVarsetMountOnOtherOrgWorkspace404(t *testing.T) {
 		`{"scope_type":"workspace","workspace_id":"ws-other"}`)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("mount on other-org workspace = %d, want 404; %s", w.Code, w.Body.String())
+	}
+}
+
+func varsetOrgOf(t *testing.T, r *gin.Engine, id string) string {
+	t.Helper()
+	w := doVarsetReq(r, "GET", "/api/v1/variable-sets/"+id, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d; %s", id, w.Code, w.Body.String())
+	}
+	var body struct {
+		OrgID *uint `json:"org_id"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if body.OrgID == nil {
+		return "null"
+	}
+	return fmt.Sprint(*body.OrgID)
+}
+
+// Every write path heals a creator-owned orphan: org_id = caller auth org.
+func TestVarsetOrphanHealedOnWriteByCreator(t *testing.T) {
+	for _, tc := range []struct{ name, method, path, body string }{
+		{"rename", "PUT", "/api/v1/variable-sets/vs-mine", `{"name":"healed"}`},
+		{"add variable", "POST", "/api/v1/variable-sets/vs-mine/variables", `{"key":"k","value":"v","variable_type":"terraform"}`},
+		{"mount", "POST", "/api/v1/variable-sets/vs-mine/assignments", `{"scope_type":"workspace","workspace_id":"ws-a"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := setupVarsetOrgRouter(t, &denyChecker{}, false)
+			if got := varsetOrgOf(t, r, "vs-mine"); got != "null" {
+				t.Fatalf("precondition org_id = %s", got)
+			}
+			if w := doVarsetReq(r, tc.method, tc.path, tc.body); w.Code >= 300 {
+				t.Fatalf("%s = %d; %s", tc.name, w.Code, w.Body.String())
+			}
+			if got := varsetOrgOf(t, r, "vs-mine"); got != "1" {
+				t.Fatalf("after %s org_id = %s, want 1", tc.name, got)
+			}
+		})
+	}
+}
+
+// Another user cannot write (or thereby claim) someone else's orphan: 404.
+func TestVarsetOrphanNonCreatorCannotHeal(t *testing.T) {
+	r := setupVarsetOrgRouter(t, &denyChecker{}, false) // caller u1
+	for _, tc := range []struct{ method, path, body string }{
+		{"PUT", "/api/v1/variable-sets/vs-theirs", `{"name":"stolen"}`},
+		{"POST", "/api/v1/variable-sets/vs-theirs/variables", `{"key":"k","value":"v","variable_type":"terraform"}`},
+		{"POST", "/api/v1/variable-sets/vs-theirs/assignments", `{"scope_type":"workspace","workspace_id":"ws-a"}`},
+		{"DELETE", "/api/v1/variable-sets/vs-theirs", ""},
+	} {
+		if w := doVarsetReq(r, tc.method, tc.path, tc.body); w.Code != http.StatusNotFound {
+			t.Errorf("%s %s = %d, want 404; %s", tc.method, tc.path, w.Code, w.Body.String())
+		}
 	}
 }
