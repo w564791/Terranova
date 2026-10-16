@@ -69,6 +69,14 @@ func SetupVariableSetRoutes(protected *gin.RouterGroup, db *gorm.DB, iamMiddlewa
 		}
 	}
 
+	// Orphan heal-on-write: fresh VARIABLE_SETS WRITE check in the auth org
+	// right before the write binds org_id (creator alone is not enough).
+	canHeal := func(c *gin.Context, orgID uint) bool {
+		return iamMiddleware.HasOrgPermission(c, orgID, "VARIABLE_SETS", "WRITE")
+	}
+	vsController.CanHealOrphan = canHeal
+	vvController.CanHealOrphan = canHeal
+
 	// Every /:varset_id route: RequirePermission, then the org binding
 	// (404 not visible in the auth org; 403 on write routes when read-only).
 	read := manifestRouteChain(vsController.VarsetInAuthOrg(false))

@@ -560,6 +560,19 @@ func (m *IAMPermissionMiddleware) HasWorkspaceResourcePermission(
 	return status == http.StatusOK
 }
 
+// HasOrgPermission is a fresh ORGANIZATION-scope check (no response
+// written; any error counts as "no").
+func (m *IAMPermissionMiddleware) HasOrgPermission(
+	c *gin.Context, orgID uint, resourceType string, requiredLevel string,
+) bool {
+	if m == nil || m.permissionChecker == nil || orgID == 0 {
+		return false
+	}
+	status, _, _ := m.checkScopedResourcePermission(c, valueobject.ScopeTypeOrganization, orgID, "",
+		fmt.Sprintf("organization %d", orgID), resourceType, requiredLevel)
+	return status == http.StatusOK
+}
+
 // checkScopedResourcePermission evaluates one scoped permission and returns
 // 200 or the status/body to emit; it never writes the response.
 func (m *IAMPermissionMiddleware) checkScopedResourcePermission(

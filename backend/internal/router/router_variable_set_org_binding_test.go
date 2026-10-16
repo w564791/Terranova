@@ -362,3 +362,89 @@ func TestVarsetOrphanNonCreatorCannotHeal(t *testing.T) {
 		}
 	}
 }
+
+// healGateChecker: the route-level VARIABLE_SETS check passes, but the fresh
+// heal-time check (the second VARIABLE_SETS evaluation in the request) sees
+// only READ - e.g. the grant changed, or a route whose gate is weaker.
+type healGateChecker struct {
+	denyChecker
+	healLevel valueobject.PermissionLevel
+	vsChecks  int
+}
+
+func (h *healGateChecker) CheckPermission(ctx context.Context, req *service.CheckPermissionRequest) (*service.CheckPermissionResult, error) {
+	if req.ResourceType == valueobject.ResourceTypeVariableSets {
+		h.mu.Lock()
+		h.vsChecks++
+		n := h.vsChecks
+		h.mu.Unlock()
+		if n > 1 { // heal-time check
+			ok := h.healLevel >= req.RequiredLevel
+			return &service.CheckPermissionResult{IsAllowed: ok, EffectiveLevel: h.healLevel}, nil
+		}
+	}
+	return h.denyChecker.CheckPermission(ctx, req)
+}
+func (h *healGateChecker) CheckPermissionWithTemporary(ctx context.Context, req *service.CheckPermissionRequest, _ *uint) (*service.CheckPermissionResult, error) {
+	return h.CheckPermission(ctx, req)
+}
+
+// Creator with only READ in the auth org at heal time: 404, org_id stays NULL,
+// on every heal path. With WRITE: healed.
+func TestVarsetOrphanHealRequiresVarsetWrite(t *testing.T) {
+	paths := []struct{ name, method, path, body string }{
+		{"rename", "PUT", "/api/v1/variable-sets/vs-mine", `{"name":"healed"}`},
+		{"scope", "PUT", "/api/v1/variable-sets/vs-mine/scope", `{"scope":"specific"}`},
+		{"delete", "DELETE", "/api/v1/variable-sets/vs-mine", ""},
+		{"add variable", "POST", "/api/v1/variable-sets/vs-mine/variables", `{"key":"k","value":"v","variable_type":"terraform"}`},
+		{"mount", "POST", "/api/v1/variable-sets/vs-mine/assignments", `{"scope_type":"workspace","workspace_id":"ws-a"}`},
+	}
+	for _, tc := range paths {
+		t.Run("read-only/"+tc.name, func(t *testing.T) {
+			hc := &healGateChecker{healLevel: valueobject.PermissionLevelRead}
+			r := setupVarsetRouterWith(t, hc, func(c *gin.Context) { c.Set("user_id", "u1") }, varsetOrgFixtures...)
+			if w := doVarsetReq(r, tc.method, tc.path, tc.body); w.Code != http.StatusNotFound {
+				t.Fatalf("%s = %d, want 404; %s", tc.name, w.Code, w.Body.String())
+			}
+			hc.healLevel = valueobject.PermissionLevelAdmin // let GET through for the assertion
+			if got := varsetOrgOf(t, r, "vs-mine"); got != "null" {
+				t.Fatalf("org_id = %s after denied %s, want null", got, tc.name)
+			}
+		})
+		t.Run("write/"+tc.name, func(t *testing.T) {
+			hc := &healGateChecker{healLevel: valueobject.PermissionLevelAdmin}
+			r := setupVarsetRouterWith(t, hc, func(c *gin.Context) { c.Set("user_id", "u1") }, varsetOrgFixtures...)
+			if w := doVarsetReq(r, tc.method, tc.path, tc.body); w.Code >= 300 {
+				t.Fatalf("%s = %d; %s", tc.name, w.Code, w.Body.String())
+			}
+			if tc.name == "delete" {
+				return // row is soft-deleted (org_id bound in the same UPDATE; checked on PG)
+			}
+			if got := varsetOrgOf(t, r, "vs-mine"); got != "1" {
+				t.Fatalf("org_id = %s after %s, want 1", got, tc.name)
+			}
+		})
+	}
+	// Creator with only READ at the route gate: refused before any heal.
+	ro := &denyChecker{}
+	r := setupVarsetRouterWith(t, readOnlyVarsets{ro}, func(c *gin.Context) { c.Set("user_id", "u1") }, varsetOrgFixtures...)
+	if w := doVarsetReq(r, "PUT", "/api/v1/variable-sets/vs-mine", `{"name":"x"}`); w.Code < 400 {
+		t.Fatalf("read-only rename = %d", w.Code)
+	}
+	if got := varsetOrgOf(t, r, "vs-mine"); got != "null" {
+		t.Fatalf("org_id = %s, want null", got)
+	}
+}
+
+type readOnlyVarsets struct{ *denyChecker }
+
+func (r readOnlyVarsets) CheckPermission(ctx context.Context, req *service.CheckPermissionRequest) (*service.CheckPermissionResult, error) {
+	if req.ResourceType == valueobject.ResourceTypeVariableSets {
+		ok := req.RequiredLevel <= valueobject.PermissionLevelRead
+		return &service.CheckPermissionResult{IsAllowed: ok, EffectiveLevel: valueobject.PermissionLevelRead}, nil
+	}
+	return r.denyChecker.CheckPermission(ctx, req)
+}
+func (r readOnlyVarsets) CheckPermissionWithTemporary(ctx context.Context, req *service.CheckPermissionRequest, _ *uint) (*service.CheckPermissionResult, error) {
+	return r.CheckPermission(ctx, req)
+}

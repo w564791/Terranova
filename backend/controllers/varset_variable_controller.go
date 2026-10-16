@@ -17,12 +17,18 @@ import (
 type VarsetVariableController struct {
 	service   *services.VarsetVariableService
 	vsService *services.VariableSetService
+
+	// CanHealOrphan: see VariableSetController.CanHealOrphan (nil = 404).
+	CanHealOrphan func(ctx *gin.Context, orgID uint) bool
 }
 
 // healOrphan binds a legacy orphan varset to the caller org before a variable
 // write (the write guard only lets its creator through). false = 404 written.
 func (c *VarsetVariableController) healOrphan(ctx *gin.Context, varsetID string) bool {
-	o := healOrg(ctx)
+	o, ok := healTarget(ctx, c.CanHealOrphan)
+	if !ok {
+		return false
+	}
 	if o == nil {
 		return true
 	}
