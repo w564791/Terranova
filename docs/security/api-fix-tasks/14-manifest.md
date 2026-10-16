@@ -151,6 +151,7 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
   - `VarsetVisibleInOrg` / `VarsetWritableInOrg` / `ListForOrg`：优先 `org_id` 列；仅 `org_id IS NULL` 兼容行才回退分配/创建者推导。Mount 目标 org 必须等于 `org_id`（global 仍仅超管）。
   - 强制约束（迁移 `20261016_02_variable_set_org_required`）：`chk_variable_sets_specific_org CHECK (scope <> 'specific' OR org_id IS NOT NULL) NOT VALID`（保留 `chk_variable_sets_org_scope`：global ⇒ NULL）。NOT VALID 只跳过已有行：新 INSERT 与任何 UPDATE 都受检，所以孤儿行（specific + NULL）不带 org_id 的普通 UPDATE 会失败（23514）。没有 pending 状态。
   - 孤儿写时修复（heal-on-write）：任何写路径（改名/描述、改 scope、删除、变量增改删、挂载/解除挂载）碰到孤儿行时，只有 `created_by` = 调用者才放行，并把 `org_id` 设为调用者 auth org——改 variable_sets 行本身的写（改名、改 scope、删除）在同一条 UPDATE 中写入 org_id；变量写与解除挂载先执行一条条件 UPDATE（`WHERE org_id IS NULL AND created_by = 调用者`），挂载在同一事务内写入。其他人写 → 404（不暴露存在）。读仍沿用兼容可见规则。
+  - 条件认领（`claimOrphanTx`，所有修复路径共用）：设置 org_id 的 UPDATE 一律带 `WHERE varset_id = ? AND scope = 'specific' AND org_id IS NULL AND created_by = 调用者 AND is_deleted = false` 并检查 RowsAffected；改名/改 scope/删除把字段改动并入这同一条 UPDATE，挂载在事务内先认领再建分配。0 行时重读：若该行仍有效且 org_id 已等于调用者 auth org（同一创建者在同一 org 的并发请求先完成认领），结果与本次认领等价，继续以 `WHERE org_id = 该 org` 执行本次写入；否则（已被其他 org 认领、已删除、非创建者）→ 404，绝不覆盖已有 org_id。修复前另需调用者在 auth org 持有 VARIABLE_SETS WRITE（预检查）。
   - **运维步骤（VALIDATE）**：用只读脚本 `scripts/varset_orphan_stats.sql` 统计剩余孤儿（`psql "$DSN" -f scripts/varset_orphan_stats.sql`）。`orphans_total` 为 0（通过写时修复或人工指定 org / 清理无主行）后执行：
     ```sql
     ALTER TABLE public.variable_sets VALIDATE CONSTRAINT chk_variable_sets_specific_org;

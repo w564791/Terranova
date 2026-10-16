@@ -88,6 +88,15 @@ const VarsetHealOrgKey = "varset_heal_org_id"
 // (nil when the varset is not an orphan). The caller must hold VARIABLE_SETS
 // WRITE in that org, checked right before the write; otherwise 404 is written
 // and ok=false, so a creator cannot claim the varset from a read-only org.
+// healClaim pairs the permitted heal org with the caller (creator check is
+// enforced again in SQL by claimOrphanTx).
+func healClaim(ctx *gin.Context, org *uint) *services.HealClaim {
+	if org == nil {
+		return nil
+	}
+	return &services.HealClaim{OrgID: *org, CallerID: ctx.GetString("user_id")}
+}
+
 func healTarget(ctx *gin.Context, can func(*gin.Context, uint) bool) (org *uint, ok bool) {
 	v, exists := ctx.Get(VarsetHealOrgKey)
 	if !exists {
@@ -330,7 +339,7 @@ func (c *VariableSetController) Update(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	varset, err := c.service.Update(varsetID, req.Name, req.Description, heal)
+	varset, err := c.service.Update(varsetID, req.Name, req.Description, healClaim(ctx, heal))
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
@@ -383,10 +392,11 @@ func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 	if id, ok := middleware.AuthOrgID(ctx); ok {
 		authOrg = id
 	}
-	if _, ok := healTarget(ctx, c.CanHealOrphan); !ok {
+	heal, ok := healTarget(ctx, c.CanHealOrphan)
+	if !ok {
 		return
 	}
-	varset, err := c.service.UpdateScope(varsetID, req.Scope, authOrg)
+	varset, err := c.service.UpdateScope(varsetID, req.Scope, authOrg, healClaim(ctx, heal))
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
@@ -422,7 +432,7 @@ func (c *VariableSetController) Delete(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := c.service.Delete(varsetID, heal); err != nil {
+	if err := c.service.Delete(varsetID, healClaim(ctx, heal)); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
@@ -505,10 +515,11 @@ func (c *VariableSetController) CreateAssignment(ctx *gin.Context) {
 		return
 	}
 
-	if _, ok := healTarget(ctx, c.CanHealOrphan); !ok {
+	heal, ok := healTarget(ctx, c.CanHealOrphan)
+	if !ok {
 		return
 	}
-	assignment, err := c.service.CreateAssignment(varsetID, req.ScopeType, req.ProjectID, req.WorkspaceID, &userID, targetOrg)
+	assignment, err := c.service.CreateAssignment(varsetID, req.ScopeType, req.ProjectID, req.WorkspaceID, &userID, targetOrg, healClaim(ctx, heal))
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {

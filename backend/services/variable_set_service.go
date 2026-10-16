@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"iac-platform/internal/models"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -181,34 +182,78 @@ func (s *VariableSetService) VarsetWritableInOrg(varsetID string, orgID uint, ca
 	return callerID != "" && vs.CreatedBy != nil && *vs.CreatedBy == callerID, true, nil
 }
 
-// HealOrphan binds a legacy orphan (specific, org_id NULL) to orgID in one
-// conditional UPDATE, only when callerID is its creator. Used by write paths
-// that do not otherwise update the variable_sets row (variables, unmount).
-// No-op when the row already has an org_id.
-func (s *VariableSetService) HealOrphan(varsetID string, orgID uint, callerID string) error {
-	if orgID == 0 || callerID == "" {
+// HealClaim identifies an orphan heal: bind org_id=OrgID, only if CallerID
+// is the varset's creator. Callers must already have checked VARIABLE_SETS
+// WRITE in OrgID.
+type HealClaim struct {
+	OrgID    uint
+	CallerID string
+}
+
+// claimOrphanTx runs one conditional UPDATE that binds a legacy orphan and
+// applies extra (may be nil) in the same statement:
+//
+//	WHERE varset_id = ? AND scope = 'specific' AND org_id IS NULL
+//	      AND created_by = <caller> AND is_deleted = false
+//
+// RowsAffected = 1 → claimed. RowsAffected = 0 → re-read the row: if it is
+// live and its org_id already equals the caller's org (a concurrent heal by
+// the same creator from the same org won the race), the outcome is identical
+// to our own claim, so extra is applied with WHERE org_id = <that org> and
+// the write proceeds. Anything else (claimed by another org, deleted, not the
+// creator, no longer specific) → "variable set not found" (404); org_id is
+// never overwritten.
+func claimOrphanTx(tx *gorm.DB, varsetID string, claim HealClaim, extra map[string]interface{}) error {
+	if claim.OrgID == 0 || claim.CallerID == "" {
 		return fmt.Errorf("variable set not found")
 	}
-	var vs models.VariableSet
-	if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err != nil {
-		return fmt.Errorf("variable set not found")
+	updates := map[string]interface{}{"updated_at": time.Now()}
+	for k, v := range extra {
+		updates[k] = v
 	}
-	if vs.OrgID != nil {
-		return nil
-	}
-	if err := s.ensureNameUnique(vs.Name, &orgID, varsetID); err != nil {
-		return err
-	}
-	res := s.db.Model(&models.VariableSet{}).
-		Where("varset_id = ? AND scope = ? AND org_id IS NULL AND created_by = ?", varsetID, "specific", callerID).
-		Updates(map[string]interface{}{"org_id": orgID, "updated_at": time.Now()})
+	updates["org_id"] = claim.OrgID
+	res := tx.Model(&models.VariableSet{}).
+		Where("varset_id = ? AND scope = ? AND org_id IS NULL AND created_by = ? AND is_deleted = ?",
+			varsetID, "specific", claim.CallerID, false).
+		Updates(updates)
 	if res.Error != nil {
 		return fmt.Errorf("heal variable set org_id: %w", res.Error)
+	}
+	if res.RowsAffected == 1 {
+		return nil
+	}
+	var cur models.VariableSet
+	if err := tx.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&cur).Error; err != nil ||
+		cur.OrgID == nil || *cur.OrgID != claim.OrgID {
+		return fmt.Errorf("variable set not found")
+	}
+	delete(updates, "org_id")
+	res = tx.Model(&models.VariableSet{}).
+		Where("varset_id = ? AND org_id = ? AND is_deleted = ?", varsetID, claim.OrgID, false).
+		Updates(updates)
+	if res.Error != nil {
+		return fmt.Errorf("update variable set: %w", res.Error)
 	}
 	if res.RowsAffected == 0 {
 		return fmt.Errorf("variable set not found")
 	}
 	return nil
+}
+
+// HealOrphan binds a legacy orphan for write paths that do not otherwise
+// update the variable_sets row (variables, unmount). See claimOrphanTx.
+func (s *VariableSetService) HealOrphan(varsetID string, orgID uint, callerID string) error {
+	claim := HealClaim{OrgID: orgID, CallerID: callerID}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var vs models.VariableSet
+		if err := tx.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err != nil {
+			return fmt.Errorf("variable set not found")
+		}
+		if err := s.ensureNameUniqueTx(tx, vs.Name, &orgID, varsetID); err != nil {
+			return err
+		}
+		return claimOrphanTx(tx, varsetID, claim, nil)
+	})
 }
 
 // GetAssignment 读取属于 varsetID 的分配(删除分配前校验其目标)。
@@ -285,53 +330,54 @@ func (s *VariableSetService) GetByVarsetID(varsetID string) (*models.VariableSet
 	return &varset, nil
 }
 
-// Update 更新变量集
-func (s *VariableSetService) Update(varsetID string, name, description *string, healOrg *uint) (*models.VariableSet, error) {
+// Update 更新变量集. With heal != nil (orphan), the edit and the org_id
+// claim happen in one conditional UPDATE (claimOrphanTx).
+func (s *VariableSetService) Update(varsetID string, name, description *string, heal *HealClaim) (*models.VariableSet, error) {
 	varset, err := s.GetByVarsetID(varsetID)
 	if err != nil {
 		return nil, err
 	}
+	healing := heal != nil && varset.OrgID == nil && varset.Scope == "specific"
 
-	updates := map[string]interface{}{
-		"updated_at": time.Now(),
-	}
-
+	updates := map[string]interface{}{}
 	targetOrg := varset.OrgID
-	if varset.OrgID == nil && varset.Scope == "specific" && healOrg != nil {
-		// Heal orphan in the same UPDATE as the edit.
-		targetOrg = healOrg
-		updates["org_id"] = *healOrg
+	if healing {
+		targetOrg = &heal.OrgID
 	}
 	newName := varset.Name
 	if name != nil {
 		newName = *name
 		updates["name"] = *name
 	}
-	if newName != varset.Name || targetOrg != varset.OrgID {
-		if err := s.ensureNameUnique(newName, targetOrg, varsetID); err != nil {
-			return nil, err
-		}
-	}
-
 	if description != nil {
 		updates["description"] = *description
 	}
 
-	if err := s.db.Model(varset).Updates(updates).Error; err != nil {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if newName != varset.Name || targetOrg != varset.OrgID {
+			if err := s.ensureNameUniqueTx(tx, newName, targetOrg, varsetID); err != nil {
+				return err
+			}
+		}
+		if healing {
+			return claimOrphanTx(tx, varsetID, *heal, updates)
+		}
+		updates["updated_at"] = time.Now()
+		return tx.Model(varset).Updates(updates).Error
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "already exists") {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to update variable set: %w", err)
 	}
-	if v, ok := updates["org_id"]; ok {
-		o := v.(uint)
-		varset.OrgID = &o
-	}
-
-	return varset, nil
+	return s.GetByVarsetID(varsetID)
 }
 
 // UpdateScope 更新变量集 scope.
 // global: clear mounts + org_id NULL. specific: set org_id from authOrgID when
 // currently NULL (e.g. flipping from global).
-func (s *VariableSetService) UpdateScope(varsetID, newScope string, authOrgID uint) (*models.VariableSet, error) {
+func (s *VariableSetService) UpdateScope(varsetID, newScope string, authOrgID uint, heal *HealClaim) (*models.VariableSet, error) {
 	if newScope != "global" && newScope != "specific" {
 		return nil, fmt.Errorf("invalid scope: %s, must be 'global' or 'specific'", newScope)
 	}
@@ -363,44 +409,64 @@ func (s *VariableSetService) UpdateScope(varsetID, newScope string, authOrgID ui
 		return varset, nil
 	}
 
+	if varset.Scope == "specific" && varset.OrgID == nil {
+		// Legacy orphan: only a conditional claim may bind org_id.
+		if heal == nil {
+			return nil, fmt.Errorf("variable set not found")
+		}
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := s.ensureNameUniqueTx(tx, varset.Name, &heal.OrgID, varsetID); err != nil {
+				return err
+			}
+			return claimOrphanTx(tx, varsetID, *heal, map[string]interface{}{"scope": newScope})
+		}); err != nil {
+			return nil, err
+		}
+		return s.GetByVarsetID(varsetID)
+	}
+
 	updates := map[string]interface{}{
 		"scope":      newScope,
 		"updated_at": time.Now(),
 	}
+	q := s.db.Model(&models.VariableSet{}).Where("varset_id = ? AND is_deleted = ?", varsetID, false)
 	if varset.OrgID == nil {
+		// global → specific: bind the auth org, guarded so a concurrent
+		// change cannot be overwritten.
 		if authOrgID == 0 {
 			return nil, fmt.Errorf("org_id required when switching to specific")
 		}
 		updates["org_id"] = authOrgID
+		q = q.Where("scope = ? AND org_id IS NULL", "global")
+	} else {
+		q = q.Where("org_id = ?", *varset.OrgID)
 	}
-	if err := s.db.Model(varset).Updates(updates).Error; err != nil {
-		return nil, fmt.Errorf("failed to update scope: %w", err)
+	res := q.Updates(updates)
+	if res.Error != nil {
+		return nil, fmt.Errorf("failed to update scope: %w", res.Error)
 	}
-	varset.Scope = newScope
-	if varset.OrgID == nil && authOrgID != 0 {
-		varset.OrgID = &authOrgID
+	if res.RowsAffected == 0 {
+		return nil, fmt.Errorf("variable set not found")
 	}
-	return varset, nil
+	return s.GetByVarsetID(varsetID)
 }
 
-// Delete 软删除变量集
-func (s *VariableSetService) Delete(varsetID string, healOrg *uint) error {
-	updates := map[string]interface{}{
-		"is_deleted": true,
-		"updated_at": time.Now(),
-	}
-	q := s.db.Model(&models.VariableSet{}).Where("varset_id = ? AND is_deleted = ?", varsetID, false)
-	if healOrg != nil {
-		// Orphan: bind org in the same UPDATE (deleted rows are out of the
-		// unique indexes, so no name check is needed).
+// Delete 软删除变量集. Orphans are claimed in the same conditional UPDATE
+// (deleted rows are outside the unique indexes, so no name check).
+func (s *VariableSetService) Delete(varsetID string, heal *HealClaim) error {
+	if heal != nil {
 		var vs models.VariableSet
-		if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err == nil &&
-			vs.Scope == "specific" && vs.OrgID == nil {
-			updates["org_id"] = *healOrg
+		if err := s.db.Where("varset_id = ? AND is_deleted = ?", varsetID, false).First(&vs).Error; err != nil {
+			return fmt.Errorf("variable set not found")
+		}
+		if vs.Scope == "specific" && vs.OrgID == nil {
+			return s.db.Transaction(func(tx *gorm.DB) error {
+				return claimOrphanTx(tx, varsetID, *heal, map[string]interface{}{"is_deleted": true})
+			})
 		}
 	}
-	result := q.Updates(updates)
-
+	result := s.db.Model(&models.VariableSet{}).Where("varset_id = ? AND is_deleted = ?", varsetID, false).
+		Updates(map[string]interface{}{"is_deleted": true, "updated_at": time.Now()})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete variable set: %w", result.Error)
 	}
@@ -413,7 +479,7 @@ func (s *VariableSetService) Delete(varsetID string, healOrg *uint) error {
 // CreateAssignment 创建变量集分配.
 // Target org must equal varset.org_id (except global, which cannot be mounted).
 // Compat rows with org_id IS NULL get org_id set to the target org on this mount.
-func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projectID *int, workspaceID *string, attachedBy *string, targetOrgID uint) (*models.VarsetAssignment, error) {
+func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projectID *int, workspaceID *string, attachedBy *string, targetOrgID uint, heal *HealClaim) (*models.VarsetAssignment, error) {
 	varset, err := s.GetByVarsetID(varsetID)
 	if err != nil {
 		return nil, err
@@ -447,14 +513,27 @@ func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projec
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if varset.OrgID == nil {
-			// First mount claims the orphan for the target org.
+			// First mount claims the orphan for the target org — creator only,
+			// conditional UPDATE with rows-affected check (claimOrphanTx).
+			if heal == nil || heal.OrgID != targetOrgID {
+				return fmt.Errorf("variable set not found")
+			}
 			if err := s.ensureNameUniqueTx(tx, varset.Name, &targetOrgID, varsetID); err != nil {
 				return err
 			}
+			if err := claimOrphanTx(tx, varsetID, *heal, nil); err != nil {
+				return err
+			}
+		} else {
+			// Re-check under tx that the varset still belongs to targetOrg.
+			var n int64
 			if err := tx.Model(&models.VariableSet{}).
-				Where("varset_id = ? AND org_id IS NULL", varsetID).
-				Updates(map[string]interface{}{"org_id": targetOrgID, "updated_at": time.Now()}).Error; err != nil {
-				return fmt.Errorf("failed to bind varset org_id: %w", err)
+				Where("varset_id = ? AND org_id = ? AND is_deleted = ?", varsetID, targetOrgID, false).
+				Count(&n).Error; err != nil {
+				return err
+			}
+			if n == 0 {
+				return fmt.Errorf("variable set not found")
 			}
 		}
 		if err := tx.Create(&assignment).Error; err != nil {

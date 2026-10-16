@@ -123,12 +123,12 @@ func TestMountRequiresMatchingOrg(t *testing.T) {
 	org1 := uint(1)
 	vs, _ := svc.Create("mine", "", "specific", vsStrPtr("u1"), &org1)
 	ws := "ws-other"
-	_, err := svc.CreateAssignment(vs.VarsetID, "workspace", nil, &ws, vsStrPtr("u1"), 2)
+	_, err := svc.CreateAssignment(vs.VarsetID, "workspace", nil, &ws, vsStrPtr("u1"), 2, nil)
 	if err == nil || err.Error() != "assignment target not found" {
 		t.Fatalf("cross-org mount err = %v, want assignment target not found", err)
 	}
 	wsA := "ws-a"
-	if _, err := svc.CreateAssignment(vs.VarsetID, "workspace", nil, &wsA, vsStrPtr("u1"), 1); err != nil {
+	if _, err := svc.CreateAssignment(vs.VarsetID, "workspace", nil, &wsA, vsStrPtr("u1"), 1, nil); err != nil {
 		t.Fatalf("same-org mount: %v", err)
 	}
 }
@@ -141,7 +141,7 @@ func TestMountOrphanSetsOrgID(t *testing.T) {
 		t.Fatal(err)
 	}
 	wsA := "ws-a"
-	if _, err := svc.CreateAssignment("vs-orphan", "workspace", nil, &wsA, vsStrPtr("u1"), 1); err != nil {
+	if _, err := svc.CreateAssignment("vs-orphan", "workspace", nil, &wsA, vsStrPtr("u1"), 1, &HealClaim{OrgID: 1, CallerID: "u1"}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.GetByVarsetID("vs-orphan")
@@ -159,8 +159,8 @@ func TestUpdateScopeGlobalClearsOrgID(t *testing.T) {
 	org1 := uint(1)
 	vs, _ := svc.Create("tog", "", "specific", vsStrPtr("u1"), &org1)
 	wsA := "ws-a"
-	_, _ = svc.CreateAssignment(vs.VarsetID, "workspace", nil, &wsA, vsStrPtr("u1"), 1)
-	out, err := svc.UpdateScope(vs.VarsetID, "global", 1)
+	_, _ = svc.CreateAssignment(vs.VarsetID, "workspace", nil, &wsA, vsStrPtr("u1"), 1, nil)
+	out, err := svc.UpdateScope(vs.VarsetID, "global", 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
