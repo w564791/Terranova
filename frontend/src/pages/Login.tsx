@@ -14,8 +14,7 @@ const Login: React.FC = () => {
   const dispatch = useDispatch();
   const { loading, isAuthenticated } = useSelector((state: RootState) => state.auth);
   
-  // Get target path from URL params before login
-  // ?redirect=(401 会话过期跳转)或旧的 ?returnUrl=(ProtectedRoute);只允许同源相对路径
+  // 登录后跳转: ?redirect=(401 会话过期)或旧 ?returnUrl=(ProtectedRoute);只允许同源相对路径
   const searchParams = new URLSearchParams(location.search);
   const from = safeRedirectPath(searchParams.get('redirect') ?? searchParams.get('returnUrl'));
   
@@ -145,6 +144,7 @@ const Login: React.FC = () => {
             mfa_token: response.data.mfa_token,
             username: response.data.user?.username || formData.username,
             required_backup_codes: response.data.required_backup_codes !== undefined ? response.data.required_backup_codes : 1,
+            from,
           },
           replace: true,
         });
@@ -159,6 +159,7 @@ const Login: React.FC = () => {
             mfa_token: response.data.mfa_token,
             username: response.data.user?.username || formData.username,
             from_login: true,
+            from,
           },
           replace: true,
         });

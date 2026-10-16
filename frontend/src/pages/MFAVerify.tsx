@@ -4,6 +4,7 @@ import { useDispatch } from 'react-redux';
 import { verifyMFALogin } from '../services/mfaService';
 import { loginSuccess } from '../store/slices/authSlice';
 import api from '../services/api';
+import { safeRedirectPath } from '../utils/safeRedirect';
 import styles from './MFAVerify.module.css';
 
 interface LocationState {
@@ -11,6 +12,8 @@ interface LocationState {
   username: string;
   mfa_setup_required?: boolean;
   required_backup_codes?: number;
+  /** 登录页传来的登录后目标(已校验的同源相对路径) */
+  from?: string;
 }
 
 const MFAVerify: React.FC = () => {
@@ -18,6 +21,7 @@ const MFAVerify: React.FC = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const state = location.state as LocationState;
+  const postLoginPath = safeRedirectPath(state?.from);
 
   const [verifyCode, setVerifyCode] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -36,7 +40,7 @@ const MFAVerify: React.FC = () => {
       return;
     }
     if (state?.mfa_setup_required) {
-      navigate('/setup/mfa', { state: { mfa_token: state.mfa_token } });
+      navigate('/setup/mfa', { state: { mfa_token: state.mfa_token, from: state.from, from_login: true } });
       return;
     }
     if (state?.required_backup_codes !== undefined) {
@@ -99,10 +103,10 @@ const MFAVerify: React.FC = () => {
           });
           const fullUser = meResponse.data || meResponse;
           dispatch(loginSuccess({ token, user: fullUser }));
-          navigate('/');
+          navigate(postLoginPath, { replace: true });
         } catch {
           dispatch(loginSuccess({ token, user }));
-          navigate('/');
+          navigate(postLoginPath, { replace: true });
         }
       } else {
         throw new Error('Invalid response');

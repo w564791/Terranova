@@ -64,11 +64,28 @@ export const apiErrorCodeLabel = (code?: string | null): string | undefined => {
 
 /** Prefer structured code label, then extractErrorMessage. */
 export const extractErrorMessageWithCode = (error: any): string => {
-  const code = error?.response?.data?.code ?? error?.data?.code
+  const data = error?.response?.data ?? error?.data
+  const code = data?.code
   const label = apiErrorCodeLabel(typeof code === 'string' ? code : undefined)
   if (label) {
-    const key = error?.response?.data?.details?.key ?? error?.data?.details?.key
-    return key ? `${label}（${key}）` : label
+    const details = data?.details
+    const key = details?.key
+    const reservedPrefix = details?.reserved_prefix
+    if (code === 'reserved_env_var' && key && reservedPrefix) {
+      return `${label}（${key}，保留前缀：${reservedPrefix}）`
+    }
+    if (key) return `${label}（${key}）`
+    return label
   }
   return extractErrorMessage(error)
+}
+
+/** 从错误中取出 reserved_env_var 的 key(用于高亮表单字段);非该错误返回 null */
+export const reservedEnvErrorKey = (error: unknown): string | null => {
+  if (!error || typeof error !== 'object') return null
+  const e = error as { response?: { data?: unknown }; data?: unknown; status?: number }
+  const data = (e.data ?? e.response?.data) as Record<string, unknown> | undefined
+  if (!data || data.code !== 'reserved_env_var') return null
+  const details = data.details as Record<string, unknown> | undefined
+  return typeof details?.key === 'string' ? details.key : null
 }

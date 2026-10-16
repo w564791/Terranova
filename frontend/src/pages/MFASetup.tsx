@@ -4,13 +4,21 @@ import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../store/slices/authSlice';
 import { getMFAStatus, setupMFA, verifyAndEnableMFA, setupMFAWithToken, verifyAndEnableMFAWithToken, disableMFA, regenerateBackupCodes, getMFAConfig } from '../services/mfaService';
 import type { MFAStatus, MFASetupResponse, MFAConfig } from '../services/mfaService';
+import { safeRedirectPath } from '../utils/safeRedirect';
 import styles from './MFASetup.module.css';
 
 const MFASetup: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  const mfaToken = (location.state as any)?.mfa_token as string | undefined;
+  const setupState = (location.state ?? {}) as {
+    mfa_token?: string;
+    from_login?: boolean;
+    from?: string;
+  };
+  const mfaToken = setupState.mfa_token;
+  const fromLogin = !!setupState.from_login;
+  const postLoginPath = safeRedirectPath(setupState.from);
   const [loading, setLoading] = useState(true);
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
   const [mfaConfig, setMfaConfig] = useState<MFAConfig | null>(null);
@@ -536,7 +544,11 @@ const MFASetup: React.FC = () => {
               </>
             )}
 
-            <button className={styles.button} onClick={() => navigate('/settings')} style={{ marginTop: 16 }}>
+            <button
+              className={styles.button}
+              onClick={() => navigate(fromLogin ? postLoginPath : '/settings', { replace: fromLogin })}
+              style={{ marginTop: 16 }}
+            >
               Done
             </button>
           </>

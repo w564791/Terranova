@@ -6,6 +6,14 @@ import type { VariableSet, VarsetVariable, VarsetAssignment } from '../services/
 import { getProjects, type Project } from '../services/projects';
 import { workspaceService, type Workspace } from '../services/workspaces';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { extractErrorMessageWithCode, reservedEnvErrorKey } from '../utils/errorHandler';
+import {
+  getReservedEnvPrefixes,
+  matchReservedEnvKey,
+  reservedEnvBlockMessage,
+  RESERVED_ENV_LIST_HINT,
+  RESERVED_ENV_LIST_DETAIL,
+} from '../services/reservedEnv';
 import VarsetManifestDeployments from './VarsetManifestDeployments';
 import styles from './Admin.module.css';
 
@@ -33,6 +41,12 @@ const VariableSetDetail: React.FC = () => {
   // Add variable
   const [showVarInput, setShowVarInput] = useState(false);
   const [editingVar, setEditingVar] = useState<VarsetVariable | null>(null);
+  const [reservedPrefixes, setReservedPrefixes] = useState<string[]>([]);
+  const [keyFieldError, setKeyFieldError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getReservedEnvPrefixes().then(setReservedPrefixes);
+  }, []);
   const [varForm, setVarForm] = useState({ key: '', value: '', description: '', variable_type: 'terraform' as 'terraform' | 'environment', value_format: 'string' as 'string' | 'hcl', sensitive: false });
 
   // Delete
@@ -82,7 +96,7 @@ const VariableSetDetail: React.FC = () => {
   };
 
   // --- Variables ---
-  const resetVarForm = () => setVarForm({ key: '', value: '', description: '', variable_type: 'terraform', value_format: 'string', sensitive: false });
+  const resetVarForm = () => { setKeyFieldError(null); setVarForm({ key: '', value: '', description: '', variable_type: 'terraform', value_format: 'string', sensitive: false }); };
   const handleAddVar = () => { setEditingVar(null); resetVarForm(); setShowVarInput(true); };
   const handleEditVar = (v: VarsetVariable) => {
     setEditingVar(v);
@@ -92,6 +106,17 @@ const VariableSetDetail: React.FC = () => {
   const submitVar = async () => {
     if (!varsetId) return;
     if (!editingVar && !varForm.key.trim()) { showToast('Key required', 'error'); return; }
+    const checkKey = editingVar ? editingVar.key : varForm.key;
+    if (varForm.variable_type === 'environment' || (editingVar && editingVar.variable_type === 'environment')) {
+      const hit = matchReservedEnvKey(checkKey, reservedPrefixes);
+      if (hit) {
+        const msg = reservedEnvBlockMessage(checkKey.trim(), hit);
+        setKeyFieldError(msg);
+        showToast(msg, 'error');
+        return;
+      }
+    }
+    setKeyFieldError(null);
     try {
       if (editingVar) {
         await variableSetService.updateVariable(varsetId, editingVar.variable_id, { value: varForm.value, description: varForm.description, sensitive: varForm.sensitive });
@@ -101,7 +126,11 @@ const VariableSetDetail: React.FC = () => {
         showToast('Variable added', 'success');
       }
       setShowVarInput(false); setEditingVar(null); resetVarForm(); loadData();
-    } catch (e: any) { showToast(e.response?.data?.error || 'Failed', 'error'); }
+    } catch (e: unknown) {
+      const msg = extractErrorMessageWithCode(e);
+      if (reservedEnvErrorKey(e)) setKeyFieldError(msg);
+      showToast(msg, 'error');
+    }
   };
   const confirmDeleteVar = async () => {
     if (!varsetId || !varToDelete) return;
@@ -227,6 +256,9 @@ const VariableSetDetail: React.FC = () => {
                       <td style={{ padding: '12px 16px' }}>
                         <span style={{ fontWeight: 500, fontSize: '14px' }}>{v.key}</span>
                         {v.sensitive && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: 'var(--amber-soft)', color: 'var(--amber-hover)', borderRadius: '4px', fontWeight: 600 }}>SENSITIVE</span>}
+                        {v.variable_type === 'environment' && matchReservedEnvKey(v.key, reservedPrefixes) && (
+                          <span title={RESERVED_ENV_LIST_DETAIL} style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px', background: 'var(--red-soft, #fff1f0)', color: 'var(--red)', borderRadius: '4px', fontWeight: 600 }}>{RESERVED_ENV_LIST_HINT}</span>
+                        )}
                       </td>
                       <td style={{ padding: '12px 16px', color: 'var(--ink-2)', fontSize: '14px' }}>
                         {v.sensitive ? '-- sensitive value --' : (v.value || <span style={{ color: 'var(--line-2)' }}>(empty)</span>)}
@@ -269,7 +301,8 @@ const VariableSetDetail: React.FC = () => {
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Key</label>
                   {editingVar ? <div style={{ padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '14px', fontFamily: 'var(--font-mono)' }}>{varForm.key}</div>
-                    : <input style={inputStyle} value={varForm.key} onChange={e => setVarForm({ ...varForm, key: e.target.value })} placeholder="key" />}
+                    : <input style={{ ...inputStyle, ...(keyFieldError ? { borderColor: 'var(--red)' } : {}) }} value={varForm.key} onChange={e => { setVarForm({ ...varForm, key: e.target.value }); if (keyFieldError) setKeyFieldError(null); }} placeholder="key" />}
+                  {keyFieldError && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{keyFieldError}</div>}
                 </div>
                 <div style={{ flex: 1.5 }}>
                   <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px', display: 'block' }}>Value</label>

@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../contexts/ToastContext';
-import { extractErrorMessage } from '../utils/errorHandler';
+import { extractErrorMessage, extractErrorMessageWithCode, reservedEnvErrorKey } from '../utils/errorHandler';
+import {
+  getReservedEnvPrefixes,
+  matchReservedEnvKey,
+  reservedEnvBlockMessage,
+  RESERVED_ENV_LIST_HINT,
+  RESERVED_ENV_LIST_DETAIL,
+} from '../services/reservedEnv';
 import api from '../services/api';
 import { variableSetService } from '../services/variableSets';
 import type { EffectiveVariable } from '../services/variableSets';
@@ -44,6 +51,12 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
     hcl: false,
     value_format: 'string' as 'string' | 'hcl'
   });
+  const [reservedPrefixes, setReservedPrefixes] = useState<string[]>([]);
+  const [keyFieldError, setKeyFieldError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getReservedEnvPrefixes().then(setReservedPrefixes);
+  }, []);
 
   // Effective variables state
   const [effectiveVars, setEffectiveVars] = useState<EffectiveVariable[]>([]);
@@ -154,6 +167,17 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
       return;
     }
 
+    if (formData.variable_type === 'environment') {
+      const hit = matchReservedEnvKey(formData.key, reservedPrefixes);
+      if (hit) {
+        const msg = reservedEnvBlockMessage(formData.key.trim(), hit);
+        setKeyFieldError(msg);
+        showToast(msg, 'error');
+        return;
+      }
+    }
+    setKeyFieldError(null);
+
     try {
       // 构建符合后端API的请求数据
       const requestData: any = {
@@ -222,7 +246,9 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
       fetchVariables();
       refreshEffective();
     } catch (error) {
-      const message = extractErrorMessage(error);
+      const message = extractErrorMessageWithCode(error);
+      const reservedKey = reservedEnvErrorKey(error);
+      if (reservedKey) setKeyFieldError(message);
       showToast(message, 'error');
     }
   };
@@ -230,6 +256,7 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
   const handleCancel = () => {
     setShowAddForm(false);
     setEditingId(null);
+    setKeyFieldError(null);
     setFormData({
       key: '',
       value: '',
@@ -309,11 +336,18 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                       <input
                         type="text"
                         value={formData.key}
-                        onChange={(e) => setFormData({ ...formData, key: e.target.value })}
+                        onChange={(e) => {
+                          setFormData({ ...formData, key: e.target.value });
+                          if (keyFieldError) setKeyFieldError(null);
+                        }}
                         className={styles.formInput}
                         placeholder="key"
                         required
+                        style={keyFieldError ? { borderColor: 'var(--red)' } : undefined}
                       />
+                      {keyFieldError && (
+                        <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{keyFieldError}</div>
+                      )}
                     </div>
                     <div className={styles.formGroup}>
                       <label className={styles.formLabel}>Value</label>
@@ -384,6 +418,15 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                     )}
                     {variable.sensitive && (
                       <span className={styles.sensitiveBadge}>Sensitive</span>
+                    )}
+                    {variable.variable_type === 'environment' && matchReservedEnvKey(variable.key, reservedPrefixes) && (
+                      <span
+                        className={styles.sensitiveBadge}
+                        title={RESERVED_ENV_LIST_DETAIL}
+                        style={{ background: 'var(--red-soft, #fff1f0)', color: 'var(--red)', marginLeft: 6 }}
+                      >
+                        {RESERVED_ENV_LIST_HINT}
+                      </span>
                     )}
                   </div>
                   {variable.description && (
@@ -462,11 +505,18 @@ const VariablesTab: React.FC<VariablesTabProps> = ({ workspaceId }) => {
                 <input
                   type="text"
                   value={formData.key}
-                  onChange={(e) => setFormData({ ...formData, key: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, key: e.target.value });
+                    if (keyFieldError) setKeyFieldError(null);
+                  }}
                   className={styles.formInput}
                   placeholder="key"
                   required
+                  style={keyFieldError ? { borderColor: 'var(--red)' } : undefined}
                 />
+                {keyFieldError && (
+                  <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{keyFieldError}</div>
+                )}
               </div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Value</label>

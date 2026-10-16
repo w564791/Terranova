@@ -124,16 +124,13 @@ export async function apiFetch(input: string | URL, init: RequestInit = {}): Pro
     headers,
   });
 
-  // Raw Response 调用也要遵守与 axios 相同的会话失效语义，避免 token 已过期
-  // 时 active-org 仍残留在浏览器里。
-  const onAuthPage =
-    window.location.pathname.includes('/login') ||
-    window.location.pathname.includes('/setup') ||
-    window.location.pathname.includes('/mfa');
-  if (isTrustedApiRequest && response.status === 401 && !onAuthPage) {
-    localStorage.removeItem('token');
-    clearAuthOrgId();
-    window.location.href = '/login';
+  // Raw Response 与 axios 共用会话过期处理(清 token / 提示 / ?redirect=)。
+  if (
+    isTrustedApiRequest &&
+    response.status === 401 &&
+    !isAuthEndpoint(requestUrl.pathname + requestUrl.search)
+  ) {
+    handleSessionExpired();
   }
   return response;
 }
@@ -301,23 +298,8 @@ api.interceptors.response.use(
     return response.data;
   },
   (error) => {
-    // MFA验证相关的401错误不应该重定向到登录页
-    const isMFAVerify = error.config?.url?.includes('/auth/mfa/verify');
-    const isAuthMe = error.config?.url?.includes('/auth/me');
-    const isDashboard = error.config?.url?.includes('/dashboard');
-    
-    // 不要在以下情况下自动重定向到登录页：
-    // 1. MFA验证请求
-    // 2. /auth/me 请求（由AuthProvider处理）
-    // 3. Dashboard请求（可能是token还没保存完成）
-    // 4. 已经在登录/setup/mfa页面
-    const shouldNotRedirect = isMFAVerify || isAuthMe || isDashboard ||
-      window.location.pathname.includes('/login') || 
-      window.location.pathname.includes('/setup') || 
-      window.location.pathname.includes('/mfa');
-    
-    if (error.response?.status === 401 && !shouldNotRedirect && !isAuthEndpoint(error.config?.url)) {
-      // 统一会话过期处理:清登录态、提示一次、带 ?redirect= 跳登录页(已在认证页不跳)
+    // 统一会话过期:认证接口本身的 401(登录/MFA/刷新)留给页面内联处理
+    if (error.response?.status === 401 && !isAuthEndpoint(error.config?.url)) {
       handleSessionExpired();
     }
     // 提取错误消息：优先使用 error.response.data.error，其次使用 error.message
