@@ -720,9 +720,13 @@ func (s *TerraformExecutor) buildEnvironmentVariables(
 			caCert = bundle
 		}
 		if caCert != "" {
+			// Reserved TF_HTTP_* user values were stripped above. Decide
+			// hasCACert from the final env only — a legacy DB row must not
+			// keep hasCACert true and block injecting the platform CA.
 			hasCACert := false
-			for _, v := range envVars {
-				if strings.HasPrefix(v.Key, "TF_HTTP_CLIENT_CA_CERTIFICATE_PEM") {
+			for _, e := range env {
+				key, _, _ := strings.Cut(e, "=")
+				if strings.EqualFold(key, "TF_HTTP_CLIENT_CA_CERTIFICATE_PEM") {
 					hasCACert = true
 					break
 				}
