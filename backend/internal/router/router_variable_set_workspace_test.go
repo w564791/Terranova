@@ -56,16 +56,16 @@ func setupVarsetRouterWith(t *testing.T, checker service.PermissionChecker, prin
 		`CREATE TABLE workspaces (id INTEGER PRIMARY KEY, workspace_id TEXT)`,
 		`CREATE TABLE projects (id INTEGER PRIMARY KEY, org_id INTEGER)`,
 		`CREATE TABLE workspace_project_relations (workspace_id TEXT, project_id INTEGER)`,
-		`CREATE TABLE variable_sets (id INTEGER PRIMARY KEY, varset_id TEXT, name TEXT, description TEXT, scope TEXT, is_deleted INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME, created_by TEXT)`,
+		`CREATE TABLE variable_sets (id INTEGER PRIMARY KEY, varset_id TEXT, name TEXT, description TEXT, scope TEXT, org_id INTEGER, is_deleted INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME, created_by TEXT)`,
 		`CREATE TABLE varset_variables (id INTEGER PRIMARY KEY, variable_id TEXT, varset_id TEXT, key TEXT, value TEXT, sensitive INTEGER, is_deleted INTEGER DEFAULT 0, version INTEGER)`,
 		`CREATE TABLE varset_assignments (id INTEGER PRIMARY KEY, varset_id TEXT, scope_type TEXT, project_id INTEGER, workspace_id TEXT, attached_at DATETIME, attached_by TEXT)`,
 		`INSERT INTO workspaces (id, workspace_id) VALUES (1, 'ws-a'), (2, 'ws-b'), (3, 'ws-other')`,
 		`INSERT INTO projects (id, org_id) VALUES (10, 1), (30, 2)`,
 		`INSERT INTO workspace_project_relations VALUES ('ws-a', 10), ('ws-b', 10), ('ws-other', 30)`,
-		`INSERT INTO variable_sets (varset_id, name, scope) VALUES
-		   ('vs-global', 'g', 'global'), ('vs-proj', 'p', 'specific'), ('vs-ws', 'w', 'specific'),
-		   ('vs-ws-b', 'wb', 'specific'), ('vs-none', 'n', 'specific')`,
-		`INSERT INTO variable_sets (varset_id, name, scope, is_deleted) VALUES ('vs-deleted', 'd', 'global', 1)`,
+		`INSERT INTO variable_sets (varset_id, name, scope, org_id) VALUES
+		   ('vs-global', 'g', 'global', NULL), ('vs-proj', 'p', 'specific', 1), ('vs-ws', 'w', 'specific', 1),
+		   ('vs-ws-b', 'wb', 'specific', 1), ('vs-none', 'n', 'specific', NULL)`,
+		`INSERT INTO variable_sets (varset_id, name, scope, org_id, is_deleted) VALUES ('vs-deleted', 'd', 'global', NULL, 1)`,
 		`INSERT INTO varset_assignments (varset_id, scope_type, project_id, workspace_id) VALUES
 		   ('vs-proj', 'project', 10, NULL), ('vs-ws', 'workspace', NULL, 'ws-a'), ('vs-ws-b', 'workspace', NULL, 'ws-b')`,
 	}, extra...) {
@@ -127,10 +127,10 @@ func TestVariableSetList_WorkspaceIDFilterAndAuthorization(t *testing.T) {
 // and the caller's own not-yet-assigned specific varsets.
 func TestVariableSetList_ScopedToCallerOrg(t *testing.T) {
 	r := setupVarsetRouter(t,
-		`INSERT INTO variable_sets (varset_id, name, scope, created_by) VALUES
-		   ('vs-other-ws', 'ow', 'specific', 'u2'), ('vs-other-proj', 'op', 'specific', 'u2'),
-		   ('vs-mine', 'm', 'specific', 'u1'), ('vs-theirs', 't', 'specific', 'u2'),
-		   ('vs-mine-elsewhere', 'me', 'specific', 'u1')`,
+		`INSERT INTO variable_sets (varset_id, name, scope, org_id, created_by) VALUES
+		   ('vs-other-ws', 'ow', 'specific', 2, 'u2'), ('vs-other-proj', 'op', 'specific', 2, 'u2'),
+		   ('vs-mine', 'm', 'specific', NULL, 'u1'), ('vs-theirs', 't', 'specific', NULL, 'u2'),
+		   ('vs-mine-elsewhere', 'me', 'specific', 2, 'u1')`,
 		`INSERT INTO varset_assignments (varset_id, scope_type, project_id, workspace_id) VALUES
 		   ('vs-other-ws', 'workspace', NULL, 'ws-other'), ('vs-other-proj', 'project', 30, NULL),
 		   ('vs-mine-elsewhere', 'project', 30, NULL)`,

@@ -106,7 +106,7 @@ func TestPlanSensitivityForTask_VarsetSensitive(t *testing.T) {
 	db.Create(wsVar)
 	defer db.Exec("DELETE FROM workspace_variables WHERE workspace_id = ?", ws)
 
-	vs, err := NewVariableSetService(db).Create("plan-redact-global", "test", "global", nil)
+	vs, err := NewVariableSetService(db).Create("plan-redact-global", "test", "global", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -89,7 +89,7 @@ func NewVariableSetController(db *gorm.DB) *VariableSetController {
 
 // Create 创建变量集
 // @Summary Create variable set
-// @Description Create a new variable set
+// @Description Create a new variable set. Specific varsets take org_id from the authenticated organization (body org_id ignored). Global requires system admin and stores org_id NULL.
 // @Tags Variable Set
 // @Accept json
 // @Produce json
@@ -119,10 +119,25 @@ func (c *VariableSetController) Create(ctx *gin.Context) {
 	}
 	userID := uid.(string)
 
-	varset, err := c.service.Create(req.Name, req.Description, req.Scope, &userID)
+	var orgID *uint
+	if req.Scope == "global" {
+		if !isSystemAdmin(ctx) {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "only a system admin can create a global variable set"})
+			return
+		}
+	} else {
+		id, ok := middleware.AuthOrgID(ctx)
+		if !ok || id == 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
+			return
+		}
+		orgID = &id
+	}
+
+	varset, err := c.service.Create(req.Name, req.Description, req.Scope, &userID, orgID)
 	if err != nil {
 		errMsg := err.Error()
-		if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "invalid") {
+		if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
 			_ = ctx.Error(fmt.Errorf("Failed to create variable set: %w", err))
@@ -155,7 +170,7 @@ func (c *VariableSetController) List(ctx *gin.Context) {
 	if workspaceID := ctx.Query("workspace_id"); workspaceID != "" {
 		varsets, err = c.service.ListMountableForWorkspace(workspaceID)
 	} else {
-		// 无 workspace_id: 只返回调用组织可见的变量集(VariableSet 无 org_id,见 ListForOrg)
+		// 无 workspace_id: 只返回调用组织可见的变量集(按 org_id 列;见 ListForOrg)
 		orgID, ok := middleware.AuthOrgID(ctx)
 		if !ok {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "org_id is required"})
@@ -175,6 +190,7 @@ func (c *VariableSetController) List(ctx *gin.Context) {
 		Name            string      `json:"name"`
 		Description     string      `json:"description"`
 		Scope           string      `json:"scope"`
+		OrgID           *uint       `json:"org_id"`
 		IsDeleted       bool        `json:"is_deleted"`
 		CreatedAt       interface{} `json:"created_at"`
 		UpdatedAt       interface{} `json:"updated_at"`
@@ -209,6 +225,7 @@ func (c *VariableSetController) List(ctx *gin.Context) {
 			Name:            vs.Name,
 			Description:     vs.Description,
 			Scope:           vs.Scope,
+			OrgID:           vs.OrgID,
 			IsDeleted:       vs.IsDeleted,
 			CreatedAt:       vs.CreatedAt,
 			UpdatedAt:       vs.UpdatedAt,
@@ -323,12 +340,16 @@ func (c *VariableSetController) UpdateScope(ctx *gin.Context) {
 		return
 	}
 
-	varset, err := c.service.UpdateScope(varsetID, req.Scope)
+	var authOrg uint
+	if id, ok := middleware.AuthOrgID(ctx); ok {
+		authOrg = id
+	}
+	varset, err := c.service.UpdateScope(varsetID, req.Scope, authOrg)
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
-		} else if strings.Contains(errMsg, "invalid") {
+		} else if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
 			_ = ctx.Error(fmt.Errorf("Failed to update variable set scope: %w", err))
@@ -432,12 +453,18 @@ func (c *VariableSetController) CreateAssignment(ctx *gin.Context) {
 		return
 	}
 
-	assignment, err := c.service.CreateAssignment(varsetID, req.ScopeType, req.ProjectID, req.WorkspaceID, &userID)
+	targetOrg, ok := middleware.AuthOrgID(ctx)
+	if !ok || targetOrg == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "assignment target not found"})
+		return
+	}
+
+	assignment, err := c.service.CreateAssignment(varsetID, req.ScopeType, req.ProjectID, req.WorkspaceID, &userID, targetOrg)
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": errMsg})
-		} else if strings.Contains(errMsg, "cannot") || strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") {
+		} else if strings.Contains(errMsg, "cannot") || strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "required") || strings.Contains(errMsg, "already exists") {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		} else {
 			_ = ctx.Error(fmt.Errorf("Failed to create assignment: %w", err))

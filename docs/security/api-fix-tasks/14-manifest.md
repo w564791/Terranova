@@ -144,11 +144,11 @@ manifest 路由原先以 `SYSTEM_SETTINGS` 作为临时权限，且 `MANIFESTS` 
     - 代码：backend/internal/gitsource/*、backend/internal/manifestbundle/{hcl,rules,source}.go、backend/internal/handlers/{manifest_git_handler,manifest_handler,manifest_versions_handler}.go、backend/internal/router/{router,router_manifest}.go、backend/internal/migration/manifest_git_source.go + backend/migrations/add_manifest_git_source.sql、backend/internal/models/{manifest,manifest_v2}.go；绑定：backend/internal/gitsource/oauth.go、backend/internal/handlers/github_app_setup.go、backend/internal/migration/github_app_binding.go + backend/migrations/add_github_app_binding.sql。
 
 ### 遗留
-- variable_sets 表无 org_id，组织归属按分配关系推导（`VariableSetService`）：
-  - `GET /variable-sets` 列表（`ListForOrg`）与按 ID 的 `/variable-sets/:varset_id/...` 全部 12 条路由及上表 #30 共用同一可见规则 `VarsetVisibleInOrg`：global；分配到本组织 workspace/project；尚无分配且由调用者创建。守卫放在 `RequirePermission` 之后（与 manifest 路由同一 `manifestRouteChain`），不可见 → 404。
-  - 写路由（更新、改 scope、删除、变量增改删、创建/删除分配）另需 `VarsetWritableInOrg`：已有分配全部在本组织内，或未分配且由调用者创建，或 global 且调用者为平台超管；任一分配在其他组织即只读 → 403；org 管理员可见 global 但写 → 403。
-  - 分配目标：创建分配时 workspace 须 `EnsureWorkspaceInOrg`、project 须属于本组织（否则 404），并需目标 `WORKSPACE_VARIABLES` WRITE（workspace 级；project 目标按 PROJECT 作用域检查，即项目/组织级授权，单个 workspace 的授权不够）→ 否则 403；删除分配按分配记录上的目标做同样校验。改 scope 为 global 仅平台超管（403）。
-  - 后续：给 variable_sets 加 org_id 列后改为直接按列绑定（推导规则下无创建者的未分配变量集对所有人不可见）。
+- ~~variable_sets 表无 org_id~~ —— 已完成（迁移 `20261016_01_variable_set_org_id`）：
+  - `variable_sets.org_id` nullable。CHECK：`scope=global` ⇒ `org_id IS NULL`；`scope=specific` 新建必带 org_id（auth org）；legacy 未分配孤儿可暂为 NULL，首次 mount 写入目标 org。
+  - 名称唯一：非删除行按 `(org_id, name)`；global/孤儿用 `org_id IS NULL` 的部分唯一索引。
+  - 回填：单 org 挂载 → 该 org；跨 org → 挂载数最多的 org 并删其它挂载（WARN 审计）；未分配按创建者最早加入且有 VARIABLE_SETS WRITE 的 org；global 保持 NULL。
+  - `VarsetVisibleInOrg` / `VarsetWritableInOrg` / `ListForOrg`：优先 `org_id` 列；仅 `org_id IS NULL` 兼容行才回退分配/创建者推导。Mount 目标 org 必须等于 `org_id`（global 仍仅超管）。
 
 ### 修改文件
 ```
@@ -213,11 +213,11 @@ backend/services/{manifest_approval,manifest_approval_check,run_token_service,ta
 - 发布时由平台拉取仓库，并固定到某个 SHA；webhook 要验签。
 
 **其他**
-- `variable_sets` 表加 `org_id` 列，改为直接按列绑定组织。
+- ~~`variable_sets` 表加 `org_id` 列，改为直接按列绑定组织。~~ —— 已完成（见上文「遗留」与迁移 `20261016_01_variable_set_org_id`）。
 - 跑过已删除迁移 `20261004_03_manifest_bundle_rules` 的开发库和测试库需要重建（`20261004_04` 不会修复它们）。
 
 
-### Reserved env vars / git source immutability
+### Reserved env vars / git source immutability / CA+plaintext
 
 - **422 `reserved_env_var`**: environment-category variable key is platform-reserved
   (`internal/reservedenv`). See `GET /api/v1/system/reserved-env-prefixes`.
@@ -225,10 +225,10 @@ backend/services/{manifest_approval,manifest_approval_check,run_token_service,ta
   `manifests_git_source_immutable` (migration `20261010_16`).
 - Platform proxy for exec: `IAC_EXEC_HTTP_PROXY` / `IAC_EXEC_HTTPS_PROXY` /
   `IAC_EXEC_NO_PROXY` (users cannot set `HTTP(S)_PROXY` per workspace).
-- **Platform CA after reserved-env strip**: a legacy DB row
+- **Platform CA after reserved-env strip** ✅ done: a legacy DB row
   `TF_HTTP_CLIENT_CA_CERTIFICATE_PEM` is stripped; CA injection is decided from
   the final env only so it cannot block `_TERRANOVA_CA_CERT`.
-- **`IAC_AGENT_ALLOW_PLAINTEXT`**: auto-inject `cluster-internal` only for
+- **`IAC_AGENT_ALLOW_PLAINTEXT`** ✅ done: auto-inject `cluster-internal` only for
   platform-launched in-cluster K8s pods/deployments/jobs when production still
   speaks `http`. Do not inject for external/VM agents. When agent protocol
   moves to `https`, stop auto-injecting (see `docs/security/tls-verification.md`).

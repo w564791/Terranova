@@ -49,9 +49,12 @@ func (d *denyChecker) reset() []*service.CheckPermissionRequest {
 // Fixtures on top of setupVarsetRouter (org 1: project 10, ws-a/ws-b;
 // org 2: project 30, ws-other). Caller u1 works in org 1.
 var varsetOrgFixtures = []string{
-	`INSERT INTO variable_sets (varset_id, name, scope, created_by) VALUES
-	   ('vs-foreign', 'f', 'specific', 'u2'), ('vs-mixed', 'x', 'specific', 'u2'),
-	   ('vs-mine', 'm', 'specific', 'u1'), ('vs-theirs', 't', 'specific', 'u2')`,
+	`INSERT INTO variable_sets (varset_id, name, scope, org_id, created_by) VALUES
+	   ('vs-foreign', 'f', 'specific', 2, 'u2'),
+	   ('vs-mixed', 'x', 'specific', NULL, 'u2'),
+	   ('vs-mine', 'm', 'specific', NULL, 'u1'),
+	   ('vs-theirs', 't', 'specific', NULL, 'u2'),
+	   ('vs-org1', 'o1', 'specific', 1, 'u1')`,
 	`INSERT INTO varset_assignments (id, varset_id, scope_type, project_id, workspace_id) VALUES
 	   (101, 'vs-foreign', 'workspace', NULL, 'ws-other'),
 	   (102, 'vs-mixed', 'workspace', NULL, 'ws-a'), (103, 'vs-mixed', 'project', 30, NULL)`,
@@ -246,10 +249,10 @@ func TestVarsetReverseLookupBindsToOrg(t *testing.T) {
 	for _, stmt := range []string{
 		`CREATE TABLE projects (id INTEGER PRIMARY KEY, org_id INTEGER)`,
 		`CREATE TABLE workspace_project_relations (workspace_id TEXT, project_id INTEGER)`,
-		`CREATE TABLE variable_sets (id INTEGER PRIMARY KEY, varset_id TEXT, name TEXT, scope TEXT, is_deleted INTEGER DEFAULT 0, created_by TEXT)`,
+		`CREATE TABLE variable_sets (id INTEGER PRIMARY KEY, varset_id TEXT, name TEXT, scope TEXT, org_id INTEGER, is_deleted INTEGER DEFAULT 0, created_by TEXT)`,
 		`CREATE TABLE varset_assignments (id INTEGER PRIMARY KEY, varset_id TEXT, scope_type TEXT, project_id INTEGER, workspace_id TEXT)`,
 		`INSERT INTO projects VALUES (10, 1), (30, 2)`,
-		`INSERT INTO variable_sets (varset_id, name, scope, created_by) VALUES ('vs-foreign', 'f', 'specific', 'u2')`,
+		`INSERT INTO variable_sets (varset_id, name, scope, org_id, created_by) VALUES ('vs-foreign', 'f', 'specific', 2, 'u2')`,
 		`INSERT INTO varset_assignments (varset_id, scope_type, project_id) VALUES ('vs-foreign', 'project', 30)`,
 	} {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -268,5 +271,38 @@ func TestVarsetReverseLookupBindsToOrg(t *testing.T) {
 		if reqs := checker.reset(); len(reqs) != 1 || reqs[0].ResourceType != valueobject.ResourceTypeVariableSets {
 			t.Fatalf("%s: want the VARIABLE_SETS check before the org guard, got %+v", path, reqs)
 		}
+	}
+}
+
+func TestVarsetCreateSetsCallerOrgID(t *testing.T) {
+	r := setupVarsetOrgRouter(t, &denyChecker{}, false)
+	w := doVarsetReq(r, "POST", "/api/v1/variable-sets", `{"name":"brand-new","description":"","scope":"specific"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create = %d, want 201; %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"org_id":1`) {
+		t.Fatalf("create body missing org_id=1: %s", w.Body.String())
+	}
+}
+
+func TestVarsetOrgBCannotReadOrgA(t *testing.T) {
+	r := setupVarsetOrgRouter(t, &denyChecker{}, false)
+	// vs-org1 belongs to org 1; request as org 2 via query override
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/variable-sets/vs-org1?org_id=2", nil)
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("org B read org A varset = %d, want 404; %s", w.Code, w.Body.String())
+	}
+}
+
+func TestVarsetMountOnOtherOrgWorkspace404(t *testing.T) {
+	r := setupVarsetOrgRouter(t, &denyChecker{}, false)
+	// Auth org 1, try to mount org-1 varset onto ws-other (org 2) → target 404
+	w := doVarsetReq(r, "POST", "/api/v1/variable-sets/vs-org1/assignments",
+		`{"scope_type":"workspace","workspace_id":"ws-other"}`)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("mount on other-org workspace = %d, want 404; %s", w.Code, w.Body.String())
 	}
 }

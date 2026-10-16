@@ -142,6 +142,8 @@ func definitions() []definition {
 		// Git source immutability (BEFORE UPDATE trigger on manifests).
 		// Additive/idempotent.
 		{version: "20261010_16_manifest_git_source_immutable", contract: "manifest-git-source-immutable-v1", apply: applyManifestGitSourceImmutable},
+		// variable_sets.org_id column + backfill. Additive/idempotent.
+		{version: "20261016_01_variable_set_org_id", contract: "variable-set-org-id-v1", apply: applyVariableSetOrgID},
 	}
 }
 

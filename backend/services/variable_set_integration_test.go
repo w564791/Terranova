@@ -13,6 +13,9 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+func uintPtr(v uint) *uint { return &v }
+
+
 const (
 	testDBName    = "iac_platform_test"
 	defaultDSN    = "host=localhost user=postgres password=postgres123 port=5432 sslmode=disable"
@@ -210,7 +213,7 @@ func cleanupWorkspaceVar(db *gorm.DB, variableID string) {
 func TestVarsetVariable_VersionOnCreate(t *testing.T) {
 	db := setupVarsetTestDB(t)
 	vsSvc := NewVariableSetService(db)
-	vs, err := vsSvc.Create("test-ver-create", "test", "specific", nil)
+	vs, err := vsSvc.Create("test-ver-create", "test", "specific", nil, uintPtr(1))
 	if err != nil {
 		t.Fatalf("create varset: %v", err)
 	}
@@ -230,7 +233,7 @@ func TestVarsetVariable_VersionOnCreate(t *testing.T) {
 func TestVarsetVariable_UpdateCreatesNewVersion(t *testing.T) {
 	db := setupVarsetTestDB(t)
 	vsSvc := NewVariableSetService(db)
-	vs, _ := vsSvc.Create("test-ver-update", "test", "specific", nil)
+	vs, _ := vsSvc.Create("test-ver-update", "test", "specific", nil, uintPtr(1))
 	defer cleanupVarset(db, vs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -262,7 +265,7 @@ func TestVarsetVariable_UpdateCreatesNewVersion(t *testing.T) {
 func TestVarsetVariable_ListReturnsLatestVersionOnly(t *testing.T) {
 	db := setupVarsetTestDB(t)
 	vsSvc := NewVariableSetService(db)
-	vs, _ := vsSvc.Create("test-ver-list", "test", "specific", nil)
+	vs, _ := vsSvc.Create("test-ver-list", "test", "specific", nil, uintPtr(1))
 	defer cleanupVarset(db, vs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -290,7 +293,7 @@ func TestVarsetVariable_ListReturnsLatestVersionOnly(t *testing.T) {
 func TestVarsetVariable_DeleteMarksAllVersions(t *testing.T) {
 	db := setupVarsetTestDB(t)
 	vsSvc := NewVariableSetService(db)
-	vs, _ := vsSvc.Create("test-ver-delete", "test", "specific", nil)
+	vs, _ := vsSvc.Create("test-ver-delete", "test", "specific", nil, uintPtr(1))
 	defer cleanupVarset(db, vs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -325,7 +328,7 @@ func TestVarsetVariable_DeleteMarksAllVersions(t *testing.T) {
 func TestVarsetVariable_DuplicateKeyRejected(t *testing.T) {
 	db := setupVarsetTestDB(t)
 	vsSvc := NewVariableSetService(db)
-	vs, _ := vsSvc.Create("test-dup-key", "test", "specific", nil)
+	vs, _ := vsSvc.Create("test-dup-key", "test", "specific", nil, uintPtr(1))
 	defer cleanupVarset(db, vs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -347,7 +350,7 @@ func TestVarsetVariable_DuplicateKeyRejected(t *testing.T) {
 func TestVarsetVariable_SensitiveUpgradeOnly(t *testing.T) {
 	db := setupVarsetTestDB(t)
 	vsSvc := NewVariableSetService(db)
-	vs, _ := vsSvc.Create("test-sensitive", "test", "specific", nil)
+	vs, _ := vsSvc.Create("test-sensitive", "test", "specific", nil, uintPtr(1))
 	defer cleanupVarset(db, vs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -385,7 +388,7 @@ func TestResolution_GlobalVarsetIncluded(t *testing.T) {
 	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-test-resolve'")
 
 	vsSvc := NewVariableSetService(db)
-	gvs, err := vsSvc.Create("test-resolve-global", "test", "global", nil)
+	gvs, err := vsSvc.Create("test-resolve-global", "test", "global", nil, nil)
 	if err != nil {
 		t.Fatalf("create global varset: %v", err)
 	}
@@ -440,7 +443,7 @@ func TestResolution_WorkspaceOverridesVarset(t *testing.T) {
 	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-test-override'")
 
 	vsSvc := NewVariableSetService(db)
-	gvs, _ := vsSvc.Create("test-override-global", "test", "global", nil)
+	gvs, _ := vsSvc.Create("test-override-global", "test", "global", nil, nil)
 	defer cleanupVarset(db, gvs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -494,7 +497,7 @@ func TestResolution_VersionInEffectiveVariable(t *testing.T) {
 	defer db.Exec("DELETE FROM workspaces WHERE workspace_id = 'ws-test-version'")
 
 	vsSvc := NewVariableSetService(db)
-	gvs, _ := vsSvc.Create("test-ver-resolve", "test", "global", nil)
+	gvs, _ := vsSvc.Create("test-ver-resolve", "test", "global", nil, nil)
 	defer cleanupVarset(db, gvs.VarsetID)
 
 	vvSvc := NewVarsetVariableService(db)
@@ -538,7 +541,7 @@ func TestSnapshot_CreateWithWorkspaceAndVarsetVars(t *testing.T) {
 
 	// Create global varset with variable
 	vsSvc := NewVariableSetService(db)
-	vs, _ := vsSvc.Create("snap-test-global", "test", "global", nil)
+	vs, _ := vsSvc.Create("snap-test-global", "test", "global", nil, nil)
 	defer func() {
 		db.Exec("DELETE FROM varset_assignments WHERE varset_id = ?", vs.VarsetID)
 		db.Exec("DELETE FROM varset_variables WHERE varset_id = ?", vs.VarsetID)

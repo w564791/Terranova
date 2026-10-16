@@ -18,26 +18,30 @@ func NewVariableSetService(db *gorm.DB) *VariableSetService {
 	return &VariableSetService{db: db}
 }
 
-// Create 创建变量集
-func (s *VariableSetService) Create(name, description, scope string, createdBy *string) (*models.VariableSet, error) {
-	// 验证 scope
+// Create 创建变量集.
+// specific: orgID required (from auth org; body org_id ignored by caller).
+// global: orgID must be nil.
+func (s *VariableSetService) Create(name, description, scope string, createdBy *string, orgID *uint) (*models.VariableSet, error) {
 	if scope != "global" && scope != "specific" {
 		return nil, fmt.Errorf("invalid scope: %s, must be 'global' or 'specific'", scope)
 	}
+	if scope == "specific" {
+		if orgID == nil || *orgID == 0 {
+			return nil, fmt.Errorf("org_id required for specific variable set")
+		}
+	} else {
+		orgID = nil
+	}
 
-	// 检查名称唯一性（非删除）
-	var existing models.VariableSet
-	err := s.db.Where("name = ? AND is_deleted = ?", name, false).First(&existing).Error
-	if err == nil {
-		return nil, fmt.Errorf("variable set with name '%s' already exists", name)
-	} else if err != gorm.ErrRecordNotFound {
-		return nil, fmt.Errorf("failed to check name uniqueness: %w", err)
+	if err := s.ensureNameUnique(name, orgID, ""); err != nil {
+		return nil, err
 	}
 
 	varset := models.VariableSet{
 		Name:        name,
 		Description: description,
 		Scope:       scope,
+		OrgID:       orgID,
 		CreatedBy:   createdBy,
 	}
 
@@ -46,6 +50,29 @@ func (s *VariableSetService) Create(name, description, scope string, createdBy *
 	}
 
 	return &varset, nil
+}
+
+// ensureNameUnique enforces per-org name uniqueness for specific varsets and
+// a separate global/orphan namespace (org_id IS NULL).
+func (s *VariableSetService) ensureNameUnique(name string, orgID *uint, excludeVarsetID string) error {
+	q := s.db.Where("name = ? AND is_deleted = ?", name, false)
+	if orgID == nil {
+		q = q.Where("org_id IS NULL")
+	} else {
+		q = q.Where("org_id = ?", *orgID)
+	}
+	if excludeVarsetID != "" {
+		q = q.Where("varset_id != ?", excludeVarsetID)
+	}
+	var existing models.VariableSet
+	err := q.First(&existing).Error
+	if err == nil {
+		return fmt.Errorf("variable set with name '%s' already exists", name)
+	}
+	if err != gorm.ErrRecordNotFound {
+		return fmt.Errorf("failed to check name uniqueness: %w", err)
+	}
+	return nil
 }
 
 // List 获取变量集列表
@@ -65,15 +92,8 @@ func (s *VariableSetService) List(scope string) ([]models.VariableSet, error) {
 }
 
 // ListForOrg 返回调用组织可见的变量集(GET /variable-sets 无 workspace_id 时)。
-//
-// variable_sets 没有 org_id(名称全平台唯一,global 变量集按解析链注入所有组织的
-// workspace),因此组织归属沿用现有租户关系推导,与 ListMountableForWorkspace 同一套
-// 分配规则:
-//   - scope = global:平台级共享,本来就会注入每个组织的 workspace,对所有组织可见;
-//   - 分配到本组织 workspace 的变量集(workspace -> workspace_project_relations -> projects.org_id);
-//   - 分配到本组织 project 的变量集(projects.org_id);
-//   - 尚无任何分配的 specific 变量集仅对其创建者可见(否则刚创建的变量集无法在
-//     列表中找到并分配;不能归属到任何组织,所以不对其他人展示)。
+// 优先按 org_id 列;仅 org_id IS NULL 的兼容行才回退到分配/创建者推导
+// (见 visibleInOrgCond)。
 func (s *VariableSetService) ListForOrg(scope string, orgID uint, callerID string) ([]models.VariableSet, error) {
 	if orgID == 0 {
 		return nil, fmt.Errorf("org_id required")
@@ -100,20 +120,27 @@ func (s *VariableSetService) orgAssignmentCond(orgID uint) *gorm.DB {
 		Or("scope_type = ? AND project_id IN (?)", "project", orgProjects)
 }
 
-// visibleInOrgCond 变量集在 orgID 内可见的条件(见 ListForOrg 注释)。
+// visibleInOrgCond 变量集在 orgID 内可见的条件。
+// Prefer org_id column; assignment/creator joins only for org_id IS NULL
+// compat/orphan rows. New rows with org_id set never infer org via join.
 func (s *VariableSetService) visibleInOrgCond(orgID uint, callerID string) *gorm.DB {
 	assigned := s.db.Model(&models.VarsetAssignment{}).Select("varset_id").Where(s.orgAssignmentCond(orgID))
 	anyAssignment := s.db.Model(&models.VarsetAssignment{}).Select("varset_id")
-	visible := s.db.Where("scope = ?", "global").Or("varset_id IN (?)", assigned)
+	compatParts := s.db.Where("varset_id IN (?)", assigned)
 	if callerID != "" {
-		visible = visible.Or("scope <> ? AND created_by = ? AND varset_id NOT IN (?)", "global", callerID, anyAssignment)
+		compatParts = compatParts.Or(
+			"scope <> ? AND created_by = ? AND varset_id NOT IN (?)",
+			"global", callerID, anyAssignment,
+		)
 	}
-	return visible
+	compat := s.db.Where("org_id IS NULL").Where(compatParts)
+	return s.db.Where("scope = ?", "global").
+		Or("org_id = ?", orgID).
+		Or(compat)
 }
 
 // VarsetVisibleInOrg 单个变量集是否对 orgID 内的 callerID 可见(by-ID 路由的读校验)。
-// 规则与 ListForOrg 完全一致:global;分配到本组织 workspace/project;尚无分配且由
-// 调用者创建。已删除或不存在 => false。
+// 规则与 ListForOrg 完全一致。已删除或不存在 => false。
 func (s *VariableSetService) VarsetVisibleInOrg(varsetID string, orgID uint, callerID string) (bool, error) {
 	if orgID == 0 || varsetID == "" {
 		return false, nil
@@ -129,10 +156,10 @@ func (s *VariableSetService) VarsetVisibleInOrg(varsetID string, orgID uint, cal
 }
 
 // VarsetWritableInOrg 单个变量集是否可被 orgID 内的 callerID 修改(by-ID 写路由)。
-// 调用前应先确认可见(不可见由调用方返回 404)。可写当且仅当:
-//   - specific 且已有分配全部落在本组织 workspace/project 内(任一分配在其他组织 => 只读);
-//   - specific、尚无分配且由调用者创建;
-//   - global 且调用者为平台超管(is_system_admin);org 管理员可见 global 但不可写。
+// 调用前应先确认可见(不可见由调用方返回 404)。
+//   - global → 仅平台超管;
+//   - org_id = orgID → 可写;
+//   - org_id IS NULL (compat): 分配全部在本组织,或未分配且由调用者创建。
 func (s *VariableSetService) VarsetWritableInOrg(varsetID string, orgID uint, callerID string, isSystemAdmin bool) (bool, error) {
 	if orgID == 0 || varsetID == "" {
 		return false, nil
@@ -147,6 +174,10 @@ func (s *VariableSetService) VarsetWritableInOrg(varsetID string, orgID uint, ca
 	if vs.Scope == "global" {
 		return isSystemAdmin, nil
 	}
+	if vs.OrgID != nil {
+		return *vs.OrgID == orgID, nil
+	}
+	// Compat: org_id IS NULL — reuse assignment/creator rules.
 	var total, inOrg int64
 	if err := s.db.Model(&models.VarsetAssignment{}).Where("varset_id = ?", varsetID).Count(&total).Error; err != nil {
 		return false, fmt.Errorf("count assignments: %w", err)
@@ -246,15 +277,10 @@ func (s *VariableSetService) Update(varsetID string, name, description *string) 
 		"updated_at": time.Now(),
 	}
 
-	// 如果更新名称，检查唯一性
 	if name != nil {
 		if *name != varset.Name {
-			var existing models.VariableSet
-			err := s.db.Where("name = ? AND is_deleted = ? AND varset_id != ?", *name, false, varsetID).First(&existing).Error
-			if err == nil {
-				return nil, fmt.Errorf("variable set with name '%s' already exists", *name)
-			} else if err != gorm.ErrRecordNotFound {
-				return nil, fmt.Errorf("failed to check name uniqueness: %w", err)
+			if err := s.ensureNameUnique(*name, varset.OrgID, varsetID); err != nil {
+				return nil, err
 			}
 		}
 		updates["name"] = *name
@@ -271,9 +297,10 @@ func (s *VariableSetService) Update(varsetID string, name, description *string) 
 	return varset, nil
 }
 
-// UpdateScope 更新变量集 scope
-func (s *VariableSetService) UpdateScope(varsetID, newScope string) (*models.VariableSet, error) {
-	// 验证 scope
+// UpdateScope 更新变量集 scope.
+// global: clear mounts + org_id NULL. specific: set org_id from authOrgID when
+// currently NULL (e.g. flipping from global).
+func (s *VariableSetService) UpdateScope(varsetID, newScope string, authOrgID uint) (*models.VariableSet, error) {
 	if newScope != "global" && newScope != "specific" {
 		return nil, fmt.Errorf("invalid scope: %s, must be 'global' or 'specific'", newScope)
 	}
@@ -283,16 +310,14 @@ func (s *VariableSetService) UpdateScope(varsetID, newScope string) (*models.Var
 		return nil, err
 	}
 
-	// 如果切换到 global，删除所有分配
-	if newScope == "global" && varset.Scope != "global" {
+	if newScope == "global" {
 		err := s.db.Transaction(func(tx *gorm.DB) error {
-			// 删除所有分配
 			if err := tx.Where("varset_id = ?", varsetID).Delete(&models.VarsetAssignment{}).Error; err != nil {
 				return fmt.Errorf("failed to delete assignments: %w", err)
 			}
-			// 更新 scope
 			if err := tx.Model(varset).Updates(map[string]interface{}{
 				"scope":      newScope,
+				"org_id":     nil,
 				"updated_at": time.Now(),
 			}).Error; err != nil {
 				return fmt.Errorf("failed to update scope: %w", err)
@@ -302,16 +327,28 @@ func (s *VariableSetService) UpdateScope(varsetID, newScope string) (*models.Var
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		if err := s.db.Model(varset).Updates(map[string]interface{}{
-			"scope":      newScope,
-			"updated_at": time.Now(),
-		}).Error; err != nil {
-			return nil, fmt.Errorf("failed to update scope: %w", err)
-		}
+		varset.Scope = newScope
+		varset.OrgID = nil
+		return varset, nil
 	}
 
+	updates := map[string]interface{}{
+		"scope":      newScope,
+		"updated_at": time.Now(),
+	}
+	if varset.OrgID == nil {
+		if authOrgID == 0 {
+			return nil, fmt.Errorf("org_id required when switching to specific")
+		}
+		updates["org_id"] = authOrgID
+	}
+	if err := s.db.Model(varset).Updates(updates).Error; err != nil {
+		return nil, fmt.Errorf("failed to update scope: %w", err)
+	}
 	varset.Scope = newScope
+	if varset.OrgID == nil && authOrgID != 0 {
+		varset.OrgID = &authOrgID
+	}
 	return varset, nil
 }
 
@@ -333,9 +370,10 @@ func (s *VariableSetService) Delete(varsetID string) error {
 	return nil
 }
 
-// CreateAssignment 创建变量集分配
-func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projectID *int, workspaceID *string, attachedBy *string) (*models.VarsetAssignment, error) {
-	// 验证变量集存在且是 specific scope
+// CreateAssignment 创建变量集分配.
+// Target org must equal varset.org_id (except global, which cannot be mounted).
+// Compat rows with org_id IS NULL get org_id set to the target org on this mount.
+func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projectID *int, workspaceID *string, attachedBy *string, targetOrgID uint) (*models.VarsetAssignment, error) {
 	varset, err := s.GetByVarsetID(varsetID)
 	if err != nil {
 		return nil, err
@@ -343,18 +381,20 @@ func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projec
 	if varset.Scope != "specific" {
 		return nil, fmt.Errorf("cannot create assignment for variable set with scope '%s', must be 'specific'", varset.Scope)
 	}
-
-	// 验证 scopeType
 	if scopeType != "project" && scopeType != "workspace" {
 		return nil, fmt.Errorf("invalid scope_type: %s, must be 'project' or 'workspace'", scopeType)
 	}
-
-	// 验证对应字段
 	if scopeType == "project" && projectID == nil {
 		return nil, fmt.Errorf("project_id is required for scope_type 'project'")
 	}
 	if scopeType == "workspace" && workspaceID == nil {
 		return nil, fmt.Errorf("workspace_id is required for scope_type 'workspace'")
+	}
+	if targetOrgID == 0 {
+		return nil, fmt.Errorf("target org_id required")
+	}
+	if varset.OrgID != nil && *varset.OrgID != targetOrgID {
+		return nil, fmt.Errorf("assignment target not found")
 	}
 
 	assignment := models.VarsetAssignment{
@@ -365,11 +405,48 @@ func (s *VariableSetService) CreateAssignment(varsetID, scopeType string, projec
 		AttachedBy:  attachedBy,
 	}
 
-	if err := s.db.Create(&assignment).Error; err != nil {
-		return nil, fmt.Errorf("failed to create assignment: %w", err)
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if varset.OrgID == nil {
+			// First mount claims the orphan for the target org.
+			if err := s.ensureNameUniqueTx(tx, varset.Name, &targetOrgID, varsetID); err != nil {
+				return err
+			}
+			if err := tx.Model(&models.VariableSet{}).
+				Where("varset_id = ? AND org_id IS NULL", varsetID).
+				Updates(map[string]interface{}{"org_id": targetOrgID, "updated_at": time.Now()}).Error; err != nil {
+				return fmt.Errorf("failed to bind varset org_id: %w", err)
+			}
+		}
+		if err := tx.Create(&assignment).Error; err != nil {
+			return fmt.Errorf("failed to create assignment: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
 	return &assignment, nil
+}
+
+func (s *VariableSetService) ensureNameUniqueTx(tx *gorm.DB, name string, orgID *uint, excludeVarsetID string) error {
+	q := tx.Where("name = ? AND is_deleted = ?", name, false)
+	if orgID == nil {
+		q = q.Where("org_id IS NULL")
+	} else {
+		q = q.Where("org_id = ?", *orgID)
+	}
+	if excludeVarsetID != "" {
+		q = q.Where("varset_id != ?", excludeVarsetID)
+	}
+	var existing models.VariableSet
+	err := q.First(&existing).Error
+	if err == nil {
+		return fmt.Errorf("variable set with name '%s' already exists", name)
+	}
+	if err != gorm.ErrRecordNotFound {
+		return fmt.Errorf("failed to check name uniqueness: %w", err)
+	}
+	return nil
 }
 
 // ListAssignments 获取变量集的分配列表

@@ -17,6 +17,10 @@ type VariableSet struct {
 	Name        string    `json:"name" gorm:"type:varchar(100);not null"`
 	Description string    `json:"description" gorm:"type:text"`
 	Scope       string    `json:"scope" gorm:"type:varchar(20);not null;default:specific"`
+	// OrgID owns a specific varset. NULL for global (and legacy unassigned
+	// orphans pending first mount). CHECK: global ⇒ NULL; new specific creates
+	// always set this from auth org.
+	OrgID       *uint     `json:"org_id" gorm:"column:org_id"`
 	IsDeleted   bool      `json:"is_deleted" gorm:"default:false"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

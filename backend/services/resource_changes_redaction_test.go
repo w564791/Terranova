@@ -32,7 +32,7 @@ func TestResourceChanges_VarsetSensitive_PG(t *testing.T) {
 	defer db.Exec("DELETE FROM workspace_task_resource_changes WHERE workspace_id = ?", ws)
 	defer db.Exec("DELETE FROM workspace_tasks WHERE workspace_id = ?", ws)
 
-	vs, err := NewVariableSetService(db).Create("rc-redact-global", "test", "global", nil)
+	vs, err := NewVariableSetService(db).Create("rc-redact-global", "test", "global", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
