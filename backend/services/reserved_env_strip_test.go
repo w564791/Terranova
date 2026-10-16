@@ -90,3 +90,16 @@ func TestBuildEnvironmentVariables_PlatformCAAfterReservedStrip(t *testing.T) {
 	}
 }
 
+
+func TestGetTFCLIArgs_AlwaysEmptyDespiteUserVars(t *testing.T) {
+	s := &TerraformExecutor{
+		dataAccessor: stripEnvAccessor{vars: []models.WorkspaceVariable{
+			{Key: "TF_CLI_ARGS", Value: "-upgrade", VariableType: models.VariableTypeEnvironment},
+			{Key: "TF_CLI_ARGS_init", Value: "-upgrade -lock=false", VariableType: models.VariableTypeEnvironment},
+			{Key: "TF_CLI_ARGS_plan", Value: "-lock=false", VariableType: models.VariableTypeEnvironment},
+		}},
+	}
+	if args := s.getTFCLIArgs("ws-1"); len(args) != 0 {
+		t.Fatalf("getTFCLIArgs must ignore user TF_CLI_ARGS*, got %v", args)
+	}
+}

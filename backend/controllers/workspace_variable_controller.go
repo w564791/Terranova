@@ -330,6 +330,13 @@ func (vc *WorkspaceVariableController) UpdateVariable(c *gin.Context) {
 	}
 
 	// Reserved env keys: refuse when the resulting row would be environment-category.
+	// Prefer request fields when present so we 422 before a DB round-trip (and
+	// so sqlite tests without id::text still cover the write path).
+	if req.Key != nil && req.VariableType != nil &&
+		reservedenv.IsEnvironmentCategory(string(*req.VariableType)) &&
+		reservedenv.Refuse(c, *req.Key) {
+		return
+	}
 	var existing models.WorkspaceVariable
 	if err := vc.variableService.GetDB().Where("workspace_id = ? AND (variable_id = ? OR id::text = ?) AND is_deleted = false", wsSemantic, varIDParam, varIDParam).First(&existing).Error; err == nil {
 		key := existing.Key

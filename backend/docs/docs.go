@@ -6165,6 +6165,164 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/app/permissions/check": {
+            "post": {
+                "security": [
+                    {
+                        "AppKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Application-Principal"
+                ],
+                "summary": "Check permission as Application",
+                "parameters": [
+                    {
+                        "description": "resource_type, scope_type, scope_id, required_level",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.CheckPermissionResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/app/whoami": {
+            "get": {
+                "security": [
+                    {
+                        "AppKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Application-Principal"
+                ],
+                "summary": "Application whoami",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/app/workspaces": {
+            "get": {
+                "security": [
+                    {
+                        "AppKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Application-Principal"
+                ],
+                "summary": "List workspaces for Application principal (tag-filtered)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "size",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "search",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/app/workspaces/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AppKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Application-Principal"
+                ],
+                "summary": "Get workspace for Application principal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "workspace id or semantic id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/login": {
             "post": {
                 "description": "Authenticate with username and password. Returns JWT token on success, or MFA challenge if MFA is enabled.",
@@ -10015,6 +10173,194 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/iam/applications/{id}/roles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all role assignments for an application (by id or app_key)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "IAM-Application"
+                ],
+                "summary": "List application roles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Application ID or app_key",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assign a role to an application within a specific scope (principal stored as app_key)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "IAM-Application"
+                ],
+                "summary": "Assign role to application",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Application ID or app_key",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Assignment information",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AssignRoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/iam/applications/{id}/roles/{assignment_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revoke a role assignment from an application",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "IAM-Application"
+                ],
+                "summary": "Revoke application role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Application ID or app_key",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Role assignment ID",
+                        "name": "assignment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -17504,6 +17850,87 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required; so is a version whose stored files no longer match bundle_hash (reason hash_mismatch, recorded on the version and sticky until a new version is published).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Manifest Deployments"
+                ],
+                "summary": "Install manifest deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Organization ID",
+                        "name": "org_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Manifest ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Install payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.InstallDeploymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/middleware.InternalErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview": {
             "post": {
                 "security": [
@@ -17591,87 +18018,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required; so is a version whose stored files no longer match bundle_hash (reason hash_mismatch, recorded on the version and sticky until a new version is published).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Manifest Deployments"
-                ],
-                "summary": "Install manifest deployment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Organization ID",
-                        "name": "org_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Manifest ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Install payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.InstallDeploymentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/middleware.InternalErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/{deployment_id}": {
             "get": {
                 "security": [
@@ -17744,7 +18090,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources and creates no task). Not blocked when the deployed version has no valid bundle: the bundle is never executed after uninstall, because the follow-up workspace Plan+Apply no longer loads manifest files (the executor refuses to run any version whose bundle_hash is NULL, failing the task with \"bundle_republish_required: <reason>\").",
+                "description": "Unbind manifest from workspace and clear related workspace resources (does not destroy cloud resources and creates no task). Not blocked when the deployed version has no valid bundle: the bundle is never executed after uninstall, because the follow-up workspace Plan+Apply no longer loads manifest files (the executor refuses to run any version whose bundle_hash is NULL, failing the task with \"bundle_republish_required: \u003creason\u003e\").",
                 "consumes": [
                     "application/json"
                 ],
@@ -18468,7 +18814,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Organization ID (default: 1)",
+                        "description": "Organization ID (must match authenticated organization)",
                         "name": "org_id",
                         "in": "query"
                     }
@@ -19422,6 +19768,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/system/reserved-env-prefixes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns platform-controlled env var names/prefixes that users cannot set. Any authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "List reserved environment variable prefixes",
+                "responses": {
+                    "200": {
+                        "description": "prefixes: string[]",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tasks/{task_id}/logs": {
             "get": {
                 "security": [
@@ -19429,7 +19808,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取任务的历史日志，支持JSON和文本格式",
+                "description": "获取任务的历史日志（须对任务所属 workspace 有 READ）",
                 "consumes": [
                     "application/json"
                 ],
@@ -19471,6 +19850,13 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "403": {
+                        "description": "无 workspace 权限",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
                     "404": {
                         "description": "任务不存在",
                         "schema": {
@@ -19488,7 +19874,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "下载任务日志为文本文件",
+                "description": "下载任务日志为文本文件（须对任务所属 workspace 有 READ）",
                 "consumes": [
                     "application/json"
                 ],
@@ -19520,6 +19906,13 @@ const docTemplate = `{
                         "description": "日志文件",
                         "schema": {
                             "type": "file"
+                        }
+                    },
+                    "403": {
+                        "description": "无 workspace 权限",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
@@ -20493,6 +20886,12 @@ const docTemplate = `{
                         "description": "Filter by scope",
                         "name": "scope",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only variable sets this workspace can mount (global + assigned to the workspace or its project); caller must be able to read the workspace",
+                        "name": "workspace_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -20525,7 +20924,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new variable set",
+                "description": "Create a new variable set. Specific varsets take org_id from the authenticated organization (body org_id ignored). Global requires system admin and stores org_id NULL.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27943,7 +28342,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code (\"bundle_republish_required\": the manifest version has no valid bundle, error_message is then \"bundle_republish_required: <reason>\"; \"plan_expired\": the stored plan expired or was purged before apply; \"agent_upgrade_required\": no agent in the pool supports manifest-bound tasks; \"bundle_hash_mismatch\": the manifest bundle the executor received did not hash to bundle_hash, message \"bundle_hash_mismatch: hash_mismatch (...)\"; \"approval_hash_mismatch\": a manifest apply refused because the bundle or plan is not what was approved), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1, not_approved, bundle_changed, plan_changed; never paths or content). A task with a manifest run carries manifest_run (services.TaskManifestRunView: id, purpose, runner, status, bundle_hash, plan_out_hash = SHA-256 of plan.out, the hash approval binds to; redacted_plan_hash = hash of the redacted plan JSON; approved_bundle_hash, approved_plan_hash, approved_by, approved_at; null when not set); omitted otherwise. Detail only, not in the task list.",
+                "description": "Get task detail by ID. A failed task carries error_message and, when the failure has a structured code, error_code (\"bundle_republish_required\": the manifest version has no valid bundle, error_message is then \"bundle_republish_required: \u003creason\u003e\"; \"plan_expired\": the stored plan expired or was purged before apply; \"agent_upgrade_required\": no agent in the pool supports manifest-bound tasks; \"bundle_hash_mismatch\": the manifest bundle the executor received did not hash to bundle_hash, message \"bundle_hash_mismatch: hash_mismatch (...)\"; \"approval_hash_mismatch\": a manifest apply refused because the bundle or plan is not what was approved), plus error_reason, a short rule token next to error_code (e.g. denylisted_file, hash_mismatch, no_valid_bundle, manifest_bundle_v1, not_approved, bundle_changed, plan_changed; never paths or content). A task with a manifest run carries manifest_run (services.TaskManifestRunView: id, purpose, runner, status, bundle_hash, plan_out_hash = SHA-256 of plan.out, the hash approval binds to; redacted_plan_hash = hash of the redacted plan JSON; approved_bundle_hash, approved_plan_hash, approved_by, approved_at; null when not set); omitted otherwise. Detail only, not in the task list.",
                 "consumes": [
                     "application/json"
                 ],
@@ -31357,6 +31756,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "org_id": {
+                    "type": "integer"
+                },
                 "policies": {
                     "description": "关联字段（不存储在数据库）",
                     "type": "array",
@@ -31825,7 +32227,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "expires_in_days": {
-                    "description": "0表示永不过期",
+                    "description": "默认/最大 1 天（24h），0 或 \u003e1 按 1 天处理",
                     "type": "integer"
                 },
                 "token_name": {
@@ -32039,6 +32441,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "org_id": {
+                    "type": "integer"
+                },
                 "policies": {
                     "type": "array",
                     "items": {
@@ -32076,6 +32481,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "org_id": {
+                    "type": "integer"
                 },
                 "policies": {
                     "description": "关联字段（不存储在数据库）",
@@ -33225,22 +33633,16 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "target_version_id": {
-                    "description": "Optional upgrade target; sensitivity of its variable blocks is applied. Must belong to the same manifest.",
                     "type": "string"
                 },
                 "unset_keys": {
-                    "description": "Stored override keys to drop from the preview (same semantics as upgrade).",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
                 "variable_overrides": {
-                    "description": "Merged over the deployment's stored overrides, exactly like upgrade.\nMap of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/models.OverrideInput"
-                    }
+                    "$ref": "#/definitions/models.OverrideInputs"
                 },
                 "varsets": {
                     "description": "Varsets 与 upgrade 同义:缺省 = 部署已挂的 varset;[] = 无;非空 = 以此为准。",
@@ -33564,11 +33966,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "variable_overrides": {
-                    "description": "Map of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/models.OverrideInput"
-                    }
+                    "$ref": "#/definitions/models.OverrideInputs"
                 },
                 "varsets": {
                     "type": "array",
@@ -33624,11 +34022,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "variable_overrides": {
-                    "description": "Map of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/models.OverrideInput"
-                    }
+                    "$ref": "#/definitions/models.OverrideInputs"
                 },
                 "varsets": {
                     "description": "Varsets 指针:缺省(nil)与 [] 在首装时等价,都表示不挂 varset。",
@@ -34282,7 +34676,6 @@ const docTemplate = `{
             }
         },
         "models.OverrideInput": {
-            "description": "OverrideInput one override; requests may also send a bare string as shorthand for {\"value\": s}.",
             "type": "object",
             "properties": {
                 "sensitive": {
@@ -34291,6 +34684,12 @@ const docTemplate = `{
                 "value": {
                     "type": "string"
                 }
+            }
+        },
+        "models.OverrideInputs": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/models.OverrideInput"
             }
         },
         "models.ParseTFRequest": {
@@ -36180,11 +36579,12 @@ const docTemplate = `{
                     }
                 },
                 "variable_overrides": {
-                    "description": "VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;\n敏感变量传空串(预览里的掩码占位)视为\"不修改\",也保留原值。\nMap of key -\u003e override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {\"value\": \"...\", \"sensitive\": true}. Sensitivity is sticky once recorded.",
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/models.OverrideInput"
-                    }
+                    "description": "VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;\n敏感变量传空串(预览里的掩码占位)视为\"不修改\",也保留原值。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.OverrideInputs"
+                        }
+                    ]
                 },
                 "varsets": {
                     "description": "Varsets 指针,缺省 != []:缺省(nil)= 保持部署已挂的 varset 不变(也不算变量变更);\n[] = 清空;非空 = 整体替换(按 priority 生效顺序比较是否变化)。",
@@ -37266,6 +37666,10 @@ const docTemplate = `{
                 },
                 "org_id": {
                     "type": "integer"
+                },
+                "workspace_tag_filter": {
+                    "type": "object",
+                    "additionalProperties": true
                 }
             }
         },
@@ -37296,6 +37700,10 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": true
                 },
+                "clear_workspace_tag_filter": {
+                    "description": "ClearWorkspaceTagFilter 为 true 时清空 tag 过滤（允许访问 org 内全部，仍需 grant）",
+                    "type": "boolean"
+                },
                 "description": {
                     "type": "string"
                 },
@@ -37307,6 +37715,10 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "workspace_tag_filter": {
+                    "type": "object",
+                    "additionalProperties": true
                 }
             }
         },
@@ -37832,24 +38244,6 @@ const docTemplate = `{
                 },
                 "total_pages": {
                     "type": "integer"
-                }
-            }
-        },
-        "services.OverrideView": {
-            "description": "Redacted view of one deployment / task override. value is only present for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ; when sensitive_keys was never computed every key is reported sensitive.",
-            "type": "object",
-            "properties": {
-                "has_value": {
-                    "type": "boolean"
-                },
-                "key": {
-                    "type": "string"
-                },
-                "sensitive": {
-                    "type": "boolean"
-                },
-                "value": {
-                    "type": "string"
                 }
             }
         },

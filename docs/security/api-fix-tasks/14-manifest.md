@@ -217,18 +217,22 @@ backend/services/{manifest_approval,manifest_approval_check,run_token_service,ta
 - 跑过已删除迁移 `20261004_03_manifest_bundle_rules` 的开发库和测试库需要重建（`20261004_04` 不会修复它们）。
 
 
-### Reserved env vars / git source immutability / CA+plaintext
+### Reserved env vars / git source immutability / CA+plaintext ✅ 已完成
 
-- **422 `reserved_env_var`**: environment-category variable key is platform-reserved
-  (`internal/reservedenv`). See `GET /api/v1/system/reserved-env-prefixes`.
+- **422 `reserved_env_var`** ✅: environment-category variable key is platform-reserved
+  (`internal/reservedenv`). Write paths (workspace create/update, varset create,
+  `BulkCreateVariables`) refuse with `details.key` / `details.reserved_prefix`.
+  See `GET /api/v1/system/reserved-env-prefixes` (in swagger `docs/docs.go`).
 - **409 `git_source_immutable`**: also enforced by DB trigger
   `manifests_git_source_immutable` (migration `20261010_16`).
 - Platform proxy for exec: `IAC_EXEC_HTTP_PROXY` / `IAC_EXEC_HTTPS_PROXY` /
   `IAC_EXEC_NO_PROXY` (users cannot set `HTTP(S)_PROXY` per workspace).
-- **Platform CA after reserved-env strip** ✅ done: a legacy DB row
+- **Platform CA after reserved-env strip** ✅: a legacy DB row
   `TF_HTTP_CLIENT_CA_CERTIFICATE_PEM` is stripped; CA injection is decided from
   the final env only so it cannot block `_TERRANOVA_CA_CERT`.
-- **`IAC_AGENT_ALLOW_PLAINTEXT`** ✅ done: auto-inject `cluster-internal` only for
+- **`IAC_AGENT_ALLOW_PLAINTEXT`** ✅: auto-inject `cluster-internal` only for
   platform-launched in-cluster K8s pods/deployments/jobs when production still
   speaks `http`. Do not inject for external/VM agents. When agent protocol
   moves to `https`, stop auto-injecting (see `docs/security/tls-verification.md`).
+- **`getTFCLIArgs`** ✅: always empty; user `TF_CLI_ARGS*` cannot inject `-upgrade`
+  into lock/init paths (unit-covered).

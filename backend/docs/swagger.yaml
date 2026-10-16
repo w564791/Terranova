@@ -1,33 +1,5 @@
 basePath: /
 definitions:
-  manifestbundle.Problem:
-    properties:
-      file:
-        type: string
-      line:
-        type: integer
-      message:
-        type: string
-      rule:
-        type: string
-    type: object
-  middleware.InternalErrorResponse:
-    properties:
-      code:
-        example: 500
-        type: integer
-      error:
-        example: internal error
-        type: string
-      message:
-        example: Internal server error
-        type: string
-      request_id:
-        example: 3f2b8c1e-6a4d-4e2a-9c51-0d7e2f1a9b33
-        type: string
-      timestamp:
-        type: string
-    type: object
   controllers.AnalyzeErrorRequest:
     properties:
       task_id:
@@ -517,6 +489,8 @@ definitions:
         type: boolean
       name:
         type: string
+      org_id:
+        type: integer
       policies:
         description: 关联字段（不存储在数据库）
         items:
@@ -832,7 +806,7 @@ definitions:
   handlers.CreateTeamTokenRequest:
     properties:
       expires_in_days:
-        description: 0表示永不过期
+        description: 默认/最大 1 天（24h），0 或 >1 按 1 天处理
         type: integer
       token_name:
         type: string
@@ -979,6 +953,8 @@ definitions:
         type: boolean
       name:
         type: string
+      org_id:
+        type: integer
       policies:
         items:
           $ref: '#/definitions/entity.RolePolicy'
@@ -1004,6 +980,8 @@ definitions:
         type: boolean
       name:
         type: string
+      org_id:
+        type: integer
       policies:
         description: 关联字段（不存储在数据库）
         items:
@@ -1148,6 +1126,34 @@ definitions:
     required:
     - code
     - mfa_token
+    type: object
+  manifestbundle.Problem:
+    properties:
+      file:
+        type: string
+      line:
+        type: integer
+      message:
+        type: string
+      rule:
+        type: string
+    type: object
+  middleware.InternalErrorResponse:
+    properties:
+      code:
+        example: 500
+        type: integer
+      error:
+        example: internal error
+        type: string
+      message:
+        example: Internal server error
+        type: string
+      request_id:
+        example: 3f2b8c1e-6a4d-4e2a-9c51-0d7e2f1a9b33
+        type: string
+      timestamp:
+        type: string
     type: object
   models.AIConfig:
     properties:
@@ -1758,47 +1764,16 @@ definitions:
     - run_task_id
     - stage
     type: object
-  models.FirstInstallPreviewRequest:
-    properties:
-      variable_overrides:
-        additionalProperties:
-          $ref: '#/definitions/models.OverrideInput'
-        description: 'Map of key -> override. Each value may be a plain string (legacy
-          shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}.
-          Sensitivity is sticky once recorded.'
-        type: object
-      varsets:
-        items:
-          $ref: '#/definitions/models.DeploymentVarsetEntry'
-        type: array
-      version_id:
-        type: string
-      workspace_id:
-        description: ws-xxx 语义化ID
-        type: string
-    required:
-    - version_id
-    - workspace_id
-    type: object
   models.DeploymentPreviewRequest:
     properties:
       target_version_id:
-        description: Optional upgrade target; sensitivity of its variable blocks is
-          applied. Must belong to the same manifest.
         type: string
       unset_keys:
-        description: Stored override keys to drop from the preview (same semantics
-          as upgrade).
         items:
           type: string
         type: array
       variable_overrides:
-        additionalProperties:
-          $ref: '#/definitions/models.OverrideInput'
-        description: |-
-          Merged over the deployment's stored overrides, exactly like upgrade.
-          Map of key -> override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}. Sensitivity is sticky once recorded.
-        type: object
+        $ref: '#/definitions/models.OverrideInputs'
       varsets:
         description: Varsets 与 upgrade 同义:缺省 = 部署已挂的 varset;[] = 无;非空 = 以此为准。
         items:
@@ -2014,6 +1989,23 @@ definitions:
       updated_by:
         type: string
     type: object
+  models.FirstInstallPreviewRequest:
+    properties:
+      variable_overrides:
+        $ref: '#/definitions/models.OverrideInputs'
+      varsets:
+        items:
+          $ref: '#/definitions/models.DeploymentVarsetEntry'
+        type: array
+      version_id:
+        type: string
+      workspace_id:
+        description: ws-xxx 语义化ID
+        type: string
+    required:
+    - version_id
+    - workspace_id
+    type: object
   models.FreezeSchedule:
     properties:
       from_time:
@@ -2038,12 +2030,7 @@ definitions:
   models.InstallDeploymentRequest:
     properties:
       variable_overrides:
-        additionalProperties:
-          $ref: '#/definitions/models.OverrideInput'
-        description: 'Map of key -> override. Each value may be a plain string (legacy
-          shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}.
-          Sensitivity is sticky once recorded.'
-        type: object
+        $ref: '#/definitions/models.OverrideInputs'
       varsets:
         description: Varsets 指针:缺省(nil)与 [] 在首装时等价,都表示不挂 varset。
         items:
@@ -2486,21 +2473,23 @@ definitions:
     x-enum-varnames:
     - NotificationTypeWebhook
     - NotificationTypeLarkRobot
-  models.OverrideInput:
-    description: 'OverrideInput one override; requests may also send a bare string
-      as shorthand for {"value": s}.'
-    properties:
-      sensitive:
-        type: boolean
-      value:
-        type: string
-    type: object
   models.OutputValue:
     properties:
       sensitive:
         type: boolean
       type: {}
       value: {}
+    type: object
+  models.OverrideInput:
+    properties:
+      sensitive:
+        type: boolean
+      value:
+        type: string
+    type: object
+  models.OverrideInputs:
+    additionalProperties:
+      $ref: '#/definitions/models.OverrideInput'
     type: object
   models.ParseTFRequest:
     properties:
@@ -3805,13 +3794,11 @@ definitions:
           type: string
         type: array
       variable_overrides:
+        allOf:
+        - $ref: '#/definitions/models.OverrideInputs'
         description: |-
           VariableOverrides 与已存覆盖合并(不再整体替换):缺省的 key 保留原值;
           敏感变量传空串(预览里的掩码占位)视为"不修改",也保留原值。
-          Map of key -> override. Each value may be a plain string (legacy shorthand, sensitive=false) or an object {"value": "...", "sensitive": true}. Sensitivity is sticky once recorded.
-        additionalProperties:
-          $ref: '#/definitions/models.OverrideInput'
-        type: object
       varsets:
         description: |-
           Varsets 指针,缺省 != []:缺省(nil)= 保持部署已挂的 varset 不变(也不算变量变更);
@@ -4548,6 +4535,9 @@ definitions:
         type: string
       org_id:
         type: integer
+      workspace_tag_filter:
+        additionalProperties: true
+        type: object
     required:
     - name
     - org_id
@@ -4571,6 +4561,9 @@ definitions:
       callback_urls:
         additionalProperties: true
         type: object
+      clear_workspace_tag_filter:
+        description: ClearWorkspaceTagFilter 为 true 时清空 tag 过滤（允许访问 org 内全部，仍需 grant）
+        type: boolean
       description:
         type: string
       expires_at:
@@ -4579,25 +4572,14 @@ definitions:
         type: boolean
       name:
         type: string
+      workspace_tag_filter:
+        additionalProperties: true
+        type: object
     type: object
   service.UpdateUserRequest:
     properties:
       is_active:
         type: boolean
-    type: object
-  services.OverrideView:
-    description: Redacted view of one deployment / task override. value is only
-      present for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ;
-      when sensitive_keys was never computed every key is reported sensitive.
-    properties:
-      has_value:
-        type: boolean
-      key:
-        type: string
-      sensitive:
-        type: boolean
-      value:
-        type: string
     type: object
   services.AssessmentOverview:
     properties:
@@ -9669,6 +9651,105 @@ paths:
       summary: Preview assembled prompt
       tags:
       - AI Form
+  /api/v1/app/permissions/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: resource_type, scope_type, scope_id, required_level
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.CheckPermissionResult'
+      security:
+      - AppKeyAuth: []
+      summary: Check permission as Application
+      tags:
+      - Application-Principal
+  /api/v1/app/whoami:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AppKeyAuth: []
+      summary: Application whoami
+      tags:
+      - Application-Principal
+  /api/v1/app/workspaces:
+    get:
+      parameters:
+      - default: 1
+        description: page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: size
+        in: query
+        name: size
+        type: integer
+      - description: search
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AppKeyAuth: []
+      summary: List workspaces for Application principal (tag-filtered)
+      tags:
+      - Application-Principal
+  /api/v1/app/workspaces/{id}:
+    get:
+      parameters:
+      - description: workspace id or semantic id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AppKeyAuth: []
+      summary: Get workspace for Application principal
+      tags:
+      - Application-Principal
   /api/v1/auth/login:
     post:
       consumes:
@@ -12169,6 +12250,132 @@ paths:
       security:
       - BearerAuth: []
       summary: 重新生成应用密钥
+      tags:
+      - IAM-Application
+  /api/v1/iam/applications/{id}/roles:
+    get:
+      description: Get all role assignments for an application (by id or app_key)
+      parameters:
+      - description: Application ID or app_key
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List application roles
+      tags:
+      - IAM-Application
+    post:
+      consumes:
+      - application/json
+      description: Assign a role to an application within a specific scope (principal
+        stored as app_key)
+      parameters:
+      - description: Application ID or app_key
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Assignment information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assign role to application
+      tags:
+      - IAM-Application
+  /api/v1/iam/applications/{id}/roles/{assignment_id}:
+    delete:
+      description: Revoke a role assignment from an application
+      parameters:
+      - description: Application ID or app_key
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Role assignment ID
+        in: path
+        name: assignment_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Revoke application role
       tags:
       - IAM-Application
   /api/v1/iam/audit/access-history:
@@ -17086,7 +17293,11 @@ paths:
     get:
       consumes:
       - application/json
-      description: 'List all deployments for a manifest. Each deployment carries overrides ([]services.OverrideView: key, sensitive, has_value, value); raw variable_overrides are never returned. value is present only for non-sensitive keys when the caller has WORKSPACE_VARIABLES READ on the workspace; a deployment whose sensitive_keys is not yet computed treats every key as sensitive.'
+      description: 'List all deployments for a manifest. Each deployment carries overrides
+        ([]services.OverrideView: key, sensitive, has_value, value); raw variable_overrides
+        are never returned. value is present only for non-sensitive keys when the
+        caller has WORKSPACE_VARIABLES READ on the workspace; a deployment whose sensitive_keys
+        is not yet computed treats every key as sensitive.'
       parameters:
       - description: Organization ID
         in: path
@@ -17119,7 +17330,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: 'Get deployment detail including linked variable sets. Overrides are returned redacted as overrides ([]services.OverrideView), never as raw variable_overrides.'
+      description: Get deployment detail including linked variable sets. Overrides
+        are returned redacted as overrides ([]services.OverrideView), never as raw
+        variable_overrides.
       parameters:
       - description: Organization ID
         in: path
@@ -17220,7 +17433,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: "Switch deployment version and varsets; reconcile workspace resources. varsets absent keeps the attached varsets, [] clears them, a list replaces them. The target version must have a valid, intact bundle (409 bundle_republish_required, reason hash_mismatch when its files no longer match); upgrading away from a version without one is allowed."
+      description: Switch deployment version and varsets; reconcile workspace resources.
+        varsets absent keeps the attached varsets, [] clears them, a list replaces
+        them. The target version must have a valid, intact bundle (409 bundle_republish_required,
+        reason hash_mismatch when its files no longer match); upgrading away from
+        a version without one is allowed.
       parameters:
       - description: Organization ID
         in: path
@@ -17284,7 +17501,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Preview merged variables with a per-variable sensitive flag; sensitive values are always empty. The previewed version (target, else current) must have a valid bundle (409 bundle_republish_required).
+      description: Preview merged variables with a per-variable sensitive flag; sensitive
+        values are always empty. The previewed version (target, else current) must
+        have a valid bundle (409 bundle_republish_required).
       parameters:
       - description: Organization ID
         in: path
@@ -17339,11 +17558,70 @@ paths:
       summary: Preview deployment variables
       tags:
       - Manifest Deployments
+  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install:
+    post:
+      consumes:
+      - application/json
+      description: Install a published version onto an empty workspace. A version
+        without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required;
+        so is a version whose stored files no longer match bundle_hash (reason hash_mismatch,
+        recorded on the version and sticky until a new version is published).
+      parameters:
+      - description: Organization ID
+        in: path
+        name: org_id
+        required: true
+        type: string
+      - description: Manifest ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Install payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.InstallDeploymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/middleware.InternalErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Install manifest deployment
+      tags:
+      - Manifest Deployments
   /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/variable-preview:
     post:
       consumes:
       - application/json
-      description: Preview merged variables for installing a published version into a workspace (no deployment yet); sensitive values are always empty. The version must have a valid bundle (409 bundle_republish_required).
+      description: Preview merged variables for installing a published version into
+        a workspace (no deployment yet); sensitive values are always empty. The version
+        must have a valid bundle (409 bundle_republish_required).
       parameters:
       - description: Organization ID
         in: path
@@ -17397,60 +17675,6 @@ paths:
       summary: Preview variables for a first install
       tags:
       - Manifest Deployments
-  /api/v1/organizations/{org_id}/manifests/{id}/v2/deployments/install:
-    post:
-      consumes:
-      - application/json
-      description: "Install a published version onto an empty workspace. A version without a valid bundle (bundle_hash null) is rejected with 409 bundle_republish_required; so is a version whose stored files no longer match bundle_hash (reason hash_mismatch, recorded on the version and sticky until a new version is published)."
-      parameters:
-      - description: Organization ID
-        in: path
-        name: org_id
-        required: true
-        type: string
-      - description: Manifest ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Install payload
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.InstallDeploymentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "403":
-          description: Forbidden
-          schema:
-            additionalProperties: true
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/middleware.InternalErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Install manifest deployment
-      tags:
-      - Manifest Deployments
   /api/v1/organizations/{org_id}/manifests/{id}/v2/draft/diff:
     get:
       consumes:
@@ -17489,7 +17713,10 @@ paths:
     get:
       consumes:
       - application/json
-      description: "List published versions for a manifest (SemVer descending). Each version carries the stored bundle_hash (null when the version has no valid bundle) and bundle_invalid_reason (rule names and paths, or hash_mismatch; null when valid). Read-only: hashes are never recomputed here."
+      description: 'List published versions for a manifest (SemVer descending). Each
+        version carries the stored bundle_hash (null when the version has no valid
+        bundle) and bundle_invalid_reason (rule names and paths, or hash_mismatch;
+        null when valid). Read-only: hashes are never recomputed here.'
       parameters:
       - description: Organization ID
         in: path
@@ -17605,7 +17832,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a published version detail by version ID, including bundle_hash and bundle_invalid_reason
+      description: Get a published version detail by version ID, including bundle_hash
+        and bundle_invalid_reason
       parameters:
       - description: Organization ID
         in: path
@@ -17776,7 +18004,7 @@ paths:
     get:
       description: List all projects with their workspace counts
       parameters:
-      - description: 'Organization ID (default: 1)'
+      - description: Organization ID (must match authenticated organization)
         in: query
         name: org_id
         type: integer
@@ -18421,11 +18649,33 @@ paths:
       summary: 获取系统初始化状态
       tags:
       - Setup
+  /api/v1/system/reserved-env-prefixes:
+    get:
+      description: Returns platform-controlled env var names/prefixes that users cannot
+        set. Any authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'prefixes: string[]'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List reserved environment variable prefixes
+      tags:
+      - System
   /api/v1/tasks/{task_id}/logs:
     get:
       consumes:
       - application/json
-      description: 获取任务的历史日志，支持JSON和文本格式
+      description: 获取任务的历史日志（须对任务所属 workspace 有 READ）
       parameters:
       - description: 任务ID
         in: path
@@ -18450,6 +18700,11 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "403":
+          description: 无 workspace 权限
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: 任务不存在
           schema:
@@ -18464,7 +18719,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 下载任务日志为文本文件
+      description: 下载任务日志为文本文件（须对任务所属 workspace 有 READ）
       parameters:
       - description: 任务ID
         in: path
@@ -18483,6 +18738,11 @@ paths:
           description: 日志文件
           schema:
             type: file
+        "403":
+          description: 无 workspace 权限
+          schema:
+            additionalProperties: true
+            type: object
         "404":
           description: 任务不存在
           schema:
@@ -19134,6 +19394,11 @@ paths:
         in: query
         name: scope
         type: string
+      - description: Only variable sets this workspace can mount (global + assigned
+          to the workspace or its project); caller must be able to read the workspace
+        in: query
+        name: workspace_id
+        type: string
       produces:
       - application/json
       responses:
@@ -19160,7 +19425,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new variable set
+      description: Create a new variable set. Specific varsets take org_id from the
+        authenticated organization (body org_id ignored). Global requires system admin
+        and stores org_id NULL.
       parameters:
       - description: Create request
         in: body
@@ -19847,9 +20114,9 @@ paths:
         in: query
         name: project_id
         type: integer
-      - description: 'RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN),
+      - description: RESOURCE_TYPE:LEVEL (workspace-level resource, READ|WRITE|ADMIN),
           e.g. WORKSPACE_RESOURCES:WRITE; only workspaces where the caller also holds
-          it; each item then carries can_write_variables (WORKSPACE_VARIABLES WRITE)'
+          it; each item then carries can_write_variables (WORKSPACE_VARIABLES WRITE)
         in: query
         name: capability
         type: string
