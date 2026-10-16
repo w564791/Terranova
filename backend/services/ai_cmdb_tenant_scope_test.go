@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"iac-platform/internal/models"
@@ -87,8 +88,28 @@ func TestAICMDBScopeExcludesExternalAndForeignResources(t *testing.T) {
 	if _, err := skillService.buildCMDBDataFromSelections(map[string]string{"vpc_id": "vpc-foreign"}, scope); !errors.Is(err, ErrCMDBResourceNotInScope) {
 		t.Fatalf("foreign selection must be rejected without disclosure, got %v", err)
 	}
-	if _, err := skillService.buildCMDBDataFromSelections(map[string]string{"vpc_id": "vpc-duplicated"}, scope); !errors.Is(err, ErrCMDBResourceNotInScope) {
+	// Workspace-scoped: only ws-org-1's copy of vpc-duplicated is in scope, so
+	// it is unambiguous and must resolve to that workspace's own row (the
+	// ws-org-1-peer copy is out of scope and must not be used).
+	data, err := skillService.buildCMDBDataFromSelections(map[string]string{"vpc_id": "vpc-duplicated"}, scope)
+	if err != nil || !strings.Contains(data, "arn:org-1:duplicate-a") || strings.Contains(data, "duplicate-b") {
+		t.Fatalf("workspace-scoped selection must resolve to own row only, got %q, %v", data, err)
+	}
+
+	// Organization-wide scope: ws-org-1 and ws-org-1-peer both hold
+	// vpc-duplicated, so the selection is ambiguous and must fail closed.
+	orgScope, err := ResolveCMDBWorkspaceScope(db, 1, "")
+	if err != nil {
+		t.Fatalf("resolve org scope: %v", err)
+	}
+	if got := strings.Join(orgScope.workspaceIDs, ","); got != "ws-org-1,ws-org-1-peer" {
+		t.Fatalf("org scope = %q (corrupt/foreign workspaces must be excluded)", got)
+	}
+	if _, err := skillService.buildCMDBDataFromSelections(map[string]string{"vpc_id": "vpc-duplicated"}, orgScope); !errors.Is(err, ErrCMDBResourceNotInScope) {
 		t.Fatalf("ambiguous same-org resource selection must fail closed, got %v", err)
+	}
+	if _, err := skillService.buildCMDBDataFromSelections(map[string]string{"vpc_id": "vpc-foreign"}, orgScope); !errors.Is(err, ErrCMDBResourceNotInScope) {
+		t.Fatalf("foreign selection must be rejected under org scope, got %v", err)
 	}
 }
 
