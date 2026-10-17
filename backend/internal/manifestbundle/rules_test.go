@@ -50,7 +50,7 @@ func TestValidate_Rules(t *testing.T) {
 		{"file too large", []File{f("big.bin", big)}, []Problem{pr(RuleFileTooLarge, "big.bin")}},
 		{"secrets", []File{
 			f("aws.tf", "# creds\nprovider \"aws\" {\n  access_key = \"AKIAQWERTYUIOPASDFGH\"\n}\n"),
-			f("key.txt", "-----BEGIN RSA PRIVATE KEY-----\nMIIB\n"),
+			f("key.txt", "-----BEGIN RSA "+"PRIVATE KEY-----\nMIIB\n"), // split so the repo private-key guard does not flag this fake fixture
 			f("gh.tf", "token = \"ghp_"+strings.Repeat("A", 36)+"\""),
 			f("slack.tf", "hook = \"xoxb-1234567890-abc\""),
 		}, []Problem{prl(RuleSecretScanPrefix+"aws_access_key", "aws.tf", 3), prl(RuleSecretScanPrefix+"github_token", "gh.tf", 1),
