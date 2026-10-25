@@ -359,21 +359,26 @@ const SandboxRegisterForm: React.FC = () => {
         </div>
 
         <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>可选 AssumeRole（明文，无密钥）</h2>
+          <h2 className={styles.sectionTitle}>客户云身份（平台不注入）</h2>
+          <p className={styles.helpText} style={{ marginBottom: 12 }}>
+            按 §10.2：平台<strong>不</strong>做客户云 AssumeRole / STS 注入，也不把 AK·SK
+            放进 vault、聊天或浏览器。开会话只签平台 typ=shell。云侧凭证请在外部
+            sandbox 自行配置（类似本机 credentials）。下列字段仅可选元数据，
+            <strong>不是</strong>开会话前置。
+          </p>
           <div className={styles.formGroup}>
-            <label htmlFor="assume_role_arn">assume_role_arn</label>
+            <label htmlFor="assume_role_arn">assume_role_arn（可选·不注入）</label>
             <input
               id="assume_role_arn"
               type="text"
               value={assumeRoleArn}
               onChange={(e) => setAssumeRoleArn(e.target.value)}
-              placeholder="arn:aws:iam::…:role/…"
+              placeholder="可选备注 ARN；平台不会用它 AssumeRole"
               autoComplete="off"
             />
-            <span className={styles.helpText}>不展示或索取 AWS Access Key；平台凭证在 Vault。</span>
           </div>
           <div className={styles.formGroup}>
-            <label htmlFor="assume_external_id">assume_external_id</label>
+            <label htmlFor="assume_external_id">assume_external_id（可选·遮罩）</label>
             <input
               id="assume_external_id"
               type="password"
@@ -383,7 +388,7 @@ const SandboxRegisterForm: React.FC = () => {
               spellCheck={false}
             />
             <span className={styles.helpText}>
-              防 confused-deputy 的共享秘密；详情页仅显示遮罩（**** + 末 4 位）。
+              若填写仅作登记快照；详情页遮罩（**** + 末 4 位）。平台不会用它向云侧换票。
             </span>
           </div>
         </div>

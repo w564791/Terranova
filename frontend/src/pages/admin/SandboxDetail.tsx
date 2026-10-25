@@ -235,10 +235,10 @@ const SandboxDetail: React.FC = () => {
           <dd className={styles.mono}>{sandbox.workspace_id}</dd>
           <dt>image_digest</dt>
           <dd className={styles.mono}>{sandbox.image_digest || '—'}</dd>
-          <dt>assume_role_arn</dt>
+          <dt>assume_role_arn（可选快照·不注入）</dt>
           <dd className={styles.mono}>{sandbox.assume_role_arn || '—'}</dd>
-          <dt>assume_external_id</dt>
-          <dd className={styles.mono} title="已遮罩，防 confused-deputy 泄露">
+          <dt>assume_external_id（遮罩）</dt>
+          <dd className={styles.mono} title="已遮罩；平台不做客户云换票">
             {maskExternalId(sandbox.assume_external_id)}
           </dd>
           <dt>租约到期</dt>
@@ -264,7 +264,7 @@ const SandboxDetail: React.FC = () => {
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>Shell 会话</h2>
           <p className={styles.shellHint}>
-            仅 shell_debug 驱动支持。打开会话：AssertAttachable → InvokeHarness 唤醒 → 签发 typ=shell（≤15min）。凭证只存浏览器内存，关闭即撤销；不进 localStorage / 控制台。不会销毁远端容器。
+            仅 shell_debug 驱动支持。打开会话：AssertAttachable → InvokeHarness 唤醒 → 签发平台 typ=shell（≤15min，权限=当前用户）。客户云凭证用户自备，平台不注入 STS。平台 token 只存浏览器内存，关闭即撤销；不进 localStorage / 控制台。不会销毁远端容器。
           </p>
           <div className={styles.shellActions}>
             <button
