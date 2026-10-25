@@ -178,17 +178,23 @@ func (s *StateTokenService) IssueRunToken(ctx context.Context, runID, agentID st
 
 // StateCaller an authenticated state backend caller.
 type StateCaller struct {
-	Type        string // StateTokenTypeTask or StateTokenTypeRun
-	WorkspaceID string
-	TaskID      uint   // task tokens; run tokens: the approval run's task (0 if none)
-	RunID       string // run tokens
-	Purpose     string // run tokens: preview | approval
-	SessionID   string
-	CreatedBy   string // run tokens: the run's creator
+	Type           string // StateTokenTypeTask, StateTokenTypeRun, or StateTokenTypeShell
+	WorkspaceID    string
+	TaskID         uint   // task tokens; run tokens: the approval run's task (0 if none)
+	RunID          string // run tokens
+	Purpose        string // run tokens: preview | approval
+	SessionID      string // run sandbox session or shell session id
+	ShellSessionID string // typ=shell
+	SandboxID      string // typ=shell
+	OrgID          uint   // typ=shell
+	CreatedBy      string // run tokens: the run's creator
 }
 
-// ReadOnly whether the caller may only read state (preview runs).
+// ReadOnly whether the caller may only read state (preview runs, shell).
 func (c *StateCaller) ReadOnly() bool {
+	if c.Type == StateTokenTypeShell {
+		return true
+	}
 	return c.Type == StateTokenTypeRun && c.Purpose != models.ManifestRunPurposeApproval
 }
 
@@ -207,8 +213,11 @@ func tokenType(tok string) string {
 // Authenticate validates a state backend token: run tokens (typ run) on the
 // run path, everything else on the unchanged task path (ValidateToken).
 func (s *StateTokenService) Authenticate(ctx context.Context, tok string) (*StateCaller, error) {
-	if tokenType(tok) == StateTokenTypeRun {
+	switch tokenType(tok) {
+	case StateTokenTypeRun:
 		return s.validateRunToken(ctx, tok)
+	case StateTokenTypeShell:
+		return s.validateShellToken(ctx, tok)
 	}
 	ws, taskID, err := s.ValidateToken(tok)
 	if err != nil {

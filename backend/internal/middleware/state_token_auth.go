@@ -16,6 +16,8 @@ import (
 // Run tokens (typ run): the run's workspace only; preview runs are read-only
 // (POST state / LOCK / UNLOCK / DELETE → 403); a failed database check
 // refuses (503).
+// Shell tokens (typ shell): bound to the shell session's workspace; always
+// read-only (no lock / apply); failed DB check → 503.
 func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Debug: log all incoming requests to state backend
@@ -48,15 +50,15 @@ func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 		workspaceID := caller.WorkspaceID
 		urlWorkspaceID := c.Param("workspace_id")
 
-		if caller.Type == services.StateTokenTypeRun {
-			// run tokens: preview runs read only (no state POST, LOCK, UNLOCK
-			// or DELETE) and reach their own workspace only. Approval runs
+		if caller.Type == services.StateTokenTypeRun || caller.Type == services.StateTokenTypeShell {
+			// run / shell tokens: preview + shell are read only (no state POST,
+			// LOCK, UNLOCK or DELETE) and reach their own workspace only. Approval runs
 			// replace the task token of their plan_and_apply task: other
 			// workspaces' state is readable exactly as with a task token
 			// (GET only, filtered and authorized in getCrossWorkspaceState),
 			// state versions are attributed to the task.
 			if caller.ReadOnly() && c.Request.Method != http.MethodGet {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "preview run tokens are read-only"})
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "preview/shell tokens are read-only"})
 				return
 			}
 			target := workspaceID
@@ -73,6 +75,9 @@ func StateTokenAuth(tokenService *services.StateTokenService) gin.HandlerFunc {
 			c.Set("state_task_id", caller.TaskID)
 			c.Set("state_run_id", caller.RunID)
 			c.Set("state_run_created_by", caller.CreatedBy)
+			if caller.ShellSessionID != "" {
+				c.Set("state_shell_session_id", caller.ShellSessionID)
+			}
 			c.Next()
 			return
 		}

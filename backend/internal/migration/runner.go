@@ -148,6 +148,8 @@ func definitions() []definition {
 		{version: "20261016_02_variable_set_org_required", contract: "variable-set-org-required-not-valid-v1", apply: applyVariableSetOrgRequired},
 		// External sandbox registration + shell_sessions (§10.2). Additive only.
 		{version: "20261025_01_sandbox_registration", contract: "sandbox-registration-shell-sessions-v1", apply: applySandboxRegistration},
+		// typ=shell JWT hash store bound to shell_sessions (§10.2). Additive only.
+		{version: "20261025_02_shell_tokens", contract: "shell-tokens-v1", apply: applyShellTokens},
 	}
 }
 

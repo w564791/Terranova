@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"iac-platform/internal/application/service"
 	"iac-platform/internal/domain/valueobject"
 	"iac-platform/internal/middleware"
 	"iac-platform/internal/models"
-	"iac-platform/internal/application/service"
 	"iac-platform/internal/sandboxreg"
+	"iac-platform/services"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
@@ -80,6 +81,12 @@ func setupSandboxTestDB(t *testing.T) *gorm.DB {
 			id TEXT PRIMARY KEY, sandbox_id TEXT NOT NULL, org_id INTEGER NOT NULL,
 			status TEXT NOT NULL DEFAULT 'active', expires_at DATETIME NOT NULL,
 			closed_at DATETIME, created_by TEXT NOT NULL, created_at DATETIME, updated_at DATETIME
+		)`,
+		`CREATE TABLE shell_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT, shell_session_id TEXT NOT NULL,
+			sandbox_id TEXT NOT NULL, org_id INTEGER NOT NULL, workspace_id TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE, expires_at DATETIME NOT NULL,
+			revoked_at DATETIME, created_at DATETIME
 		)`,
 	} {
 		if err := db.Exec(s).Error; err != nil {
@@ -261,9 +268,6 @@ func TestListGetDeleteSandbox(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("delete %d %s", w.Code, w.Body.String())
 	}
-	if len(h.revokeIntents) == 0 {
-		t.Fatal("expected revoke intent on delete")
-	}
 	var status string
 	db.Raw(`SELECT status FROM sandboxes WHERE id = ?`, created.ID).Scan(&status)
 	if status != models.SandboxStatusUnbound {
@@ -271,8 +275,9 @@ func TestListGetDeleteSandbox(t *testing.T) {
 	}
 }
 
-func TestShellSessionCreateDeleteStub(t *testing.T) {
+func TestShellSessionIssueAndRevokeToken(t *testing.T) {
 	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	db := setupSandboxTestDB(t)
 	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
 	h := NewSandboxHandler(db, perm)
@@ -282,6 +287,9 @@ func TestShellSessionCreateDeleteStub(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("sandbox create %d %s", w.Code, w.Body.String())
+	}
 	var sb models.Sandbox
 	json.Unmarshal(w.Body.Bytes(), &sb)
 
@@ -290,22 +298,82 @@ func TestShellSessionCreateDeleteStub(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("shell create %d %s", w.Code, w.Body.String())
 	}
-	var sess models.ShellSession
-	json.Unmarshal(w.Body.Bytes(), &sess)
+	var resp struct {
+		ID         string `json:"id"`
+		ShellToken string `json:"shell_token"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.ShellToken == "" || resp.ID == "" {
+		t.Fatalf("missing token/id: %s", w.Body.String())
+	}
+	// Token typ=shell + shell_session_id claim
+	caller, err := h.tokens.Authenticate(context.Background(), resp.ShellToken)
+	if err != nil {
+		t.Fatalf("authenticate: %v", err)
+	}
+	if caller.Type != services.StateTokenTypeShell || caller.ShellSessionID != resp.ID {
+		t.Fatalf("caller=%+v", caller)
+	}
+	if !caller.ReadOnly() {
+		t.Fatal("shell token must be read-only")
+	}
+	var hashCount int64
+	db.Table("shell_tokens").Where("shell_session_id = ? AND revoked_at IS NULL", resp.ID).Count(&hashCount)
+	if hashCount != 1 {
+		t.Fatalf("active hashes=%d", hashCount)
+	}
 
 	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/organizations/1/sandboxes/shell-sessions/"+sess.ID, nil))
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/organizations/1/sandboxes/shell-sessions/"+resp.ID, nil))
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("shell delete %d %s", w.Code, w.Body.String())
 	}
-	found := false
-	for _, ri := range h.revokeIntents {
-		if strings.Contains(ri.Reason, "shell_session_close") {
-			found = true
-		}
+	if _, err := h.tokens.Authenticate(context.Background(), resp.ShellToken); err == nil {
+		t.Fatal("expected revoke to reject second use")
 	}
-	if !found {
-		t.Fatal("expected shell revoke intent")
+	db.Table("shell_tokens").Where("shell_session_id = ? AND revoked_at IS NULL", resp.ID).Count(&hashCount)
+	if hashCount != 0 {
+		t.Fatalf("active hashes after revoke=%d", hashCount)
+	}
+	var closedAt *time.Time
+	db.Raw(`SELECT closed_at FROM shell_sessions WHERE id = ?`, resp.ID).Scan(&closedAt)
+	if closedAt == nil {
+		t.Fatal("session not closed")
+	}
+}
+
+func TestShellSession_ProductionRejectsEmptyOrPublic(t *testing.T) {
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	for _, mode := range []string{"", "PUBLIC"} {
+		t.Run("mode_"+mode, func(t *testing.T) {
+			t.Setenv("ENV", "development") // register first (PUBLIC/empty OK)
+			db := setupSandboxTestDB(t)
+			h := NewSandboxHandler(db, perm)
+			r := sandboxRouter(h, 1)
+			body := `{"workspace_id":"ws-a","sandbox_ref":"ref-` + mode + `","driver":"shell_debug"`
+			if mode != "" {
+				body += `,"network_mode":"` + mode + `"`
+			}
+			body += `}`
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusCreated {
+				t.Fatalf("create %d %s", w.Code, w.Body.String())
+			}
+			var sb models.Sandbox
+			json.Unmarshal(w.Body.Bytes(), &sb)
+			t.Setenv("ENV", "production")
+			w = httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
+			if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), sandboxreg.ErrNetworkModeNotAllowed) {
+				t.Fatalf("got %d %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }
 

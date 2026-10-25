@@ -25,6 +25,7 @@ const (
 	PurposeState   Purpose = "state"   // Terraform HTTP state backend tokens
 	PurposeAgent   Purpose = "agent"   // per-agent tokens
 	PurposeRun     Purpose = "run"     // manifest sandbox run tokens
+	PurposeShell   Purpose = "shell"   // shell session tokens (§10.2); no legacy scheme
 	PurposeRunTask Purpose = "runtask" // Run Task callback tokens
 	// PurposeGitHubAppState the signed state of the GitHub App installation
 	// flow (org, initiating user, nonce; 10 minutes, single use).

@@ -19,24 +19,14 @@ import (
 // SandboxHandler registers and lists externally managed sandboxes (§10.2).
 // Platform does not create/destroy AgentCore containers.
 type SandboxHandler struct {
-	db   *gorm.DB
-	perm *middleware.IAMPermissionMiddleware
-	ws   *services.WorkspaceService
+	db     *gorm.DB
+	perm   *middleware.IAMPermissionMiddleware
+	ws     *services.WorkspaceService
+	tokens *services.StateTokenService
 	// vaultConfigured stubs platform AgentCore vault presence.
 	// When false and driver requires vault → 422 vault_credential_required.
 	// TODO(step-6): wire real Bot vault lookup for Bedrock/AgentCore access.
 	vaultConfigured bool
-	// revokeTokens records revoke intent on DELETE (stub until typ=shell /
-	// sandbox-scoped run tokens are extended).
-	revokeIntents []SandboxRevokeIntent
-}
-
-// SandboxRevokeIntent is a recorded credential revoke for unbind.
-type SandboxRevokeIntent struct {
-	SandboxID string
-	OrgID     uint
-	At        time.Time
-	Reason    string
 }
 
 // NewSandboxHandler constructs the registration API handler.
@@ -45,6 +35,7 @@ func NewSandboxHandler(db *gorm.DB, perm *middleware.IAMPermissionMiddleware) *S
 		db:              db,
 		perm:            perm,
 		ws:              services.NewWorkspaceService(db),
+		tokens:          services.NewStateTokenService(db),
 		vaultConfigured: true, // stub: treat vault as present until wired; tests can clear
 	}
 }
@@ -267,29 +258,39 @@ func (h *SandboxHandler) DeleteSandbox(c *gin.Context) {
 	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, row.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return
 	}
-	h.revokeSandboxCredentials(row.ID, orgID, "sandbox_unbind")
 	now := time.Now()
-	if err := h.db.Model(&row).Updates(map[string]interface{}{
-		"status":     models.SandboxStatusUnbound,
-		"updated_at": now,
-	}).Error; err != nil {
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		// Revoke typ=shell tokens first, then close sessions, then unbind.
+		if err := services.RevokeShellTokensForSandbox(c.Request.Context(), tx, row.ID); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.ShellSession{}).
+			Where("sandbox_id = ? AND org_id = ? AND closed_at IS NULL", row.ID, orgID).
+			Updates(map[string]interface{}{
+				"status":     models.ShellSessionStatusClosed,
+				"closed_at":  now,
+				"updated_at": now,
+			}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&row).Updates(map[string]interface{}{
+			"status":     models.SandboxStatusUnbound,
+			"updated_at": now,
+		}).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "unbind failed"})
 		return
 	}
-	// Close open shell sessions for this sandbox (credential lifecycle).
-	_ = h.db.Model(&models.ShellSession{}).
-		Where("sandbox_id = ? AND org_id = ? AND closed_at IS NULL", row.ID, orgID).
-		Updates(map[string]interface{}{
-			"status":     models.ShellSessionStatusClosed,
-			"closed_at":  now,
-			"updated_at": now,
-		})
+	// TODO(step-6): also revoke unexpired typ=run tokens scoped to this sandbox
+	// once run_tokens carries sandbox_id.
 	c.Status(http.StatusNoContent)
 }
 
-// CreateShellSession stubs shell session create + credential issue hooks (§10.2).
-// TODO(step-6): issue typ=shell JWT (claim shell_session_id), STS assume_role,
-// hard cap ≤15min, heartbeat renew ≤ expires_at. Require shell_debug driver.
+// CreateShellSession creates a shell_sessions row and mints a typ=shell JWT
+// (§10.2). Token lifetime = session lifetime, hard-capped at 15 minutes.
+// Requires driver=shell_debug and AssertAttachable (production → VPC).
+// TODO(step-6): STS AssumeRole inject; InvokeHarness wake (never invoke-agent-runtime).
 func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok {
@@ -317,39 +318,53 @@ func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 		})
 		return
 	}
-	mode := ""
-	if sb.NetworkMode != nil {
-		mode = *sb.NetworkMode
-	}
-	if err := sandboxreg.ValidateNetworkModeForAttach(mode); err != nil {
+	if err := AssertAttachable(&sb); err != nil {
 		writeSandboxValidation(c, err)
 		return
 	}
-	// TODO(step-6 data plane): wake via sandboxreg.HarnessInvoker.InvokeHarness only —
-	// never invoke-agent-runtime.
 	userID := c.GetString("user_id")
 	if userID == "" {
 		userID = "unknown"
 	}
+	now := time.Now()
 	sess := models.ShellSession{
 		ID:        uuid.New().String(),
 		SandboxID: sb.ID,
 		OrgID:     orgID,
 		Status:    models.ShellSessionStatusActive,
-		ExpiresAt: time.Now().Add(15 * time.Minute),
+		ExpiresAt: now.Add(services.MaxShellSessionTTL),
 		CreatedBy: userID,
 	}
-	if err := h.db.Create(&sess).Error; err != nil {
+	var tok string
+	var exp time.Time
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&sess).Error; err != nil {
+			return err
+		}
+		var err error
+		tok, exp, err = h.tokens.IssueShellToken(c.Request.Context(), tx, &sess, &sb)
+		return err
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "create shell session failed"})
 		return
 	}
-	// TODO(step-6): mint typ=shell token bound to sess.ID; inject STS; do not
-	// cache tokens on the warm runtime.
-	c.JSON(http.StatusCreated, sess)
+	// TODO(step-6 data plane): wake via sandboxreg.HarnessInvoker.InvokeHarness only.
+	c.JSON(http.StatusCreated, gin.H{
+		"id":               sess.ID,
+		"sandbox_id":       sess.SandboxID,
+		"org_id":           sess.OrgID,
+		"status":           sess.Status,
+		"expires_at":       sess.ExpiresAt,
+		"created_by":       sess.CreatedBy,
+		"created_at":       sess.CreatedAt,
+		"shell_token":      tok,
+		"token_expires_at": exp,
+	})
 }
 
-// DeleteShellSession stubs shell session close + credential revoke (§10.2).
-// TODO(step-6): revoke all typ=shell credentials for this session before close.
+// DeleteShellSession revokes typ=shell tokens then closes the session in one
+// transaction (§10.2). No orphan tokens.
 func (h *SandboxHandler) DeleteShellSession(c *gin.Context) {
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok {
@@ -373,13 +388,7 @@ func (h *SandboxHandler) DeleteShellSession(c *gin.Context) {
 			return
 		}
 	}
-	h.revokeSandboxCredentials(sess.SandboxID, orgID, "shell_session_close:"+sess.ID)
-	now := time.Now()
-	if err := h.db.Model(&sess).Updates(map[string]interface{}{
-		"status":     models.ShellSessionStatusClosed,
-		"closed_at":  now,
-		"updated_at": now,
-	}).Error; err != nil {
+	if err := services.EndShellSession(c.Request.Context(), h.db, sess.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "close failed"})
 		return
 	}
@@ -401,17 +410,6 @@ func AssertAttachable(sb *models.Sandbox) error {
 		mode = *sb.NetworkMode
 	}
 	return sandboxreg.ValidateNetworkModeForAttach(mode)
-}
-
-func (h *SandboxHandler) revokeSandboxCredentials(sandboxID string, orgID uint, reason string) {
-	// TODO(step-6): revoke unexpired run_tokens / typ=shell tokens scoped to
-	// this sandbox once token tables carry sandbox_id / shell_session_id.
-	h.revokeIntents = append(h.revokeIntents, SandboxRevokeIntent{
-		SandboxID: sandboxID,
-		OrgID:     orgID,
-		At:        time.Now(),
-		Reason:    reason,
-	})
 }
 
 func writeSandboxValidation(c *gin.Context, err error) {
