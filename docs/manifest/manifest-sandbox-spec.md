@@ -283,7 +283,7 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
   - 权限：目标 workspace `WORKSPACE_RESOURCES` WRITE；跨 org → 404；缺平台 AgentCore vault → `422 vault_credential_required`；非法 ref → `422 invalid_sandbox_ref`；非法 `network_mode` 字面量 → `422 invalid_network_mode`；生产下 `PUBLIC`（及挂载时非 VPC）→ `422 network_mode_not_allowed`。
 - `GET` 列表/详情；`DELETE` → 解绑 + **吊销该沙箱未过期 run/shell 凭据**，不毁外部沙箱（不调 AWS destroy）。
 - 控制面：**沙箱主动来拉**（同现有 agent）：短 ticket → 换 token / 拉 bundle；平台不存回调 URL、不用 vault 凭据打外部地址。
-- **唤醒 / 数据面**：只走 **InvokeHarness**（或 SDK 等价）；**禁止** `invoke-agent-runtime` / `InvokeAgentRuntime`。
+- **唤醒 / 数据面**：只走 AWS SDK **InvokeHarness**（Go `bedrockagentcore.InvokeHarness` / boto3 `bedrock-agentcore.invoke_harness`；`IAC_AGENTCORE_INVOKE_HARNESS=1` 启用 live）；**禁止** CLI、`invoke-agent-runtime` / `InvokeAgentRuntime`。
 - `POST /sandboxes/:id/shell-sessions` → 签发 `typ=shell`（claim 含 `shell_session_id`），只读云 + 只读 state、不拿锁；寿命 = 会话寿命（硬顶建议 ≤15min），心跳同步续租且不超过会话过期；唤醒前再跑 `network_mode` 校验。
 - `DELETE /shell-sessions/:id`（超时/断线宽限同）→ **先吊销该会话全部 shell 凭据**，再标结束。禁止凭据挂到第二个 Shell；禁止会话结束后凭据残留。
 - `POST /shell-sessions/:id/plans` → 创建历史任务 `task_type=shell_plan`（`-lock=false`），可查日志/红action结果；无 mirror → `503 provider_unreachable`。状态保持 `ready`，创建沙箱不因缺 mirror 失败。
@@ -297,7 +297,7 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
 6. 自定义 **Dockerfile** 单独镜像流水线（底包含 terraform 等）；凭据不进镜像；登记可选 `image_digest`，握手校验；**不等于**生产启用 DockerDriver。
 7. `shell_plan` 与外部 preview plan 均不可作 Deploy approval 输入。
 8. **`networkMode`**：生产（`ENV=production`）挂载只接受已存 `VPC`；`PUBLIC` / 空 / 未知 → `422 network_mode_not_allowed`。非法 create 字面量 → `422 invalid_network_mode`。非生产可 empty / PUBLIC / VPC。
-9. Session wake 只用 **InvokeHarness**，不用 `invoke-agent-runtime`。
+9. Session wake 只用 SDK **InvokeHarness**（boto3-compatible），不用 CLI / `invoke-agent-runtime`。
 
 #### 云身份（客户 AWS 等）
 1. **默认：** 登记 `assume_role_arn`（+ 可选 `assume_external_id` / OIDC）。开 Shell / preview 时平台 STS AssumeRole，临时票寿命绑会话，结束即废。角色策略必须是 **plan 只读**（无写资源、无 `iam:*`）；`external_id` 按 org 维度防混淆代理。

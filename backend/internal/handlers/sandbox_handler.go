@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -23,6 +24,9 @@ type SandboxHandler struct {
 	perm   *middleware.IAMPermissionMiddleware
 	ws     *services.WorkspaceService
 	tokens *services.StateTokenService
+	// harness wakes AgentCore via InvokeHarness (stub by default;
+	// AWS SDK when IAC_AGENTCORE_INVOKE_HARNESS=1).
+	harness sandboxreg.HarnessInvoker
 	// vaultConfigured stubs platform AgentCore vault presence.
 	// When false and driver requires vault → 422 vault_credential_required.
 	// TODO(step-6): wire real Bot vault lookup for Bedrock/AgentCore access.
@@ -31,18 +35,31 @@ type SandboxHandler struct {
 
 // NewSandboxHandler constructs the registration API handler.
 func NewSandboxHandler(db *gorm.DB, perm *middleware.IAMPermissionMiddleware) *SandboxHandler {
-	return &SandboxHandler{
+	h := &SandboxHandler{
 		db:              db,
 		perm:            perm,
 		ws:              services.NewWorkspaceService(db),
 		tokens:          services.NewStateTokenService(db),
+		harness:         sandboxreg.NewStubHarnessInvoker(),
 		vaultConfigured: true, // stub: treat vault as present until wired; tests can clear
 	}
+	if inv, err := sandboxreg.HarnessInvokerFromEnv(context.Background()); err == nil && inv != nil {
+		h.harness = inv
+	}
+	return h
 }
 
 // WithVaultConfigured overrides the AgentCore vault stub (tests / wiring).
 func (h *SandboxHandler) WithVaultConfigured(ok bool) *SandboxHandler {
 	h.vaultConfigured = ok
+	return h
+}
+
+// WithHarness overrides the AgentCore wake invoker (tests / wiring).
+func (h *SandboxHandler) WithHarness(inv sandboxreg.HarnessInvoker) *SandboxHandler {
+	if inv != nil {
+		h.harness = inv
+	}
 	return h
 }
 
@@ -290,7 +307,7 @@ func (h *SandboxHandler) DeleteSandbox(c *gin.Context) {
 // CreateShellSession creates a shell_sessions row and mints a typ=shell JWT
 // (§10.2). Token lifetime = session lifetime, hard-capped at 15 minutes.
 // Requires driver=shell_debug and AssertAttachable (production → VPC).
-// TODO(step-6): STS AssumeRole inject; InvokeHarness wake (never invoke-agent-runtime).
+// Wake uses HarnessInvoker (InvokeHarness). TODO(step-6): STS AssumeRole inject.
 func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok {
@@ -335,6 +352,27 @@ func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 		ExpiresAt: now.Add(services.MaxShellSessionTTL),
 		CreatedBy: userID,
 	}
+	runtimeRef := ""
+	if sb.RuntimeRef != nil {
+		runtimeRef = *sb.RuntimeRef
+	}
+	// Wake via InvokeHarness only (never invoke-agent-runtime). Stub by default;
+	// live AWS when IAC_AGENTCORE_INVOKE_HARNESS=1. Fail before minting tokens.
+	if h.harness != nil {
+		if err := h.harness.InvokeHarness(c.Request.Context(), sandboxreg.InvokeRequest{
+			HarnessARN: sb.SandboxRef,
+			RuntimeRef: runtimeRef,
+			SessionID:  sess.ID,
+			Message:    sandboxreg.DefaultWakeMessage,
+			Qualifier:  sandboxreg.DefaultHarnessQualifier,
+		}); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"code":    "harness_invoke_failed",
+				"message": "InvokeHarness wake failed",
+			})
+			return
+		}
+	}
 	var tok string
 	var exp time.Time
 	err = h.db.Transaction(func(tx *gorm.DB) error {
@@ -349,7 +387,7 @@ func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "create shell session failed"})
 		return
 	}
-	// TODO(step-6 data plane): wake via sandboxreg.HarnessInvoker.InvokeHarness only.
+	// TODO(step-6): STS AssumeRole inject into the woken session (not on runtime cache).
 	c.JSON(http.StatusCreated, gin.H{
 		"id":               sess.ID,
 		"sandbox_id":       sess.SandboxID,

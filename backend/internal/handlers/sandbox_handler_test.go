@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -374,6 +375,34 @@ func TestShellSession_ProductionRejectsEmptyOrPublic(t *testing.T) {
 				t.Fatalf("got %d %s", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestShellSession_HarnessInvokeFailure(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	stub := sandboxreg.NewStubHarnessInvoker()
+	stub.Err = errors.New("simulated InvokeHarness failure")
+	h := NewSandboxHandler(db, perm).WithHarness(stub)
+	r := sandboxRouter(h, 1)
+	body := `{"workspace_id":"ws-a","sandbox_ref":"ref-wake","driver":"shell_debug","network_mode":"VPC"}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	var sb models.Sandbox
+	json.Unmarshal(w.Body.Bytes(), &sb)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "harness_invoke_failed") {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+	var n int64
+	db.Table("shell_sessions").Count(&n)
+	if n != 0 {
+		t.Fatalf("session should not be created on wake failure, n=%d", n)
 	}
 }
 
