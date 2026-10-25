@@ -672,3 +672,77 @@ func TestShellPlan_ClosedSession_422(t *testing.T) {
 		t.Fatalf("got %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestShellPlan_ProductionRejectsEmptyOrPublic(t *testing.T) {
+	// Register + open session in non-prod (PUBLIC/empty OK), then ENV=production:
+	// CreateShellPlan must re-AssertAttachable → network_mode_not_allowed.
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	restore := services.SetProviderMirrorConfiguredForTest(func() bool { return true })
+	defer restore()
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	for _, mode := range []string{"", "PUBLIC"} {
+		t.Run("mode_"+mode, func(t *testing.T) {
+			t.Setenv("ENV", "development")
+			db := setupSandboxTestDB(t)
+			h := NewSandboxHandler(db, perm)
+			r := sandboxRouter(h, 1)
+			body := `{"workspace_id":"ws-a","sandbox_ref":"ref-plan-` + mode + `","driver":"shell_debug"`
+			if mode != "" {
+				body += `,"network_mode":"` + mode + `"`
+			}
+			body += `}`
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusCreated {
+				t.Fatalf("sandbox create %d %s", w.Code, w.Body.String())
+			}
+			var sb models.Sandbox
+			json.Unmarshal(w.Body.Bytes(), &sb)
+			w = httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
+			if w.Code != http.StatusCreated {
+				t.Fatalf("shell create %d %s", w.Code, w.Body.String())
+			}
+			var sess struct {
+				ID string `json:"id"`
+			}
+			json.Unmarshal(w.Body.Bytes(), &sess)
+			t.Setenv("ENV", "production")
+			w = httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/shell-sessions/"+sess.ID+"/plans", nil))
+			if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), sandboxreg.ErrNetworkModeNotAllowed) {
+				t.Fatalf("got %d %s", w.Code, w.Body.String())
+			}
+			var n int64
+			db.Table("workspace_tasks").Where("task_type = ?", models.TaskTypeShellPlan).Count(&n)
+			if n != 0 {
+				t.Fatalf("must not persist history on network_mode refusal, got %d", n)
+			}
+		})
+	}
+}
+
+func TestShellPlan_ProductionVPC_OK(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	restore := services.SetProviderMirrorConfiguredForTest(func() bool { return true })
+	defer restore()
+
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	h := NewSandboxHandler(db, perm)
+	r := sandboxRouter(h, 1)
+	_, sessID := createShellDebugSession(t, r, "ref-plan-vpc-prod")
+
+	t.Setenv("ENV", "production")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/shell-sessions/"+sessID+"/plans", nil))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("VPC plan in production must succeed: %d %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), string(models.TaskTypeShellPlan)) {
+		t.Fatalf("body=%s", w.Body.String())
+	}
+}

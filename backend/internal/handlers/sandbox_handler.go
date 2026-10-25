@@ -446,6 +446,8 @@ func (h *SandboxHandler) DeleteShellSession(c *gin.Context) {
 // session (§10.2). Never enters approval hashes, never apply. Missing provider
 // mirror → 503 provider_unreachable (sandbox status unchanged). Cloud identity
 // is user-prepared externally; platform does not inject STS.
+// Re-runs AssertAttachable (same as CreateShellSession): production empty/PUBLIC
+// snapshots → 422 network_mode_not_allowed even if registered in non-prod.
 func (h *SandboxHandler) CreateShellPlan(c *gin.Context) {
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok {
@@ -475,8 +477,10 @@ func (h *SandboxHandler) CreateShellPlan(c *gin.Context) {
 	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, sb.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
 		return
 	}
-	if sb.Status == models.SandboxStatusUnbound {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "sandbox_unbound", "message": "sandbox is unbound"})
+	// Plans/Deploy mount surface: re-validate stored network_mode (do not rely on
+	// registration-time ENV). Same codes as CreateShellSession.
+	if err := AssertAttachable(&sb); err != nil {
+		writeSandboxValidation(c, err)
 		return
 	}
 	if !services.ProviderMirrorConfigured() {
