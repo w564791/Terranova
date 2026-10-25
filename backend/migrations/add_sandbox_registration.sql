@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS public.sandboxes (
     id character varying(36) NOT NULL PRIMARY KEY,
     org_id bigint NOT NULL,
     workspace_id character varying(50) NOT NULL,
-    sandbox_ref character varying(128) NOT NULL,
-    runtime_ref character varying(128),
+    sandbox_ref character varying(256) NOT NULL,
+    runtime_ref character varying(256),
     label character varying(256),
     driver character varying(32) NOT NULL,
     image_digest character varying(128),
@@ -23,14 +23,14 @@ CREATE TABLE IF NOT EXISTS public.sandboxes (
     CONSTRAINT chk_sandboxes_driver CHECK (driver IN ('agentcore_external', 'shell_debug')),
     CONSTRAINT chk_sandboxes_status CHECK (status IN ('registered', 'ready', 'lease_expired', 'unbound')),
     CONSTRAINT chk_sandboxes_network_mode CHECK (network_mode IS NULL OR network_mode IN ('VPC', 'PUBLIC')),
-    CONSTRAINT chk_sandboxes_sandbox_ref CHECK (sandbox_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$'),
-    CONSTRAINT chk_sandboxes_runtime_ref CHECK (runtime_ref IS NULL OR runtime_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$'),
+    CONSTRAINT chk_sandboxes_sandbox_ref CHECK (sandbox_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]{1,255}$'),
+    CONSTRAINT chk_sandboxes_runtime_ref CHECK (runtime_ref IS NULL OR runtime_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]{1,255}$'),
     CONSTRAINT uq_sandboxes_org_ref UNIQUE (org_id, sandbox_ref)
 );
 CREATE INDEX IF NOT EXISTS idx_sandboxes_org ON public.sandboxes (org_id);
 CREATE INDEX IF NOT EXISTS idx_sandboxes_workspace ON public.sandboxes (workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sandboxes_status ON public.sandboxes (status) WHERE status <> 'unbound';
-COMMENT ON COLUMN public.sandboxes.network_mode IS 'Snapshot VPC|PUBLIC when known; production attach rejects PUBLIC (ENV=production)';
+COMMENT ON COLUMN public.sandboxes.network_mode IS 'Snapshot VPC|PUBLIC when known; production attach requires VPC (ENV=production; empty/PUBLIC/other → network_mode_not_allowed)';
 COMMENT ON COLUMN public.sandboxes.runtime_ref IS 'Optional warm-pool runtime/harness pointer; session isolation is separate';
 COMMENT ON TABLE public.sandboxes IS 'Platform registration of externally managed sandboxes; DELETE unbinds only';
 

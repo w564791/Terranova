@@ -10,8 +10,11 @@ const (
 	NetworkModeVPC    = "VPC"
 	NetworkModePublic = "PUBLIC"
 
-	// ErrNetworkModeNotAllowed is returned when PUBLIC is refused in production.
+	// ErrNetworkModeNotAllowed is production policy refusal on attach/create:
+	// PUBLIC, empty, or anything other than VPC while ENV=production.
 	ErrNetworkModeNotAllowed = "network_mode_not_allowed"
+	// ErrInvalidNetworkMode is a malformed create body value (not VPC|PUBLIC).
+	ErrInvalidNetworkMode = "invalid_network_mode"
 )
 
 // NormalizeNetworkMode uppercases a known mode; empty stays empty.
@@ -25,19 +28,57 @@ func NormalizeNetworkMode(mode string) string {
 	}
 }
 
-// ValidateNetworkModeForAttach refuses PUBLIC when the platform runs in
-// production (ENV=production via keys.IsProduction). Non-production may use
-// PUBLIC for 联调. Call before wake / preview / Deploy attach — re-check the
-// stored snapshot even if the row was registered while ENV was non-prod.
+// ParseNetworkModeForCreate validates an optional create-body network_mode.
+// Empty / omitted → ("", nil) meaning unknown yet.
+// VPC|PUBLIC (any case) → normalized value.
+// Anything else → 422 invalid_network_mode (not network_mode_not_allowed).
+func ParseNetworkModeForCreate(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	nm := NormalizeNetworkMode(trimmed)
+	if nm != NetworkModeVPC && nm != NetworkModePublic {
+		return "", &ValidationError{
+			Code:    ErrInvalidNetworkMode,
+			Message: "network_mode must be VPC or PUBLIC",
+		}
+	}
+	return nm, nil
+}
+
+// ValidateNetworkModeForAttach enforces attach/wake/Deploy/preview policy.
 //
-// Live AWS GetAgentRuntime networkMode lookup is intentionally not done here;
-// 联调 stub skips AWS until platform AgentCore vault credentials are wired.
+// Production (ENV=production / keys.IsProduction): stored snapshot must be
+// exactly VPC. Empty, PUBLIC, or unknown → 422 network_mode_not_allowed.
+// Non-production: empty, PUBLIC, or VPC are all allowed (联调).
+//
+// Always re-check the stored snapshot before wake — do not rely on
+// registration-time ENV. Live AWS Get networkMode is not done here.
 func ValidateNetworkModeForAttach(networkMode string) error {
 	m := NormalizeNetworkMode(networkMode)
-	if m == NetworkModePublic && keys.IsProduction() {
+	if !keys.IsProduction() {
+		// Non-prod: empty | VPC | PUBLIC OK; unknown non-empty still rejected
+		// so typos do not silently attach.
+		if m == "" || m == NetworkModeVPC || m == NetworkModePublic {
+			return nil
+		}
+		return &ValidationError{
+			Code:    ErrInvalidNetworkMode,
+			Message: "network_mode must be VPC or PUBLIC",
+		}
+	}
+	if m != NetworkModeVPC {
+		msg := "AgentCore networkMode must be VPC in production"
+		switch m {
+		case "":
+			msg = "AgentCore networkMode snapshot is required in production (must be VPC)"
+		case NetworkModePublic:
+			msg = "AgentCore networkMode=PUBLIC is not allowed in production; use VPC"
+		}
 		return &ValidationError{
 			Code:    ErrNetworkModeNotAllowed,
-			Message: "AgentCore networkMode=PUBLIC is not allowed in production; use VPC",
+			Message: msg,
 		}
 	}
 	return nil

@@ -273,14 +273,14 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
 - **`sandboxes`**：`id, org_id, workspace_id, sandbox_ref, runtime_ref?, label, driver, image_digest, assume_role_arn, assume_external_id, network_mode?, status, lease_expires_at, created_by, created_at, updated_at`；唯一 `(org_id, sandbox_ref)`。
   - `driver`：`agentcore_external`（preview，无 Shell）| `shell_debug`（UI Shell）。
   - `status`：`registered` →（握手后来拉成功）`ready` → `lease_expired` | `unbound`。
-  - `sandbox_ref`：`^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$`，禁止 `://` / 任意 URL；另做账号/区域白名单。
-  - `runtime_ref`：可选，指向外部常驻 runtime/harness（同格式约束，禁 URL）。
-  - `network_mode`：可选快照 `VPC` | `PUBLIC`（登记时已知则写入；列表/详情可标「非 VPC / 仅联调」）。**生产路径**（平台 `ENV=production`，与 `keys.IsProduction()` 一致）拒绝 `PUBLIC` → `422 network_mode_not_allowed`；非生产允许 `PUBLIC` 联调。无客户端/header 覆盖、无单独 allow-public 开关。挂到 preview / Deploy / wake 时**必须再校验**已存快照：即使非生产时登记了 `PUBLIC`，生产环境下 API 也要拦（不能只靠 UI banner）。
+  - `sandbox_ref` / `runtime_ref`：`^[A-Za-z0-9][A-Za-z0-9._:/-]{1,255}$`（最长 256），允许完整 AWS ARN（含 `/`）；禁止 `://` / URL（防 SSRF）；另做账号/区域白名单。
+  - `runtime_ref`：可选，指向外部常驻 runtime/harness（同格式约束）。
+  - `network_mode`：可选快照 `VPC` | `PUBLIC`（登记时已知则写入；列表/详情可标「非 VPC / 仅联调」）。非法取值（非空且不是 VPC/PUBLIC）→ `422 invalid_network_mode`。**生产路径**（平台 `ENV=production`，与 `keys.IsProduction()` 一致）挂载/登记 `PUBLIC`、以及挂载时快照为空/未知/非 VPC → `422 network_mode_not_allowed`；非生产允许 empty / PUBLIC / VPC 联调。无客户端/header 覆盖、无单独 allow-public 开关。挂到 preview / Deploy / wake 时**必须再校验**已存快照：即使非生产时登记了 `PUBLIC` 或留下空快照，生产环境下 API 也要拦（不能只靠 UI banner）。
 - **`shell_sessions`**：`id, sandbox_id, org_id, status, expires_at, created_by, …`；与凭据同生共死。
 
 #### API
 - `POST /api/v1/organizations/:org_id/sandboxes`（规格简称 orgs）`{ workspace_id, sandbox_ref, driver, label?, image_digest?, runtime_ref?, assume_role_arn?, assume_external_id?, network_mode? }` → 201，初始可 `ready`（有 vault）或 `registered`。
-  - 权限：目标 workspace `WORKSPACE_RESOURCES` WRITE；跨 org → 404；缺平台 AgentCore vault → `422 vault_credential_required`；非法 ref → `422 invalid_sandbox_ref`；生产下 `network_mode=PUBLIC` → `422 network_mode_not_allowed`。
+  - 权限：目标 workspace `WORKSPACE_RESOURCES` WRITE；跨 org → 404；缺平台 AgentCore vault → `422 vault_credential_required`；非法 ref → `422 invalid_sandbox_ref`；非法 `network_mode` 字面量 → `422 invalid_network_mode`；生产下 `PUBLIC`（及挂载时非 VPC）→ `422 network_mode_not_allowed`。
 - `GET` 列表/详情；`DELETE` → 解绑 + **吊销该沙箱未过期 run/shell 凭据**，不毁外部沙箱（不调 AWS destroy）。
 - 控制面：**沙箱主动来拉**（同现有 agent）：短 ticket → 换 token / 拉 bundle；平台不存回调 URL、不用 vault 凭据打外部地址。
 - **唤醒 / 数据面**：只走 **InvokeHarness**（或 SDK 等价）；**禁止** `invoke-agent-runtime` / `InvokeAgentRuntime`。
@@ -296,7 +296,7 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
 5. 每次执行 / 冷握手重查 org + workspace 权限；记录带 `org_id`。
 6. 自定义 **Dockerfile** 单独镜像流水线（底包含 terraform 等）；凭据不进镜像；登记可选 `image_digest`，握手校验；**不等于**生产启用 DockerDriver。
 7. `shell_plan` 与外部 preview plan 均不可作 Deploy approval 输入。
-8. **`networkMode=PUBLIC`**：仅非生产联调；生产（`ENV=production`）登记与挂载一律 `422 network_mode_not_allowed`。
+8. **`networkMode`**：生产（`ENV=production`）挂载只接受已存 `VPC`；`PUBLIC` / 空 / 未知 → `422 network_mode_not_allowed`。非法 create 字面量 → `422 invalid_network_mode`。非生产可 empty / PUBLIC / VPC。
 9. Session wake 只用 **InvokeHarness**，不用 `invoke-agent-runtime`。
 
 #### 云身份（客户 AWS 等）

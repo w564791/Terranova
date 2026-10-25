@@ -8,9 +8,11 @@ import (
 func TestValidateSandboxRef_OK(t *testing.T) {
 	for _, r := range []string{
 		FixtureHarnessID,
+		FixtureHarnessARN,
+		FixtureRuntimeARN,
 		"a1",
 		"Arn.Like:with-dashes_ok",
-		strings.Repeat("x", 128),
+		strings.Repeat("x", 256),
 	} {
 		if err := ValidateSandboxRef(r); err != nil {
 			t.Fatalf("%q: %v", r, err)
@@ -24,12 +26,11 @@ func TestValidateSandboxRef_Reject(t *testing.T) {
 		"https://example.com/x",
 		"http://x",
 		"s3://bucket/key",
-		"arn:aws:bedrock-agentcore:ap-northeast-1:072107099780:harness/harness_l0zfw-Ml59dium3t", // slash
 		"-bad",
 		".bad",
 		"a",
 		"has space",
-		strings.Repeat("z", 200),
+		strings.Repeat("z", 257),
 	}
 	for _, r := range cases {
 		err := ValidateSandboxRef(r)
@@ -47,7 +48,7 @@ func TestValidateOptionalRuntimeRef(t *testing.T) {
 	if err := ValidateOptionalRuntimeRef(""); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateOptionalRuntimeRef(FixtureRuntimeID); err != nil {
+	if err := ValidateOptionalRuntimeRef(FixtureRuntimeARN); err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateOptionalRuntimeRef("https://x"); err == nil {

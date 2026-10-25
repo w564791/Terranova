@@ -113,18 +113,20 @@ func (h *SandboxHandler) CreateSandbox(c *gin.Context) {
 		return
 	}
 	var networkMode *string
-	if req.NetworkMode != nil && strings.TrimSpace(*req.NetworkMode) != "" {
-		nm := sandboxreg.NormalizeNetworkMode(*req.NetworkMode)
-		if nm != sandboxreg.NetworkModeVPC && nm != sandboxreg.NetworkModePublic {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{
-				"code":    sandboxreg.ErrNetworkModeNotAllowed,
-				"message": "network_mode must be VPC or PUBLIC",
-			})
-			return
-		}
-		// Production refuses to register PUBLIC (same code as attach).
+	rawMode := ""
+	if req.NetworkMode != nil {
+		rawMode = *req.NetworkMode
+	}
+	nm, err := sandboxreg.ParseNetworkModeForCreate(rawMode)
+	if err != nil {
+		writeSandboxValidation(c, err) // invalid_network_mode for bad body values
+		return
+	}
+	if nm != "" {
+		// Production refuses PUBLIC (and would refuse empty on attach; empty
+		// create is still allowed so mode can be filled after 联调 probe).
 		if err := sandboxreg.ValidateNetworkModeForAttach(nm); err != nil {
-			writeSandboxValidation(c, err)
+			writeSandboxValidation(c, err) // network_mode_not_allowed
 			return
 		}
 		networkMode = &nm
@@ -315,11 +317,13 @@ func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 		})
 		return
 	}
+	mode := ""
 	if sb.NetworkMode != nil {
-		if err := sandboxreg.ValidateNetworkModeForAttach(*sb.NetworkMode); err != nil {
-			writeSandboxValidation(c, err)
-			return
-		}
+		mode = *sb.NetworkMode
+	}
+	if err := sandboxreg.ValidateNetworkModeForAttach(mode); err != nil {
+		writeSandboxValidation(c, err)
+		return
 	}
 	// TODO(step-6 data plane): wake via sandboxreg.HarnessInvoker.InvokeHarness only —
 	// never invoke-agent-runtime.
@@ -392,10 +396,11 @@ func AssertAttachable(sb *models.Sandbox) error {
 	if sb.Status == models.SandboxStatusUnbound {
 		return &sandboxreg.ValidationError{Code: "sandbox_unbound", Message: "sandbox is unbound"}
 	}
+	mode := ""
 	if sb.NetworkMode != nil {
-		return sandboxreg.ValidateNetworkModeForAttach(*sb.NetworkMode)
+		mode = *sb.NetworkMode
 	}
-	return nil
+	return sandboxreg.ValidateNetworkModeForAttach(mode)
 }
 
 func (h *SandboxHandler) revokeSandboxCredentials(sandboxID string, orgID uint, reason string) {

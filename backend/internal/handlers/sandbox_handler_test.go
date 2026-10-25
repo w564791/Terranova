@@ -119,7 +119,7 @@ func TestCreateSandbox_OK(t *testing.T) {
 	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
 	h := NewSandboxHandler(db, perm)
 	r := sandboxRouter(h, 1)
-	body := `{"workspace_id":"ws-a","sandbox_ref":"` + sandboxreg.FixtureHarnessID + `","driver":"agentcore_external","runtime_ref":"` + sandboxreg.FixtureRuntimeID + `","network_mode":"PUBLIC","label":"联调"}`
+	body := `{"workspace_id":"ws-a","sandbox_ref":"` + sandboxreg.FixtureHarnessARN + `","driver":"agentcore_external","runtime_ref":"` + sandboxreg.FixtureRuntimeARN + `","network_mode":"PUBLIC","label":"联调"}`
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -197,6 +197,25 @@ func TestCreateSandbox_ProductionRejectsPublic(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), sandboxreg.ErrNetworkModeNotAllowed) {
 		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateSandbox_InvalidNetworkMode422(t *testing.T) {
+	t.Setenv("ENV", "development")
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	h := NewSandboxHandler(db, perm)
+	r := sandboxRouter(h, 1)
+	body := `{"workspace_id":"ws-a","sandbox_ref":"ref-badmode","driver":"agentcore_external","network_mode":"PRIVATE"}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), sandboxreg.ErrInvalidNetworkMode) {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), sandboxreg.ErrNetworkModeNotAllowed) {
+		t.Fatalf("must not reuse network_mode_not_allowed for bad body: %s", w.Body.String())
 	}
 }
 
@@ -290,20 +309,31 @@ func TestShellSessionCreateDeleteStub(t *testing.T) {
 	}
 }
 
-func TestAssertAttachable_ProductionRejectsStoredPublic(t *testing.T) {
+func TestAssertAttachable_ProductionRequiresVPCSnapshot(t *testing.T) {
 	pub := sandboxreg.NetworkModePublic
-	sb := &models.Sandbox{Status: models.SandboxStatusReady, NetworkMode: &pub}
+	vpc := sandboxreg.NetworkModeVPC
 	t.Setenv("ENV", "development")
-	if err := AssertAttachable(sb); err != nil {
+	if err := AssertAttachable(&models.Sandbox{Status: models.SandboxStatusReady, NetworkMode: &pub}); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ENV", "production")
-	err := AssertAttachable(sb)
-	if err == nil {
-		t.Fatal("expected reject")
+	if err := AssertAttachable(&models.Sandbox{Status: models.SandboxStatusReady}); err != nil {
+		t.Fatal(err) // empty OK in non-prod
 	}
-	ve, ok := err.(*sandboxreg.ValidationError)
-	if !ok || ve.Code != sandboxreg.ErrNetworkModeNotAllowed {
-		t.Fatalf("got %#v", err)
+	t.Setenv("ENV", "production")
+	for _, sb := range []*models.Sandbox{
+		{Status: models.SandboxStatusReady, NetworkMode: &pub},
+		{Status: models.SandboxStatusReady, NetworkMode: nil}, // empty/unknown
+	} {
+		err := AssertAttachable(sb)
+		if err == nil {
+			t.Fatalf("expected reject for %#v", sb.NetworkMode)
+		}
+		ve, ok := err.(*sandboxreg.ValidationError)
+		if !ok || ve.Code != sandboxreg.ErrNetworkModeNotAllowed {
+			t.Fatalf("got %#v", err)
+		}
+	}
+	if err := AssertAttachable(&models.Sandbox{Status: models.SandboxStatusReady, NetworkMode: &vpc}); err != nil {
+		t.Fatal(err)
 	}
 }
