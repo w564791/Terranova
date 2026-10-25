@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -113,13 +114,51 @@ func (a *AWSHarnessInvoker) InvokeHarness(ctx context.Context, req InvokeRequest
 	}
 }
 
+// InvokeHarnessTimeout bounds InvokeHarness + event-stream drain on the
+// shell-create handler path. Matches the live test budget in
+// aws_harness_live_test.go (60s). Do not rely solely on an unbounded request
+// context while draining the stream.
+const InvokeHarnessTimeout = 60 * time.Second
+
+// FailingHarnessInvoker always returns Err from InvokeHarness.
+// Used when IAC_AGENTCORE_INVOKE_HARNESS=1 but AWS config / client construction
+// failed, so operators get 503 harness_invoke_failed instead of a silent stub
+// that never called AWS.
+type FailingHarnessInvoker struct {
+	Err error
+}
+
+// InvokeHarness implements HarnessInvoker (always errors).
+func (f *FailingHarnessInvoker) InvokeHarness(ctx context.Context, req InvokeRequest) error {
+	if f == nil || f.Err == nil {
+		return fmt.Errorf("InvokeHarness: AWS client not configured")
+	}
+	return f.Err
+}
+
+// harnessAWSFactory builds the live AWS invoker. Overridden in unit tests to
+// simulate LoadDefaultConfig / client construction failure without touching
+// real credentials.
+var harnessAWSFactory = func(ctx context.Context) (HarnessInvoker, error) {
+	return NewAWSHarnessInvoker(ctx)
+}
+
 // HarnessInvokerFromEnv returns AWSHarnessInvoker when EnvInvokeHarness is set,
-// otherwise StubHarnessInvoker. Construction errors fall back to stub with a
-// non-secret warning left to the caller.
+// otherwise StubHarnessInvoker.
+//
+// When the live flag is set and AWS config/client construction fails, this
+// NEVER falls back to StubHarnessInvoker. It returns a FailingHarnessInvoker
+// (every InvokeHarness errors) plus the construction error so callers may fail
+// startup loudly or keep serving 503 on shell-create paths.
 func HarnessInvokerFromEnv(ctx context.Context) (HarnessInvoker, error) {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(EnvInvokeHarness)))
 	if v != "1" && v != "true" && v != "yes" {
 		return NewStubHarnessInvoker(), nil
 	}
-	return NewAWSHarnessInvoker(ctx)
+	inv, err := harnessAWSFactory(ctx)
+	if err != nil {
+		fail := &FailingHarnessInvoker{Err: fmt.Errorf("AWS config for InvokeHarness: %w", err)}
+		return fail, err
+	}
+	return inv, nil
 }

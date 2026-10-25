@@ -43,8 +43,12 @@ func NewSandboxHandler(db *gorm.DB, perm *middleware.IAMPermissionMiddleware) *S
 		harness:         sandboxreg.NewStubHarnessInvoker(),
 		vaultConfigured: true, // stub: treat vault as present until wired; tests can clear
 	}
-	if inv, err := sandboxreg.HarnessInvokerFromEnv(context.Background()); err == nil && inv != nil {
+	// When IAC_AGENTCORE_INVOKE_HARNESS=1, always install the returned invoker
+	// (AWS or FailingHarnessInvoker). Never keep the default stub on config
+	// failure — that would silently skip AWS while operators think it was called.
+	if inv, err := sandboxreg.HarnessInvokerFromEnv(context.Background()); inv != nil {
 		h.harness = inv
+		_ = err // construction error is carried by FailingHarnessInvoker
 	}
 	return h
 }
@@ -358,8 +362,12 @@ func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 	}
 	// Wake via InvokeHarness only (never invoke-agent-runtime). Stub by default;
 	// live AWS when IAC_AGENTCORE_INVOKE_HARNESS=1. Fail before minting tokens.
+	// Bound InvokeHarness + stream drain with InvokeHarnessTimeout (~60s); do not
+	// rely solely on an unbounded request context while draining the event stream.
 	if h.harness != nil {
-		if err := h.harness.InvokeHarness(c.Request.Context(), sandboxreg.InvokeRequest{
+		wakeCtx, wakeCancel := context.WithTimeout(c.Request.Context(), sandboxreg.InvokeHarnessTimeout)
+		defer wakeCancel()
+		if err := h.harness.InvokeHarness(wakeCtx, sandboxreg.InvokeRequest{
 			HarnessARN: sb.SandboxRef,
 			RuntimeRef: runtimeRef,
 			SessionID:  sess.ID,

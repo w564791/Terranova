@@ -434,3 +434,71 @@ func TestAssertAttachable_ProductionRequiresVPCSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// captureCtxHarness records the context passed to InvokeHarness (timeout check).
+type captureCtxHarness struct {
+	ctx context.Context
+}
+
+func (c *captureCtxHarness) InvokeHarness(ctx context.Context, req sandboxreg.InvokeRequest) error {
+	c.ctx = ctx
+	return nil
+}
+
+func TestShellSession_InvokeHarnessUsesTimeoutContext(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	cap := &captureCtxHarness{}
+	h := NewSandboxHandler(db, perm).WithHarness(cap)
+	r := sandboxRouter(h, 1)
+	body := `{"workspace_id":"ws-a","sandbox_ref":"ref-timeout","driver":"shell_debug","network_mode":"VPC"}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	var sb models.Sandbox
+	json.Unmarshal(w.Body.Bytes(), &sb)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+	if cap.ctx == nil {
+		t.Fatal("InvokeHarness was not called")
+	}
+	deadline, ok := cap.ctx.Deadline()
+	if !ok {
+		t.Fatal("InvokeHarness context must have a deadline (InvokeHarnessTimeout)")
+	}
+	remaining := time.Until(deadline)
+	// Bound should be ~InvokeHarnessTimeout (60s); allow slack for scheduling.
+	if remaining > sandboxreg.InvokeHarnessTimeout || remaining < sandboxreg.InvokeHarnessTimeout-5*time.Second {
+		t.Fatalf("deadline remaining=%v, want roughly %v", remaining, sandboxreg.InvokeHarnessTimeout)
+	}
+}
+
+func TestShellSession_FailingHarnessInvoker_Returns503(t *testing.T) {
+	// FailingHarnessInvoker is what HarnessInvokerFromEnv installs when flag=1
+	// and AWS config fails; shell-create must surface 503 harness_invoke_failed.
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	fail := &sandboxreg.FailingHarnessInvoker{Err: errors.New("AWS config for InvokeHarness: simulated")}
+	h := NewSandboxHandler(db, perm).WithHarness(fail)
+	r := sandboxRouter(h, 1)
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	body := `{"workspace_id":"ws-a","sandbox_ref":"ref-failcfg","driver":"shell_debug","network_mode":"VPC"}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	var sb models.Sandbox
+	json.Unmarshal(w.Body.Bytes(), &sb)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "harness_invoke_failed") {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+}

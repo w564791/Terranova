@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentcore"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockagentcore/types"
@@ -130,5 +131,44 @@ func TestSourceHasNoInvokeAgentRuntimeCall(t *testing.T) {
 	}
 	if !strings.Contains(src, "InvokeHarness") {
 		t.Fatal("expected InvokeHarness")
+	}
+}
+
+func TestHarnessInvokerFromEnv_FlagSetConfigFail_NotStub(t *testing.T) {
+	t.Setenv(EnvInvokeHarness, "1")
+	orig := harnessAWSFactory
+	t.Cleanup(func() { harnessAWSFactory = orig })
+	harnessAWSFactory = func(ctx context.Context) (HarnessInvoker, error) {
+		return nil, errors.New("simulated LoadDefaultConfig failure")
+	}
+	inv, err := HarnessInvokerFromEnv(context.Background())
+	if err == nil {
+		t.Fatal("expected construction error")
+	}
+	if inv == nil {
+		t.Fatal("expected failing invoker, got nil")
+	}
+	if _, ok := inv.(*StubHarnessInvoker); ok {
+		t.Fatal("must not return StubHarnessInvoker when flag=1 and config fails")
+	}
+	fail, ok := inv.(*FailingHarnessInvoker)
+	if !ok {
+		t.Fatalf("got %T, want *FailingHarnessInvoker", inv)
+	}
+	callErr := fail.InvokeHarness(context.Background(), InvokeRequest{
+		HarnessARN: FixtureHarnessARN,
+		SessionID:  "550e8400-e29b-41d4-a716-446655440000",
+	})
+	if callErr == nil {
+		t.Fatal("FailingHarnessInvoker must error on InvokeHarness")
+	}
+	if !strings.Contains(callErr.Error(), "simulated LoadDefaultConfig failure") {
+		t.Fatalf("got %v", callErr)
+	}
+}
+
+func TestInvokeHarnessTimeout_Documented(t *testing.T) {
+	if InvokeHarnessTimeout != 60*time.Second {
+		t.Fatalf("InvokeHarnessTimeout=%v, want 60s (match live tests)", InvokeHarnessTimeout)
 	}
 }
