@@ -58,6 +58,9 @@ import AuditLog from './pages/admin/AuditLog';
 import AgentPoolManagement from './pages/admin/AgentPoolManagement';
 import AgentPoolDetail from './pages/admin/AgentPoolDetail';
 import AgentPoolForm from './pages/admin/AgentPoolForm';
+import SandboxManagement from './pages/admin/SandboxManagement';
+import SandboxRegisterForm from './pages/admin/SandboxRegisterForm';
+import SandboxDetail from './pages/admin/SandboxDetail';
 import RunTaskManagement from './pages/admin/RunTaskManagement';
 import RunTaskForm from './pages/admin/RunTaskForm';
 import NotificationManagement from './pages/admin/NotificationManagement';
@@ -150,6 +153,9 @@ const App: FC = () => {
                   <Route path="global/settings/agent-pools/create" element={<AgentPoolForm />} />
                   <Route path="global/settings/agent-pools/:poolId" element={<AgentPoolDetail />} />
                   <Route path="global/settings/agent-pools/:poolId/edit" element={<AgentPoolForm />} />
+                  <Route path="global/settings/sandboxes" element={<SandboxManagement />} />
+                  <Route path="global/settings/sandboxes/register" element={<SandboxRegisterForm />} />
+                  <Route path="global/settings/sandboxes/:sandboxId" element={<SandboxDetail />} />
                   <Route path="global/settings/run-tasks" element={<RunTaskManagement />} />
                   <Route path="global/settings/run-tasks/create" element={<RunTaskForm />} />
                   <Route path="global/settings/run-tasks/:runTaskId/edit" element={<RunTaskForm />} />

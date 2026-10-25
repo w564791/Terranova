@@ -1,0 +1,304 @@
+.container {
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 20px;
+}
+
+.backButton {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+}
+
+.backButton:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.titleBlock h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  word-break: break-all;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.driverAgentcore {
+  background: var(--brand-soft, #e8f4f8);
+  color: var(--brand-ink, #0d4a5c);
+  border-color: var(--brand-line, #b3d5e0);
+}
+
+.driverShell {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+
+.statusReady {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+
+.statusRegistered {
+  background: var(--brand-soft, #e8f4f8);
+  color: var(--brand);
+  border-color: var(--brand-line, #b3d5e0);
+}
+
+.statusLeaseExpired {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: var(--amber-line);
+}
+
+.statusDefault {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+
+.networkVpc {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+
+.networkPublic {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: var(--amber-line);
+}
+
+.networkUnknown {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  border-color: var(--line-2);
+}
+
+.unbindButton {
+  padding: 9px 16px;
+  background: white;
+  border: 1px solid var(--red-line, #f0b4b4);
+  color: var(--red);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.unbindButton:hover:not(:disabled) {
+  background: var(--red-soft, #fff0f0);
+}
+
+.unbindButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.warningBanner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  background: var(--amber-soft, #fff8e6);
+  border: 1px solid var(--amber-line, #f0d78c);
+  color: var(--amber, #8a6d1d);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.warningIcon {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--surface-2);
+  padding: 20px 22px;
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dl {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.dl dt {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  padding-top: 2px;
+}
+
+.dl dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.runtimeNote {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px dashed var(--line-2);
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.shellActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.primaryButton,
+.secondaryButton {
+  padding: 9px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: var(--brand);
+  border: none;
+  color: #fff;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--brand-400);
+}
+
+.secondaryButton {
+  background: white;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--brand-400);
+  color: var(--ink);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sessionBox {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--surface-2);
+  font-size: 13px;
+}
+
+.sessionMeta {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.sessionMeta dt {
+  color: var(--ink-3);
+  font-size: 12px;
+  margin: 0;
+}
+
+.sessionMeta dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.shellHint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.agentcoreNote {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .dl,
+  .sessionMeta {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

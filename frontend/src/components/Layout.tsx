@@ -156,6 +156,7 @@ const Layout: React.FC = () => {
         { path: '/global/settings/provider-templates', label: 'Provider Templates', icon: '' },
         { path: '/global/settings/ai-configs', label: 'AI Config', icon: '' },
         { path: '/global/settings/agent-pools', label: 'Agent Pools', icon: '' },
+        { path: '/global/settings/sandboxes', label: '沙箱登记', icon: '' },
         { path: '/global/settings/run-tasks', label: 'Run Tasks', icon: '' },
         { path: '/global/settings/notifications', label: 'Notifications', icon: '' },
         { path: '/global/settings/platform-config', label: 'Platform Config', icon: '' },

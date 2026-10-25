@@ -55,6 +55,14 @@ export const logError = (context: string, error: any) => {
 export const API_ERROR_CODE_LABELS: Record<string, string> = {
   reserved_env_var: '该环境变量名由平台保留，不可设置',
   git_source_immutable: 'Git 源在创建后不可修改',
+  network_mode_not_allowed: '生产环境不允许公网沙箱；请改用 VPC 或换非生产环境登记',
+  invalid_network_mode: 'network_mode 须为 VPC 或 PUBLIC',
+  vault_credential_required: '平台未配置 AgentCore 凭证',
+  invalid_sandbox_ref: 'sandbox_ref 引用格式不合法（禁止 URL / ://）',
+  invalid_runtime_ref: 'runtime_ref 引用格式不合法（禁止 URL / ://）',
+  invalid_driver: 'driver 须为 agentcore_external 或 shell_debug',
+  sandbox_ref_exists: '该 sandbox_ref 已在本组织登记',
+  shell_not_supported: '仅 shell_debug 驱动支持 Shell 会话',
 }
 
 export const apiErrorCodeLabel = (code?: string | null): string | undefined => {
