@@ -63,7 +63,8 @@ func PurposeOfTask(task *models.WorkspaceTask) RunPurpose {
 		return RunPurposeApproval
 	}
 	switch task.TaskType {
-	case models.TaskTypePlan, models.TaskTypeDriftCheck:
+	case models.TaskTypePlan, models.TaskTypeDriftCheck, models.TaskTypeShellPlan:
+		// shell_plan is history-only preview (§10.2): -lock=false, never approval.
 		return RunPurposePreview
 	default:
 		return RunPurposeApproval

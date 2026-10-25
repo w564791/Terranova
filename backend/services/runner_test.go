@@ -26,6 +26,7 @@ func TestPurposeOfTaskAndStateLock(t *testing.T) {
 	cases := map[models.TaskType]RunPurpose{
 		models.TaskTypePlan:         RunPurposePreview,
 		models.TaskTypeDriftCheck:   RunPurposePreview,
+		models.TaskTypeShellPlan:    RunPurposePreview, // §10.2 history-only, -lock=false
 		models.TaskTypePlanAndApply: RunPurposeApproval,
 		models.TaskTypeApply:        RunPurposeApproval,
 		"unknown":                   RunPurposeApproval,
@@ -78,6 +79,9 @@ func TestSandboxRunnerStub(t *testing.T) {
 	}
 	if err := StartRun(s, RunRequest{Task: &models.WorkspaceTask{TaskType: models.TaskTypePlan}, Workspace: ws}); !errors.Is(err, ErrSandboxRunnerNotImplemented) {
 		t.Fatalf("sandbox stub: %v", err)
+	}
+	if err := StartRun(s, RunRequest{Task: &models.WorkspaceTask{TaskType: models.TaskTypeShellPlan}, Workspace: ws}); !errors.Is(err, ErrSandboxRunnerNotImplemented) {
+		t.Fatalf("sandbox stub shell_plan: %v", err)
 	}
 }
 

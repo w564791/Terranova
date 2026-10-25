@@ -442,6 +442,140 @@ func (h *SandboxHandler) DeleteShellSession(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// CreateShellPlan records a history-only shell_plan task for an active Shell
+// session (§10.2). Never enters approval hashes, never apply. Missing provider
+// mirror → 503 provider_unreachable (sandbox status unchanged). Cloud identity
+// is user-prepared externally; platform does not inject STS.
+func (h *SandboxHandler) CreateShellPlan(c *gin.Context) {
+	orgID, ok := middleware.AuthOrgID(c)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_org_id", "message": "org_id required"})
+		return
+	}
+	sessID := c.Param("session_id")
+	var sess models.ShellSession
+	err := h.db.Where("id = ? AND org_id = ?", sessID, orgID).First(&sess).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "Shell session not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "get failed"})
+		return
+	}
+	var sb models.Sandbox
+	if err := h.db.Where("id = ? AND org_id = ?", sess.SandboxID, orgID).First(&sb).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "Sandbox not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "get failed"})
+		return
+	}
+	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, sb.WorkspaceID, "WORKSPACE_RESOURCES", "WRITE") {
+		return
+	}
+	if sb.Status == models.SandboxStatusUnbound {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "sandbox_unbound", "message": "sandbox is unbound"})
+		return
+	}
+	if !services.ProviderMirrorConfigured() {
+		// Spec: no mirror → 503; registration/ready status must not fail for lack of mirror.
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    services.ErrProviderMirrorUnavailable,
+			"message": "provider network_mirror is not configured; shell_plan init requires an internal mirror",
+		})
+		return
+	}
+	userID := c.GetString("user_id")
+	res, err := services.CreateShellPlanHistory(c.Request.Context(), h.db, &sess, &sb, userID)
+	if errors.Is(err, services.ErrShellPlanSessionInactive) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "shell_session_inactive", "message": "shell session is not active or has expired"})
+		return
+	}
+	if errors.Is(err, services.ErrShellPlanNotShellDebug) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "shell_not_supported", "message": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "create shell_plan failed"})
+		return
+	}
+	task := res.Task
+	c.JSON(http.StatusCreated, gin.H{
+		"id":               task.ID,
+		"workspace_id":     task.WorkspaceID,
+		"task_type":        task.TaskType,
+		"status":           task.Status,
+		"description":      task.Description,
+		"shell_session_id": sess.ID,
+		"sandbox_id":       sb.ID,
+		"lock":             false,
+		"approvable":       false,
+		"history_only":     true,
+		"cloud_identity":   "user_prepared",
+		"created_at":       task.CreatedAt,
+		"created_by":       task.CreatedBy,
+		"context":          task.Context,
+	})
+}
+
+// ListShellPlans lists history-only shell_plan tasks for a Shell session (§10.2).
+func (h *SandboxHandler) ListShellPlans(c *gin.Context) {
+	orgID, ok := middleware.AuthOrgID(c)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_org_id", "message": "org_id required"})
+		return
+	}
+	sessID := c.Param("session_id")
+	var sess models.ShellSession
+	err := h.db.Where("id = ? AND org_id = ?", sessID, orgID).First(&sess).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "Shell session not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "get failed"})
+		return
+	}
+	var sb models.Sandbox
+	if err := h.db.Where("id = ? AND org_id = ?", sess.SandboxID, orgID).First(&sb).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "Sandbox not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "get failed"})
+		return
+	}
+	if h.perm != nil && !h.perm.RequireWorkspaceResourcePermission(c, sb.WorkspaceID, "WORKSPACE_RESOURCES", "READ") {
+		return
+	}
+	items, err := services.ListShellPlanHistory(c.Request.Context(), h.db, sb.WorkspaceID, sess.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "list failed"})
+		return
+	}
+	out := make([]gin.H, 0, len(items))
+	for _, t := range items {
+		out = append(out, gin.H{
+			"id":               t.ID,
+			"workspace_id":     t.WorkspaceID,
+			"task_type":        t.TaskType,
+			"status":           t.Status,
+			"description":      t.Description,
+			"error_code":       t.ErrorCode,
+			"error_message":    t.ErrorMessage,
+			"shell_session_id": sess.ID,
+			"approvable":       false,
+			"history_only":     true,
+			"created_at":       t.CreatedAt,
+			"completed_at":     t.CompletedAt,
+			"context":          t.Context,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"items": out, "total": len(out)})
+}
+
 // AssertAttachable re-checks stored network_mode before production preview/Deploy.
 // Handlers for wake/preview should call this; registration of PUBLIC in non-prod
 // must not bypass a later production attach.

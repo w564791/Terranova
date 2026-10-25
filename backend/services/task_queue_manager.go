@@ -210,6 +210,8 @@ func (m *TaskQueueManager) GetNextExecutableTask(workspaceID string) (*models.Wo
 		}
 	}
 
+	// shell_plan (§10.2 history-only) is intentionally never selected here:
+	// it records into task history but must not enter the apply/approval queue.
 	// 2. 获取plan任务（完全独立,可以并发执行,不受lock和plan_and_apply任务阻塞）
 	var planTask models.WorkspaceTask
 	err := m.db.Where("workspace_id = ? AND task_type = ? AND status = ?",

@@ -153,8 +153,12 @@ func workspaceUsesManifestDeployment(ws *models.Workspace) bool {
 // TaskRequiresManifestApproval a task that applies a deployed manifest
 // version: its apply needs a recorded approval (plan_and_apply through an
 // approval run; standalone apply tasks are refused).
+// shell_plan / plan / drift_check never qualify (§10.2: not Deploy approval input).
 func TaskRequiresManifestApproval(task *models.WorkspaceTask, ws *models.Workspace) bool {
-	return task != nil && workspaceUsesManifestDeployment(ws) && !taskUsesExternalFiles(task) &&
+	if task == nil || TaskExcludedFromApproval(task) {
+		return false
+	}
+	return workspaceUsesManifestDeployment(ws) && !taskUsesExternalFiles(task) &&
 		(task.TaskType == models.TaskTypePlanAndApply || task.TaskType == models.TaskTypeApply)
 }
 
@@ -214,7 +218,8 @@ func newManifestRunID() string {
 // version with a bundle_hash (NULL: the executor fails the task with
 // bundle_republish_required at hand-off; there is nothing to bind to).
 func EnsureApprovalRun(ctx context.Context, db *gorm.DB, task *models.WorkspaceTask, ws *models.Workspace) (*models.ManifestRun, error) {
-	if task == nil || task.TaskType != models.TaskTypePlanAndApply || !TaskRequiresManifestApproval(task, ws) {
+	// shell_plan must never mint approval runs / hashes (§10.2).
+	if task == nil || task.TaskType != models.TaskTypePlanAndApply || TaskExcludedFromApproval(task) || !TaskRequiresManifestApproval(task, ws) {
 		return nil, nil
 	}
 	if run, err := ApprovalRunForTask(ctx, db, task.ID); err != nil || run != nil {
@@ -327,6 +332,10 @@ func approvalRefused(status int, code, reason, msg string) *ApprovalError {
 // for tasks that are not manifest deployments and have no run (the ordinary
 // confirm-apply flow). Refusals are *ApprovalError.
 func ApproveManifestRun(ctx context.Context, tx *gorm.DB, task *models.WorkspaceTask, ws *models.Workspace, approver string) (*models.ManifestRun, error) {
+	if IsShellPlanTask(task) {
+		return nil, approvalRefused(http.StatusConflict, ApprovalCodeNotApprovable, "shell_plan",
+			"shell_plan history tasks cannot be approved or applied")
+	}
 	run, err := ApprovalRunForTask(ctx, tx, task.ID)
 	if err != nil {
 		return nil, err

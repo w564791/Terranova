@@ -89,6 +89,24 @@ func setupSandboxTestDB(t *testing.T) *gorm.DB {
 			token_hash TEXT NOT NULL UNIQUE, expires_at DATETIME NOT NULL,
 			revoked_at DATETIME, created_at DATETIME
 		)`,
+		`CREATE TABLE workspace_tasks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			workspace_id TEXT NOT NULL,
+			created_by TEXT,
+			created_at DATETIME,
+			updated_at DATETIME,
+			description TEXT,
+			task_type TEXT NOT NULL,
+			status TEXT DEFAULT 'pending',
+			execution_mode TEXT NOT NULL DEFAULT 'local',
+			stage TEXT DEFAULT 'pending',
+			context TEXT,
+			error_code TEXT,
+			error_message TEXT,
+			error_reason TEXT,
+			completed_at DATETIME,
+			is_background INTEGER DEFAULT 0
+		)`,
 	} {
 		if err := db.Exec(s).Error; err != nil {
 			t.Fatalf("%v\n%s", err, s)
@@ -118,6 +136,8 @@ func sandboxRouter(h *SandboxHandler, orgID uint) *gin.Engine {
 	g.DELETE("/:id", h.DeleteSandbox)
 	g.POST("/:id/shell-sessions", h.CreateShellSession)
 	g.DELETE("/shell-sessions/:session_id", h.DeleteShellSession)
+	g.POST("/shell-sessions/:session_id/plans", h.CreateShellPlan)
+	g.GET("/shell-sessions/:session_id/plans", h.ListShellPlans)
 	return r
 }
 
@@ -499,6 +519,156 @@ func TestShellSession_FailingHarnessInvoker_Returns503(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
 	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "harness_invoke_failed") {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+}
+
+func createShellDebugSession(t *testing.T, r *gin.Engine, ref string) (sandboxID, sessionID string) {
+	t.Helper()
+	body := `{"workspace_id":"ws-a","sandbox_ref":"` + ref + `","driver":"shell_debug","network_mode":"VPC"}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("sandbox create %d %s", w.Code, w.Body.String())
+	}
+	var sb models.Sandbox
+	if err := json.Unmarshal(w.Body.Bytes(), &sb); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/"+sb.ID+"/shell-sessions", nil))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("shell create %d %s", w.Code, w.Body.String())
+	}
+	var sess struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &sess); err != nil || sess.ID == "" {
+		t.Fatalf("session: %s", w.Body.String())
+	}
+	return sb.ID, sess.ID
+}
+
+func TestShellPlan_CreateList_HistoryOnly(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	restore := services.SetProviderMirrorConfiguredForTest(func() bool { return true })
+	defer restore()
+
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	h := NewSandboxHandler(db, perm)
+	r := sandboxRouter(h, 1)
+	_, sessID := createShellDebugSession(t, r, "ref-shell-plan")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/shell-sessions/"+sessID+"/plans", nil))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create plan %d %s", w.Code, w.Body.String())
+	}
+	var created map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created["task_type"] != string(models.TaskTypeShellPlan) {
+		t.Fatalf("task_type=%v", created["task_type"])
+	}
+	if created["approvable"] != false || created["lock"] != false || created["history_only"] != true {
+		t.Fatalf("must be history-only / non-approvable: %v", created)
+	}
+	if created["cloud_identity"] != "user_prepared" {
+		t.Fatalf("cloud_identity=%v", created["cloud_identity"])
+	}
+	// Persist: workspace_tasks row exists with shell_plan
+	var n int64
+	db.Table("workspace_tasks").Where("task_type = ?", models.TaskTypeShellPlan).Count(&n)
+	if n != 1 {
+		t.Fatalf("shell_plan rows=%d", n)
+	}
+	// No approval run side-effect table is required; EnsureApprovalRun is a no-op.
+	if services.IsShellPlanTask(&models.WorkspaceTask{TaskType: models.TaskTypeShellPlan}) == false {
+		t.Fatal("IsShellPlanTask")
+	}
+	if !services.TaskExcludedFromApproval(&models.WorkspaceTask{TaskType: models.TaskTypeShellPlan}) {
+		t.Fatal("shell_plan must be excluded from approval")
+	}
+
+	// List
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/organizations/1/sandboxes/shell-sessions/"+sessID+"/plans", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("list %d %s", w.Code, w.Body.String())
+	}
+	var listed struct {
+		Items []map[string]interface{} `json:"items"`
+		Total int                      `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if listed.Total != 1 || len(listed.Items) != 1 {
+		t.Fatalf("list=%+v", listed)
+	}
+	if listed.Items[0]["task_type"] != string(models.TaskTypeShellPlan) {
+		t.Fatalf("list item=%v", listed.Items[0])
+	}
+	if listed.Items[0]["approvable"] != false {
+		t.Fatal("list must mark non-approvable")
+	}
+}
+
+func TestShellPlan_NoMirror_503(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	restore := services.SetProviderMirrorConfiguredForTest(func() bool { return false })
+	defer restore()
+
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	h := NewSandboxHandler(db, perm)
+	r := sandboxRouter(h, 1)
+	_, sessID := createShellDebugSession(t, r, "ref-no-mirror")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/shell-sessions/"+sessID+"/plans", nil))
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "provider_unreachable") {
+		t.Fatalf("got %d %s", w.Code, w.Body.String())
+	}
+	var n int64
+	db.Table("workspace_tasks").Where("task_type = ?", models.TaskTypeShellPlan).Count(&n)
+	if n != 0 {
+		t.Fatalf("must not persist history on 503, got %d", n)
+	}
+	// Sandbox stays ready
+	var status string
+	db.Raw(`SELECT status FROM sandboxes WHERE sandbox_ref = ?`, "ref-no-mirror").Scan(&status)
+	if status != models.SandboxStatusReady {
+		t.Fatalf("sandbox status=%q want ready", status)
+	}
+}
+
+func TestShellPlan_ClosedSession_422(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("SIGNING_ROOT_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	restore := services.SetProviderMirrorConfiguredForTest(func() bool { return true })
+	defer restore()
+
+	db := setupSandboxTestDB(t)
+	perm := middleware.NewIAMPermissionMiddlewareWithChecker(&sandboxPermChecker{allow: map[string]bool{"ws-a": true}})
+	h := NewSandboxHandler(db, perm)
+	r := sandboxRouter(h, 1)
+	_, sessID := createShellDebugSession(t, r, "ref-closed-plan")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/organizations/1/sandboxes/shell-sessions/"+sessID, nil))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("close %d %s", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/organizations/1/sandboxes/shell-sessions/"+sessID+"/plans", nil))
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "shell_session_inactive") {
 		t.Fatalf("got %d %s", w.Code, w.Body.String())
 	}
 }

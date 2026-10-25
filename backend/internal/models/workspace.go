@@ -266,10 +266,10 @@ type Workspace struct {
 	DriftCheckInterval  int    `json:"drift_check_interval" gorm:"default:1440"`                 // 检测间隔（分钟）
 
 	// CMDB 同步状态（用于前端展示和互斥控制）
-	CMDBSyncStatus      string     `json:"cmdb_sync_status" gorm:"type:varchar(20);default:idle"`      // idle, syncing
-	CMDBSyncTriggeredBy string     `json:"cmdb_sync_triggered_by" gorm:"type:varchar(20)"`             // auto, manual, rebuild
-	CMDBSyncStartedAt   *time.Time `json:"cmdb_sync_started_at"`                                      // 同步开始时间
-	CMDBSyncCompletedAt *time.Time `json:"cmdb_sync_completed_at"`                                    // 同步完成时间
+	CMDBSyncStatus      string     `json:"cmdb_sync_status" gorm:"type:varchar(20);default:idle"` // idle, syncing
+	CMDBSyncTriggeredBy string     `json:"cmdb_sync_triggered_by" gorm:"type:varchar(20)"`        // auto, manual, rebuild
+	CMDBSyncStartedAt   *time.Time `json:"cmdb_sync_started_at"`                                  // 同步开始时间
+	CMDBSyncCompletedAt *time.Time `json:"cmdb_sync_completed_at"`                                // 同步完成时间
 
 	// Manifest 软链接(workspace 装了 manifest 时三列同生同死;一致性 CHECK 见 migration)
 	ManifestDeploymentID *string `json:"manifest_deployment_id,omitempty" gorm:"type:varchar(36);index"` // 关联 manifest_deployments.id
@@ -309,6 +309,9 @@ const (
 	TaskTypeApply        TaskType = "apply"
 	TaskTypePlanAndApply TaskType = "plan_and_apply" // Plan+Apply组合任务
 	TaskTypeDriftCheck   TaskType = "drift_check"    // Drift 检测任务
+	// TaskTypeShellPlan history-only Shell preview (§10.2): -lock=false,
+	// never enters approval hashes, never apply. Listed in task history.
+	TaskTypeShellPlan TaskType = "shell_plan"
 )
 
 // Structured task failure codes (workspace_tasks.error_code).
@@ -361,7 +364,7 @@ const (
 	TaskStatusWaiting            TaskStatus = "waiting" // 等待前置任务完成
 	TaskStatusRunning            TaskStatus = "running"
 	TaskStatusApplyPending       TaskStatus = "apply_pending"        // Plan完成，等待用户确认Apply
-	TaskStatusDecisionRequired  TaskStatus = "decision_required"    // Plan完成，AI判定高风险，等待人工确认决策
+	TaskStatusDecisionRequired   TaskStatus = "decision_required"    // Plan完成，AI判定高风险，等待人工确认决策
 	TaskStatusPlannedAndFinished TaskStatus = "planned_and_finished" // Plan完成，无需Apply（无变更）
 	TaskStatusSuccess            TaskStatus = "success"              // Plan任务成功完成
 	TaskStatusApplied            TaskStatus = "applied"              // Apply任务成功完成
@@ -427,24 +430,24 @@ type WorkspaceTask struct {
 	ChangesDestroy int `json:"changes_destroy" gorm:"default:0"` // Plan显示的删除资源数
 
 	// Terraform执行引擎字段
-	PlanTaskID *uint                  `json:"plan_task_id"`                                        // Apply任务关联的Plan任务ID
-	PlanData   []byte                 `json:"-" gorm:"type:bytea"`                                 // Plan二进制数据（plan.out文件）
-	PlanJSON   JSONB                  `json:"plan_json" gorm:"type:jsonb"`                         // Plan JSON格式数据
-	PlanHash   string                 `json:"plan_hash" gorm:"type:varchar(64)"`                   // Plan文件SHA256 hash（用于优化）
-	Outputs    JSONB                  `json:"outputs" gorm:"type:jsonb"`                           // Terraform outputs
-	Stage      string                 `json:"stage" gorm:"type:varchar(30);default:pending;index"` // 执行阶段
-	Context    JSONB                  `json:"context" gorm:"type:jsonb"`                           // 阶段上下文数据
+	PlanTaskID *uint  `json:"plan_task_id"`                                        // Apply任务关联的Plan任务ID
+	PlanData   []byte `json:"-" gorm:"type:bytea"`                                 // Plan二进制数据（plan.out文件）
+	PlanJSON   JSONB  `json:"plan_json" gorm:"type:jsonb"`                         // Plan JSON格式数据
+	PlanHash   string `json:"plan_hash" gorm:"type:varchar(64)"`                   // Plan文件SHA256 hash（用于优化）
+	Outputs    JSONB  `json:"outputs" gorm:"type:jsonb"`                           // Terraform outputs
+	Stage      string `json:"stage" gorm:"type:varchar(30);default:pending;index"` // 执行阶段
+	Context    JSONB  `json:"context" gorm:"type:jsonb"`                           // 阶段上下文数据
 
 	// Plan+Apply流程字段
 	SnapshotID       string `json:"snapshot_id" gorm:"type:varchar(64)"` // 资源版本快照ID（旧版本）
 	ApplyDescription string `json:"apply_description" gorm:"type:text"`  // Apply描述
 
 	// Plan+Apply快照字段（新版本，用于修复竞态条件bug）
-	SnapshotResourceVersions   JSONB      `json:"snapshot_resource_versions" gorm:"type:jsonb"`   // 资源版本快照
-	VariableSnapshotID         *string    `json:"variable_snapshot_id" gorm:"type:varchar(30)"`   // 变量快照ID（关联variable_snapshots表）
-	SnapshotProviderConfig     JSONB      `json:"snapshot_provider_config" gorm:"type:jsonb"`     // Provider配置快照
-	SnapshotCreatedAt          *time.Time `json:"snapshot_created_at"`                            // 快照创建时间
-	SnapshotManifestVersionID  *string    `json:"snapshot_manifest_version_id" gorm:"type:varchar(36)"` // Manifest版本ID快照（manifest-managed workspace 用，供 code diff 回溯）
+	SnapshotResourceVersions  JSONB      `json:"snapshot_resource_versions" gorm:"type:jsonb"`         // 资源版本快照
+	VariableSnapshotID        *string    `json:"variable_snapshot_id" gorm:"type:varchar(30)"`         // 变量快照ID（关联variable_snapshots表）
+	SnapshotProviderConfig    JSONB      `json:"snapshot_provider_config" gorm:"type:jsonb"`           // Provider配置快照
+	SnapshotCreatedAt         *time.Time `json:"snapshot_created_at"`                                  // 快照创建时间
+	SnapshotManifestVersionID *string    `json:"snapshot_manifest_version_id" gorm:"type:varchar(36)"` // Manifest版本ID快照（manifest-managed workspace 用，供 code diff 回溯）
 
 	// Apply确认审计字段（用于追踪谁在什么时间确认了apply）
 	ApplyConfirmedBy *string    `json:"apply_confirmed_by" gorm:"type:varchar(255)"` // 确认apply的用户ID
