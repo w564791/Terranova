@@ -152,7 +152,8 @@ func EndShellSession(ctx context.Context, db *gorm.DB, shellSessionID string) er
 				return err
 			}
 		}
-		// TODO(step-6): revoke STS AssumeRole credentials bound to this session.
+		// Identity lock (2026-10-25): platform never mints/injects customer-cloud STS;
+		// closing the session only revokes platform typ=shell (already done above).
 		return nil
 	})
 }

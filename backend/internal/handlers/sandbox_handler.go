@@ -311,7 +311,7 @@ func (h *SandboxHandler) DeleteSandbox(c *gin.Context) {
 // CreateShellSession creates a shell_sessions row and mints a typ=shell JWT
 // (§10.2). Token lifetime = session lifetime, hard-capped at 15 minutes.
 // Requires driver=shell_debug and AssertAttachable (production → VPC).
-// Wake uses HarnessInvoker (InvokeHarness). TODO(step-6): STS AssumeRole inject.
+// Wake uses HarnessInvoker (InvokeHarness). Identity lock: no customer-cloud STS inject.
 func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 	orgID, ok := middleware.AuthOrgID(c)
 	if !ok {
@@ -395,7 +395,8 @@ func (h *SandboxHandler) CreateShellSession(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "db_error", "message": "create shell session failed"})
 		return
 	}
-	// TODO(step-6): STS AssumeRole inject into the woken session (not on runtime cache).
+	// Identity lock (2026-10-25): do not AssumeRole / inject customer cloud creds here;
+	// user prepares cloud identity in the external sandbox. Platform ships typ=shell only.
 	c.JSON(http.StatusCreated, gin.H{
 		"id":               sess.ID,
 		"sandbox_id":       sess.SandboxID,
