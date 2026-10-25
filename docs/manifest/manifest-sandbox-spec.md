@@ -259,15 +259,22 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
 ### 10.2 第 6 步最小切片（2026-10-25 锁定）：登记 + Shell + 基础镜像
 
 **原则**：沙箱由用户外部创建，平台不管容器内部生命周期；`DELETE` 只解绑平台记录。
-
-外部 AgentCore **runtime / harness 可常驻**（为避免冷启动）；平台只在新建 session 时登记并唤醒。常驻池**不**等于跨 session 共用凭据——每个 session 仍单独签发短票，结束即吊销。
 平台 Bedrock/AgentCore 接入可放 Bot vault（仅 1:1 安全表单）；**客户云身份不进 Bot vault、不进聊天、不进镜像**。
 
+#### Warm pool（runtime / harness 常驻）
+- 外部 AgentCore **runtime + harness 可常驻**，只为避免冷启动；新建 session = **唤醒**，不是平台冷拉容器，也不随 session 拆掉 runtime。
+- 表字段拆分：可选 **`runtime_ref`**（常驻层，你外部维护） vs **`sandbox_ref` / session**（可唤醒会话）。常驻健康与 session 状态在 UI 分开展示。
+- 常驻**只省冷启动，不省隔离**。硬规则：
+  1. Runtime/harness **不得缓存** `typ=shell` / run token / STS；票只活在 session；关 session 必须吊销且进程内清掉。
+  2. 唤醒 = 新票 + 注入本 run 冻结 bundle（再校哈希）+ 空 workdir（或按 `session_id` 隔离目录）。
+  3. **禁止**复用上一 session 的 `.terraform`、plugin cache、环境变量 / state 脏目录。
+
 #### 表
-- **`sandboxes`**：`id, org_id, workspace_id, sandbox_ref, label, driver, image_digest, assume_role_arn, assume_external_id, status, lease_expires_at, created_by, created_at, updated_at`；唯一 `(org_id, sandbox_ref)`。
+- **`sandboxes`**：`id, org_id, workspace_id, sandbox_ref, runtime_ref?, label, driver, image_digest, assume_role_arn, assume_external_id, status, lease_expires_at, created_by, created_at, updated_at`；唯一 `(org_id, sandbox_ref)`。
   - `driver`：`agentcore_external`（preview，无 Shell）| `shell_debug`（UI Shell）。
   - `status`：`registered` →（握手后来拉成功）`ready` → `lease_expired` | `unbound`。
   - `sandbox_ref`：`^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$`，禁止 `://` / 任意 URL；另做账号/区域白名单。
+  - `runtime_ref`：可选，指向外部常驻 runtime/harness（同格式约束，禁 URL）。
 - **`shell_sessions`**：`id, sandbox_id, org_id, status, expires_at, created_by, …`；与凭据同生共死。
 
 #### API
@@ -299,6 +306,7 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
 - Shell 入口只挂 `shell_debug`；与 `agentcore_external` 分开。
 - 任务历史展示 `shell_plan`，标「预览 / 来自 Shell，不可用于 apply」。
 - 无 mirror 时 plan 明确 `provider_unreachable`。
+- 状态机区分：runtime 健康（常驻） vs session（唤醒中·秒级 / 活跃 / 休眠 / 已解绑）；runtime 不可用单独告警，不与单个 session 失败混写。
 
 **仍前置**：provider mirror（第 12 节）才能真正跑通 sandbox/`shell_plan` 的 `init`；不开 NAT。
 
