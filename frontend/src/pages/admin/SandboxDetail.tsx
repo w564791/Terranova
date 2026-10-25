@@ -5,6 +5,7 @@ import {
   sandboxesApi,
   isPublicNetworkMode,
   isUnknownNetworkMode,
+  maskExternalId,
   type Sandbox,
   type SandboxDriver,
   type SandboxStatus,
@@ -221,7 +222,9 @@ const SandboxDetail: React.FC = () => {
           <dt>assume_role_arn</dt>
           <dd className={styles.mono}>{sandbox.assume_role_arn || '—'}</dd>
           <dt>assume_external_id</dt>
-          <dd className={styles.mono}>{sandbox.assume_external_id || '—'}</dd>
+          <dd className={styles.mono} title="已遮罩，防 confused-deputy 泄露">
+            {maskExternalId(sandbox.assume_external_id)}
+          </dd>
           <dt>租约到期</dt>
           <dd>
             {sandbox.lease_expires_at

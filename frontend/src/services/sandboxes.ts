@@ -86,6 +86,17 @@ export function isUnknownNetworkMode(mode?: string | null): boolean {
   return !(mode || '').trim();
 }
 
+/**
+ * Mask assume_external_id for list/detail (confused-deputy secret).
+ * Shows **** + last 4 when long enough; never the full string.
+ */
+export function maskExternalId(value?: string | null): string {
+  const v = (value || '').trim();
+  if (!v) return '—';
+  if (v.length <= 4) return '****';
+  return `****${v.slice(-4)}`;
+}
+
 export const sandboxesApi = {
   list: async (
     orgId: string | number,

@@ -376,11 +376,15 @@ const SandboxRegisterForm: React.FC = () => {
             <label htmlFor="assume_external_id">assume_external_id</label>
             <input
               id="assume_external_id"
-              type="text"
+              type="password"
               value={assumeExternalId}
               onChange={(e) => setAssumeExternalId(e.target.value)}
-              autoComplete="off"
+              autoComplete="new-password"
+              spellCheck={false}
             />
+            <span className={styles.helpText}>
+              防 confused-deputy 的共享秘密；详情页仅显示遮罩（**** + 末 4 位）。
+            </span>
           </div>
         </div>
 
