@@ -245,6 +245,63 @@ module source 白名单唯一入口 `manifestbundle.PublishModuleSourcePolicy`�
 - 单个 session 最长运行时间是否覆盖大 workspace 的 plan。
 - VPC 模式下到 provider mirror 与目标云 API 的路径（VPC 端点 / NAT + 白名单）。
 
+### 10.1 参考：k8s-infra AgentCore（2026-10-18）
+Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下表取用。第 6 步按 2026-10-25 决议：**外部建沙箱、平台只登记**；Shell 与自定义镜像按 10.2。
+
+| 模块 | 处理 | 说明 |
+| :--- | :--- | :--- |
+| driver 抽象 / 冷启动 / 释放 | 参考 | 生产不跑 DockerDriver；外部沙箱 + 平台登记 |
+| `taskRunning` / `runSeq` | 复用思路 | plan / Shell 进行中不释放；DB 租约 + 心跳 |
+| 30 天个人 Token | 不用 | `typ=run` / `typ=shell` 短 token |
+| 热更新 workspace / 跨 run 复用容器 | 不用 | 冻结 bundle；一次任务一份干净环境 |
+| Shell 与 preview 共用同一凭据会话 | 不用 | 见 10.2 拆分 |
+
+### 10.2 第 6 步最小切片（2026-10-25 锁定）：登记 + Shell + 基础镜像
+
+**原则**：沙箱由用户外部创建，平台不管容器内部生命周期；`DELETE` 只解绑平台记录。
+
+外部 AgentCore **runtime / harness 可常驻**（为避免冷启动）；平台只在新建 session 时登记并唤醒。常驻池**不**等于跨 session 共用凭据——每个 session 仍单独签发短票，结束即吊销。
+平台 Bedrock/AgentCore 接入可放 Bot vault（仅 1:1 安全表单）；**客户云身份不进 Bot vault、不进聊天、不进镜像**。
+
+#### 表
+- **`sandboxes`**：`id, org_id, workspace_id, sandbox_ref, label, driver, image_digest, assume_role_arn, assume_external_id, status, lease_expires_at, created_by, created_at, updated_at`；唯一 `(org_id, sandbox_ref)`。
+  - `driver`：`agentcore_external`（preview，无 Shell）| `shell_debug`（UI Shell）。
+  - `status`：`registered` →（握手后来拉成功）`ready` → `lease_expired` | `unbound`。
+  - `sandbox_ref`：`^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$`，禁止 `://` / 任意 URL；另做账号/区域白名单。
+- **`shell_sessions`**：`id, sandbox_id, org_id, status, expires_at, created_by, …`；与凭据同生共死。
+
+#### API
+- `POST /api/v1/orgs/:org_id/sandboxes` `{ workspace_id, sandbox_ref, driver, label?, image_digest? }` → 201，初始可 `ready`（有 vault）或等握手。
+  - 权限：目标 workspace `WORKSPACE_RESOURCES` WRITE；跨 org → 404；缺平台 AgentCore vault → `422 vault_credential_required`；非法 ref → `422 invalid_sandbox_ref`。
+- `GET` 列表/详情；`DELETE` → 解绑 + **吊销该沙箱未过期 run/shell 凭据**，不毁外部沙箱。
+- 控制面：**沙箱主动来拉**（同现有 agent）：短 ticket → 换 token / 拉 bundle；平台不存回调 URL、不用 vault 凭据打外部地址。
+- `POST /sandboxes/:id/shell-sessions` → 签发 `typ=shell`（claim 含 `shell_session_id`），只读云 + 只读 state、不拿锁；寿命 = 会话寿命（硬顶建议 ≤15min），心跳同步续租且不超过会话过期。
+- `DELETE /shell-sessions/:id`（超时/断线宽限同）→ **先吊销该会话全部 shell 凭据**，再标结束。禁止凭据挂到第二个 Shell；禁止会话结束后凭据残留。
+- `POST /shell-sessions/:id/plans` → 创建历史任务 `task_type=shell_plan`（`-lock=false`），可查日志/红action结果；无 mirror → `503 provider_unreachable`。状态保持 `ready`，创建沙箱不因缺 mirror 失败。
+
+#### 硬规则
+1. Preview / `shell_plan`：只读凭据；`-lock=false`；**不得**进入审批哈希。apply 只走 runner 审批路径。
+2. `typ=run` 与 `typ=shell` 不得混用；云身份优先 STS（见上）；平台 AgentCore 接入与客户云凭据分槽。
+3. 禁 `apply` / `destroy` / `state push` / 拿锁；入口包装 + agent 双拦。
+4. 出网白名单；禁 `external` / `local-exec`；不因只读放松。
+5. 每次执行 / 冷握手重查 org + workspace 权限；记录带 `org_id`。
+6. 自定义 **Dockerfile** 单独镜像流水线（底包含 terraform 等）；凭据不进镜像；登记可选 `image_digest`，握手校验；**不等于**生产启用 DockerDriver。
+7. `shell_plan` 与外部 preview plan 均不可作 Deploy approval 输入。
+
+#### 云身份（客户 AWS 等）
+1. **默认：** 登记 `assume_role_arn`（+ 可选 `assume_external_id` / OIDC）。开 Shell / preview 时平台 STS AssumeRole，临时票寿命绑会话，结束即废。角色策略必须是 **plan 只读**（无写资源、无 `iam:*`）；`external_id` 按 org 维度防混淆代理。
+2. **静态密钥兜底：** 独立机密槽 `cloud_readonly`（`DATA_ENCRYPTION_KEY` 信封）；`PUT` 可写，`GET` 永不回明文（只 `configured: true`）；权限与 `VARIABLE_SETS` 拆开（如 `CLOUD_CREDENTIALS` WRITE）。**禁止**进 varset / 普通环境变量 / `TF_VAR_`。
+3. **Bot vault：** 只放平台调 Bedrock/AgentCore 的接入；客户 AK/SK 不进。本设计讨论房禁止粘贴任何云密钥。
+4. 注入时机：仅签发 `typ=shell` / run 时进进程环境；日志与 API 红action。
+
+#### 前端
+- 登记流（非代建）；解绑二次确认「只删平台登记」。
+- Shell 入口只挂 `shell_debug`；与 `agentcore_external` 分开。
+- 任务历史展示 `shell_plan`，标「预览 / 来自 Shell，不可用于 apply」。
+- 无 mirror 时 plan 明确 `provider_unreachable`。
+
+**仍前置**：provider mirror（第 12 节）才能真正跑通 sandbox/`shell_plan` 的 `init`；不开 NAT。
+
 ## 11. 实现中的变更（2026-10-10）
 1. **uninstall 不跑 destroy**：只解除 workspace 与 manifest 的绑定，资源由用户在 workspace 上自行 Plan + Apply 删除。哈希为 NULL 的版本（违反规则或 `hash_mismatch`）在执行器上一律不能运行（plan/apply/drift），返回 `error_code=bundle_republish_required`，没有例外。原定的净化后 destroy、`untrusted_bundle_confirm_required` 确认流程不做；以后若加 destroy 任务类型再启用。
 2. **`plan_data` 保留期**：信封加密，`PLAN_DATA_TTL` 默认 7 天，apply 成功、任务终态或过期即删除；过期后 apply 返回 `plan_expired`。
