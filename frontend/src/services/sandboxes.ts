@@ -100,6 +100,33 @@ export function maskExternalId(value?: string | null): string {
   return `****${v.slice(-4)}`;
 }
 
+
+/** History-only shell_plan row (§10.2) — never approvable / never apply. */
+export interface ShellPlanHistoryItem {
+  id: string;
+  workspace_id: string;
+  task_type: 'shell_plan' | string;
+  status: string;
+  description?: string | null;
+  shell_session_id: string;
+  sandbox_id?: string;
+  lock?: boolean;
+  approvable: boolean;
+  history_only: boolean;
+  cloud_identity?: 'user_prepared' | string;
+  created_at: string;
+  created_by?: string | null;
+  completed_at?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  context?: Record<string, unknown> | null;
+}
+
+export interface ShellPlanListResponse {
+  items: ShellPlanHistoryItem[];
+  total: number;
+}
+
 export const sandboxesApi = {
   list: async (
     orgId: string | number,
@@ -148,5 +175,32 @@ export const sandboxesApi = {
     sessionId: string,
   ): Promise<void> => {
     await api.delete(`/organizations/${orgId}/sandboxes/shell-sessions/${sessionId}`);
+  },
+
+  /** List history-only shell_plan tasks for a Shell session (§10.2). */
+  listShellPlans: async (
+    orgId: string | number,
+    sessionId: string,
+  ): Promise<ShellPlanListResponse> => {
+    const res: ShellPlanListResponse = await api.get(
+      `/organizations/${orgId}/sandboxes/shell-sessions/${sessionId}/plans`,
+    );
+    return {
+      items: Array.isArray(res?.items) ? res.items : [],
+      total: typeof res?.total === 'number' ? res.total : (res?.items?.length ?? 0),
+    };
+  },
+
+  /**
+   * Record a history-only shell_plan row (201).
+   * Never enters approval hashes; never apply. No request body.
+   */
+  createShellPlan: async (
+    orgId: string | number,
+    sessionId: string,
+  ): Promise<ShellPlanHistoryItem> => {
+    return api.post(
+      `/organizations/${orgId}/sandboxes/shell-sessions/${sessionId}/plans`,
+    );
   },
 };

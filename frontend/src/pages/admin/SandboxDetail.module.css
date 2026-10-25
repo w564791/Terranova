@@ -302,3 +302,82 @@
     gap: 4px;
   }
 }
+
+.planHistory {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line-2);
+}
+
+.planHistoryTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.planBanner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--brand-soft, #e8f4f8);
+  border: 1px solid var(--brand-line, #b3d5e0);
+  color: var(--brand-ink, #0d4a5c);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.planEmpty {
+  font-size: 12px;
+  color: var(--ink-3);
+  padding: 8px 0;
+}
+
+.planTableWrap {
+  overflow-x: auto;
+}
+
+.planTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.planTable th,
+.planTable td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--surface-2);
+  vertical-align: top;
+  word-break: break-all;
+}
+
+.planTable th {
+  font-weight: 600;
+  color: var(--ink-3);
+  background: var(--bg);
+  white-space: nowrap;
+}
+
+.planChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chipHistory {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+
+.chipIdentity {
+  background: var(--brand-soft, #e8f4f8);
+  color: var(--brand-ink, #0d4a5c);
+  border-color: var(--brand-line, #b3d5e0);
+}
+
+.planError {
+  color: var(--red, #b42318);
+  max-width: 220px;
+}

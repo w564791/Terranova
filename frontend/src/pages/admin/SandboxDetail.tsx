@@ -10,6 +10,7 @@ import {
   type SandboxDriver,
   type SandboxStatus,
   type ShellSession,
+  type ShellPlanHistoryItem,
 } from '../../services/sandboxes';
 import { useToast } from '../../contexts/ToastContext';
 import { extractErrorMessageWithCode } from '../../utils/errorHandler';
@@ -75,6 +76,9 @@ const SandboxDetail: React.FC = () => {
   const [shellToken, setShellToken] = useState<string | null>(null);
   const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
   const [shellBusy, setShellBusy] = useState(false);
+  const [shellPlans, setShellPlans] = useState<ShellPlanHistoryItem[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!sandboxId || !orgId) {
@@ -97,6 +101,35 @@ const SandboxDetail: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  const sessionActive =
+    !!shellSession &&
+    shellSession.status === 'active' &&
+    !shellSession.closed_at;
+
+  const loadShellPlans = useCallback(async () => {
+    if (!orgId || !shellSession?.id || !sessionActive) {
+      setShellPlans([]);
+      return;
+    }
+    try {
+      setPlansLoading(true);
+      const res = await sandboxesApi.listShellPlans(orgId, shellSession.id);
+      setShellPlans(res.items);
+    } catch (error) {
+      showToast(extractErrorMessageWithCode(error), 'error');
+    } finally {
+      setPlansLoading(false);
+    }
+  }, [orgId, shellSession?.id, sessionActive, showToast]);
+
+  useEffect(() => {
+    if (sessionActive) {
+      loadShellPlans();
+    } else {
+      setShellPlans([]);
+    }
+  }, [sessionActive, loadShellPlans]);
 
   const handleUnbind = async () => {
     if (!sandbox || !orgId) return;
@@ -146,11 +179,26 @@ const SandboxDetail: React.FC = () => {
       setShellSession({ ...shellSession, status: 'closed', closed_at: new Date().toISOString() });
       setShellToken(null);
       setTokenExpiresAt(null);
+      setShellPlans([]);
       showToast('Shell 会话已关闭并撤销凭证', 'success');
     } catch (error) {
       showToast(extractErrorMessageWithCode(error), 'error');
     } finally {
       setShellBusy(false);
+    }
+  };
+
+  const recordShellPlan = async () => {
+    if (!orgId || !shellSession || !sessionActive) return;
+    try {
+      setPlanBusy(true);
+      await sandboxesApi.createShellPlan(orgId, shellSession.id);
+      showToast('已记录 shell_plan 历史行', 'success');
+      await loadShellPlans();
+    } catch (error) {
+      showToast(extractErrorMessageWithCode(error), 'error');
+    } finally {
+      setPlanBusy(false);
     }
   };
 
@@ -166,6 +214,8 @@ const SandboxDetail: React.FC = () => {
   const showPublicWarn = isPublicNetworkMode(sandbox.network_mode);
   const showUnknownWarn = isUnknownNetworkMode(sandbox.network_mode);
   const title = sandbox.label?.trim() || sandbox.sandbox_ref;
+  const canRecordPlan =
+    sessionActive && sandbox.status !== 'unbound' && !planBusy && !shellBusy;
 
   return (
     <div className={styles.container}>
@@ -317,6 +367,79 @@ const SandboxDetail: React.FC = () => {
                       : '已清除'}
                 </dd>
               </dl>
+            </div>
+          )}
+
+          {sessionActive && (
+            <div className={styles.planHistory}>
+              <h3 className={styles.planHistoryTitle}>Plan 历史（只读）</h3>
+              <div className={styles.planBanner} role="status">
+                历史只读、不进审批哈希、禁 apply；云身份用户自备；本刀仅记历史行（无真实
+                terraform 输出）
+              </div>
+              <div className={styles.shellActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={recordShellPlan}
+                  disabled={!canRecordPlan}
+                >
+                  {planBusy ? '记录中…' : '记录 shell_plan'}
+                </button>
+              </div>
+              {plansLoading ? (
+                <div className={styles.planEmpty}>加载 Plan 历史…</div>
+              ) : shellPlans.length === 0 ? (
+                <div className={styles.planEmpty}>暂无 shell_plan 历史</div>
+              ) : (
+                <div className={styles.planTableWrap}>
+                  <table className={styles.planTable}>
+                    <thead>
+                      <tr>
+                        <th>id</th>
+                        <th>status</th>
+                        <th>description</th>
+                        <th>created_at</th>
+                        <th>标记</th>
+                        <th>error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shellPlans.map((p) => (
+                        <tr key={p.id}>
+                          <td className={styles.mono}>{p.id}</td>
+                          <td>{p.status}</td>
+                          <td>{p.description || '—'}</td>
+                          <td>
+                            {p.created_at
+                              ? new Date(p.created_at).toLocaleString()
+                              : '—'}
+                          </td>
+                          <td>
+                            <span className={styles.planChips}>
+                              {p.history_only !== false && (
+                                <span className={`${styles.chip} ${styles.chipHistory}`}>
+                                  history_only
+                                </span>
+                              )}
+                              <span className={`${styles.chip} ${styles.chipIdentity}`}>
+                                {p.cloud_identity || 'user_prepared'}
+                              </span>
+                            </span>
+                          </td>
+                          <td className={styles.planError}>
+                            {p.error_code || p.error_message
+                              ? [p.error_code, p.error_message]
+                                  .filter(Boolean)
+                                  .join(' · ')
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>

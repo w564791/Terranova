@@ -64,6 +64,10 @@ export const API_ERROR_CODE_LABELS: Record<string, string> = {
   sandbox_ref_exists: '该 sandbox_ref 已在本组织登记',
   shell_not_supported: '仅 shell_debug 驱动支持 Shell 会话',
   harness_invoke_failed: 'Harness 唤醒失败（InvokeHarness），未创建会话',
+  provider_unreachable: '未配置 provider network_mirror，无法记录 shell_plan',
+  shell_session_inactive: 'Shell 会话未激活或已过期',
+  run_not_approvable: 'shell_plan 不可审批/不可 apply',
+  sandbox_unbound: '沙箱已解绑',
 }
 
 export const apiErrorCodeLabel = (code?: string | null): string | undefined => {
