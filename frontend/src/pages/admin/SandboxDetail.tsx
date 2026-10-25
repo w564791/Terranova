@@ -71,6 +71,9 @@ const SandboxDetail: React.FC = () => {
   const [unbindOpen, setUnbindOpen] = useState(false);
   const [unbinding, setUnbinding] = useState(false);
   const [shellSession, setShellSession] = useState<ShellSession | null>(null);
+  /** typ=shell JWT — memory only; never localStorage / console. */
+  const [shellToken, setShellToken] = useState<string | null>(null);
+  const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
   const [shellBusy, setShellBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -114,10 +117,21 @@ const SandboxDetail: React.FC = () => {
     if (!sandbox || !orgId || sandbox.driver !== 'shell_debug') return;
     try {
       setShellBusy(true);
-      const sess = await sandboxesApi.createShellSession(orgId, sandbox.id);
+      const res = await sandboxesApi.createShellSession(orgId, sandbox.id);
+      const { shell_token, token_expires_at, ...sess } = res;
       setShellSession(sess);
-      showToast('Shell 会话已打开', 'success');
+      // One-shot memory hold — do not log or persist the raw token.
+      setShellToken(typeof shell_token === 'string' && shell_token ? shell_token : null);
+      setTokenExpiresAt(
+        typeof token_expires_at === 'string' ? token_expires_at : sess.expires_at || null,
+      );
+      showToast(
+        shell_token ? 'Shell 会话已打开（凭证仅存内存）' : 'Shell 会话已打开',
+        'success',
+      );
     } catch (error) {
+      setShellToken(null);
+      setTokenExpiresAt(null);
       showToast(extractErrorMessageWithCode(error), 'error');
     } finally {
       setShellBusy(false);
@@ -130,7 +144,9 @@ const SandboxDetail: React.FC = () => {
       setShellBusy(true);
       await sandboxesApi.closeShellSession(orgId, shellSession.id);
       setShellSession({ ...shellSession, status: 'closed', closed_at: new Date().toISOString() });
-      showToast('Shell 会话已关闭并撤销钩子', 'success');
+      setShellToken(null);
+      setTokenExpiresAt(null);
+      showToast('Shell 会话已关闭并撤销凭证', 'success');
     } catch (error) {
       showToast(extractErrorMessageWithCode(error), 'error');
     } finally {
@@ -248,7 +264,7 @@ const SandboxDetail: React.FC = () => {
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>Shell 会话</h2>
           <p className={styles.shellHint}>
-            仅 shell_debug 驱动支持。打开会话会签发短时凭证钩子；关闭即撤销。不会销毁远端容器。
+            仅 shell_debug 驱动支持。打开会话：AssertAttachable → InvokeHarness 唤醒 → 签发 typ=shell（≤15min）。凭证只存浏览器内存，关闭即撤销；不进 localStorage / 控制台。不会销毁远端容器。
           </p>
           <div className={styles.shellActions}>
             <button
@@ -287,6 +303,18 @@ const SandboxDetail: React.FC = () => {
                   {shellSession.closed_at
                     ? new Date(shellSession.closed_at).toLocaleString()
                     : '—'}
+                </dd>
+                <dt>短时凭证</dt>
+                <dd>
+                  {shellSession.status === 'active' && shellToken
+                    ? `已持有（仅内存，不展示明文）${
+                        tokenExpiresAt
+                          ? ` · 过期 ${new Date(tokenExpiresAt).toLocaleString()}`
+                          : ''
+                      }`
+                    : shellSession.status === 'active'
+                      ? '本次响应无 shell_token'
+                      : '已清除'}
                 </dd>
               </dl>
             </div>

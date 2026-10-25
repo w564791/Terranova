@@ -63,6 +63,7 @@ export const API_ERROR_CODE_LABELS: Record<string, string> = {
   invalid_driver: 'driver 须为 agentcore_external 或 shell_debug',
   sandbox_ref_exists: '该 sandbox_ref 已在本组织登记',
   shell_not_supported: '仅 shell_debug 驱动支持 Shell 会话',
+  harness_invoke_failed: 'Harness 唤醒失败（InvokeHarness），未创建会话',
 }
 
 export const apiErrorCodeLabel = (code?: string | null): string | undefined => {

@@ -36,7 +36,10 @@ export interface ShellSession {
   closed_at?: string | null;
   created_by: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  /** Present only on create response; hold in memory once — never localStorage/logs. */
+  shell_token?: string;
+  token_expires_at?: string;
 }
 
 export interface CreateSandboxRequest {
@@ -129,6 +132,10 @@ export const sandboxesApi = {
     await api.delete(`/organizations/${orgId}/sandboxes/${id}`);
   },
 
+  /**
+   * Opens a shell session (AssertAttachable → InvokeHarness → mint typ=shell).
+   * Response may include shell_token once — caller must keep it in memory only.
+   */
   createShellSession: async (
     orgId: string | number,
     sandboxId: string,
