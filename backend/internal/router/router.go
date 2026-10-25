@@ -226,6 +226,8 @@ func Setup(db *gorm.DB, streamManager *services.OutputStreamManager, wsHub *webs
 
 	// Manifest 可视化编排器
 	RegisterManifestRoutes(protected, db, queueManager, iamMiddleware)
+	// Sandbox registration (external AgentCore / shell_debug) — §10.2
+	RegisterSandboxRoutes(protected, db, iamMiddleware)
 	// GitHub App(git 来源 manifest):installation 登记(组织 ADMIN)+ webhook(验签,无登录)
 	RegisterGitHubAppRoutes(api, protected, db, iamMiddleware)
 

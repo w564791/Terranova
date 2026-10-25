@@ -146,6 +146,8 @@ func definitions() []definition {
 		{version: "20261016_01_variable_set_org_id", contract: "variable-set-org-id-v1", apply: applyVariableSetOrgID},
 		// specific ⇒ org_id NOT NULL as NOT VALID check (orphans healed on write).
 		{version: "20261016_02_variable_set_org_required", contract: "variable-set-org-required-not-valid-v1", apply: applyVariableSetOrgRequired},
+		// External sandbox registration + shell_sessions (§10.2). Additive only.
+		{version: "20261025_01_sandbox_registration", contract: "sandbox-registration-shell-sessions-v1", apply: applySandboxRegistration},
 	}
 }
 

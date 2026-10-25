@@ -270,19 +270,21 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
   3. **禁止**复用上一 session 的 `.terraform`、plugin cache、环境变量 / state 脏目录。
 
 #### 表
-- **`sandboxes`**：`id, org_id, workspace_id, sandbox_ref, runtime_ref?, label, driver, image_digest, assume_role_arn, assume_external_id, status, lease_expires_at, created_by, created_at, updated_at`；唯一 `(org_id, sandbox_ref)`。
+- **`sandboxes`**：`id, org_id, workspace_id, sandbox_ref, runtime_ref?, label, driver, image_digest, assume_role_arn, assume_external_id, network_mode?, status, lease_expires_at, created_by, created_at, updated_at`；唯一 `(org_id, sandbox_ref)`。
   - `driver`：`agentcore_external`（preview，无 Shell）| `shell_debug`（UI Shell）。
   - `status`：`registered` →（握手后来拉成功）`ready` → `lease_expired` | `unbound`。
   - `sandbox_ref`：`^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$`，禁止 `://` / 任意 URL；另做账号/区域白名单。
   - `runtime_ref`：可选，指向外部常驻 runtime/harness（同格式约束，禁 URL）。
+  - `network_mode`：可选快照 `VPC` | `PUBLIC`（登记时已知则写入；列表/详情可标「非 VPC / 仅联调」）。**生产路径**（平台 `ENV=production`，与 `keys.IsProduction()` 一致）拒绝 `PUBLIC` → `422 network_mode_not_allowed`；非生产允许 `PUBLIC` 联调。无客户端/header 覆盖、无单独 allow-public 开关。挂到 preview / Deploy / wake 时**必须再校验**已存快照：即使非生产时登记了 `PUBLIC`，生产环境下 API 也要拦（不能只靠 UI banner）。
 - **`shell_sessions`**：`id, sandbox_id, org_id, status, expires_at, created_by, …`；与凭据同生共死。
 
 #### API
-- `POST /api/v1/orgs/:org_id/sandboxes` `{ workspace_id, sandbox_ref, driver, label?, image_digest? }` → 201，初始可 `ready`（有 vault）或等握手。
-  - 权限：目标 workspace `WORKSPACE_RESOURCES` WRITE；跨 org → 404；缺平台 AgentCore vault → `422 vault_credential_required`；非法 ref → `422 invalid_sandbox_ref`。
-- `GET` 列表/详情；`DELETE` → 解绑 + **吊销该沙箱未过期 run/shell 凭据**，不毁外部沙箱。
+- `POST /api/v1/organizations/:org_id/sandboxes`（规格简称 orgs）`{ workspace_id, sandbox_ref, driver, label?, image_digest?, runtime_ref?, assume_role_arn?, assume_external_id?, network_mode? }` → 201，初始可 `ready`（有 vault）或 `registered`。
+  - 权限：目标 workspace `WORKSPACE_RESOURCES` WRITE；跨 org → 404；缺平台 AgentCore vault → `422 vault_credential_required`；非法 ref → `422 invalid_sandbox_ref`；生产下 `network_mode=PUBLIC` → `422 network_mode_not_allowed`。
+- `GET` 列表/详情；`DELETE` → 解绑 + **吊销该沙箱未过期 run/shell 凭据**，不毁外部沙箱（不调 AWS destroy）。
 - 控制面：**沙箱主动来拉**（同现有 agent）：短 ticket → 换 token / 拉 bundle；平台不存回调 URL、不用 vault 凭据打外部地址。
-- `POST /sandboxes/:id/shell-sessions` → 签发 `typ=shell`（claim 含 `shell_session_id`），只读云 + 只读 state、不拿锁；寿命 = 会话寿命（硬顶建议 ≤15min），心跳同步续租且不超过会话过期。
+- **唤醒 / 数据面**：只走 **InvokeHarness**（或 SDK 等价）；**禁止** `invoke-agent-runtime` / `InvokeAgentRuntime`。
+- `POST /sandboxes/:id/shell-sessions` → 签发 `typ=shell`（claim 含 `shell_session_id`），只读云 + 只读 state、不拿锁；寿命 = 会话寿命（硬顶建议 ≤15min），心跳同步续租且不超过会话过期；唤醒前再跑 `network_mode` 校验。
 - `DELETE /shell-sessions/:id`（超时/断线宽限同）→ **先吊销该会话全部 shell 凭据**，再标结束。禁止凭据挂到第二个 Shell；禁止会话结束后凭据残留。
 - `POST /shell-sessions/:id/plans` → 创建历史任务 `task_type=shell_plan`（`-lock=false`），可查日志/红action结果；无 mirror → `503 provider_unreachable`。状态保持 `ready`，创建沙箱不因缺 mirror 失败。
 
@@ -294,6 +296,8 @@ Jinlong 已在 k8s-infra 跑通 AgentCore session 流程。场景不同，按下
 5. 每次执行 / 冷握手重查 org + workspace 权限；记录带 `org_id`。
 6. 自定义 **Dockerfile** 单独镜像流水线（底包含 terraform 等）；凭据不进镜像；登记可选 `image_digest`，握手校验；**不等于**生产启用 DockerDriver。
 7. `shell_plan` 与外部 preview plan 均不可作 Deploy approval 输入。
+8. **`networkMode=PUBLIC`**：仅非生产联调；生产（`ENV=production`）登记与挂载一律 `422 network_mode_not_allowed`。
+9. Session wake 只用 **InvokeHarness**，不用 `invoke-agent-runtime`。
 
 #### 云身份（客户 AWS 等）
 1. **默认：** 登记 `assume_role_arn`（+ 可选 `assume_external_id` / OIDC）。开 Shell / preview 时平台 STS AssumeRole，临时票寿命绑会话，结束即废。角色策略必须是 **plan 只读**（无写资源、无 `iam:*`）；`external_id` 按 org 维度防混淆代理。
